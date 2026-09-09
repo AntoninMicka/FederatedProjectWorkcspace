@@ -5,6 +5,8 @@ Aktuální milník: **M0 — Architecture spike**. Operativní úkoly, chyby a o
 
 Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
+Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v TODO; administrativa zůstává v `docs/IP`.
+
 ## 0. Cíl MVP
 
 - [ ] Definovat systém jako **self-hosted projektový workspace** provozovatelný primárně:

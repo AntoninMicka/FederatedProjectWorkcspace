@@ -33,6 +33,9 @@ Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zat
 - [Federace a konfliktové UI](FEDERATION.md)
 - [Bezpečnost](SECURITY.md)
 - [Katalog reuse](REUSE_CATALOG.md)
+- [IP, defensive publication a crowdfunding roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>)
+- [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md)
+- [Defensive Disclosures](docs/IP/DEFENSIVE_DISCLOSURES.md)
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 

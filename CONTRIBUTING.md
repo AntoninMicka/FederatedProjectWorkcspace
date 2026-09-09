@@ -20,7 +20,8 @@ vyžadována.
   dopad na bezpečnost, federaci, datový model a kompatibilitu.
 - U změn týkajících se LLM routingu, RBAC, provenance, federace,
   Context Manifestu nebo execution boundaries zvažte dopad na
-  Patent Risk Register a defensive publication workflow.
+  [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md) a
+  [defensive publication workflow](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>).
 
 ## Third-party code
 

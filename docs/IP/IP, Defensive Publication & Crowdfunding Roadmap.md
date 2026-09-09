@@ -1,5 +1,21 @@
 # IP, Defensive Publication & Crowdfunding Roadmap
 
+## Začlenění do repozitáře — designed
+
+Produktové milníky M0–M6 a jejich gates drží [master roadmapa](<../../Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>), implementační práci [TODO](../../TODO.md). Aktuální M0 ani jeho pořadí tato podpůrná roadmapa nemění.
+
+Podle [integračního pokynu](<ip integration instruction>) jsou provozními dokumenty tato dlouhodobá roadmapa, [Patent Risk Register](PATENT_RISK_REGISTER.md) a [Defensive Disclosures](DEFENSIVE_DISCLOSURES.md). Pokyn zůstává zachován jako zdroj. IP/FTO evidence patří do prvního registru, příprava a stav zveřejnění do druhého; crowdfundingové checklisty zůstávají zde.
+
+Stav integrace k 2026-09-09: registry jsou založené, patentový watchlist je **neověřený** a disclosure ID jsou pouze rezervované náměty. Nebyla provedena patentová rešerše, claim analysis ani publikace, release či DOI. Založení registrů není důkaz FTO ani veřejného prior art. Nezaškrtnuté body níže jsou cíle/checklisty; dokončení vyžaduje uvedený důkaz. Operativní položky používají stavy a úrovně z TODO.
+
+Vazby na vývoj:
+
+| Událost | IP / publikační návaznost |
+| --- | --- |
+| Významná změna architektury, zejména M0 kontrakty | Screening podle sekce 3, záznam do patentového registru, posouzení disclosure; případná změna architektury vyžaduje doložené rozhodnutí/ADR. |
+| Významný veřejný release kteréhokoli M | Review podle sekcí 6–11 a 30; propojit commit, tag, release, disclosure a případné DOI. |
+| Příprava kampaně | Samostatný Gate C0, IP freeze ze sekce 20 a readiness ze sekce 31; neznamenají dokončení produktových gates. |
+
 ## Účel dokumentu
 
 Tento dokument definuje podpůrnou roadmapu pro:
@@ -44,9 +60,7 @@ Vlastní patentová přihláška je výjimka, nikoli výchozí stav.
 
 # 2. Patent Risk Register
 
-Vytvořit:
-
-`docs/ip/PATENT_RISK_REGISTER.md`
+Založeno (implemented — dokumentační registr): [PATENT_RISK_REGISTER.md](PATENT_RISK_REGISTER.md). Ověřené patentové rodiny se doplní po screeningu; počáteční watchlist není výsledkem rešerše.
 
 ## 2.1 Evidovaná pole
 
@@ -76,7 +90,7 @@ Pro každou relevantní patentovou rodinu evidovat:
 
 ## 2.2 Počáteční watchlist
 
-Založit minimálně záznamy pro:
+Počáteční náměty jsou založené v registru jako PR-001 až PR-009. Níže zůstává otevřené jejich ověření:
 
 - [ ] Airia — privacy / sensitivity / model routing,
 - [ ] Cisco — RAG chunk filtering podle RBAC,
@@ -200,9 +214,7 @@ Minimální obsah:
 
 # 5. Defensive Disclosure Registry
 
-Vytvořit:
-
-`docs/ip/DEFENSIVE_DISCLOSURES.md`
+Založeno (implemented — dokumentační registr): [DEFENSIVE_DISCLOSURES.md](DEFENSIVE_DISCLOSURES.md). Seznam námětů není hotový disclosure dokument.
 
 Registry entry:
 
@@ -471,14 +483,14 @@ Například každé 3–6 měsíců:
 
 Před veřejným stabilním releasem:
 
-- [ ] zvolit licenci,
-- [ ] posoudit Apache-2.0 jako variantu s explicitním patent grantem,
-- [ ] vytvořit `LICENSE`,
+- [x] Licence MPL-2.0 je uvedena v [LICENSE](../../LICENSE) a [CONTRIBUTING.md](../../CONTRIBUTING.md) — implemented, ověřeno čtením souborů.
+
+Původní návrh posoudit Apache-2.0 není přijatou změnou licence; integrace zachovává existující MPL-2.0. Zbývající readiness kontroly:
+
 - [ ] vytvořit `NOTICE`, pokud je potřeba,
 - [ ] dependency licence review,
-- [ ] contributor policy,
-- [ ] contribution agreement / DCO rozhodnutí,
-- [ ] `CONTRIBUTING.md`,
+- [x] Základní contributor policy a `CONTRIBUTING.md` existují — implemented; příspěvky pod MPL-2.0, samostatná CLA nyní není vyžadována.
+- [ ] Doplnit explicitní rozhodnutí o DCO; existence CONTRIBUTING není dokončený audit práv ke všem příspěvkům.
 - [ ] security disclosure policy,
 - [ ] copyright notices,
 - [ ] třetí strany / assets audit.
@@ -525,7 +537,7 @@ Před přípravou kampaně musí existovat:
 
 Připravit přesný seznam financovaných milestones.
 
-Například:
+Následující balíčky jsou návrhy financování, nikoli nové produktové milníky nebo závazek. A odpovídá M1, B převážně M2 (provenance navazuje na M3), C M3/M4 a D federaci M5 a integraci ze sekce 21 master roadmapy. Desktopový základ zůstává v M1; v D může být financováno jeho federační rozšíření. Přesný rozsah i pořadí integrace Open WebUI zbývá určit před kampaní.
 
 ### Funding milestone A
 
@@ -551,7 +563,7 @@ Například:
 ### Funding milestone D
 
 - [ ] federation,
-- [ ] desktop node,
+- [ ] federované rozšíření desktopového uzlu (základ již patří do M1),
 - [ ] external/Open WebUI integration.
 
 ---
@@ -801,14 +813,14 @@ Tato roadmapa se nemá stát druhým produktovým backlogem.
 
 Do hlavního `TODO.md` přenášet pouze konkrétní integrace:
 
-- [ ] vytvoření IP registrů,
+- [x] Vytvoření IP registrů — implemented; dokončená integrace je evidována v TODO jako IP-00.
 - [ ] implementace release metadata,
 - [ ] vytvoření citation metadata,
 - [ ] automatizace archive/release workflow,
 - [ ] integrace DOI,
 - [ ] crowdfunding milestone příprava.
 
-Technická implementace produktu zůstává v hlavní roadmapě.
+Strategie produktu zůstává v hlavní roadmapě a jeho operativní implementace v TODO. Zbývající integrační práce je vedena jako IP-01 až IP-03 v TODO; patentové kontroly, jednotlivé disclosures a administrativa kampaně se tam nekopírují.
 
 ---
 
