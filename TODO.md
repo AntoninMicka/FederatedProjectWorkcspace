@@ -61,6 +61,8 @@ Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úk
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle explicitního manifestu a pravidel privacy.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely nad kontrakty uzavřenými v M0 a následné předávání artefaktů mezi rolemi.
 
+- [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
+
 ## Podpůrné IP / release integrace — nepřebírají prioritu M0
 
 Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její registry. Níže jsou pouze konkrétní integrace do repozitáře; žádná publikační automatizace zatím neexistuje.

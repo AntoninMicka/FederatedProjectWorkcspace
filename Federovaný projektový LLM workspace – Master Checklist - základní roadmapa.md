@@ -357,6 +357,16 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
   - [ ] synchronizovatelnou definici,
   - [ ] lokální credentials.
 
+## 7C. Usage & billing — volitelná indikace
+
+- [ ] U backendů, kde to dává smysl a lze údaje získat podporovaným rozhraním, zobrazovat spotřebu a billing podle dostupných capabilities; podporu usage a billing rozlišovat samostatně.
+- [ ] Usage může zahrnovat vstupní/výstupní tokeny, počet požadavků nebo jiné backendem poskytované jednotky; billing náklady za období, zbývající kredit či čerpání kvóty, pokud jsou dostupné.
+- [ ] Rozlišovat spotřebu konkrétního běhu/workspace od souhrnu poskytovatele za účet nebo organizaci. U hodnot uvádět rozsah, období, jednotku/měnu, zdroj a čas poslední aktualizace; souhrn účtu nevydávat za spotřebu projektu.
+- [ ] Oddělit poskytovatelem hlášené náklady od odhadu podle ceníku; odhad jasně označit a uvést použitý ceník/verzi. Lokální backend ani chybějící billing údaj automaticky neznamenají nulové náklady.
+- [ ] V UI odlišit nepodporováno, chybějící oprávnění, dočasně nedostupné a zastaralé údaje od skutečné nuly. Výpadek načítání přehledu sám o sobě neblokuje použití backendu ani nemění routing či existující cost policy.
+- [ ] Účetní souhrny zobrazovat pouze oprávněným uživatelům; oprávnění používat backend samo nedává přístup k billingu celého účtu. Případné další credentials držet lokálně mimo projektový Git; účetní data automaticky nesynchronizovat s projektem.
+- [ ] Přehled zpřístupnit v detailu backendu a stručnou indikaci při jeho výběru; dostupné usage konkrétního běhu také u výsledku. Jde o přehled, nikoli správu plateb nebo změny předplatného.
+
 ---
 
 # 8. LLM role
@@ -493,6 +503,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Metadata editor.
 - [ ] Git history.
 - [ ] LLM action panel.
+- [ ] Indikace usage & billing u podporovaných backendů podle sekce 7C, v rozsahu oprávnění uživatele.
 - [ ] Context preview.
 - [ ] Výběr:
   - [ ] role,
@@ -674,6 +685,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 - [ ] Backend abstraction.
 - [ ] První externí provider.
+- [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [ ] Role.
 - [ ] Context preview.
 - [ ] Privacy filter.
