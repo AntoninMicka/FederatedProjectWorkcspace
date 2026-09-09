@@ -6,11 +6,10 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-04 — Lokální transport/API PoC.** M0-01 až M0-03 jsou dokončené v rozsahu PoC; výsledky a limity jsou níže a v ADR 0003–0005. Gate M0 zůstává otevřený.
+**M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** M0-01 až M0-04 jsou dokončené v rozsahu PoC; výsledky a limity jsou níže a v ADR 0003–0006. Nejprve určit dostupný testovací cíl. Gate M0 zůstává otevřený.
 
 ## Další zbývající práce M0
 
-- [ ] **[planned] M0-04 — Lokální transport/API PoC.** Porovnat IPC/socket s loopback HTTP pro desktop; ověřit autentizaci a nepovolené volání. U HTTP testovat token, Host/Origin a CSRF. Oddělit lokální spojení od budoucí federace. Podklad: SECURITY a roadmapa 12A.
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Určit dostupný testovací cíl a zaznamenat HW/OS/architekturu. Změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
 - [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. Závisí na M0-03 až M0-05.
 - [ ] **[planned] M0-07 — Ověřit zbývající konfliktové scénáře.** Existuje textový UX scénář a test divergence stejné entity. Doplnit simulaci změna–smazání a přejmenování–úprava páru obsah/sidecar, textově čistý merge s neplatnými vztahy a postup lidského rozhodnutí. Obnova lokálního přejmenování v journalu není distribuovaný merge. Síťová federace zůstává M5.
@@ -29,6 +28,8 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 - [ ] [planned] **V-08 — Aplikační integrace konfigurace (cílová úroveň: implemented).** Navázat na schéma v1 z M0-02: při otevření projektu ověřit project_id registrace, existenci a bezpečné umístění kořenů/stavu, podporovanou verzi a vazbu identity na credential úložiště. Navrhnout bezpečnou inicializaci a serializovaný zápis project.json přes Workspace a oddělený obnovitelný zápis node.json, včetně budoucích explicitních migrací. Před změnou popsat crash boundaries; současný samostatný validátor nic nezapisuje a storage projekce konfiguraci nečte.
 - [ ] [planned] **V-09 — Produkční Git transport a credentials (cílová úroveň: PoC validated).** Nad výchozím Git CLI ověřit TLS certifikáty, SSH host keys, zvolený credential store/helper, odmítnutí odvolaných credentials, timeout/cancel a restart přenosu. Loopback HTTP Basic test M0-03 ověřuje správné/chybné credentials, nikoli bezpečný internetový transport nebo federované RBAC. Vazba na V-06, cílové balení a M5.
 - [ ] **[planned] R-01 — Posoudit zdrojové komponenty pro reuse (cílová úroveň: designed).** Před převzetím ověřit původ/licenci souborů, úplné závislosti, testy a kompatibilitu. Lokální inventura a její zbývající rozsah patří výhradně do volitelného soukromého katalogu; veřejné kandidáty evidovat v REUSE_CATALOG až po ověření veřejné dostupnosti.
+
+- [ ] [planned] **V-10 — Integrace lokálního API (cílová úroveň: PoC validated).** V M0-06 ověřit skutečný browser/WebView, same-origin UI nebo nativní bridge, chráněné předání endpointu/tokenu, lifecycle po pádu a úklid vlastních socketů. Před persistentními mutacemi v M1 definovat klientské operation ID/retry/receipt podle ADR 0003, limity souběhu a celkový deadline requestu. Protokolový čítač ADR 0006 toto neprokazuje.
 
 ## Pozdější operativní backlog — nezahajovat místo M0
 
@@ -49,6 +50,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-04 — PoC validated: lokální socket a loopback HTTP.** `spikes/local_api.py` a sedm testů v `tests/test_local_api.py` porovnávají stejný paměťový endpoint přes Unix socket a IPv4 loopback. Ověřeny token/rotace, Host/Origin, CSRF formáty/metody, UID/práva, limity/duplicity JSON a hlaviček, timeout a pipelining; odmítnuté požadavky nemění stav. [ADR 0006](docs/adr/0006-local-api-transport.md) preferuje same-origin loopback HTTP pro navazující UI, s Unix alternativou. Browser/obal, bootstrap tokenu a napojení Workspace zůstávají V-10. Závěrečné `M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 53 testů prošlo bez skipů. Sandbox původně odmítl bind; běh s povolenými lokálními sockety uspěl. Dokumentace, odkazy a `git diff --check` ověřeny.
 
 - [x] [completed] **R-00 — Implemented: oddělený veřejný a soukromý reuse katalog.** REUSE_CATALOG obsahuje technologie a komponenty workspace; seznam veřejných externích repozitářů je zatím prázdný. Lokální inventura je v `REUSE_CATALOG.private.md`, vyloučeném z Gitu. Ověřeny odkazy, absence soukromých detailů ve změněných veřejných dokumentech, ignore pravidlo a diff; bez nového běhu aplikačních testů. Detailní posouzení před převzetím zůstává R-01.
 

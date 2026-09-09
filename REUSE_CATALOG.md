@@ -40,4 +40,6 @@ Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3
 | [Konfigurace](spikes/configuration.py) | **adapt**: sdílená validační primitiva, oddělený projekt a uzel | [ADR 0004](docs/adr/0004-project-node-config.md), [testy](tests/test_configuration.py); V-08: zapojení do lifecycle |
 | [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy v [TODO](TODO.md); V-01: automatizace CLI validátoru; není to aplikační server/UI |
 
-Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a TODO. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Nejbližší implementační úkol zůstává M0-04.
+Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a TODO. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Navazující úkoly a aktuální výsledky drží TODO.
+
+M0-04 **adaptuje** omezený JSON parser z `spikes/metadata.py` a **reuse** stdlib HTTP/socketserver pro izolovaný [transportní experiment](spikes/local_api.py). Vlastní minimální handler odděluje zkoušku autentizace od aplikačního stacku; nejde o přenos cizího serveru ani produkční volbu frameworku. Rozhodnutí a limity: [ADR 0006](docs/adr/0006-local-api-transport.md).

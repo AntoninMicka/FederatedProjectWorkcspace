@@ -34,7 +34,7 @@ python3 -m venv .venv
 
 Pokud už je požadovaný PyYAML dostupný, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
 
-Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada nepoužívá síť. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
+Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada používá dočasné Unix sockety a porty na `127.0.0.1` pro [lokální API PoC](docs/adr/0006-local-api-transport.md); nepotřebuje internet. Sandbox musí povolit lokální bind, jinak jde o selhání testu. Cíleně: `python3 -m unittest tests.test_local_api -v`. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 
 Pracovní projekci existujícího projektu lze ověřit bez zápisu:
 

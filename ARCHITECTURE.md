@@ -6,6 +6,8 @@ Jeden uzel je samostatný backend s lokálními daty. Desktop spouští stejný 
 
 Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Konkrétní jazyk a framework zůstávají otevřené. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
 
+Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal a bezpečné předání tokenu uzavře M0-06. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
+
 ## Data a zápis
 
 Git drží projektové artefakty, jejich metadata, registry a schválené LLM výstupy. SQLite indexuje pouze validovaný commit. Identita uzlu, credentials a rozpracované operace jsou lokální autoritativní stav mimo projektový Git i index.
