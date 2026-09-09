@@ -118,7 +118,7 @@ lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
   'cd /opt/federated-workspace/current && .venv/bin/python -m spikes.demo'
 ```
 
-Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží TODO u M0-05. Zbývají provozní měření a ověření filesystemu pracovních dat dema (výchozí /tmp).
+Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží TODO u M0-05. Potvrzen je také běh s TMPDIR=/var/tmp/workspace-poc na SSD/Btrfs. Výchozí /tmp je v ověřeném kontejneru tmpfs; měření tohoto běhu nelze vydávat za výkon SSD. Provozní měření a recovery na cílovém zařízení zbývají.
 
 ## Zdrojový balíček desktopového PoC
 
