@@ -37,10 +37,10 @@ Roadmapa zachycuje fáze, milníky, architektonické cíle, významné schopnost
 
 Stavy TODO používej přesně:
 
-- `[ ] planned` — zbývající práce.
-- `[~] in progress` — skutečně probíhající práce.
-- `[x] completed` — výstup je dokončený a relevantně ověřený.
-- `[!] blocked` — konkrétní překážka; uveď důvod a podmínku odblokování.
+- `[ ] [planned]` — zbývající práce.
+- `[ ] [in progress]` — skutečně probíhající práce.
+- `[x] [completed]` — výstup je dokončený a relevantně ověřený.
+- `[ ] [blocked]` — konkrétní překážka; uveď důvod a podmínku odblokování.
 
 U položek uváděj úroveň: designed, implemented, PoC validated nebo production-ready. Dokončený návrh ani úspěšný spike neznamenají produkční implementaci. Chybějící ověření ponech otevřené nebo výslovně neověřené. Závislost na jiném plánovaném úkolu sama není důvod vše označit jako blocked.
 
@@ -49,6 +49,7 @@ U položek uváděj úroveň: designed, implemented, PoC validated nebo producti
 - Aktualizuj TODO a přidej nově nalezené navazující úkoly.
 - Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate.
 - Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Zachovej historii; průběžný stav práce patří do TODO.
+- Pokud implementace řeší operaci přes více persistentních vrstev (filesystem, Git, SQLite index, journal), před implementací explicitně popiš crash boundaries a očekávané chování recovery. Úspěšný happy-path test není dostatečný důkaz dokončení takové operace.
 - Pro implementaci spusť relevantní testy a existující build/lint, pokud se změny týkají. Ověř chování i chybové cesty. Pro čistě dokumentační změny zkontroluj věcnou konzistenci, odkazy a diff; pokud deklaruješ nové výsledky testů, skutečně je spusť.
 - Současný příkaz testů je `python3 -m unittest discover -s tests -v` (Linux, Python 3.11+, závislosti z `requirements.txt`; instalace viz README). Samostatný build/lint ani CI zatím nejsou nakonfigurované; nevydávej je za ověřené.
 - Před dokončením zkontroluj `git diff --check`, finální diff a nově vytvořené soubory. Shrň změnu, ověření a relevantní zbývající omezení.

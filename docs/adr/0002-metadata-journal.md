@@ -20,6 +20,7 @@ Testy ukončují pomocný proces přes `os._exit` po uložení záměru, po kaž
 
 ## Hranice PoC
 
+- Současný journal končí po úspěšném zápisu a validaci pracovního stromu. Proto sám nepokrývá atomický životní cyklus přes následný Git commit a aktualizaci indexu. M0-01 tuto hranici řeší nadřazenou aplikační operací se stavem obnovitelným i po vytvoření commitu.
 - Zámek koordinuje pouze volající Journal. Editor, Git operace a čtenáři budoucí aplikace musí respektovat stejný životní cyklus; při pending operaci se projekt nesmí commitovat ani zpřístupnit jako konzistentní pracovní stav.
 - Přímý `Git.commit` zatím nemá napojení na journal a používá testovací identitu. Není určen k samostatnému produkčnímu použití.
 - Kontroly cest chrání proti statickým symlinkům, nikoli proti závodící změně souborového systému jiným procesem. PoC předpokládá soukromý projekt a kooperujícího jediného zapisovatele.

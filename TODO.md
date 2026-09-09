@@ -2,50 +2,74 @@
 
 Aktuální milník: **M0 — Architecture spike**, Gate M0 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md) a [ADR 0002](docs/adr/0002-metadata-journal.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
 
-Stavy: `[ ] planned`, `[~] in progress`, `[x] completed`, `[!] blocked`. Úroveň výsledku je samostatná: designed / implemented / PoC validated / production-ready. Žádná aplikační část zatím není označena production-ready. Následující úkoly nejsou zahájené ani prokazatelně blokované jen kvůli svým závislostem.
+Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`. Úroveň výsledku je samostatná: designed / implemented / PoC validated / production-ready. Žádná aplikační část zatím není označena production-ready. Následující úkoly nejsou zahájené ani prokazatelně blokované jen kvůli svým závislostem.
 
 ## Nejbližší úkol M0
 
-- [ ] planned **M0-01 — Jedna koordinovaná operace journal → validace → Git commit → index.** Navázat na `Journal`, `Git` a `Index`, nepsat je znovu. Výstup: jeden aplikační vstup pro zápis a obnovu v Linux PoC, jednotné řízení přístupu a doložitelný výsledek operace. Akceptace: zámek pokrývá celý životní cyklus, pending stav brání publikaci neúplného projektu; commit obsahuje pouze zamýšlené změny a explicitního autora; restart po zápisu/před commitem i po commitu/před indexací neztratí změny ani nevytvoří duplicitní commit. Ověřit změnu HEAD, cizí rozpracované změny, opakovanou obnovu a dva kooperující zapisovatele. Podklad: ADR 0002, `Git.commit` nyní volá `add --all` s testovací identitou a journal se vyčistí ještě před commitem.
+- [ ] **[planned] M0-01 — Jedna koordinovaná operace journal → validace → Git commit → index.**
+  Navázat na `Journal`, `Git` a `Index`, nepsat je znovu. Výstup: jeden aplikační vstup pro zápis a obnovu v Linux PoC, jednotné řízení přístupu a doložitelný výsledek operace.
+
+  Operace musí mít stabilní `operation_id` a explicitní stavový životní cyklus. Minimálně musí být možné po restartu rozlišit:
+
+  `prepared → files-applied → committed → indexed`
+
+  Implementace nemusí použít přesně tyto názvy, ale stav musí být obnovitelný bez odhadu podle neúplných vedlejších efektů.
+
+  Journal / operation record nesmí být definitivně odstraněn pouze proto, že byly úspěšně zapsány soubory. Musí zůstat dost informace k rozpoznání, zda příslušný Git commit již vznikl a zda byl index aktualizován.
+
+  Operace eviduje minimálně:
+  - operation ID,
+  - výchozí HEAD,
+  - zamýšlené změněné cesty,
+  - stav operace,
+  - po commitu výsledný commit ID.
+
+  Recovery musí být idempotentní: opakovaný restart nesmí vytvořit další commit stejné operace.
+
+  Git commit nesmí používat neomezené `git add --all`. Musí commitnout pouze cesty vlastněné aktuální operací, nebo operaci bezpečně odmítnout, pokud nelze oddělit cizí změny.
+
+  Před commitem ověřit, že HEAD stále odpovídá výchozímu HEAD operace. Změna HEAD během operace nesmí být tiše přepsána.
+
+  Akceptace: zámek pokrývá celý životní cyklus, pending stav brání publikaci neúplného projektu; commit obsahuje pouze zamýšlené změny a explicitního autora; restart po zápisu/před commitem i po commitu/před indexací neztratí změny ani nevytvoří duplicitní commit. Ověřit změnu HEAD, cizí rozpracované změny, opakovanou obnovu a dva kooperující zapisovatele. Podklad: ADR 0002, `Git.commit` nyní volá `add --all` s testovací identitou a journal se vyčistí ještě před commitem.
 
 ## Další zbývající práce M0
 
-- [ ] planned **M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** Určit verze, migrace, oddělení přenositelné definice od lokální identity/credentials a validaci. Artefaktové/registry schéma už existuje. Nepřidávat nyní síťovou distribuci uživatelů.
-- [ ] planned **M0-03 — Srovnat libgit2/C++ s existujícím Git CLI PoC.** Nejprve ověřit dostupnost závislosti a reuse katalog; použít stejné scénáře commit/branch/conflict/abort/recovery, přenos a autentizaci. Zapsat výsledky a rozhodnutí o Git adaptéru včetně balení; nedostupnost knihovny v minulém prostředí není zamítnutí technologie.
-- [ ] planned **M0-04 — Lokální transport/API PoC.** Porovnat IPC/socket s loopback HTTP pro desktop; ověřit autentizaci a nepovolené volání. U HTTP testovat token, Host/Origin a CSRF. Oddělit lokální spojení od budoucí federace. Podklad: SECURITY a roadmapa 12A.
-- [ ] planned **M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Určit dostupný testovací cíl a zaznamenat HW/OS/architekturu. Změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
-- [ ] planned **M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. Závisí na M0-03 až M0-05.
-- [ ] planned **M0-07 — Ověřit zbývající konfliktové scénáře.** Existuje textový UX scénář a test divergence stejné entity. Doplnit simulaci změna–smazání a přejmenování–úprava páru obsah/sidecar, textově čistý merge s neplatnými vztahy a postup lidského rozhodnutí. Obnova lokálního přejmenování v journalu není distribuovaný merge. Síťová federace zůstává M5.
-- [ ] planned **M0-08 — Zpřesnit návrhové kontrakty.** Doplnit pravidla větví a publikace při změně HEAD; uzavřít kontrakty Backend/Role/Context Manifest a lokální hranici důvěry v návaznosti na ARCHITECTURE, FEDERATION a SECURITY. LLM adapter ani RBAC engine tímto úkolem neimplementovat.
-- [ ] planned **M0-09 — Gate review před M1.** Po ověření předchozích výstupů projít Gate M0, zaznamenat důkazy, otevřená omezení a rozhodnutí o připravenosti. Nepřejít do M1 jen na základě zelených spike testů.
+- [ ] **[planned] M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** Určit verze, migrace, oddělení přenositelné definice od lokální identity/credentials a validaci. Artefaktové/registry schéma už existuje. Nepřidávat nyní síťovou distribuci uživatelů.
+- [ ] **[planned] M0-03 — Srovnat libgit2/C++ s existujícím Git CLI PoC.** Nejprve ověřit dostupnost závislosti a reuse katalog; použít stejné scénáře commit/branch/conflict/abort/recovery, přenos a autentizaci. Zapsat výsledky a rozhodnutí o Git adaptéru včetně balení; nedostupnost knihovny v minulém prostředí není zamítnutí technologie.
+- [ ] **[planned] M0-04 — Lokální transport/API PoC.** Porovnat IPC/socket s loopback HTTP pro desktop; ověřit autentizaci a nepovolené volání. U HTTP testovat token, Host/Origin a CSRF. Oddělit lokální spojení od budoucí federace. Podklad: SECURITY a roadmapa 12A.
+- [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Určit dostupný testovací cíl a zaznamenat HW/OS/architekturu. Změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
+- [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. Závisí na M0-03 až M0-05.
+- [ ] **[planned] M0-07 — Ověřit zbývající konfliktové scénáře.** Existuje textový UX scénář a test divergence stejné entity. Doplnit simulaci změna–smazání a přejmenování–úprava páru obsah/sidecar, textově čistý merge s neplatnými vztahy a postup lidského rozhodnutí. Obnova lokálního přejmenování v journalu není distribuovaný merge. Síťová federace zůstává M5.
+- [ ] **[planned] M0-08 — Zpřesnit návrhové kontrakty.** Doplnit pravidla větví a publikace při změně HEAD; uzavřít kontrakty Backend/Role/Context Manifest a lokální hranici důvěry v návaznosti na ARCHITECTURE, FEDERATION a SECURITY. LLM adapter ani RBAC engine tímto úkolem neimplementovat.
+- [ ] **[planned] M0-09 — Gate review před M1.** Po ověření předchozích výstupů projít Gate M0, zaznamenat důkazy, otevřená omezení a rozhodnutí o připravenosti. Nepřejít do M1 jen na základě zelených spike testů.
 
 ## Zjištěné mezery a navazující ověření
 
-- [ ] planned **V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
-- [ ] planned **V-02 — Upřesnit test neplatného indexovaného stavu.** `test_invalid_merge_projection_does_not_replace_previous_index` dnes narazí na nesoulad názvu souboru s ID, nikoli nutně na duplicitu ID. Samostatný test validátoru duplicitu pokrývá; doplnit integrační test indexu, který prokáže zamýšlený důvod odmítnutí. Žádný dosavadní test neprokazuje skutečný textově čistý, významově chybný merge (M0-07).
-- [ ] planned **V-03 — Vyjasnit omezení projekce indexu.** Index nyní validuje vztahy, ale ukládá pouze id/title a commit ID. Před relačními dotazy navrhnout a otestovat rozšíření projekce; neoznačovat existující index za kompletní databázi vztahů.
-- [ ] planned **V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje.
-- [ ] planned **V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
-- [ ] planned **V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
-- [ ] planned **R-01 — Identifikovat starší zdrojové projekty pro reuse.** Katalog zatím neobsahuje konkrétní repository/cesty těchto projektů. Po jejich identifikaci prověřit licence, závislosti, kompatibilitu a důvod reuse/adapt/rewrite/reject. Nevyvozovat, že inventura proběhla.
+- [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
+- [ ] **[planned] V-02 — Upřesnit test neplatného indexovaného stavu.** `test_invalid_merge_projection_does_not_replace_previous_index` dnes narazí na nesoulad názvu souboru s ID, nikoli nutně na duplicitu ID. Samostatný test validátoru duplicitu pokrývá; doplnit integrační test indexu, který prokáže zamýšlený důvod odmítnutí. Žádný dosavadní test neprokazuje skutečný textově čistý, významově chybný merge (M0-07).
+- [ ] **[planned] V-03 — Vyjasnit omezení projekce indexu.** Index nyní validuje vztahy, ale ukládá pouze id/title a commit ID. Před relačními dotazy navrhnout a otestovat rozšíření projekce; neoznačovat existující index za kompletní databázi vztahů.
+- [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje.
+- [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
+- [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
+- [ ] **[planned] R-01 — Identifikovat starší zdrojové projekty pro reuse.** Katalog zatím neobsahuje konkrétní repository/cesty těchto projektů. Po jejich identifikaci prověřit licence, závislosti, kompatibilitu a důvod reuse/adapt/rewrite/reject. Nevyvozovat, že inventura proběhla.
 
 ## Pozdější operativní backlog — nezahajovat místo M0
 
 Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úkolu. Milníky a gates zůstávají v roadmapě.
 
-- [ ] planned **M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
-- [ ] planned **M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle explicitního manifestu a pravidel privacy.
-- [ ] planned **M3/M4 — Role a backendy:** implementovat Role/Backend modely nad kontrakty uzavřenými v M0 a následné předávání artefaktů mezi rolemi.
+- [ ] **[planned] M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
+- [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle explicitního manifestu a pravidel privacy.
+- [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely nad kontrakty uzavřenými v M0 a následné předávání artefaktů mezi rolemi.
 
 ## Dokončené výstupy a důkazy
 
-- [x] completed **Designed — základní návrhy a kostra experimentů.** ARCHITECTURE, DATA_MODEL, FEDERATION, SECURITY, REUSE_CATALOG a ADR 0001/0002 existují; aplikační skeleton, síť ani UI tím nejsou hotové.
-- [x] completed **PoC validated — Git divergence a historie.** `tests/test_storage.py`: dvě lokální repo kopie, tři konfliktní verze, abort, merge se dvěma rodiči. Žádná síťová federace/autentizace.
-- [x] completed **PoC validated — validace artefaktů a registrů.** `spikes/metadata.py`, `tests/test_metadata.py`: schéma, UUID, JSON/YAML duplicity, limity, frontmatter, sidecar a vztahy.
-- [x] completed **PoC validated — SQLite index.** `spikes/storage.py`, `tests/test_storage.py`: validovaný commit, stale detection, obnova z HEAD i po odstranění databáze, oddělení necommitnutých změn.
-- [x] completed **PoC validated — souborový journal.** `spikes/journal.py`, `tests/test_journal.py`: vytvoření, přejmenování, smazání, přerušená obnova, cizí editace, zachování binárních bajtů a návazný ručně koordinovaný commit/index. Testy používají skutečné `os._exit` v pomocném procesu.
-- [x] completed **Implemented, ručně ověřeno — CLI validátor projekce.** `spikes/check_project.py`; důkaz smoke testu v ADR 0002, automatizace zbývá V-01.
-- [x] completed **Implemented — vývojový workflow.** AGENTS.md, tento TODO a reconciliace roadmapy vůči kódu; architektura, ADR a experimenty zachovány.
+- [x] **[completed] Designed — základní návrhy a kostra experimentů.** ARCHITECTURE, DATA_MODEL, FEDERATION, SECURITY, REUSE_CATALOG a ADR 0001/0002 existují; aplikační skeleton, síť ani UI tím nejsou hotové.
+- [x] **[completed] PoC validated — Git divergence a historie.** `tests/test_storage.py`: dvě lokální repo kopie, tři konfliktní verze, abort, merge se dvěma rodiči. Žádná síťová federace/autentizace.
+- [x] **[completed] PoC validated — validace artefaktů a registrů.** `spikes/metadata.py`, `tests/test_metadata.py`: schéma, UUID, JSON/YAML duplicity, limity, frontmatter, sidecar a vztahy.
+- [x] **[completed] PoC validated — SQLite index.** `spikes/storage.py`, `tests/test_storage.py`: validovaný commit, stale detection, obnova z HEAD i po odstranění databáze, oddělení necommitnutých změn.
+- [x] **[completed] PoC validated — souborový journal.** `spikes/journal.py`, `tests/test_journal.py`: vytvoření, přejmenování, smazání, přerušená obnova, cizí editace, zachování binárních bajtů a návazný ručně koordinovaný commit/index. Testy používají skutečné `os._exit` v pomocném procesu.
+- [x] **[completed] Implemented, ručně ověřeno — CLI validátor projekce.** `spikes/check_project.py`; důkaz smoke testu v ADR 0002, automatizace zbývá V-01.
+- [x] **[completed] Implemented — vývojový workflow.** AGENTS.md, tento TODO a reconciliace roadmapy vůči kódu; architektura, ADR a experimenty zachovány.
 
 ## Posouzení repozitáře k 2026-09-09
 
