@@ -31,3 +31,5 @@ Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vl
 ## Kontrakty M0-08
 
 Závazné návrhové kontrakty Backend/Role/Context Manifest a tok deterministického orchestrátoru vymezuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md). Odděluje přenositelnou definici od lokálního bindingu, capabilities od execution boundary a ukládá manifest přesného požadavku mimo Git. Implementace LLM a RBAC zůstává otevřená.
+
+Posouzení distribuční cesty v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md) doporučuje zachovat Python jádro a ověřit PySide6/WebEngine s nativním linuxovým balíkem. Jde o návrh, nikoli nahrazení současného PyQt PoC nebo dokončenou volbu produkčního stacku.

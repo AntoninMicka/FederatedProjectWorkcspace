@@ -6,12 +6,15 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06 — Doplnit podklady pro finální volbu stacku a desktopového balení.** Review M0-09 je dokončené s výsledkem „Gate M0 nesplněn“. Další konkrétní krok: posoudit desktopový binding a způsob distribuce včetně závislostí/licencí a chybějících měření startu/paměti. Uživatel již úspěšně provedl ruční deploy a storage demo na Omnii. Běh dema na SSD/Btrfs je potvrzený; M0-05 zbývá doplnit provozním měřením cílových variant. Přechod do M1 zatím není schválen.
+**M0-06d — Ověřit PySide6/WebEngine a změřit desktop.** Posouzení M0-06c doporučuje Python + Git CLI/SQLite, PySide6 a první nativní linuxový instalační balík dle ADR 0009. Další krok je adaptovat a ověřit binding ve skutečném okně; současný PyQt PoC zůstává funkční. M0-05, finální M0-06 a Gate M0 zůstávají otevřené.
 
 ## Další zbývající práce M0
 
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Uživatel doložil Turris Omnia / TurrisOS 9.1.1 / ARMv7, LXC 6.0.5 a běžící Debian 13 Trixie kontejner na SSD (Btrfs). Uživatel následně doložil úspěšnou instalaci PyYAML 6.0.3, běh storage dema, Git commit, čtení indexu po znovuotevření a přepnutí current. Opakovaný uživatelský běh: 0,66 s pro celé demo, RUSAGE_CHILDREN.ru_maxrss 11 520 KiB (11,25 MiB), exit 0. Jde o jediné orientační měření, nikoli čas startu služby nebo součet paměti procesů. Dodané df potvrzuje /tmp jako tmpfs: uvedené měření patří běhu v RAM. Následný běh s TMPDIR=/var/tmp/workspace-poc úspěšně vytvořil projekt, commit a index po znovuotevření a odstranil dočasná data; df pro tento adresář potvrzuje /dev/sda, Btrfs. Zápisový smoke na SSD je tedy doložen, jeho čas/paměť ani crash recovery na SSD však měřeny nebyly. Zbývá změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
 - [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. M0-06a ověřuje pouze desktopový PoC dle ADR 0007; finální rozhodnutí stále potřebuje M0-05 a distribuční/licenční posouzení.
+
+- [ ] [planned] **M0-06d — PySide6/WebEngine (cílová úroveň: PoC validated).** Dle ADR 0009 ověřit dostupný runtime a adaptaci Qt vazby, jednoznačný výběr bindingu, bezpečnostní/lifecycle regresní scénáře a celou sadu včetně grafických testů. Změřit start UI/API a paměť stromu procesů. Bez změny storage protokolu.
+- [ ] [planned] **M0-06e — Linux instalační kandidát (cílová úroveň: PoC validated).** Po M0-06d ověřit .deb se systémovými závislostmi pro konkrétní OS/architekturu dle ADR 0009; čistá instalace, offline start, upgrade/odinstalace bez ztráty dat, inventář licencí a velikost. Před implementací popsat instalační crash boundaries; nevydávat zdrojový archiv za instalátor.
 
 ## Gate review M0-09 — 2026-09-09
 
@@ -76,6 +79,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-06c — Designed: posouzení bindingu a distribuce.** [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md) porovnává PyQt/PySide, zachování Python jádra a instalační varianty. Ověřeny oficiální licenční podklady, místní Qt/PyQt importy a apt kandidáti chybějících PySide WebEngine modulů. Doporučení PySide/.deb je podmíněné skutečným runtime a instalačním ověřením M0-06d/e. Žádná instalace ani změna kódu; dokumentační kontrola konzistence, odkazů a diffu, bez nového běhu testové sady.
 
 - [x] [completed] **PoC validated — ruční deploy a storage demo na Omnii.** Uživatelem dodaný výstup potvrzuje instalaci PyYAML 6.0.3, vytvoření artefaktu a Git historie, index po znovuotevření, úklid dočasných dat a hlášku úspěšné instalace do current. Daemon se nespustil. Jde o úspěšný smoke běh, nikoli celou testovou sadu nebo recovery na cílovém zařízení. Následné orientační měření uživatele: celé demo 0,66 s, max RSS potomků 11 520 KiB, exit 0; podrobnosti a omezení u M0-05. Měřený běh používal /tmp na tmpfs. Další uživatelský výstup potvrzuje úspěšný neměřený běh s TMPDIR=/var/tmp/workspace-poc na /dev/sda/Btrfs, včetně indexu po znovuotevření a úklidu. Nejde o restart kontejneru ani test pádu. Zbývající ověření drží M0-05; desktopové připojení k serveru zatím neexistuje.
 
