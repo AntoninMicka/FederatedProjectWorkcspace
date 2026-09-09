@@ -34,7 +34,7 @@ python3 -m venv .venv
 
 Pokud už je požadovaný PyYAML dostupný, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
 
-Testy vytvářejí izolované dočasné repozitáře a SQLite databáze. Nepoužívají síť ani nemění globální Git konfiguraci.
+Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada nepoužívá síť. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 
 Pracovní projekci existujícího projektu lze ověřit bez zápisu:
 
@@ -69,4 +69,4 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Další krok: M0-03 — srovnání libgit2/C++ s Git CLI PoC. Minimální schémata project.json/node.json a jejich samostatná validace jsou připravené; aplikační integrace zbývá. Koordinovaná operace journal → Git → index je ověřený Linux PoC. V M0 zbývá také libgit2 PoC, lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.
+Další krok: M0-04 — lokální transport/API PoC. Srovnání libgit2/C++ zachovalo Git CLI jako výchozí adapter (ADR 0005). Minimální schémata project.json/node.json a jejich samostatná validace jsou připravené; aplikační integrace zbývá. Koordinovaná operace journal → Git → index je ověřený Linux PoC. V M0 zbývá lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.

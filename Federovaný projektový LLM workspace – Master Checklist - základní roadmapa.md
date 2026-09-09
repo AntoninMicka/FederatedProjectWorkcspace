@@ -647,7 +647,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
 - [ ] Doplnit návrh pravidel větví a ověřit konflikty obsahu/sidecaru včetně sémanticky neplatného merge. Implementace síťové federace zůstává M5.
 - [ ] Ověřit bezpečný lokální transport/API pro desktop podle SECURITY a sekce 12A.
-- [ ] Uzavřít Git implementaci na základě porovnání C++/libgit2 s existujícím Git CLI PoC, včetně autentizace a distribuce závislostí.
+- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; produkční TLS/SSH a cílové balení zbývají v TODO V-09 a M0-05/M0-06.
 - [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.
 - [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux je navržený první cíl; Qt/WebView kandidát. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
 - [ ] Zaznamenat konečná rozhodnutí a vyhodnotit připravenost pro M1.

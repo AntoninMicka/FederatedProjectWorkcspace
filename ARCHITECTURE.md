@@ -4,7 +4,7 @@
 
 Jeden uzel je samostatný backend s lokálními daty. Desktop spouští stejný backend jako server a přidává obal UI. První desktopový cíl pro ověření je Linux; Windows a macOS vyžadují samostatné ověření balení.
 
-Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Konkrétní jazyk a framework zůstávají otevřené.
+Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Konkrétní jazyk a framework zůstávají otevřené. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
 
 ## Data a zápis
 
