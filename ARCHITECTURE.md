@@ -4,9 +4,9 @@
 
 Jeden uzel je samostatný backend s lokálními daty. Desktop spouští stejný backend jako server a přidává obal UI. První desktopový cíl pro ověření je Linux; Windows a macOS vyžadují samostatné ověření balení.
 
-Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Konkrétní jazyk a framework zůstávají otevřené. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
+Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Jádro pro M1 používá Python dle [ADR 0013](docs/adr/0013-m1-stack.md); doménové služby jsou nezávislé na HTTP adaptéru. Produkční serverový framework se bude vybírat proti konkrétním požadavkům V-10/M1. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
 
-Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal a bezpečné předání tokenu uzavře M0-06. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
+Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal PySide6 a nativní předání tokenu jsou ověřeny v ADR 0010; volbu stacku uzavírá ADR 0013. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
 
 ## Data a zápis
 
@@ -26,12 +26,12 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 
 `spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci ani import cizích repozitářů. Minimální schémata konfigurace projektu/uzlu validuje samostatně `spikes/configuration.py` podle [ADR 0004](docs/adr/0004-project-node-config.md); nejsou zatím napojena na storage lifecycle. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
 
-Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vlákno ve stejném Python procesu, token předán přímo nativnímu request interceptoru. Viz [ADR 0007](docs/adr/0007-desktop-poc.md). Jde o ověřený lifecycle statického UI a paměťového API; volba produkčního bindingu/balíku a napojení projektových služeb zůstávají otevřené.
+Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vlákno ve stejném Python procesu, token předán přímo nativnímu request interceptoru. Viz [ADR 0007](docs/adr/0007-desktop-poc.md). Jde o ověřený lifecycle statického UI a paměťového API; PySide6 a .deb jsou zvolený základ pro M1 dle ADR 0013; napojení projektových služeb a veřejný release zůstávají otevřené.
 
 ## Kontrakty M0-08
 
 Závazné návrhové kontrakty Backend/Role/Context Manifest a tok deterministického orchestrátoru vymezuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md). Odděluje přenositelnou definici od lokálního bindingu, capabilities od execution boundary a ukládá manifest přesného požadavku mimo Git. Implementace LLM a RBAC zůstává otevřená.
 
-Posouzení distribuční cesty v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md) doporučuje zachovat Python jádro a ověřit PySide6/WebEngine s nativním linuxovým balíkem. Jde o návrh, nikoli nahrazení současného PyQt PoC nebo dokončenou volbu produkčního stacku.
+Posouzení distribuční cesty v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md) doporučuje zachovat Python jádro a ověřit PySide6/WebEngine s nativním linuxovým balíkem. Toto původní doporučení následně ověřily ADR 0010–0012 a jako základ pro M1 přijímá ADR 0013.
 
 Desktopové PoC nyní používá PySide6 dle [ADR 0010](docs/adr/0010-pyside-desktop-validation.md). Přechod zachovává API a životní cyklus; historický PyQt experiment ADR 0007 zůstává podkladem návrhu.

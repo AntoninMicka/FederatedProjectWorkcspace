@@ -654,7 +654,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; minimální schéma projektu/uzlu v1 a samostatná validace viz ADR 0004, storage integrace zbývá.
 - [x] Obnova souborových změn před commitem — Linux PoC validated, včetně pádu procesu; nejde o celou aplikační transakci.
 - [x] Popsat uživatelský scénář konfliktu a ověřit divergenci stejné entity — designed + Git CLI PoC validated; UI není implementované.
-- [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
+- [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed; Python, PySide6 a .deb jako základ pro M1 dle ADR 0013.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
 - [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá TODO V-08.
 - [x] Návrhové kontrakty Backend, Role a Context Manifest — designed v [ADR 0008](docs/adr/0008-context-and-publication-contracts.md); implementace zbývá M2–M4.
@@ -665,8 +665,8 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); skutečný browser/obal, bootstrap a aplikační integrace zbývají v TODO V-10.
 - [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; produkční TLS/SSH a cílové balení zbývají v TODO V-09 a M0-05/M0-06.
 - [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.
-- [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux Qt/WebEngine má spustitelné PoC podle [ADR 0007](docs/adr/0007-desktop-poc.md); distribuční balení a finální binding zůstávají otevřené. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
-- [ ] Uzavřít zbývající rozhodnutí M0-05/M0-06 a schválit připravenost pro M1. Review M0-09 dne 2026-09-09 dokončeno s výsledkem **Gate M0 nesplněn**; důkazy a podmínky opakovaného posouzení jsou v [TODO](TODO.md).
+- [x] Stack pro M1 uzavřen — designed v [ADR 0013](docs/adr/0013-m1-stack.md): Python, Git CLI/SQLite, Linux PySide6/WebEngine a .deb. Lifecycle a čistá/offline instalace jsou PoC validated dle ADR 0010–0012. Cílové měření M0-05 a produkční release zůstávají otevřené.
+- [ ] Dokončit cílové ověření M0-05 a schválit připravenost pro M1; M0-06 uzavírá ADR 0013. Review M0-09 dne 2026-09-09 dokončeno s výsledkem **Gate M0 nesplněn**; důkazy a podmínky opakovaného posouzení jsou v [TODO](TODO.md).
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.
 
