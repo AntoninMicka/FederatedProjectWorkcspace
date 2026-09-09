@@ -1,0 +1,11 @@
+# Katalog reuse
+
+| Kandidát | Stav | Účel | Co zbývá ověřit |
+| --- | --- | --- | --- |
+| Git CLI | evaluate | Referenční storage PoC | Produkční izolace, autentizace, cílové balení |
+| libgit2 / C++ | evaluate | Alternativní Git adapter | Knihovna není v prostředí dostupná přes pkg-config; sestavení a srovnávací PoC |
+| Python stdlib SQLite | evaluate | Obnovitelný lokální index | Plné schéma, výkon a paměť na Turrisu |
+| Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
+| Vlastní starší projekty | candidate | Potenciální reuse | Repozitáře zatím nejsou určeny; licence a kompatibilita neověřeny |
+
+Žádná komponenta zatím nemá schválený produkční status reuse. Licence a verze závislostí zaznamenat před zařazením do distribuované aplikace.

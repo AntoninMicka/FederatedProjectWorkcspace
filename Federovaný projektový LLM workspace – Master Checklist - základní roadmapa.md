@@ -591,6 +591,10 @@
 
 ## Milestone M0 – Architecture spike
 
+Zahájeno 2026-09-09: pracovní návrhy jsou v `ARCHITECTURE.md`, `DATA_MODEL.md`,
+`FEDERATION.md` a `SECURITY.md`. Referenční storage PoC a výsledky jsou popsány
+v `docs/adr/0001-m0-baseline.md`. Gate M0 zůstává otevřený; návrhy nejsou finálně ověřeny.
+
 - [ ] Datový model.
 - [ ] Repo layout.
 - [ ] Artifact metadata.
@@ -712,12 +716,12 @@
 
 # 19. První úkoly pro Codium
 
-- [ ] `ARCHITECTURE.md`
-- [ ] `DATA_MODEL.md`
-- [ ] `FEDERATION.md`
-- [ ] `SECURITY.md`
-- [ ] `REUSE_CATALOG.md`
-- [ ] vytvořit skeleton repository
+- [x] `ARCHITECTURE.md` — vytvořen pracovní návrh M0
+- [x] `DATA_MODEL.md` — vytvořen pracovní návrh M0
+- [x] `FEDERATION.md` — vytvořen pracovní návrh M0
+- [x] `SECURITY.md` — vytvořen pracovní návrh M0
+- [x] `REUSE_CATALOG.md` — vytvořen pracovní návrh M0
+- [x] vytvořit skeleton repository — dokumentace, storage PoC a testy; aplikační skeleton až po volbě stacku
 - [ ] vytvořit LXC development deployment
 - [ ] vytvořit desktopový launcher a balení se společným aplikačním jádrem
 - [ ] implementovat persistentní identitu a lokální úložiště desktopového uzlu
