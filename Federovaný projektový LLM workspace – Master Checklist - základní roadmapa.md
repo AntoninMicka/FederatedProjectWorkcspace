@@ -648,7 +648,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuální výsledky ověření a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuální výsledky ověření a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 splněn dle závěrečného review M0-09R v TODO; navazuje M1.**
 
 - [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
 - [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; minimální schéma projektu/uzlu v1 a samostatná validace viz ADR 0004, storage integrace zbývá.
@@ -662,11 +662,11 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Designed dle ADR 0008: V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
 - [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
 - [x] Designed dle ADR 0008: Uzavřít pravidla větví a publikace (M0-08). Konflikty obsahu/sidecaru včetně textově čistého sémanticky neplatného merge jsou PoC validated v M0-07, scénáře a limity ve [FEDERATION](FEDERATION.md); produkční synchronizace zůstává M5.
-- [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); skutečný browser/obal, bootstrap a aplikační integrace zbývají v TODO V-10.
-- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; produkční TLS/SSH a cílové balení zbývají v TODO V-09 a M0-05/M0-06.
+- [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); browser/obal a bootstrap ověřeny v ADR 0010; aplikační integrace zbývá v TODO V-10.
+- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; cílové ověření a PoC balení dokončeny v M0-05/M0-06; produkční TLS/SSH a release zbývají v TODO V-09/V-11.
 - [x] Turris Omnia/LXC a desktop — PoC validated pro zvolený stack: cílový SSD probe M0-05, desktopové měření ADR 0010 a čistá instalace ADR 0012. Přesné metriky a hranice důkazů drží TODO; nejde o produkční kapacitní test.
-- [x] Stack pro M1 uzavřen — designed v [ADR 0013](docs/adr/0013-m1-stack.md): Python, Git CLI/SQLite, Linux PySide6/WebEngine a .deb. Lifecycle a čistá/offline instalace jsou PoC validated dle ADR 0010–0012. Cílové měření M0-05 a produkční release zůstávají otevřené.
-- [ ] Schválit připravenost pro M1 po opakovaném review M0-09R; cílové ověření M0-05 dokončeno, M0-06 uzavírá ADR 0013. Review M0-09 dne 2026-09-09 dokončeno s výsledkem **Gate M0 nesplněn**; důkazy a podmínky opakovaného posouzení jsou v [TODO](TODO.md).
+- [x] Stack pro M1 uzavřen — designed v [ADR 0013](docs/adr/0013-m1-stack.md): Python, Git CLI/SQLite, Linux PySide6/WebEngine a .deb. Lifecycle a čistá/offline instalace jsou PoC validated dle ADR 0010–0012. Cílové měření M0-05 je PoC validated; produkční release zůstává otevřený.
+- [x] Připravenost pro M1 schválena v závěrečném review M0-09R: cílové ověření M0-05 a stack M0-06 doloženy. Historická negativní review a aktuální důkazy drží [TODO](TODO.md).
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.
 

@@ -1,22 +1,36 @@
 # TODO — operativní práce
 
-Aktuální milník: **M0 — Architecture spike**, Gate M0 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a [ADR 0003](docs/adr/0003-coordinated-operation.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
+Aktuální milník: **M1 — Single-node project workspace**. Gate M0 je splněný v rozsahu architecture spike dle závěrečného review M0-09R níže; Gate M1 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a [ADR 0003](docs/adr/0003-coordinated-operation.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
 
 Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`. Úroveň výsledku je samostatná: designed / implemented / PoC validated / production-ready. Žádná aplikační část zatím není označena production-ready. Následující úkoly nejsou zahájené ani prokazatelně blokované jen kvůli svým závislostem.
 
-## Nejbližší úkol M0
+## Nejbližší úkol M1
 
-**M0-09 — Závěrečné opakované Gate review.** Stack i desktopový instalační kandidát jsou uzavřené pro rozsah M0 a cílový probe na Omnii prošel. Nyní vyhodnotit souhrn důkazů a otevřených omezení a explicitně rozhodnout o přechodu do M1; samotný PASS gate automaticky neuzavírá.
+**M1-01 — Otevření existujícího projektu a seznam artefaktů v desktopu.** Adaptovat konfiguraci v1, Workspace a lokální API; uživatel zvolí registrovaný projekt a uvidí jeho název, commit ID a artefakty. První krok je čtení bez editoru a bez nových projektových mutací. Přesný rozsah a akceptace jsou níže.
 
-## Další zbývající práce M0
+## Závěrečné Gate review M0-09R
 
-- [ ] [planned] **M0-09R — Opakované Gate review (cílová úroveň: designed).** Posoudit důkazy M0-05/M0-06 po dokončení probe, oddělit otevřené produkční úkoly od podmínek vstupu do M1 a zaznamenat rozhodnutí. Původní negativní review zachovat.
+Posouzený HEAD `1efc6d3`, pracovní strom čistý. **Gate M0 splněn pro rozsah architecture spike; přechod do M1 je schválen.** Toto rozhodnutí nahrazuje předchozí negativní review, která zůstávají níže jako historie. Neprohlašuje produkční připravenost ani splnění Gate M1.
 
+| Podmínka Gate M0 | Důkaz | Závěr |
+| --- | --- | --- |
+| Zaznamenaný stack podložený PoC | ADR 0013; srovnání Git ADR 0005, PySide/měření ADR 0010 | Splněno: Python, Git CLI/SQLite, PySide/WebEngine, Linux .deb. |
+| Autoritativní schéma a obnova indexu | ADR 0002/0004, validátory a testy; M0-05 rebuild indexu na cíli | Splněno pro minimální schéma. |
+| Koordinace a recovery | ADR 0003, Workspace testy a M0-05: všech 12 checkpointů na Omnia SSD | Splněno pro procesní pády ve vymezeném PoC. |
+| Návrh bezpečného lokálního API | ADR 0006/0007/0010, token/origin policy, skutečné Qt okno | Splněno pro návrh a transportní PoC. |
+| Konflikt entity a obsah/sidecar | M0-07, FEDERATION a test_merge_scenarios | Splněno včetně čistého sémanticky neplatného merge. |
+| Orchestrace bez LLM a execution boundaries | ADR 0008, návrhové scénáře | Splněno jako designed; LLM/RBAC engine se nepředstírá. |
+| Cílové prostředí a balení | ADR 0012 čistá instalace/offline/upgrade/purge; M0-05 ARMv7/Btrfs měření | Splněno jako PoC validated. |
 
+Poslední plná sada má 73 úspěšných testů (důkaz u cílového probe); nový uživatelský výstup potvrzuje cílové ověření. V tomto dokumentačním review se testy neopakovaly. Ověřeny návaznost důkazů, odkazy a finální diff.
+
+Otevřené V-01 až V-11 se nepřevádějí na hotové: V-08 a V-10 jsou integrační podmínky práce s projekty, V-04/V-05 podmínky rozšíření metadat/importu, V-06/V-07 produkční ochrany a V-11 veřejný release. Výpadek napájení, plné RBAC, síťová federace, LLM, kapacita velkých projektů ani další OS nejsou vstupními podmínkami M1 podle definice Gate M0. Jejich backlog zůstává zachovaný. Produkční HTTP server není schválen pouhým úspěchem loopback PoC.
+
+- [ ] [planned] **M1-01 — Otevřít existující projekt v desktopu (cílová úroveň: PoC validated).** Navázat na V-08: při otevření ověřit registraci, shodu project_id, podporovanou konfiguraci, existenci a bezpečné umístění root/state. Zpřístupnit pouze autorizovaný lokální výběr projektu a seznam artefaktů z validovaného commitu přes stávající API. UI zobrazí projekt, commit a seznam, nebo srozumitelnou chybu pro neplatnou konfiguraci, pending operaci či stale/nevalidní projekci; nesmí vydávat stará data za aktuální ani vykonávat obsah artefaktů. Ověřit dva projekty bez záměny, chybnou registraci, opětovné otevření a případnou obnovu indexu. Před automatickými zápisy indexu/stavu popsat jejich hranice; klientské persistentní mutace a editor navazují až po V-10. Nezavádět druhou storage implementaci.
 
 ## Gate review M0-09 — 2026-09-09
 
-Historické posouzení před následným ručním deployem; novější důkaz je uveden u M0-05 a v dokončených výstupech. Rozhodnutí o gate zatím nebylo změněno.
+Historické posouzení před následným ručním deployem; novější důkaz je uveden u M0-05 a v dokončených výstupech. Aktuální rozhodnutí drží závěrečné M0-09R výše.
 
 Posouzený HEAD: `1c7b228`, vstupní pracovní strom čistý. Výsledek: **Gate M0 nesplněn; M1 nezahajovat automaticky.** Review je dokončené, schválení gate nikoli. Nezavádí se nové architektonické rozhodnutí ani změna priorit nasazení.
 
@@ -62,7 +76,7 @@ Uživatel přesměrovává X11 přes síť; odpojení jeho kontejneru by přeru�
 
 - [ ] [planned] **V-10 — Integrace lokálního API (cílová úroveň: PoC validated).** Qt/WebEngine, same-origin UI a token v nativním interceptoru jsou ověřeny M0-06a. Zbývá lifecycle po násilném pádu, případný úklid Unix socketů a bezpečné vykreslení nedůvěryhodných artefaktů. Před persistentními mutacemi v M1 definovat klientské operation ID/retry/receipt podle ADR 0003, limity souběhu a celkový deadline requestu. Protokolový čítač ADR 0006 toto neprokazuje.
 
-## Pozdější operativní backlog — nezahajovat místo M0
+## Navazující operativní backlog — pořadí řídí nejbližší úkol
 
 Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úkolu. Milníky a gates zůstávají v roadmapě.
 
@@ -91,6 +105,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-09R — Designed: závěrečné Gate review.** Podmínky Gate M0 splněny podle tabulky výše; přechod do M1 schválen. První implementační úkol M1-01 vymezen bez zahájení implementace. Produkční omezení a historické negativní review zachovány.
 
 - [x] [completed] **M0-05 — PoC validated: cílový běh a recovery na Omnii SSD.** Uživatel doložil `spikes.target_probe` s výsledkem PASS: Btrfs, armv7l, Python 3.13.5, SQLite 3.46.1, Git 2.47.3. Navazuje na potvrzený Debian LXC a SSD /dev/sda; pracovní adresář /var/tmp/workspace-poc. Všech 15 případů má verified=true: tři normální běhy a 12 pádů vlastního workeru. Probe ověřil pending čtení, zachování kandidáta, přesné bajty, jediný commit operace, idempotenci recovery, rebuild smazaného indexu a úklid dočasných dat. Jde o uživatelský cílový výstup, nikoli nový běh celé unittest sady. Původní demo 0,66 s běželo na tmpfs a nemíchá se s novými SSD měřeními.
 

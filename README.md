@@ -2,7 +2,7 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt je ve fázi **M0 — Architecture spike**. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; práce s projekty v UI ještě není implementovaná.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; práce s projekty v UI ještě není implementovaná.
 
 ## Desktop
 
@@ -94,7 +94,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Aktuální pořadí práce drží [TODO](TODO.md). Lokální API i desktopové PoC jsou ověřené; distribuční balení a měření backendu na Turris/LXC zůstávají otevřené před uzavřením M0.
+Aktuální pořadí práce drží [TODO](TODO.md). Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. Navazuje zapojení skutečných projektových služeb v M1; produkční release zůstává otevřený.
 
 ## Ruční deploy na Omnii
 
