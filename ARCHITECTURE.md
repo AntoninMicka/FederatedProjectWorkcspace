@@ -22,4 +22,4 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 
 ## Stav implementace
 
-`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci, import cizích repozitářů ani schémata konfigurace projektu/uzlu. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
+`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci ani import cizích repozitářů. Minimální schémata konfigurace projektu/uzlu validuje samostatně `spikes/configuration.py` podle [ADR 0004](docs/adr/0004-project-node-config.md); nejsou zatím napojena na storage lifecycle. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.

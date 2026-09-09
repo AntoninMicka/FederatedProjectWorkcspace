@@ -4,12 +4,13 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [demo|setup|test|check CESTA|help]
+Použití: ./run.sh [demo|setup|test|check CESTA|config project|node CESTA|help]
 
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
   test         Spustí celou unittest sadu.
   check CESTA  Ověří artefakty a registry projektu bez zápisu; neověřuje project.json.
+  config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
   help         Zobrazí tuto nápovědu.
 
 Jde o storage PoC bez UI, serveru, LLM a federace.
@@ -25,12 +26,16 @@ case "$command_name" in
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
     check)
         if (( $# != 2 )); then usage >&2; exit 2; fi ;;
+    config)
+        if (( $# != 3 )) || [[ "$2" != project && "$2" != node ]]; then
+            usage >&2; exit 2
+        fi ;;
     *) printf 'Neznámý příkaz: %s\n' "$command_name" >&2; usage >&2; exit 2 ;;
 esac
 
 # Resolve caller-relative project paths before switching to the source directory.
-if [[ "$command_name" == check ]]; then
-    project_path=$2
+if [[ "$command_name" == check || "$command_name" == config ]]; then
+    if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
     if [[ "$project_path" != /* ]]; then project_path="$PWD/$project_path"; fi
 fi
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -63,4 +68,5 @@ case "$command_name" in
     demo) exec "$python_bin" -m spikes.demo ;;
     test) exec "$python_bin" -m unittest discover -s tests -v ;;
     check) exec "$python_bin" -m spikes.check_project "$project_path" ;;
+    config) exec "$python_bin" -m spikes.check_config "$2" "$project_path" ;;
 esac

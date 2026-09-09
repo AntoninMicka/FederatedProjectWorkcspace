@@ -93,7 +93,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 **Stav M0:** autoritativní Git a lokální index jsou přijatý návrh. `spikes/storage.py` má PoC validated obnovu indexu validovaného commitu a kontrolu jeho ID vůči HEAD. Index zatím obsahuje pouze ID/název entity; úplné dotazy nad metadaty a vztahy ani jednotná aplikační operace nejsou hotové.
 
 - [ ] Jeden projekt reprezentovat Git repozitářem.
-- [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; schéma project.json zbývá.
+- [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; minimální project.json/node.json v1 a samostatná validace viz ADR 0004.
 - [ ] Oddělit:
   - [ ] aktivní projektové dokumenty,
   - [ ] zdroje,
@@ -632,15 +632,16 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuálně ověřeno 32 testů; podrobné výsledky a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuální výsledky ověření a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
 
 - [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
-- [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; úplné schéma projektu/uzlu zbývá.
+- [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; minimální schéma projektu/uzlu v1 a samostatná validace viz ADR 0004, storage integrace zbývá.
 - [x] Obnova souborových změn před commitem — Linux PoC validated, včetně pádu procesu; nejde o celou aplikační transakci.
 - [x] Popsat uživatelský scénář konfliktu a ověřit divergenci stejné entity — designed + Git CLI PoC validated; UI není implementované.
 - [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
-- [ ] Uzavřít datové kontrakty projektu/uzlu a návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
+- [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá TODO V-08.
+- [ ] Uzavřít návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
 - [ ] Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
 - [ ] V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
 - [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.

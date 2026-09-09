@@ -6,11 +6,10 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** M0-01 je dokončený Linux PoC; důkazy a limity jsou níže a v [ADR 0003](docs/adr/0003-coordinated-operation.md). Gate M0 zůstává otevřený.
+**M0-03 — Srovnat libgit2/C++ s existujícím Git CLI PoC.** M0-01 a M0-02 jsou dokončené v rozsahu PoC; důkazy a limity jsou níže a v ADR 0003/0004. Gate M0 zůstává otevřený.
 
 ## Další zbývající práce M0
 
-- [ ] **[planned] M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** Určit verze, migrace, oddělení přenositelné definice od lokální identity/credentials a validaci. Artefaktové/registry schéma už existuje. Nepřidávat nyní síťovou distribuci uživatelů.
 - [ ] **[planned] M0-03 — Srovnat libgit2/C++ s existujícím Git CLI PoC.** Nejprve ověřit dostupnost závislosti a reuse katalog; použít stejné scénáře commit/branch/conflict/abort/recovery, přenos a autentizaci. Zapsat výsledky a rozhodnutí o Git adaptéru včetně balení; nedostupnost knihovny v minulém prostředí není zamítnutí technologie.
 - [ ] **[planned] M0-04 — Lokální transport/API PoC.** Porovnat IPC/socket s loopback HTTP pro desktop; ověřit autentizaci a nepovolené volání. U HTTP testovat token, Host/Origin a CSRF. Oddělit lokální spojení od budoucí federace. Podklad: SECURITY a roadmapa 12A.
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Určit dostupný testovací cíl a zaznamenat HW/OS/architekturu. Změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
@@ -28,6 +27,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 - [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
 - [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními.
+- [ ] [planned] **V-08 — Aplikační integrace konfigurace (cílová úroveň: implemented).** Navázat na schéma v1 z M0-02: při otevření projektu ověřit project_id registrace, existenci a bezpečné umístění kořenů/stavu, podporovanou verzi a vazbu identity na credential úložiště. Navrhnout bezpečnou inicializaci a serializovaný zápis project.json přes Workspace a oddělený obnovitelný zápis node.json, včetně budoucích explicitních migrací. Před změnou popsat crash boundaries; současný samostatný validátor nic nezapisuje a storage projekce konfiguraci nečte.
 - [ ] **[planned] R-01 — Identifikovat starší zdrojové projekty pro reuse.** Katalog zatím neobsahuje konkrétní repository/cesty těchto projektů. Po jejich identifikaci prověřit licence, závislosti, kompatibilitu a důvod reuse/adapt/rewrite/reject. Nevyvozovat, že inventura proběhla.
 
 ## Pozdější operativní backlog — nezahajovat místo M0
@@ -49,6 +49,10 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-02 — PoC validated: minimální project.json a konfigurace uzlu.** `spikes/configuration.py` a read-only `check_config`/`run.sh config` validují přenositelný projekt, lokální uzel, stabilní UUID, verzi v1, nepřekrývající se lokální cesty a opaque credential reference. Sdíleny parserové limity a UUID/timestamp pravidla; neznámé verze se odmítají bez migrace. Kontrakt a budoucí explicitní migrační pravidla: [ADR 0004](docs/adr/0004-project-node-config.md), příklady v DATA_MODEL. Deset nových testů konfigurace pokrývá i chybové cesty a read-only CLI. `python3 -m unittest discover -s tests -v`: 42 testů prošlo; `bash -n run.sh` a kontrola dokumentovaných příkladů/odkazů prošly. Zapojení konfigurace do aplikačního lifecycle, ověření identity/vaultu a migrační zápis zbývají V-08; distribuce uživatelů není implementována.
+
+- [x] [completed] **Implemented — shellový launcher storage PoC.** `run.sh` poskytuje výchozí dočasné demo, explicitní setup do `.venv`, test, check a help; `spikes/demo.py` používá existující Workspace/Git a lifecycle podle ADR 0003. Ověřeno demo, `bash -n`, spuštění z cizího adresáře, relativní cesta s mezerami, chyby argumentů a neplatný/chybějící projekt bez zápisu. Přes `./run.sh test` prošlo 32 testů. Síťová instalace `setup` nebyla v tomto běhu provedena. Launcher není UI/server; běžná aplikace a balení zůstávají v M1.
 
 - [x] [completed] **Implemented — optimalizace projektových instrukcí AGENTS.md.** Rozlišeno čtení pro návrh, dokumentaci a implementaci; doplněno opětovné použití nezměněných podkladů, pravidlo „další úkol“, aktualizace TODO po uceleném výsledku a evidence ověření bez duplikace počtů testů. Crash boundaries přesunuty před implementaci, zpřesněno cílené a závěrečné ověření. Architektonické mantinely, LLM workflow a pravidla commitů zachovány. Ověřena konzistence, lokální odkazy a diff; čistě dokumentační změna bez nového běhu testů.
 

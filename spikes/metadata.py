@@ -41,6 +41,15 @@ def uuid(value):
         raise ValidationError('Expected canonical UUID') from exc
 
 
+def timestamp(value):
+    require(isinstance(value, str) and bool(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', value)),
+            'created_at must be UTC RFC3339 ending in Z')
+    try:
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise ValidationError('Invalid calendar timestamp') from exc
+
+
 def safe_path(value):
     require(isinstance(value, str) and bool(value), 'Expected relative path')
     parts = value.split('/')
@@ -146,12 +155,7 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     uuid(meta['author_id'])
     for key in ['title', 'kind', 'created_at', 'privacy', 'provenance']:
         require(isinstance(meta[key], str) and bool(meta[key].strip()), f'Invalid {key}')
-    require(bool(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', meta['created_at'])),
-            'created_at must be UTC RFC3339 ending in Z')
-    try:
-        datetime.fromisoformat(meta['created_at'].replace('Z', '+00:00'))
-    except ValueError as exc:
-        raise ValidationError('Invalid calendar timestamp') from exc
+    timestamp(meta['created_at'])
     require(meta['privacy'] in {'public', 'project', 'confidential', 'local-only'}, 'Invalid privacy')
     require(meta['provenance'] in {'user', 'external', 'llm-generated', 'llm-transformed', 'snapshot'},
             'Invalid provenance')
