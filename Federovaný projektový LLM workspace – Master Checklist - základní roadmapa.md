@@ -770,3 +770,57 @@ První prototyp je hotový, pokud lze:
 První prototyp ověřit i jako samostatně běžící desktopovou aplikaci s lokálními daty.
 
 Teprve po ověření tohoto workflow propojit desktopový a serverový uzel a řešit synchronizaci, distribuované identity a konflikty.
+
+---
+
+# 21. Ollama / Open WebUI – obousměrná integrace
+
+Vedle použití Ollamy jako interního backendu workspace umožnit také opačný směr integrace: federovaný projektový workspace může vystupovat jako zdroj kontextu, nástrojů a projektových artefaktů pro externí LLM rozhraní, zejména Ollama/Open WebUI.
+
+- [ ] Navrhnout integrační API nezávislé na konkrétním UI klientovi.
+- [ ] Umožnit přístup z Ollama/Open WebUI k vybranému projektu v rozsahu oprávnění přihlášeného uživatele.
+- [ ] Umožnit z externího LLM rozhraní:
+  - [ ] vybrat projekt,
+  - [ ] vyhledat projektové artefakty,
+  - [ ] načíst explicitně vybraný kontext,
+  - [ ] použít Context Builder workspace,
+  - [ ] získat Context Manifest,
+  - [ ] pracovat s projektovými registry a vztahy v rozsahu povolených capabilities.
+- [ ] Zachovat stejné RBAC, privacy a execution-boundary kontroly jako při použití interního UI.
+- [ ] Externí klient nesmí získat přímý neomezený přístup k projektovému Git repozitáři nebo filesystemu.
+
+## Zpětný zápis výsledků
+
+- [ ] Umožnit vrátit výsledek práce z Ollama/Open WebUI zpět do workspace.
+- [ ] Výsledek importovat jako explicitní artefakt nebo návrh změny, nikoli jako automatickou modifikaci existujícího projektového obsahu.
+- [ ] U importovaného výsledku evidovat provenance minimálně:
+  - [ ] zdrojovou integraci,
+  - [ ] uživatele,
+  - [ ] projekt,
+  - [ ] backend/model, pokud je znám,
+  - [ ] čas,
+  - [ ] použité vstupní artefakty / Context Manifest, pokud jsou dostupné,
+  - [ ] původní conversation/run ID, pokud jej integrace poskytuje.
+- [ ] Výsledek může být následně:
+  - [ ] uložen jako nový artefakt,
+  - [ ] připojen jako návrh k existujícímu artefaktu,
+  - [ ] předán projektové LLM roli,
+  - [ ] použit jako vstup workflow,
+  - [ ] přijat, upraven nebo zamítnut člověkem.
+- [ ] Zápis do autoritativních projektových dat musí vždy projít standardní aplikační cestou:
+  `integration → authorization → validation → application orchestrator → Git operation → index`.
+- [ ] Open WebUI ani jiný externí LLM klient nesmí obcházet aplikační orchestrátor, Git lifecycle, audit nebo human-approval pravidla.
+
+## Integrační princip
+
+Integrace má být obousměrná:
+
+`workspace → Context Builder → Ollama / Open WebUI → LLM`
+
+a
+
+`LLM / Open WebUI → návrh/výsledek → workspace → validace → verzovaný artefakt`
+
+Open WebUI tedy může sloužit jako alternativní konverzační frontend nad projektovými daty, ale **workspace zůstává autoritou pro projektová data, oprávnění, provenance, rozhodnutí a verzování**.
+
+Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř Open WebUI. Konverzační historie může zůstat vlastnictvím externího klienta; do workspace se vracejí explicitně vybrané výsledky, artefakty a jejich dohledatelná provenance.
