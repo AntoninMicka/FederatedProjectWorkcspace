@@ -1,6 +1,10 @@
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
+Aktuální milník: **M0 — Architecture spike**. Operativní úkoly, chyby a ověřovací kroky jsou v [TODO.md](TODO.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+
+Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
+
 ## 0. Cíl MVP
 
 - [ ] Definovat systém jako **self-hosted projektový workspace** provozovatelný primárně:
@@ -64,7 +68,7 @@
 
 ## 1B. Evidence kandidátních řešení
 
-- [ ] Zavést `reuse-catalog`.
+- [x] Zavést `reuse-catalog` — evidence kandidátů existuje v REUSE_CATALOG.md; inventura vlastních projektů zůstává otevřená.
 - [ ] Každému kandidátu přiřadit stav:
   - [ ] `candidate`
   - [ ] `evaluate`
@@ -80,8 +84,10 @@
 
 ## 2A. Git jako primární projektový datastore
 
+**Stav M0:** autoritativní Git a lokální index jsou přijatý návrh. `spikes/storage.py` má PoC validated obnovu indexu validovaného commitu a kontrolu jeho ID vůči HEAD. Index zatím obsahuje pouze ID/název entity; úplné dotazy nad metadaty a vztahy ani jednotná aplikační operace nejsou hotové.
+
 - [ ] Jeden projekt reprezentovat Git repozitářem.
-- [ ] Definovat základní adresářovou strukturu.
+- [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; schéma project.json zbývá.
 - [ ] Oddělit:
   - [ ] aktivní projektové dokumenty,
   - [ ] zdroje,
@@ -134,12 +140,14 @@
 
 ## 2C. Uložení metadat podle formátu
 
+**Stav M0: PoC validated.** Frontmatter/sidecar parser, společné schéma, registry po entitách a kontrola vztahů jsou implementované v `spikes/metadata.py`. Zachování bajtů importu a obnova souborových změn jsou ověřené. Níže uvedené aplikační schopnosti zůstávají otevřené do integrace; neimplementovat znovu jejich PoC. Přejmenování v journalu není ověřením distribuovaného merge.
+
 - [ ] Pro editovatelné projektové Markdown dokumenty používat YAML frontmatter jako jediné místo autoritativních metadat dokumentu.
 - [ ] Importované zdroje, které mají zůstat beze změny, zachovat v původních bajtech včetně Markdownu; jejich projektová metadata uložit do sidecaru.
 - [ ] Pro PDF, obrázky a další formáty bez vhodných editovatelných metadat použít sidecar se stabilním ID artefaktu.
-- [ ] V M0 určit povinná pole, verzi schématu a konvenci umístění sidecaru; vazbu založit na stabilním ID s evidencí aktuální cesty souboru.
+- [x] V M0 určit povinná pole, verzi schématu a konvenci umístění sidecaru; vazbu založit na stabilním ID s evidencí aktuální cesty souboru — PoC validated, ADR 0002.
 - [ ] Přejmenování nebo smazání artefaktu promítnout do sidecaru a odkazů v jednom commitu; před commitem ověřit konzistenci.
-- [ ] Git commit nepovažovat za transakci pracovního adresáře: pro přerušené změny souboru a sidecaru navrhnout obnovu po pádu.
+- [x] Navrhnout obnovu přerušené změny souboru a sidecaru — PoC validated pomocí journalu (ADR 0002); integrace celé operace s commitem je otevřená.
 - [ ] Konflikty změna–smazání, přejmenování–úprava a osiřelý sidecar řešit explicitně; metadata nesmějí být tiše zahozena.
 - [ ] Metadata neduplikovat mezi frontmatter a sidecarem; použít společné logické schéma pro oba způsoby uložení.
 - [ ] Strukturované entity registrů ukládat jako JSON s vlastními poli ID a verze schématu; nepřidávat k nim duplicitní sidecar.
@@ -591,30 +599,22 @@
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09: pracovní návrhy jsou v `ARCHITECTURE.md`, `DATA_MODEL.md`,
-`FEDERATION.md` a `SECURITY.md`. Referenční storage PoC a výsledky jsou popsány
-v `docs/adr/0001-m0-baseline.md`. Gate M0 zůstává otevřený; návrhy nejsou finálně ověřeny.
-Pokračování M0: `docs/adr/0002-metadata-journal.md` popisuje implementovanou validaci artefaktů/registrů a Linux PoC obnovy souborů po pádu procesu. Integrace s commitem a řízením přístupu zůstává otevřená.
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a `tests/`. Aktuálně ověřeno 19 testů; podrobné výsledky a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
 
-- [ ] Datový model.
-- [ ] Repo layout.
-- [ ] Artifact metadata.
-- [ ] Backend abstraction.
-- [ ] Role abstraction.
-- [ ] Federation model.
-- [ ] Společné jádro pro serverový a desktopový uzel.
-- [ ] Výběr prvního desktopového OS, obalu UI a životního cyklu lokálního backendu.
-- [ ] Definovat frontmatter/sidecar schéma, soubory entit registrů a obnovu SQLite indexu.
-- [ ] Navrhnout a projít uživatelský scénář konfliktu po offline úpravách dvou uzlů.
-- [ ] Ověřit bezpečný transport mezi desktopovým UI a lokálním backendem.
-- [ ] Vyhodnotit C++ jádro s libgit2 krátkým PoC: commit, větvení, merge konflikt, přerušení operace a sestavení na cílovém Turris/LXC a desktopu.
-- [ ] Výchozí návrh MVP držet jako jeden backendový proces s oddělenými moduly pro storage, federaci a LLM; jazyk určit v M0.
-- [ ] Hybrid C++ + Python daemon přijmout pouze při doloženém přínosu oproti jednomu backendu; zaznamenat náklady balení, IPC, diagnostiky, obnovy po pádu a aktualizací.
-- [ ] libgit2 posoudit proti bezpečnému volání Git CLI bez shellu přes společné Git rozhraní; ověřit autentizaci, podporované operace a distribuci závislostí.
-- [ ] Porovnat paměť, start, instalaci a provoz na cílovém Turrisu/LXC i desktopu; samotná preference jazyka není podmínkou rozdělení do více procesů.
-- [ ] Vyhodnotit sdílené webové UI v desktopovém WebView, včetně Qt obalu; konkrétní frontendový framework vybrat až po ověření.
-- [ ] Výslednou volbu stacku a případné hranice procesů zaznamenat jako architektonické rozhodnutí.
-- [ ] Threat model.
+- [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
+- [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; úplné schéma projektu/uzlu zbývá.
+- [x] Obnova souborových změn před commitem — Linux PoC validated, včetně pádu procesu; nejde o celou aplikační transakci.
+- [x] Popsat uživatelský scénář konfliktu a ověřit divergenci stejné entity — designed + Git CLI PoC validated; UI není implementované.
+- [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
+- [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
+- [ ] Uzavřít datové kontrakty projektu/uzlu a návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
+- [ ] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu.
+- [ ] Doplnit návrh pravidel větví a ověřit konflikty obsahu/sidecaru včetně sémanticky neplatného merge. Implementace síťové federace zůstává M5.
+- [ ] Ověřit bezpečný lokální transport/API pro desktop podle SECURITY a sekce 12A.
+- [ ] Uzavřít Git implementaci na základě porovnání C++/libgit2 s existujícím Git CLI PoC, včetně autentizace a distribuce závislostí.
+- [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.
+- [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux je navržený první cíl; Qt/WebView kandidát. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
+- [ ] Zaznamenat konečná rozhodnutí a vyhodnotit připravenost pro M1.
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Implementace federace zůstává v M5.
 
@@ -715,29 +715,13 @@ Pokračování M0: `docs/adr/0002-metadata-journal.md` popisuje implementovanou 
 
 ---
 
-# 19. První úkoly pro Codium
+# 19. Operativní práce a návaznost na implementaci
 
-- [x] `ARCHITECTURE.md` — vytvořen pracovní návrh M0
-- [x] `DATA_MODEL.md` — vytvořen pracovní návrh M0
-- [x] `FEDERATION.md` — vytvořen pracovní návrh M0
-- [x] `SECURITY.md` — vytvořen pracovní návrh M0
-- [x] `REUSE_CATALOG.md` — vytvořen pracovní návrh M0
-- [x] vytvořit skeleton repository — dokumentace, storage PoC a testy; aplikační skeleton až po volbě stacku
-- [ ] vytvořit LXC development deployment
-- [ ] vytvořit desktopový launcher a balení se společným aplikačním jádrem
-- [ ] implementovat persistentní identitu a lokální úložiště desktopového uzlu
-- [ ] implementovat Project model
-- [ ] implementovat Artifact model
-- [ ] implementovat Git service
-- [ ] implementovat YAML frontmatter pro Markdown a sidecar pro ostatní artefakty
-- [ ] implementovat obnovitelný SQLite index projektových metadat
-- [ ] implementovat Markdown viewer/editor
-- [ ] implementovat základní Git history UI
-- [ ] implementovat Ollama adapter
-- [ ] implementovat auto-summary/description
-- [ ] implementovat Role model
-- [ ] implementovat Backend model
-- [ ] implementovat Context Builder PoC
+Konkrétní úkoly byly přesunuty do [TODO.md](TODO.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
+
+- [x] Pracovní architektonické dokumenty, ADR, reuse katalog a kostra experimentů — designed / implemented.
+- [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a TODO.
+- [ ] Integrovaná aplikace a nasazení podle M1; existující experimenty adaptovat podle finálního stacku.
 
 ---
 
