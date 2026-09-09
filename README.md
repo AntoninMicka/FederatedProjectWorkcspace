@@ -119,3 +119,17 @@ lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
 ```
 
 Skutečný vzdálený deploy zatím není ověřen; M0-05 čeká na ruční běh a výsledky měření.
+
+## Zdrojový balíček desktopového PoC
+
+```sh
+./run.sh package-desktop
+# nebo vlastní cesta (existující soubor se nikdy nepřepíše):
+./run.sh package-desktop --output /tmp/workspace-poc.tar.gz
+```
+
+Výchozí výstup je `dist/federated-workspace-poc.tar.gz` (ignorovaný Gitem). Obsahuje zdrojový kód, testy a veřejnou dokumentaci; nepřenáší `.git`, `.venv`, privátní katalog ani Qt knihovny. SHA256 každého souboru je v `MANIFEST.sha256.json`, hash archivu vypíše příkaz. Stejné bajty zdrojů vytvoří stejný archiv bez závislosti na čase sestavení. Hash dokládá integritu, není to podpis vydavatele.
+
+Po rozbalení do nového adresáře spusťte `./run.sh desktop` uvnitř `federated-workspace-poc`. Platí stejné systémové závislosti jako v sekci Desktop; případný `./run.sh setup` připraví pouze Python závislosti. Balíček neobsahuje vlastní Python/Qt runtime, není to AppImage ani instalátor a není určen jako schválené produkční vydání.
+
+Sestavení bere aktuální obsah vybraných zdrojů včetně necommitnutých změn. Kompletní archiv se nejprve zapíše do dočasného souboru ve výstupním adresáři a teprve poté zveřejní pod cílovým názvem bez přepsání existujícího souboru. Pád může zanechat `.package-*`; projektová data se nemění.

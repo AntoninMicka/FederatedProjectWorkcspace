@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06 — Dokončit posouzení desktopového obalu a balení.** Spustitelné desktopové PoC je hotové jako M0-06a. Uživatel upřednostnil desktop; měření aplikace na Turrisu (M0-05) je odložené. Gate M0 zůstává otevřený.
+**M0-06 — Dokončit posouzení desktopového obalu a balení.** Spustitelné desktopové PoC a přenositelný zdrojový balíček jsou hotové jako M0-06a/M0-06b. Uživatel upřednostnil desktop; měření aplikace na Turrisu (M0-05) je odložené. Gate M0 zůstává otevřený.
 
 ## Další zbývající práce M0
 
@@ -58,6 +58,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-06b — Implemented: reprodukovatelný zdrojový desktopový balíček.** `run.sh package-desktop` vytváří allowlistovaný tar.gz s manifestem SHA256, bez privátního katalogu, prostředí a binárních závislostí. Atomické zveřejnění kompletního souboru bez přepsání existujícího vydání; ověření rozbalené kopie je součástí grafických testů. Systémový runtime stále vyžaduje Python/Qt/PyYAML; finální binding, distribuční licence, instalační balík a M0-05 zůstávají otevřené. Závěrečná sada `M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 63 testů prošlo bez skipů, včetně skutečného WebEngine z rozbaleného archivu mimo checkout. Bash syntax, lokální odkazy, finální diff a sestavení archivu ověřeny.
 
 - [x] [completed] **Implemented — ruční deploy headless PoC na Omnii.** `run.sh deploy-omnia` poskytuje dry-run a explicitní SSH nasazení do běžícího Debian LXC na SSD, omezený archiv zdrojů, oddělená vydání a přepnutí current až po demu. Lokální testy ověřují obsah archivu, validaci vstupů, chyby SSH a zachování previous/current po chybě instalace. Závěrečná sada s `M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1`: 60 testů prošlo bez skipů; bash syntax, dry-run, odkazy a diff ověřeny. Vzdálený deploy nebyl spuštěn; uživatel jej provede ručně, M0-05 zůstává otevřené.
 

@@ -4,3 +4,6 @@ __pycache__/
 
 # Soukromá lokální inventura zdrojových repozitářů
 /REUSE_CATALOG.private.md
+
+# Locally built release archives
+/dist/
