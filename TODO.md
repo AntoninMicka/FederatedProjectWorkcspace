@@ -6,13 +6,12 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-08 — Zpřesnit návrhové kontrakty.** M0-07 je ověřený lokálními scénáři. M0-05 a finální posouzení stacku/balení M0-06 zůstávají otevřené; uživatel upřednostnil pokračování na desktopu. Gate M0 zůstává otevřený.
+**M0-09 — Gate review před M1.** M0-08 má uzavřené návrhové kontrakty v ADR 0008; M0-07 je ověřený lokálními scénáři. M0-05 a finální posouzení stacku/balení M0-06 zůstávají otevřené; uživatel upřednostnil pokračování na desktopu. Gate M0 zůstává otevřený.
 
 ## Další zbývající práce M0
 
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Uživatel doložil Turris Omnia / TurrisOS 9.1.1 / ARMv7, LXC 6.0.5 a běžící Debian 13 Trixie kontejner na SSD (Btrfs). Zatím bez běhu aplikace; další měření na žádost uživatele odloženo za desktopové PoC. Zbývá změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
 - [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. M0-06a ověřuje pouze desktopový PoC dle ADR 0007; finální rozhodnutí stále potřebuje M0-05 a distribuční/licenční posouzení.
-- [ ] **[planned] M0-08 — Zpřesnit návrhové kontrakty.** Doplnit pravidla větví a publikace při změně HEAD; uzavřít kontrakty Backend/Role/Context Manifest a lokální hranici důvěry v návaznosti na ARCHITECTURE, FEDERATION a SECURITY. LLM adapter ani RBAC engine tímto úkolem neimplementovat.
 - [ ] **[planned] M0-09 — Gate review před M1.** Po ověření předchozích výstupů projít Gate M0, zaznamenat důkazy, otevřená omezení a rozhodnutí o připravenosti. Nepřejít do M1 jen na základě zelených spike testů.
 
 ## Zjištěné mezery a navazující ověření
@@ -34,10 +33,12 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úkolu. Milníky a gates zůstávají v roadmapě.
 
 - [ ] **[planned] M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
-- [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle explicitního manifestu a pravidel privacy.
-- [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely nad kontrakty uzavřenými v M0 a následné předávání artefaktů mezi rolemi.
+- [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
+- [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
+
+- [ ] [planned] **M5 — Federovaná publikace (cílová úroveň: PoC validated).** Implementovat izolovaný příjem, autorizaci celého přenášeného obsahu včetně historie, validaci kandidáta a CAS/recovery dle ADR 0008. Ověřit změnu HEAD po lidském řešení, neplatný fast-forward/merge, revokaci a odmítnutí přenosu local-only historie; zachovat konfliktní rodiče.
 
 ## Import externích dat — navazuje na aplikační import M1
 
@@ -56,6 +57,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-08 — Designed: kontrakty a pravidla publikace.** [ADR 0008](docs/adr/0008-context-and-publication-contracts.md) vymezuje Backend/Role/Context Manifest, přesné vstupy a cíl, autorizaci před odesláním, fallback, nejistý výsledek síťového volání a CAS publikaci při změně HEAD. Návrhové review scénářů zahrnuje uzel bez LLM, Ollamu, cloud, peer, local-only i zakázaný obsah v Git historii. Ověřena konzistence s ADR 0003/0004, roadmapou a odkazy; čistě dokumentační změna bez nového běhu testů. Implementace a akceptační scénáře navazují v M1–M5/V-10 a M3-UB-01; Gate M0 zůstává otevřený.
 
 - [x] [completed] **M0-07 — PoC validated: zbývající merge scénáře.** `tests/test_merge_scenarios.py` ověřuje modify/delete s abortem a obnovou úplného páru obsah/sidecar, rename/edit s přesnými bajty a metadaty a textově čistý merge dvou validních větví s dangling relation. Validace kandidáta odmítne publikaci; úmyslně neplatný commit v negativním testu nenahradí index a čtení odmítne stale stav. Ověřena lidská oprava a rodiče merge; scénáře a limity jsou ve FEDERATION. Produkční synchronizace ani conflict UI nevznikají. Závěrečné `M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 66 testů prošlo bez skipů. Ověřeny lokální odkazy a finální diff.
 - [x] [completed] **V-02 — PoC validated: přesný důvod odmítnutí duplicity indexem.** Existující test ve `tests/test_storage.py` nyní vytváří platnou Markdown entitu se stejným ID jako registr a vyžaduje chybu Duplicate ID; zachování indexu a odmítnutí stale čtení zůstává ověřeno. Původní nesoulad názvu JSON souboru již výsledek nezastíní.

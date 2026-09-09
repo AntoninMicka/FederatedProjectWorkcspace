@@ -18,3 +18,7 @@ Revokace brání budoucímu autorizovanému přenosu; nemůže vzít zpět již 
 Souborový journal a jeho limity jsou popsány v [ADR 0002](docs/adr/0002-metadata-journal.md). Journal vyžaduje soukromý adresář mimo projekt; obsahuje i celé bajty rozpracovaných souborů a nesmí se synchronizovat.
 
 [Workspace PoC](docs/adr/0003-coordinated-operation.md) sdílí zámek se souborovým journalem a při pending operaci odmítá čtení. Samostatný Index ani Git wrapper tuto aplikační ochranu nevynucují. Všichni kooperující účastníci musí používat stejný Workspace a stavový adresář; koordinace není RBAC engine ani ochrana před nekooperačním filesystemovým závodem.
+
+## Kontext a hranice důvěry M0-08
+
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md) váže autorizaci na přesné bajty a cíl před odesláním, chrání manifest stejně jako vstupy a zakazuje implicitní fallback i přenos local-only odvozenin. Zohledňuje také zakázaný obsah v Git historii. Jde o designed kontrakt; metadata validátor ani transportní PoC tyto kontroly nevynucují.

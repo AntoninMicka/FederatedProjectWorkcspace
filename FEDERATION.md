@@ -35,3 +35,7 @@ Před publikací kontrolovat celý strom, ne pouze konfliktní řádky nebo enti
 Negativní test úmyslně obchází validační bránu a vytvoří neplatný merge commit, aby doložil, že Index odmítne rebuild, ponechá předchozí commit/řádky a při čtení nesouladu s HEAD vrátí StaleIndex. Tento krok není doporučený publikační postup. Oprava přidává nový commit a nemaže konfliktní historii.
 
 Rozsah: řízené dočasné repozitáře, testovací Git helper s add-all a ruční orchestrace. Nejde o produkční izolovaný merge, atomickou publikaci do aktivního Workspace, síťovou synchronizaci ani oprávnění peerů. Crash boundaries aplikačních zápisů nadále drží ADR 0003; tyto testy nepřidávají novou persistentní službu.
+
+## Pravidla publikace M0-08
+
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md) vymezuje projektový ref, izolovaný příjem, validaci fast-forwardu i merge a CAS při změně HEAD. Autorizace síťového přenosu zahrnuje dosažitelnou historii, nikoli jen současný strom. Publikace na jednom uzlu není atomická synchronizace peerů; produkční služba zůstává M5.

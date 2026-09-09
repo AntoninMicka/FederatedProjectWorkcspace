@@ -657,11 +657,11 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
 - [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá TODO V-08.
-- [ ] Uzavřít návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
-- [ ] Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
-- [ ] V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
+- [x] Návrhové kontrakty Backend, Role a Context Manifest — designed v [ADR 0008](docs/adr/0008-context-and-publication-contracts.md); implementace zbývá M2–M4.
+- [x] Designed dle ADR 0008: Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
+- [x] Designed dle ADR 0008: V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
 - [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
-- [ ] Uzavřít pravidla větví a publikace (M0-08). Konflikty obsahu/sidecaru včetně textově čistého sémanticky neplatného merge jsou PoC validated v M0-07, scénáře a limity ve [FEDERATION](FEDERATION.md); produkční synchronizace zůstává M5.
+- [x] Designed dle ADR 0008: Uzavřít pravidla větví a publikace (M0-08). Konflikty obsahu/sidecaru včetně textově čistého sémanticky neplatného merge jsou PoC validated v M0-07, scénáře a limity ve [FEDERATION](FEDERATION.md); produkční synchronizace zůstává M5.
 - [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); skutečný browser/obal, bootstrap a aplikační integrace zbývají v TODO V-10.
 - [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; produkční TLS/SSH a cílové balení zbývají v TODO V-09 a M0-05/M0-06.
 - [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.

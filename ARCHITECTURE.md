@@ -27,3 +27,7 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 `spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci ani import cizích repozitářů. Minimální schémata konfigurace projektu/uzlu validuje samostatně `spikes/configuration.py` podle [ADR 0004](docs/adr/0004-project-node-config.md); nejsou zatím napojena na storage lifecycle. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
 
 Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vlákno ve stejném Python procesu, token předán přímo nativnímu request interceptoru. Viz [ADR 0007](docs/adr/0007-desktop-poc.md). Jde o ověřený lifecycle statického UI a paměťového API; volba produkčního bindingu/balíku a napojení projektových služeb zůstávají otevřené.
+
+## Kontrakty M0-08
+
+Závazné návrhové kontrakty Backend/Role/Context Manifest a tok deterministického orchestrátoru vymezuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md). Odděluje přenositelnou definici od lokálního bindingu, capabilities od execution boundary a ukládá manifest přesného požadavku mimo Git. Implementace LLM a RBAC zůstává otevřená.
