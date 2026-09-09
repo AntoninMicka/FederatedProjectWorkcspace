@@ -98,9 +98,12 @@
 - [ ] Připravit mechanismus řešení konfliktů.
 - [ ] Projektová metadata a registry verzovat v Gitu jako autoritativní data.
 - [ ] SQLite používat jako lokální, z Gitu obnovitelný index pro dotazy a vztahy; databázový soubor nesynchronizovat.
+- [ ] SQLite index neslouží k řešení souběžných změn ani merge konfliktů; ty řešit nad autoritativními soubory před aktualizací indexu.
 - [ ] Změny projektových metadat zapisovat přes soubory v Gitu; index aktualizovat po úspěšném commitu/merge a při startu ověřit jeho verzi vůči HEAD.
 - [ ] Oddělit obnovitelný projektový index od autoritativního lokálního stavu uzlu (identita, credentials, rozpracované operace).
 - [ ] Každou entitu registru ukládat do samostatného souboru se stabilním ID; společné seznamy generovat z indexu.
+- [ ] Rozdělení registrů omezuje kolize změn různých entit; souběžné změny stejné entity stále vyžadují sloučení a validaci.
+- [ ] Index označit ID indexovaného commitu; při nesouladu jej obnovit a do té doby nezobrazovat zastaralé výsledky jako aktuální. Rozpracované změny zobrazovat odděleně od indexu commitnutého stavu.
 - [ ] Po merge validovat schémata, unikátnost ID a vztahy; textově čistý merge nemusí být významově správný.
 
 ## 2B. Typy souborů
@@ -129,12 +132,19 @@
   - [ ] přílohy,
   - [ ] případně CAD a další projektové soubory.
 
-## 2C. Verzovací filtry
+## 2C. Uložení metadat podle formátu
 
-- [ ] Pro Markdown definovat YAML frontmatter jako jediné místo autoritativních metadat dokumentu.
+- [ ] Pro editovatelné projektové Markdown dokumenty používat YAML frontmatter jako jediné místo autoritativních metadat dokumentu.
+- [ ] Importované zdroje, které mají zůstat beze změny, zachovat v původních bajtech včetně Markdownu; jejich projektová metadata uložit do sidecaru.
 - [ ] Pro PDF, obrázky a další formáty bez vhodných editovatelných metadat použít sidecar se stabilním ID artefaktu.
-- [ ] V M0 určit povinná pole, verzi schématu, pravidla přejmenování a mazání; změnu souboru a sidecaru provádět v jedné Git transakci/commitu.
+- [ ] V M0 určit povinná pole, verzi schématu a konvenci umístění sidecaru; vazbu založit na stabilním ID s evidencí aktuální cesty souboru.
+- [ ] Přejmenování nebo smazání artefaktu promítnout do sidecaru a odkazů v jednom commitu; před commitem ověřit konzistenci.
+- [ ] Git commit nepovažovat za transakci pracovního adresáře: pro přerušené změny souboru a sidecaru navrhnout obnovu po pádu.
+- [ ] Konflikty změna–smazání, přejmenování–úprava a osiřelý sidecar řešit explicitně; metadata nesmějí být tiše zahozena.
 - [ ] Metadata neduplikovat mezi frontmatter a sidecarem; použít společné logické schéma pro oba způsoby uložení.
+- [ ] Strukturované entity registrů ukládat jako JSON s vlastními poli ID a verze schématu; nepřidávat k nim duplicitní sidecar.
+
+## 2D. Verzovací filtry
 
 - [ ] Navrhnout normalizační pipeline před commitem.
 - [ ] Odstraňovat nedeterministická metadata tam, kde je to bezpečné.
@@ -593,10 +603,15 @@
 - [ ] Navrhnout a projít uživatelský scénář konfliktu po offline úpravách dvou uzlů.
 - [ ] Ověřit bezpečný transport mezi desktopovým UI a lokálním backendem.
 - [ ] Vyhodnotit C++ jádro s libgit2 krátkým PoC: commit, větvení, merge konflikt, přerušení operace a sestavení na cílovém Turris/LXC a desktopu.
-- [ ] Posoudit hybrid C++ + Python daemon pro LLM proti jednoduššímu jednojazyčnému backendu; zaznamenat náklady balení, IPC, diagnostiky a aktualizací.
+- [ ] Výchozí návrh MVP držet jako jeden backendový proces s oddělenými moduly pro storage, federaci a LLM; jazyk určit v M0.
+- [ ] Hybrid C++ + Python daemon přijmout pouze při doloženém přínosu oproti jednomu backendu; zaznamenat náklady balení, IPC, diagnostiky, obnovy po pádu a aktualizací.
+- [ ] libgit2 posoudit proti bezpečnému volání Git CLI bez shellu přes společné Git rozhraní; ověřit autentizaci, podporované operace a distribuci závislostí.
+- [ ] Porovnat paměť, start, instalaci a provoz na cílovém Turrisu/LXC i desktopu; samotná preference jazyka není podmínkou rozdělení do více procesů.
 - [ ] Vyhodnotit sdílené webové UI v desktopovém WebView, včetně Qt obalu; konkrétní frontendový framework vybrat až po ověření.
 - [ ] Výslednou volbu stacku a případné hranice procesů zaznamenat jako architektonické rozhodnutí.
 - [ ] Threat model.
+
+**Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Implementace federace zůstává v M5.
 
 ## Milestone M1 – Single-node project workspace
 
@@ -611,6 +626,7 @@
 - [ ] Desktopové balení se spuštěním lokálního uzlu a sdíleným UI.
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [ ] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu.
+- [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
 
 **Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
 
@@ -659,7 +675,8 @@
 - [ ] Offline/reconnect.
 
 - [ ] Ověřit synchronizaci desktopového a Turris/LXC nebo Linux serverového uzlu.
-- [ ] Ověřit souběžné úpravy stejného souboru během offline provozu desktopu a následné řešení konfliktu.
+- [ ] Ověřit souběžné úpravy stejného souboru a stejné entity registru během offline provozu desktopu a následné řešení konfliktu.
+- [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
 **Gate M5:** desktopový a serverový uzel mohou sdílet projekt a uživatele, používat rozdílné LLM backendy a synchronizovat změny po offline práci bez ztráty historie.
