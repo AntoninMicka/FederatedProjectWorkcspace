@@ -6,7 +6,7 @@ import tempfile
 import unittest
 
 from spikes.storage import Git, Index, StaleIndex
-from tests.fixtures import ENTITY, registry
+from tests.fixtures import ENTITY, registry, markdown
 
 
 class StorageSpike(unittest.TestCase):
@@ -71,9 +71,11 @@ class StorageSpike(unittest.TestCase):
         self.assertEqual(rebuilt.read(self.git), reopened.read(self.git))
 
     def test_invalid_merge_projection_does_not_replace_previous_index(self):
-        self.write(self.git, 'Duplicate', name='22222222-2222-4222-8222-222222222222')
+        artifact = self.git.root / 'artifacts' / ENTITY
+        artifact.mkdir(parents=True)
+        (artifact / 'duplicate.md').write_bytes(markdown())
         self.git.commit('Semantically invalid state')
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(ValueError, 'Duplicate ID'):
             self.db.rebuild(self.git)
         with closing(sqlite3.connect(self.db.path)) as db, db:
             self.assertEqual(db.execute('SELECT commit_id FROM state').fetchone()[0], self.base)

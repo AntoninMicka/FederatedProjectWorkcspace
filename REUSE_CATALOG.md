@@ -49,3 +49,5 @@ M0-06a **adaptuje** `spikes/local_api.py` s odděleným statickým UI handlerem 
 Ruční deploy **reuse** existující `spikes.demo` a requirements; **adapt** launcheru přidává transport omezeného archivu a oddělená vydání bez nové storage implementace. Aktualizace current nastává až po úspěšném demu; vzdálené ověření zůstává M0-05.
 
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
+
+M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
