@@ -2,14 +2,15 @@
 
 Projekt je aktivně vyvíjený **Git-backed federated project knowledge & decision workspace**. Nevytvářej jej znovu jako greenfield. Zachovej existující práci, experimenty, testy, dokumentaci a historii ADR. Aktuální milník a stav práce čti z roadmapy a TODO.
 
-## Před každým implementačním úkolem
+## Zahájení a rozsah úkolu
 
-1. Přečti `AGENTS.md` a případné pokyny v dotčených podadresářích.
-2. Zkontroluj `git status --short`, relevantní diff a poslední změny. Nepřepisuj nesouvisející práci uživatele.
-3. Přečti strategickou roadmapu `Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md` a operativní `TODO.md`. Nevytvářej druhou konkurenční roadmapu.
-4. Přečti relevantní dokumentaci a ADR v `docs/adr/`, poté odpovídající implementaci a testy. Nezačínej znovu něco, co už existuje.
-5. Pokud funkce může existovat jinde, přečti `REUSE_CATALOG.md`, prověř uvedené zdrojové repozitáře/komponenty a zaznamenej důvod reuse/adapt/rewrite/reject. Chybějící zdroj označ jako neověřený; nekopíruj kód automaticky.
-6. Vymez konkrétní výstup a jeho ověření v rámci zadání. Navazující práci zapiš do TODO; nerozšiřuj potichu rozsah.
+1. Zkontroluj `git status --short`, relevantní diff a změny od poslední kontroly. Nepřepisuj nesouvisející práci uživatele. Přečti platné pokyny pro dotčené adresáře.
+2. Zjisti aktuální milník a nejbližší úkol z `TODO.md`; z dokumentu `Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md` a ADR čti relevantní části. Již přečtené podklady v rámci konverzace použij znovu, pokud se nezměnily; při chybějícím kontextu je znovu načti. Nevytvářej druhou konkurenční roadmapu.
+3. Vymez konkrétní výstup a ověření. U návrhu nebo review prováděj potřebné čtení; soubory měň pouze v rozsahu zadání. U dokumentační změny ověř dotčené podklady, konzistenci a odkazy. Při změně kódu nebo jeho chování navíc přečti odpovídající implementaci a testy.
+4. Před přidáním či nahrazením funkce prověř existující řešení. Pokud může být dostupné jinde, použij `REUSE_CATALOG.md` a uvedené zdrojové komponenty; zaznamenej důvod reuse/adapt/rewrite/reject. Chybějící zdroj označ jako neověřený; nekopíruj kód automaticky ani neopakuj již doloženou inventuru beze změny podkladů.
+5. U operace přes více persistentních vrstev (filesystem, Git, SQLite index, journal) před implementací explicitně popiš crash boundaries a očekávané recovery. Pokud je již popisuje platné ADR, odkaž na ně a popiš pouze změny. Úspěšný happy-path test nestačí k dokončení takové operace.
+
+Pokud uživatel požádá o „další úkol“ bez upřesnění, pokračuj nejbližší otevřenou položkou aktuálního milníku v TODO. Dokonči ji včetně ověření a dokumentace; další samostatný úkol automaticky nezahajuj. Rozsah nerozšiřuj potichu, konkrétní navazující práci zaznamenej do TODO.
 
 Skutečný kód a ověřené testy dokládají současný stav. Roadmapa není důkaz implementace a starý nezaškrtnutý bod není důvod zopakovat hotový experiment. Rozpor s architektonickým rozhodnutím pojmenuj; nepovažuj jej automaticky za nové rozhodnutí.
 
@@ -44,15 +45,14 @@ Stavy TODO používej přesně:
 
 U položek uváděj úroveň: designed, implemented, PoC validated nebo production-ready. Dokončený návrh ani úspěšný spike neznamenají produkční implementaci. Chybějící ověření ponech otevřené nebo výslovně neověřené. Závislost na jiném plánovaném úkolu sama není důvod vše označit jako blocked.
 
-## Po každé změně
+## Dokončení a ověření
 
-- Aktualizuj TODO a přidej nově nalezené navazující úkoly.
-- Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate.
-- Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Zachovej historii; průběžný stav práce patří do TODO.
-- Pokud implementace řeší operaci přes více persistentních vrstev (filesystem, Git, SQLite index, journal), před implementací explicitně popiš crash boundaries a očekávané chování recovery. Úspěšný happy-path test není dostatečný důkaz dokončení takové operace.
-- Pro implementaci spusť relevantní testy a existující build/lint, pokud se změny týkají. Ověř chování i chybové cesty. Pro čistě dokumentační změny zkontroluj věcnou konzistenci, odkazy a diff; pokud deklaruješ nové výsledky testů, skutečně je spusť.
-- Současný příkaz testů je `python3 -m unittest discover -s tests -v` (Linux, Python 3.11+, závislosti z `requirements.txt`; instalace viz README). Samostatný build/lint ani CI zatím nejsou nakonfigurované; nevydávej je za ověřené.
-- Před dokončením zkontroluj `git diff --check`, finální diff a nově vytvořené soubory. Shrň změnu, ověření a relevantní zbývající omezení.
+- TODO aktualizuj při změně stavu úkolu, dokončení uceleného výstupu nebo nalezení konkrétní navazující práce. Kosmetické opravy a mezikroky nepotřebují vlastní položky; nedoplňuj spekulativní backlog.
+- Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate. Aktuální výsledky ověření eviduj v TODO; roadmapa na důkazy odkazuje. Celkový počet testů nekopíruj do dalších dokumentů.
+- Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Do ADR patří důkazy příslušného rozhodnutí; jejich historické výsledky zachovej. Průběžný stav práce patří do TODO.
+- Během implementace spouštěj cílené testy chování i chybových cest. Před dokončením změny kódu nebo testů spusť celou současnou sadu: `python3 -m unittest discover -s tests -v` (Linux, Python 3.11+, závislosti z `requirements.txt`; instalace viz README). Relevantní existující build/lint spusť, pokud je nakonfigurovaný; nyní samostatný build/lint ani CI nejsou nakonfigurované.
+- Po úspěšném běhu opakuj ověření pouze při relevantní změně kódu, testů, závislostí či konfigurace nebo nové pochybnosti. Po následných čistě dokumentačních úpravách stačí kontrola dokumentace a diffu. Pokud deklaruješ nové výsledky testů, skutečně je spusť; neprovedené kontroly označ jako neověřené.
+- U čistě dokumentačních změn zkontroluj věcnou konzistenci, odkazy a diff. Před dokončením každé ucelené změny zkontroluj `git diff --check`, finální diff i nově vytvořené soubory. Shrň výsledek, ověření a relevantní zbývající omezení.
 
 ## Commity
 
