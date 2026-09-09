@@ -118,7 +118,7 @@ lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
   'cd /opt/federated-workspace/current && .venv/bin/python -m spikes.demo'
 ```
 
-Skutečný vzdálený deploy zatím není ověřen; M0-05 čeká na ruční běh a výsledky měření.
+Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží TODO u M0-05. Zbývají provozní měření a ověření filesystemu pracovních dat dema (výchozí /tmp).
 
 ## Zdrojový balíček desktopového PoC
 
