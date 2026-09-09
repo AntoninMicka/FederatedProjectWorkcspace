@@ -10,12 +10,12 @@ Projekt je ve fázi **M0 — Architecture spike**. Obsahuje návrh, storage expe
 ./run.sh desktop
 ```
 
-Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Jde o propojení UI/backendu, zatím bez otevření a ukládání projektů. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md).
+Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Jde o propojení UI/backendu, zatím bez otevření a ukládání projektů. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md), přechod bindingu a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 
-Na ověřeném Linux hostu jsou Qt moduly již dostupné. Na Debianu/Ubuntu lze chybějící systémové moduly připravit explicitně:
+Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 
 ```sh
-sudo apt-get install python3-pyqt6 python3-pyqt6.qtwebengine
+sudo apt-get install python3-pyside6.qtwebenginewidgets
 ```
 
 Wrapper preferuje `.venv/bin/python`; pokud v něm Qt chybí, použije systémový `python3` pouze tehdy, pokud má WebEngine i požadovaný PyYAML 6.0.3. Jinak skončí s chybou. `./run.sh setup` připravuje storage závislosti, Qt neinstaluje. Desktop vyžaduje běžného uživatele a grafickou relaci; nespouštět přes sudo. Automatické vypínání Chromium sandboxu ani TLS kontrol není použito.

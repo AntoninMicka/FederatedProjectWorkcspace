@@ -58,3 +58,11 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('authenticated fetch, value=1', result.stdout)
             self.assertIn('backend stopped', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_renderer_crash_exits_with_failure(self):
+        result = subprocess.run([sys.executable, '-m', 'spikes.desktop', '--smoke', '--smoke-crash'],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=25)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn('backend stopped', result.stdout)

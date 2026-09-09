@@ -84,11 +84,11 @@ if ! "$python_bin" -c 'import yaml; assert yaml.__version__ == "6.0.3"' >/dev/nu
 fi
 # The desktop can use distro Qt without modifying an existing isolated venv.
 if [[ "$command_name" == desktop ]]; then
-    if ! "$python_bin" -c 'from PyQt6.QtWebEngineWidgets import QWebEngineView' >/dev/null 2>&1; then
-        if python3 -c 'from PyQt6.QtWebEngineWidgets import QWebEngineView; import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
+    if ! "$python_bin" -c 'from PySide6.QtWebEngineWidgets import QWebEngineView' >/dev/null 2>&1; then
+        if python3 -c 'from PySide6.QtWebEngineWidgets import QWebEngineView; import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
             python_bin=python3
         else
-            printf 'Chybí PyQt6 WebEngine. Instalace desktopu je popsána v README.\n' >&2
+            printf 'Chybí PySide6 WebEngine. Instalace desktopu je popsána v README.\n' >&2
             exit 1
         fi
     fi

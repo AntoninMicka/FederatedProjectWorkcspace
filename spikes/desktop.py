@@ -27,17 +27,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--smoke', action='store_true', help='Run real WebEngine click test and exit.')
     parser.add_argument('--screenshot', help='Save the rendered window during --smoke.')
+    parser.add_argument('--smoke-crash', action='store_true', help='Kill renderer during --smoke; expect exit 1.')
     args = parser.parse_args()
+    if args.smoke_crash and not args.smoke:
+        parser.error('--smoke-crash requires --smoke')
     if args.screenshot and not args.smoke:
         parser.error('--screenshot requires --smoke')
     try:
-        from PyQt6.QtCore import QTimer, QUrl
-        from PyQt6.QtWidgets import QApplication, QMessageBox
-        from PyQt6.QtWebEngineWidgets import QWebEngineView
-        from PyQt6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
+        from PySide6.QtCore import QTimer, QUrl
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
     except ImportError:
-        print('Chybí PyQt6 WebEngine. Instalace viz README, sekce Desktop.', file=sys.stderr)
+        print('Chybí PySide6 WebEngine. Instalace viz README, sekce Desktop.', file=sys.stderr)
         return 1
     if os.geteuid() == 0:
         print('Desktop spouštějte jako běžný uživatel.', file=sys.stderr)
@@ -97,19 +100,24 @@ def main():
             def checked(value):
                 if value == '1' and server.counter == 1:
                     poll.stop()
+                    if args.smoke_crash:
+                        os.kill(page.renderProcessPid(), signal.SIGKILL)
+                        return
                     print('desktop smoke: rendered UI, authenticated fetch, value=1', flush=True)
                     def finish():
+                        print('desktop measure: idle', flush=True)
                         if args.screenshot and not view.grab().save(args.screenshot):
                             app.exit(4)
                             return
                         view.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
-            poll.timeout.connect(lambda: page.runJavaScript("document.querySelector('#count')?.textContent", checked))
+            poll.timeout.connect(lambda: page.runJavaScript("document.querySelector('#count')?.textContent", 0, checked))
             poll.start(100)
             def loaded(ok):
                 if not ok:
                     app.exit(3)
                 else:
+                    print("desktop measure: ui ready", flush=True)
                     page.runJavaScript("document.querySelector('#increment').click()")
             view.loadFinished.connect(loaded)
         else:
@@ -120,9 +128,9 @@ def main():
         result = app.exec()
         view.close()
         # Destroy pages before their off-the-record profile.
-        from PyQt6 import sip
-        sip.delete(view)
-        sip.delete(profile)
+        from shiboken6 import delete
+        delete(view)
+        delete(profile)
     if args.smoke and result == 0:
         print('desktop smoke: backend stopped', flush=True)
     return result
