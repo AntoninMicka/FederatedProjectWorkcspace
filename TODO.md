@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Inventář konkrétního kandidáta je doplněný. Zbývá čistý OS se skutečným rozlišením závislostí, offline start a release posouzení licenčních povinností; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
+**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Inventář konkrétního kandidáta je doplněný. Offline běh je ověřený lokálním namespace testem. Zbývá čistý OS se skutečným rozlišením závislostí a release posouzení licenčních povinností; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
 
 ## Další zbývající práce M0
 
@@ -36,6 +36,8 @@ Uživatel následně potvrdil úspěch ruční akceptace desktopu: kliknutí, za
 Evidence testů je převzatá z dokončených úkolů níže (poslední plná sada u M0-07), nikoli nový běh v tomto review. Zkontrolovány současné zdroje UI, pokrytí testů, návaznost ADR a gate. Dokumentační ověření: lokální odkazy a finální diff. Po doplnění M0-05/M0-06 zopakovat rozhodnutí o gate s novými důkazy; dnešní negativní výsledek zachovat jako historii. Samotné potvrzení čítače gate neuzavře.
 
 ## Aktualizované posouzení M0 po instalaci .deb
+
+Historické posouzení před offline testem; novější důkaz je níže v dokončených výstupech.
 
 Posouzený HEAD `2b0adf2`, vstupní pracovní strom čistý. Historický review výše se nepřepisuje. Nové důkazy: PySide6 skutečné okno, měření desktopu a renderer crash (ADR 0010), instalační balík s izolovaným dpkg lifecycle (ADR 0011), uživatelsky potvrzené instalované GUI na Ubuntu arm64 a v Debian kontejneru x86_64 pod běžným uživatelem, headless Omnia demo na SSD. Poslední plná sada je u balíku: 69 testů, v tomto dokumentačním review nebyla opakována.
 
@@ -88,6 +90,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **PoC validated — offline grafický běh .deb.** `tests/test_desktop_offline.py` vytváří samostatný user/network namespace s pouze aktivním loopbackem; ověřuje namespace ID, nulové capabilities aplikace, nepřítomnost tras a odmítnutí externího TCP bez trasy. Lokální X11 socket zajišťuje skutečné okno, dva běhy ověřují kliknutí, zavření backendu a restart rozbaleného .deb. Hostitelská síť ani uživatelovo přesměrování X11 se nemění. Metoda a limity v ADR 0011; nejde o čistý OS ani obecný bezpečnostní sandbox. Závěrečné `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 70 testů prošlo bez skipů. Odkazy a finální diff ověřeny.
 
 - [x] [completed] **Designed — distribuční inventář a aktualizované M0 review.** Inventarizován konkrétní .deb a místní runtime, doplněny důkazy uživatelské instalace a omezení přesměrovaného X11. Rozhodnutí o gate zůstává otevřené; odkazy, shoda hashů a diff ověřeny, bez nového běhu aplikačních testů.
 

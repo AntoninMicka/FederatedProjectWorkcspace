@@ -21,3 +21,11 @@ Test sestaví balík a zkontroluje rozsah souborů, absenci maintainer skriptů,
 Jde o validaci balíku a dpkg lifecycle na existujícím hostu, nikoli čistou instalaci celého OS, test výpadku napájení nebo skutečnou persistentní práci UI. Balík neobsahuje síťové instalátory; smoke používá pouze loopback, síťově izolovaný OS test je otevřený. Plné clean-OS ověření, aktualizační zdroj a release inventář musí předcházet produkční distribuci. Maintainer adresa je výslovně nefunkční placeholder pro lokální kandidát, před publikací ji nahradit skutečným kontaktem. Balík se nikam nepublikuje.
 
 Konkrétní kandidát a systémové závislosti zachycuje [inventář M0](0011-runtime-inventory.md). Jde o snapshot s hash vazbou na .deb, nikoli obecné potvrzení licenčních povinností. Aktuální výsledky uživatelských instalací a gate review drží [TODO](../../TODO.md).
+
+## Následné offline ověření
+
+`tests/test_desktop_offline.py` s volbou M0_OFFLINE_TEST=1 sestaví .deb, rozbalí jej mimo checkout a spustí jeho launcher dvakrát v novém Linux user/network namespace. Zachová běžné UID; setup pomocí keep-caps aktivuje pouze loopback v novém namespace, pak setpriv odstraní bounding/inheritable/ambient capabilities. Kontrola před GUI vyžaduje nulové effective/permitted/ambient capabilities, odlišné ID síťového namespace, jediné rozhraní lo ve stavu UP a prázdné IPv4/IPv6 směrovací tabulky. Pokus o TCP spojení na dokumentační adresu 192.0.2.1 musí skončit chybou chybějící trasy, nikoli pouze timeoutem. Nejde o ping ani kontakt živé služby.
+
+DISPLAY musí označovat lokální X11; test použije unix socket /tmp/.X11-unix a odmítá přesměrovaný displej. Nezasahuje do sítě hostitele ani uživatelského kontejneru. Ověří skutečné JS kliknutí, autentizovanou loopback odpověď, zavření backendu a restart s novým čítačem. Chybějící namespace oprávnění nebo závislosti při explicitním zapnutí znamenají selhání testu, nikoli tichý skip.
+
+Ověřeno na vývojovém Ubuntu arm64 s připravenými systémovými závislostmi. Je to důkaz běhu bez přímé externí IP konektivity, nikoli izolace filesystemu/IPC nebo čerstvé instalace OS. Lokální X server a systémový runtime jsou záměrně sdílené. Chromium sandbox se nevypíná. Předchozí odstavec popisuje historický stav před tímto experimentem; aktuální výsledky testů drží TODO. Výsledek se nepřenáší automaticky na uživatelův Debian s přesměrovanými Xky.
