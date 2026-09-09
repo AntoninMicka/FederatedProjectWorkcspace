@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Zbývá čistý OS se skutečným rozlišením závislostí, offline start a finální distribuční inventář; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
+**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Inventář konkrétního kandidáta je doplněný. Zbývá čistý OS se skutečným rozlišením závislostí, offline start a release posouzení licenčních povinností; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
 
 ## Další zbývající práce M0
 
@@ -34,6 +34,16 @@ Posouzený HEAD: `1c7b228`, vstupní pracovní strom čistý. Výsledek: **Gate 
 Uživatel následně potvrdil úspěch ruční akceptace desktopu: kliknutí, zavření a restart fungují. Současné UI obsahuje jen paměťový čítač; nelze v něm ještě otevřít projekt, uložit artefakt ani ověřit zachování projektových dat po restartu. Ruční akceptace: třikrát „Ověřit spojení“ → 1/2/3, zavření → návrat terminálu, nový `./run.sh desktop` → 0 a opět funkční tlačítko. Výsledek je uživatelské potvrzení, nikoli nový automatický test.
 
 Evidence testů je převzatá z dokončených úkolů níže (poslední plná sada u M0-07), nikoli nový běh v tomto review. Zkontrolovány současné zdroje UI, pokrytí testů, návaznost ADR a gate. Dokumentační ověření: lokální odkazy a finální diff. Po doplnění M0-05/M0-06 zopakovat rozhodnutí o gate s novými důkazy; dnešní negativní výsledek zachovat jako historii. Samotné potvrzení čítače gate neuzavře.
+
+## Aktualizované posouzení M0 po instalaci .deb
+
+Posouzený HEAD `2b0adf2`, vstupní pracovní strom čistý. Historický review výše se nepřepisuje. Nové důkazy: PySide6 skutečné okno, měření desktopu a renderer crash (ADR 0010), instalační balík s izolovaným dpkg lifecycle (ADR 0011), uživatelsky potvrzené instalované GUI na Ubuntu arm64 a v Debian kontejneru x86_64 pod běžným uživatelem, headless Omnia demo na SSD. Poslední plná sada je u balíku: 69 testů, v tomto dokumentačním review nebyla opakována.
+
+[Inventář kandidáta](docs/adr/0011-runtime-inventory.md) obsahuje SHA-256 balíku, přibalených souborů a distribučních copyright souborů 229 systémových závislostí na vývojovém hostu. Je úplný pro popsaný průchod Depends/Pre-Depends, nikoli univerzální SBOM všech platforem nebo hotový licenční audit. Uživatelův Debian má vlastní doložené verze; inventář Ubuntu se na něj nepřenáší.
+
+**Výsledek: Gate M0 zůstává otevřený.** Podklady pro Python/Git/SQLite + PySide a .deb výrazně pokročily; funkční instalace neznamená finální schválení produkčního stacku. M0-06e zbývá izolovaný offline start a doložení čistého OS bez checkoutu/testovací vrstvy, M0-05 cílová provozní měření. Před zveřejněním balíku navíc zbývá skutečný maintainer kontakt, licenční posouzení a způsob aktualizací.
+
+Uživatel přesměrovává X11 přes síť; odpojení jeho kontejneru by přerušilo i displej a nebylo by vhodným testem aplikace. Offline ověření zůstává planned, nikoli tvrzené jako úspěch ani obecně blocked. **Nejbližší konkrétní krok:** připravit lokální grafický smoke v oddělené síťové konfiguraci se zachovaným loopbackem a lokálním displejem, bez zásahu do uživatelova X11 spojení. Akceptace: žádná externí konektivita, funkční čítač, zavření/restart; zaznamenat způsob izolace a závislosti. V této změně se tento experiment nespouští.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -78,6 +88,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **Designed — distribuční inventář a aktualizované M0 review.** Inventarizován konkrétní .deb a místní runtime, doplněny důkazy uživatelské instalace a omezení přesměrovaného X11. Rozhodnutí o gate zůstává otevřené; odkazy, shoda hashů a diff ověřeny, bez nového běhu aplikačních testů.
 
 - [x] [completed] **Implemented — evidence uživatelského ověření .deb na druhém prostředí.** Uživatel hlásí funkční aplikaci v kontejneru; dodané os-release uvádí Debian GNU/Linux 13 Trixie 13.6, uname x86_64. Dpkg-query uvádí federated-workspace-poc 0.1.0~m0, python3 3.14.7-3, python3-pyside6.qtwebenginewidgets 6.8.2.1-4 a python3-yaml 6.0.3-1+b1. Jde o konkrétní uživatelské prostředí, nikoli automaticky standardní čistý Debian nebo obecnou podporu amd64. Původ balíků a offline start nejsou doloženy. Uživatel upřesnil spuštění instalovaného launcheru přes sudo -u user federated-workspace-poc: grafické okno tedy běželo pod běžným uživatelem, nikoli rootem. Funkčnost okna je uživatelsky potvrzená; diagnostický výpis pocházel z root shellu. Zaznamenání evidence neuzavírá M0-06e ani gate; bez nového běhu testů, ověřena konzistence a diff.
 
