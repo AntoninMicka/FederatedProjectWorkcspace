@@ -4,13 +4,13 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|help]
 
   deploy-omnia USER@HOST [--container NAME] [--dry-run]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
   package-deb [--output SOUBOR] [--version VERZE]  Sestaví instalační .deb.
   package-desktop [--output SOUBOR]  Sestaví zdrojový balíček desktopového PoC.
-  desktop      Otevře Qt/WebEngine okno s lokálním testovacím backendem.
+  desktop [--node SOUBOR]  Otevře desktop; node.json určuje registrované projekty.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
   test         Spustí celou unittest sadu.
@@ -18,7 +18,7 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
   help         Zobrazí tuto nápovědu.
 
-Desktop je PoC propojení UI/backendu bez ukládání projektů, LLM a federace.
+Desktop umožňuje čtení registrovaných projektů; editor, LLM a federace zatím chybí.
 Demo se po dokončení odstraní; nepracuje s vašimi projektovými daty.
 Běžné spuštění nic nestahuje. Použije .venv/bin/python, jinak python3.
 Desktop může použít systémový python3 s Qt a PyYAML, pokud Qt ve venv chybí.
@@ -29,8 +29,12 @@ command_name=${1:-demo}
 case "$command_name" in
     help|-h|--help) usage; exit 0 ;;
     deploy-omnia|package-desktop|package-deb) ;;
-    desktop|demo|setup|test)
+    demo|setup|test)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
+    desktop)
+        if (( $# != 1 )) && { (( $# != 3 )) || [[ "$2" != --node ]]; }; then
+            usage >&2; exit 2
+        fi ;;
     check)
         if (( $# != 2 )); then usage >&2; exit 2; fi ;;
     config)
@@ -40,6 +44,12 @@ case "$command_name" in
     *) printf 'Neznámý příkaz: %s\n' "$command_name" >&2; usage >&2; exit 2 ;;
 esac
 
+desktop_args=()
+if [[ "$command_name" == desktop && $# == 3 ]]; then
+    node_path=$3
+    if [[ "$node_path" != /* ]]; then node_path="$PWD/$node_path"; fi
+    desktop_args=(--node "$node_path")
+fi
 # Resolve caller-relative project paths before switching to the source directory.
 if [[ "$command_name" == check || "$command_name" == config ]]; then
     if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
@@ -97,7 +107,7 @@ if [[ "$command_name" == desktop ]]; then
             exit 1
         fi
     fi
-    exec "$python_bin" -m spikes.desktop
+    exec "$python_bin" -m spikes.desktop "${desktop_args[@]}"
 fi
 case "$command_name" in
     demo) exec "$python_bin" -m spikes.demo ;;

@@ -18,6 +18,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(first, build(ROOT))
         with tarfile.open(fileobj=io.BytesIO(first), mode='r:gz') as archive:
             names = archive.getnames()
+            self.assertIn(PREFIX + '/docs/project-opening.md', names)
             self.assertTrue(all(m.isfile() and m.name.startswith(PREFIX + '/') for m in archive))
             self.assertFalse(any('/.git/' in n or '/.venv/' in n or '.private.' in n or '/dist/' in n for n in names))
             manifest = json.load(archive.extractfile(PREFIX + '/MANIFEST.sha256.json'))

@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import uuid
 
+from spikes.configuration import committed_project
 from spikes.journal import Journal, RecoveryConflict, snapshot
 from spikes.metadata import require, validate_snapshot
 from spikes.storage import Git, Index, StaleIndex
@@ -78,13 +79,36 @@ class Workspace:
     def read(self):
         """Only expose a validated HEAD projection with no unfinished operation."""
         with self.journal.lock(), self.journal.connect() as db:
+            return self._read_locked(db)
+
+    def _read_locked(self, db):
+        if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise PendingOperation('Project has an unfinished operation')
+        try:
+            return self.index.read(self.git)
+        except StaleIndex:
+            self.index.rebuild(self.git)
+            return self.index.read(self.git)
+
+    def read_project(self, project_id):
+        """Return one committed project view under the shared writer lock."""
+        with self.journal.lock(), self.journal.connect() as db:
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
                 raise PendingOperation('Project has an unfinished operation')
-            try:
-                return self.index.read(self.git)
-            except StaleIndex:
-                self.index.rebuild(self.git)
-                return self.index.read(self.git)
+            self._branch()
+            commit = self.git.head()
+            require(not self.git.run('ls-files', '-u').stdout, 'Unresolved merge')
+            meta = committed_project(self.git, commit, project_id)
+            files = self.git.snapshot(commit)
+            entities = validate_snapshot(files)
+            rows = self._read_locked(db)
+            require(rows == sorted((item['id'], item['title']) for item in entities.values()),
+                    'Index differs from validated commit')
+            if self.git.head() != commit:
+                raise StaleIndex('HEAD changed while opening project; retry')
+            artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
+            return dict(id=project_id, title=meta['title'], commit_id=commit,
+                        artifacts=[dict(id=id_, title=title) for id_, title in rows if id_ in artifact_ids])
 
     def receipt(self, operation_id):
         with self.journal.lock(), self.journal.connect() as db:

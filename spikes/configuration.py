@@ -83,3 +83,21 @@ def read_config(path):
         data = handle.read(MAX_METADATA + 1)
     require(len(data) <= MAX_METADATA, 'Configuration exceeds 64 KiB')
     return data
+
+
+def committed_project(git, commit, project_id):
+    """Validate project identity from the same commit as the artifact projection."""
+    entry = git.run('ls-tree', commit, '--', 'project.json').stdout.strip()
+    require(bool(entry), 'Missing committed project.json')
+    info, name = entry.split('\t', 1)
+    mode, kind, oid = info.split()
+    require(name == 'project.json' and mode in {'100644', '100755'} and kind == 'blob',
+            'Project configuration must be a regular Git blob')
+    require(int(git.run('cat-file', '-s', oid).stdout) <= MAX_METADATA,
+            'Project configuration exceeds limit')
+    data = git.run('cat-file', 'blob', oid, binary=True).stdout
+    meta = parse_project(data)
+    require(meta['id'] == project_id, 'Registered project ID differs from project.json')
+    require(read_config(git.root / 'project.json') == data,
+            'Working project.json differs from the selected commit')
+    return meta

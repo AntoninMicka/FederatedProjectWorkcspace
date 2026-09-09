@@ -48,6 +48,14 @@ class Handler(BaseHTTPRequestHandler):
         values = self.headers.get_all(name, [])
         return values[0] if len(values) == 1 else None
 
+    post_paths = {'/v1/counter'}
+
+    def dispatch(self, request):
+        if request != {'action': 'increment'}:
+            return self.send_error(400)
+        self.server.counter += 1
+        self.reply(200, {'value': self.server.counter})
+
     def do_POST(self):
         if self.single('Host') != self.server.authority:
             return self.send_error(403)
@@ -62,7 +70,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_error(401)
         if self.headers.get_all('Sec-Fetch-Site', []) not in ([], ['same-origin'], ['none']):
             return self.send_error(403)
-        if self.path != '/v1/counter':
+        if self.path not in self.post_paths:
             return self.send_error(404)
         # JSON + non-ambient Authorization + no CORS is the CSRF contract.
         if self.single('Content-Type') != 'application/json':
@@ -79,12 +87,9 @@ class Handler(BaseHTTPRequestHandler):
             if len(body) != int(length):
                 return self.send_error(400)
             request = parse_json(body)
-            if request != {'action': 'increment'}:
-                return self.send_error(400)
         except (ValidationError, UnicodeError, ValueError):
             return self.send_error(400)
-        self.server.counter += 1
-        self.reply(200, {'value': self.server.counter})
+        self.dispatch(request)
 
     def do_GET(self):
         self.send_error(405)
@@ -113,7 +118,7 @@ def private_directory(path):
 
 
 @contextmanager
-def running_api(transport, runtime=None, *, handler=Handler):
+def running_api(transport, runtime=None, *, handler=Handler, projects=None):
     """Yield in-process endpoint/token to test driver; no token file or public bootstrap."""
     directory = None
     if transport == 'unix':
@@ -136,6 +141,7 @@ def running_api(transport, runtime=None, *, handler=Handler):
     server.origin = 'http://' + server.authority
     server.token = secrets.token_urlsafe(32)
     server.counter = 0
+    server.projects = projects
     thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.02})
     thread.start()
     try:

@@ -2,7 +2,7 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; práce s projekty v UI ještě není implementovaná.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop již otevírá registrované projekty a zobrazuje artefakty z Gitu; editor zatím chybí.
 
 ## Desktop
 
@@ -10,7 +10,7 @@ Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M
 ./run.sh desktop
 ```
 
-Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Jde o propojení UI/backendu, zatím bez otevření a ukládání projektů. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md), přechod bindingu a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Volba `./run.sh desktop --node /cesta/node.json` přidá výběr registrovaného projektu, jeho název, commit a seznam artefaktů. [Postup a izolovaná ukázka](docs/project-opening.md) popisují konfiguraci i spuštění; projektové soubory se v UI zatím neupravují. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md), přechod bindingu a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 
 Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 
@@ -94,7 +94,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Aktuální pořadí práce drží [TODO](TODO.md). Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. Navazuje zapojení skutečných projektových služeb v M1; produkční release zůstává otevřený.
+Aktuální pořadí práce drží [TODO](TODO.md). Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. M1 nyní propojuje čtení registrovaných projektů s desktopem; produkční release zůstává otevřený.
 
 ## Ruční deploy na Omnii
 

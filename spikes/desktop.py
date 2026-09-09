@@ -1,5 +1,6 @@
-"""Linux Qt/WebEngine shell around the existing local API; no persistent state."""
+"""Linux Qt/WebEngine shell around the existing local API; registered project reads."""
 import argparse
+import json
 import os
 import signal
 import sys
@@ -7,6 +8,7 @@ from urllib.parse import urlsplit
 
 from spikes.desktop_ui import ASSETS, DesktopHandler
 from spikes.local_api import running_api
+from spikes.projects import Projects
 
 
 def request_policy(url, initiator, method, origin):
@@ -18,17 +20,21 @@ def request_policy(url, initiator, method, origin):
         return 'block'
     if parsed.path in ASSETS and method == 'GET':
         return 'allow'
-    if parsed.path == '/v1/counter' and method == 'POST' and initiator.rstrip('/') == origin:
+    if parsed.path in DesktopHandler.post_paths and method == 'POST' and initiator.rstrip('/') == origin:
         return 'authenticate'
     return 'block'
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--node', help='Local node.json containing authorized project registrations.')
     parser.add_argument('--smoke', action='store_true', help='Run real WebEngine click test and exit.')
     parser.add_argument('--screenshot', help='Save the rendered window during --smoke.')
+    parser.add_argument('--smoke-project', help='During --smoke, open this registered ID and verify rendered rows.')
     parser.add_argument('--smoke-crash', action='store_true', help='Kill renderer during --smoke; expect exit 1.')
     args = parser.parse_args()
+    if args.smoke_project and not (args.smoke and args.node):
+        parser.error('--smoke-project requires --smoke and --node')
     if args.smoke_crash and not args.smoke:
         parser.error('--smoke-crash requires --smoke')
     if args.screenshot and not args.smoke:
@@ -71,7 +77,7 @@ def main():
 
     app = QApplication([sys.argv[0]])
     app.setApplicationName('Projektový workspace')
-    with running_api('http', handler=DesktopHandler) as server:
+    with running_api('http', handler=DesktopHandler, projects=Projects(args.node)) as server:
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -97,12 +103,18 @@ def main():
             deadline.timeout.connect(lambda: app.exit(2))
             deadline.start(15000)
             poll = QTimer()
+            project_check = None
+            if args.smoke_project:
+                expected = server.projects.open(args.smoke_project)
+                project_check = json.dumps(expected)
             def checked(value):
                 if value == '1' and server.counter == 1:
                     poll.stop()
                     if args.smoke_crash:
                         os.kill(page.renderProcessPid(), signal.SIGKILL)
                         return
+                    if project_check:
+                        print('desktop smoke: project=' + args.smoke_project + ', rendered rows verified', flush=True)
                     print('desktop smoke: rendered UI, authenticated fetch, value=1', flush=True)
                     def finish():
                         print('desktop measure: idle', flush=True)
@@ -111,7 +123,24 @@ def main():
                             return
                         view.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
-            poll.timeout.connect(lambda: page.runJavaScript("document.querySelector('#count')?.textContent", 0, checked))
+            script = "document.querySelector('#count')?.textContent"
+            if project_check:
+                script = """(()=>{
+                  const expected=EXPECTED;
+                  const select=document.querySelector('#projects');
+                  const open=document.querySelector('#open-project');
+                  if(!window.projectSmokeStarted && !open.disabled && [...select.options].some(o=>o.value===expected.id)){
+                    window.projectSmokeStarted=true;select.value=expected.id;open.click();
+                  }
+                  if(document.querySelector('#project-view').hidden) return null;
+                  const rows=[...document.querySelectorAll('#artifacts li')].map(e=>e.textContent);
+                  const wanted=expected.artifacts.map(e=>e.title+' · '+e.id);
+                  if(document.querySelector('#project-title').textContent!==expected.title ||
+                     document.querySelector('#project-commit').textContent!==expected.commit_id ||
+                     JSON.stringify(rows)!==JSON.stringify(wanted) || document.querySelector('#artifacts img')) return null;
+                  return document.querySelector('#count').textContent;
+                })()""".replace('EXPECTED', project_check)
+            poll.timeout.connect(lambda: page.runJavaScript(script, 0, checked))
             poll.start(100)
             def loaded(ok):
                 if not ok:

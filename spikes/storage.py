@@ -57,6 +57,8 @@ class StaleIndex(RuntimeError):
 class Index:
     def __init__(self, path):
         self.path = Path(path)
+        fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
         with closing(sqlite3.connect(self.path)) as db, db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), commit_id TEXT NOT NULL);

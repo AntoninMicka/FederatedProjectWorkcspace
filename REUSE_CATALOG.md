@@ -63,3 +63,5 @@ Offline test **reuse** .deb builder a existující WebEngine smoke, **adapt** Li
 M0-06 uzavírá **adapt/reuse** Python/Git CLI/SQLite a PySide6 pro M1 dle [ADR 0013](docs/adr/0013-m1-stack.md). C++ port ani hybrid se bez doloženého problému nezahajují. Produkční status reuse tím není přiznán.
 
 Cílový probe **adaptuje** scénář z `tests/test_workspace.py` a dvojici obsah/sidecar z testových fixtures; **reuse** Workspace, Git a snapshot. Samostatný modul ve spikes lze přenést stávajícím deploy allowlistem bez rozšíření přístupu na jiná data nebo přidání nové storage vrstvy. Měření rozlišuje čas celé pomocné operace a apply/recover; Python RSS není součet všech procesů.
+
+M1-01 **adaptuje** konfiguraci v1, Workspace/Index a autentizovaný lokální handler. Služba Projects pouze propojuje existující validaci a koordinované čtení; nepřebírá cizí storage/API framework. UI používá stávající PySide obal a bezpečné textové vykreslení. Soukromá inventura nepřidává pro tento omezený krok potřebnou komponentu; žádný externí kód nebyl kopírován. Kontrakt: [ADR 0014](docs/adr/0014-project-read.md).

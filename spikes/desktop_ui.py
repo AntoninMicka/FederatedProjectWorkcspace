@@ -1,19 +1,33 @@
-"""Static, same-origin PoC UI. No project content or credentials in these assets."""
+"""Static same-origin UI; project data arrives through authenticated reads."""
+import sqlite3
+import subprocess
+
 from spikes.local_api import Handler
+from spikes.projects import Projects
+from spikes.storage import StaleIndex
+from spikes.workspace import PendingOperation
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
 <body><aside><div class="brand">◈ &nbsp; WORKSPACE</div><div class="nav">Přehled uzlu</div>
-<p>DESKTOPOVÝ EXPERIMENT<br>M0 · Lokální propojení</p></aside>
-<main><header><span class="badge">Lokální uzel</span><span>PoC / bez ukládání dat</span></header>
+<p>DESKTOPOVÝ EXPERIMENT<br>M1 · Projekty</p></aside>
+<main><header><span class="badge">Lokální uzel</span><span>PoC / čtení projektů</span></header>
 <h1>Váš lokální workspace.</h1><p class="intro">První krok ke společnému prostoru pro projekty, znalosti a rozhodnutí.</p>
+<section><div class="eyebrow">PROJEKTY</div><h2>Otevřít projekt</h2>
+<label for="projects">Registrovaný projekt</label>
+<div class="controls"><select id="projects" aria-label="Registrovaný projekt"></select>
+<button id="open-project" disabled>Otevřít</button></div>
+<p id="project-status" role="status" aria-live="polite">Načítám registrace…</p>
+<div id="project-view" hidden><h2 id="project-title"></h2>
+<p>Git commit: <code id="project-commit"></code></p><h3>Artefakty</h3>
+<ul id="artifacts"></ul></div></section>
 <section><div class="eyebrow">OVĚŘENÍ SPOJENÍ</div><h2>Okno a backend spolu komunikují.</h2>
 <p>Tlačítko odešle požadavek lokálnímu backendu. Číslo potvrzuje přijaté požadavky v tomto běhu.</p>
 <div class="controls"><button id="increment">Ověřit spojení</button><output id="count">0</output></div>
 <p id="status" role="status" aria-live="polite">Připraveno k ověření.</p></section>
-<div class="next"><h3>Co bude následovat</h3><p>Otevření projektu · Artefakty a metadata · Historie změn</p></div>
-<footer>Čítač se po zavření vynuluje. Projektová data, LLM a federace zatím nejsou zapojené.</footer>
+<div class="next"><h3>Co bude následovat</h3><p>Editor artefaktů · Metadata · Historie změn</p></div>
+<footer>Čítač se po zavření vynuluje. Projektové soubory se zde neupravují. LLM a federace zatím nejsou zapojené.</footer>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#162638;font:16px system-ui;display:flex;min-height:100vh}aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:34px 22px}.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:52px}.nav{background:#274154;border-radius:8px;padding:13px}aside p{font-size:11px;line-height:2;letter-spacing:1px;margin-top:35px}main{max-width:1100px;width:100%;padding:36px 54px}header{display:flex;justify-content:space-between;align-items:center;color:#627183;font-size:12px}.badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}h1{font-size:38px;letter-spacing:-1px;margin:50px 0 10px}.intro{color:#627183;line-height:1.7}section{background:white;border:1px solid #dce3e9;border-radius:14px;padding:30px;margin:30px 0}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}h2{font-size:22px}section p{color:#627183;line-height:1.7;max-width:610px}.controls{display:flex;gap:28px;align-items:center;margin-top:24px}button{border:0;border-radius:8px;background:#176b60;color:white;font:600 15px system-ui;padding:14px 23px;cursor:pointer}button:hover{background:#12564d}button:disabled{opacity:.55;cursor:wait}button:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}output{font-size:32px;font-weight:700}#status{font-size:13px}.next{padding:0 4px}.next h3{font-size:15px}.next p,footer{color:#627183;font-size:13px;line-height:1.8}footer{margin-top:40px;border-top:1px solid #dce3e9;padding-top:20px}@media(max-width:780px){aside{width:175px;padding:24px 14px}main{padding:26px}h1{font-size:29px}}'''
 JS = '''const button=document.querySelector('#increment');
@@ -31,11 +45,81 @@ button.addEventListener('click',async()=>{
  }catch(error){status.textContent='Spojení se nezdařilo. Zavřete a znovu spusťte aplikaci.';}
  finally{button.disabled=false;}
 });'''
+JS += """
+const projects=document.querySelector('#projects');
+const openProject=document.querySelector('#open-project');
+const projectStatus=document.querySelector('#project-status');
+const projectView=document.querySelector('#project-view');
+const artifacts=document.querySelector('#artifacts');
+function clearProject(){
+ projectView.hidden=true;
+ document.querySelector('#project-title').textContent='';
+ document.querySelector('#project-commit').textContent='';
+ artifacts.replaceChildren();
+}
+async function projectRequest(path,body){
+ const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
+ const result=await response.json();
+ if(!response.ok) throw new Error(result.error || 'Požadavek byl odmítnut.');
+ return result;
+}
+projects.addEventListener('change',()=>{clearProject();projectStatus.textContent='Projekt připraven k otevření.';});
+openProject.addEventListener('click',async()=>{
+ clearProject();openProject.disabled=true;projects.disabled=true;
+ projectStatus.textContent='Otevírám projekt…';
+ try{
+  const result=await projectRequest('/v1/projects/open',{project_id:projects.value});
+  document.querySelector('#project-title').textContent=result.title;
+  document.querySelector('#project-commit').textContent=result.commit_id;
+  for(const item of result.artifacts){
+   const row=document.createElement('li');row.textContent=item.title+' · '+item.id;artifacts.append(row);
+  }
+  projectView.hidden=false;
+  projectStatus.textContent=result.artifacts.length ? 'Projekt otevřen.' : 'Projekt zatím nemá artefakty.';
+ }catch(error){projectStatus.textContent=error.message;}
+ finally{openProject.disabled=false;projects.disabled=false;}
+});
+(async()=>{
+ try{
+  const result=await projectRequest('/v1/projects',{});
+  for(const project of result.projects){
+   const option=document.createElement('option');option.value=project.id;option.textContent=project.id;projects.append(option);
+  }
+  openProject.disabled=!result.projects.length;
+  projectStatus.textContent=result.projects.length ? 'Vyberte projekt a otevřete jej.' :
+   'Žádné registrované projekty. Spusťte desktop s volbou --node a cestou k node.json.';
+ }catch(error){projectStatus.textContent=error.message;}
+})();
+"""
+CSS += 'select{max-width:100%;padding:12px}code,li{overflow-wrap:anywhere}li{margin:12px 0}.controls{flex-wrap:wrap}'
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
 
 
 class DesktopHandler(Handler):
+    post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open'}
+
+    def dispatch(self, request):
+        if self.path == '/v1/counter':
+            return super().dispatch(request)
+        projects = self.server.projects or Projects()
+        try:
+            if self.path == '/v1/projects' and request == {}:
+                return self.reply(200, {'projects': projects.list()})
+            if (self.path == '/v1/projects/open' and isinstance(request, dict)
+                    and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
+                return self.reply(200, projects.open(request['project_id']))
+            return self.send_error(400)
+        except PendingOperation:
+            return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
+        except StaleIndex:
+            return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            # Do not forward paths, Git stderr or configuration payloads to the renderer.
+            return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
+                                   'práva lokálního stavu a platnost Git dat/indexu.'})
+
     def do_GET(self):
         if self.single('Host') != self.server.authority:
             return self.send_error(403)
