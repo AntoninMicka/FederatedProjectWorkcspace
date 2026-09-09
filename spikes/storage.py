@@ -1,16 +1,17 @@
 """M0 experiment for controlled repositories; not a production Git sandbox."""
-import json
 import os
 from pathlib import Path
 import sqlite3
 import subprocess
+
+from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, validate_snapshot
 
 
 class Git:
     def __init__(self, root):
         self.root = Path(root)
 
-    def run(self, *args, check=True):
+    def run(self, *args, check=True, binary=False):
         env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
         env.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
                    GIT_TERMINAL_PROMPT='0', GIT_AUTHOR_NAME='M0 Test',
@@ -19,7 +20,7 @@ class Git:
         return subprocess.run(
             ['git', '-c', f'core.hooksPath={os.devnull}', '-c', 'commit.gpgSign=false',
              '-c', 'core.autocrlf=false', '-c', 'core.fsmonitor=false', *args],
-            cwd=self.root, env=env, capture_output=True, text=True,
+            cwd=self.root, env=env, capture_output=True, text=not binary,
             check=check, timeout=30,
         )
 
@@ -50,22 +51,19 @@ class Index:
         if git.run('ls-files', '-u').stdout:
             raise ValueError('Unresolved merge')
         commit = git.head()
-        paths = git.run('ls-tree', '-r', '--name-only', '-z', commit, '--', 'registries/').stdout
-        rows = []
-        ids = set()
-        for path in filter(None, paths.split('\0')):
-            if not path.endswith('.json'):
-                raise ValueError('Expected JSON registry entity')
-            data = json.loads(git.run('show', f'{commit}:{path}').stdout)
-            if not isinstance(data, dict):
-                raise ValueError('Expected object')
-            entity_id, title = data.get('id'), data.get('title')
-            if not isinstance(entity_id, str) or not entity_id or entity_id in ids:
-                raise ValueError('Missing or duplicate ID')
-            if not isinstance(title, str) or not title.strip():
-                raise ValueError('Invalid title')
-            ids.add(entity_id)
-            rows.append((entity_id, title))
+        entries = git.run('ls-tree', '-r', '-z', commit, '--', 'artifacts/', 'registries/').stdout
+        files = {}
+        total = 0
+        for entry in filter(None, entries.split('\0')):
+            info, path = entry.split('\t', 1)
+            mode, kind, oid = info.split()
+            require(mode in {'100644', '100755'} and kind == 'blob', 'Non-regular Git entry')
+            size = int(git.run('cat-file', '-s', oid).stdout)
+            total += size
+            require(size <= MAX_FILE and total <= MAX_SNAPSHOT and len(files) < 10000, 'Snapshot exceeds limits')
+            files[path] = git.run('cat-file', 'blob', oid, binary=True).stdout
+        entities = validate_snapshot(files)
+        rows = [(meta['id'], meta['title']) for meta in entities.values()]
         with sqlite3.connect(self.path) as db:
             db.execute('DELETE FROM entities')
             db.executemany('INSERT INTO entities VALUES (?, ?)', rows)

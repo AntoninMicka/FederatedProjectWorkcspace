@@ -594,6 +594,7 @@
 Zahájeno 2026-09-09: pracovní návrhy jsou v `ARCHITECTURE.md`, `DATA_MODEL.md`,
 `FEDERATION.md` a `SECURITY.md`. Referenční storage PoC a výsledky jsou popsány
 v `docs/adr/0001-m0-baseline.md`. Gate M0 zůstává otevřený; návrhy nejsou finálně ověřeny.
+Pokračování M0: `docs/adr/0002-metadata-journal.md` popisuje implementovanou validaci artefaktů/registrů a Linux PoC obnovy souborů po pádu procesu. Integrace s commitem a řízením přístupu zůstává otevřená.
 
 - [ ] Datový model.
 - [ ] Repo layout.

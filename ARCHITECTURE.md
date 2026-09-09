@@ -10,7 +10,7 @@ Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStor
 
 Git drží projektové artefakty, jejich metadata, registry a schválené LLM výstupy. SQLite indexuje pouze validovaný commit. Identita uzlu, credentials a rozpracované operace jsou lokální autoritativní stav mimo projektový Git i index.
 
-Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem je nutné ještě implementovat journal a obnovu; samotný commit nestačí.
+Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem existuje souborový journal a obnova v `spikes/journal.py`. Propojení journalu, commitu a indexace do jedné aplikační operace zatím chybí.
 
 Index musí nést commit ID. Dotazy při nesouladu vracejí stav obnovy, nikoli tiše stará data. Necommitnuté změny má editor zobrazovat odděleně. Synchronizace se připravuje v izolovaném pracovním prostoru a publikuje až po validaci a kontrole nezměněného výchozího HEAD.
 
@@ -22,4 +22,4 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 
 ## Stav implementace
 
-`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci, import cizích repozitářů ani úplný datový validátor. Produkční nasazení není připraveno.
+`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci, import cizích repozitářů ani schémata konfigurace projektu/uzlu. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.

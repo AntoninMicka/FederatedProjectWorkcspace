@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from spikes.storage import Git, Index, StaleIndex
+from tests.fixtures import ENTITY, registry
 
 
 class StorageSpike(unittest.TestCase):
@@ -21,11 +22,10 @@ class StorageSpike(unittest.TestCase):
         self.db = Index(self.root / 'index.sqlite')
         self.db.rebuild(self.git)
 
-    def write(self, git, title, name='entity', entity_id='entity'):
+    def write(self, git, title, name=ENTITY, entity_id=ENTITY):
         folder = git.root / 'registries' / 'decisions'
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / f'{name}.json').write_text(json.dumps(
-            {'id': entity_id, 'title': title}, indent=2) + '\n')
+        (folder / f'{name}.json').write_bytes(registry(title, entity_id))
 
     def test_divergence_abort_and_resolution_preserve_history(self):
         peer = Git(self.root / 'server')
@@ -39,12 +39,12 @@ class StorageSpike(unittest.TestCase):
         result = self.git.run('merge', '--no-edit', 'FETCH_HEAD', check=False)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(self.git.head(), local)
-        path = 'registries/decisions/entity.json'
+        path = f'registries/decisions/{ENTITY}.json'
         for stage, title in [(1, 'Shared base'), (2, 'Desktop edit'), (3, 'Server edit')]:
             self.assertEqual(json.loads(self.git.run('show', f':{stage}:{path}').stdout)['title'], title)
         with self.assertRaises(ValueError):
             self.db.rebuild(self.git)
-        self.assertEqual(self.db.read(self.git), [('entity', 'Desktop edit')])
+        self.assertEqual(self.db.read(self.git), [(ENTITY, 'Desktop edit')])
         self.git.run('merge', '--abort')
         self.assertEqual(self.git.head(), local)
         self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
@@ -54,7 +54,7 @@ class StorageSpike(unittest.TestCase):
         parents = self.git.run('show', '-s', '--format=%P', 'HEAD').stdout.split()
         self.assertEqual(parents, [local, remote])
         self.db.rebuild(self.git)
-        self.assertEqual(self.db.read(self.git), [('entity', 'Human resolution')])
+        self.assertEqual(self.db.read(self.git), [(ENTITY, 'Human resolution')])
 
     def test_recovery_after_commit_before_index_update(self):
         self.write(self.git, 'Committed before crash')
@@ -63,14 +63,14 @@ class StorageSpike(unittest.TestCase):
         with self.assertRaises(StaleIndex):
             reopened.read(self.git)
         reopened.rebuild(self.git)
-        self.assertEqual(reopened.read(self.git), [('entity', 'Committed before crash')])
+        self.assertEqual(reopened.read(self.git), [(ENTITY, 'Committed before crash')])
         self.db.path.unlink()
         rebuilt = Index(self.db.path)
         rebuilt.rebuild(self.git)
         self.assertEqual(rebuilt.read(self.git), reopened.read(self.git))
 
     def test_invalid_merge_projection_does_not_replace_previous_index(self):
-        self.write(self.git, 'Duplicate', name='duplicate')
+        self.write(self.git, 'Duplicate', name='22222222-2222-4222-8222-222222222222')
         self.git.commit('Semantically invalid state')
         with self.assertRaises(ValueError):
             self.db.rebuild(self.git)
@@ -83,7 +83,7 @@ class StorageSpike(unittest.TestCase):
     def test_projection_reads_commit_not_uncommitted_edits(self):
         self.write(self.git, 'Unsaved draft')
         self.db.rebuild(self.git)
-        self.assertEqual(self.db.read(self.git), [('entity', 'Shared base')])
+        self.assertEqual(self.db.read(self.git), [(ENTITY, 'Shared base')])
 
 
 if __name__ == '__main__':

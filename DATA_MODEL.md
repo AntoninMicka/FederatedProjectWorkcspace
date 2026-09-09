@@ -16,9 +16,9 @@ Každý adresář artefaktu obsahuje právě jeden primární soubor. Editovatel
 
 Povinná pole: `schema_version` (1), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID).
 
-Frontmatter má stejné klíče v YAML mezi úvodními oddělovači `---`. Parser musí odmítat duplicitní klíče, neznámou verzi schématu a nepodporované YAML konstrukce; limity parseru se stanoví před importem. Import nesmí bez potvrzení přepisovat metadata původního zdroje.
+Frontmatter má stejné klíče v YAML mezi úvodními oddělovači `---`. Parser musí odmítat duplicitní klíče, neznámou verzi schématu a nepodporované YAML konstrukce; limity jsou 64 KiB metadat a 16 úrovní vnoření. Import nesmí bez potvrzení přepisovat metadata původního zdroje.
 
-Registry: JSON objekt pro každou entitu, společná metadata plus `status`, `body` a `relations`. Povolené stavy podle druhu registru se doplní do strojového schématu. JSON serializovat stabilně, UTF-8 a s koncovým newline. ID se nemění při přejmenování. Kolizi ID, chybějící cíl vztahu nebo sidecar bez obsahu nelze automaticky schválit.
+Registry: JSON objekt pro každou entitu, společná metadata plus `status`, `body` a `relations`. Povolené druhy registrů a jejich stavy jsou definovány ve `STATES` v `spikes/metadata.py`; pole `kind` se musí shodovat s názvem adresáře registru. JSON serializovat stabilně, UTF-8 a s koncovým newline. ID se nemění při přejmenování. Kolizi ID, chybějící cíl vztahu nebo sidecar bez obsahu nelze automaticky schválit.
 
 ## Konzistence
 
@@ -26,4 +26,10 @@ Smazání prověřuje příchozí vztahy. Přejmenování obsahu a změna pole `
 
 SQLite obsahuje projekci entit a commit ID; neobsahuje jedinou kopii uživatelských dat. Při selhání validace nový index nepublikovat. MVP nepotřebuje sdílenou SQLite databázi ani synchronizaci jejího souboru.
 
-Storage PoC záměrně používá pouze minimální entitu `id/title`; úplné schéma a frontmatter/sidecar parser nejsou implementovány.
+## Implementovaný rozsah M0
+
+`spikes/metadata.py` validuje výše uvedená metadata, cestu a identitu artefaktu, stavy registrů, unikátnost ID a cíle vztahů. Autor je kanonické UUID; jeho existenci musí později ověřit služba identity. `kind` artefaktu je document/source/snapshot. Neznámá pole a verze se odmítají. UTC čas používá koncové Z, volitelně 1–6 desetinných míst sekundy.
+
+Sidecar má `file` jako jeden název souboru ve stejném adresáři; adresář musí obsahovat právě obsah a metadata.json. Markdown s frontmatterem je jediný soubor svého adresáře. U neměnného Markdown zdroje se projektová metadata čtou pouze ze sidecaru a původní frontmatter je součástí neinterpretovaného zdroje.
+
+Projekce má v PoC limit 16 MiB na soubor, 64 MiB celkem a 10 000 souborů. Project.json a strojová schémata dalších konfigurací zůstávají otevřená. Journal podporuje připravené vytvoření, úpravu, přejmenování a smazání souborů s následnou obnovou; podrobnosti a omezení viz [ADR 0002](docs/adr/0002-metadata-journal.md).

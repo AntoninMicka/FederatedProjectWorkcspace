@@ -18,8 +18,10 @@ Obnova po změně HEAD simuluje pád mezi commitem a indexací, nejde o test ná
 
 - [x] Pracovní architektura, layout dat, hranice indexu a autoritativního stavu.
 - [x] Popsaný uživatelský scénář konfliktu.
-- [ ] Úplné strojové schéma a validátor frontmatter/sidecar.
-- [ ] Obnova přerušeného zápisu artefaktu a sidecaru.
+- [x] Spustitelné schéma artefaktů/registrů a validátor frontmatter/sidecar — viz ADR 0002.
+- [ ] Schéma project.json a konfigurací uzlu.
+- [x] Obnova přerušeného zápisu artefaktu a sidecaru — Linux PoC s testy pádu procesu.
+- [ ] Integrace journal → validace → Git commit → index a společné řízení přístupu.
 - [ ] libgit2 PoC a porovnání se stejnými scénáři Git CLI.
 - [ ] Měření paměti, startu a balení na desktopu a Turris/LXC.
 - [ ] Ověření bezpečného lokálního transportu a výběr desktopového obalu.

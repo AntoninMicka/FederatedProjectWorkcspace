@@ -6,13 +6,25 @@ Projekt je ve fázi **M0 — Architecture spike**. Zatím obsahuje návrh a spus
 
 ## Spuštění experimentu
 
-Vyžaduje Python 3.11+ a Git v PATH, bez dalších Python závislostí:
+Vyžaduje Linux, Python 3.11+, Git v PATH a PyYAML 6.0.3:
 
 ```sh
-python3 -m unittest discover -s tests -v
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
+Pokud už je požadovaný PyYAML dostupný, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
+
 Testy vytvářejí izolované dočasné repozitáře a SQLite databáze. Nepoužívají síť ani nemění globální Git konfiguraci.
+
+Pracovní projekci existujícího projektu lze ověřit bez zápisu:
+
+```sh
+.venv/bin/python -m spikes.check_project /cesta/k/projektu
+```
+
+Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zatím `project.json` ani konfiguraci uzlu. Neplatná projekce vrací exit code 1.
 
 ## Dokumentace
 
@@ -22,5 +34,6 @@ Testy vytvářejí izolované dočasné repozitáře a SQLite databáze. Nepouž
 - [Bezpečnost](SECURITY.md)
 - [Katalog reuse](REUSE_CATALOG.md)
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
+- [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Další krok: libgit2 PoC, ověření na cílovém Turris/LXC, frontmatter/sidecar validátor a obnova přerušené změny dvojice souborů. Poté uzavřít stack a začít M1.
+Další krok: propojit journal, validaci, Git commit a index do jedné aplikační operace. V M0 zbývá také libgit2 PoC, lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.
