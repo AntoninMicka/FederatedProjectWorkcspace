@@ -213,6 +213,22 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ---
 
+## 3C. Import z Google Drive, NotebookLM a chatbotů
+
+**Stav: designed / plánováno, žádný konektor není implementován.** „Gemini notebook“ zde znamená NotebookLM; konkrétní edici účtu ověřit před implementací. Navazuje na import artefaktů M1 a provenance; neblokuje současné desktopové PoC. Operativní kroky drží TODO IMP-01 až IMP-03.
+
+- [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje.
+- [ ] NotebookLM: importovat dostupné zdroje, uživatelské poznámky a generované výstupy jako odlišné artefakty; zachovat citace a vazby, pokud jsou exportem/API poskytovány. Nedostupné části uvést v přehledu importu. Rozlišit běžný NotebookLM a Enterprise; existence Enterprise API není důkaz dostupnosti stejné funkce běžnému účtu ani exportu celé historie chatu.
+- [ ] Chatboty: podporovat import uživatelem získaných exportů (např. ChatGPT nebo Gemini/Takeout) a ručně dodaného textu/Markdownu. Konkrétní formáty potvrdit na vzorcích; odlišit archiv konverzace od samostatné odpovědi. Zachovat role, pořadí, čas, větvení, přílohy a zdrojová ID, pokud je export obsahuje; chybějící hodnoty nevymýšlet.
+- [ ] Dostupnost čtení historie ověřovat samostatně pro každý produkt a edici. Generační API modelu není automaticky přístup k historii jeho webového chatbota. Při chybějícím oficiálním API nabídnout souborový import; nevyžadovat session cookies ani neoficiální interní endpointy.
+- [ ] Import nejprve nabídne náhled výběru, cílový projekt a privacy třídu. Oprávnění cloudového zdroje nepřenášet automaticky na projektové RBAC; OAuth credentials držet mimo Git, používat minimální potřebná oprávnění a zvládnout odvolání přístupu.
+- [ ] Evidovat původní službu/ID/URL, zdrojovou revizi nebo dostupný čas změny, datum importu, hash importovaných bajtů a způsob převodu. Uchovat přijatý export jako neměnný zdroj a odvozený text odděleně. U LLM výstupů nepředpokládat dostupnost modelu, promptu či úplného Context Manifestu.
+- [ ] Opakovaný import musí rozpoznat duplicity a nabídnout novou verzi při změně zdroje; lokální editace nesmí tiše přepsat. Import není obousměrná synchronizace ani automatický zápis zpět do cloudu. Importované dokumenty se bez explicitního dalšího kroku neposílají LLM.
+
+Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/export), [Notebook Enterprise API — preview](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks), [ChatGPT export](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data), [Gemini Apps export přes Takeout](https://support.google.com/gemini/answer/16920332?hl=en). Tyto podklady potvrzují dílčí rozhraní/exporty, nikoli úplnost importu nebo přístup k uživatelovu účtu.
+
+---
+
 # 4. Projektové registry
 
 - [ ] Zavést registr předpokladů.

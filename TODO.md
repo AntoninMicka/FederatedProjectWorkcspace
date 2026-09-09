@@ -41,6 +41,14 @@ Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úk
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
+## Import externích dat — navazuje na aplikační import M1
+
+Strategický rozsah drží sekce 3C master roadmapy; tyto úkoly nemění prioritu desktopového PoC.
+
+- [ ] [planned] **IMP-01 — Google Drive import (cílová úroveň: implemented).** Ověřit OAuth scopes a výběr souborů, download/export podle typu a limity; navázat na aplikační import a V-04/V-05. Akceptace: binární soubor i nativní Google dokument, provenance exportu, duplicita/nová revize, odvolané oprávnění, rate limit a přerušený přenos bez částečného publikování do projektu. Před zápisy popsat crash boundaries podle ADR 0003.
+- [ ] [planned] **IMP-02 — NotebookLM import (cílová úroveň: PoC validated).** Určit edici účtu a ověřit dostupné oficiální exporty/API zvlášť pro zdroje, poznámky, generované výstupy a chat. Enterprise preview nepovažovat za obecné API osobního účtu. Akceptace: uživatelem poskytnutý vzorek, zachované dostupné citace/provenance, jasný seznam neimportovatelných částí a funkční souborový fallback tam, kde export existuje. Nezavádět automaticky placenou Enterprise závislost.
+- [ ] [planned] **IMP-03 — Import exportů konverzací (cílová úroveň: implemented).** Získat uživatelem schválené anonymizované vzorky ChatGPT a Gemini/Takeout, ověřit skutečnou strukturu a vytvořit lokální import s náhledem. Akceptace: role/pořadí/větvení podle dostupnosti, chybějící metadata, přílohy, opakovaný import a poškozený archiv; omezit velikost i rozbalení archivu, odmítnout traversal/symlinky a nevykonávat importované HTML. Generační API není předpokládaným zdrojem historie webového účtu.
+
 ## Podpůrné IP / release integrace — nepřebírají prioritu M0
 
 Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její registry. Níže jsou pouze konkrétní integrace do repozitáře; žádná publikační automatizace zatím neexistuje.
@@ -50,6 +58,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **Designed — rozsah importu Drive, NotebookLM a konverzací.** Doplněna sekce 3C roadmapy a IMP-01 až IMP-03. Ověřeny oficiální podklady k dílčím API/exportům, lokální odkazy a diff. Konektory, autentizace ani parsery exportů nejsou implementované; žádná uživatelská cloudová data nebyla načtena.
 
 - [x] [completed] **M0-06a — PoC validated: spustitelné desktopové okno.** `./run.sh desktop`, `spikes/desktop.py` a `desktop_ui.py` adaptují existující lokální API; Qt okno používá stejný Python proces s backendovým vláknem, token pouze v nativní části a off-the-record WebEngine. Skutečné UI/JS kliknutí ověřuje autentizované API a zavření backendu; nový start resetuje čítač. [ADR 0007](docs/adr/0007-desktop-poc.md) vymezuje změnu pořadí na žádost uživatele a otevřené produkční balení/licence i M0-05. Závěrečné `M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 56 testů prošlo bez skipů. Ověřeno vykreslené okno ze screenshotu, `bash -n run.sh`, help/chybné argumenty a skutečný launcher z /tmp včetně SIGTERM. Kontrola odkazů, soukromých údajů a diffu dokončena.
 
