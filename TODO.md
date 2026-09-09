@@ -6,11 +6,12 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-05 — Dokončit cílové měření a recovery na Omnii.** Stack pro M1 je zvolený dle ADR 0013; desktopové důkazy a balení se neopakují. Další konkrétní výstup: měření zvoleného Python/Git/SQLite stacku s projektovými daty na SSD a ověření obnovy po přerušení. Připravený příkaz v README používá spikes.target_probe; čeká na ruční spuštění aktuálního deploye uživatelem na Omnii a jeho výstup. Poté zopakovat Gate M0 review.
+**M0-09 — Závěrečné opakované Gate review.** Stack i desktopový instalační kandidát jsou uzavřené pro rozsah M0 a cílový probe na Omnii prošel. Nyní vyhodnotit souhrn důkazů a otevřených omezení a explicitně rozhodnout o přechodu do M1; samotný PASS gate automaticky neuzavírá.
 
 ## Další zbývající práce M0
 
-- [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Uživatel doložil Turris Omnia / TurrisOS 9.1.1 / ARMv7, LXC 6.0.5 a běžící Debian 13 Trixie kontejner na SSD (Btrfs). Uživatel následně doložil úspěšnou instalaci PyYAML 6.0.3, běh storage dema, Git commit, čtení indexu po znovuotevření a přepnutí current. Opakovaný uživatelský běh: 0,66 s pro celé demo, RUSAGE_CHILDREN.ru_maxrss 11 520 KiB (11,25 MiB), exit 0. Jde o jediné orientační měření, nikoli čas startu služby nebo součet paměti procesů. Dodané df potvrzuje /tmp jako tmpfs: uvedené měření patří běhu v RAM. Následný běh s TMPDIR=/var/tmp/workspace-poc úspěšně vytvořil projekt, commit a index po znovuotevření a odstranil dočasná data; df pro tento adresář potvrzuje /dev/sda, Btrfs. Zápisový smoke na SSD je tedy doložen, jeho čas/paměť ani crash recovery na SSD však měřeny nebyly. Zbývá změřit start, paměť a provoz zvoleného Python/Git/SQLite stacku podle ADR 0013 a ověřit recovery na SSD, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
+- [ ] [planned] **M0-09R — Opakované Gate review (cílová úroveň: designed).** Posoudit důkazy M0-05/M0-06 po dokončení probe, oddělit otevřené produkční úkoly od podmínek vstupu do M1 a zaznamenat rozhodnutí. Původní negativní review zachovat.
+
 
 
 ## Gate review M0-09 — 2026-09-09
@@ -90,6 +91,31 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-05 — PoC validated: cílový běh a recovery na Omnii SSD.** Uživatel doložil `spikes.target_probe` s výsledkem PASS: Btrfs, armv7l, Python 3.13.5, SQLite 3.46.1, Git 2.47.3. Navazuje na potvrzený Debian LXC a SSD /dev/sda; pracovní adresář /var/tmp/workspace-poc. Všech 15 případů má verified=true: tři normální běhy a 12 pádů vlastního workeru. Probe ověřil pending čtení, zachování kandidáta, přesné bajty, jediný commit operace, idempotenci recovery, rebuild smazaného indexu a úklid dočasných dat. Jde o uživatelský cílový výstup, nikoli nový běh celé unittest sady. Původní demo 0,66 s běželo na tmpfs a nemíchá se s novými SSD měřeními.
+
+  | Normální běh | Celý worker (s) | Apply (s) | Python peak RSS (KiB) |
+  | --- | --- | --- | --- |
+  | 1 | 0,8741 | 0,489111 | 11392 |
+  | 2 | 0,8749 | 0,487234 | 11648 |
+  | 3 | 0,8655 | 0,481006 | 11648 |
+
+  | Hranice přerušení | Recovery (s) |
+  | --- | --- |
+  | prepared | 0,4496 |
+  | file:0 | 0,4446 |
+  | file:1 | 0,4455 |
+  | applied | 0,4472 |
+  | files-applied | 0,4243 |
+  | commit-created | 0,4261 |
+  | commit-ready | 0,2838 |
+  | ref-updated | 0,2765 |
+  | committed | 0,2620 |
+  | git-indexed | 0,2606 |
+  | indexed | 0,2758 |
+  | completed | 0,0011 |
+
+  `process_s` zahrnuje start Pythonu a inicializaci Git projektu, nikoli start serverové služby; RSS patří Python workeru, ne celému kontejneru/Git potomkům. Normální recover bez pending operace trval 0,0010–0,0011 s. Pád procesu na checkpointu není výpadek napájení ani pád uvnitř libovolného syscallu. Malá fixture není kapacitní benchmark. Úroveň je PoC validated pro zvolený stack; další produkční hardening drží V-06/V-07. Ověřena konzistence dodaných hodnot, odkazy a diff; Gate M0 čeká na review M0-09R.
 
 - [x] [completed] **Implemented — cílový probe pro M0-05.** `spikes.target_probe` přenáší stávající crash scénáře do ručního deploye, vyžaduje explicitní základ a očekávaný filesystem, měří tři normální běhy a ověřuje 12 pádů workeru, obnovu a přesné bajty bez duplicitního commitu. Při úspěchu uklidí jen vlastní data, při selhání je ponechá. Lokální regresní testy pokrývají skutečné pády, chybný filesystem bez zápisu a zachování diagnostiky. Závěrečné `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 73 testů prošlo bez skipů. Ověřeny odkazy a finální diff. Skutečný běh na Omnia SSD zatím neproběhl v této změně, M0-05 zůstává otevřený.
 
