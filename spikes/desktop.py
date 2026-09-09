@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from spikes.desktop_ui import ASSETS, DesktopHandler
 from spikes.local_api import running_api
 from spikes.projects import Projects
+from spikes.project_creation import ProjectCreation, default_node_path
 
 
 def request_policy(url, initiator, method, origin):
@@ -30,9 +31,12 @@ def main():
     parser.add_argument('--node', help='Local node.json containing authorized project registrations.')
     parser.add_argument('--smoke', action='store_true', help='Run real WebEngine click test and exit.')
     parser.add_argument('--screenshot', help='Save the rendered window during --smoke.')
+    parser.add_argument('--smoke-create', metavar='NEW_DIRECTORY', help='During --smoke, create a project through the native dialog.')
     parser.add_argument('--smoke-project', help='During --smoke, open this registered ID and verify rendered rows.')
     parser.add_argument('--smoke-crash', action='store_true', help='Kill renderer during --smoke; expect exit 1.')
     args = parser.parse_args()
+    if args.smoke_create and (not (args.smoke and args.node) or args.smoke_project):
+        parser.error('--smoke-create requires --smoke and --node; cannot combine with --smoke-project')
     if args.smoke_project and not (args.smoke and args.node):
         parser.error('--smoke-project requires --smoke and --node')
     if args.smoke_crash and not args.smoke:
@@ -41,7 +45,8 @@ def main():
         parser.error('--screenshot requires --smoke')
     try:
         from PySide6.QtCore import QTimer, QUrl
-        from PySide6.QtWidgets import QApplication, QMessageBox
+        from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow
+        from spikes.desktop_creation import CreationController
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -75,9 +80,18 @@ def main():
             self.closing = True
             super().closeEvent(event)
 
+    class Window(QMainWindow):
+        def closeEvent(self, event):
+            if controller.busy:
+                event.ignore()
+                return
+            view.closing = True
+            super().closeEvent(event)
+
     app = QApplication([sys.argv[0]])
     app.setApplicationName('Projektový workspace')
-    with running_api('http', handler=DesktopHandler, projects=Projects(args.node)) as server:
+    node_path = args.node or default_node_path()
+    with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -89,8 +103,28 @@ def main():
         for setting in ('LocalContentCanAccessFileUrls', 'LocalContentCanAccessRemoteUrls',
                         'JavascriptCanOpenWindows', 'FullScreenSupportEnabled'):
             settings.setAttribute(getattr(QWebEngineSettings.WebAttribute, setting), False)
-        view.setWindowTitle('Projektový workspace · Desktop PoC')
-        view.resize(1100, 760)
+        window = Window()
+        window.setCentralWidget(view)
+        window.setWindowTitle('Projektový workspace · Desktop PoC')
+        window.resize(1100, 800)
+        creation_result = {'receipt': None, 'loaded': False}
+        def created(receipt):
+            if receipt:
+                creation_result['receipt'] = receipt
+                if creation_result['loaded']:
+                    page.runJavaScript('loadProjects(' + json.dumps(receipt['id']) + ')')
+        def creation_failed(message):
+            if args.smoke:
+                print('desktop creation failed: ' + message, file=sys.stderr, flush=True)
+                app.exit(5)
+            else:
+                QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
+        controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
+        def project_loaded(ok):
+            creation_result['loaded'] = ok
+            if ok and creation_result['receipt']:
+                page.runJavaScript('loadProjects(' + json.dumps(creation_result['receipt']['id']) + ')')
+        view.loadFinished.connect(project_loaded)
         page.renderProcessTerminated.connect(lambda *_: None if view.closing else app.exit(1))
         timer = QTimer()
         timer.timeout.connect(lambda: None)
@@ -109,19 +143,23 @@ def main():
                 project_check = json.dumps(expected)
             def checked(value):
                 if value == '1' and server.counter == 1:
+                    if args.smoke_create and (not creation_result['receipt'] or controller.busy):
+                        return
                     poll.stop()
                     if args.smoke_crash:
                         os.kill(page.renderProcessPid(), signal.SIGKILL)
                         return
+                    if args.smoke_create:
+                        print('desktop smoke: created=' + creation_result['receipt']['id'], flush=True)
                     if project_check:
                         print('desktop smoke: project=' + args.smoke_project + ', rendered rows verified', flush=True)
                     print('desktop smoke: rendered UI, authenticated fetch, value=1', flush=True)
                     def finish():
                         print('desktop measure: idle', flush=True)
-                        if args.screenshot and not view.grab().save(args.screenshot):
+                        if args.screenshot and not window.grab().save(args.screenshot):
                             app.exit(4)
                             return
-                        view.close()
+                        window.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
             script = "document.querySelector('#count')?.textContent"
             if project_check:
@@ -140,6 +178,13 @@ def main():
                      JSON.stringify(rows)!==JSON.stringify(wanted) || document.querySelector('#artifacts img')) return null;
                   return document.querySelector('#count').textContent;
                 })()""".replace('EXPECTED', project_check)
+            if args.smoke_create:
+                script = """(()=>{
+                  if(document.querySelector('#project-view').hidden ||
+                     document.querySelector('#project-title').textContent!=='Nový projekt z dialogu' ||
+                     !document.querySelector('#project-commit').textContent) return null;
+                  return document.querySelector('#count').textContent;
+                })()"""
             poll.timeout.connect(lambda: page.runJavaScript(script, 0, checked))
             poll.start(100)
             def loaded(ok):
@@ -148,17 +193,24 @@ def main():
                 else:
                     print("desktop measure: ui ready", flush=True)
                     page.runJavaScript("document.querySelector('#increment').click()")
+                    if args.smoke_create:
+                        controller.smoke = ('Nový projekt z dialogu', args.smoke_create)
+                        QTimer.singleShot(0, controller.button.click)
             view.loadFinished.connect(loaded)
         else:
             view.loadFinished.connect(lambda ok: None if ok else QMessageBox.warning(
                 view, 'Nelze načíst rozhraní', 'Zavřete aplikaci a spusťte ji znovu.'))
         view.load(QUrl(server.origin + '/'))
-        view.show()
+        window.show()
+        if not args.smoke:
+            QTimer.singleShot(0, controller.recover)
         result = app.exec()
-        view.close()
+        controller.wait()
+        view.closing = True
+        window.close()
         # Destroy pages before their off-the-record profile.
         from shiboken6 import delete
-        delete(view)
+        delete(window)
         delete(profile)
     if args.smoke and result == 0:
         print('desktop smoke: backend stopped', flush=True)

@@ -2,7 +2,7 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop již otevírá registrované projekty a zobrazuje artefakty z Gitu; editor zatím chybí.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Editor artefaktů zatím chybí.
 
 ## Desktop
 
@@ -10,7 +10,9 @@ Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M
 ./run.sh desktop
 ```
 
-Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Volba `./run.sh desktop --node /cesta/node.json` přidá výběr registrovaného projektu, jeho název, commit a seznam artefaktů. [Postup a izolovaná ukázka](docs/project-opening.md) popisují konfiguraci i spuštění; projektové soubory se v UI zatím neupravují. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md), přechod bindingu a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+V horní liště klikněte na **Nový projekt…**, zadejte název a dosud neexistující cílovou složku a potvrďte **Vytvořit a otevřít**. Aplikace připraví Git, projektová metadata, lokální stav a registraci; po restartu projekt zůstane dostupný. JSON není nutné psát ručně. Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, jinak `~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json` vybere jiný uzel.
+
+[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující cílová složka se nepřepisuje. Editor artefaktů zatím chybí. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 
 Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 

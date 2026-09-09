@@ -10,7 +10,7 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
   package-deb [--output SOUBOR] [--version VERZE]  Sestaví instalační .deb.
   package-desktop [--output SOUBOR]  Sestaví zdrojový balíček desktopového PoC.
-  desktop [--node SOUBOR]  Otevře desktop; node.json určuje registrované projekty.
+  desktop [--node SOUBOR]  Vytvoří nebo otevře projekt v desktopu; konfigurace uzlu je volitelná.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
   test         Spustí celou unittest sadu.
@@ -18,7 +18,7 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
   help         Zobrazí tuto nápovědu.
 
-Desktop umožňuje čtení registrovaných projektů; editor, LLM a federace zatím chybí.
+Desktop umožňuje vytvoření a čtení projektů; editor artefaktů, LLM a federace zatím chybí.
 Demo se po dokončení odstraní; nepracuje s vašimi projektovými daty.
 Běžné spuštění nic nestahuje. Použije .venv/bin/python, jinak python3.
 Desktop může použít systémový python3 s Qt a PyYAML, pokud Qt ve venv chybí.

@@ -48,11 +48,19 @@ class DebianPackageTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(sentinel.read_bytes(), b'user project')
             if os.environ.get('M0_DESKTOP_TEST') == '1':
-                result = subprocess.run([str(root / f'usr/bin/{NAME}'), '--smoke'], cwd='/tmp',
+                result = subprocess.run([str(root / f'usr/bin/{NAME}'), '--smoke',
+                                         '--node', str(base / 'node.json'),
+                                         '--smoke-create', str(base / 'created-project')], cwd='/tmp',
                                         capture_output=True, text=True, timeout=25)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertIn('backend stopped', result.stdout)
+                self.assertIn('desktop smoke: created=', result.stdout)
+                created_bytes = (base / 'created-project/project.json').read_bytes()
+                node_bytes = (base / 'node.json').read_bytes()
             result = subprocess.run(command + ['--purge', NAME], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertFalse((root / f'usr/bin/{NAME}').exists())
+            if os.environ.get('M0_DESKTOP_TEST') == '1':
+                self.assertEqual((base / 'created-project/project.json').read_bytes(), created_bytes)
+                self.assertEqual((base / 'node.json').read_bytes(), node_bytes)
             self.assertEqual(sentinel.read_bytes(), b'user project')

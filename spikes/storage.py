@@ -4,13 +4,15 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
+import time
 
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, validate_snapshot
 
 
 class Git:
-    def __init__(self, root):
+    def __init__(self, root, *, deadline=None):
         self.root = Path(root)
+        self.deadline = deadline
 
     def run(self, *args, check=True, binary=False, env_extra=None, input=None):
         env = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
@@ -19,11 +21,14 @@ class Git:
                    GIT_AUTHOR_EMAIL='m0@example.invalid', GIT_COMMITTER_NAME='M0 Test',
                    GIT_COMMITTER_EMAIL='m0@example.invalid', LC_ALL='C')
         env.update(env_extra or {})
+        timeout = 30 if self.deadline is None else min(30, self.deadline - time.monotonic())
+        if timeout <= 0:
+            raise TimeoutError('Operation deadline exceeded')
         return subprocess.run(
             ['git', '-c', f'core.hooksPath={os.devnull}', '-c', 'commit.gpgSign=false',
              '-c', 'core.autocrlf=false', '-c', 'core.fsmonitor=false', *args],
             cwd=self.root, env=env, capture_output=True, text=not binary,
-            check=check, timeout=30, input=input,
+            check=check, timeout=timeout, input=input,
         )
 
     def head(self):

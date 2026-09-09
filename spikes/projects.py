@@ -25,7 +25,7 @@ class Projects:
         self.node_path = Path(node_path).absolute() if node_path else None
 
     def _bindings(self):
-        if self.node_path is None:
+        if self.node_path is None or not os.path.lexists(self.node_path):
             return []
         return parse_node(read_config(self.node_path), location=self.node_path)['projects']
 

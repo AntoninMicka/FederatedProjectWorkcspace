@@ -12,7 +12,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
 <body><aside><div class="brand">◈ &nbsp; WORKSPACE</div><div class="nav">Přehled uzlu</div>
 <p>DESKTOPOVÝ EXPERIMENT<br>M1 · Projekty</p></aside>
-<main><header><span class="badge">Lokální uzel</span><span>PoC / čtení projektů</span></header>
+<main><header><span class="badge">Lokální uzel</span><span>PoC / lokální projekty</span></header>
 <h1>Váš lokální workspace.</h1><p class="intro">První krok ke společnému prostoru pro projekty, znalosti a rozhodnutí.</p>
 <section><div class="eyebrow">PROJEKTY</div><h2>Otevřít projekt</h2>
 <label for="projects">Registrovaný projekt</label>
@@ -80,17 +80,25 @@ openProject.addEventListener('click',async()=>{
  }catch(error){projectStatus.textContent=error.message;}
  finally{openProject.disabled=false;projects.disabled=false;}
 });
-(async()=>{
+let catalogRequest=0;
+async function loadProjects(selectedId=null){
+ const request=++catalogRequest;
  try{
   const result=await projectRequest('/v1/projects',{});
+  if(request!==catalogRequest) return;
+  projects.replaceChildren();
   for(const project of result.projects){
    const option=document.createElement('option');option.value=project.id;option.textContent=project.id;projects.append(option);
   }
   openProject.disabled=!result.projects.length;
   projectStatus.textContent=result.projects.length ? 'Vyberte projekt a otevřete jej.' :
-   'Žádné registrované projekty. Spusťte desktop s volbou --node a cestou k node.json.';
+   'Zatím nemáte žádný projekt. Použijte tlačítko Nový projekt v horní liště.';
+  if(selectedId && result.projects.some(p=>p.id===selectedId)){
+   projects.value=selectedId;openProject.click();
+  }
  }catch(error){projectStatus.textContent=error.message;}
-})();
+}
+loadProjects();
 """
 CSS += 'select{max-width:100%;padding:12px}code,li{overflow-wrap:anywhere}li{margin:12px 0}.controls{flex-wrap:wrap}'
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),

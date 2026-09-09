@@ -1,6 +1,20 @@
-# Otevření projektu v desktopu
+# Projekty v desktopu
 
-Desktop M1-01 čte již registrované projekty. Z checkoutu:
+## Vytvoření nového projektu
+
+Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
+
+Cílová složka ještě nesmí existovat, ani prázdná. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Editor artefaktů naváže samostatně.
+
+Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
+
+V průběhu vytváření je další vytvoření a běžné zavření okna dočasně zakázané; po dokončení lze okno zavřít. Při násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví. Po chybě je dostupné také **Dokončit přerušené vytvoření**. Pokud se mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu; nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky `.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
+
+Kontrakt, idempotence a hranice recovery: [ADR 0015](adr/0015-project-creation.md). Jde o lokální Linux PoC, nikoli produkční správu identit nebo úplné recovery po výpadku napájení.
+
+## Jiný uzel a již registrované projekty
+
+Explicitní konfiguraci lze vybrat z checkoutu:
 
 ```sh
 ./run.sh desktop --node /absolutni/cesta/node.json
@@ -12,11 +26,11 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` funguje ověření spojení a zobrazí se prázdný seznam. Relativní cesta se vyhodnocuje vůči adresáři volajícího. V okně vyberte ID a klikněte na **Otevřít**. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Registry a obsah souborů zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. V okně vyberte ID a klikněte na **Otevřít**. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Registry a obsah souborů zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
 
 ## Existující data
 
-`node.json` zůstává mimo projektový Git. Příklad (nahraďte absolutní cesty):
+`node.json` zůstává mimo projektový Git. Pro zapisující operace musí jít o váš běžný soubor bez symlinků/hardlinků a bez práva zápisu jiných uživatelů; nové konfigurace mají 0600. Příklad (nahraďte absolutní cesty):
 
 ```json
 {
@@ -85,4 +99,4 @@ print('./run.sh desktop --node ' + shlex.quote(str(node)))
 PY
 ```
 
-Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Editor a vytváření/registrace projektu v UI navazují samostatně. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
+Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Editor artefaktů naváže samostatně; nové projekty už lze vytvářet nativním dialogem. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
