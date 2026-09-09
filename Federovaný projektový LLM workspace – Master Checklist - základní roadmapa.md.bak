@@ -25,16 +25,12 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] historii rozhodnutí,
   - [ ] generované snapshoty.
 - [ ] Umožnit používat více LLM providerů s jasně definovanými rolemi.
-- [ ] Core orchestrace systému nesmí být závislá na dostupnosti LLM; deterministický aplikační orchestrátor musí fungovat i bez lokálního nebo externího modelu.
-- [ ] Konverzační orchestraci („orchestrator chat“) navrhnout jako volitelnou LLM vrstvu nad deterministickým aplikačním orchestrátorem.
-- [ ] Nedostupnost lokálního LLM nesmí způsobit tichý fallback na externího providera; změna execution boundary musí být explicitně povolená policy.
 - [ ] Lokální Ollama používat primárně jako:
   - [ ] klasifikátor,
   - [ ] extraktor,
   - [ ] sumarizátor,
   - [ ] filtr kontextu,
-  - [ ] případně anonymizátor/redaktor před odesláním dat ven,
-  - [ ] volitelně orchestrator chat / planner, pokud je lokální model dostupný.
+  - [ ] případně anonymizátor/redaktor před odesláním dat ven.
 - [ ] Externím LLM neposílat automaticky celý projekt, ale pouze **sestavený kontext potřebný pro konkrétní úlohu**.
 
 ---
@@ -338,14 +334,7 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] capabilities,
   - [ ] limity,
   - [ ] privacy classification,
-  - [ ] cenu/cost policy,
-  - [ ] účel/capabilities použití (např. orchestrator chat, role execution, extraction/summarization, Context Builder).
-- [ ] Oddělit účel backendu od jeho execution boundary.
-- [ ] Rozlišovat minimálně execution boundary:
-  - [ ] `same-node`,
-  - [ ] `trusted-federation`,
-  - [ ] `external-provider`.
-- [ ] Dostupnost backendu nesmí sama změnit autorizaci ani povolenou trust boundary.
+  - [ ] cenu/cost policy.
 
 ## 7B. Secrets
 
@@ -386,11 +375,6 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
 
 # 9. Lokální Ollama pipeline
 
-- [ ] Ollama je volitelná lokální inteligentní vrstva, nikoli systémová závislost uzlu.
-- [ ] Uzel bez Ollamy musí zachovat plnou základní projektovou funkcionalitu přes deterministické UI/příkazy/workflow.
-- [ ] Pokud Ollama obsluhuje orchestrator chat, pouze interpretuje požadavek/plán; provedení operací zůstává v deterministickém aplikačním orchestrátoru pod RBAC, privacy policy a validací.
-- [ ] Fallback orchestrator chatu konfigurovat explicitně, minimálně jako `disabled | external | selected-backend`; výchozí chování nesmí být tichý externí fallback.
-
 ## 9A. Ingest
 
 - [ ] Import dokumentu.
@@ -420,10 +404,8 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] `project`
   - [ ] `confidential`
   - [ ] `local-only`
-- [ ] `local-only` chápat jako `same-node`: neposílat jej jinému federovanému uzlu ani externímu providerovi bez explicitní reklasifikace.
-- [ ] Pro ostatní privacy třídy určit povolené execution boundaries projektovou/user policy.
+- [ ] `local-only` nikdy neposílat externímu backendu.
 - [ ] Kontrolu provádět aplikačně, nikoli pouze promptem pro LLM.
-- [ ] Výpadek nebo nedostupnost backendu nesmí automaticky rozšířit povolenou execution boundary.
 
 ---
 
@@ -435,8 +417,7 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] uživatel,
   - [ ] role,
   - [ ] projekt,
-  - [ ] vybraný backend,
-  - [ ] execution boundary a capabilities cílového backendu/uzlu.
+  - [ ] vybraný backend.
 - [ ] Výstup:
   - [ ] system instructions,
   - [ ] relevantní artefakty,
@@ -446,8 +427,8 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] automatický context,
   - [ ] ruční výběr souborů,
   - [ ] kombinaci obou.
-- [ ] Evidovat manifest použitého kontextu včetně execution boundary (`same-node` / `trusted-federation` / `external-provider`).
-- [ ] Umožnit později přesně rekonstruovat LLM request i místo/trust boundary jeho vykonání.
+- [ ] Evidovat manifest použitého kontextu.
+- [ ] Umožnit později přesně rekonstruovat LLM request.
 
 ---
 
@@ -505,7 +486,6 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
 
 - [ ] Projekt nesmí působit primárně jako „chat s AI“.
 - [ ] Chat je pouze jeden z možných pohledů.
-- [ ] Orchestrator chat je volitelný; bez dostupného/povoleného LLM musí stejné základní projektové operace zůstat dostupné deterministickým UI/workflow.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -564,7 +544,7 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
   - [ ] config,
   - [ ] secrets,
   - [ ] cache.
-- [ ] Ollama považovat za samostatnou volitelnou službu/backend; její absence nesmí degradovat uzel pod základní non-LLM funkcionalitu.
+- [ ] Ollama považovat za samostatnou službu/backend.
 - [ ] Nevyžadovat, aby velký LLM běžel přímo na Turrisu.
 - [ ] Umožnit Ollama endpoint na:
   - [ ] stejném uzlu,
@@ -628,8 +608,6 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
 - [ ] Uzavřít datové kontrakty projektu/uzlu a návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
-- [ ] Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
-- [ ] V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
 - [ ] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu.
 - [ ] Doplnit návrh pravidel větví a ověřit konflikty obsahu/sidecaru včetně sémanticky neplatného merge. Implementace síťové federace zůstává M5.
 - [ ] Ověřit bezpečný lokální transport/API pro desktop podle SECURITY a sekce 12A.
@@ -638,7 +616,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux je navržený první cíl; Qt/WebView kandidát. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
 - [ ] Zaznamenat konečná rozhodnutí a vyhodnotit připravenost pro M1.
 
-**Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.
+**Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Implementace federace zůstává v M5.
 
 ## Milestone M1 – Single-node project workspace
 
@@ -666,7 +644,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Tagging.
 - [ ] Context builder.
 
-**Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt a sestavit relevantní kontext; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
+**Gate M2:** systém dokáže lokálně zpracovat projekt a sestavit relevantní kontext.
 
 ## Milestone M3 – External LLM
 
