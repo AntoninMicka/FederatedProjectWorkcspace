@@ -1,4 +1,14 @@
-# Katalog reuse
+# Veřejný katalog reuse
+
+Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.
+
+## Externí zdrojové repozitáře
+
+Zatím žádné. Před zařazením uvést veřejnou URL, ověřit přístup bez přihlášení a zaznamenat licenci, revizi a důvod reuse/adapt/reject. Samotná veřejná dostupnost neznamená oprávnění k převzetí kódu.
+
+Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md`, ignorovaný Gitem. Jeho absence v čerstvém klonu je očekávaná. Lokální cesty, neveřejné názvy repozitářů a podrobnosti jejich posouzení se do verzovaných dokumentů nepřenášejí.
+
+## Technologie a závislosti
 
 | Kandidát | Stav | Účel | Co zbývá ověřit |
 | --- | --- | --- | --- |
@@ -7,14 +17,27 @@
 | Python stdlib SQLite | adapt (M0 PoC) | Obnovitelný projektový index (`spikes/storage.py`) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); zbývá produkční integrace, úplná projekce metadat/vztahů, výkon a paměť na Turrisu |
 | PyYAML 6.0.3 | evaluate | Omezený frontmatter parser v M0 | Produkční distribuce a audit závislosti před vydáním |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
-| Vlastní starší projekty | candidate | Potenciální reuse | Repozitáře zatím nejsou určeny; licence a kompatibilita neověřeny |
 
 Žádná komponenta zatím nemá schválený produkční status reuse. Licence a verze závislostí zaznamenat před zařazením do distribuované aplikace.
 
-M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC; starší zdrojové projekty nadále nejsou identifikované ani ověřené.
+M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.
 
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 
-M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Starší vlastní projekty zůstávají neidentifikované; jejich inventura se tím neprohlašuje za hotovou.
+M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+
+## Již používané vlastní komponenty
+
+Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; jediná deklarovaná pip závislost je PyYAML 6.0.3 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+
+| Komponenta / zdroj | Rozhodnutí a důvod | Důkazy a omezení |
+| --- | --- | --- |
+| [Validace metadat](spikes/metadata.py) | **adapt**: společný omezený JSON/YAML parser, UUID a vztahy; nepřidávat další parser | [Testy](tests/test_metadata.py); V-04/V-05: kontrakt provenance a neměnnost zdrojů |
+| [Journal](spikes/journal.py) a [Workspace](spikes/workspace.py) | **adapt**: zachovat společnou serializaci a obnovitelnou operaci | [ADR 0003](docs/adr/0003-coordinated-operation.md), [testy](tests/test_workspace.py); V-06/V-07: produkční ochrany a lifecycle |
+| [Git a SQLite index](spikes/storage.py) | **adapt**: validovaný commit a rebuild projekce místo druhé autority | [Testy](tests/test_storage.py); V-02/V-03: integrační důkaz a úplnější projekce |
+| [Konfigurace](spikes/configuration.py) | **adapt**: sdílená validační primitiva, oddělený projekt a uzel | [ADR 0004](docs/adr/0004-project-node-config.md), [testy](tests/test_configuration.py); V-08: zapojení do lifecycle |
+| [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy v [TODO](TODO.md); V-01: automatizace CLI validátoru; není to aplikační server/UI |
+
+Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a TODO. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Nejbližší implementační úkol zůstává M0-04.

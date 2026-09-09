@@ -1,3 +1,6 @@
 __pycache__/
 *.py[cod]
 .venv/
+
+# Soukromá lokální inventura zdrojových repozitářů
+/REUSE_CATALOG.private.md
