@@ -152,7 +152,7 @@ sudo apt install /tmp/workspace-next.deb
 sudo apt remove federated-workspace-poc
 ```
 
-Před upgradem aplikaci zavřete. Balík nemá migrační/odinstalační skripty ani vlastnictví uživatelských projektů. Důkazy a omezení izolovaného dpkg testu: [ADR 0011](docs/adr/0011-debian-package.md). Čistý OS a produkční release zatím ověřeny nejsou. Lokální balík není podepsaný repozitář ani automatický updater.
+Před upgradem aplikaci zavřete. Balík nemá migrační/odinstalační skripty ani vlastnictví uživatelských projektů. Důkazy a omezení izolovaného dpkg testu: [ADR 0011](docs/adr/0011-debian-package.md). Čistá instalace, offline běh a upgrade/purge v Ubuntu 26.04 arm64 kontejneru jsou ověřeny v [ADR 0012](docs/adr/0012-clean-os-validation.md); produkční release zatím není připraven. Lokální balík není podepsaný repozitář ani automatický updater.
 
 Volitelné ověření dpkg lifecycle na hostu s připravenými systémovými závislostmi: `M0_DEB_TEST=1 M0_DESKTOP_TEST=1 python3 -m unittest tests.test_package_deb -v`. Použije dočasný kořen, nikoli systémovou instalaci.
 

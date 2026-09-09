@@ -6,14 +6,13 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Inventář konkrétního kandidáta je doplněný. Offline běh je ověřený lokálním namespace testem. Zbývá čistý OS se skutečným rozlišením závislostí a release posouzení licenčních povinností; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
+**M0-06 — Uzavřít volbu stacku na základě dokončených desktopových důkazů.** M0-06e je PoC validated včetně čisté instalace, offline běhu a upgrade/purge podle ADR 0012. Další krok: konsolidovat rozhodnutí Python/Git/SQLite + PySide a .deb vůči zbývajícím důkazům M0-05. Gate M0 zůstává otevřený; veřejný release zatím není schválen.
 
 ## Další zbývající práce M0
 
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Uživatel doložil Turris Omnia / TurrisOS 9.1.1 / ARMv7, LXC 6.0.5 a běžící Debian 13 Trixie kontejner na SSD (Btrfs). Uživatel následně doložil úspěšnou instalaci PyYAML 6.0.3, běh storage dema, Git commit, čtení indexu po znovuotevření a přepnutí current. Opakovaný uživatelský běh: 0,66 s pro celé demo, RUSAGE_CHILDREN.ru_maxrss 11 520 KiB (11,25 MiB), exit 0. Jde o jediné orientační měření, nikoli čas startu služby nebo součet paměti procesů. Dodané df potvrzuje /tmp jako tmpfs: uvedené měření patří běhu v RAM. Následný běh s TMPDIR=/var/tmp/workspace-poc úspěšně vytvořil projekt, commit a index po znovuotevření a odstranil dočasná data; df pro tento adresář potvrzuje /dev/sda, Btrfs. Zápisový smoke na SSD je tedy doložen, jeho čas/paměť ani crash recovery na SSD však měřeny nebyly. Zbývá změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
 - [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. M0-06a ověřuje pouze desktopový PoC dle ADR 0007; finální rozhodnutí stále potřebuje M0-05 a distribuční/licenční posouzení.
 
-- [ ] [planned] **M0-06e — Linux instalační kandidát (cílová úroveň: PoC validated).** Po M0-06d ověřit .deb se systémovými závislostmi pro konkrétní OS/architekturu dle ADR 0009; čistá instalace, offline start, upgrade/odinstalace bez ztráty dat, inventář licencí a velikost. Před implementací popsat instalační crash boundaries; nevydávat zdrojový archiv za instalátor.
 
 ## Gate review M0-09 — 2026-09-09
 
@@ -48,6 +47,8 @@ Posouzený HEAD `2b0adf2`, vstupní pracovní strom čistý. Historický review 
 Uživatel přesměrovává X11 přes síť; odpojení jeho kontejneru by přerušilo i displej a nebylo by vhodným testem aplikace. Offline ověření zůstává planned, nikoli tvrzené jako úspěch ani obecně blocked. **Nejbližší konkrétní krok:** připravit lokální grafický smoke v oddělené síťové konfiguraci se zachovaným loopbackem a lokálním displejem, bez zásahu do uživatelova X11 spojení. Akceptace: žádná externí konektivita, funkční čítač, zavření/restart; zaznamenat způsob izolace a závislosti. V této změně se tento experiment nespouští.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-03 — Vyjasnit omezení projekce indexu.** Index nyní validuje vztahy, ale ukládá pouze id/title a commit ID. Před relačními dotazy navrhnout a otestovat rozšíření projekce; neoznačovat existující index za kompletní databázi vztahů.
@@ -90,6 +91,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-06e — PoC validated: instalační kandidát v čistém OS.** [ADR 0012](docs/adr/0012-clean-os-validation.md) dokládá nový oficiální Ubuntu 26.04 arm64 kontejner, skutečné stažení a vyřešení APT závislostí bez doporučených balíků, instalovaný launcher pod běžným uživatelem přes interní Xvfb, dva offline starty a upgrade/purge se zachováním kontrolních projektových/stavových souborů. Není použit checkout ani runtime hostitele. Dpkg audit čistý; runtime verze, velikosti, image digest a .deb hash zaznamenány. Kontejner odstraněn. Bez změny kódu a nového běhu celé unittest sady; provedeny skutečné instalační/grafické experimenty, kontrola odkazů a diffu. Inventář kandidáta drží ADR 0011; licenční posouzení veřejného releasu není tímto uzavřeno.
 
 - [x] [completed] **PoC validated — offline grafický běh .deb.** `tests/test_desktop_offline.py` vytváří samostatný user/network namespace s pouze aktivním loopbackem; ověřuje namespace ID, nulové capabilities aplikace, nepřítomnost tras a odmítnutí externího TCP bez trasy. Lokální X11 socket zajišťuje skutečné okno, dva běhy ověřují kliknutí, zavření backendu a restart rozbaleného .deb. Hostitelská síť ani uživatelovo přesměrování X11 se nemění. Metoda a limity v ADR 0011; nejde o čistý OS ani obecný bezpečnostní sandbox. Závěrečné `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 70 testů prošlo bez skipů. Odkazy a finální diff ověřeny.
 
