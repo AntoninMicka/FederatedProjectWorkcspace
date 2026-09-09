@@ -649,7 +649,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); skutečný browser/obal, bootstrap a aplikační integrace zbývají v TODO V-10.
 - [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; produkční TLS/SSH a cílové balení zbývají v TODO V-09 a M0-05/M0-06.
 - [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.
-- [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux je navržený první cíl; Qt/WebView kandidát. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
+- [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux Qt/WebEngine má spustitelné PoC podle [ADR 0007](docs/adr/0007-desktop-poc.md); distribuční balení a finální binding zůstávají otevřené. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
 - [ ] Zaznamenat konečná rozhodnutí a vyhodnotit připravenost pro M1.
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.

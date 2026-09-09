@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Launcher for the Linux M0 PoC; no application server or UI exists yet.
+# Launcher for Linux M0 storage and desktop experiments.
 set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [demo|setup|test|check CESTA|config project|node CESTA|help]
+Použití: ./run.sh [desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
 
+  desktop      Otevře Qt/WebEngine okno s lokálním testovacím backendem.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
   test         Spustí celou unittest sadu.
@@ -13,16 +14,17 @@ Použití: ./run.sh [demo|setup|test|check CESTA|config project|node CESTA|help]
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
   help         Zobrazí tuto nápovědu.
 
-Jde o storage PoC bez UI, serveru, LLM a federace.
+Desktop je PoC propojení UI/backendu bez ukládání projektů, LLM a federace.
 Demo se po dokončení odstraní; nepracuje s vašimi projektovými daty.
 Běžné spuštění nic nestahuje. Použije .venv/bin/python, jinak python3.
+Desktop může použít systémový python3 s Qt a PyYAML, pokud Qt ve venv chybí.
 HELP
 }
 
 command_name=${1:-demo}
 case "$command_name" in
     help|-h|--help) usage; exit 0 ;;
-    demo|setup|test)
+    desktop|demo|setup|test)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
     check)
         if (( $# != 2 )); then usage >&2; exit 2; fi ;;
@@ -63,6 +65,18 @@ if [[ "$command_name" == setup ]]; then
 fi
 if ! "$python_bin" -c 'import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
     printf 'Chybí požadovaný PyYAML 6.0.3. Spusťte: ./run.sh setup\n' >&2; exit 1
+fi
+# The desktop can use distro Qt without modifying an existing isolated venv.
+if [[ "$command_name" == desktop ]]; then
+    if ! "$python_bin" -c 'from PyQt6.QtWebEngineWidgets import QWebEngineView' >/dev/null 2>&1; then
+        if python3 -c 'from PyQt6.QtWebEngineWidgets import QWebEngineView; import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
+            python_bin=python3
+        else
+            printf 'Chybí PyQt6 WebEngine. Instalace desktopu je popsána v README.\n' >&2
+            exit 1
+        fi
+    fi
+    exec "$python_bin" -m spikes.desktop
 fi
 case "$command_name" in
     demo) exec "$python_bin" -m spikes.demo ;;

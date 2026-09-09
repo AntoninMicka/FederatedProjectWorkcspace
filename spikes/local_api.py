@@ -113,7 +113,7 @@ def private_directory(path):
 
 
 @contextmanager
-def running_api(transport, runtime=None):
+def running_api(transport, runtime=None, *, handler=Handler):
     """Yield in-process endpoint/token to test driver; no token file or public bootstrap."""
     directory = None
     if transport == 'unix':
@@ -121,7 +121,7 @@ def running_api(transport, runtime=None):
         directory = tempfile.TemporaryDirectory(prefix='api-', dir=parent)
         endpoint = str(Path(directory.name) / 'api.sock')
         try:
-            server = UnixAPI(endpoint, Handler)
+            server = UnixAPI(endpoint, handler)
             os.chmod(endpoint, 0o600)
         except BaseException:
             directory.cleanup()
@@ -129,7 +129,7 @@ def running_api(transport, runtime=None):
         server.allowed_uid = os.getuid()
         server.authority = 'workspace.local'
     elif transport == 'http':
-        server = HTTPServer(('127.0.0.1', 0), Handler)
+        server = HTTPServer(('127.0.0.1', 0), handler)
         server.authority = f'127.0.0.1:{server.server_port}'
     else:
         raise ValueError('unknown transport')

@@ -25,3 +25,5 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 ## Stav implementace
 
 `spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci ani import cizích repozitářů. Minimální schémata konfigurace projektu/uzlu validuje samostatně `spikes/configuration.py` podle [ADR 0004](docs/adr/0004-project-node-config.md); nejsou zatím napojena na storage lifecycle. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
+
+Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vlákno ve stejném Python procesu, token předán přímo nativnímu request interceptoru. Viz [ADR 0007](docs/adr/0007-desktop-poc.md). Jde o ověřený lifecycle statického UI a paměťového API; volba produkčního bindingu/balíku a napojení projektových služeb zůstávají otevřené.

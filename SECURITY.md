@@ -2,14 +2,14 @@
 
 | Vstup / hranice | Riziko | Požadovaná kontrola | Stav |
 | --- | --- | --- | --- |
-| Webová stránka → desktop API | Neoprávněné Git/LLM operace | IPC nebo loopback HTTP s tokenem, Host/Origin validací, CSRF ochranou | protokolový PoC, ADR 0006; browser/WebView integrace zbývá |
+| Webová stránka → desktop API | Neoprávněné Git/LLM operace | IPC nebo loopback HTTP s tokenem, Host/Origin validací, CSRF ochranou | protokolový PoC, ADR 0006; statický Qt/WebEngine PoC ADR 0007; integrace artefaktů zbývá |
 | Soubor → storage | Path traversal, symlink, škodlivý parser vstup | Omezené kořenové cesty, validace, limity velikosti a schémat | PoC; bez ochrany proti závodícím FS změnám |
 | Peer → projekt | Neoprávněný přenos a škodlivá konfigurace Gitu | Node autentizace, aktuální RBAC, izolovaný import, zákaz cizích hooků a helperů | návrh |
 | Zdroj → LLM | Prompt injection a únik kontextu | Zdroj jako data, aplikační privacy filtr, náhled kontextu | návrh |
 | Desktop disk → jiný uživatel | Únik credentials | Systémové úložiště klíčů, restriktivní práva, token mimo logy/URL | návrh |
 | Restart → stav projektu | Ztracený zápis / zastaralý index | Journal operací, validace a obnova podle commit ID | Linux PoC přes Workspace, ADR 0003; produkční ochrany otevřené |
 
-Lokální HTTP a Unix socket jsou ověřeny izolovaným experimentem [ADR 0006](docs/adr/0006-local-api-transport.md). Token se mění při každém startu; chráněné předání do desktopového obalu a browser/WebView integrace zůstávají neověřené. CORS nenahrazuje autentizaci. Síťový federační endpoint vyžaduje samostatnou autentizaci a TLS.
+Lokální HTTP a Unix socket jsou ověřeny izolovaným experimentem [ADR 0006](docs/adr/0006-local-api-transport.md). Token se mění při každém startu; desktopové PoC předává token přímo nativnímu request interceptoru v témže procesu, bez zveřejnění v UI; skutečný WebEngine ověřuje [ADR 0007](docs/adr/0007-desktop-poc.md). Bezpečné zobrazení nedůvěryhodných artefaktů a produkční integrace zůstávají otevřené. CORS nenahrazuje autentizaci. Síťový federační endpoint vyžaduje samostatnou autentizaci a TLS.
 
 Testovací Git wrapper používá seznam argumentů bez shellu, vypíná globální/system konfiguraci, hooky a interaktivní prompt v řízeném experimentu. To není kompletní sandbox pro nedůvěryhodné repozitáře; produkční vrstva musí také řídit lokální konfiguraci, Git attributes/filtry, transporty, velikost vstupů a souběh operací.
 

@@ -2,9 +2,34 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt je ve fázi **M0 — Architecture spike**. Zatím obsahuje návrh a spustitelný storage experiment, nikoli hotovou aplikaci.
+Projekt je ve fázi **M0 — Architecture spike**. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; práce s projekty v UI ještě není implementovaná.
 
-## Spuštění experimentu
+## Desktop
+
+```sh
+./run.sh desktop
+```
+
+Otevře samostatné Qt/WebEngine okno s tlačítkem **Ověřit spojení**. Tlačítko volá lokální backend; čítač se při zavření ztratí a backend se ukončí spolu s oknem. Jde o propojení UI/backendu, zatím bez otevření a ukládání projektů. Návrh a limity: [ADR 0007](docs/adr/0007-desktop-poc.md).
+
+Na ověřeném Linux hostu jsou Qt moduly již dostupné. Na Debianu/Ubuntu lze chybějící systémové moduly připravit explicitně:
+
+```sh
+sudo apt-get install python3-pyqt6 python3-pyqt6.qtwebengine
+```
+
+Wrapper preferuje `.venv/bin/python`; pokud v něm Qt chybí, použije systémový `python3` pouze tehdy, pokud má WebEngine i požadovaný PyYAML 6.0.3. Jinak skončí s chybou. `./run.sh setup` připravuje storage závislosti, Qt neinstaluje. Desktop vyžaduje běžného uživatele a grafickou relaci; nespouštět přes sudo. Automatické vypínání Chromium sandboxu ani TLS kontrol není použito.
+
+Grafické ověření (Python s dostupným Qt):
+
+```sh
+M0_DESKTOP_TEST=1 python3 -m unittest tests.test_desktop -v
+python3 -m spikes.desktop --smoke
+```
+
+Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vlastního okna. Bez `M0_DESKTOP_TEST=1` se grafický test v celé sadě přeskočí; ostatní desktopové testy běží vždy. `demo` zůstává výchozím příkazem wrapperu.
+
+## Spuštění storage experimentu
 
 Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wrapper [run.sh](run.sh):
 
