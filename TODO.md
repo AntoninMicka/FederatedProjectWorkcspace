@@ -6,13 +6,30 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-09 — Gate review před M1.** M0-08 má uzavřené návrhové kontrakty v ADR 0008; M0-07 je ověřený lokálními scénáři. M0-05 a finální posouzení stacku/balení M0-06 zůstávají otevřené; uživatel upřednostnil pokračování na desktopu. Gate M0 zůstává otevřený.
+**M0-06 — Doplnit podklady pro finální volbu stacku a desktopového balení.** Review M0-09 je dokončené s výsledkem „Gate M0 nesplněn“. Další konkrétní krok: posoudit desktopový binding a způsob distribuce včetně závislostí/licencí a chybějících měření startu/paměti. M0-05 zůstává odložené podle preference uživatele; jeho chybějící důkazy nelze nahradit během na desktopu. Přechod do M1 zatím není schválen.
 
 ## Další zbývající práce M0
 
 - [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Uživatel doložil Turris Omnia / TurrisOS 9.1.1 / ARMv7, LXC 6.0.5 a běžící Debian 13 Trixie kontejner na SSD (Btrfs). Zatím bez běhu aplikace; další měření na žádost uživatele odloženo za desktopové PoC. Zbývá změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
 - [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. M0-06a ověřuje pouze desktopový PoC dle ADR 0007; finální rozhodnutí stále potřebuje M0-05 a distribuční/licenční posouzení.
-- [ ] **[planned] M0-09 — Gate review před M1.** Po ověření předchozích výstupů projít Gate M0, zaznamenat důkazy, otevřená omezení a rozhodnutí o připravenosti. Nepřejít do M1 jen na základě zelených spike testů.
+
+## Gate review M0-09 — 2026-09-09
+
+Posouzený HEAD: `1c7b228`, vstupní pracovní strom čistý. Výsledek: **Gate M0 nesplněn; M1 nezahajovat automaticky.** Review je dokončené, schválení gate nikoli. Nezavádí se nové architektonické rozhodnutí ani změna priorit nasazení.
+
+| Kritérium | Důkaz a úroveň | Závěr |
+| --- | --- | --- |
+| Autoritativní data a obnova indexu | ADR 0002–0004, metadata/configuration/storage a jejich testy; designed + PoC validated | Splněno pro rozsah M0; integrace konfigurace a úplnější projekce zbývají V-03/V-08. |
+| Koordinovaná obnova zápisu | ADR 0003 a tests/test_workspace.py: crash boundaries, CAS, pending stav, dva zapisovatelé | Splněno pro řízený Linux PoC; ne důkaz produkčního hardeningu nebo výpadku napájení. |
+| Bezpečné lokální API a desktopové propojení | ADR 0006/0007, tests/test_local_api.py a tests/test_desktop.py | Návrh a PoC splněny; persistentní operace a nedůvěryhodný obsah zbývají V-10. |
+| Konflikty entity a obsah/sidecar | M0-07, tests/test_merge_scenarios.py a FEDERATION | PoC splněno včetně sémanticky neplatného čistého merge; conflict UI a síťová federace nejsou implementované. |
+| Orchestrace bez LLM, role, manifest, execution boundaries | ADR 0008 a návrhová tabulka scénářů | Designed splněno; LLM/RBAC implementace se neprohlašuje za hotovou. |
+| Finální stack a distribuční cesta | ADR 0005 volí Git CLI; ADR 0007 pouze PoC binding; M0-06b zdrojový archiv | **Nesplněno:** finální backendový stack/binding a distribuční posouzení M0-06 zůstávají otevřené. |
+| Cílové prostředí a provozní měření | M0-05 doložený LXC bez běhu aplikace; desktopové testy na vývojovém hostu | **Nesplněno:** měření na Omnia/ARMv7 a úplné posouzení startu, paměti a instalace cílových variant. |
+
+Uživatel následně potvrdil úspěch ruční akceptace desktopu: kliknutí, zavření a restart fungují. Současné UI obsahuje jen paměťový čítač; nelze v něm ještě otevřít projekt, uložit artefakt ani ověřit zachování projektových dat po restartu. Ruční akceptace: třikrát „Ověřit spojení“ → 1/2/3, zavření → návrat terminálu, nový `./run.sh desktop` → 0 a opět funkční tlačítko. Výsledek je uživatelské potvrzení, nikoli nový automatický test.
+
+Evidence testů je převzatá z dokončených úkolů níže (poslední plná sada u M0-07), nikoli nový běh v tomto review. Zkontrolovány současné zdroje UI, pokrytí testů, návaznost ADR a gate. Dokumentační ověření: lokální odkazy a finální diff. Po doplnění M0-05/M0-06 zopakovat rozhodnutí o gate s novými důkazy; dnešní negativní výsledek zachovat jako historii. Samotné potvrzení čítače gate neuzavře.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -57,6 +74,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **M0-09 — Designed: Gate review před M1.** Kritéria, podklady a negativní rozhodnutí jsou v sekci Gate review výše. M0-05/M0-06 zůstávají otevřené; dokončení review neznamená splnění gate. Bez nového běhu testů a bez vzdáleného nasazení.
 
 - [x] [completed] **M0-08 — Designed: kontrakty a pravidla publikace.** [ADR 0008](docs/adr/0008-context-and-publication-contracts.md) vymezuje Backend/Role/Context Manifest, přesné vstupy a cíl, autorizaci před odesláním, fallback, nejistý výsledek síťového volání a CAS publikaci při změně HEAD. Návrhové review scénářů zahrnuje uzel bez LLM, Ollamu, cloud, peer, local-only i zakázaný obsah v Git historii. Ověřena konzistence s ADR 0003/0004, roadmapou a odkazy; čistě dokumentační změna bez nového běhu testů. Implementace a akceptační scénáře navazují v M1–M5/V-10 a M3-UB-01; Gate M0 zůstává otevřený.
 
