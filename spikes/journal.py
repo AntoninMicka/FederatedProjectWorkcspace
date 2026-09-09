@@ -57,6 +57,9 @@ class Journal:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS owner (root TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS pending (path TEXT PRIMARY KEY, before BLOB, after BLOB);
+                CREATE TABLE IF NOT EXISTS operations (
+                    id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
+                CREATE UNIQUE INDEX IF NOT EXISTS one_active_operation ON operations(done) WHERE done=0;
             ''')
             owner = db.execute('SELECT root FROM owner').fetchone()
             if owner is None:
@@ -98,29 +101,37 @@ class Journal:
         """Validate whole resulting projection, persist intent, then roll forward."""
         with self.lock(), self.connect() as db:
             require(not db.execute('SELECT 1 FROM pending LIMIT 1').fetchone(), 'Recovery required')
-            before = snapshot(self.root)
-            after = dict(before)
-            rows = []
-            for path, data in sorted(changes.items()):
-                self.target(path)
-                require(data is None or isinstance(data, bytes), 'Expected bytes or deletion')
-                if data is None:
-                    after.pop(path, None)
-                else:
-                    after[path] = data
-                if before.get(path) != data:
-                    rows.append((path, before.get(path), data))
-            validate_snapshot(after)
-            db.executemany('INSERT INTO pending VALUES (?, ?, ?)', rows)
+            require(not db.execute('SELECT 1 FROM operations WHERE done=0').fetchone(),
+                    'Workspace recovery required')
+            self._prepare(db, changes)
             db.commit()
             checkpoint('prepared')
             self._recover(db, checkpoint)
 
+    def _prepare(self, db, changes):
+        before = snapshot(self.root)
+        after = dict(before)
+        rows = []
+        for path, data in sorted(changes.items()):
+            self.target(path)
+            require(data is None or isinstance(data, bytes), 'Expected bytes or deletion')
+            if data is None:
+                after.pop(path, None)
+            else:
+                after[path] = data
+            if before.get(path) != data:
+                rows.append((path, before.get(path), data))
+        validate_snapshot(after)
+        db.executemany('INSERT INTO pending VALUES (?, ?, ?)', rows)
+        return [row[0] for row in rows]
+
     def recover(self, checkpoint=lambda stage: None):
         with self.lock(), self.connect() as db:
+            require(not db.execute('SELECT 1 FROM operations WHERE done=0').fetchone(),
+                    'Workspace recovery required')
             return self._recover(db, checkpoint)
 
-    def _recover(self, db, checkpoint):
+    def _recover(self, db, checkpoint, *, clear=True):
         rows = db.execute('SELECT path, before, after FROM pending ORDER BY path').fetchall()
         if not rows:
             return False
@@ -158,7 +169,8 @@ class Journal:
             checkpoint(f'file:{index}')
         validate_snapshot(snapshot(self.root))
         checkpoint('applied')
-        db.execute('DELETE FROM pending')
-        db.commit()
-        checkpoint('completed')
+        if clear:
+            db.execute('DELETE FROM pending')
+            db.commit()
+            checkpoint('completed')
         return True

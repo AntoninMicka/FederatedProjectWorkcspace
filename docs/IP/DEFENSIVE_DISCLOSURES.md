@@ -9,7 +9,7 @@ ID níže jsou plánované náměty, nikoli záznamy se stavem `draft` nebo `pub
 | ID | Téma | Existující podklad a hranice |
 | --- | --- | --- |
 | DD-001 | Core artifact-centric architecture | [ARCHITECTURE](../../ARCHITECTURE.md), [DATA_MODEL](../../DATA_MODEL.md) — designed |
-| DD-002 | Git authoritative state + rebuildable index + recoverable operation | [ADR 0001](../adr/0001-m0-baseline.md), [ADR 0002](../adr/0002-metadata-journal.md) — dílčí PoC validated; koordinovaná operace zbývá TODO M0-01 |
+| DD-002 | Git authoritative state + rebuildable index + recoverable operation | [ADR 0001](../adr/0001-m0-baseline.md), [ADR 0002](../adr/0002-metadata-journal.md) a [ADR 0003](../adr/0003-coordinated-operation.md) — koordinovaná operace Linux PoC validated; produkční integrace otevřená |
 | DD-003 | Context Manifest | [ARCHITECTURE](../../ARCHITECTURE.md), master roadmapa §10 — designed, kontrakt zbývá uzavřít |
 | DD-004 | Execution boundaries and fail-closed backend selection | [SECURITY](../../SECURITY.md), master roadmapa §9 a M0 — designed, nevynuceno aplikací |
 | DD-005 | Federated backend capability model | Master roadmapa M0/M5 — návrhové požadavky; kontrakt otevřený |
@@ -51,6 +51,6 @@ Technický dokument musí pokrýt problém, řešení, datové struktury a toky,
 
 ## Nejbližší práce
 
-- [ ] [planned] **designed — cíl:** vybrat první disclosure nebo sloučený dokument z DD-001/DD-002; popsat současný návrh a limity PoC podle ADR, nikoli prohlásit M0-01 za hotové.
+- [ ] [planned] **designed — cíl:** vybrat první disclosure nebo sloučený dokument z DD-001/DD-002; popsat současný návrh a limity PoC podle ADR, odlišit dokončený M0-01 Linux PoC od produkční připravenosti.
 - [ ] [planned] **designed — cíl:** u dalších významných architektonických změn posoudit DD-003 až DD-010 a evidovat výsledek včetně případného sloučení.
 - [ ] [planned] **designed — cíl:** před prvním zveřejněním dokončit technický text, review patentových vazeb a publikační checklist; po publikaci ověřit řetězec commit ↔ tag ↔ release ↔ disclosure ↔ případné DOI a odkazy na PR záznamy.

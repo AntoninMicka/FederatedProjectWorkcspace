@@ -1,3 +1,4 @@
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -74,7 +75,7 @@ class StorageSpike(unittest.TestCase):
         self.git.commit('Semantically invalid state')
         with self.assertRaises(ValueError):
             self.db.rebuild(self.git)
-        with sqlite3.connect(self.db.path) as db:
+        with closing(sqlite3.connect(self.db.path)) as db, db:
             self.assertEqual(db.execute('SELECT commit_id FROM state').fetchone()[0], self.base)
             self.assertEqual(db.execute('SELECT title FROM entities').fetchall(), [('Shared base',)])
         with self.assertRaises(StaleIndex):

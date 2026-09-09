@@ -10,7 +10,7 @@ Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStor
 
 Git drží projektové artefakty, jejich metadata, registry a schválené LLM výstupy. SQLite indexuje pouze validovaný commit. Identita uzlu, credentials a rozpracované operace jsou lokální autoritativní stav mimo projektový Git i index.
 
-Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem existuje souborový journal a obnova v `spikes/journal.py`. Propojení journalu, commitu a indexace do jedné aplikační operace zatím chybí.
+Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem existuje souborový journal a obnova v `spikes/journal.py`. Propojení pro kontrolovaný Linux PoC poskytuje `spikes/workspace.py`: journal drží operaci a kandidátní commit před compare-and-swap posunem větve, payloady maže až po indexaci. Společný zámek chrání apply/recover/read; pending operace blokuje čtení projekce přes Workspace. Podrobnosti a crash boundaries: [ADR 0003](docs/adr/0003-coordinated-operation.md). Produkční aplikační integrace zůstává otevřená.
 
 Index musí nést commit ID. Dotazy při nesouladu vracejí stav obnovy, nikoli tiše stará data. Necommitnuté změny má editor zobrazovat odděleně. Synchronizace se připravuje v izolovaném pracovním prostoru a publikuje až po validaci a kontrole nezměněného výchozího HEAD.
 

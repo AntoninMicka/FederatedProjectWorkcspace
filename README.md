@@ -26,6 +26,12 @@ Pracovní projekci existujícího projektu lze ověřit bez zápisu:
 
 Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zatím `project.json` ani konfiguraci uzlu. Neplatná projekce vrací exit code 1.
 
+## Koordinovaný storage PoC
+
+`spikes.workspace.Workspace(root, state)` poskytuje `apply(changes, author_name=..., author_email=..., message=...)`, `recover()`, `read()` a `receipt(operation_id)`. Změny jsou mapa projektových cest na bajty nebo `None` pro smazání; validuje se celý výsledný artefaktový/registry snapshot. `apply` vrátí receipt s operation ID, výsledným commit ID a stavem `indexed`. `recover` dokončí pending operaci nebo vrátí `None`. Konflikt zachová journal a vyžaduje lidské řešení; `read` při pending stavu vyvolá `PendingOperation`.
+
+Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi, čistým worktree/staging a jediným soukromým stavovým adresářem mimo projekt na stejném filesystemu. Všechny aplikační zápisy a čtení musí procházet tímto vstupem; samostatné `Git.commit`, `Journal` a `Index` zůstávají nízkoúrovňovými experimenty. Nejde o podporu cizích repozitářů, síťové federace ani produkční aplikaci. Crash boundaries a ověření: [ADR 0003](docs/adr/0003-coordinated-operation.md).
+
 ## Dokumentace
 
 - [Architektura](ARCHITECTURE.md)
@@ -39,4 +45,4 @@ Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zat
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Další krok: propojit journal, validaci, Git commit a index do jedné aplikační operace. V M0 zbývá také libgit2 PoC, lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.
+Další krok: M0-02 — schéma project.json a minimální konfigurace uzlu. Koordinovaná operace journal → Git → index je ověřený Linux PoC. V M0 zbývá také libgit2 PoC, lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.

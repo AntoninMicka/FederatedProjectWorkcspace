@@ -2,6 +2,8 @@
 
 Datum: 2026-09-09. Stav: implementováno jako Linux M0 PoC, produkční integrace otevřená.
 
+Následná koordinace celé operace je popsána v [ADR 0003](0003-coordinated-operation.md). Níže zůstává zachován rozsah a výsledek původního samostatného journalového experimentu.
+
 ## Rozhodnutí
 
 `spikes/metadata.py` je spustitelné schéma v1 pro artefakty a registry. Sdílí jej pracovní strom, journal a index konkrétního Git commitu. Nevaliduje zatím project.json, uživatele, konfiguraci federace ani LLM manifesty.

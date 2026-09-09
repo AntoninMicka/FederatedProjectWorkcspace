@@ -153,7 +153,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Pro PDF, obrázky a další formáty bez vhodných editovatelných metadat použít sidecar se stabilním ID artefaktu.
 - [x] V M0 určit povinná pole, verzi schématu a konvenci umístění sidecaru; vazbu založit na stabilním ID s evidencí aktuální cesty souboru — PoC validated, ADR 0002.
 - [ ] Přejmenování nebo smazání artefaktu promítnout do sidecaru a odkazů v jednom commitu; před commitem ověřit konzistenci.
-- [x] Navrhnout obnovu přerušené změny souboru a sidecaru — PoC validated pomocí journalu (ADR 0002); integrace celé operace s commitem je otevřená.
+- [x] Navrhnout obnovu přerušené změny souboru a sidecaru — PoC validated pomocí journalu (ADR 0002); koordinace celé operace s commitem/indexem je Linux PoC validated v ADR 0003.
 - [ ] Konflikty změna–smazání, přejmenování–úprava a osiřelý sidecar řešit explicitně; metadata nesmějí být tiše zahozena.
 - [ ] Metadata neduplikovat mezi frontmatter a sidecarem; použít společné logické schéma pro oba způsoby uložení.
 - [ ] Strukturované entity registrů ukládat jako JSON s vlastními poli ID a verze schématu; nepřidávat k nim duplicitní sidecar.
@@ -632,7 +632,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a `tests/`. Aktuálně ověřeno 19 testů; podrobné výsledky a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuálně ověřeno 32 testů; podrobné výsledky a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
 
 - [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
 - [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; úplné schéma projektu/uzlu zbývá.
@@ -643,7 +643,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Uzavřít datové kontrakty projektu/uzlu a návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
 - [ ] Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
 - [ ] V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
-- [ ] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu.
+- [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
 - [ ] Doplnit návrh pravidel větví a ověřit konflikty obsahu/sidecaru včetně sémanticky neplatného merge. Implementace síťové federace zůstává M5.
 - [ ] Ověřit bezpečný lokální transport/API pro desktop podle SECURITY a sekce 12A.
 - [ ] Uzavřít Git implementaci na základě porovnání C++/libgit2 s existujícím Git CLI PoC, včetně autentizace a distribuce závislostí.

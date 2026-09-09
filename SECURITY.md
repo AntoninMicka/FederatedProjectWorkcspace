@@ -7,7 +7,7 @@
 | Peer → projekt | Neoprávněný přenos a škodlivá konfigurace Gitu | Node autentizace, aktuální RBAC, izolovaný import, zákaz cizích hooků a helperů | návrh |
 | Zdroj → LLM | Prompt injection a únik kontextu | Zdroj jako data, aplikační privacy filtr, náhled kontextu | návrh |
 | Desktop disk → jiný uživatel | Únik credentials | Systémové úložiště klíčů, restriktivní práva, token mimo logy/URL | návrh |
-| Restart → stav projektu | Ztracený zápis / zastaralý index | Journal operací, validace a obnova podle commit ID | částečný PoC |
+| Restart → stav projektu | Ztracený zápis / zastaralý index | Journal operací, validace a obnova podle commit ID | Linux PoC přes Workspace, ADR 0003; produkční ochrany otevřené |
 
 Lokální HTTP není implementováno. Token by byl náhodný pro každé spuštění, předaný chráněným kanálem; CORS nenahrazuje autentizaci. Síťový federační endpoint vyžaduje samostatnou autentizaci a TLS.
 
@@ -16,3 +16,5 @@ Testovací Git wrapper používá seznam argumentů bez shellu, vypíná globál
 Revokace brání budoucímu autorizovanému přenosu; nemůže vzít zpět již stažená offline data. Backup musí zahrnout autoritativní lokální stav, nejen obnovitelný index.
 
 Souborový journal a jeho limity jsou popsány v [ADR 0002](docs/adr/0002-metadata-journal.md). Journal vyžaduje soukromý adresář mimo projekt; obsahuje i celé bajty rozpracovaných souborů a nesmí se synchronizovat.
+
+[Workspace PoC](docs/adr/0003-coordinated-operation.md) sdílí zámek se souborovým journalem a při pending operaci odmítá čtení. Samostatný Index ani Git wrapper tuto aplikační ochranu nevynucují. Všichni kooperující účastníci musí používat stejný Workspace a stavový adresář; koordinace není RBAC engine ani ochrana před nekooperačním filesystemovým závodem.

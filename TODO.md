@@ -1,36 +1,12 @@
 # TODO — operativní práce
 
-Aktuální milník: **M0 — Architecture spike**, Gate M0 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md) a [ADR 0002](docs/adr/0002-metadata-journal.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
+Aktuální milník: **M0 — Architecture spike**, Gate M0 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a [ADR 0003](docs/adr/0003-coordinated-operation.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
 
 Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`. Úroveň výsledku je samostatná: designed / implemented / PoC validated / production-ready. Žádná aplikační část zatím není označena production-ready. Následující úkoly nejsou zahájené ani prokazatelně blokované jen kvůli svým závislostem.
 
 ## Nejbližší úkol M0
 
-- [ ] **[planned] M0-01 — Jedna koordinovaná operace journal → validace → Git commit → index.**
-  Navázat na `Journal`, `Git` a `Index`, nepsat je znovu. Výstup: jeden aplikační vstup pro zápis a obnovu v Linux PoC, jednotné řízení přístupu a doložitelný výsledek operace.
-
-  Operace musí mít stabilní `operation_id` a explicitní stavový životní cyklus. Minimálně musí být možné po restartu rozlišit:
-
-  `prepared → files-applied → committed → indexed`
-
-  Implementace nemusí použít přesně tyto názvy, ale stav musí být obnovitelný bez odhadu podle neúplných vedlejších efektů.
-
-  Journal / operation record nesmí být definitivně odstraněn pouze proto, že byly úspěšně zapsány soubory. Musí zůstat dost informace k rozpoznání, zda příslušný Git commit již vznikl a zda byl index aktualizován.
-
-  Operace eviduje minimálně:
-  - operation ID,
-  - výchozí HEAD,
-  - zamýšlené změněné cesty,
-  - stav operace,
-  - po commitu výsledný commit ID.
-
-  Recovery musí být idempotentní: opakovaný restart nesmí vytvořit další commit stejné operace.
-
-  Git commit nesmí používat neomezené `git add --all`. Musí commitnout pouze cesty vlastněné aktuální operací, nebo operaci bezpečně odmítnout, pokud nelze oddělit cizí změny.
-
-  Před commitem ověřit, že HEAD stále odpovídá výchozímu HEAD operace. Změna HEAD během operace nesmí být tiše přepsána.
-
-  Akceptace: zámek pokrývá celý životní cyklus, pending stav brání publikaci neúplného projektu; commit obsahuje pouze zamýšlené změny a explicitního autora; restart po zápisu/před commitem i po commitu/před indexací neztratí změny ani nevytvoří duplicitní commit. Ověřit změnu HEAD, cizí rozpracované změny, opakovanou obnovu a dva kooperující zapisovatele. Podklad: ADR 0002, `Git.commit` nyní volá `add --all` s testovací identitou a journal se vyčistí ještě před commitem.
+**M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** M0-01 je dokončený Linux PoC; důkazy a limity jsou níže a v [ADR 0003](docs/adr/0003-coordinated-operation.md). Gate M0 zůstává otevřený.
 
 ## Další zbývající práce M0
 
@@ -51,6 +27,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 - [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje.
 - [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
+- [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními.
 - [ ] **[planned] R-01 — Identifikovat starší zdrojové projekty pro reuse.** Katalog zatím neobsahuje konkrétní repository/cesty těchto projektů. Po jejich identifikaci prověřit licence, závislosti, kompatibilitu a důvod reuse/adapt/rewrite/reject. Nevyvozovat, že inventura proběhla.
 
 ## Pozdější operativní backlog — nezahajovat místo M0
@@ -72,6 +49,33 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] **[completed] M0-01 — Jedna koordinovaná operace journal → validace → Git commit → index.**
+  **PoC validated:** `spikes/workspace.py` adaptuje Journal/Git/Index a poskytuje apply/recover/read/receipt. Společný zámek, trvalé UUID a kandidátní commit před compare-and-swap posunem větve, blokované čtení pending operace a dokončený receipt. `tests/test_workspace.py`: 13 nových testů, včetně skutečných pádů procesu a dvou zapisovatelů; celkem 32 testů prošlo. Podrobnosti: [ADR 0003](docs/adr/0003-coordinated-operation.md). Původní akceptační požadavky:
+
+  Operace musí mít stabilní `operation_id` a explicitní stavový životní cyklus. Minimálně musí být možné po restartu rozlišit:
+
+  `prepared → files-applied → committed → indexed`
+
+  Implementace nemusí použít přesně tyto názvy, ale stav musí být obnovitelný bez odhadu podle neúplných vedlejších efektů.
+
+  Journal / operation record nesmí být definitivně odstraněn pouze proto, že byly úspěšně zapsány soubory. Musí zůstat dost informace k rozpoznání, zda příslušný Git commit již vznikl a zda byl index aktualizován.
+
+  Operace eviduje minimálně:
+
+  - operation ID,
+  - výchozí HEAD,
+  - zamýšlené změněné cesty,
+  - stav operace,
+  - po commitu výsledný commit ID.
+
+  Recovery musí být idempotentní: opakovaný restart nesmí vytvořit další commit stejné operace.
+
+  Git commit nesmí používat neomezené `git add --all`. Musí commitnout pouze cesty vlastněné aktuální operací, nebo operaci bezpečně odmítnout, pokud nelze oddělit cizí změny.
+
+  Před commitem ověřit, že HEAD stále odpovídá výchozímu HEAD operace. Změna HEAD během operace nesmí být tiše přepsána.
+
+  Akceptace: zámek pokrývá celý životní cyklus, pending stav brání publikaci neúplného projektu; commit obsahuje pouze zamýšlené změny a explicitního autora; restart po zápisu/před commitem i po commitu/před indexací neztratí změny ani nevytvoří duplicitní commit. Ověřit změnu HEAD, cizí rozpracované změny, opakovanou obnovu a dva kooperující zapisovatele. Původní podklad: ADR 0002; samostatný `Git.commit` zůstává testovacím helperem s `add --all`. Workspace jej nepoužívá a drží journal až do indexace. Limity: existující commit a běžná větev, čistý vstup, kooperující procesy se společným stavovým adresářem; ne produkční aplikace.
 
 - [x] [completed] **IP-00 — Implemented: dokumentační integrace IP roadmapy.** Zachována podpůrná roadmapa v `docs/IP`, založeny PATENT_RISK_REGISTER a DEFENSIVE_DISCLOSURES s neověřeným watchlistem a rezervovanými DD náměty; propojeny master roadmapa, README a CONTRIBUTING. Zohledněna existující MPL-2.0. Ověřeny lokální odkazy, věcná konzistence a diff; patentová rešerše, publikace, DOI a crowdfunding zůstávají neprovedené.
 
