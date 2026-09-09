@@ -45,3 +45,5 @@ Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a
 M0-04 **adaptuje** omezený JSON parser z `spikes/metadata.py` a **reuse** stdlib HTTP/socketserver pro izolovaný [transportní experiment](spikes/local_api.py). Vlastní minimální handler odděluje zkoušku autentizace od aplikačního stacku; nejde o přenos cizího serveru ani produkční volbu frameworku. Rozhodnutí a limity: [ADR 0006](docs/adr/0006-local-api-transport.md).
 
 M0-06a **adaptuje** `spikes/local_api.py` s odděleným statickým UI handlerem a **evaluate** systémový PyQt6/Qt WebEngine pro desktopový PoC. Důvodem je dostupný binding a zachování Python backendu bez portu či dalšího aplikačního procesu. Ověření a licenční/distribuční omezení: [ADR 0007](docs/adr/0007-desktop-poc.md); produkční Qt binding zatím není vybrán.
+
+Ruční deploy **reuse** existující `spikes.demo` a requirements; **adapt** launcheru přidává transport omezeného archivu a oddělená vydání bez nové storage implementace. Aktualizace current nastává až po úspěšném demu; vzdálené ověření zůstává M0-05.

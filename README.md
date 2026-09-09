@@ -94,4 +94,28 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Další krok: M0-04 — lokální transport/API PoC. Srovnání libgit2/C++ zachovalo Git CLI jako výchozí adapter (ADR 0005). Minimální schémata project.json/node.json a jejich samostatná validace jsou připravené; aplikační integrace zbývá. Koordinovaná operace journal → Git → index je ověřený Linux PoC. V M0 zbývá lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.
+Aktuální pořadí práce drží [TODO](TODO.md). Lokální API i desktopové PoC jsou ověřené; distribuční balení a měření backendu na Turris/LXC zůstávají otevřené před uzavřením M0.
+
+## Ruční deploy na Omnii
+
+Pro existující **běžící Debian LXC** na SSD připojeném na routeru jako `/srv`:
+
+```sh
+./run.sh deploy-omnia root@ADRESA_ROUTERU --container workspace-m0 --dry-run
+./run.sh deploy-omnia root@ADRESA_ROUTERU --container workspace-m0
+```
+
+První příkaz pouze vypíše plán a seznam přenášených souborů. Druhý se připojí přes SSH (může požádat o heslo), ověří Btrfs mount `/srv`, běžící kontejner a shodu zařízení jeho kořenového filesystemu s SSD. Existující SSH host key musí být v known_hosts. Používá `ssh -F /dev/null`, tedy bez uživatelských aliasů/proxy nastavení; host zadávejte přímo. Hesla se neukládají. Příkazy se nespouštějí automaticky při startu desktopu.
+
+Přenáší aktuální obsah `spikes/*.py`, `requirements.txt` a `LICENSE`, včetně případných lokálních úprav těchto souborů. Soukromý katalog, `.git`, `.venv`, jiné lokální repozitáře a projektová data se neposílají. V kontejneru vytvoří nové `/opt/federated-workspace/releases/<id>`, přes apt připraví Python/venv/Git/CA a přes pip závislosti, poté spustí dočasné storage demo. Instalace potřebuje internet v kontejneru a mění jeho balíčky; na routeru žádné balíčky neinstaluje, kontejner nevytváří ani nerestartuje.
+
+Odkaz `/opt/federated-workspace/current` přepne atomicky až po úspěšném demu. Při selhání zůstává předchozí odkaz a nedokončené vydání pro diagnostiku. Změny apt/pip nejsou transakčně vráceny; žádná uživatelská data ani starší vydání se automaticky nemažou. Souběžná úspěšná nasazení mají vlastní adresáře, poslední přepnutí určuje current.
+
+Jde o **instalaci headless PoC**, ne produkční služby: daemon, síťové API ani Qt na routeru nespouští. Demo lze ručně zopakovat na routeru:
+
+```sh
+lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
+  'cd /opt/federated-workspace/current && .venv/bin/python -m spikes.demo'
+```
+
+Skutečný vzdálený deploy zatím není ověřen; M0-05 čeká na ruční běh a výsledky měření.

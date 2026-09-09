@@ -4,8 +4,10 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
+Použití: ./run.sh [deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
 
+  deploy-omnia USER@HOST [--container NAME] [--dry-run]
+               Ruční instalace headless PoC do běžícího Debian LXC na SSD.
   desktop      Otevře Qt/WebEngine okno s lokálním testovacím backendem.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
@@ -24,6 +26,7 @@ HELP
 command_name=${1:-demo}
 case "$command_name" in
     help|-h|--help) usage; exit 0 ;;
+    deploy-omnia) ;;
     desktop|demo|setup|test)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
     check)
@@ -42,6 +45,10 @@ if [[ "$command_name" == check || "$command_name" == config ]]; then
 fi
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$repo_dir"
+if [[ "$command_name" == deploy-omnia ]]; then
+    shift
+    exec python3 scripts/deploy_omnia.py "$@"
+fi
 if [[ "$(uname -s)" != Linux ]]; then
     printf 'Tento PoC vyžaduje Linux.\n' >&2; exit 1
 fi
