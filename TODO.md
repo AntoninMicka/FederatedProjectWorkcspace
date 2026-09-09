@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-05 — Dokončit cílové měření a recovery na Omnii.** Stack pro M1 je zvolený dle ADR 0013; desktopové důkazy a balení se neopakují. Další konkrétní výstup: měření zvoleného Python/Git/SQLite stacku s projektovými daty na SSD a ověření obnovy po přerušení. Poté zopakovat Gate M0 review.
+**M0-05 — Dokončit cílové měření a recovery na Omnii.** Stack pro M1 je zvolený dle ADR 0013; desktopové důkazy a balení se neopakují. Další konkrétní výstup: měření zvoleného Python/Git/SQLite stacku s projektovými daty na SSD a ověření obnovy po přerušení. Připravený příkaz v README používá spikes.target_probe; čeká na ruční spuštění aktuálního deploye uživatelem na Omnii a jeho výstup. Poté zopakovat Gate M0 review.
 
 ## Další zbývající práce M0
 
@@ -90,6 +90,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **Implemented — cílový probe pro M0-05.** `spikes.target_probe` přenáší stávající crash scénáře do ručního deploye, vyžaduje explicitní základ a očekávaný filesystem, měří tři normální běhy a ověřuje 12 pádů workeru, obnovu a přesné bajty bez duplicitního commitu. Při úspěchu uklidí jen vlastní data, při selhání je ponechá. Lokální regresní testy pokrývají skutečné pády, chybný filesystem bez zápisu a zachování diagnostiky. Závěrečné `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 73 testů prošlo bez skipů. Ověřeny odkazy a finální diff. Skutečný běh na Omnia SSD zatím neproběhl v této změně, M0-05 zůstává otevřený.
 
 - [x] [completed] **M0-06 — Designed: stack pro M1 uzavřen.** [ADR 0013](docs/adr/0013-m1-stack.md) přijímá Python, Git CLI, oddělené SQLite index/journal, PySide6/WebEngine, same-origin UI a linuxový .deb na základě již ověřených PoC. C++ port/hybrid není potřeba bez doloženého problému. Rozlišena volba technologií od produkčního HTTP serveru, release a cílových měření M0-05; gate zůstává otevřený. Ověřena návaznost ADR, odkazy a diff, bez nového běhu testů.
 

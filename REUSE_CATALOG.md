@@ -61,3 +61,5 @@ Instalační .deb **reuse** stávající spikes a systémové dpkg-deb; **adapt*
 Offline test **reuse** .deb builder a existující WebEngine smoke, **adapt** Linux unshare/setpriv/ip pro oddělenou síť s lokálním X11 socketem. Nezavádí druhý desktop ani produkční sandbox; hranice v ADR 0011.
 
 M0-06 uzavírá **adapt/reuse** Python/Git CLI/SQLite a PySide6 pro M1 dle [ADR 0013](docs/adr/0013-m1-stack.md). C++ port ani hybrid se bez doloženého problému nezahajují. Produkční status reuse tím není přiznán.
+
+Cílový probe **adaptuje** scénář z `tests/test_workspace.py` a dvojici obsah/sidecar z testových fixtures; **reuse** Workspace, Git a snapshot. Samostatný modul ve spikes lze přenést stávajícím deploy allowlistem bez rozšíření přístupu na jiná data nebo přidání nové storage vrstvy. Měření rozlišuje čas celé pomocné operace a apply/recover; Python RSS není součet všech procesů.

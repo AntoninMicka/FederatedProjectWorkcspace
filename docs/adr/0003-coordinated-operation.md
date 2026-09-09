@@ -37,3 +37,7 @@ Ověřeny přesné bajty a cesty commitu, explicitní autor i committer, jediný
 Soukromý Git staging index se skládá přes `hash-object` a `update-index` přímo z journalových bajtů; nejde přes `git add --all` ani obsahové clean filtry. Změněné soubory mají Git mód 100644, stejně jako souborový journal nepřenáší původní filesystemová práva. SQLite spojení Indexu se explicitně zavírají; integrační testy odhalily dřívější ResourceWarning při jejich ponechání garbage collectoru.
 
 Zbývá produkční řízení všech vstupů a bezpečnost cizích Git konfigurací podle TODO V-06, úklid osiřelých dočasných staging souborů/objektů a retence receipts podle V-07. Testovací checkpointy neběží uvnitř Git/SQLite syscalls; nedokládají recovery po násilném přerušení libovolného podprocesu ani po výpadku napájení.
+
+## Přenos ověření na cílový uzel
+
+`spikes.target_probe` adaptuje stejné checkpointy pro ruční M0-05 bez přenosu celé testové sady. Vytvoří vlastní dočasný projekt/stav na explicitním filesystemu, provede tři normální zápisy a 12 `os._exit(73)` v samostatných workerech. Storage protokol ani výše uvedené crash boundaries se nemění. Po obnově ověří commit/bajty/index a idempotenci; na konci úspěchu odstraní pouze vlastní adresář, při selhání ponechá diagnostická data. Jde o pád aplikačního procesu mezi checkpointy, nikoli výpadek napájení nebo přerušení uvnitř libovolného Git/SQLite syscallu. Výsledky lokální validace a skutečného cílového běhu se evidují odděleně v TODO.

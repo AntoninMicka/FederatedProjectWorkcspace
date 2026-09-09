@@ -163,3 +163,19 @@ M0_OFFLINE_TEST=1 python3 -m unittest tests.test_desktop_offline -v
 ```
 
 Test vyžaduje povolené user/network namespaces. Běží jako běžný uživatel, odmítá vzdálené/přesměrované DISPLAY a spustí rozbalený `.deb` pouze s loopbackem. Nemění hostitelské síťové rozhraní. Bez explicitní volby je přeskočen. Podrobnosti a hranice důkazu jsou v ADR 0011.
+
+## Měření a recovery na Omnii (ruční M0-05)
+
+Po nasazení aktuálních zdrojů přes `run.sh deploy-omnia` spusťte **uvnitř Debian kontejneru**:
+
+```sh
+cd /opt/federated-workspace/current
+mkdir -p /var/tmp/workspace-poc
+.venv/bin/python -m spikes.target_probe --base /var/tmp/workspace-poc
+```
+
+Probe vyžaduje Btrfs; nesouhlas filesystemu odmítne před vytvořením projektu. Pracuje jen ve vlastním novém adresáři, který při úspěchu odstraní. Při chybě adresář ponechá a vypíše jeho cestu pro diagnostiku. Nevypíná kontejner ani jiné procesy, nepřistupuje k síti. Disk musí být SSD podle ověřeného mountu; samotný typ Btrfs neprokazuje fyzické médium.
+
+Výstup obsahuje prostředí, tři měření zápisu a 12 přerušení vlastního procesu na hranicích ADR 0003. Kontroluje pending čtení, zachování kandidáta, přesné bajty, jediný commit operace, opakovanou recovery a rebuild smazaného indexu. `process_s` zahrnuje start Pythonu, inicializaci dočasného Git projektu a apply; `apply_s` jen apply; `recovery_s` jednu recover operaci v řídicím procesu. `python_peak_rss_kib` je peak RSS Python workeru, nezahrnuje součet Git podprocesů ani paměť kontejneru. Nejde o benchmark velkých dat, trvalou službu ani výpadek napájení.
+
+Úspěch končí `target probe: PASS; 3 measured runs, 12 crash boundaries; temporary data removed`. Výstup pošlete k vyhodnocení M0-05; lokální test tohoto nástroje sám neuzavírá cílové ověření. Volba `--expected-fstype` slouží pro explicitní ověření na jiném filesystemu, například v lokálních testech; na Omnii ponechte výchozí Btrfs.
