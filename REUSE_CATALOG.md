@@ -55,3 +55,5 @@ M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Ind
 M0-06c **adapt**: doporučení zachovat Python/Git/SQLite a Qt UI, ověřit PySide6 místo portu jádra. **Evaluate** systémové závislosti a .deb; runtime bundler odložen do doložené potřeby. Důvody, oficiální licenční podklady a neověřené části jsou v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md).
 
 M0-06d **adaptuje** stávající Qt obal na PySide6 a shiboken6; sdílené UI/API beze změny. Použity distribuční binding moduly rozbalené do /tmp, bez převzetí cizího aplikačního kódu. Ověření a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+
+Instalační .deb **reuse** stávající spikes a systémové dpkg-deb; **adapt** vzoru úplného dočasného artefaktu s hardlink publikací. Balík má užší runtime allowlist než zdrojový archiv; neobsahuje další kopii Qt ani instalační framework. Viz [ADR 0011](docs/adr/0011-debian-package.md).

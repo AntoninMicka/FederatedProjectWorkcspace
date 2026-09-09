@@ -4,10 +4,11 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop|demo|setup|test|check CESTA|config project|node CESTA|help]
 
   deploy-omnia USER@HOST [--container NAME] [--dry-run]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
+  package-deb [--output SOUBOR] [--version VERZE]  Sestaví instalační .deb.
   package-desktop [--output SOUBOR]  Sestaví zdrojový balíček desktopového PoC.
   desktop      Otevře Qt/WebEngine okno s lokálním testovacím backendem.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
@@ -27,7 +28,7 @@ HELP
 command_name=${1:-demo}
 case "$command_name" in
     help|-h|--help) usage; exit 0 ;;
-    deploy-omnia|package-desktop) ;;
+    deploy-omnia|package-desktop|package-deb) ;;
     desktop|demo|setup|test)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
     check)
@@ -47,6 +48,10 @@ fi
 # Resolve package output relative to the caller before cd.
 if [[ "$command_name" == package-desktop && $# == 3 && "$2" == --output && "$3" != /* ]]; then
     set -- "$1" "$2" "$PWD/$3"
+fi
+if [[ "$command_name" == package-deb ]]; then
+    shift
+    exec python3 "$(dirname -- "${BASH_SOURCE[0]}")/scripts/package_deb.py" "$@"
 fi
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$repo_dir"

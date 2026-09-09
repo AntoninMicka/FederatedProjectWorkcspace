@@ -133,3 +133,25 @@ Výchozí výstup je `dist/federated-workspace-poc.tar.gz` (ignorovaný Gitem). 
 Po rozbalení do nového adresáře spusťte `./run.sh desktop` uvnitř `federated-workspace-poc`. Platí stejné systémové závislosti jako v sekci Desktop; případný `./run.sh setup` připraví pouze Python závislosti. Balíček neobsahuje vlastní Python/Qt runtime, není to AppImage ani instalátor a není určen jako schválené produkční vydání.
 
 Sestavení bere aktuální obsah vybraných zdrojů včetně necommitnutých změn. Kompletní archiv se nejprve zapíše do dočasného souboru ve výstupním adresáři a teprve poté zveřejní pod cílovým názvem bez přepsání existujícího souboru. Pád může zanechat `.package-*`; projektová data se nemění.
+
+## Instalační kandidát .deb (Ubuntu 26.04 arm64)
+
+```sh
+./run.sh package-deb
+sudo apt install ./dist/federated-workspace-poc.deb
+federated-workspace-poc
+```
+
+Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine a PyYAML 6.0.3. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI stále obsahuje pouze testovací čítač.
+
+Pro další vydání zvolte vyšší verzi a jiný výstup; builder existující soubor nepřepisuje:
+
+```sh
+./run.sh package-deb --version 0.1.1~m0 --output /tmp/workspace-next.deb
+sudo apt install /tmp/workspace-next.deb
+sudo apt remove federated-workspace-poc
+```
+
+Před upgradem aplikaci zavřete. Balík nemá migrační/odinstalační skripty ani vlastnictví uživatelských projektů. Důkazy a omezení izolovaného dpkg testu: [ADR 0011](docs/adr/0011-debian-package.md). Čistý OS a produkční release zatím ověřeny nejsou. Lokální balík není podepsaný repozitář ani automatický updater.
+
+Volitelné ověření dpkg lifecycle na hostu s připravenými systémovými závislostmi: `M0_DEB_TEST=1 M0_DESKTOP_TEST=1 python3 -m unittest tests.test_package_deb -v`. Použije dočasný kořen, nikoli systémovou instalaci.

@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M0
 
-**M0-06e — Linux instalační kandidát.** PySide6/WebEngine je ověřené skutečným oknem i zdrojovým balíčkem; měření drží ADR 0010. Další krok: .deb pro konkrétní OS/architekturu, čistá instalace a upgrade/odinstalace bez ztráty dat. Finální M0-06, M0-05 a Gate M0 zůstávají otevřené.
+**M0-06e — Dokončit ověření instalačního kandidáta.** .deb builder a izolovaný dpkg lifecycle jsou hotové dle ADR 0011. Zbývá čistý OS se skutečným rozlišením závislostí, offline start a finální distribuční inventář; hostitelská databáze závislostí není tento důkaz. M0-05 a Gate M0 zůstávají otevřené.
 
 ## Další zbývající práce M0
 
@@ -78,6 +78,8 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
 
 ## Dokončené výstupy a důkazy
+
+- [x] [completed] **Implemented / PoC validated — .deb kandidát a izolovaný dpkg lifecycle (část M0-06e).** `run.sh package-deb`, builder, launcher a desktop entry používají systémové závislosti bez instalace za běhu. Ověřeny obsah, nepřepsání výstupu, chybějící závislosti, upgrade/purge se zachováním kontrolních dat a skutečné instalované okno. Rozsah a předem popsané crash boundaries v ADR 0011; čistý OS test zůstává otevřený. Závěrečné `M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 69 testů prošlo bez skipů. Ověřen výsledný .deb, shellová syntaxe, odkazy a finální diff.
 
 - [x] [completed] **M0-06d — PoC validated: PySide6/WebEngine a měření desktopu.** Desktop i launcher používají PySide6 bez fallbacku na PyQt, shiboken6 zajišťuje pořadí destrukce objektů. Skutečný click/close/restart, pád rendereru a rozbalený zdrojový balík ověřeny. `PYTHONPATH=/tmp/m0-pyside M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: 67 testů prošlo bez skipů. Ověřen launcher z /tmp a SIGTERM, bash syntax a help. Tři měřené běhy a omezení RSS/loadFinished jsou v [ADR 0010](docs/adr/0010-pyside-desktop-validation.md). Runtime moduly byly rozbaleny do /tmp, běžný uživatel je musí připravit dle README; čistá instalace zůstává M0-06e. Dokumentace, lokální odkazy a finální diff zkontrolovány.
 
