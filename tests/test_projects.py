@@ -193,6 +193,28 @@ class ProjectTests(unittest.TestCase):
             response = driver.request(server, path='/v1/projects', body=b'{}')
             self.assertIn(b' 422 ', response.split(b'\r\n')[0]); self.assertNotIn(b'INVALID', response)
 
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires actual sidebar tabs')
+    def test_sidebar_tabs_include_sources_and_empty_project_without_writes(self):
+        root = self.gits[0].root
+        folder = root / 'artifacts' / OTHER; folder.mkdir()
+        meta = metadata('<img src=x onerror=alert(1)> PDF source', OTHER)
+        meta.update(kind='source', provenance='external', file='source.pdf')
+        (folder / 'metadata.json').write_bytes(encoded(meta))
+        (folder / 'source.pdf').write_bytes(b'%PDF-1.7\x00\xff')
+        self.gits[0].commit('Add binary source')
+        (self.gits[1].root / 'artifacts' / OTHER / 'note.md').unlink()
+        self.gits[1].commit('Empty second project')
+        self.assertEqual(len(self.projects.open(ENTITY)['artifacts']), 2)
+        self.assertEqual(self.projects.open(OTHER)['artifacts'], [])
+        for id_, git in zip((ENTITY, OTHER), self.gits):
+            head = git.head()
+            result = subprocess.run([sys.executable, '-m', 'spikes.desktop', '--node', str(self.node_path),
+                                     '--smoke', '--smoke-project', id_], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('rendered rows verified', result.stdout)
+            self.assertEqual(git.head(), head)
+            self.assertEqual(git.run('status', '--porcelain').stdout, '')
+
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_desktop_projects_restart_and_untrusted_titles(self):
         for id_ in (ENTITY, OTHER, ENTITY):

@@ -11,10 +11,17 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
 <body><aside><div class="brand">◈ &nbsp; WORKSPACE</div><div class="nav">Přehled uzlu</div>
-<div id="todo-widget" aria-labelledby="todo-heading"><h2 id="todo-heading">Hlavní TODO</h2>
+<div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
+<button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">TODO</button>
+<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Zdroje / artefakty</button></div>
+<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2 id="todo-heading">Hlavní TODO</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <ul id="todo-tree" aria-label="Položky hlavního TODO"></ul>
 <small>Pouze pro čtení · upravíte v editoru</small></div>
+<div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
+<h2>Zdroje / artefakty</h2><p id="sidebar-artifact-status" role="status">Otevřete projekt.</p>
+<ul id="sidebar-artifact-list" aria-label="Zdroje a artefakty projektu"></ul>
+<small>Pouze pro čtení</small></div>
 <p>DESKTOPOVÝ EXPERIMENT<br>M1 · Projekty</p></aside>
 <main><header><span class="badge">Lokální uzel</span><span>PoC / lokální projekty</span></header>
 <h1>Váš lokální workspace.</h1><p class="intro">První krok ke společnému prostoru pro projekty, znalosti a rozhodnutí.</p>
@@ -57,6 +64,34 @@ const projectView=document.querySelector('#project-view');
 const artifacts=document.querySelector('#artifacts');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
+const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
+const sidebarArtifactStatus=document.querySelector('#sidebar-artifact-status');
+const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
+function selectSidebarTab(selected){
+ for(const tab of sidebarTabs){
+  const active=tab===selected;
+  tab.setAttribute('aria-selected',String(active));tab.tabIndex=active ? 0 : -1;
+  document.getElementById(tab.getAttribute('aria-controls')).hidden=!active;
+ }
+}
+for(const [index,tab] of sidebarTabs.entries()){
+ tab.addEventListener('click',()=>selectSidebarTab(tab));
+ tab.addEventListener('keydown',event=>{
+  const next={ArrowRight:(index+1)%2,ArrowLeft:(index+1)%2,Home:0,End:1}[event.key];
+  if(next===undefined) return;
+  event.preventDefault();selectSidebarTab(sidebarTabs[next]);sidebarTabs[next].focus();
+ });
+}
+function renderSidebarArtifacts(items){
+ sidebarArtifacts.replaceChildren();
+ sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Projekt zatím nemá zdroje ani artefakty.';
+ for(const item of items){
+  const row=document.createElement('li');
+  const title=document.createElement('span');title.className='sidebar-artifact-title';title.textContent=item.title;
+  const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
+  row.append(title,id);sidebarArtifacts.append(row);
+ }
+}
 let viewRequest=0;
 function renderTodo(todo){
  todoTree.replaceChildren();
@@ -86,6 +121,7 @@ function renderTodo(todo){
 }
 function clearProject(){
  ++viewRequest;
+ sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';
  projectView.hidden=true;
@@ -109,6 +145,7 @@ openProject.addEventListener('click',async()=>{
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest || projects.value!==projectId) return;
   renderTodo(result.main_todo);
+  renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
   for(const item of result.artifacts){
@@ -116,7 +153,7 @@ openProject.addEventListener('click',async()=>{
   }
   projectView.hidden=false;
   projectStatus.textContent=result.artifacts.length ? 'Projekt otevřen.' : 'Projekt zatím nemá artefakty.';
- }catch(error){if(request===viewRequest){projectStatus.textContent=error.message;todoStatus.textContent='TODO není dostupné. Zkuste projekt znovu otevřít.';}}
+ }catch(error){if(request===viewRequest){projectStatus.textContent=error.message;todoStatus.textContent='TODO není dostupné. Zkuste projekt znovu otevřít.';sidebarArtifactStatus.textContent='Seznam není dostupný. Zkuste projekt znovu otevřít.';}}
  finally{if(request===viewRequest){openProject.disabled=false;projects.disabled=false;}}
 });
 let catalogRequest=0;
@@ -141,7 +178,7 @@ async function loadProjects(selectedId=null){
 loadProjects();
 """
 CSS += 'select{max-width:100%;padding:12px}code,li{overflow-wrap:anywhere}li{margin:12px 0}.controls{flex-wrap:wrap}'
-CSS += '''#todo-widget{margin-top:32px}#todo-widget h2{font-size:17px;color:white;margin:0 0 12px}
+CSS += '''#todo-widget{margin-top:18px}#todo-widget h2{font-size:17px;color:white;margin:0 0 12px}
 #todo-widget p{font-size:12px;line-height:1.5;letter-spacing:0;margin:8px 0;color:#c8d4df}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-widget small{font-size:11px;color:#aabecf}
 #todo-tree{max-height:55vh;overflow:auto;padding:0;margin:14px 0;list-style:none}
@@ -151,6 +188,16 @@ CSS += '''#todo-widget{margin-top:32px}#todo-widget h2{font-size:17px;color:whit
 .todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done> .todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
 #todo-tree summary:focus-visible{outline:2px solid #79c9ac;outline-offset:3px}'''
+CSS += '''#sidebar-tabs{display:flex;gap:4px;margin-top:28px;flex-wrap:wrap}
+#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df;border-radius:6px}
+#sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
+#sidebar-artifacts{margin-top:18px}#sidebar-artifacts h2{font-size:17px;color:white;margin:0 0 12px}
+#sidebar-artifacts p{font-size:12px;line-height:1.5;letter-spacing:0;margin:8px 0}
+#sidebar-artifacts small{font-size:11px;color:#aabecf}
+#sidebar-artifact-list{list-style:none;max-height:55vh;overflow:auto;padding:0;margin:14px 0}
+#sidebar-artifact-list li{font-size:13px;border-bottom:1px solid #274154;padding-bottom:10px;margin:10px 0}
+.sidebar-artifact-title,.sidebar-artifact-id{display:block;overflow-wrap:anywhere}.sidebar-artifact-id{margin-top:4px}
+[role="tabpanel"]:focus-visible{outline:2px solid #79c9ac;outline-offset:4px}'''
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
 

@@ -197,6 +197,22 @@ def main():
                   if(document.querySelector('#project-title').textContent!==expected.title ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
                      JSON.stringify(rows)!==JSON.stringify(wanted) || document.querySelector('#artifacts img')) return null;
+                  const artifactTab=document.querySelector('#artifacts-tab'),todoTab=document.querySelector('#todo-tab');
+                  const artifactPanel=document.querySelector('#sidebar-artifacts'),todoPanel=document.querySelector('#todo-widget');
+                  const sidebarList=document.querySelector('#sidebar-artifact-list');
+                  if(window.sidebarReloaded && artifactTab.getAttribute('aria-selected')!=='true') return null;
+                  artifactTab.click();
+                  if(artifactPanel.hidden || !todoPanel.hidden || artifactTab.getAttribute('aria-selected')!=='true') return null;
+                  const sideRows=[...sidebarList.querySelectorAll('li')].map(row=>({
+                    id:row.querySelector('.sidebar-artifact-id').textContent,
+                    title:row.querySelector('.sidebar-artifact-title').textContent}));
+                  if(JSON.stringify(sideRows)!==JSON.stringify(expected.artifacts) || sidebarList.querySelector('img,script,a')) return null;
+                  artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+                  if(todoPanel.hidden || !artifactPanel.hidden || document.activeElement!==todoTab) return null;
+                  todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+                  if(artifactPanel.hidden || document.activeElement!==artifactTab || artifactTab.tabIndex!==0 || todoTab.tabIndex!==-1) return null;
+                  artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
+                  if(todoPanel.hidden || document.activeElement!==todoTab) return null;
                   const todo=expected.main_todo;
                   const tree=document.querySelector('#todo-tree');
                   if(!tree || tree.querySelector('img,script,a')) return null;
@@ -217,10 +233,12 @@ def main():
                     if(branch){branch.querySelector('summary').click();if(branch.open) return null;
                       branch.querySelector('summary').click();if(!branch.open) return null;}
                   }else if(todoRows.length) return null;
+                  todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+                  if(artifactPanel.hidden || document.activeElement!==artifactTab) return null;
                   if(!window.sidebarReloaded){
                     window.sidebarReloaded=true;
                     select.dispatchEvent(new Event('change'));
-                    if(tree.children.length || document.querySelector('#todo-title').textContent) return null;
+                    if(tree.children.length || sidebarList.children.length || document.querySelector('#todo-title').textContent) return null;
                     loadProjects(expected.id);
                     return null;
                   }
