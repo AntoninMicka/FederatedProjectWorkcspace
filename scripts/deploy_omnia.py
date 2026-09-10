@@ -11,11 +11,18 @@ import subprocess
 import tarfile
 import uuid
 
+if __package__:
+    from .license_files import license_files
+    from .install_web import install_script as web_install_script
+else:
+    from license_files import license_files
+    from install_web import install_script as web_install_script
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def bundle(root):
-    files = [root / name for name in ('requirements.txt', 'LICENSE')]
+    files = [root / 'requirements.txt', *license_files(root)]
     files += sorted((root / 'spikes').glob('*.py'))
     # Fixed source allowlist: no .git, credentials, private catalog or user data.
     stream = io.BytesIO()
@@ -27,7 +34,7 @@ def bundle(root):
     return stream.getvalue(), [str(p.relative_to(root)) for p in files]
 
 
-def remote_script(container, release):
+def remote_script(container, release, *, lan=None):
     # Both interpolated values have been validated/generated locally.
     return f'''set -eu
 awk '$2 == "/srv" && $3 == "btrfs" {{found=1}} END {{exit !found}}' /proc/mounts || {{ echo 'SSD /srv not mounted as Btrfs' >&2; exit 1; }}
@@ -36,7 +43,7 @@ awk '$2 == "/srv" && $3 == "btrfs" {{found=1}} END {{exit !found}}' /proc/mounts
 hostdev=$(stat -c %d /srv)
 containerdev=$(lxc-attach -P /srv/lxc -n {container} -- stat -c %d / < /dev/null)
 [ "$hostdev" = "$containerdev" ] || {{ echo 'Container root is not on /srv filesystem' >&2; exit 1; }}
-lxc-attach -P /srv/lxc -n {container} -- sh -c {shlex.quote(install_script(release))}
+lxc-attach -P /srv/lxc -n {container} -- sh -c {shlex.quote(web_install_script(release, lan) if lan else install_script(release))}
 '''
 
 
@@ -73,6 +80,7 @@ def main():
     parser.add_argument('host', help='SSH user@host of the router (password prompt allowed)')
     parser.add_argument('--container', default='workspace-m0')
     parser.add_argument('--dry-run', action='store_true', help='Show plan without SSH or writes')
+    parser.add_argument('--web-lan', help='Opt in to HTTPS viewer; allowed private IPv4 client subnet')
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*', args.host):
         parser.error('host must be user@hostname or user@IPv4')
@@ -80,7 +88,10 @@ def main():
         parser.error('invalid container name')
     payload, files = bundle(ROOT)
     release = uuid.uuid4().hex
-    command = remote_script(args.container, release)
+    try:
+        command = remote_script(args.container, release, lan=args.web_lan)
+    except ValueError as error:
+        parser.error(str(error))
     if args.dry_run:
         print(f'Target: {args.host}; container: {args.container}; release: {release}')
         print('Files: ' + ', '.join(files))

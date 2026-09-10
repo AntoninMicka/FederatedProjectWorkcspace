@@ -107,6 +107,8 @@ Aktuální dávku (milník), její průběžné výsledky a ad-hoc úkoly drží
 
 ## Ruční deploy na Omnii
 
+Volitelný HTTPS webový náhled v LXC a dlaždici s aktuální adresou kontejneru popisuje [návod webového nasazení](docs/lxc-web.md). Jde o development PoC; cílová akceptace zůstává otevřená v M1-07.
+
 Pro existující **běžící Debian LXC** na SSD připojeném na routeru jako `/srv`:
 
 ```sh

@@ -24,7 +24,7 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 def fixture(root):
     """Synthetic, trusted build tree with real legal assets, not a release build."""
     for name in (
-        'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md',
+        'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
         'AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md', 'FEDERATION.md',

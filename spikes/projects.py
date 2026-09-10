@@ -24,8 +24,9 @@ def directory(value, *, private=False):
 
 
 class Projects:
-    def __init__(self, node_path=None):
+    def __init__(self, node_path=None, *, network=False):
         self.node_path = Path(node_path).absolute() if node_path else None
+        self.network = network
 
     def _bindings(self):
         if self.node_path is None or not os.path.lexists(self.node_path):
@@ -34,6 +35,8 @@ class Projects:
 
     def list(self):
         # Do not expose filesystem locations or credential references to JavaScript.
+        if self.network:
+            return [{'id': row['id']} for row in self.catalog()]
         return [{'id': binding['project_id']} for binding in self._bindings()]
 
     def catalog(self):
@@ -51,11 +54,17 @@ class Projects:
                         'Registration must refer to the repository root')
                 head = git.head()
                 meta = committed_project(git, head, binding['project_id'])
+                if self.network:
+                    from spikes.metadata import validate_snapshot
+                    require(all(item['privacy'] != 'local-only'
+                                for item in validate_snapshot(git.snapshot(head)).values()),
+                            'Project contains local-only data')
                 require(git.head() == head, 'Project changed during catalog read')
                 row.update(title=meta['title'], description=meta.get('description', ''), available=True)
             except (ValueError, OSError, subprocess.SubprocessError):
                 pass  # Per-project failure must not expose paths or hide healthy registrations.
-            rows.append(row)
+            if not self.network or row['available']:
+                rows.append(row)
         return rows
 
     def workspace(self, project_id, *, blocking=True, deadline=None):
@@ -79,7 +88,10 @@ class Projects:
         return Workspace(root, state, blocking=blocking, deadline=deadline)
 
     def open(self, project_id):
-        return self.workspace(project_id).read_project(project_id)
+        import time
+        workspace = self.workspace(project_id, blocking=not self.network,
+                                   deadline=time.monotonic() + 30 if self.network else None)
+        return workspace.read_project(project_id, network=self.network)
 
     def preview(self, project_id, artifact_id, expected_head, page=1):
         import re
@@ -91,7 +103,8 @@ class Projects:
                 'Invalid preview commit')
         require(type(page) is int and 1 <= page <= 100, 'Invalid preview page')
         ws = self.workspace(project_id, blocking=False, deadline=time.monotonic() + 30)
-        item = ws.read_project(project_id, artifact_id=artifact_id, expected_head=expected_head)
+        item = ws.read_project(project_id, artifact_id=artifact_id, expected_head=expected_head,
+                               network=self.network)
         result = preview(item, page)
         if ws.git.head() != expected_head:
             from spikes.storage import StaleIndex

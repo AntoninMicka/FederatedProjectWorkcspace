@@ -1,0 +1,101 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# Webový náhled v LXC a dlaždice na routeru
+
+Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO a náhledy Markdown/obrázků/PDF; editor, tvorba a historie zůstávají v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../TODO.md).
+
+## Příprava
+
+Určete privátní IPv4 subnet klientů a kontejneru. Příklady používají dokumentační placeholdery `ROUTER` a `LAN_SUBNET`; dosaďte skutečné hodnoty. Výchozí kontejner je `workspace-m0`. Serverový port je 8443, routerový helper používá pouze `127.0.0.1:8846`. Přístup přes IPv6 a DNS jméno zatím není implementovaný.
+
+V kontejneru připravte `/etc/federated-workspace/tls.crt` (certifikát a případný řetězec), `tls.key` a `ca.crt` (důvěryhodná CA pro instalační healthcheck). Certifikát musí být důvěryhodný pro klientské prohlížeče a zahrnovat IP adresy, které může tento kontejner dostat. Lze použít vlastní LAN CA a certifikát se SAN pro vyhrazený DHCP pool; změna mimo SAN vyžaduje obnovu certifikátu a restart služby. Nepoužívejte vypnutí ověřování TLS. Kořenový certifikát CA přeneste na router do `/etc/federated-workspace-ca.pem`; soukromý TLS klíč zůstává v LXC. Instalátor klíč ani certifikát nevytváří, nepřenáší a nezahrnuje do source archivu.
+
+Prohlížeč vyžaduje náhodný přístupový klíč aplikace. První instalace jej vygeneruje v `/var/lib/federated-workspace/access-key` (0600); správce jej přečte uvnitř LXC a předá oprávněnému operátorovi mimo URL. Restart ani upgrade klíč nemění. Pro odvolání přístupu správce bezpečně nahradí soubor novým náhodným klíčem alespoň 32 bajtů, zachová vlastnictví/mód a restartuje službu. Klíč neopravňuje k práci přes SSH.
+
+## LXC instalace
+
+Nejdřív zkontrolujte plán z checkoutu:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --dry-run
+```
+
+Po přípravě TLS a schválení nasazení spusťte stejný příkaz bez `--dry-run`. Vyžaduje ověřený SSH host key. Balík obsahuje pouze zdroje a veřejné licenční podklady; lokální konfigurace a projekty se nekopírují. Bez `--web-lan` zůstává původní headless demo.
+
+Služba `federated-workspace.service` běží pod účtem `federated-workspace`; persistentní data a projekty umisťujte pod `/var/lib/federated-workspace`. První start vytvoří prázdný `node.json` se stálým UUID. Registrace v něm používá stejný formát jako desktop, s absolutními cestami platnými uvnitř LXC. Projekt a state musí patřit účtu služby, state musí být 0700 a ležet na stejném filesystému. Registraci existujících projektů provádějte stávající službou ProjectCreation z lokální administrace pod tímto účtem; nekopírujte desktopový node.json s neplatnými cestami. Projekty s local-only entitou web nezobrazí ani v katalogu.
+
+Kontrola uvnitř LXC:
+
+```sh
+systemctl status federated-workspace.service
+journalctl -u federated-workspace.service -n 30
+```
+
+## Routerová dlaždice
+
+Na routeru musí být Python 3, LXC nástroje, procd, lighttpd a `lighttpd-mod-proxy`. Před instalací ověřte, že cesta `/federated-workspace/` a port 8846 nejsou obsazené jinou aplikací. Podpora lighttpd a umístění JSON odpovídají [oficiální specifikaci WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md).
+
+Po schválení přenosu zkopírujte **pouze** `scripts/router_tile.py` a `scripts/router_entry.py` do společného staging adresáře na routeru, plus veřejný CA certifikát na výše uvedenou cestu. TLS privátní klíč ani přístupový klíč aplikace na router nekopírujte. Ve staging adresáři:
+
+```sh
+python3 router_tile.py plan --container workspace-m0 --lan LAN_SUBNET
+python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
+```
+
+Instalátor spravuje pět vlastních souborů: helper, procd službu, lighttpd konfiguraci, JSON dlaždice a SVG. Ostatních dlaždic se nedotýká. JSON směřuje na stálou routerovou cestu; aktuální IP kontejneru se zjišťuje až při kliknutí. Bez právě jedné IPv4 v subnetu nebo při neplatném TLS/nedostupné službě se zobrazí zpráva o nedostupnosti. Dlaždice neobchází přihlášení do aplikace.
+
+Odebrání integrace (projekty, LXC služba a CA zůstanou):
+
+```sh
+python3 router_tile.py remove
+```
+
+Při přerušené instalaci nejprve:
+
+```sh
+python3 router_tile.py recover
+```
+
+Trvalý rollback journal `/etc/federated-workspace-tile-rollback.json` se při neúspěšné obnově ponechá. Obsahuje předchozí soubory a stav služby; nemažte jej místo obnovy. Instalátor používá zámek proti souběhu.
+
+## Obnova LXC instalace
+
+Při běžné chybě se vrací předchozí `current`, unit a enabled/active stav. Snapshot `/opt/federated-workspace/web-rollback` zůstane pro kontrolu. Po přerušení procesu proveďte obnovu jako root v kontejneru, se zastavenou službou a bez souběžného deploye:
+
+```sh
+base=/opt/federated-workspace
+unit=/etc/systemd/system/federated-workspace.service
+exec 9>"$base/web-deploy.lock"
+flock -n 9 || exit 1
+test -d "$base/web-rollback" || exit 1
+systemctl stop federated-workspace.service
+if test -s "$base/web-rollback/previous"; then
+    ln -s "$(cat "$base/web-rollback/previous")" "$base/.manual-restore"
+    mv -Tf "$base/.manual-restore" "$base/current"
+else
+    rm -f "$base/current"
+fi
+if test -f "$base/web-rollback/unit"; then
+    cp -p "$base/web-rollback/unit" "$unit"
+else
+    rm -f "$unit"
+fi
+systemctl daemon-reload
+if test -f "$base/web-rollback/enabled"; then
+    systemctl enable federated-workspace.service
+else
+    systemctl disable federated-workspace.service
+fi
+if test -f "$base/web-rollback/active"; then
+    systemctl start federated-workspace.service
+fi
+```
+
+Zkontrolujte návrat předchozího stavu a teprve poté odstraňte `web-rollback`. Nainstalované balíky/uživatelský účet, nové vydání a persistentní data zůstávají zachované. Toto není rollback operačního systému.
+
+## Cílová akceptace
+
+Ověřte otevření dlaždice a přihlášení, skutečný projekt/náhled, změnu IP v certifikovaném poolu, restart kontejneru i routeru, zastavení LXC, nejednoznačnou adresu, neplatný certifikát, opakované nasazení, obnovu po chybě a odebrání dlaždice se zachováním ostatních aplikací. Výsledky zapisujte do M1-07 v TODO; lokální unit testy nejsou důkazem této cílové akceptace.
