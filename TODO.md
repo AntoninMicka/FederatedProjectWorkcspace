@@ -16,7 +16,14 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
-- [ ] [planned] **V-11 — Příprava veřejné distribuce (designed, 2026-09-10).** Příprava aktualizačního kanálu a distribučně relevantních metadat před veřejným releasem. V tomto kroku je určen ruční release flow (`.deb` + `apt`), ověřeno chybějící placeholder `noreply@example.invalid` v kontrolních metadatech a doplněna poznámka o absenci auto-updateru; před veřejným zveřejněním zůstává nutný rozhodnutý kontakt/maintainer a právní review konkrétních distribučních komponent.
+- [x] [completed] **V-11 — Příprava veřejné distribuce (designed, 2026-09-10).** Distribuční metadata a update channel byly sjednoceny pro aktuální PoC release režim: v `.deb` kontrolním souboru je explicitní `Maintainer` (už bez placeholderu), doplněn `Homepage` repozitáře a v dokumentaci je explicitně řečeno, že update je v této fázi ruční (`.deb` + `apt`), bez auto-updateru. V kontrolním testu .deb je potvrzeno, že placeholder byl odstraněn.
+
+Ověření V-11:
+- `python3 -m unittest tests.test_package_deb -v`
+- `grep -n "Maintainer"` v `scripts/package_deb.py` a `tests/test_package_deb.py` potvrzuje novou hodnotu a regresní kontrolu.
+- `git diff --check`.
+
+Poznámka k otevřené části: před skutečným veřejným releasem zůstává nutné oddělené právní review komponent distribuce a oficiální potvrzení kontaktu v publikované licenci/release metadata.
 
 - [x] [completed] **V-08 — Registrace existujícího projektu (implemented, 2026-09-10).** Doplněn registrační tok pro již existující Git projekt: nová cesta `ProjectCreation.register` validuje kořenový Git repozitář, `project.json` v `HEAD` i pracovní kopii, kontroluje konfliktní/duplicitní `project_id`, vytváří lokální state vedle repozitáře a zapisuje registraci přes recovery flow.
 
