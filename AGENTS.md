@@ -10,7 +10,7 @@ Projekt je aktivně vyvíjený **Git-backed federated project knowledge & decisi
 4. Před přidáním či nahrazením funkce prověř existující řešení. Pokud může být dostupné jinde, použij `REUSE_CATALOG.md` a uvedené zdrojové komponenty; zaznamenej důvod reuse/adapt/rewrite/reject. Je-li dostupný lokální `REUSE_CATALOG.private.md`, použij také jeho inventuru; soubor je ignorovaný Gitem a jeho soukromé názvy, cesty ani detaily nepřenášej do verzovaných dokumentů. Do veřejného katalogu zařazuj externí repozitáře až po ověření veřejné dostupnosti. Chybějící zdroj označ jako neověřený; nekopíruj kód automaticky ani neopakuj již doloženou inventuru beze změny podkladů.
 5. U operace přes více persistentních vrstev (filesystem, Git, SQLite index, journal) před implementací explicitně popiš crash boundaries a očekávané recovery. Pokud je již popisuje platné ADR, odkaž na ně a popiš pouze změny. Úspěšný happy-path test nestačí k dokončení takové operace.
 
-Pokud uživatel požádá o „další úkol“ bez upřesnění, pokračuj nejbližší otevřenou položkou aktuálního milníku v TODO. Dokonči ji včetně ověření a dokumentace; další samostatný úkol automaticky nezahajuj. Rozsah nerozšiřuj potichu, konkrétní navazující práci zaznamenej do TODO, pokud je bezprostředně na řadě, jinak do BACKLOG. Je-li TODO prázdné, vyber nejbližší doložený otevřený úkol aktuálního milníku z BACKLOG a přesuň jej do TODO; nevymýšlej práci jen pro zaplnění okna.
+Pokud uživatel požádá o „další úkol“ bez upřesnění, pokračuj nejbližší otevřenou položkou aktuální dávky v TODO. Dokonči ji včetně ověření a dokumentace; další samostatný úkol automaticky nezahajuj. Dokončenou položku ponech v TODO do uzavření celé dávky. Je-li dávka dokončená, proveď předání popsané níže; samotné naplnění TODO další dávkou není pokynem ji celou implementovat.
 
 Skutečný kód a ověřené testy dokládají současný stav. Roadmapa není důkaz implementace a starý nezaškrtnutý bod není důvod zopakovat hotový experiment. Rozpor s architektonickým rozhodnutím pojmenuj; nepovažuj jej automaticky za nové rozhodnutí.
 
@@ -32,31 +32,43 @@ Role jsou nezávislé na modelech a providerech: creator, opponent, analyst, res
 
 Externí LLM požadavek musí mít explicitní Context Manifest. RBAC a privacy kontroluj aplikačně před voláním backendu. Privacy třídy zahrnují public, project, confidential, local-only. Data local-only nesmí opustit lokální hranici důvěry bez explicitní reklasifikace. Tyto požadavky jsou závazný návrh; neoznačuj je za implementované jen proto, že je validátor přijímá jako metadata.
 
-## Roadmapa, aktuální okno, backlog a záznam práce
+## Roadmapa a práce po dávkách
 
-Každý dokument má jednu roli:
+- **Roadmapa** drží strategii, milníky, schopnosti a gates. Zachovej původní katalog požadavků; není to průběžný pracovní deník ani druhý backlog.
+- **TODO.md** obsahuje celou aktuální dávku, zpravidla jeden milník, včetně ad-hoc úkolů. Nemá limit 5 položek. Uvádí rozsah, pořadí práce a podmínky dokončení dávky. Hotové položky i jejich ověření zde zůstávají do uzavření dávky.
+- **BACKLOG.md** připravuje další dávky, typicky tři navazující milníky. Jde o plánovací horizont, nikoli důvod zahazovat již evidované vzdálenější úkoly. Ty lze ponechat v oddělené části bez dalšího rozepisování. Ad-hoc práce může být součástí dávky nebo samostatnou budoucí položkou.
+- **WORK_LOG.md** obsahuje uzavřené dávky, jejich dokončené úkoly, ověření a historická gate review. Starší jednotlivé záznamy zachovej; nově archivuj po dávkách, nejnovější nahoru.
 
-- **Roadmapa** zachycuje fáze, milníky, architektonické cíle, významné schopnosti a gates. Stávající podrobný katalog požadavků zachovej; nové operativní podrobnosti patří do TODO nebo BACKLOG. Nevytvářej druhou konkurenční roadmapu.
-- **TODO.md** je krátké aktuální okno: právě řešené a bezprostředně navazující úkoly, nejvýše 5 položek. Pořadí položek určuje pořadí práce. Na začátku stačí aktuální milník, stručný stav gates a odkazy; nepatří sem dokončené úkoly, historie review ani dlouhé testové protokoly.
-- **BACKLOG.md** drží ostatní otevřené úkoly, návaznosti, chyby a technický dluh. Vybranou položku přesuň do TODO se stejným ID a kontextem; při odložení ji přesuň zpět. Přesun není dokončení ani důvod změnit prioritu milníku.
-- **WORK_LOG.md** drží dokončené výstupy, důkazy ověření a historická gate review. Po dokončení sem přesuň celý úkol s ID, datem dokončení, úrovní výsledku, stručným výsledkem, ověřením a relevantními omezeními. Nové záznamy přidávej nahoru; stará rozhodnutí a výsledky nepřepisuj podle dnešního stavu.
+### Během dávky
 
-Jeden úkol má jediný aktuální záznam; mezi soubory používej odkazy, ne kopie stavů. Při přesunu zachovej ID, rozsah, závislosti, důkazy a aktualizuj odkazy. Dokončený úkol odstraň z TODO v téže změně, ve které jej zapíšeš do WORK_LOG. Neověřený výstup ani nedokončenou část nearchivuj jako hotovou; konkrétní zbývající práci ponech otevřenou v TODO/BACKLOG s odkazem na dokončenou část. Nové zjištění k dříve hotovému úkolu má vlastní otevřenou položku a odkaz na původní záznam; historický důkaz zachovej.
+Z těchto pracovních evidencí aktualizuj pouze TODO: stav, výsledky, ověření, omezení a nová zjištění. BACKLOG a WORK_LOG průběžně nesynchronizuj. To neomezuje potřebné změny kódu, testů, návodů či ADR; roadmapu měň jen při skutečné změně rozsahu nebo rozhodnutí, nikoli kvůli každému hotovému úkolu.
+
+Ad-hoc úkol zapiš se stabilním ID, původem/požadavkem, rozsahem, cílovou úrovní a podmínkou dokončení. Patří-li do aktuální dávky, zařaď jej podle priority mezi její úkoly. Práci pro později zachyť v TODO v sekci „K předání do backlogu“; tato sekce není součástí podmínek dokončení dávky. Při novém zjištění k existujícímu backlogovému úkolu odkaž na jeho ID a zaznamenej doplnění, nevytvářej druhý stavový záznam. Nezařazuj spekulativní úkoly do počtu.
+
+### Uzavření a načtení další dávky
+
+Po dokončení a relevantním ověření všech úkolů aktuální dávky:
+
+1. Vyhodnoť podmínky dávky a příslušný gate. Dokončení dávky samo neprokazuje splnění celého milníku; neověřenou či blokovanou práci neoznačuj jako hotovou. Při nutném odložení výslovně zaznamenej změnu rozsahu a zbývající práci.
+2. Přesuň dokončenou dávku z TODO do WORK_LOG s ID úkolů, daty dokončení, úrovní výsledků, důkazy ověření a omezeními; zachovej i ad-hoc úkoly a důvody změn rozsahu.
+3. Přenes odložené úkoly a poznámky z „K předání do backlogu“ do odpovídajících dávek BACKLOG; aktualizuj stávající položky podle ID. Nedokončené úkoly zůstávají otevřené.
+4. Přesuň další dávku z BACKLOG do TODO, vymez její rozsah a pořadí podle roadmapy a doložených návazností. Backlog podle potřeby doplň směrem k přibližně třem dalším milníkům, bez vymýšlení práce. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
+5. Ve stejné změně oprav odkazy a případný stav milníku/gate v roadmapě. Jeden úkol má jediný aktuální záznam; odkazy a historické důkazy nejsou konkurenčními kopiemi stavů.
 
 Stavy používej přesně:
 
-- `[ ] [planned]` — zbývající práce (TODO/BACKLOG).
-- `[ ] [in progress]` — skutečně probíhající práce (TODO).
-- `[x] [completed]` — výstup dokončený a relevantně ověřený (WORK_LOG).
-- `[ ] [blocked]` — konkrétní překážka; uveď důvod a podmínku odblokování (TODO/BACKLOG podle aktuální priority).
+- `[ ] [planned]` — zbývající práce.
+- `[ ] [in progress]` — skutečně probíhající práce v TODO.
+- `[x] [completed]` — dokončený a relevantně ověřený výstup; do uzavření dávky v TODO, poté ve WORK_LOG.
+- `[ ] [blocked]` — konkrétní překážka s důvodem a podmínkou odblokování.
 
-U položek uváděj úroveň: designed, implemented, PoC validated nebo production-ready. Dokončený návrh ani úspěšný spike neznamenají produkční implementaci. Chybějící ověření ponech otevřené nebo výslovně neověřené. Závislost na jiném plánovaném úkolu sama není důvod vše označit jako blocked. Okno TODO doplňuj jen z doložené práce podle roadmapy či požadavku uživatele, nikoli spekulativně do počtu.
+U položek uváděj úroveň: designed, implemented, PoC validated nebo production-ready. Návrh ani spike neznamená produkční implementaci. Chybějící ověření ponech otevřené nebo výslovně neověřené. Závislost na plánovaném úkolu sama není důvod vše označit jako blocked.
 
 ## Dokončení a ověření
 
-- Při změně stavu aktualizuj aktuální záznam v TODO/BACKLOG; dokončený výstup přesuň do WORK_LOG a ponech v TODO jen aktuální okno. Kosmetické opravy a mezikroky nepotřebují vlastní položky; nedoplňuj spekulativní backlog.
-- Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate. Výsledky dokončeného ověření eviduj ve WORK_LOG; u otevřené práce v TODO/BACKLOG uveď jen potřebný stav či chybějící kontrolu. Roadmapa odkazuje na důkazy ve WORK_LOG. Odkazy oprav i při pouhém přesunu záznamů, bez změny významu gate. Celkový počet testů nekopíruj do dalších dokumentů.
-- Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Do ADR patří důkazy příslušného rozhodnutí; jejich historické výsledky zachovej. Průběžný stav práce patří do TODO/BACKLOG, dokončené výstupy do WORK_LOG.
+- Průběžný stav a výsledky ověření zapisuj do TODO, včetně dokončených a ad-hoc úkolů aktuální dávky. BACKLOG a WORK_LOG aktualizuj při předání dávky. Kosmetické mezikroky nepotřebují vlastní položky.
+- Roadmapu aktualizuj pouze při skutečné změně milníku, rozsahu nebo stavu schopnosti/gate. Na důkazy odkazuj do TODO u aktuální dávky, do WORK_LOG u uzavřených dávek; při přesunu oprav odkazy. Celkový počet testů nekopíruj do dalších dokumentů.
+- Architekturu či ADR měň pouze při skutečném návrhovém rozhodnutí nebo opravě konkrétního věcného rozporu. Do ADR patří důkazy příslušného rozhodnutí; jejich historické výsledky zachovej. Průběžná evidence patří do TODO.
 - Během implementace spouštěj cílené testy chování i chybových cest. Před dokončením změny kódu nebo testů spusť celou současnou sadu: `python3 -m unittest discover -s tests -v` (Linux, Python 3.11+, závislosti z `requirements.txt`; instalace viz README). Relevantní existující build/lint spusť, pokud je nakonfigurovaný; nyní samostatný build/lint ani CI nejsou nakonfigurované.
 - Po úspěšném běhu opakuj ověření pouze při relevantní změně kódu, testů, závislostí či konfigurace nebo nové pochybnosti. Po následných čistě dokumentačních úpravách stačí kontrola dokumentace a diffu. Pokud deklaruješ nové výsledky testů, skutečně je spusť; neprovedené kontroly označ jako neověřené.
 - U čistě dokumentačních změn zkontroluj věcnou konzistenci, odkazy a diff. Před dokončením každé ucelené změny zkontroluj `git diff --check`, finální diff i nově vytvořené soubory. Shrň výsledek, ověření a relevantní zbývající omezení.

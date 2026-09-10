@@ -1,8 +1,8 @@
 # Záznam dokončené práce
 
-Dokončené výstupy, výsledky ověření a historická gate review. Aktuální okno práce drží [TODO](TODO.md), vzdálenější otevřené položky [BACKLOG](BACKLOG.md), strategii a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>).
+Dokončené výstupy, výsledky ověření a historická gate review. Aktuální dávku včetně dosud nearchivovaných dokončených úkolů drží [TODO](TODO.md), vzdálenější otevřené položky [BACKLOG](BACKLOG.md), strategii a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>).
 
-Starší záznamy od review M0-09R níže byly beze změny důkazů přesunuty z TODO. Časy, počty testů, popisy tehdejšího stavu a starší negativní review jsou historické; neoznačují automaticky dnešní stav. Nové dokončené výstupy přidávejte nahoru s ID, datem, úrovní výsledku, ověřením a omezeními. Původní ID a důkazy zachovávejte; věcné opravy doplňujte jako datované dodatky.
+Starší záznamy od review M0-09R níže byly beze změny důkazů přesunuty z TODO. Časy, počty testů, popisy tehdejšího stavu a starší negativní review jsou historické; neoznačují automaticky dnešní stav. Nové záznamy přidávejte nahoru až při uzavření celé dávky, s ID úkolů, daty, úrovní výsledků, ověřením a omezeními. Během dávky zůstávají výsledky v TODO. Původní ID a důkazy zachovávejte; věcné opravy doplňujte jako datované dodatky.
 
 ## WF-01 — Přehledné aktuální okno práce — 2026-09-10
 

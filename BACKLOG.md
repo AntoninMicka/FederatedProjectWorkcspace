@@ -1,8 +1,8 @@
-# Backlog — práce mimo aktuální okno
+# Backlog — další dávky
 
-Otevřené úkoly, návaznosti, chyby a technický dluh, které právě nejsou na řadě. Pořadí aktuální práce určuje [TODO](TODO.md); milníky a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>). Dokončené výstupy a ověření jsou ve [WORK_LOG](WORK_LOG.md).
+Aktuální dávku drží [TODO](TODO.md), uzavřené dávky [WORK_LOG](WORK_LOG.md), milníky a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>). Pravidla určuje [AGENTS](AGENTS.md).
 
-Položku při zařazení do aktuálního okna **přesuňte** do TODO se stejným ID, stavem, rozsahem a podmínkami; neudržujte dvě kopie. Přesun sám nemění prioritu milníků ani úroveň hotovosti. Některé široké historické položky mají již dokončené dílčí výstupy ve WORK_LOG; neopakujte je kvůli původnímu znění backlogu. Stavy a workflow určuje [AGENTS](AGENTS.md).
+Plánovací horizont tvoří zpravidla tři další milníky (nyní M2–M4). Níže zachované vzdálenější a průřezové položky se nezahazují ani automaticky nerozepisují. Při práci na dávce se tento soubor nemění: nové ad-hoc požadavky a doplnění se dočasně zachycují v TODO. Při uzavření dávky se sem převedou odložené položky a další dávka se přesune do TODO se stejnými ID, rozsahem a návaznostmi. Již ověřené části historických širokých úkolů se neopakují.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -20,15 +20,16 @@ Položku při zařazení do aktuálního okna **přesuňte** do TODO se stejným
 
 - [ ] [planned] **V-10 — Integrace lokálního API (cílová úroveň: PoC validated).** Qt/WebEngine, same-origin UI a token v nativním interceptoru jsou ověřeny M0-06a. Zbývá lifecycle po násilném pádu, případný úklid Unix socketů a bezpečné vykreslení nedůvěryhodných artefaktů. Před persistentními mutacemi v M1 definovat klientské operation ID/retry/receipt podle ADR 0003, limity souběhu a celkový deadline requestu. Protokolový čítač ADR 0006 toto neprokazuje. M1-02 uzavírá pouze nativní vytváření: operation ID/receipt, jeden worker, neblokující uzlový zámek, deadline a recovery dle ADR 0015. M1-03 přidává nativní editor dle ADR 0016: stabilní operation ID/digest/receipt, kontrolu výchozího HEAD, neblokující zámek, recovery při otevření editoru a textové zobrazení nedůvěryhodného obsahu. Obecné mutující HTTP API zůstává neimplementované a pro tento nativní vstup není potřeba.
 
-## Navazující operativní backlog — pořadí řídí nejbližší úkol
+## Připravené dávky — M2 až M4
 
-Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úkolu. Milníky a gates zůstávají v roadmapě.
+Přeneseno z původní sekce 19 roadmapy. Společný záznam M3/M4 se při přípravě konkrétní dávky rozdělí podle rozsahu těchto milníků v roadmapě; zachová se původ a návaznosti.
 
-- [ ] **[planned] M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
+
+## Vzdálenější dávky
 
 - [ ] [planned] **M5 — Federovaná publikace (cílová úroveň: PoC validated).** Implementovat izolovaný příjem, autorizaci celého přenášeného obsahu včetně historie, validaci kandidáta a CAS/recovery dle ADR 0008. Ověřit změnu HEAD po lidském řešení, neplatný fast-forward/merge, revokaci a odmítnutí přenosu local-only historie; zachovat konfliktní rodiče.
 

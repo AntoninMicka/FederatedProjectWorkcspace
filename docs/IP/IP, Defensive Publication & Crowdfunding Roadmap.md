@@ -811,7 +811,7 @@ Doporučený veřejný reporting:
 
 Tato roadmapa se nemá stát druhým produktovým backlogem.
 
-Do `BACKLOG.md` přenášet pouze konkrétní integrace; do `TODO.md` je přesouvat, až budou bezprostředně na řadě:
+Konkrétní nové integrace během dávky zachytit v `TODO.md` jako ad-hoc práci nebo poznámku k předání. Do `BACKLOG.md` je přenášet při uzavření dávky; z něj do TODO až s příslušnou další dávkou:
 
 - [x] Vytvoření IP registrů — implemented; dokončená integrace je evidována ve [WORK_LOG](../../WORK_LOG.md) jako IP-00.
 - [ ] implementace release metadata,

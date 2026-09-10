@@ -1,9 +1,9 @@
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální milník: **M1 — Single-node project workspace**. Aktuální okno práce je v [TODO.md](TODO.md), další otevřené úkoly v [BACKLOG.md](BACKLOG.md) a dokončená práce s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+Aktuální milník: **M1 — Single-node project workspace**. Aktuální dávka práce je v [TODO.md](TODO.md), další otevřené úkoly v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
 
-Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO nebo BACKLOG podle priority. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
+Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
 Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v BACKLOG; administrativa zůstává v `docs/IP`.
 
@@ -772,7 +772,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 
 # 19. Operativní práce a návaznost na implementaci
 
-Konkrétní otevřené úkoly drží [BACKLOG.md](BACKLOG.md), bezprostřední okno [TODO.md](TODO.md) a dokončené výstupy [WORK_LOG.md](WORK_LOG.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
+Konkrétní otevřené úkoly drží [BACKLOG.md](BACKLOG.md), aktuální dávku [TODO.md](TODO.md) a uzavřené dávky [WORK_LOG.md](WORK_LOG.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
 
 - [x] Pracovní architektonické dokumenty, ADR, reuse katalog a kostra experimentů — designed / implemented.
 - [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a WORK_LOG.
