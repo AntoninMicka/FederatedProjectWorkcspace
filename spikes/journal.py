@@ -45,7 +45,8 @@ def snapshot(root):
 
 
 class Journal:
-    def __init__(self, root, state):
+    def __init__(self, root, state, *, blocking=True):
+        self.blocking = blocking
         self.root = Path(root).resolve(strict=True)
         self.state = Path(state).resolve()
         require(not self.state.is_relative_to(self.root) and not self.root.is_relative_to(self.state),
@@ -71,7 +72,7 @@ class Journal:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.database)
+        db = sqlite3.connect(self.database, timeout=2)
         db.execute('PRAGMA synchronous=FULL')
         try:
             with db:
@@ -83,7 +84,7 @@ class Journal:
     def lock(self):
         fd = os.open(self.state / 'writer.lock', os.O_CREAT | os.O_RDWR, 0o600)
         with os.fdopen(fd, 'a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+            fcntl.flock(handle, fcntl.LOCK_EX | (0 if self.blocking else fcntl.LOCK_NB))
             try:
                 yield
             finally:

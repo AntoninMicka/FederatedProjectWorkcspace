@@ -2,7 +2,7 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Editor artefaktů zatím chybí.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu.
 
 ## Desktop
 
@@ -12,7 +12,7 @@ Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M
 
 V horní liště klikněte na **Nový projekt…**, zadejte název a dosud neexistující cílovou složku a potvrďte **Vytvořit a otevřít**. Aplikace připraví Git, projektová metadata, lokální stav a registraci; po restartu projekt zůstane dostupný. JSON není nutné psát ručně. Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, jinak `~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json` vybere jiný uzel.
 
-[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující cílová složka se nepřepisuje. Editor artefaktů zatím chybí. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující cílová složka se nepřepisuje. Vyberte projekt a použijte **Markdown editor…** nebo **Hlavní TODO…**; změny potvrďte tlačítkem **Uložit**. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 
 Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 
@@ -144,7 +144,7 @@ sudo apt install ./dist/federated-workspace-poc.deb
 federated-workspace-poc
 ```
 
-Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine a PyYAML 6.0.3. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI stále obsahuje pouze testovací čítač.
+Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine a PyYAML 6.0.3. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI nabízí projekty, Markdown editor, checklisty a hlavní TODO; testovací čítač zůstává pro kontrolu spojení.
 
 Pro další vydání zvolte vyšší verzi a jiný výstup; builder existující soubor nepřepisuje:
 

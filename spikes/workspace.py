@@ -1,4 +1,5 @@
 """Coordinated Linux M0 operations in controlled, initialized Git repositories."""
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -15,9 +16,9 @@ class PendingOperation(RuntimeError):
 
 
 class Workspace:
-    def __init__(self, root, state):
-        self.journal = Journal(root, state)
-        self.git = Git(self.journal.root)
+    def __init__(self, root, state, *, blocking=True, deadline=None):
+        self.journal = Journal(root, state, blocking=blocking)
+        self.git = Git(self.journal.root, deadline=deadline)
         self.index = Index(self.journal.state / 'index.sqlite')
 
     def _active(self, db):
@@ -42,30 +43,56 @@ class Workspace:
 
     def apply(self, changes, *, author_name, author_email, message, checkpoint=lambda stage: None):
         """Refuse dirty inputs; return a durable receipt after commit and index publication."""
+        with self.journal.lock(), self.journal.connect() as db:
+            return self._apply_locked(db, changes, author_name, author_email, message, checkpoint)
+
+    def transact(self, operation_id, request, prepare, *, expected_head=None, checkpoint=lambda stage: None):
+        """Bind a native request to one durable operation, including lost-response retries.
+
+        prepare runs under the writer lock, only for a new request, and returns
+        (changes, author_name, author_email, message) after checking its base HEAD.
+        """
+        from spikes.metadata import uuid as validate_uuid
+        validate_uuid(operation_id)
+        digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        with self.journal.lock(), self.journal.connect() as db:
+            row = db.execute('SELECT record, done FROM operations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                require(record.get('request_digest') == digest, 'Operation ID belongs to a different request')
+                return record if row[1] else self._recover(db, record, checkpoint)
+            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+                raise PendingOperation('Recover the pending operation first')
+            changes, name, email, message = prepare(self)
+            return self._apply_locked(db, changes, name, email, message, checkpoint,
+                                      operation_id=operation_id, request_digest=digest, expected_head=expected_head)
+
+    def _apply_locked(self, db, changes, author_name, author_email, message, checkpoint,
+                      *, operation_id=None, request_digest=None, expected_head=None):
         for value in (author_name, author_email):
             require(isinstance(value, str) and value.strip() == value and bool(value)
                     and not any(c in value for c in '\n\r\0<>'), 'Explicit Git identity required')
         require(isinstance(message, str) and bool(message.strip()) and '\0' not in message,
                 'Commit message required')
-        with self.journal.lock(), self.journal.connect() as db:
-            if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
-                raise PendingOperation('Recover the pending operation first')
-            branch = self._branch()
-            base = self.git.head()
-            require(not self.git.run('status', '--porcelain', '--untracked-files=all').stdout,
-                    'Clean worktree and staging index required')
-            require(snapshot(self.git.root) == self.git.snapshot(base),
-                    'Working projection differs from HEAD (including ignored files)')
-            paths = self.journal._prepare(db, changes)
-            require(bool(paths), 'Operation has no changes')
-            record = dict(operation_id=str(uuid.uuid4()), base_head=base, branch=branch,
-                          paths=paths, author_name=author_name, author_email=author_email,
-                          message=message, state='prepared', commit_id=None)
-            db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
-                       (record['operation_id'], json.dumps(record)))
-            db.commit()
-            checkpoint('prepared')
-            return self._recover(db, record, checkpoint)
+        if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
+            raise PendingOperation('Recover the pending operation first')
+        branch = self._branch()
+        base = self.git.head()
+        require(expected_head is None or base == expected_head, 'Project changed before preparation')
+        require(not self.git.run('status', '--porcelain', '--untracked-files=all').stdout,
+                'Clean worktree and staging index required')
+        require(snapshot(self.git.root) == self.git.snapshot(base),
+                'Working projection differs from HEAD (including ignored files)')
+        paths = self.journal._prepare(db, changes)
+        require(bool(paths), 'Operation has no changes')
+        record = dict(operation_id=operation_id or str(uuid.uuid4()), base_head=base, branch=branch,
+                      paths=paths, author_name=author_name, author_email=author_email,
+                      message=message, state='prepared', commit_id=None, request_digest=request_digest)
+        db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
+                   (record['operation_id'], json.dumps(record)))
+        db.commit()
+        checkpoint('prepared')
+        return self._recover(db, record, checkpoint)
 
     def recover(self, checkpoint=lambda stage: None):
         with self.journal.lock(), self.journal.connect() as db:

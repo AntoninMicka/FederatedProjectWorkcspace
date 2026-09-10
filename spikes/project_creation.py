@@ -146,6 +146,11 @@ class ProjectCreation:
             finally:
                 db.close()
 
+    def author_id(self):
+        """Reuse the durable local author, never substitute the node UUID."""
+        with self._locked() as db:
+            return db.execute('SELECT id FROM local_author').fetchone()[0]
+
     def _save(self, db, record, *, done=False):
         db.execute('INSERT OR REPLACE INTO creations VALUES (?, ?, ?)',
                    (record['operation_id'], json.dumps(record), int(done)))

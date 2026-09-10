@@ -4,7 +4,7 @@
 
 Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
 
-Cílová složka ještě nesmí existovat, ani prázdná. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Editor artefaktů naváže samostatně.
+Cílová složka ještě nesmí existovat, ani prázdná. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte tlačítkem **Markdown editor…**.
 
 Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
 
@@ -26,7 +26,19 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. V okně vyberte ID a klikněte na **Otevřít**. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Registry a obsah souborů zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. V okně vyberte ID a klikněte na **Otevřít**. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Markdown dokumenty otevřete nativním editorem; registry zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+
+## Markdown editor a checklisty
+
+Vyberte projekt v seznamu a klikněte na **Markdown editor…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
+
+Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat položku checklistu**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
+
+**Hlavní TODO…** v horní liště otevře hlavní seznam projektu. Při prvním použití nabídne návrh, který vznikne až uložením. Stejné tlačítko vždy míří na stejný dokument, i když změníte jeho název. Vedle něj můžete mít další dokumenty s vlastními checklisty.
+
+Při chybě uložení text zůstane v okně a **Zopakovat uložení** použije původní požadavek. **Znovu načíst / obnovit** načte aktuální projekt a dokončí připravený zápis; před opuštěním rozepsaného textu žádá potvrzení. Při souběžné změně projektu si text před opětovným načtením zkopírujte, automatické sloučení editor zatím neumí. Po pádu desktopu znovu otevřete editor daného projektu; potvrzené pending uložení se obnoví. Pouhé otevření webového přehledu pending zápis nedokončuje.
+
+Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. Otevřete **Hlavní TODO…** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
 
 ## Existující data
 
@@ -61,7 +73,7 @@ Autor ID je metadata, nikoli oprávnění. Schéma a požadavky na artefakty pop
 
 Stavový adresář musí již existovat, patřit běžnému uživateli a mít práva 0700; kořen projektu a `.git` nesmějí být zapisovatelné jinými uživateli. Root/state musí být vzájemně oddělené, bez symlinků a na stejném filesystemu. Použijte existující stav daného projektu, pokud už má journal — nepřesměrujte jej na prázdný adresář kvůli obejití pending operace. Všechny aplikace nad stejným projektem musí sdílet stejný stav a zámek.
 
-Při otevření mohou vzniknout lokální `journal.sqlite`, `writer.lock` a `index.sqlite`. Nový lock/index mají 0600. Existující stavové soubory musejí být soukromé běžné soubory bez hardlinků; aplikace jim automaticky nemění práva. Chybějící/stale index se obnoví z validovaného HEAD. Pending operace vyžaduje samostatnou obnovu podle ADR 0003; neplatný či poškozený index se nevydává za aktuální. Kvůli chybě nemažte journal.
+Při otevření mohou vzniknout lokální `journal.sqlite`, `writer.lock` a `index.sqlite`. Nový lock/index mají 0600. Existující stavové soubory musejí být soukromé běžné soubory bez hardlinků; aplikace jim automaticky nemění práva. Chybějící/stale index se obnoví z validovaného HEAD. Pending operaci obnoví otevření nativního editoru podle ADR 0003; neplatný či poškozený index se nevydává za aktuální. Kvůli chybě nemažte journal.
 
 ## Izolovaná ukázka bez zásahu do existujících projektů
 
@@ -99,4 +111,4 @@ print('./run.sh desktop --node ' + shlex.quote(str(node)))
 PY
 ```
 
-Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Editor artefaktů naváže samostatně; nové projekty už lze vytvářet nativním dialogem. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
+Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Tlačítkem **Markdown editor…** otevřete a upravte poznámku; po uložení a restartu ověřte změněný obsah. Limity a recovery: [ADR 0014](adr/0014-project-read.md).

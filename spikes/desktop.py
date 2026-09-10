@@ -45,7 +45,9 @@ def main():
         parser.error('--screenshot requires --smoke')
     try:
         from PySide6.QtCore import QTimer, QUrl
-        from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow
+        from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow, QPushButton
+        from spikes.desktop_editor import EditorDialog
+        from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
@@ -120,6 +122,25 @@ def main():
             else:
                 QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
+        editor_toolbar = window.addToolBar('Dokumenty')
+        def edit_selected(todo=False):
+            if controller.busy:
+                return
+            def selected(project_id):
+                if not project_id:
+                    QMessageBox.information(window, 'Dokumenty', 'Nejprve vyberte projekt.')
+                    return
+                dialog = EditorDialog(Artifacts(node_path), project_id, window, todo=todo)
+                dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
+                dialog.exec()
+                for worker in dialog.workers:
+                    worker.wait()
+                dialog.deleteLater()
+            page.runJavaScript("document.querySelector('#projects').value", 0, selected)
+        for label, todo in [('Markdown editor…', False), ('Hlavní TODO…', True)]:
+            button = QPushButton(label)
+            button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
+            editor_toolbar.addWidget(button)
         def project_loaded(ok):
             creation_result['loaded'] = ok
             if ok and creation_result['receipt']:

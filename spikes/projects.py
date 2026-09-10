@@ -33,7 +33,7 @@ class Projects:
         # Do not expose filesystem locations or credential references to JavaScript.
         return [{'id': binding['project_id']} for binding in self._bindings()]
 
-    def open(self, project_id):
+    def workspace(self, project_id, *, blocking=True, deadline=None):
         binding = next((b for b in self._bindings() if b['project_id'] == project_id), None)
         require(binding is not None, 'Project is not registered')
         root = directory(binding['root'])
@@ -46,9 +46,12 @@ class Projects:
             require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1
                     and info.st_uid == os.getuid() and not info.st_mode & 0o077,
                     'Unsafe state file')
-        git = Git(root)
+        git = Git(root, deadline=deadline)
         require(Path(git.run('rev-parse', '--show-toplevel').stdout.strip()) == root,
                 'Registration must refer to the repository root')
         # Invalid/uncommitted configuration cannot initialize a journal or index.
         committed_project(git, git.head(), project_id)
-        return Workspace(root, state).read_project(project_id)
+        return Workspace(root, state, blocking=blocking, deadline=deadline)
+
+    def open(self, project_id):
+        return self.workspace(project_id).read_project(project_id)
