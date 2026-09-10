@@ -76,6 +76,182 @@ class ArtifactTests(unittest.TestCase):
         doc = self.service.open(self.id)['documents'][0]
         self.assertEqual(doc['metadata'], dict(original, description='', tags=[]))
 
+    def test_rename_preserves_identity_relations_history_and_rebuilds_index(self):
+        from spikes.artifact_history import ArtifactHistory
+        request = self.request(id_=main_todo_id(self.id))
+        self.service.save(request, str(uuid4()))
+        other = self.request()
+        self.service.save(other, str(uuid4()))
+        sidecar = self.root / 'artifacts' / other['artifact_id'] / 'metadata.json'
+        meta = json.loads(sidecar.read_bytes())
+        meta['relations'] = [dict(type='references', target_id=request['artifact_id'])]
+        sidecar.write_text(json.dumps(meta)); self.git.commit('Add incoming relation')
+        before = self.git.head()
+        original = self.service.open(self.id)['documents']
+        rename = dict(self.request(id_=request['artifact_id'], new=False), filename='Moje úkoly.md')
+        operation = str(uuid4())
+        receipt = self.service.save(rename, operation)
+        ws = self.service.workspace(self.id); ws.index.path.unlink()
+        view = Artifacts(self.node).open(self.id)
+        doc = next(d for d in view['documents'] if d['id'] == request['artifact_id'])
+        old = next(d for d in original if d['id'] == request['artifact_id'])
+        self.assertEqual(doc['metadata'], dict(old['metadata'], file='Moje úkoly.md'))
+        self.assertEqual(doc['body'], old['body'])
+        self.assertFalse((self.root / old['path']).exists())
+        self.assertEqual(self.service.projects.open(self.id)['main_todo']['total'], 1)
+        entities = validate_snapshot(self.git.snapshot(self.git.head()))
+        self.assertEqual(entities[other['artifact_id']], meta)
+        comparison = ArtifactHistory(self.node).compare(self.id, request['artifact_id'],
+            receipt['commit_id'], before, receipt['commit_id'])
+        self.assertEqual(comparison['before']['body'], comparison['after']['body'])
+        self.assertIn('Moje', comparison['diff'])
+        self.service.save(self.request(), str(uuid4()))
+        later = self.git.head()
+        self.assertEqual(self.service.save(rename, operation), receipt)
+        self.assertEqual(self.git.head(), later)
+        with self.assertRaises(ValidationError):
+            self.service.save(dict(rename, filename='different.md'), operation)
+
+    def test_frontmatter_pure_rename_preserves_exact_bytes_and_combined_edit(self):
+        id_ = str(uuid4())
+        path = self.root / 'artifacts' / id_ / 'note.md'; path.parent.mkdir(parents=True)
+        raw = markdown(metadata('Document', id_)).replace(b'\n', b'\r\n')
+        path.write_bytes(raw); self.git.commit('Frontmatter with CRLF')
+        doc = self.service.open(self.id)['documents'][0]
+        request = dict(self.request(id_=id_, new=False, body=doc['body']), filename='renamed.md')
+        self.service.save(request, str(uuid4()))
+        self.assertEqual((path.parent / 'renamed.md').read_bytes(), raw)
+        self.assertFalse(path.exists())
+        request = dict(self.request(id_=id_, new=False, body='Changed', title='New title'),
+                       filename='combined.md', metadata={'description': 'New description'})
+        self.service.save(request, str(uuid4()))
+        doc = self.service.open(self.id)['documents'][0]
+        self.assertEqual((doc['body'], doc['title'], doc['metadata']['description']),
+                         ('Changed', 'New title', 'New description'))
+        self.assertNotIn('file', doc['metadata'])
+
+    def test_rename_invalid_names_stale_and_foreign_destination(self):
+        request = self.request(); self.service.save(request, str(uuid4()))
+        rename = dict(self.request(id_=request['artifact_id'], new=False), filename='renamed.md')
+        before = self.git.head()
+        for filename in (None, 42, '', '../x.md', '/x.md', 'a/b.md', 'a\\b.md',
+                         'metadata.json', 'no-extension', 'a\n.md', 'a\t.md', 'é' * 100 + '.md'):
+            with self.subTest(filename=filename), self.assertRaises(ValidationError):
+                self.service.save(dict(rename, filename=filename), str(uuid4()))
+            self.assertEqual(self.git.head(), before)
+            self.assertIsNone(self.service.workspace(self.id).recover())
+        path = self.root / 'artifacts' / request['artifact_id'] / 'renamed.md'
+        path.write_text('foreign')
+        with self.assertRaises(ValidationError): self.service.save(rename, str(uuid4()))
+        self.assertEqual(path.read_text(), 'foreign'); path.unlink()
+        with self.service.workspace(self.id).journal.lock():
+            with self.assertRaises(BlockingIOError): self.service.save(rename, str(uuid4()))
+        self.service.save(self.request(), str(uuid4()))
+        with self.assertRaises(ValidationError): self.service.save(rename, str(uuid4()))
+
+    def test_rename_process_crashes_recover_once(self):
+        script = '''
+import json, os, sys
+from spikes.artifacts import Artifacts
+def checkpoint(stage):
+    if stage == sys.argv[4]: os._exit(73)
+Artifacts(sys.argv[1]).save(json.loads(sys.argv[2]), sys.argv[3], checkpoint=checkpoint)
+'''
+        for stage in ('prepared', 'file:0', 'file:1', 'file:2', 'applied', 'files-applied',
+                      'commit-created', 'commit-ready', 'ref-updated', 'committed',
+                      'git-indexed', 'indexed', 'completed'):
+            with self.subTest(stage=stage):
+                request = self.request(); self.service.save(request, str(uuid4()))
+                rename = dict(self.request(id_=request['artifact_id'], new=False), filename='renamed.md')
+                operation = str(uuid4())
+                result = subprocess.run([sys.executable, '-c', script, str(self.node),
+                    json.dumps(rename), operation, stage], capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 73, result.stderr)
+                view = Artifacts(self.node).open(self.id)
+                receipt = self.service.save(rename, operation)
+                self.assertEqual(receipt['commit_id'], view['commit_id'])
+                self.assertEqual(self.git.run('rev-list', '--count', rename['base_head'] + '..HEAD').stdout.strip(), '1')
+                doc = next(d for d in view['documents'] if d['id'] == request['artifact_id'])
+                self.assertTrue(doc['path'].endswith('/renamed.md'))
+                self.assertEqual(doc['body'], request['body'])
+                self.assertFalse((self.root / 'artifacts' / request['artifact_id'] / 'content.md').exists())
+                self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
+                self.assertIsNone(self.service.workspace(self.id).recover())
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
+    def test_native_rename_retry_reload_and_history(self):
+        request = self.request(); self.service.save(request, str(uuid4()))
+        # Older valid files may exceed the new-name limit; displaying one must not truncate it.
+        folder = self.root / 'artifacts' / request['artifact_id']
+        old_name = 'a' * 210 + '.md'
+        (folder / 'content.md').rename(folder / old_name)
+        meta = json.loads((folder / 'metadata.json').read_bytes())
+        meta['file'] = old_name
+        (folder / 'metadata.json').write_text(json.dumps(meta))
+        self.git.commit('Existing long filename')
+        before = self.git.head()
+        script = '''
+import sys, time
+from PySide6.QtWidgets import QApplication
+from spikes.desktop_editor import EditorDialog
+from spikes.artifacts import Artifacts
+app = QApplication([])
+service = Artifacts(sys.argv[1])
+original = service.save
+lost = [True]
+def save(*args, **kwargs):
+    receipt = original(*args, **kwargs)
+    if lost[0]:
+        lost[0] = False
+        raise RuntimeError('Lost reply')
+    return receipt
+service.save = save
+def idle(dialog):
+    deadline = time.monotonic() + 15
+    while dialog.busy and time.monotonic() < deadline:
+        app.processEvents(); time.sleep(.01)
+    assert not dialog.busy, dialog.status.text()
+dialog = EditorDialog(service, sys.argv[2]); dialog.show(); idle(dialog)
+assert dialog.filename.text() == 'a' * 210 + '.md'
+assert not dialog.dirty
+dialog.filename.setText('Moje poznámky.md')
+assert dialog.dirty and dialog.save_button.isEnabled()
+dialog.save_button.click(); idle(dialog)
+assert dialog.pending and dialog.filename.isReadOnly()
+assert dialog.pending[0]['filename'] == 'Moje poznámky.md'
+operation = dialog.pending[1]
+dialog.save_button.click(); idle(dialog)
+assert not dialog.pending and not dialog.dirty, dialog.status.text()
+assert service.workspace(sys.argv[2]).receipt(operation)
+assert dialog.current['path'].endswith('/Moje poznámky.md')
+assert dialog.history_button.isEnabled()
+dialog.close(); app.processEvents()
+dialog = EditorDialog(service, sys.argv[2]); dialog.show(); idle(dialog)
+assert dialog.filename.text() == 'Moje poznámky.md'
+assert not dialog.dirty
+dialog.close(); app.processEvents()
+'''
+        result = subprocess.run([sys.executable, '-c', script, str(self.node), self.id],
+                                capture_output=True, text=True, timeout=40)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.git.run('rev-list', '--count', before + '..HEAD').stdout.strip(), '1')
+
+    def test_rename_recovery_keeps_foreign_edit(self):
+        from spikes.journal import RecoveryConflict
+        request = self.request(); self.service.save(request, str(uuid4()))
+        rename = dict(self.request(id_=request['artifact_id'], new=False), filename='renamed.md')
+        operation = str(uuid4())
+        def crash(stage):
+            if stage == 'prepared': raise RuntimeError('interrupted')
+        with self.assertRaises(RuntimeError): self.service.save(rename, operation, checkpoint=crash)
+        path = self.root / 'artifacts' / request['artifact_id'] / 'renamed.md'
+        path.write_text('foreign')
+        with self.assertRaises(RecoveryConflict): self.service.open(self.id)
+        self.assertEqual(path.read_text(), 'foreign')
+        path.unlink()
+        self.service.open(self.id)
+        self.assertEqual(self.service.save(rename, operation)['commit_id'], self.git.head())
+
     def test_invalid_metadata_patch_leaves_no_pending_or_files(self):
         head = self.git.head()
         for patch in (None, [], {'privacy': 'public'}, {'created_at': 'now'}, {'provenance': 'user'},

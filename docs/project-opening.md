@@ -1,5 +1,11 @@
 # Projekty v desktopu
 
+## Přejmenování souboru dokumentu
+
+Otevřete **Dokumenty…**, vyberte dokument a v záložce **Popis a štítky** upravte **Název souboru (.md)**. Zadejte název bez složek s příponou `.md` (nejvýše 200 bajtů UTF-8). Potvrďte **Uložit**; zároveň můžete upravit text, titulek, popis i štítky. Titulek a název souboru jsou nezávislé. Historie, vazby přes identitu dokumentu i role hlavního seznamu úkolů zůstávají zachované. Ručně vložené odkazy na původní název souboru uvnitř textu upravte sami.
+
+Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu načíst** pro obnovu připravené operace. Při konfliktu s cizí změnou se operace zastaví bez jejího přepsání. Podrobnosti a limity: [ADR 0016](adr/0016-markdown-editor.md#přejmenování-souboru-dokumentu--m1-06).
+
 ## Vytvoření nového projektu
 
 Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.

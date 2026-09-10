@@ -7,7 +7,7 @@ import time
 import yaml
 
 from spikes.configuration import committed_project
-from spikes.metadata import require, uuid, validate_snapshot
+from spikes.metadata import require, safe_path, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation, regular
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
@@ -50,8 +50,14 @@ class Artifacts:
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
         required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
-        require(isinstance(request, dict) and required <= request.keys() <= required | {'metadata'},
+        require(isinstance(request, dict) and required <= request.keys() <= required | {'metadata', 'filename'},
                 'Invalid editor request')
+        if 'filename' in request:
+            filename = request['filename']
+            require(len(safe_path(filename)) == 1 and filename.endswith('.md')
+                    and len(filename.encode('utf-8')) <= 200
+                    and not any(ord(c) < 32 or ord(c) == 127 for c in filename),
+                    'Název souboru musí končit .md, bez složek, nejvýše 200 bajtů UTF-8.')
         patch = request.get('metadata', {})
         require(isinstance(patch, dict) and patch.keys() <= {'description', 'tags'}, 'Invalid editable metadata')
         if 'description' in patch:
@@ -89,12 +95,23 @@ class Artifacts:
                 doc = document(files, entities, id_)
                 meta, path, sidecar = dict(doc['metadata']), doc['path'], doc['sidecar']
                 meta['title'] = request['title']
+            old_path = path
+            if 'filename' in request:
+                path = f'artifacts/{id_}/' + request['filename']
+                require(path == old_path or path not in files, 'Cílový soubor již existuje.')
+                if sidecar:
+                    meta['file'] = request['filename']
             meta.update(patch)
             body = request['body'].encode()
             if sidecar:
                 changes = {path: body, sidecar: (json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()}
             else:
                 changes = {path: ('---\n' + yaml.safe_dump(meta, allow_unicode=True, sort_keys=True) + '---\n').encode() + body}
+            if path != old_path and not request['new']:
+                # A pure rename preserves original content bytes, including YAML formatting.
+                if request['body'] == doc['body'] and (sidecar or meta == doc['metadata']):
+                    changes[path] = files[old_path]
+                changes[old_path] = None
             return changes, 'Local workspace author', author + '@local.invalid', 'Save Markdown document'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)

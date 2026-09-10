@@ -60,6 +60,8 @@ class EditorDialog(QDialog):
         tabs = QTabWidget()
         tabs.addTab(self.body, 'Obsah')
         metadata_page = QWidget(); form = QFormLayout(metadata_page)
+        self.filename = QLineEdit()
+        form.addRow('Název souboru (.md)', self.filename)
         self.description = QPlainTextEdit(); self.description.setMaximumHeight(100)
         self.tags = QPlainTextEdit(); self.tags.setMaximumHeight(80)
         self.tags.setPlaceholderText('Jeden štítek na řádek')
@@ -81,6 +83,7 @@ class EditorDialog(QDialog):
         self.body.textChanged.connect(self.changed)
         self.description.textChanged.connect(self.changed)
         self.tags.textChanged.connect(self.changed)
+        self.filename.textChanged.connect(self.changed)
         self.checks.itemChanged.connect(self.toggle)
         self.documents.activated.connect(self.select)
         self.new_button.clicked.connect(self.new_document)
@@ -94,6 +97,7 @@ class EditorDialog(QDialog):
         editable = self.current is not None and not self.busy and self.pending is None
         self.title.setReadOnly(not editable); self.body.setReadOnly(not editable)
         self.description.setReadOnly(not editable); self.tags.setReadOnly(not editable)
+        self.filename.setReadOnly(not editable)
         self.checks.setEnabled(editable); self.add_check.setEnabled(editable)
         for widget in (self.documents, self.new_button, self.todo_button):
             widget.setEnabled(self.view is not None and not self.busy and self.pending is None)
@@ -145,6 +149,9 @@ class EditorDialog(QDialog):
 
     def show_document(self, doc):
         self.current = doc
+        self.filename.blockSignals(True)
+        self.filename.setText(doc.get('path', 'content.md').rsplit('/', 1)[-1])
+        self.filename.blockSignals(False)
         self.title.blockSignals(True); self.body.blockSignals(True)
         self.title.setText(doc['title']); self.body.setPlainText(doc['body'])
         self.title.blockSignals(False); self.body.blockSignals(False)
@@ -192,7 +199,8 @@ class EditorDialog(QDialog):
 
     def changed(self):
         self.dirty = self.current is not None and (self.current.get('new', False) or
-            self.title.text() != self.current['title'] or self.body.toPlainText() != self.current['body'] or bool(self.metadata_patch()))
+            self.title.text() != self.current['title'] or self.body.toPlainText() != self.current['body'] or
+            self.filename.text() != self.current.get('path', 'content.md').rsplit('/', 1)[-1] or bool(self.metadata_patch()))
         self.refresh_checks(); self.controls()
 
     def metadata_patch(self):
@@ -228,6 +236,8 @@ class EditorDialog(QDialog):
             request = dict(project_id=self.project_id, artifact_id=self.current['id'],
                            base_head=self.view['commit_id'], title=self.title.text(), body=self.body.toPlainText(),
                            new=self.current.get('new', False), metadata=self.metadata_patch())
+            if self.filename.text() != self.current.get('path', 'content.md').rsplit('/', 1)[-1]:
+                request['filename'] = self.filename.text()
             self.pending = (request, str(uuid4()))
         request, operation = self.pending
         def save_and_read():
