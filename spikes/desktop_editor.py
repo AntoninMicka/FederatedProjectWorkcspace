@@ -1,10 +1,11 @@
 """Native editor: untrusted Markdown is plain text, mutations never enter WebEngine."""
+import json
 from uuid import uuid4
 
 from PySide6.QtCore import QThread, Signal, Qt
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QPlainTextEdit,
                                QPushButton, QLabel, QComboBox, QListWidget, QListWidgetItem,
-                               QMessageBox, QSplitter)
+                               QMessageBox, QSplitter, QTabWidget, QWidget, QFormLayout)
 
 from spikes.artifacts import checklist_items
 
@@ -56,7 +57,18 @@ class EditorDialog(QDialog):
         self.body = QPlainTextEdit()
         self.body.setPlaceholderText('Markdown text; checklist: - [ ] Úkol')
         self.checks = QListWidget()
-        splitter.addWidget(self.body); splitter.addWidget(self.checks)
+        tabs = QTabWidget()
+        tabs.addTab(self.body, 'Obsah')
+        metadata_page = QWidget(); form = QFormLayout(metadata_page)
+        self.description = QPlainTextEdit(); self.description.setMaximumHeight(100)
+        self.tags = QPlainTextEdit(); self.tags.setMaximumHeight(80)
+        self.tags.setPlaceholderText('Jeden štítek na řádek')
+        self.metadata_view = QPlainTextEdit(); self.metadata_view.setReadOnly(True)
+        form.addRow('Popis', self.description)
+        form.addRow('Štítky (jeden na řádek)', self.tags)
+        form.addRow('Uložená metadata (pouze čtení)', self.metadata_view)
+        tabs.addTab(metadata_page, 'Metadata')
+        splitter.addWidget(tabs); splitter.addWidget(self.checks)
         splitter.setSizes([700, 300]); layout.addWidget(splitter)
         buttons = QHBoxLayout()
         self.add_check = QPushButton('Přidat položku checklistu')
@@ -67,6 +79,8 @@ class EditorDialog(QDialog):
         layout.addLayout(buttons); layout.addWidget(self.status)
         self.title.textChanged.connect(self.changed)
         self.body.textChanged.connect(self.changed)
+        self.description.textChanged.connect(self.changed)
+        self.tags.textChanged.connect(self.changed)
         self.checks.itemChanged.connect(self.toggle)
         self.documents.activated.connect(self.select)
         self.new_button.clicked.connect(self.new_document)
@@ -79,6 +93,7 @@ class EditorDialog(QDialog):
     def controls(self):
         editable = self.current is not None and not self.busy and self.pending is None
         self.title.setReadOnly(not editable); self.body.setReadOnly(not editable)
+        self.description.setReadOnly(not editable); self.tags.setReadOnly(not editable)
         self.checks.setEnabled(editable); self.add_check.setEnabled(editable)
         for widget in (self.documents, self.new_button, self.todo_button):
             widget.setEnabled(self.view is not None and not self.busy and self.pending is None)
@@ -102,8 +117,8 @@ class EditorDialog(QDialog):
 
     def discard(self):
         return not (self.dirty or self.pending) or QMessageBox.question(
-            self, 'Opustit rozepsaný text?',
-            'Zahodit neuložený text v editoru? Již připravený zápis v journalu se při otevření dokončí.',
+            self, 'Opustit neuložené změny?',
+            'Zahodit neuložený obsah a metadata v editoru? Již připravený zápis v journalu se při otevření dokončí.',
             QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel) == QMessageBox.StandardButton.Discard
 
@@ -133,6 +148,16 @@ class EditorDialog(QDialog):
         self.title.blockSignals(True); self.body.blockSignals(True)
         self.title.setText(doc['title']); self.body.setPlainText(doc['body'])
         self.title.blockSignals(False); self.body.blockSignals(False)
+        meta = doc.get('metadata', {})
+        self.description.blockSignals(True); self.tags.blockSignals(True)
+        self.description.setPlainText(meta.get('description', ''))
+        self.tags.setPlainText('\n'.join(meta.get('tags', [])))
+        self.description.blockSignals(False); self.tags.blockSignals(False)
+        self.metadata_view.setPlainText(json.dumps(meta, ensure_ascii=False, indent=2) if meta else
+                                       'Metadata vzniknou při prvním uložení.')
+        # Compare the widget representation, preserving untouched unusual imported strings.
+        self.original_description = self.description.toPlainText()
+        self.original_tags = self.tags.toPlainText()
         self.dirty = doc.get('new', False)
         self.documents.setCurrentIndex(self.documents.findData(doc['id']))
         self.refresh_checks(); self.controls()
@@ -167,8 +192,16 @@ class EditorDialog(QDialog):
 
     def changed(self):
         self.dirty = self.current is not None and (self.current.get('new', False) or
-            self.title.text() != self.current['title'] or self.body.toPlainText() != self.current['body'])
+            self.title.text() != self.current['title'] or self.body.toPlainText() != self.current['body'] or bool(self.metadata_patch()))
         self.refresh_checks(); self.controls()
+
+    def metadata_patch(self):
+        patch = {}
+        if self.description.toPlainText() != self.original_description:
+            patch['description'] = self.description.toPlainText()
+        if self.tags.toPlainText() != self.original_tags:
+            patch['tags'] = [line.strip() for line in self.tags.toPlainText().splitlines() if line.strip()]
+        return patch
 
     def toggle(self, item):
         body = self.body.toPlainText(); offset = item.data(Qt.ItemDataRole.UserRole)
@@ -194,17 +227,17 @@ class EditorDialog(QDialog):
                 self.status.setText('Vyplňte název dokumentu.'); return
             request = dict(project_id=self.project_id, artifact_id=self.current['id'],
                            base_head=self.view['commit_id'], title=self.title.text(), body=self.body.toPlainText(),
-                           new=self.current.get('new', False))
+                           new=self.current.get('new', False), metadata=self.metadata_patch())
             self.pending = (request, str(uuid4()))
         request, operation = self.pending
-        def saved(receipt):
-            self.view['commit_id'] = receipt['commit_id']
-            self.current = dict(id=request['artifact_id'], title=request['title'], body=request['body'])
-            self.view['documents'] = [d for d in self.view['documents'] if d['id'] != self.current['id']] + [self.current]
-            self.loaded(self.view)
+        def save_and_read():
+            self.service.save(request, operation)
+            return self.service.open(self.project_id)
+        def saved(view):
+            self.loaded(view)
             self.status.setText('Uloženo do Gitu.')
             self.saved.emit(self.project_id)
-        self.run(lambda: self.service.save(request, operation), saved)
+        self.run(save_and_read, saved)
 
     def history(self):
         if self.busy or self.pending or not self.current or self.current.get('new', False):

@@ -49,8 +49,16 @@ class Artifacts:
                         main_todo_id=main_todo_id(project_id))
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
-        require(isinstance(request, dict) and request.keys() == {
-            'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}, 'Invalid editor request')
+        required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
+        require(isinstance(request, dict) and required <= request.keys() <= required | {'metadata'},
+                'Invalid editor request')
+        patch = request.get('metadata', {})
+        require(isinstance(patch, dict) and patch.keys() <= {'description', 'tags'}, 'Invalid editable metadata')
+        if 'description' in patch:
+            require(isinstance(patch['description'], str), 'Invalid description')
+        if 'tags' in patch:
+            require(isinstance(patch['tags'], list) and
+                    all(isinstance(tag, str) and tag.strip() for tag in patch['tags']), 'Invalid tags')
         for key in ('project_id', 'artifact_id'):
             uuid(request[key])
         require(type(request['new']) is bool, 'Invalid create flag')
@@ -81,6 +89,7 @@ class Artifacts:
                 doc = document(files, entities, id_)
                 meta, path, sidecar = dict(doc['metadata']), doc['path'], doc['sidecar']
                 meta['title'] = request['title']
+            meta.update(patch)
             body = request['body'].encode()
             if sidecar:
                 changes = {path: body, sidecar: (json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()}

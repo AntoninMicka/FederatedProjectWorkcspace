@@ -16,7 +16,10 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
-- [ ] [planned] **M1-05 — Metadata dokumentu v editoru (cílová úroveň: PoC validated).** Zobrazit současná metadata a doplnit editaci popisu/štítků přes existující operation ID/retry/receipt a validaci. Zachovat identitu, původ/provenance a vytvoření; změny privacy/provenance nepřidávat bez vymezeného kontraktu. Ověřit společný commit obsahu/metadat, historii a restart. Navazuje na stávající schopnost Metadata v M1; úkol zatím nebyl zahájen.
+- [x] [completed] **M1-05 — Metadata dokumentu v editoru (PoC validated, 2026-09-10).** Záložka Metadata zobrazuje uložená metadata pouze pro čtení a dovoluje upravit popis/štítky. Obsah i explicitní změny metadat se ukládají jednou operací s původním operation ID/retry/receipt; identita, autor, vytvoření, privacy a provenance se zachovávají. Podporovány sidecary i frontmatter, vyčištění hodnot a samostatná editace metadat. Po uložení se čte potvrzený stav z Gitu. Reuse/adapt Artifacts, Qt widgetů a validátoru; crash boundaries ADR 0003/0016 beze změny. Kontrakt a limity: [ADR 0016](docs/adr/0016-markdown-editor.md), [návod](docs/project-opening.md).
+
+Ověření M1-05: cílených 15 testů artefaktů OK se skutečnými Qt widgety; společný obsah/metadata a historie, restart, readonly metadata, ztracená odpověď a retry, vazba digestu na změny metadat, odmítnutí nepovolených/nevalidních/nadměrných metadat bez pending a recovery na všech 12 procesních checkpointech. Celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **119 testů OK, bez vynechání**, 62,895 s. Místní odkazy a `git diff --check` v pořádku. Lokální Linux PoC; produkční připravenost ani nové ověření na cílovém zařízení se tím neprohlašují. Zůstává v TODO do uzavření dávky M1.
+
 
 ## Ad-hoc úkoly aktuální dávky
 

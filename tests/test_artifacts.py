@@ -51,6 +51,43 @@ class ArtifactTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.service.save(self.request(id_=id_), str(uuid4()))
 
+    def test_metadata_edit_history_restart_and_clear(self):
+        from spikes.artifact_history import ArtifactHistory
+        request = dict(self.request(), metadata={'description': 'Původní', 'tags': ['a,b', 'Žluťoučký']})
+        first = self.service.save(request, str(uuid4()))['commit_id']
+        original = self.service.open(self.id)['documents'][0]['metadata']
+        update = dict(self.request(id_=request['artifact_id'], new=False, body='Changed content'),
+                      metadata={'description': 'Nový popis', 'tags': ['new']})
+        operation = str(uuid4())
+        receipt = self.service.save(update, operation)
+        doc = Artifacts(self.node).open(self.id)['documents'][0]
+        self.assertEqual(doc['metadata'], dict(original, **update['metadata']))
+        self.assertEqual(doc['body'], 'Changed content')
+        comparison = ArtifactHistory(self.node).compare(self.id, request['artifact_id'],
+            receipt['commit_id'], first, receipt['commit_id'])
+        self.assertEqual(comparison['before']['metadata'], original)
+        self.assertEqual(comparison['after']['metadata'], doc['metadata'])
+        self.assertEqual(self.service.save(update, operation), receipt)
+        for patch in ({'description': 'different'}, {'tags': ['different']}):
+            with self.assertRaises(ValidationError):
+                self.service.save(dict(update, metadata=patch), operation)
+        clear = dict(self.request(id_=request['artifact_id'], new=False), metadata={'description': '', 'tags': []})
+        self.service.save(clear, str(uuid4()))
+        doc = self.service.open(self.id)['documents'][0]
+        self.assertEqual(doc['metadata'], dict(original, description='', tags=[]))
+
+    def test_invalid_metadata_patch_leaves_no_pending_or_files(self):
+        head = self.git.head()
+        for patch in (None, [], {'privacy': 'public'}, {'created_at': 'now'}, {'provenance': 'user'},
+                      {'description': 1}, {'tags': 'tag'}, {'tags': ['']}, {'tags': [1]},
+                      {'description': 'x' * 65536}):
+            with self.subTest(patch_type=type(patch).__name__):
+                with self.assertRaises(ValidationError):
+                    self.service.save(dict(self.request(), metadata=patch), str(uuid4()))
+                self.assertEqual(self.git.head(), head)
+                self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
+                self.assertIsNone(self.service.workspace(self.id).recover())
+
     def test_sidebar_reads_committed_tree_without_recovering_or_writing(self):
         from spikes.workspace import PendingOperation
         from spikes.journal import snapshot
@@ -148,6 +185,11 @@ class ArtifactTests(unittest.TestCase):
         doc = self.service.open(self.id)['documents'][0]
         self.assertEqual(doc['body'], body)
         self.assertEqual(doc['metadata'], dict(meta, title='Edited'))
+        patch = {'description': 'Updated', 'tags': ['nový']}
+        self.service.save(dict(self.request(id_=id_, body=body, title='Edited', new=False),
+                               metadata=patch), str(uuid4()))
+        self.assertEqual(self.service.open(self.id)['documents'][0]['metadata'],
+                         dict(meta, title='Edited', **patch))
         self.assertEqual(list(self.git.snapshot(self.git.head())), [f'artifacts/{id_}/note.md'])
 
     def test_process_crashes_and_native_open_recover_exactly_once(self):
@@ -162,7 +204,7 @@ Artifacts(sys.argv[1]).save(request, sys.argv[3], checkpoint=checkpoint)
         for stage in ('prepared', 'file:0', 'file:1', 'applied', 'files-applied', 'commit-created',
                       'commit-ready', 'ref-updated', 'committed', 'git-indexed', 'indexed', 'completed'):
             with self.subTest(stage=stage):
-                request, operation = self.request(), str(uuid4())
+                request, operation = dict(self.request(), metadata={'description': 'Recover', 'tags': ['tag']}), str(uuid4())
                 result = subprocess.run([sys.executable, '-c', script, str(self.node), json.dumps(request), operation, stage],
                                         capture_output=True, text=True, timeout=20)
                 self.assertEqual(result.returncode, 73, result.stderr)
@@ -171,6 +213,9 @@ Artifacts(sys.argv[1]).save(request, sys.argv[3], checkpoint=checkpoint)
                 self.assertEqual(receipt['commit_id'], view['commit_id'])
                 self.assertEqual(self.git.run('rev-list', '--count', request['base_head'] + '..HEAD').stdout.strip(), '1')
                 self.assertEqual(next(d['body'] for d in view['documents'] if d['id'] == request['artifact_id']), request['body'])
+                doc = next(d for d in view['documents'] if d['id'] == request['artifact_id'])
+                self.assertEqual(doc['metadata']['description'], 'Recover')
+                self.assertEqual(doc['metadata']['tags'], ['tag'])
                 self.assertIsNone(self.service.workspace(self.id).recover())
 
     def test_pending_retry_and_foreign_edit_are_preserved(self):
@@ -251,7 +296,10 @@ for pass_ in range(2):
         assert dialog.checks.count() == 1
         dialog.checks.item(0).setCheckState(Qt.CheckState.Checked)
         assert '- [x] A' in dialog.body.toPlainText()
+        dialog.description.setPlainText('Popis <b>plain text</b>')
+        dialog.tags.setPlainText('tag, comma\\nčeský')
         dialog.save_button.click(); idle(dialog)
+        assert dialog.description.isReadOnly() and dialog.tags.isReadOnly()
         assert dialog.pending and dialog.body.isReadOnly()
         assert '- [x] A' in dialog.body.toPlainText()
         operation = dialog.pending[1]
@@ -259,8 +307,17 @@ for pass_ in range(2):
         assert service.workspace(sys.argv[2]).receipt(operation) is not None
         assert dialog.status.text() == 'Uloženo do Gitu.', dialog.status.text()
         assert not dialog.dirty
+        assert dialog.metadata_view.isReadOnly()
+        assert 'created_at' in dialog.metadata_view.toPlainText()
     else:
         assert dialog.checks.item(0).checkState() == Qt.CheckState.Checked
+        assert dialog.description.toPlainText() == 'Popis <b>plain text</b>'
+        assert dialog.current['metadata']['tags'] == ['tag, comma', 'český']
+        assert not dialog.dirty
+        dialog.description.setPlainText('Metadata only')
+        assert dialog.dirty and dialog.save_button.isEnabled()
+        dialog.save_button.click(); idle(dialog)
+        assert dialog.current['metadata']['description'] == 'Metadata only'
         assert not dialog.dirty
     dialog.close(); app.processEvents()
 print('native editor verified')

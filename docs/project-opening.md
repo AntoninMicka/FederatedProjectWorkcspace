@@ -30,7 +30,7 @@ Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je se
 
 ## Markdown editor a checklisty
 
-Vyberte projekt v seznamu a klikněte na **Markdown editor…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
+Vyberte projekt v seznamu a klikněte na **Markdown editor…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. V záložce **Metadata** lze upravit popis a štítky (jeden na řádek); uložená metadata včetně původu, autora a data vytvoření jsou také vidět pouze pro čtení. Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
 
 Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat položku checklistu**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
 
