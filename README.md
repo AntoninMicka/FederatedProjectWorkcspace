@@ -2,7 +2,7 @@
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty, hlavní TODO projektu a prohlížení historie/diffů uložených dokumentů.
 
 ## Desktop
 

@@ -42,6 +42,14 @@ Po otevření projektu je hlavní TODO také v levém panelu: názvy položek, s
 
 Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. Otevřete **Hlavní TODO…** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
 
+## Historie dokumentu
+
+V Markdown editoru vyberte uložený dokument a klikněte na **Historie…**. Seznam verzí uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
+
+Záložky ukazují původní obsah zobrazené verze, její metadata, rozdíl uložených souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v obou seznamech vybrat stejný commit. Rozepsaný text zůstává v editoru zachovaný a historie jej neukládá ani nepřepisuje. U nového dosud neuloženého dokumentu je tlačítko historie nedostupné.
+
+Historie je pouze pro čtení. Při změně projektu nebo pending operaci dialog zobrazí chybu; zavřete historii a použijte obnovu/nové načtení editoru, po zachování rozepsaného textu. Neplatné starší verze jsou označené a nelze je zobrazit jako validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí. Podrobnosti: [ADR 0017](adr/0017-artifact-history.md).
+
 ## Existující data
 
 `node.json` zůstává mimo projektový Git. Pro zapisující operace musí jít o váš běžný soubor bez symlinků/hardlinků a bez práva zápisu jiných uživatelů; nové konfigurace mají 0600. Příklad (nahraďte absolutní cesty):

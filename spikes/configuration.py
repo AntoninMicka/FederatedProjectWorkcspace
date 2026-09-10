@@ -85,7 +85,7 @@ def read_config(path):
     return data
 
 
-def committed_project(git, commit, project_id):
+def committed_project(git, commit, project_id, *, check_worktree=True):
     """Validate project identity from the same commit as the artifact projection."""
     entry = git.run('ls-tree', commit, '--', 'project.json').stdout.strip()
     require(bool(entry), 'Missing committed project.json')
@@ -98,6 +98,7 @@ def committed_project(git, commit, project_id):
     data = git.run('cat-file', 'blob', oid, binary=True).stdout
     meta = parse_project(data)
     require(meta['id'] == project_id, 'Registered project ID differs from project.json')
-    require(read_config(git.root / 'project.json') == data,
-            'Working project.json differs from the selected commit')
+    if check_worktree:
+        require(read_config(git.root / 'project.json') == data,
+                'Working project.json differs from the selected commit')
     return meta

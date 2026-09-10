@@ -6,7 +6,7 @@ Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`.
 
 ## Nejbližší úkol M1
 
-**M1-04 — Historie změn dokumentu.** Navázat na editor: zobrazit commitnutou historii vybraného artefaktu a rozdíl obsahu/metadat mezi verzemi. Čtení musí respektovat registrovaný projekt, validovaný commit a pending stav; nezavádět obnovu staré verze zápisem bez samostatného kontraktu.
+**M1-05 — Metadata dokumentu v editoru.** Navázat na zobrazení metadat v historii: zpřístupnit současná metadata dokumentu a vymezit editaci popisu/štítků přes existující ukládací kontrakt. ID, původní autor, čas vytvoření a provenance nepřepisovat běžnou editací textu.
 
 ## Závěrečné Gate review M0-09R
 
@@ -42,7 +42,11 @@ Otevřené V-01 až V-11 se nepřevádějí na hotové: V-08 a V-10 jsou integra
 
   Ověření finálního kódu: `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **108 testů úspěšně, bez skipů**. Tři nové testy a rozšířený WebEngine smoke ověřují hierarchii/počet hotových položek, committed proti neuloženému obsahu, pending bez recovery, prázdný/nepodporovaný/velký TODO, readonly checkboxy, bezpečné texty, sbalení větví, vyčištění a opětovné načtení i restart. Vizuálně ověřen screenshot vlastního dočasného projektu. Regrese editoru, .deb a offline startu prošly. `bash -n run.sh`, odkazy a `git diff --check` ověřeny. Limit přehledu je prvních 1000 položek s upozorněním; nadpisy nejsou stromové uzly a externí změny vyžadují nové otevření. Historie M1-04 nebyla zahájena.
 
-- [ ] [planned] **M1-04 — Historie změn dokumentu (cílová úroveň: PoC validated).** Zobrazit historii vybraného artefaktu a rozdíl obsahu/metadat mezi commitnutými verzemi. Reuse Git/Workspace, bezpečné textové zobrazení, autorizace registrací a odmítnutí pending stavu. Ověřit více uložených verzí včetně checklistu, zachování metadat a read-only chování; obnovení staré verze zápisem není součástí tohoto kroku.
+- [x] [completed] **M1-04 — PoC validated: historie změn dokumentu.** Tlačítko Historie v editoru otevírá nativní readonly dialog s verzemi, datem/autorem/zprávou, původním Markdownem, metadaty a diffem uložených souborů. ArtifactHistory čte jen registrovaný projekt pod společným zámkem, kontroluje HEAD před/po čtení a odmítá pending bez recovery. Historické snapshoty validuje samostatně; neplatné verze zůstávají označené v seznamu. Full-history zachovává obě větve merge, diff nepouští externí drivery/textconv, draft se nemění. [ADR 0017](docs/adr/0017-artifact-history.md), [návod](docs/project-opening.md).
+
+  Ověření finálního kódu: `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **116 testů úspěšně, bez skipů**. Osm nových testů pokrývá verze a diff checklistu/metadat, zachování HEAD/stagingu/journalu/indexu/draftů, unregistered/revspec/nedosažitelné revize, stale/busy/deadline/pending, historickou konfiguraci, invalidní snapshot, rename, obě větve merge, limit seznamu, smazání/recreate, zákaz externího diff driveru a skutečný Qt dialog se zachováním rozepsaného textu a vyčištěním výsledku po chybě. Vizuálně ověřen finální dialog nad vlastním dočasným projektem. Regrese .deb/offline/desktopu prošly; nový viewer má vlastní Qt test z checkoutu. `bash -n run.sh`, odkazy a `git diff --check` ověřeny. PoC limit: nejvýše 100 záznamů a 1 MiB těla; bez revertu, prohlížeče nyní smazaných artefaktů nebo nového cílového ověření na Omnii. Gate M1 zůstává otevřený.
+
+- [ ] [planned] **M1-05 — Metadata dokumentu v editoru (cílová úroveň: PoC validated).** Zobrazit současná metadata a doplnit editaci popisu/štítků přes existující operation ID/retry/receipt a validaci. Zachovat identitu, původ/provenance a vytvoření; změny privacy/provenance nepřidávat bez vymezeného kontraktu. Ověřit společný commit obsahu/metadat, historii a restart. Navazuje na stávající schopnost Metadata v M1; úkol zatím nebyl zahájen.
 
 ## Gate review M0-09 — 2026-09-09
 

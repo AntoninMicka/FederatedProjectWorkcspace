@@ -672,7 +672,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 ## Milestone M1 – Single-node project workspace
 
-M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy v TODO). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [TODO](TODO.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). Migrace/registrace již existujících projektů, historie v UI a Gate M1 zůstávají otevřené.
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy v TODO). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [TODO](TODO.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží TODO. Migrace/registrace již existujících projektů a Gate M1 zůstávají otevřené.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
