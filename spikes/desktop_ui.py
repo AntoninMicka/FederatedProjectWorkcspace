@@ -11,6 +11,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
 <body><aside><div class="brand">◈ &nbsp; WORKSPACE</div><div class="nav">Přehled uzlu</div>
+<div id="todo-widget" aria-labelledby="todo-heading"><h2 id="todo-heading">Hlavní TODO</h2>
+<p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
+<ul id="todo-tree" aria-label="Položky hlavního TODO"></ul>
+<small>Pouze pro čtení · upravíte v editoru</small></div>
 <p>DESKTOPOVÝ EXPERIMENT<br>M1 · Projekty</p></aside>
 <main><header><span class="badge">Lokální uzel</span><span>PoC / lokální projekty</span></header>
 <h1>Váš lokální workspace.</h1><p class="intro">První krok ke společnému prostoru pro projekty, znalosti a rozhodnutí.</p>
@@ -51,7 +55,39 @@ const openProject=document.querySelector('#open-project');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const artifacts=document.querySelector('#artifacts');
+const todoTree=document.querySelector('#todo-tree');
+const todoStatus=document.querySelector('#todo-status');
+let viewRequest=0;
+function renderTodo(todo){
+ todoTree.replaceChildren();
+ document.querySelector('#todo-title').textContent=todo?.title || '';
+ if(!todo){todoStatus.textContent='Hlavní TODO zatím není vytvořeno.';return;}
+ if(todo.status!=='ready'){todoStatus.textContent='Hlavní TODO nelze zobrazit v tomto formátu nebo velikosti.';return;}
+ todoStatus.textContent=todo.total ? `${todo.completed} z ${todo.total} hotovo` : 'Zatím bez položek checklistu.';
+ if(todo.truncated) todoStatus.textContent+=' Zobrazeno prvních 1000 položek.';
+ const lists=[todoTree];
+ for(let i=0;i<todo.items.length;i++){
+  const item=todo.items[i];lists.length=item.depth+1;
+  const row=document.createElement('li');row.dataset.depth=item.depth;
+  const label=document.createElement('span');label.className='todo-label';
+  const check=document.createElement('input');check.type='checkbox';check.checked=item.checked;check.disabled=true;
+  check.setAttribute('aria-label',item.checked ? 'Hotovo' : 'Nehotovo');
+  const title=document.createElement('span');title.className='todo-text';title.textContent=item.title;
+  label.append(check,title);
+  if(item.checked) row.classList.add('todo-done');
+  if(todo.items[i+1]?.depth>item.depth){
+   const branch=document.createElement('details');branch.open=true;
+   const summary=document.createElement('summary');summary.append(label);branch.append(summary);
+   const children=document.createElement('ul');branch.append(children);row.append(branch);
+   lists[item.depth+1]=children;
+  }else{row.append(label);}
+  lists[item.depth].append(row);
+ }
+}
 function clearProject(){
+ ++viewRequest;
+ todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
+ todoStatus.textContent='Otevřete projekt.';
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-commit').textContent='';
@@ -66,10 +102,13 @@ async function projectRequest(path,body){
 }
 projects.addEventListener('change',()=>{clearProject();projectStatus.textContent='Projekt připraven k otevření.';});
 openProject.addEventListener('click',async()=>{
- clearProject();openProject.disabled=true;projects.disabled=true;
+ clearProject();const request=viewRequest;const projectId=projects.value;
+ openProject.disabled=true;projects.disabled=true;
  projectStatus.textContent='Otevírám projekt…';
  try{
-  const result=await projectRequest('/v1/projects/open',{project_id:projects.value});
+  const result=await projectRequest('/v1/projects/open',{project_id:projectId});
+  if(request!==viewRequest || projects.value!==projectId) return;
+  renderTodo(result.main_todo);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
   for(const item of result.artifacts){
@@ -77,12 +116,13 @@ openProject.addEventListener('click',async()=>{
   }
   projectView.hidden=false;
   projectStatus.textContent=result.artifacts.length ? 'Projekt otevřen.' : 'Projekt zatím nemá artefakty.';
- }catch(error){projectStatus.textContent=error.message;}
- finally{openProject.disabled=false;projects.disabled=false;}
+ }catch(error){if(request===viewRequest){projectStatus.textContent=error.message;todoStatus.textContent='TODO není dostupné. Zkuste projekt znovu otevřít.';}}
+ finally{if(request===viewRequest){openProject.disabled=false;projects.disabled=false;}}
 });
 let catalogRequest=0;
 async function loadProjects(selectedId=null){
  const request=++catalogRequest;
+ clearProject();openProject.disabled=true;projects.disabled=true;
  try{
   const result=await projectRequest('/v1/projects',{});
   if(request!==catalogRequest) return;
@@ -90,17 +130,27 @@ async function loadProjects(selectedId=null){
   for(const project of result.projects){
    const option=document.createElement('option');option.value=project.id;option.textContent=project.id;projects.append(option);
   }
-  openProject.disabled=!result.projects.length;
+  openProject.disabled=!result.projects.length;projects.disabled=false;
   projectStatus.textContent=result.projects.length ? 'Vyberte projekt a otevřete jej.' :
    'Zatím nemáte žádný projekt. Použijte tlačítko Nový projekt v horní liště.';
   if(selectedId && result.projects.some(p=>p.id===selectedId)){
    projects.value=selectedId;openProject.click();
   }
- }catch(error){projectStatus.textContent=error.message;}
+ }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;projects.disabled=false;}}
 }
 loadProjects();
 """
 CSS += 'select{max-width:100%;padding:12px}code,li{overflow-wrap:anywhere}li{margin:12px 0}.controls{flex-wrap:wrap}'
+CSS += '''#todo-widget{margin-top:32px}#todo-widget h2{font-size:17px;color:white;margin:0 0 12px}
+#todo-widget p{font-size:12px;line-height:1.5;letter-spacing:0;margin:8px 0;color:#c8d4df}
+#todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-widget small{font-size:11px;color:#aabecf}
+#todo-tree{max-height:55vh;overflow:auto;padding:0;margin:14px 0;list-style:none}
+#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
+#todo-tree li{font-size:13px;margin:8px 0}#todo-tree summary{cursor:pointer}
+.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}
+.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
+.todo-done> .todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
+#todo-tree summary:focus-visible{outline:2px solid #79c9ac;outline-offset:3px}'''
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
 

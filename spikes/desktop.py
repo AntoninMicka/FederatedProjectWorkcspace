@@ -197,6 +197,33 @@ def main():
                   if(document.querySelector('#project-title').textContent!==expected.title ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
                      JSON.stringify(rows)!==JSON.stringify(wanted) || document.querySelector('#artifacts img')) return null;
+                  const todo=expected.main_todo;
+                  const tree=document.querySelector('#todo-tree');
+                  if(!tree || tree.querySelector('img,script,a')) return null;
+                  const todoRows=[...tree.querySelectorAll('li')];
+                  if(todo?.status==='ready'){
+                    if(document.querySelector('#todo-title').textContent!==todo.title || todoRows.length!==todo.items.length) return null;
+                    for(let i=0;i<todoRows.length;i++){
+                      const row=todoRows[i], item=todo.items[i], check=row.querySelector('input');
+                      if(row.querySelector('.todo-text').textContent!==item.title ||
+                         Number(row.dataset.depth)!==item.depth || !check.disabled || check.checked!==item.checked) return null;
+                      let depth=0;for(let parent=row.parentElement;parent!==tree;parent=parent.parentElement){
+                        if(parent.tagName==='UL') depth++;
+                      }
+                      if(depth!==item.depth) return null;
+                      check.click();if(check.checked!==item.checked) return null;
+                    }
+                    const branch=tree.querySelector('details');
+                    if(branch){branch.querySelector('summary').click();if(branch.open) return null;
+                      branch.querySelector('summary').click();if(!branch.open) return null;}
+                  }else if(todoRows.length) return null;
+                  if(!window.sidebarReloaded){
+                    window.sidebarReloaded=true;
+                    select.dispatchEvent(new Event('change'));
+                    if(tree.children.length || document.querySelector('#todo-title').textContent) return null;
+                    loadProjects(expected.id);
+                    return null;
+                  }
                   return document.querySelector('#count').textContent;
                 })()""".replace('EXPECTED', project_check)
             if args.smoke_create:

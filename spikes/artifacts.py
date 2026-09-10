@@ -3,69 +3,15 @@ from datetime import datetime, timezone
 import json
 import re
 import time
-from uuid import UUID, uuid5
 
 import yaml
 
 from spikes.configuration import committed_project
-from spikes.metadata import MAX_METADATA, require, uuid, validate_snapshot
+from spikes.metadata import require, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation, regular
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
-
-MAX_EDITOR = 1024 * 1024
-
-
-def main_todo_id(project_id):
-    uuid(project_id)
-    return str(uuid5(UUID(project_id), 'federated-workspace:main-todo:v1'))
-
-
-def checklist_items(body):
-    """Return source offsets for list checkboxes, excluding fenced code blocks.
-
-    The supported subset is -, + or * lists (including indented lists) and
-    backtick/tilde fences. Raw HTML and links are never rendered or executed.
-    """
-    result, offset, fence = [], 0, None
-    for line in body.splitlines(keepends=True):
-        marker = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
-        if marker:
-            token, tail = marker.groups()
-            if fence is None:
-                fence = (token[0], len(token))
-            elif token[0] == fence[0] and len(token) >= fence[1] and not tail.strip():
-                fence = None
-        elif fence is None:
-            match = re.match(r'^\s*[-+*]\s+\[([ xX])\][ \t]+(.*?)[\r\n]*$', line)
-            if match:
-                result.append(dict(offset=offset + match.start(1), checked=match[1].lower() == 'x',
-                                   title=match[2]))
-        offset += len(line)
-    return result
-
-
-def document(files, entities, artifact_id):
-    prefix = f'artifacts/{artifact_id}/'
-    entries = {p: data for p, data in files.items() if p.startswith(prefix)}
-    require(entries and artifact_id in entities, 'Artifact does not exist')
-    meta = entities[artifact_id]
-    require(meta['kind'] == 'document', 'Only document artifacts are editable')
-    sidecar = prefix + 'metadata.json'
-    path = prefix + meta['file'] if sidecar in entries else next(iter(entries))
-    require(path.endswith('.md'), 'Only Markdown documents are editable')
-    raw = entries[path]
-    require(len(raw) <= MAX_EDITOR + MAX_METADATA, 'Editor limit is 1 MiB')
-    if sidecar in entries:
-        body = raw.decode('utf-8')
-    else:
-        lines = raw.splitlines(keepends=True)
-        end = next(i for i in range(1, len(lines)) if lines[i].rstrip(b'\r\n') == b'---')
-        body = b''.join(lines[end + 1:]).decode('utf-8')
-    require(len(body.encode()) <= MAX_EDITOR, 'Editor limit is 1 MiB')
-    return dict(id=artifact_id, title=meta['title'], body=body, metadata=meta,
-                path=path, sidecar=sidecar if sidecar in entries else None)
-
+from spikes.markdown_documents import MAX_EDITOR, main_todo_id, checklist_items, document
 
 class Artifacts:
     def __init__(self, node_path, *, timeout=60):

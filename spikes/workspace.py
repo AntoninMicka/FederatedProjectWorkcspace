@@ -6,6 +6,7 @@ import tempfile
 import uuid
 
 from spikes.configuration import committed_project
+from spikes.markdown_documents import main_todo_view
 from spikes.journal import Journal, RecoveryConflict, snapshot
 from spikes.metadata import require, validate_snapshot
 from spikes.storage import Git, Index, StaleIndex
@@ -131,10 +132,11 @@ class Workspace:
             rows = self._read_locked(db)
             require(rows == sorted((item['id'], item['title']) for item in entities.values()),
                     'Index differs from validated commit')
+            todo = main_todo_view(files, entities, project_id)
             if self.git.head() != commit:
                 raise StaleIndex('HEAD changed while opening project; retry')
             artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
-            return dict(id=project_id, title=meta['title'], commit_id=commit,
+            return dict(id=project_id, title=meta['title'], commit_id=commit, main_todo=todo,
                         artifacts=[dict(id=id_, title=title) for id_, title in rows if id_ in artifact_ids])
 
     def receipt(self, operation_id):

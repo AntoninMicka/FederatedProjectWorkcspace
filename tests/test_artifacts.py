@@ -51,6 +51,66 @@ class ArtifactTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.service.save(self.request(id_=id_), str(uuid4()))
 
+    def test_sidebar_reads_committed_tree_without_recovering_or_writing(self):
+        from spikes.workspace import PendingOperation
+        from spikes.journal import snapshot
+        self.assertIsNone(self.service.projects.open(self.id)['main_todo'])
+        body = '- [ ] Parent\n  - [x] Child\n    * [ ] Grandchild\n- [X] Sibling\n```\n- [ ] Hidden\n```\n'
+        request = self.request(id_=main_todo_id(self.id), body=body, title='Project tasks')
+        self.service.save(request, str(uuid4()))
+        before = snapshot(self.root); head = self.git.head()
+        view = self.service.projects.open(self.id)
+        todo = view['main_todo']
+        self.assertEqual(todo['title'], 'Project tasks')
+        self.assertEqual(todo['items'], [dict(title=title, depth=depth, checked=checked) for title, depth, checked in
+                         [('Parent', 0, False), ('Child', 1, True), ('Grandchild', 2, False), ('Sibling', 0, True)]])
+        self.assertEqual((todo['completed'], todo['total'], todo['truncated']), (2, 4, False))
+        self.assertEqual(snapshot(self.root), before)
+        self.assertEqual(self.git.head(), head)
+        path = self.root / 'artifacts' / request['artifact_id'] / 'content.md'
+        path.write_text('- [x] Uncommitted')
+        self.assertEqual(self.service.projects.open(self.id), view)
+        path.write_bytes(before[str(path.relative_to(self.root))])
+        update = self.request(id_=request['artifact_id'], body='- [x] Updated', new=False)
+        def crash(stage):
+            if stage == 'prepared': raise RuntimeError('interrupted')
+        with self.assertRaises(RuntimeError): self.service.save(update, str(uuid4()), checkpoint=crash)
+        with self.assertRaises(PendingOperation): self.service.projects.open(self.id)
+        self.assertEqual(self.git.head(), head)
+        self.assertEqual(snapshot(self.root), before)
+        self.service.open(self.id)
+        refreshed = self.service.projects.open(self.id)
+        self.assertNotEqual(refreshed['commit_id'], head)
+        self.assertEqual(refreshed['main_todo']['items'][0]['title'], 'Updated')
+
+    def test_sidebar_empty_unsupported_and_bounded_projection(self):
+        request = self.request(id_=main_todo_id(self.id), body='# Empty\n')
+        self.service.save(request, str(uuid4()))
+        self.assertEqual(self.service.projects.open(self.id)['main_todo']['total'], 0)
+        update = self.request(id_=request['artifact_id'], body='- [ ] Item\n' * 1001, new=False)
+        self.service.save(update, str(uuid4()))
+        todo = self.service.projects.open(self.id)['main_todo']
+        self.assertEqual((len(todo['items']), todo['total'], todo['truncated']), (1000, 1001, True))
+        path = self.root / 'artifacts' / request['artifact_id'] / 'content.md'
+        path.write_bytes(b'\xff'); self.git.commit('Unsupported UTF-8 document')
+        self.assertEqual(self.service.projects.open(self.id)['main_todo']['status'], 'unsupported')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires actual WebEngine sidebar')
+    def test_real_sidebar_tree_readonly_safe_text_and_restart(self):
+        request = self.request(id_=main_todo_id(self.id), title='<img src=x onerror=alert(1)>',
+                               body='- [ ] <img src=x onerror=alert(1)>\n  - [x] Child\n- [ ] Sibling\n')
+        self.service.save(request, str(uuid4()))
+        for body in (None, '- [x] Changed\n  - [ ] New child\n'):
+            if body:
+                self.service.save(self.request(id_=request['artifact_id'], body=body, new=False), str(uuid4()))
+            head = self.git.head()
+            result = subprocess.run([sys.executable, '-m', 'spikes.desktop', '--node', str(self.node),
+                                     '--smoke', '--smoke-project', self.id], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('rendered rows verified', result.stdout)
+            self.assertEqual(self.git.head(), head)
+            self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
+
     def test_retry_receipt_binds_complete_request_even_after_later_commit(self):
         request, operation = self.request(), str(uuid4())
         receipt = self.service.save(request, operation)

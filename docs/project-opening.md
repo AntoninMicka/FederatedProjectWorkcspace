@@ -38,6 +38,8 @@ Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použi
 
 Při chybě uložení text zůstane v okně a **Zopakovat uložení** použije původní požadavek. **Znovu načíst / obnovit** načte aktuální projekt a dokončí připravený zápis; před opuštěním rozepsaného textu žádá potvrzení. Při souběžné změně projektu si text před opětovným načtením zkopírujte, automatické sloučení editor zatím neumí. Po pádu desktopu znovu otevřete editor daného projektu; potvrzené pending uložení se obnoví. Pouhé otevření webového přehledu pending zápis nedokončuje.
 
+Po otevření projektu je hlavní TODO také v levém panelu: názvy položek, stav zaškrtnutí a počet hotových úkolů. Odsazené checklisty tvoří podúkoly; větve lze sbalit a rozbalit. Checkboxy zde slouží jen pro čtení, úpravy dělejte v editoru. Přehled ukazuje uložený Git stav a po uložení v editoru se obnoví. Po externí změně použijte **Otevřít** znovu. Neexistující TODO a dokument bez checklistů mají vlastní hlášení. U velkého seznamu se zobrazí prvních 1000 položek s upozorněním.
+
 Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. Otevřete **Hlavní TODO…** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
 
 ## Existující data
