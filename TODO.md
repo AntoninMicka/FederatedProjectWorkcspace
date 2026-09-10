@@ -28,7 +28,7 @@ Ověření V-11:
 - `grep -n "Maintainer"` v `scripts/package_deb.py` a `tests/test_package_deb.py` potvrzuje novou hodnotu a regresní kontrolu.
 - `git diff --check`.
 
-Poznámka k otevřené části: před skutečným veřejným releasem zůstává nutné oddělené právní review komponent distribuce a oficiální potvrzení kontaktu v publikované licenci/release metadata.
+Poznámka k otevřené části: před skutečným veřejným releasem zůstává právní review komponent distribuce mimo čistě projektovou kódovou základnu a oficiální potvrzení kontaktních dat v publikované licenci/release metadatech.
 
 - [x] [completed] **V-08 — Registrace existujícího projektu (implemented, 2026-09-10).** Doplněn registrační tok pro již existující Git projekt: nová cesta `ProjectCreation.register` validuje kořenový Git repozitář, `project.json` v `HEAD` i pracovní kopii, kontroluje konfliktní/duplicitní `project_id`, vytváří lokální state vedle repozitáře a zapisuje registraci přes recovery flow.
 
