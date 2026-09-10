@@ -51,6 +51,22 @@ class ProjectTests(unittest.TestCase):
     def state(self, i=0):
         return Path(self.node['projects'][i]['state_dir'])
 
+    def test_catalog_labels_are_committed_and_do_not_initialize_state(self):
+        rows = self.projects.catalog()
+        self.assertEqual([r['id'] for r in rows], [ENTITY, OTHER])
+        self.assertEqual(rows[0]['title'], '<img src=x onerror=alert(1)>')
+        self.assertTrue(all(r['available'] for r in rows))
+        self.assertEqual(list(self.state().iterdir()), [])
+        self.assertEqual(list(self.state(1).iterdir()), [])
+        # An invalid registration must not suppress other projects or leak its path.
+        (self.gits[0].root / 'project.json').write_bytes(b'bad')
+        rows = self.projects.catalog()
+        self.assertFalse(rows[0]['available'])
+        self.assertEqual(rows[0]['title'], 'Nedostupný projekt')
+        self.assertTrue(rows[1]['available'])
+        self.assertNotIn(str(self.base), str(rows))
+        self.assertEqual(list(self.state().iterdir()), [])
+
     def test_two_projects_restart_missing_and_stale_index(self):
         self.assertEqual(self.projects.list(), [{'id': ENTITY}, {'id': OTHER}])
         for i, id_ in enumerate((ENTITY, OTHER)):
@@ -178,7 +194,7 @@ class ProjectTests(unittest.TestCase):
     def test_real_api_auth_validation_and_no_path_access(self):
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler, projects=self.projects) as server:
-            for path, body in [('/v1/projects', b'{}'), ('/v1/projects/open', encoded(dict(project_id=ENTITY)))]:
+            for path, body in [('/v1/projects', b'{}'), ('/v1/projects', b'{"details":true}'), ('/v1/projects/open', encoded(dict(project_id=ENTITY)))]:
                 driver.rejected(server, path=path, body=body, headers={'Authorization': None})
                 driver.rejected(server, path=path, body=body, headers={'Origin': 'http://evil.example'})
                 response = driver.request(server, path=path, body=body)

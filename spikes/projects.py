@@ -33,6 +33,28 @@ class Projects:
         # Do not expose filesystem locations or credential references to JavaScript.
         return [{'id': binding['project_id']} for binding in self._bindings()]
 
+    def catalog(self):
+        """Read only committed project labels; never initialize a Workspace/index."""
+        import subprocess
+        import time
+        deadline = time.monotonic() + 30
+        rows = []
+        for binding in self._bindings():
+            row = dict(id=binding['project_id'], title='Nedostupný projekt', description='', available=False)
+            try:
+                root = directory(binding['root']); directory(root / '.git')
+                git = Git(root, deadline=deadline)
+                require(Path(git.run('rev-parse', '--show-toplevel').stdout.strip()) == root,
+                        'Registration must refer to the repository root')
+                head = git.head()
+                meta = committed_project(git, head, binding['project_id'])
+                require(git.head() == head, 'Project changed during catalog read')
+                row.update(title=meta['title'], description=meta.get('description', ''), available=True)
+            except (ValueError, OSError, subprocess.SubprocessError):
+                pass  # Per-project failure must not expose paths or hide healthy registrations.
+            rows.append(row)
+        return rows
+
     def workspace(self, project_id, *, blocking=True, deadline=None):
         binding = next((b for b in self._bindings() if b['project_id'] == project_id), None)
         require(binding is not None, 'Project is not registered')

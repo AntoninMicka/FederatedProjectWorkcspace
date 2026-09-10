@@ -26,11 +26,11 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. V okně vyberte ID a klikněte na **Otevřít**. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Markdown dokumenty otevřete nativním editorem; registry zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na kartu projektu s názvem a popisem nebo na jeho název ve stručném seznamu vlevo. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Markdown dokumenty otevřete nativním editorem; registry zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
 
 ## Markdown editor a checklisty
 
-Vyberte projekt v seznamu a klikněte na **Markdown editor…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. V záložce **Metadata** lze upravit popis a štítky (jeden na řádek); uložená metadata včetně původu, autora a data vytvoření jsou také vidět pouze pro čtení. Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
+Otevřete projekt a klikněte na **Markdown editor…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. V záložce **Metadata** lze upravit popis a štítky (jeden na řádek); uložená metadata včetně původu, autora a data vytvoření jsou také vidět pouze pro čtení. Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
 
 Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat položku checklistu**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
 
@@ -38,7 +38,7 @@ Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použi
 
 Při chybě uložení text zůstane v okně a **Zopakovat uložení** použije původní požadavek. **Znovu načíst / obnovit** načte aktuální projekt a dokončí připravený zápis; před opuštěním rozepsaného textu žádá potvrzení. Při souběžné změně projektu si text před opětovným načtením zkopírujte, automatické sloučení editor zatím neumí. Po pádu desktopu znovu otevřete editor daného projektu; potvrzené pending uložení se obnoví. Pouhé otevření webového přehledu pending zápis nedokončuje.
 
-Levý panel má dvě záložky **TODO** a **Zdroje / artefakty**. Druhá zobrazuje názvy a ID všech uložených artefaktů projektu včetně zdrojů (například PDF); seznam je pouze pro čtení. Záložky přepnete kliknutím, šipkami vlevo/vpravo nebo klávesami Home/End. Volba zůstává zachovaná při obnově dat a přepnutí projektu v tomto okně; po restartu se otevře TODO. Při přepnutí projektu či chybě se starý obsah obou záložek vymaže.
+Levý panel má dvě záložky **TODO** a **Zdroje / artefakty**. Druhá zobrazuje názvy a ID všech uložených artefaktů projektu včetně zdrojů (například PDF); seznam je pouze pro čtení. Záložky přepnete kliknutím, šipkami vlevo/vpravo nebo klávesami Home/End. Při otevření projektu se nabídne seznam zdrojů/artefaktů. Bez otevřeného projektu je vlevo stručný seznam projektů. Při přepnutí projektu či chybě se starý obsah obou záložek vymaže.
 
 Po otevření projektu je hlavní TODO také v levém panelu: názvy položek, stav zaškrtnutí a počet hotových úkolů. Odsazené checklisty tvoří podúkoly; větve lze sbalit a rozbalit. Checkboxy zde slouží jen pro čtení, úpravy dělejte v editoru. Přehled ukazuje uložený Git stav a po uložení v editoru se obnoví. Po externí změně použijte **Otevřít** znovu. Neexistující TODO a dokument bez checklistů mají vlastní hlášení. U velkého seznamu se zobrazí prvních 1000 položek s upozorněním.
 
@@ -129,6 +129,6 @@ Po spuštění ověřte otevření, název, commit a „První poznámka“. Zav
 
 V levém panelu přepněte na **Zdroje / artefakty** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Metadata a popis**. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
 
-Záložka **Orchestrační chat** umožní připravit text zadání pouze v paměti okna. Odesílání je nedostupné, protože LLM backend zatím není zapojený. Přepnutí záložek zachová rozepsaný text i náhled; změna nebo opětovné otevření projektu je vymaže. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní automaticky přepne na **Orchestrační chat**; Enter nebo **Přidat zadání** vloží text do lokálního přehledu zadání, Shift+Enter vytvoří nový řádek. Nic se neodesílá, protože LLM backend zatím není zapojený. Přepnutí záložek zachová rozepsaný text i náhled; změna nebo opětovné otevření projektu je vymaže. Tlačítko **Zpět na seznam projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo. Úvodní obrazovka se v otevřeném projektu nezobrazuje. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
 
 Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.

@@ -6,6 +6,8 @@ Desktop přijímá explicitní lokální `--node SOUBOR`. Registrace se znovu va
 
 Projekt musí být existující vlastněný běžný Git kořen; state je existující soukromý adresář 0700 na stejném filesystemu, oddělený podle konfigurace v1. Nepřijímají se symlink adresáře ani nebezpečné existující stavové soubory (symlink, hardlink, cizí vlastník, přístup jiných uživatelů). Projektové `project.json` musí být pravidelný blob v HEAD, podporované verze a se shodným ID; pracovní soubor se musí shodovat s tímto blobem. Nevalidní konfigurace nevytváří runtime stav. Inicializace/registrace/migrace projektu zůstává samostatný úkol V-08.
 
+Rozšíření M1-AH-03 přidává volitelný katalog názvů a popisů bez inicializace Workspace; původní seznam ID zůstává dostupný. Aktuální navigaci kartami a společný prompt popisuje [ADR 0019](0019-main-panel-preview.md). Níže uvedené kontroly samotného otevření zůstávají v platnosti.
+
 ## Hranice zápisů a recovery
 
 - Před validací registrace a konfigurace se nic nezapisuje.

@@ -10,53 +10,98 @@ from spikes.workspace import PendingOperation
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
-<body><aside><div class="brand">◈ &nbsp; WORKSPACE</div><div class="nav">Přehled uzlu</div>
+<body><aside><div class="brand">◈ &nbsp; WORKSPACE</div>
+<div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
+<p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
+<div id="sidebar-project-tools" hidden>
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
 <button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">TODO</button>
 <button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Zdroje / artefakty</button></div>
-<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2 id="todo-heading">Hlavní TODO</h2>
+<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní TODO</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
-<ul id="todo-tree" aria-label="Položky hlavního TODO"></ul>
-<small>Pouze pro čtení · upravíte v editoru</small></div>
+<ul id="todo-tree" aria-label="Položky hlavního TODO"></ul><small>Pouze pro čtení · upravíte v editoru</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
-<h2>Zdroje / artefakty</h2><p id="sidebar-artifact-status" role="status">Otevřete projekt.</p>
-<ul id="sidebar-artifact-list" aria-label="Zdroje a artefakty projektu"></ul>
-<small>Pouze pro čtení</small></div>
-<p>DESKTOPOVÝ EXPERIMENT<br>M1 · Projekty</p></aside>
-<main><header><span class="badge">Lokální uzel</span><span>PoC / lokální projekty</span></header>
-<h1>Váš lokální workspace.</h1><p class="intro">První krok ke společnému prostoru pro projekty, znalosti a rozhodnutí.</p>
-<section><div class="eyebrow">PROJEKTY</div><h2>Otevřít projekt</h2>
-<label for="projects">Registrovaný projekt</label>
-<div class="controls"><select id="projects" aria-label="Registrovaný projekt"></select>
-<button id="open-project" disabled>Otevřít</button></div>
-<p id="project-status" role="status" aria-live="polite">Načítám registrace…</p>
-<div id="project-view" hidden><h2 id="project-title"></h2>
-<p>Git commit: <code id="project-commit"></code></p><details><summary>Seznam artefaktů</summary>
-<ul id="artifacts"></ul></details></div></section>
+<h2>Zdroje / artefakty</h2><p id="sidebar-artifact-status" role="status"></p>
+<ul id="sidebar-artifact-list" aria-label="Zdroje a artefakty projektu"></ul></div></div>
+<div class="node-note">Lokální uzel<br>Projektový workspace · PoC</div></aside>
+<main><div id="project-home">
+<header><span class="badge">Lokální workspace</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
+<div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
+<h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
+<p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
+<div id="project-cards" aria-label="Seznam projektů"></div>
+<p class="home-help">Nový projekt vytvoříte tlačítkem v horní liště.</p>
+<details class="diagnostics"><summary>Ověření spojení</summary>
+<button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
+</div>
+<div id="project-view" hidden>
+<header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
+<details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
 <button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled artefaktu</button>
 <button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Orchestrační chat</button></div>
+<div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
-<p id="preview-status" role="status">Vyberte artefakt ze seznamu.</p>
+<p id="preview-status" role="status">Vyberte artefakt ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
 <details id="preview-details" hidden><summary>Metadata a popis</summary><dl id="preview-metadata"></dl></details></div>
-<div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden>
-<h2>Orchestrační chat</h2><p>Chat zatím není dostupný. LLM backend není zapojený.</p>
-<label for="chat-draft">Zadání pro budoucí zpracování</label>
-<textarea id="chat-draft" placeholder="Zde si můžete připravit zadání. Nic se neodesílá."></textarea>
-<p>Rozepsané zadání zůstává pouze v tomto okně. Při změně projektu se vymaže.</p>
-<button disabled>Odeslat — nedostupné</button></div></section>
-<section><div class="eyebrow">OVĚŘENÍ SPOJENÍ</div><h2>Okno a backend spolu komunikují.</h2>
-<p>Tlačítko odešle požadavek lokálnímu backendu. Číslo potvrzuje přijaté požadavky v tomto běhu.</p>
-<div class="controls"><button id="increment">Ověřit spojení</button><output id="count">0</output></div>
-<p id="status" role="status" aria-live="polite">Připraveno k ověření.</p></section>
-
-<footer>Čítač se po zavření vynuluje. Dokumenty a checklisty upravíte tlačítkem Markdown editor nebo Hlavní TODO v horní liště. LLM a federace zatím nejsou zapojené.</footer>
-</main><script src="/app.js"></script></body></html>'''
-CSS = '''*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#162638;font:16px system-ui;display:flex;min-height:100vh}aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:34px 22px}.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:52px}.nav{background:#274154;border-radius:8px;padding:13px}aside p{font-size:11px;line-height:2;letter-spacing:1px;margin-top:35px}main{max-width:1100px;width:100%;padding:36px 54px}header{display:flex;justify-content:space-between;align-items:center;color:#627183;font-size:12px}.badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}h1{font-size:38px;letter-spacing:-1px;margin:50px 0 10px}.intro{color:#627183;line-height:1.7}section{background:white;border:1px solid #dce3e9;border-radius:14px;padding:30px;margin:30px 0}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}h2{font-size:22px}section p{color:#627183;line-height:1.7;max-width:610px}.controls{display:flex;gap:28px;align-items:center;margin-top:24px}button{border:0;border-radius:8px;background:#176b60;color:white;font:600 15px system-ui;padding:14px 23px;cursor:pointer}button:hover{background:#12564d}button:disabled{opacity:.55;cursor:wait}button:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}output{font-size:32px;font-weight:700}#status{font-size:13px}.next{padding:0 4px}.next h3{font-size:15px}.next p,footer{color:#627183;font-size:13px;line-height:1.8}footer{margin-top:40px;border-top:1px solid #dce3e9;padding-top:20px}@media(max-width:780px){aside{width:175px;padding:24px 14px}main{padding:26px}h1{font-size:29px}}'''
+<div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Orchestrační chat</h2>
+<p>LLM backend zatím není připojený. Zadání zůstávají pouze v tomto okně, bez odeslání.</p>
+<div id="chat-messages" role="log" aria-label="Lokální zadání"></div></div></div>
+<form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
+<div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
+<button id="chat-submit" type="submit" disabled>Přidat zadání</button></div>
+<small>Jen v tomto okně · Enter přidá zadání, Shift+Enter nový řádek · LLM není připojený</small></form>
+</section>
+<button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
+</div></main><script src="/app.js"></script></body></html>'''
+CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
+aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
+.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:32px}.node-note{font-size:11px;line-height:1.8;margin-top:auto;padding-top:28px;color:#9eb5c7}
+main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
+.badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
+h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
+button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
+button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
+summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
+.home-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
+#project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
+.project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
+.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
+.project-card .project-name{font-size:21px;line-height:1.4}.project-card .project-description{font-size:13px;color:#627183;font-weight:400;line-height:1.6}
+.project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
+.diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
+aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
+#sidebar-project-list,#sidebar-artifact-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list button,#sidebar-artifact-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
+#sidebar-project-list button:hover,#sidebar-artifact-list button:hover{background:#274154}
+#sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
+.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px}.sidebar-artifact-title{font-size:13px}
+#sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
+#sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
+#todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
+#todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
+.todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
+#project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0}.project-header h1{font-size:25px;color:#162638;margin:6px 0}
+.project-header details{max-width:280px}.project-header code{font-size:10px}
+#workspace-panel{min-height:0;flex:1;display:flex;flex-direction:column;background:white;border:1px solid #dce3e9;border-radius:16px;overflow:hidden}
+#main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
+#main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
+#main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}
+#preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
+#preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
+#preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
+#pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
+#chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
+.prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
+.prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
+@media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
+'''
 JS = '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
@@ -73,11 +118,10 @@ button.addEventListener('click',async()=>{
  finally{button.disabled=false;}
 });'''
 JS += """
-const projects=document.querySelector('#projects');
-const openProject=document.querySelector('#open-project');
+const projectCards=document.querySelector('#project-cards');
+const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
-const artifacts=document.querySelector('#artifacts');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -104,6 +148,7 @@ function renderSidebarArtifacts(items){
  for(const item of items){
   const row=document.createElement('li');
   const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
+  title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
   const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
   row.append(title,id);sidebarArtifacts.append(row);
@@ -139,13 +184,16 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
+ document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
+ document.querySelector('#project-home').hidden=false;
+ document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
+ selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-commit').textContent='';
- artifacts.replaceChildren();
 }
 async function projectRequest(path,body){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -154,48 +202,54 @@ async function projectRequest(path,body){
  if(!response.ok) throw new Error(result.error || 'Požadavek byl odmítnut.');
  return result;
 }
-projects.addEventListener('change',()=>{clearProject();projectStatus.textContent='Projekt připraven k otevření.';});
-openProject.addEventListener('click',async()=>{
- clearProject();const request=viewRequest;const projectId=projects.value;
- openProject.disabled=true;projects.disabled=true;
+let catalogRequest=0;
+async function openRegisteredProject(projectId){
+ ++catalogRequest;
+ clearProject();const request=viewRequest;
  projectStatus.textContent='Otevírám projekt…';
  try{
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
-  if(request!==viewRequest || projects.value!==projectId) return;
+  if(request!==viewRequest)return;
   activeProject={id:projectId,head:result.commit_id};
-  renderTodo(result.main_todo);
-  renderSidebarArtifacts(result.artifacts);
+  renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
-  for(const item of result.artifacts){
-   const row=document.createElement('li');const choose=document.createElement('button');
-   choose.textContent=item.title+' · '+item.id;choose.addEventListener('click',()=>openPreview(item.id));
-   row.append(choose);artifacts.append(row);
-  }
-  projectView.hidden=false;
-  projectStatus.textContent=result.artifacts.length ? 'Projekt otevřen.' : 'Projekt zatím nemá artefakty.';
- }catch(error){if(request===viewRequest){projectStatus.textContent=error.message;todoStatus.textContent='TODO není dostupné. Zkuste projekt znovu otevřít.';sidebarArtifactStatus.textContent='Seznam není dostupný. Zkuste projekt znovu otevřít.';}}
- finally{if(request===viewRequest){openProject.disabled=false;projects.disabled=false;}}
-});
-let catalogRequest=0;
+  projectView.hidden=false;document.querySelector('#project-home').hidden=true;
+  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+  selectSidebarTab(sidebarTabs[1]);
+  document.querySelector('#preview-status').textContent=result.artifacts.length ?
+   'Vyberte artefakt ze seznamu vlevo.' : 'Projekt zatím nemá artefakty. Vytvořte dokument v editoru.';
+ }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
+}
+function renderProjectCatalog(items){
+ projectCards.replaceChildren();sidebarProjects.replaceChildren();
+ for(const item of items){
+  const card=document.createElement('button');card.type='button';card.className='project-card';card.dataset.id=item.id;
+  const name=document.createElement('span');name.className='project-name';name.textContent=item.title;
+  const description=document.createElement('span');description.className='project-description';
+  description.textContent=item.available ? (item.description.slice(0,240) || 'Prostor pro zdroje, poznámky a rozhodnutí.') : 'Projekt nelze načíst. Ověřte jeho umístění a konfiguraci.';
+  const id=document.createElement('span');id.className='project-id';id.textContent=item.id;
+  const action=document.createElement('span');action.className='project-action';action.textContent=item.available?'Otevřít projekt →':'Zkusit otevřít →';
+  card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));projectCards.append(card);
+  const row=document.createElement('li');const compact=document.createElement('button');compact.type='button';compact.dataset.id=item.id;
+  compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));row.append(compact);sidebarProjects.append(row);
+ }
+ document.querySelector('#sidebar-project-status').textContent=items.length ? `${items.length} projektů` : 'Zatím bez projektů.';
+}
 async function loadProjects(selectedId=null){
  const request=++catalogRequest;
- clearProject();openProject.disabled=true;projects.disabled=true;
+ clearProject();projectCards.replaceChildren();sidebarProjects.replaceChildren();
+ projectStatus.textContent='Načítám projekty…';document.querySelector('#sidebar-project-status').textContent='Načítám projekty…';
  try{
-  const result=await projectRequest('/v1/projects',{});
-  if(request!==catalogRequest) return;
-  projects.replaceChildren();
-  for(const project of result.projects){
-   const option=document.createElement('option');option.value=project.id;option.textContent=project.id;projects.append(option);
-  }
-  openProject.disabled=!result.projects.length;projects.disabled=false;
-  projectStatus.textContent=result.projects.length ? 'Vyberte projekt a otevřete jej.' :
-   'Zatím nemáte žádný projekt. Použijte tlačítko Nový projekt v horní liště.';
-  if(selectedId && result.projects.some(p=>p.id===selectedId)){
-   projects.value=selectedId;openProject.click();
-  }
- }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;projects.disabled=false;}}
+  const result=await projectRequest('/v1/projects',{details:true});
+  if(request!==catalogRequest)return;
+  renderProjectCatalog(result.projects);
+  projectStatus.textContent=result.projects.length ? 'Vyberte projekt.' : 'Zatím nemáte žádný projekt.';
+  if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
+ }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
+document.querySelector('#back-projects').addEventListener('click',()=>loadProjects());
+
 """
 
 JS += """
@@ -219,6 +273,7 @@ for(const [index,tab] of mainTabs.entries()){
 }
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
+ for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
  document.querySelector('#preview-title').textContent='';
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
@@ -244,6 +299,7 @@ async function openPreview(id,page=1){
  if(!activeProject)return;
  const project=activeProject;
  clearPreview();selectedArtifact=id;
+ for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current',String(button.dataset.id===id));
  const request=previewRequest;
  selectMainTab(mainTabs[0]);previewStatus.textContent='Načítám náhled…';
  try{
@@ -275,49 +331,23 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
  const input=document.querySelector('#pdf-page');
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));
 });
+const draft=document.querySelector('#chat-draft');
+draft.addEventListener('input',()=>{
+ document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
+ if(activeProject && draft.value.trim())selectMainTab(mainTabs[1]);
+});
+document.querySelector('#chat-composer').addEventListener('submit',event=>{
+ event.preventDefault();if(!activeProject || !draft.value.trim())return;
+ selectMainTab(mainTabs[1]);
+ const message=document.createElement('div');message.className='chat-message';message.textContent=draft.value.trim();
+ document.querySelector('#chat-messages').append(message);
+ draft.value='';document.querySelector('#chat-submit').disabled=true;draft.focus();
+ document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;
+});
+draft.addEventListener('keydown',event=>{
+ if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
+});
 loadProjects();
-"""
-CSS += 'select{max-width:100%;padding:12px}code,li{overflow-wrap:anywhere}li{margin:12px 0}.controls{flex-wrap:wrap}'
-CSS += '''#todo-widget{margin-top:18px}#todo-widget h2{font-size:17px;color:white;margin:0 0 12px}
-#todo-widget p{font-size:12px;line-height:1.5;letter-spacing:0;margin:8px 0;color:#c8d4df}
-#todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-widget small{font-size:11px;color:#aabecf}
-#todo-tree{max-height:55vh;overflow:auto;padding:0;margin:14px 0;list-style:none}
-#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
-#todo-tree li{font-size:13px;margin:8px 0}#todo-tree summary{cursor:pointer}
-.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}
-.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
-.todo-done> .todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
-#todo-tree summary:focus-visible{outline:2px solid #79c9ac;outline-offset:3px}'''
-CSS += '''#sidebar-tabs{display:flex;gap:4px;margin-top:28px;flex-wrap:wrap}
-#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df;border-radius:6px}
-#sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
-#sidebar-artifacts{margin-top:18px}#sidebar-artifacts h2{font-size:17px;color:white;margin:0 0 12px}
-#sidebar-artifacts p{font-size:12px;line-height:1.5;letter-spacing:0;margin:8px 0}
-#sidebar-artifacts small{font-size:11px;color:#aabecf}
-#sidebar-artifact-list{list-style:none;max-height:55vh;overflow:auto;padding:0;margin:14px 0}
-#sidebar-artifact-list li{font-size:13px;border-bottom:1px solid #274154;padding-bottom:10px;margin:10px 0}
-.sidebar-artifact-title,.sidebar-artifact-id{display:block;overflow-wrap:anywhere}.sidebar-artifact-id{margin-top:4px}
-[role="tabpanel"]:focus-visible{outline:2px solid #79c9ac;outline-offset:4px}'''
-
-CSS += """#main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding-bottom:12px}
-#main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-#workspace-panel{min-height:380px}#preview-content{overflow:auto;max-height:65vh}
-#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
-#preview-content p{white-space:pre-wrap;margin:6px 0}#preview-metadata{overflow-wrap:anywhere}
-#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
-#chat-draft{display:block;width:100%;min-height:120px;margin:12px 0;font:inherit;padding:12px}
-#pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
-#sidebar-artifact-list button{padding:4px 0;text-align:left;background:transparent;font-size:13px;color:#e2edf3}
-#artifacts{list-style:none;padding:0}#artifacts button{background:#edf3f6;color:#244455;text-align:left;font-weight:400}
-[hidden]{display:none!important}main{min-width:0}#preview-content h1{font-size:28px;margin:15px 0}
-"""
-CSS += """main{padding:20px 32px}main>h1{font-size:24px;margin:16px 0 10px}main>.intro{display:none}
-main>section:first-of-type{padding:14px 20px;margin:12px 0}
-main>section:first-of-type .eyebrow,main>section:first-of-type>h2{display:none}
-main>section:first-of-type .controls{margin-top:6px;gap:12px}
-main>section:first-of-type p{margin:6px 0;font-size:12px}
-#project-title{font-size:18px;margin:10px 0}#workspace-panel{margin:16px 0;padding:20px}
-#preview-status{margin:10px 0;font-size:13px}#preview-title{font-size:20px;margin:12px 0}
 """
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
@@ -333,6 +363,8 @@ class DesktopHandler(Handler):
         try:
             if self.path == '/v1/projects' and request == {}:
                 return self.reply(200, {'projects': projects.list()})
+            if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
+                return self.reply(200, {'projects': projects.catalog()})
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))

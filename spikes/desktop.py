@@ -136,7 +136,7 @@ def main():
                 for worker in dialog.workers:
                     worker.wait()
                 dialog.deleteLater()
-            page.runJavaScript("document.querySelector('#projects').value", 0, selected)
+            page.runJavaScript("activeProject?.id || null", 0, selected)
         for label, todo in [('Markdown editor…', False), ('Hlavní TODO…', True)]:
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
@@ -187,18 +187,20 @@ def main():
             script = "document.querySelector('#count')?.textContent"
             if project_check:
                 script = """(()=>{
+                  if(!document.querySelector('#project-view'))return null;
                   const expected=EXPECTED;
-                  const select=document.querySelector('#projects');
-                  const open=document.querySelector('#open-project');
-                  if(!window.projectSmokeStarted && !open.disabled && [...select.options].some(o=>o.value===expected.id)){
-                    window.projectSmokeStarted=true;select.value=expected.id;open.click();
+                  const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
+                  if(!window.projectSmokeStarted && card){
+                    if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
+                       document.querySelector('select') || card.querySelector('.project-name').textContent!==expected.title)return null;
+                    const compact=[...document.querySelectorAll('#sidebar-project-list button')].find(e=>e.dataset.id===expected.id);
+                    if(!compact || compact.textContent!==expected.title)return null;
+                    window.projectSmokeStarted=true;(window.homeReturnChecked?compact:card).click();
                   }
                   if(document.querySelector('#project-view').hidden) return null;
-                  const rows=[...document.querySelectorAll('#artifacts li')].map(e=>e.textContent);
-                  const wanted=expected.artifacts.map(e=>e.title+' · '+e.id);
                   if(document.querySelector('#project-title').textContent!==expected.title ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
-                     JSON.stringify(rows)!==JSON.stringify(wanted) || document.querySelector('#artifacts img')) return null;
+                     !document.querySelector('#project-home').hidden || !document.querySelector('#sidebar-projects').hidden)return null;
                   const artifactTab=document.querySelector('#artifacts-tab'),todoTab=document.querySelector('#todo-tab');
                   const artifactPanel=document.querySelector('#sidebar-artifacts'),todoPanel=document.querySelector('#todo-widget');
                   const sidebarList=document.querySelector('#sidebar-artifact-list');
@@ -239,15 +241,25 @@ def main():
                   if(artifactPanel.hidden || document.activeElement!==artifactTab) return null;
                   if(!window.sidebarReloaded){
                     window.sidebarReloaded=true;
-                    select.dispatchEvent(new Event('change'));
+                    clearProject();
                     if(tree.children.length || sidebarList.children.length || document.querySelector('#todo-title').textContent) return null;
                     loadProjects(expected.id);
                     return null;
                   }
                   const chatTab=document.querySelector('#chat-tab'),previewTab=document.querySelector('#preview-tab');
-                  chatTab.click();
+                  previewTab.click();
                   const draft=document.querySelector('#chat-draft');draft.value='Local draft';
-                  if(document.querySelector('#chat-panel').hidden)return null;
+                  draft.dispatchEvent(new Event('input',{bubbles:true}));
+                  if(document.querySelector('#chat-panel').hidden || document.querySelector('#chat-submit').disabled)return null;
+                  if(!window.promptSubmitChecked){
+                    const before=document.querySelector('#count').textContent;
+                    draft.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+                    if(document.querySelector('#chat-messages').lastElementChild?.textContent!=='Local draft' || draft.value ||
+                       document.querySelector('#count').textContent!==before)return null;
+                    window.promptSubmitChecked=true;draft.value='Local draft';draft.dispatchEvent(new Event('input'));
+                  }
+                  const composer=document.querySelector('#chat-composer');
+                  if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
                   if(document.querySelector('#preview-panel').hidden || draft.value!=='Local draft' ||
                      document.activeElement!==previewTab)return null;
@@ -264,10 +276,17 @@ def main():
                     if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
                     if(!window.previewClearChecked){
                       window.previewClearChecked=true;window.previewStarted=false;
-                      select.dispatchEvent(new Event('change'));
+                      clearProject();
                       if(content.children.length || draft.value || document.querySelector('#preview-title').textContent)return null;
                       loadProjects(expected.id);return null;
                     }
+                  }
+                  if(!window.homeReturnChecked){
+                    window.homeReturnChecked=true;window.projectSmokeStarted=false;window.previewStarted=false;
+                    document.querySelector('#back-projects').click();
+                    if(!document.querySelector('#project-view').hidden || document.querySelector('#project-home').hidden ||
+                       document.querySelector('#sidebar-projects').hidden || draft.value)return null;
+                    return null;
                   }
                   return document.querySelector('#count').textContent;
                 })()""".replace('EXPECTED', project_check)
