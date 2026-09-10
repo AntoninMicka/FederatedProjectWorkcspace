@@ -95,6 +95,8 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [Federace a konfliktové UI](FEDERATION.md)
 - [Bezpečnost](SECURITY.md)
 - [Katalog reuse](REUSE_CATALOG.md)
+- [Compliance evidence](docs/legal/COMPLIANCE.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [IP, defensive publication a crowdfunding roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>)
 - [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md)
 - [Defensive Disclosures](docs/IP/DEFENSIVE_DISCLOSURES.md)

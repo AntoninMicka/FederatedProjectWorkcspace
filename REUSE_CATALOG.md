@@ -23,6 +23,8 @@ Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md
 | PyYAML 6.0.3 | approved | Omezený frontmatter parser v M0 | Produkční release: doplnit evidence licenčních textů/notice pro všechny distribuované třetí strany; aktuálně je pro PyYAML 6.0.3 v M1 audit potvrzen jako MIT-approved (2026-09-10). |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
 
+Nad rámec komponent najdeš evidenci compliance závislostí v [docs/legal/DEPENDENCIES.toml](docs/legal/DEPENDENCIES.toml).
+
 Žádná komponenta zatím nemá schválený produkční status reuse. Licence a verze závislostí zaznamenat před zařazením do distribuované aplikace.
 
 M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
