@@ -30,7 +30,7 @@ def build(output, version='0.1.0~m0'):
         write(f'usr/share/doc/{NAME}/README', b'Desktop PoC: create local projects and read committed artifacts. Close before upgrading.\nRuntime dependencies are supplied by the OS, not bundled.\n')
         write(f'usr/bin/{NAME}', b'#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$(readlink -f -- "$0")")/../lib/federated-workspace-poc"\nexec /usr/bin/python3 -I -c \'import sys; sys.path.insert(0, "."); from spikes.desktop import main; raise SystemExit(main())\' "$@"\n', 0o755)
         write(f'usr/share/applications/{NAME}.desktop', f'[Desktop Entry]\nType=Application\nName=Projektový workspace PoC\nExec={NAME}\nTerminal=false\nCategories=Office;\n'.encode())
-        write('DEBIAN/control', f'Package: {NAME}\nVersion: {version}\nArchitecture: all\nMaintainer: Workspace developers <noreply@example.invalid>\nDepends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils\nSection: utils\nPriority: optional\nDescription: Experimental project workspace desktop\n Local project creation, registration and committed artifact listing.\n'.encode())
+        write('DEBIAN/control', f'Package: {NAME}\nVersion: {version}\nArchitecture: all\nMaintainer: Workspace developers <noreply@example.invalid>\nDepends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils, poppler-utils\nSection: utils\nPriority: optional\nDescription: Experimental project workspace desktop\n Local project creation, registration and committed artifact listing.\n'.encode())
         for directory in stage.rglob('*'):
             if directory.is_dir():
                 directory.chmod(0o755)

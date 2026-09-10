@@ -118,7 +118,7 @@ class Workspace:
             self.index.rebuild(self.git)
             return self.index.read(self.git)
 
-    def read_project(self, project_id):
+    def read_project(self, project_id, *, artifact_id=None, expected_head=None):
         """Return one committed project view under the shared writer lock."""
         with self.journal.lock(), self.journal.connect() as db:
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -126,12 +126,25 @@ class Workspace:
             self._branch()
             commit = self.git.head()
             require(not self.git.run('ls-files', '-u').stdout, 'Unresolved merge')
+            if expected_head is not None and commit != expected_head:
+                raise StaleIndex('Project changed; reopen preview')
             meta = committed_project(self.git, commit, project_id)
             files = self.git.snapshot(commit)
             entities = validate_snapshot(files)
             rows = self._read_locked(db)
             require(rows == sorted((item['id'], item['title']) for item in entities.values()),
                     'Index differs from validated commit')
+            if artifact_id is not None:
+                prefix = f'artifacts/{artifact_id}/'
+                entries = {p: raw for p, raw in files.items() if p.startswith(prefix)}
+                require(entries and artifact_id in entities, 'Artifact is not in this project')
+                metadata = entities[artifact_id]
+                sidecar = prefix + 'metadata.json' in entries
+                path = prefix + metadata['file'] if sidecar else next(iter(entries))
+                if self.git.head() != commit:
+                    raise StaleIndex('Project changed while reading preview')
+                return dict(id=artifact_id, commit_id=commit, metadata=metadata,
+                            path=path, raw=entries[path], sidecar=sidecar)
             todo = main_todo_view(files, entities, project_id)
             if self.git.head() != commit:
                 raise StaleIndex('HEAD changed while opening project; retry')

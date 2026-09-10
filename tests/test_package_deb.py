@@ -16,6 +16,8 @@ class DebianPackageTests(unittest.TestCase):
             subprocess.run(['dpkg-deb', '-R', str(package), str(root / 'unpacked')], check=True, capture_output=True)
             tree = root / 'unpacked'
             self.assertEqual({p.name for p in (tree / 'DEBIAN').iterdir()}, {'control'})
+            self.assertIn('poppler-utils', (tree / 'DEBIAN/control').read_text())
+            self.assertTrue((tree / f'usr/lib/{NAME}/spikes/artifact_preview.py').exists())
             self.assertFalse((tree / 'home').exists())
             self.assertFalse((tree / 'var').exists())
             self.assertTrue((tree / f'usr/bin/{NAME}').stat().st_mode & 0o111)

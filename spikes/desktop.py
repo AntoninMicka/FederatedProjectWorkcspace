@@ -161,6 +161,8 @@ def main():
             project_check = None
             if args.smoke_project:
                 expected = server.projects.open(args.smoke_project)
+                if expected['artifacts']:
+                    expected['preview'] = server.projects.preview(args.smoke_project, expected['artifacts'][0]['id'], expected['commit_id'])
                 project_check = json.dumps(expected)
             def checked(value):
                 if value == '1' and server.counter == 1:
@@ -241,6 +243,31 @@ def main():
                     if(tree.children.length || sidebarList.children.length || document.querySelector('#todo-title').textContent) return null;
                     loadProjects(expected.id);
                     return null;
+                  }
+                  const chatTab=document.querySelector('#chat-tab'),previewTab=document.querySelector('#preview-tab');
+                  chatTab.click();
+                  const draft=document.querySelector('#chat-draft');draft.value='Local draft';
+                  if(document.querySelector('#chat-panel').hidden)return null;
+                  chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
+                  if(document.querySelector('#preview-panel').hidden || draft.value!=='Local draft' ||
+                     document.activeElement!==previewTab)return null;
+                  if(expected.artifacts.length){
+                    if(!window.previewStarted){window.previewStarted=true;
+                      document.querySelector('#sidebar-artifact-list button').click();return null;}
+                    if(document.querySelector('#preview-title').textContent!==expected.artifacts[0].title ||
+                       document.querySelector('#preview-details').hidden)return null;
+                    const content=document.querySelector('#preview-content');
+                    if(content.querySelector('script,iframe,object,a'))return null;
+                    const image=content.querySelector('img');
+                    if(['image','pdf'].includes(expected.preview.format) && !image)return null;
+                    if(image && (!image.complete || !image.naturalWidth))return null;
+                    if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
+                    if(!window.previewClearChecked){
+                      window.previewClearChecked=true;window.previewStarted=false;
+                      select.dispatchEvent(new Event('change'));
+                      if(content.children.length || draft.value || document.querySelector('#preview-title').textContent)return null;
+                      loadProjects(expected.id);return null;
+                    }
                   }
                   return document.querySelector('#count').textContent;
                 })()""".replace('EXPECTED', project_check)

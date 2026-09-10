@@ -1,0 +1,15 @@
+# ADR 0019 — Hlavní panel a náhled artefaktů
+
+Datum: 2026-09-10. M1-AH-02, lokální Linux PoC. Rozšiřuje čtení [ADR 0014](0014-project-read.md), zachovává [chat kontrakt ADR 0008](0008-context-and-publication-contracts.md). Nevytváří LLM backend ani importní workflow.
+
+Hlavní panel přepíná náhled a orchestrační chat pomocí přístupných záložek. Kliknutí na artefakt v sidebaru nebo seznamu projektu načte náhled. Text zadání zůstává pouze v paměti stránky a nic neodesílá; UI výslovně uvádí nedostupnost backendu. Uložený popis a další metadata se čtou, nové souhrny se negenerují. Změna projektu/opětovné otevření vymaže náhled i draft; generační číslo požadavku odmítne opožděnou odpověď pro jiný výběr.
+
+Autentizovaný POST `/v1/artifacts/preview` přijímá výhradně project_id, artifact_id, expected_head a page. Projects znovu ověří registraci a umístění uzlu; Workspace pod sdíleným zámkem odmítne pending, validuje konfiguraci, celý snapshot a index, porovná HEAD a vrátí obsah/metadatové údaje téhož commitu. Nevrací filesystemové cesty a nepřijímá je jako vstup. Po konverzi se HEAD zkontroluje znovu. Platí lokální autorizace PoC, nikoli plné RBAC. Obsah již načtený v UI je označen jako uložená verze; změny mimo aplikaci vyžadují znovu otevřít projekt.
+
+Nové persistentní zápisy ani cache nevznikají. Případné založení lokálního journalu či obnova indexu mají stejné hranice jako ADR 0014; čtení neobnovuje rozpracovaný projektový zápis. Git a zdroje se náhledem nemění.
+
+Podpora: Markdown (UTF-8, frontmatter i sidecar), PNG/JPEG a PDF. Markdown má záměrně omezený renderer nadpisů, textu a fenced bloků; textContent brání interpretaci HTML, odkazy/obrázky se nenačítají. Bitmapy jsou vložené data URI; CSP dovoluje pouze data obrázky, nepovoluje iframe/object ani vzdálené zdroje. Stávající interceptor neposkytuje token žádným novým cizím URL. PDF se v systémovém podprocesu `pdftoppm` převádí na jedinou PNG stránku; PDF JavaScript, odkazy a přílohy do WebEngine nevstupují. Podproces dostává bajty na stdin bez shellu, časový limit 15 sekund, stránku 1–100 a raster do 1200 px. Vstup i raster mají limit 4 MiB; Markdown nejvýše 2000 odřádkování kvůli velikosti DOM. Chybějící Poppler, poškozený soubor a neexistující stránka mají stav nedostupného náhledu s metadaty. Nejde o produkční sandbox PDF parseru ani garantovaný limit jeho vnitřní paměti.
+
+Reuse/adapt: stávající Projects/Workspace, validátor snapshotu, HTTP token/origin kontroly a DOM. Nový parserový framework ani Qt binding se nepřidává. QtPdf není v současném runtime dostupný; systémový Poppler je zvolen pro stránkovou rasterizaci bez povolení aktivního PDF obsahu. Závislost `poppler-utils` je součástí .deb a postupu instalace; budoucí release musí aktualizovat svůj distribuční inventář. Staré inventáře zůstávají historickými důkazy.
+
+Ověření a readiness drží [TODO](../../TODO.md). Testy pokrývají autentizaci, registraci/ID, pending/stale, čtení commitnutých bajtů, limity, chybná PDF a reálný WebEngine s Markdownem, PNG a PDF; nejde o kompletní podporu formátů, plné RBAC ani implementaci chatu.

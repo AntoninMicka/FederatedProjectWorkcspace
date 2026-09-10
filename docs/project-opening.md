@@ -124,3 +124,11 @@ PY
 ```
 
 Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Tlačítkem **Markdown editor…** otevřete a upravte poznámku; po uložení a restartu ověřte změněný obsah. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
+
+## Hlavní panel a náhled artefaktu
+
+V levém panelu přepněte na **Zdroje / artefakty** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Metadata a popis**. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
+
+Záložka **Orchestrační chat** umožní připravit text zadání pouze v paměti okna. Odesílání je nedostupné, protože LLM backend zatím není zapojený. Přepnutí záložek zachová rozepsaný text i náhled; změna nebo opětovné otevření projektu je vymaže. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+
+Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.

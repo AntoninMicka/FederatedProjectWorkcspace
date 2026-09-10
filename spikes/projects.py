@@ -55,3 +55,20 @@ class Projects:
 
     def open(self, project_id):
         return self.workspace(project_id).read_project(project_id)
+
+    def preview(self, project_id, artifact_id, expected_head, page=1):
+        import re
+        import time
+        from spikes.metadata import uuid
+        from spikes.artifact_preview import preview
+        uuid(project_id); uuid(artifact_id)
+        require(isinstance(expected_head, str) and re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', expected_head),
+                'Invalid preview commit')
+        require(type(page) is int and 1 <= page <= 100, 'Invalid preview page')
+        ws = self.workspace(project_id, blocking=False, deadline=time.monotonic() + 30)
+        item = ws.read_project(project_id, artifact_id=artifact_id, expected_head=expected_head)
+        result = preview(item, page)
+        if ws.git.head() != expected_head:
+            from spikes.storage import StaleIndex
+            raise StaleIndex('Project changed during preview')
+        return result
