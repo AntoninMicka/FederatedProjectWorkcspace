@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Antonín Mička
+// SPDX-License-Identifier: MPL-2.0
+
 // Disposable M0 test driver. No production CLI or filesystem sandbox.
 #include <git2.h>
 #include <cstdlib>
