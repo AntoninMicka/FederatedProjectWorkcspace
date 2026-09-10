@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Přispívání do projektu
 
 Příspěvky do projektu jsou vítány.

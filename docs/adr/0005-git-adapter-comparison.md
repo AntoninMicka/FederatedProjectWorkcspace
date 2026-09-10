@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0005 — Srovnání Git CLI a C++/libgit2
 
 Datum: 2026-09-09. Stav: přijato pro navazující implementaci, PoC validated na vývojovém Linux hostu; produkční balení/transporty otevřené.

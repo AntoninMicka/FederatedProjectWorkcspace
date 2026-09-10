@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Local registered-project reads; independent of the HTTP/Qt adapters."""
 import os
 from pathlib import Path

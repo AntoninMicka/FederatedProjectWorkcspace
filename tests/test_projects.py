@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Registered reads exercise real Git/SQLite, HTTP authorization and optional Qt."""
 from contextlib import closing
 from copy import deepcopy

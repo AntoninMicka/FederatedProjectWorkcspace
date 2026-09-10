@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 from copy import deepcopy
 import os
 from pathlib import Path

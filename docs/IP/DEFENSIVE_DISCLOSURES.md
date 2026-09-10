@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Defensive Disclosures
 
 Provozní evidence k [IP roadmapě](<IP, Defensive Publication & Crowdfunding Roadmap.md>), zejména sekcím 4–11, 20 a 30. Patentové podklady drží [Patent Risk Register](PATENT_RISK_REGISTER.md). Stav k 2026-09-09: **implemented — struktura registru; žádné dokončené disclosure ani ověřená publikace zde nejsou evidovány**.

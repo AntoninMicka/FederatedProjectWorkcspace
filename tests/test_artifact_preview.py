@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Preview reads are HEAD-bound and never execute document content."""
 import base64
 import json

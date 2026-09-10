@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Federovaný projektový LLM workspace
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.

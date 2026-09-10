@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Záznam dokončené práce
 
 Dokončené výstupy, výsledky ověření a historická gate review. Aktuální dávku včetně dosud nearchivovaných dokončených úkolů drží [TODO](TODO.md), vzdálenější otevřené položky [BACKLOG](BACKLOG.md), strategii a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>).

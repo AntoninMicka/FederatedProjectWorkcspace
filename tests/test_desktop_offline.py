@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Opt-in Linux network namespace validation of the packaged desktop."""
 import os
 from pathlib import Path

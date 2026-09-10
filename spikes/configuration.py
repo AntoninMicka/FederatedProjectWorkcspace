@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Read-only executable v1 schemas for portable project and local node metadata."""
 import os
 from pathlib import Path

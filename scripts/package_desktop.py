@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Build a deterministic source distribution, never bundle local state or Qt binaries."""
 import argparse
 import gzip

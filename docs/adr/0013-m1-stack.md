@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0013 — Výchozí stack pro navazující M1
 
 Datum: 2026-09-09. Stav: přijato, **designed**, podložené uvedenými PoC. Uzavírá volbu technologií M0-06, nikoli celý Gate M0 ani produkční připravenost.

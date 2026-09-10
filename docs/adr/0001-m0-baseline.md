@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0001 — Referenční storage experiment
 
 Datum: 2026-09-09. Stav: přijato pro M0 experiment; produkční stack otevřený.

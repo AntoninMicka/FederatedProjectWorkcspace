@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 # Launcher for Linux M0 storage and desktop experiments.
 set -euo pipefail
 

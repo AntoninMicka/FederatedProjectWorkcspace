@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0012 — Ověření instalačního kandidáta v čistém OS
 
 Stav: PoC validated pro čistou instalaci M0-06e; tento dokument nevybírá nový stack. Navazuje na [ADR 0011](0011-debian-package.md).

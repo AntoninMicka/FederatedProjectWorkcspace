@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Editor contract against real registered projects, Git, journal and native widgets."""
 import json
 import os

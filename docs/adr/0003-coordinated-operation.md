@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0003 — Koordinovaná operace nad journalem, Gitem a indexem
 
 Datum: 2026-09-09. Stav: přijato a PoC validated pro Linux M0-01; produkční stack zůstává otevřený.

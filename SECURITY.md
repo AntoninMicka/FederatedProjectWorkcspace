@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Bezpečnost — počáteční threat model
 
 | Vstup / hranice | Riziko | Požadovaná kontrola | Stav |

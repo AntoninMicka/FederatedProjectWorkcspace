@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0014 — Otevření registrovaného projektu v M1
 
 Stav: přijato pro omezenou integraci M1-01. Navazuje na ADR 0003, 0004 a 0013; nepřidává projektové mutace ani nový storage protokol.

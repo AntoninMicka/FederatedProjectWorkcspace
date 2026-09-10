@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Desktop assets/policy are mandatory; a real Qt smoke is explicitly opt-in."""
 import os
 from pathlib import Path

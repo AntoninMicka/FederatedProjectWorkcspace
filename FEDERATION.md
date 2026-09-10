@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Federace — návrh M0, implementace v M5
 
 Každý uzel má trvalé Node ID a klíč; důvěra je explicitní a nezávislá na VPN. Pro první ověření propojit desktop s jedním zvoleným serverovým peerem. Server není globální autorita všech projektů; další topologie přijde až po ověření dvou uzlů.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Bounded, read-only previews of committed artifact bytes; no external URLs."""
 import base64
 from pathlib import PurePosixPath

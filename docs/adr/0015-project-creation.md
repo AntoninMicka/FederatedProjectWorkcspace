@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0015 — Vytvoření a registrace projektu
 
 Stav: přijato pro M1-02, omezený Linux PoC. Doplňuje inicializaci, kterou ADR 0003/0004 výslovně vynechaly. Další změny existujícího projektu nadále řídí Workspace.

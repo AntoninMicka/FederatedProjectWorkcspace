@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0006 — Lokální transport/API pro desktop
 
 Stav: přijato pro směr navazujícího PoC; produkční stack a desktopový obal zůstávají M0-06. Datum: 2026-09-09.

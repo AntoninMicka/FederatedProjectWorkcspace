@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Linux Qt/WebEngine shell around the existing local API; registered project reads."""
 import argparse
 import json

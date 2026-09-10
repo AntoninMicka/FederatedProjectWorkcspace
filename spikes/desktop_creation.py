@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Native Qt creation dialog/controller: never accepts commands from JavaScript."""
 from pathlib import Path
 from uuid import uuid4

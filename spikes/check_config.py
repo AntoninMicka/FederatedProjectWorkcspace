@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Validate one project.json or local node.json without modifying it."""
 import argparse
 from pathlib import Path

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0017 — Historie dokumentu pouze pro čtení
 
 Stav: přijato pro M1-04, lokální Linux PoC. Navazuje na [čtení projektu](0014-project-read.md) a [editor](0016-markdown-editor.md). Git zůstává autoritou; nevzniká kopie historie v SQLite.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Real sidebar action uses the native editor; cancel never creates a TODO."""
 import os
 from pathlib import Path

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Native editor: untrusted Markdown is plain text, mutations never enter WebEngine."""
 import json
 from uuid import uuid4

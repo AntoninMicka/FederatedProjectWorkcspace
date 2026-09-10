@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Executable M0 schema and bounded metadata parsing, independent of storage."""
 from datetime import datetime
 import json

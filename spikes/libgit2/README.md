@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Srovnávací C++/libgit2 experiment M0-03
 
 Pouze pro izolované testovací repozitáře. Nejde o produkční Git adapter ani náhradu Workspace. Python testy orchestrují stejné scénáře pro Git CLI a tento malý C++ executable; nejde o návrh produkčního C++/Python IPC.

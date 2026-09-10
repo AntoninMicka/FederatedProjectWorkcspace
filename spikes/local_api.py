@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """M0 transport comparison, not an application server. Linux only; no persistence."""
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, HTTPServer

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0019 — Hlavní panel a náhled artefaktů
 
 Datum: 2026-09-10. M1-AH-02, lokální Linux PoC. Rozšiřuje čtení [ADR 0014](0014-project-read.md), zachovává [chat kontrakt ADR 0008](0008-context-and-publication-contracts.md). Nevytváří LLM backend ani importní workflow.

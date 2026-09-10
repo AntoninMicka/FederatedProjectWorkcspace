@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 from contextlib import redirect_stdout, redirect_stderr
 import io
 from pathlib import Path

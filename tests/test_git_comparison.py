@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Optional native comparison: set M0_LIBGIT2_PROBE to the compiled C++ probe."""
 from contextlib import closing, contextmanager
 import base64

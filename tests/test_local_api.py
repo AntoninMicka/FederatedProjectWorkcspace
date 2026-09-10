@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Real loopback and Unix sockets; no internet, credentials, Git or LLM calls."""
 from contextlib import contextmanager, redirect_stderr
 import io

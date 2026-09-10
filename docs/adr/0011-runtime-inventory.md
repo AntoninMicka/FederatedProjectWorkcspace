@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Inventář instalačního kandidáta M0
 
 Snímek 2026-09-09, Ubuntu 26.04 arm64. Data načtena z konkrétního .deb a místní dpkg databáze. Nejde o inventář uživatelova Debian kontejneru ani o právní posouzení releasu.

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0010 — PySide6 desktopové PoC
 
 Datum: 2026-09-09. Stav: přijato pro M0-06d, PoC validated na vývojovém Ubuntu arm64. Navazuje na návrh [ADR 0009](0009-desktop-distribution-assessment.md); instalační kandidát a finální Gate M0 zůstávají otevřené.

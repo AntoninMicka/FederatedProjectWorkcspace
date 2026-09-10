@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """M0 experiment for controlled repositories; not a production Git sandbox."""
 from contextlib import closing
 import os

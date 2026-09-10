@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Pokyny pro práci v repozitáři
 
 Projekt je aktivně vyvíjený **Git-backed federated project knowledge & decision workspace**. Nevytvářej jej znovu jako greenfield. Zachovej existující práci, experimenty, testy, dokumentaci a historii ADR. Aktuální milník a stav práce čti z roadmapy a TODO.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Coordinated Linux M0 operations in controlled, initialized Git repositories."""
 import hashlib
 import json

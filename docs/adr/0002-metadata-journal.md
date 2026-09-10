@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0002 — Validace metadat a obnova souborových operací
 
 Datum: 2026-09-09. Stav: implementováno jako Linux M0 PoC, produkční integrace otevřená.

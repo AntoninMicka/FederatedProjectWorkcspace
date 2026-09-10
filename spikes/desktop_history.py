@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Native history viewer with no editor writes or HTML rendering."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontDatabase

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 import unittest
 
 from spikes.metadata import (MAX_METADATA, ValidationError, frontmatter, parse_json,

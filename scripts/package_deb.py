@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Build an installable desktop PoC using system runtime dependencies."""
 import argparse
 import os

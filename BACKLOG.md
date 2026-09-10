@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Backlog — další dávky
 
 Aktuální dávku drží [TODO](TODO.md), uzavřené dávky [WORK_LOG](WORK_LOG.md), milníky a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>). Pravidla určuje [AGENTS](AGENTS.md).

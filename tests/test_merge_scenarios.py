@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Controlled local merge scenarios, not a production synchronization service."""
 from contextlib import closing
 import json

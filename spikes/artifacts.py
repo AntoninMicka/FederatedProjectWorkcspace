@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Native Markdown editing over the registered Workspace transaction boundary."""
 from datetime import datetime, timezone
 import json

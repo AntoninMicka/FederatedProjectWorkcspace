@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0016 — Markdown editor, checklisty a hlavní TODO
 
 Stav: přijato pro M1-03, lokální Linux PoC. Rozšiřuje nativní vstup ADR 0015 a koordinovanou operaci [ADR 0003](0003-coordinated-operation.md); nemění autoritu Gitu ani schéma v1.

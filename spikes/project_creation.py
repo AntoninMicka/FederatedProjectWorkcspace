@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Recoverable creation of a new local project, separate from artifact mutations."""
 from contextlib import contextmanager
 import ctypes

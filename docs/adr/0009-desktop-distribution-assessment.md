@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0009 — Posouzení desktopového bindingu a distribuce
 
 Datum: 2026-09-09. Stav: **navrženo, designed** (M0-06c). Doporučení pro ověření, nikoli finální uzavření stacku nebo distribuční release. Historická rozhodnutí [ADR 0005](0005-git-adapter-comparison.md) a [ADR 0007](0007-desktop-poc.md) zůstávají platná.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Read-only, HEAD-bound document history over registered project Git objects."""
 from contextlib import contextmanager
 import json

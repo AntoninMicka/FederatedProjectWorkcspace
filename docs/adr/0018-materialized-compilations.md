@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0018 — Materializované kompiláty jako lokální cache
 
 Datum: 2026-09-10. Stav: **designed**, přijatý návrh na požadavek uživatele (M1-AH-01). Implementace, datový kontrakt a UI zatím neexistují. Navazuje na [architekturu](../../ARCHITECTURE.md), [datový model](../../DATA_MODEL.md) a [Context Manifest / execution boundaries](0008-context-and-publication-contracts.md).

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Manual Linux storage measurements and process-crash recovery on a chosen filesystem."""
 from contextlib import closing
 import argparse

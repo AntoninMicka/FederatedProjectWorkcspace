@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Single-writer Linux M0 file journal; caller commits/indexes after successful recovery."""
 from contextlib import contextmanager
 import fcntl

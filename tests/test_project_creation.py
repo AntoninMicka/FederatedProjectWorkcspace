@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Real process crashes, Git, registration and native desktop creation."""
 from contextlib import closing
 import json

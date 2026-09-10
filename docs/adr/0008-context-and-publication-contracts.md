@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
 Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08. Nejde o implementované schéma, LLM adapter, RBAC ani synchronizační službu.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Static same-origin UI; project data arrives through authenticated reads."""
 import sqlite3
 import subprocess

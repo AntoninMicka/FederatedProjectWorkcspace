@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # IP, Defensive Publication & Crowdfunding Roadmap
 
 ## Začlenění do repozitáře — designed

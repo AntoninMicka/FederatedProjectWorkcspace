@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0011 — Instalační kandidát Debian
 
 Stav: návrh a implementační ověření M0-06e, nikoli produkční release. Navazuje na ADR 0009/0010.

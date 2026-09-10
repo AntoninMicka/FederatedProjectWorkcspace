@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Veřejný katalog reuse
 
 Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.

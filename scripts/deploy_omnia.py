@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Explicit manual deployment of the headless PoC to an existing Debian LXC."""
 import argparse
 import io

@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0004 — Minimální konfigurace projektu a uzlu
 
 Datum: 2026-09-09. Stav: přijato pro M0-02, samostatná validace PoC validated; produkční konfigurace otevřená.
