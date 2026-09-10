@@ -31,8 +31,8 @@ class HistoryDialog(QDialog):
         layout.addWidget(self.compare_button)
         self.tabs = QTabWidget(); layout.addWidget(self.tabs)
         self.body, self.metadata, self.diff, self.info = (QPlainTextEdit() for _ in range(4))
-        for name, widget in [('Obsah zobrazené verze', self.body), ('Metadata', self.metadata),
-                             ('Rozdíl uložených souborů', self.diff), ('Commit', self.info)]:
+        for name, widget in [('Obsah zobrazené verze', self.body), ('Technické údaje', self.metadata),
+                             ('Rozdíl uložených souborů', self.diff), ('Záznam uložení', self.info)]:
             widget.setReadOnly(True)
             widget.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
             self.tabs.addTab(widget, name)

@@ -15,17 +15,18 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
 <div id="sidebar-project-tools" hidden>
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
-<button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">TODO</button>
-<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Zdroje / artefakty</button></div>
-<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní TODO</h2>
+<button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">Úkoly</button>
+<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button></div>
+<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
-<ul id="todo-tree" aria-label="Položky hlavního TODO"></ul><small>Pouze pro čtení · upravíte v editoru</small></div>
+<button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
+<ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
-<h2>Zdroje / artefakty</h2><p id="sidebar-artifact-status" role="status"></p>
-<ul id="sidebar-artifact-list" aria-label="Zdroje a artefakty projektu"></ul></div></div>
-<div class="node-note">Lokální uzel<br>Projektový workspace · PoC</div></aside>
+<h2>Podklady</h2><p id="sidebar-artifact-status" role="status"></p>
+<ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div></div>
+<div class="node-note">Na tomto počítači<br>Zkušební verze</div></aside>
 <main><div id="project-home">
-<header><span class="badge">Lokální workspace</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
+<header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
 <div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
 <h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
 <p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
@@ -39,22 +40,22 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
-<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled artefaktu</button>
-<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Orchestrační chat</button></div>
+<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
+<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button></div>
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
-<p id="preview-status" role="status">Vyberte artefakt ze seznamu vlevo.</p>
+<p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
-<details id="preview-details" hidden><summary>Metadata a popis</summary><dl id="preview-metadata"></dl></details></div>
-<div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Orchestrační chat</h2>
-<p>LLM backend zatím není připojený. Zadání zůstávají pouze v tomto okně, bez odeslání.</p>
-<div id="chat-messages" role="log" aria-label="Lokální zadání"></div></div></div>
+<details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
+<div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
+<p>Asistent zatím není připojený a neodpovídá. Zadání zůstávají jen v tomto okně a po jeho zavření se ztratí.</p>
+<div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
 <button id="chat-submit" type="submit" disabled>Přidat zadání</button></div>
-<small>Jen v tomto okně · Enter přidá zadání, Shift+Enter nový řádek · LLM není připojený</small></form>
+<small>Jen v tomto okně · Enter přidá zadání, Shift+Enter nový řádek · Asistent zatím neodpovídá</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
 </div></main><script src="/app.js"></script></body></html>'''
@@ -113,7 +114,7 @@ button.addEventListener('click',async()=>{
   if(!response.ok) throw new Error('request rejected');
   const result=await response.json();
   document.querySelector('#count').textContent=result.value;
-  status.textContent='Spojení funguje. Backend přijal požadavek.';
+  status.textContent='Spojení funguje.';
  }catch(error){status.textContent='Spojení se nezdařilo. Zavřete a znovu spusťte aplikaci.';}
  finally{button.disabled=false;}
 });'''
@@ -144,7 +145,7 @@ for(const [index,tab] of sidebarTabs.entries()){
 }
 function renderSidebarArtifacts(items){
  sidebarArtifacts.replaceChildren();
- sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Projekt zatím nemá zdroje ani artefakty.';
+ sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
   const row=document.createElement('li');
   const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
@@ -155,12 +156,18 @@ function renderSidebarArtifacts(items){
  }
 }
 let viewRequest=0;
+const createTodo=document.querySelector('#create-main-todo');
+createTodo.addEventListener('click',()=>{
+ if(activeProject && !createTodo.hidden)location.hash='create-main-todo';
+});
 function renderTodo(todo){
+ createTodo.hidden=!!todo;
+ document.querySelector('#todo-help').hidden=!todo;
  todoTree.replaceChildren();
  document.querySelector('#todo-title').textContent=todo?.title || '';
- if(!todo){todoStatus.textContent='Hlavní TODO zatím není vytvořeno.';return;}
- if(todo.status!=='ready'){todoStatus.textContent='Hlavní TODO nelze zobrazit v tomto formátu nebo velikosti.';return;}
- todoStatus.textContent=todo.total ? `${todo.completed} z ${todo.total} hotovo` : 'Zatím bez položek checklistu.';
+ if(!todo){todoStatus.textContent='Založte seznam a mějte úkoly projektu po ruce.';return;}
+ if(todo.status!=='ready'){todoStatus.textContent='Hlavní seznam úkolů nelze zobrazit v tomto formátu nebo velikosti.';return;}
+ todoStatus.textContent=todo.total ? `${todo.completed} z ${todo.total} hotovo` : 'Zatím bez úkolů.';
  if(todo.truncated) todoStatus.textContent+=' Zobrazeno prvních 1000 položek.';
  const lists=[todoTree];
  for(let i=0;i<todo.items.length;i++){
@@ -190,7 +197,7 @@ function clearProject(){
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
- todoStatus.textContent='Otevřete projekt.';
+ todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-commit').textContent='';
@@ -218,7 +225,7 @@ async function openRegisteredProject(projectId){
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   selectSidebarTab(sidebarTabs[1]);
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
-   'Vyberte artefakt ze seznamu vlevo.' : 'Projekt zatím nemá artefakty. Vytvořte dokument v editoru.';
+   'Vyberte podklad ze seznamu vlevo.' : 'Zatím tu nejsou žádné podklady. První dokument vytvoříte tlačítkem Dokumenty v horní liště.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
 }
 function renderProjectCatalog(items){
@@ -234,7 +241,7 @@ function renderProjectCatalog(items){
   const row=document.createElement('li');const compact=document.createElement('button');compact.type='button';compact.dataset.id=item.id;
   compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));row.append(compact);sidebarProjects.append(row);
  }
- document.querySelector('#sidebar-project-status').textContent=items.length ? `${items.length} projektů` : 'Zatím bez projektů.';
+ document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
 }
 async function loadProjects(selectedId=null){
  const request=++catalogRequest;
@@ -278,7 +285,7 @@ function clearPreview(){
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
  document.querySelector('#pdf-controls').hidden=true;
- previewStatus.textContent='Vyberte artefakt ze seznamu.';
+ previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
 function renderMarkdown(text){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
@@ -309,15 +316,19 @@ async function openPreview(id,page=1){
   document.querySelector('#preview-title').textContent=result.metadata.title;
   const metadata=document.querySelector('#preview-metadata');
   for(const [key,value] of Object.entries(result.metadata)){
-   const term=document.createElement('dt');term.textContent=key;
-   const detail=document.createElement('dd');detail.textContent=typeof value==='string'?value:JSON.stringify(value);
+   const term=document.createElement('dt');term.textContent=({title:'Název',description:'Popis',tags:'Štítky',id:'Identifikátor',kind:'Typ',file:'Soubor',created_at:'Vytvořeno',author_id:'Autor',privacy:'Soukromí',provenance:'Původ',schema_version:'Verze formátu',relations:'Vztahy',source_url:'Odkaz na zdroj'})[key] || key;
+   const detail=document.createElement('dd');detail.textContent=Array.isArray(value) && value.every(item=>typeof item==='string') ? value.join(', ') : typeof value==='string'?value:JSON.stringify(value);
+   const labels={privacy:{public:'Veřejné',project:'V rámci projektu',confidential:'Důvěrné','local-only':'Jen na tomto počítači'},
+    provenance:{user:'Vytvořeno uživatelem',external:'Převzato ze zdroje','llm-generated':'Vytvořeno AI','llm-transformed':'Upraveno AI',snapshot:'Snímek stavu'},
+    kind:{document:'Dokument',source:'Zdroj'}};
+   if(labels[key] && Object.hasOwn(labels[key],value))detail.textContent=labels[key][value];
    metadata.append(term,detail);
   }
   document.querySelector('#preview-details').hidden=false;
   if(result.format==='markdown')renderMarkdown(result.text);
   else if(result.format==='image' || result.format==='pdf'){
    const image=document.createElement('img');image.alt=result.metadata.title;
-   image.addEventListener('error',()=>{if(request===previewRequest)previewStatus.textContent='Obrázek nelze dekódovat.';});
+   image.addEventListener('error',()=>{if(request===previewRequest)previewStatus.textContent='Obrázek se nepodařilo zobrazit.';});
    image.src=result.image;previewContent.append(image);
   }
   // Keep page selection available after an invalid/missing PDF page.

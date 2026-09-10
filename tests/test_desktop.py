@@ -26,6 +26,8 @@ class DesktopTests(unittest.TestCase):
             ('http://127.0.0.1:1235/v1/counter', origin, 'POST'),
             ('http://user@127.0.0.1:1234/v1/counter', origin, 'POST'),
             ('https://evil.example/', origin, 'GET'),
+            (origin + '/#create-main-todo', origin, 'GET'),
+            (origin + '/native/main-todo', origin, 'POST'),
             ('file:///etc/passwd', origin, 'GET'),
             ('data:text/html,test', origin, 'GET'),
         ]:

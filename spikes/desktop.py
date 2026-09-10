@@ -107,7 +107,7 @@ def main():
             settings.setAttribute(getattr(QWebEngineSettings.WebAttribute, setting), False)
         window = Window()
         window.setCentralWidget(view)
-        window.setWindowTitle('Projektový workspace · Desktop PoC')
+        window.setWindowTitle('Projektový workspace · Zkušební verze')
         window.resize(1100, 800)
         creation_result = {'receipt': None, 'loaded': False}
         def created(receipt):
@@ -123,24 +123,41 @@ def main():
                 QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         editor_toolbar = window.addToolBar('Dokumenty')
+        editor_open = False
         def edit_selected(todo=False):
-            if controller.busy:
+            nonlocal editor_open
+            if controller.busy or editor_open:
                 return
+            editor_open = True
             def selected(project_id):
+                nonlocal editor_open
+                if view.closing:
+                    editor_open = False
+                    return
                 if not project_id:
+                    editor_open = False
                     QMessageBox.information(window, 'Dokumenty', 'Nejprve vyberte projekt.')
                     return
-                dialog = EditorDialog(Artifacts(node_path), project_id, window, todo=todo)
-                dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
-                dialog.exec()
-                for worker in dialog.workers:
-                    worker.wait()
-                dialog.deleteLater()
+                try:
+                    dialog = EditorDialog(Artifacts(node_path), project_id, window, todo=todo)
+                    dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
+                    dialog.exec()
+                    for worker in dialog.workers:
+                        worker.wait()
+                    dialog.deleteLater()
+                finally:
+                    editor_open = False
             page.runJavaScript("activeProject?.id || null", 0, selected)
-        for label, todo in [('Markdown editor…', False), ('Hlavní TODO…', True)]:
+        for label, todo in [('Dokumenty…', False), ('Úkoly projektu…', True)]:
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
             editor_toolbar.addWidget(button)
+        def native_action(url):
+            # A same-document fragment never loads a route or exposes an HTTP writer.
+            if url.toString() == server.origin + '/#create-main-todo':
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                edit_selected(True)
+        page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok
             if ok and creation_result['receipt']:
@@ -218,6 +235,7 @@ def main():
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
                   if(todoPanel.hidden || document.activeElement!==todoTab) return null;
                   const todo=expected.main_todo;
+                  if(document.querySelector('#create-main-todo').hidden!==!!todo) return null;
                   const tree=document.querySelector('#todo-tree');
                   if(!tree || tree.querySelector('img,script,a')) return null;
                   const todoRows=[...tree.querySelectorAll('li')];

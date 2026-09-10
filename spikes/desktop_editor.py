@@ -34,7 +34,7 @@ class EditorDialog(QDialog):
         self.service, self.project_id, self.want_todo = service, project_id, todo
         self.workers, self.busy, self.dirty, self.pending = [], False, False, None
         self.view, self.current = None, None
-        self.setWindowTitle('Markdown dokumenty')
+        self.setWindowTitle('Dokumenty')
         self.resize(1000, 720)
         layout = QVBoxLayout(self)
         self.project_label = QLabel()
@@ -43,10 +43,10 @@ class EditorDialog(QDialog):
         bar = QHBoxLayout()
         self.documents = QComboBox()
         self.new_button = QPushButton('Nový dokument')
-        self.todo_button = QPushButton('Hlavní TODO')
+        self.todo_button = QPushButton('Hlavní seznam úkolů')
         self.history_button = QPushButton('Historie…')
         self.history_button.clicked.connect(self.history)
-        self.reload_button = QPushButton('Znovu načíst / obnovit')
+        self.reload_button = QPushButton('Znovu načíst')
         for widget in (self.documents, self.new_button, self.todo_button, self.history_button, self.reload_button):
             bar.addWidget(widget)
         layout.addLayout(bar)
@@ -55,7 +55,7 @@ class EditorDialog(QDialog):
         layout.addWidget(self.title)
         splitter = QSplitter()
         self.body = QPlainTextEdit()
-        self.body.setPlaceholderText('Markdown text; checklist: - [ ] Úkol')
+        self.body.setPlaceholderText('Napište text. Úkol přidáte tlačítkem pod editorem.')
         self.checks = QListWidget()
         tabs = QTabWidget()
         tabs.addTab(self.body, 'Obsah')
@@ -66,12 +66,12 @@ class EditorDialog(QDialog):
         self.metadata_view = QPlainTextEdit(); self.metadata_view.setReadOnly(True)
         form.addRow('Popis', self.description)
         form.addRow('Štítky (jeden na řádek)', self.tags)
-        form.addRow('Uložená metadata (pouze čtení)', self.metadata_view)
-        tabs.addTab(metadata_page, 'Metadata')
+        form.addRow('Technické údaje (jen pro čtení)', self.metadata_view)
+        tabs.addTab(metadata_page, 'Popis a štítky')
         splitter.addWidget(tabs); splitter.addWidget(self.checks)
         splitter.setSizes([700, 300]); layout.addWidget(splitter)
         buttons = QHBoxLayout()
-        self.add_check = QPushButton('Přidat položku checklistu')
+        self.add_check = QPushButton('Přidat úkol')
         self.save_button = QPushButton('Uložit')
         self.status = QLabel(); self.status.setWordWrap(True)
         self.status.setTextFormat(Qt.TextFormat.PlainText)
@@ -118,7 +118,7 @@ class EditorDialog(QDialog):
     def discard(self):
         return not (self.dirty or self.pending) or QMessageBox.question(
             self, 'Opustit neuložené změny?',
-            'Zahodit neuložený obsah a metadata v editoru? Již připravený zápis v journalu se při otevření dokončí.',
+            'Zahodit rozepsané změny? Ukládání, které už začalo, se při dalším otevření dokončí.',
             QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel) == QMessageBox.StandardButton.Discard
 
@@ -128,7 +128,7 @@ class EditorDialog(QDialog):
         self.project_label.setText(view['title'])
         self.documents.clear()
         for doc in view['documents']:
-            label = ('Hlavní TODO · ' if doc['id'] == view['main_todo_id'] else '') + doc['title']
+            label = ('Hlavní seznam úkolů · ' if doc['id'] == view['main_todo_id'] else '') + doc['title']
             self.documents.addItem(label, doc['id'])
         target = view['main_todo_id'] if self.want_todo else previous
         self.want_todo = False
@@ -154,7 +154,7 @@ class EditorDialog(QDialog):
         self.tags.setPlainText('\n'.join(meta.get('tags', [])))
         self.description.blockSignals(False); self.tags.blockSignals(False)
         self.metadata_view.setPlainText(json.dumps(meta, ensure_ascii=False, indent=2) if meta else
-                                       'Metadata vzniknou při prvním uložení.')
+                                       'Podrobnosti se doplní při prvním uložení.')
         # Compare the widget representation, preserving untouched unusual imported strings.
         self.original_description = self.description.toPlainText()
         self.original_tags = self.tags.toPlainText()
@@ -178,7 +178,7 @@ class EditorDialog(QDialog):
             return
         id_ = self.view['main_todo_id']
         doc = next((d for d in self.view['documents'] if d['id'] == id_), None)
-        self.show_document(doc or dict(id=id_, title='Hlavní TODO', body='# TODO\n\n- [ ] První úkol\n', new=True))
+        self.show_document(doc or dict(id=id_, title='Hlavní seznam úkolů', body='# Hlavní seznam úkolů\n\n- [ ] První úkol\n', new=True))
 
     def refresh_checks(self):
         self.checks.blockSignals(True); self.checks.clear()
@@ -235,7 +235,7 @@ class EditorDialog(QDialog):
             return self.service.open(self.project_id)
         def saved(view):
             self.loaded(view)
-            self.status.setText('Uloženo do Gitu.')
+            self.status.setText('Změny uloženy.')
             self.saved.emit(self.project_id)
         self.run(save_and_read, saved)
 

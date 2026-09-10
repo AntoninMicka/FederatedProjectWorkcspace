@@ -305,7 +305,7 @@ for pass_ in range(2):
         operation = dialog.pending[1]
         dialog.save_button.click(); idle(dialog)
         assert service.workspace(sys.argv[2]).receipt(operation) is not None
-        assert dialog.status.text() == 'Uloženo do Gitu.', dialog.status.text()
+        assert dialog.status.text() == 'Změny uloženy.', dialog.status.text()
         assert not dialog.dirty
         assert dialog.metadata_view.isReadOnly()
         assert 'created_at' in dialog.metadata_view.toPlainText()
