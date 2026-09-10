@@ -12,6 +12,11 @@ import tempfile
 from pathlib import Path
 import tarfile
 
+if __package__:
+    from .license_files import license_files
+else:
+    from license_files import license_files
+
 ROOT = Path(__file__).resolve().parents[1]
 PREFIX = 'federated-workspace-poc'
 
@@ -26,6 +31,7 @@ def sources(root):
                  'FEDERATION.md', 'SECURITY.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md', 'REUSE_CATALOG.md', 'CONTRIBUTING.md'))
     paths.extend(root.glob('*Master Checklist*.md'))
     paths.extend(sorted((root / 'docs/IP').glob('*.md')))
+    paths.extend(license_files(root))
     paths = sorted(set(paths))
     for path in paths:
         if not path.is_file() or path.is_symlink() or path.resolve() != path.absolute():

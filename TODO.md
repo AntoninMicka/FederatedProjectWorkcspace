@@ -67,6 +67,9 @@ Ověření M1-AH-03: cílené testy katalogu/projektů/náhledů a skutečný We
 
 Ověření M1-AH-04: cílených 32 testů OK, následně skutečné zahození návrhu přes potvrzovací dialog, opakované otevření, uložení jediného dokumentu a obnovení sidebaru. Vizuální kontrola levého panelu a editoru v Qt; existující/nepodporovaný seznam nenabízí vytvoření. Závěrečná celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **125 testů OK, bez vynechání**, 83,027 s. Syntaxe JS, místní odkazy a `git diff --check` v pořádku. Úkol pro ukázku UI uzavřen v rozsahu lokálního PoC; asistent nadále neodpovídá a zadání nejsou trvale uložená. Gate M1 zůstává otevřený, záznam zůstává v TODO do uzavření dávky.
 
+
+- [x] [completed] **M1-LC-01 — Compliance baseline a notices (implemented, 2026-09-10).** Dokončena integrace compliance patchu: přidané `THIRD_PARTY_NOTICES.md`, právní evidence pod `docs/legal/*` (`COMPLIANCE.md`, `LICENSE_SOURCES.md`, `DEPENDENCIES.toml`, `RELINKING.md`, `licenses/*`), nový `scripts/license_files.py`, a `tests/test_license_packaging.py`; úprava balicích skriptů pro zařazení povinných licenčních souborů do source i `.deb` distribuce. Ověření: `python3 -m unittest discover -s tests -p 'test_license_packaging.py' -v`, validace `git diff --check` po změnách, dokumentační vazby do `README.md` a `REUSE_CATALOG.md` podle zadání.
+
 ## K předání do backlogu
 
 Doplnění k **V-11** při předání dávky: příští distribuční inventář musí zahrnout novou systémovou závislost `poppler-utils` pro PDF náhledy (M1-AH-02). Historické inventáře se nepřepisují; veřejný release zůstává samostatným úkolem.
