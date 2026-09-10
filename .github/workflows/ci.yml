@@ -73,3 +73,19 @@ jobs:
       - name: Check repository diff
         run: |
           git diff --check
+
+  release-branch:
+    name: release-branch
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require release or hotfix branch for main
+        shell: bash
+        run: |
+          if [[ "${GITHUB_HEAD_REF}" != release/* &&
+                "${GITHUB_HEAD_REF}" != hotfix/* ]]; then
+            echo "PRs into main must come from release/* or hotfix/* branches."
+            echo "Current source branch: ${GITHUB_HEAD_REF}"
+            exit 1
+          fi
