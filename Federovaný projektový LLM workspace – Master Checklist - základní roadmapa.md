@@ -606,6 +606,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 # 14. Turris Omnia / LXC deployment
 
 - [ ] Vytvořit minimální LXC image/container setup.
+- [ ] Integrovat dlaždici aplikace na uvítací stránce routeru s odkazem na aktuální adresu LXC služby, včetně změny IP, restartu a nedostupnosti kontejneru (aktuální úkol M1-07 v [TODO](TODO.md)).
 - [ ] Oddělit persistentní:
   - [ ] Git repositories,
   - [ ] DB,

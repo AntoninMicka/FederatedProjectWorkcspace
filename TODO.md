@@ -21,6 +21,8 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
+- [ ] [planned] **M1-07 — LXC webové nasazení a dlaždice na routeru (cílová úroveň: PoC validated).** Navazuje na otevřené LXC nasazení v souhrnném M1; požadavek uživatele z 2026-09-10 doplňuje dlaždici aplikace na uvítací stránce routeru. Zpřístupnit workspace v prohlížeči v rámci LAN a integrovat dlaždici s aktuální adresou určeného LXC kontejneru a portem služby. Adresu nezapisovat napevno při instalaci: odkaz musí sledovat změnu IP i restart kontejneru/routeru; při nedostupné nebo nejednoznačné adrese nesmí vést na starou či náhodně vybranou adresu. Nejprve ověřit existující mechanismus uvítací stránky routeru a možnosti jeho reuse/adapt; zachovat ostatní dlaždice. Stávající `scripts/deploy_omnia.py` instaluje pouze headless demo, webovou službu ani dlaždici zatím neposkytuje; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013. Podmínka dokončení: doložené spuštění služby, funkční otevření aplikace z dlaždice, změna IP, restart, zastavený kontejner, opakované nasazení a odebrání integrace bez poškození ostatních dlaždic. Ověření na skutečném routeru evidovat odděleně od lokálních testů; do té doby zůstává tato část neověřená. Doplnit návod nasazení a obnovy.
+
 - [x] [completed] **V-11 — Příprava veřejné distribuce (designed, 2026-09-10).** Distribuční metadata a update channel byly sjednoceny pro aktuální PoC release režim: v `.deb` kontrolním souboru je explicitní `Maintainer` (už bez placeholderu), doplněn `Homepage` repozitáře a v dokumentaci je explicitně řečeno, že update je v této fázi ruční (`.deb` + `apt`), bez auto-updateru. V kontrolním testu .deb je potvrzeno, že placeholder byl odstraněn.
 
 Ověření V-11:
