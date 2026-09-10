@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 
-rm F  name: CI
+name: CI
 
 on:
   pull_request:
@@ -61,7 +61,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          
+
       - name: Validate SPDX metadata
         run: |
           python -m unittest tests.test_spdx -v
