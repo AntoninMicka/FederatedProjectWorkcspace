@@ -9,6 +9,11 @@ import re
 import subprocess
 import tempfile
 
+if __package__:
+    from .license_files import license_files
+else:
+    from license_files import license_files
+
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'federated-workspace-poc'
 
@@ -16,6 +21,7 @@ NAME = 'federated-workspace-poc'
 def build(output, version='0.1.0~m0'):
     if not re.fullmatch(r'[0-9][A-Za-z0-9.+~]*', version):
         raise ValueError('Invalid package version')
+    legal_sources = license_files(ROOT)
     output = Path(output).absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.deb-', dir=output.parent) as tmp:
@@ -30,10 +36,16 @@ def build(output, version='0.1.0~m0'):
             if source.is_symlink() or not source.is_file():
                 raise ValueError('Expected regular source')
             write(f'usr/lib/{NAME}/spikes/{source.name}', source.read_bytes())
-        write(f'usr/share/doc/{NAME}/copyright', (ROOT / 'LICENSE').read_bytes())
-        write(f'usr/share/doc/{NAME}/README', b'Desktop PoC: create local projects and read committed artifacts. Close before upgrading.\nRuntime dependencies are supplied by the OS, not bundled.\n')
-        write(f'usr/bin/{NAME}', b'#!/bin/sh\nset -eu\ncd -- "$(dirname -- "$(readlink -f -- "$0")")/../lib/federated-workspace-poc"\nexec /usr/bin/python3 -I -c \'import sys; sys.path.insert(0, "."); from spikes.desktop import main; raise SystemExit(main())\' "$@"\n', 0o755)
-        write(f'usr/share/applications/{NAME}.desktop', f'[Desktop Entry]\nType=Application\nName=Projektový workspace PoC\nExec={NAME}\nTerminal=false\nCategories=Office;\n'.encode())
+        for source in legal_sources:
+            write(f'usr/share/doc/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
+        write(f'usr/share/doc/{NAME}/copyright', (
+            'Workspace original sources: Copyright 2026 Antonín Mička\n'
+            'License: MPL-2.0. Third-party notices and license documents retain\n'
+            'their respective ownership and terms; see THIRD_PARTY_NOTICES.md.\n\n'
+        ).encode() + (ROOT / 'LICENSE').read_bytes())
+        write(f'usr/share/doc/{NAME}/README', b'Desktop PoC: create local projects and read committed artifacts. Close before upgrading.\nRuntime dependencies are supplied by the OS, not bundled.\nSee THIRD_PARTY_NOTICES.md and docs/legal/RELINKING.md for licenses and library replacement.\n')
+        write(f'usr/bin/{NAME}', b'#!/bin/sh\n# SPDX-FileCopyrightText: 2026 Anton\xc3\xadn Mi\xc4\x8dka\n# SPDX-License-Identifier: MPL-2.0\nset -eu\ncd -- "$(dirname -- "$(readlink -f -- "$0")")/../lib/federated-workspace-poc"\nexec /usr/bin/python3 -I -c \'import sys; sys.path.insert(0, "."); from spikes.desktop import main; raise SystemExit(main())\' "$@"\n', 0o755)
+        write(f'usr/share/applications/{NAME}.desktop', f'# SPDX-FileCopyrightText: 2026 Antonín Mička\n# SPDX-License-Identifier: MPL-2.0\n[Desktop Entry]\nType=Application\nName=Projektový workspace PoC\nExec={NAME}\nTerminal=false\nCategories=Office;\n'.encode())
         write('DEBIAN/control', (
             f'Package: {NAME}\n'
             f'Version: {version}\n'
@@ -42,7 +54,7 @@ def build(output, version='0.1.0~m0'):
             'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils, poppler-utils\n'
             'Section: utils\n'
             'Priority: optional\n'
-            'Homepage: https://github.com/antonin-micka/FederatedProjectWorkcspace\n'
+            'Homepage: https://github.com/AntoninMicka/FederatedProjectWorkcspace\n'
             'Description: Experimental project workspace desktop\n'
             ' Local project creation, registration and committed artifact listing.\n'
         ).encode())
