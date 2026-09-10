@@ -16,6 +16,8 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
+- [ ] [planned] **V-11 — Příprava veřejné distribuce (designed, 2026-09-10).** Příprava aktualizačního kanálu a distribučně relevantních metadat před veřejným releasem. V tomto kroku je určen ruční release flow (`.deb` + `apt`), ověřeno chybějící placeholder `noreply@example.invalid` v kontrolních metadatech a doplněna poznámka o absenci auto-updateru; před veřejným zveřejněním zůstává nutný rozhodnutý kontakt/maintainer a právní review konkrétních distribučních komponent.
+
 - [x] [completed] **V-08 — Registrace existujícího projektu (implemented, 2026-09-10).** Doplněn registrační tok pro již existující Git projekt: nová cesta `ProjectCreation.register` validuje kořenový Git repozitář, `project.json` v `HEAD` i pracovní kopii, kontroluje konfliktní/duplicitní `project_id`, vytváří lokální state vedle repozitáře a zapisuje registraci přes recovery flow.
 
 Ověření V-08:

@@ -16,7 +16,10 @@ class DebianPackageTests(unittest.TestCase):
             subprocess.run(['dpkg-deb', '-R', str(package), str(root / 'unpacked')], check=True, capture_output=True)
             tree = root / 'unpacked'
             self.assertEqual({p.name for p in (tree / 'DEBIAN').iterdir()}, {'control'})
-            self.assertIn('poppler-utils', (tree / 'DEBIAN/control').read_text())
+            control = (tree / 'DEBIAN/control').read_text()
+            self.assertIn('poppler-utils', control)
+            self.assertIn('Maintainer: Federated workspace contributors', control)
+            self.assertNotIn('noreply@example.invalid', control)
             self.assertTrue((tree / f'usr/lib/{NAME}/spikes/artifact_preview.py').exists())
             self.assertFalse((tree / 'home').exists())
             self.assertFalse((tree / 'var').exists())

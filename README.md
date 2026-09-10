@@ -146,6 +146,8 @@ federated-workspace-poc
 
 Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine a PyYAML 6.0.3. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI nabízí projekty, Markdown editor, checklisty a hlavní TODO; testovací čítač zůstává pro kontrolu spojení.
 
+Aktualizační kanál je v této fázi explicitně **ruční**: nový release se instaluje opět přes nový `.deb` soubor a aktivní verzi pak řeší `apt install`/`dpkg`. `federated-workspace-poc` zatím nemá vlastní update feed ani auto-updater.
+
 Pro další vydání zvolte vyšší verzi a jiný výstup; builder existující soubor nepřepisuje:
 
 ```sh
