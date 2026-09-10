@@ -26,4 +26,4 @@ Stávající `check_project`, Workspace, Git snapshot a Index nadále validují 
 
 Ověřit platnou konfiguraci, neplatné a budoucí verze, chybějící/zakázaná pole, UUID/datum, parserové limity, duplicitní registrace, překryv cest a symlink aliasy, node.json uvnitř projektu a CLI exit kódy bez změny vstupů. Testy nedokládají RBAC, vault, migraci ani zabezpečení vůči závodícím filesystemovým změnám.
 
-Ověření: `python3 -m unittest discover -s tests -v` prošlo včetně nového `tests/test_configuration.py`; aktuální počty a výsledky jsou v TODO u M0-02. Ověřeny i CLI/wrapper a zachování bajtů vstupních souborů. Shellová syntaxe ověřena přes `bash -n run.sh`.
+Ověření: `python3 -m unittest discover -s tests -v` prošlo včetně nového `tests/test_configuration.py`; aktuální počty a výsledky jsou ve WORK_LOG u M0-02. Ověřeny i CLI/wrapper a zachování bajtů vstupních souborů. Shellová syntaxe ověřena přes `bash -n run.sh`.

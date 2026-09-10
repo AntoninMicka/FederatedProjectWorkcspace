@@ -20,7 +20,7 @@ def sources(root):
     paths.extend(root / name for name in ('spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md'))
     # Include docs linked by README/ADRs, excluding the private local inventory.
     paths.extend(root / name for name in ('AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md',
-                 'FEDERATION.md', 'SECURITY.md', 'TODO.md', 'REUSE_CATALOG.md', 'CONTRIBUTING.md'))
+                 'FEDERATION.md', 'SECURITY.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md', 'REUSE_CATALOG.md', 'CONTRIBUTING.md'))
     paths.extend(root.glob('*Master Checklist*.md'))
     paths.extend(sorted((root / 'docs/IP').glob('*.md')))
     paths = sorted(set(paths))

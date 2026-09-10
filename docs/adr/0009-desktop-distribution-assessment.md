@@ -6,7 +6,7 @@ Datum: 2026-09-09. Stav: **navrženo, designed** (M0-06c). Doporučení pro ově
 
 Posouzen checkout `3549811`, čistý pracovní strom. Současný launcher a desktop používají PyQt6, zdrojový balíček obsahuje Python zdroje bez Qt runtime. Na vývojovém Ubuntu 26.04.1 arm64 je importem potvrzen Qt/PyQt 6.10.2. PySide6 je přítomné, ale `find_spec` pro QtWebEngineCore i QtWebEngineWidgets vrací None. Místní apt-cache nabízí oba moduly ve verzi 6.10.2-6ubuntu1; jde o obsah lokálního katalogu, ne ověřené stažení, instalaci nebo spuštění.
 
-Uživatelské důkazy v [TODO](../../TODO.md) potvrzují desktopové kliknutí/zavření/restart i headless Python storage demo na Omnia ARMv7, včetně běhu na SSD/Btrfs. Čas 0,66 s a RSS 11 520 KiB patří pouze celému demu v tmpfs. Nejsou měřením startu desktopu ani výkonu SSD. C++/libgit2 má srovnávací PoC na vývojovém hostu; produkční port Workspace by stále vyžadoval novou práci.
+Uživatelské důkazy v [WORK_LOG](../../WORK_LOG.md) potvrzují desktopové kliknutí/zavření/restart i headless Python storage demo na Omnia ARMv7, včetně běhu na SSD/Btrfs. Čas 0,66 s a RSS 11 520 KiB patří pouze celému demu v tmpfs. Nejsou měřením startu desktopu ani výkonu SSD. C++/libgit2 má srovnávací PoC na vývojovém hostu; produkční port Workspace by stále vyžadoval novou práci.
 
 ## Porovnání a doporučení
 

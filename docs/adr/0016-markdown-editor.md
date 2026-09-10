@@ -35,7 +35,7 @@ Git operace sdílejí deadline 60 sekund, SQLite čekání má limit 2 sekundy, 
 
 Adaptovány Workspace/Journal/Git/Index, Projects, lokální author z ProjectCreation a nativní Qt widgets. Nový parser pouze mapuje checklisty na pozice textu; nepřibývá Markdown renderer, závislost nebo cizí framework. Soukromá inventura neposkytuje potřebný důvod nahrazovat existující storage či Qt cestu.
 
-`tests/test_artifacts.py` ověřuje nové/změněné dokumenty, metadata, stabilní TODO, retry/receipt, stale/busy, odmítnuté vstupy, cizí editace, obnovu indexu, procesní pády na hranicích ADR 0003 a skutečný Qt editor s checkboxem i ztracenou odpovědí. Aktuální běhy a readiness drží [TODO](../../TODO.md). Obecné mutující HTTP API, plné RBAC, preview, registry úkolů a produkční provoz zůstávají mimo tento PoC.
+`tests/test_artifacts.py` ověřuje nové/změněné dokumenty, metadata, stabilní TODO, retry/receipt, stale/busy, odmítnuté vstupy, cizí editace, obnovu indexu, procesní pády na hranicích ADR 0003 a skutečný Qt editor s checkboxem i ztracenou odpovědí. Aktuální běhy a readiness drží [WORK_LOG](../../WORK_LOG.md). Obecné mutující HTTP API, plné RBAC, preview, registry úkolů a produkční provoz zůstávají mimo tento PoC.
 
 ## Read-only strom hlavního TODO — M1-03a
 
@@ -43,4 +43,4 @@ Na požadavek uživatele přidává levý panel přehled checklistů. `Workspace
 
 Čisté funkce pro document, hlavní TODO ID a checklisty jsou sdílené v `markdown_documents.py`. Renderer dostává pouze titulek, texty položek, stavy a hloubku stromu; nedostává celé tělo, metadata, cesty ani credentials. Hierarchie vychází z odsazení checklistových položek (tabulátor = čtyři mezery); nadpisy a běžný text se nezobrazují jako uzly. Zobrazuje se prvních 1000 položek, souhrn počítá celý checklist; limit těla zůstává 1 MiB. Nepodporovaný formát/velikost má vlastní stav, neblokuje ostatní validní artefakty projektu.
 
-UI používá textContent, disabled checkboxy a nativní HTML details/summary pro sbalení větví. Výběr projektu, nové načtení i chyba odstraní předchozí obsah; opožděná odpověď patřící staršímu požadavku se zahodí. Úspěšné uložení v nativním editoru využívá existující refresh přehledu. Externí změny se načtou opětovným otevřením projektu, periodické dotazování nevzniká. [Testy artefaktů](../../tests/test_artifacts.py) a rozšířený WebEngine smoke ověřují strom, stavy, readonly vykreslení a obnovení; výsledky drží TODO.
+UI používá textContent, disabled checkboxy a nativní HTML details/summary pro sbalení větví. Výběr projektu, nové načtení i chyba odstraní předchozí obsah; opožděná odpověď patřící staršímu požadavku se zahodí. Úspěšné uložení v nativním editoru využívá existující refresh přehledu. Externí změny se načtou opětovným otevřením projektu, periodické dotazování nevzniká. [Testy artefaktů](../../tests/test_artifacts.py) a rozšířený WebEngine smoke ověřují strom, stavy, readonly vykreslení a obnovení; výsledky drží WORK_LOG.

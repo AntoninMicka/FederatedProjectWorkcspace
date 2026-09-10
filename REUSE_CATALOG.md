@@ -38,9 +38,9 @@ Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3
 | [Journal](spikes/journal.py) a [Workspace](spikes/workspace.py) | **adapt**: zachovat společnou serializaci a obnovitelnou operaci | [ADR 0003](docs/adr/0003-coordinated-operation.md), [testy](tests/test_workspace.py); V-06/V-07: produkční ochrany a lifecycle |
 | [Git a SQLite index](spikes/storage.py) | **adapt**: validovaný commit a rebuild projekce místo druhé autority | [Testy](tests/test_storage.py); V-02/V-03: integrační důkaz a úplnější projekce |
 | [Konfigurace](spikes/configuration.py) | **adapt**: sdílená validační primitiva, oddělený projekt a uzel | [ADR 0004](docs/adr/0004-project-node-config.md), [testy](tests/test_configuration.py); V-08: zapojení do lifecycle |
-| [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy v [TODO](TODO.md); V-01: automatizace CLI validátoru; není to aplikační server/UI |
+| [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy ve [WORK_LOG](WORK_LOG.md); [BACKLOG](BACKLOG.md) V-01: automatizace CLI validátoru; není to aplikační server/UI |
 
-Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a TODO. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Navazující úkoly a aktuální výsledky drží TODO.
+Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a WORK_LOG. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Navazující úkoly drží TODO/BACKLOG, výsledky ověření WORK_LOG.
 
 M0-04 **adaptuje** omezený JSON parser z `spikes/metadata.py` a **reuse** stdlib HTTP/socketserver pro izolovaný [transportní experiment](spikes/local_api.py). Vlastní minimální handler odděluje zkoušku autentizace od aplikačního stacku; nejde o přenos cizího serveru ani produkční volbu frameworku. Rozhodnutí a limity: [ADR 0006](docs/adr/0006-local-api-transport.md).
 

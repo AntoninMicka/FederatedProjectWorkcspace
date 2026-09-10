@@ -30,7 +30,7 @@ Zdroj, příkazy a hranice použití: [spikes/libgit2](../../spikes/libgit2/READ
 
 Lokální HTTP test vyžadoval povolení socketu mimo výchozí sandbox. Použil `git-http-backend`, loopback port a smyšlené credentials; žádný cizí účet nebo projekt. Testovací Git CLI posílá dummy Basic header přímo, libgit2 použije callback; ani jedno není implementace produkčního credential úložiště. Standardní verifikace certifikátů není v probe vypínána, ale TLS se tímto HTTP testem neověřilo.
 
-Počty a poslední příkaz plného ověření drží TODO u M0-03. Srovnávací scénáře jsou v [tests/test_git_comparison.py](../../tests/test_git_comparison.py); bez explicitně zadaného sestaveného probe jsou označeny skipped, nikoli validated.
+Počty a poslední příkaz plného ověření drží WORK_LOG u M0-03. Srovnávací scénáře jsou v [tests/test_git_comparison.py](../../tests/test_git_comparison.py); bez explicitně zadaného sestaveného probe jsou označeny skipped, nikoli validated.
 
 ## Orientační náklady a balení
 
@@ -42,7 +42,7 @@ Pro Git CLI je třeba ve výsledném balení zajistit kompatibilní Git a požad
 
 ## Zbývající ověření
 
-M0-05 ověří cílový Turris/LXC a desktopové náklady; M0-06 uzavře stack a balení. TODO V-06/V-09 drží produkční Git konfigurace a autentizované transporty. Migrace Workspace na libgit2 by vyžadovala samostatné rozhodnutí a stejné crash/conflict/privacy testy, včetně zachování bajtů, cizích změn a řízení přístupu.
+M0-05 ověří cílový Turris/LXC a desktopové náklady; M0-06 uzavře stack a balení. BACKLOG V-06/V-09 drží produkční Git konfigurace a autentizované transporty. Migrace Workspace na libgit2 by vyžadovala samostatné rozhodnutí a stejné crash/conflict/privacy testy, včetně zachování bajtů, cizích změn a řízení přístupu.
 
 ## Podklady
 

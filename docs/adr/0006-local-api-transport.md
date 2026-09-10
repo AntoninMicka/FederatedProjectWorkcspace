@@ -40,4 +40,4 @@ UID test používá skutečné SO_PEERCRED a úmyslně odlišné povolené UID; 
 
 Python [http.server](https://docs.python.org/3/library/http.server.html) je dle jeho dokumentace určen pouze pro základní HTTP obsluhu a není doporučen pro produkci; zde slouží s vlastním handlerem bez servírování souborů. [socketserver](https://docs.python.org/3/library/socketserver.html) poskytuje obě transportní varianty bez nové pip závislosti. Aplikační parser adaptuje existující `spikes.metadata.parse_json`; druhý parser ani kopie externího aplikačního serveru nejsou potřeba.
 
-Aktuální běh celé sady je evidován v [TODO](../../TODO.md). Síťová federace zůstává M5: vyžaduje samostatné peer identity, TLS, projektová oprávnění a revokaci; lokální bearer token se na ni nesmí rozšířit.
+Aktuální běh celé sady je evidován v [WORK_LOG](../../WORK_LOG.md). Síťová federace zůstává M5: vyžaduje samostatné peer identity, TLS, projektová oprávnění a revokaci; lokální bearer token se na ni nesmí rozšířit.

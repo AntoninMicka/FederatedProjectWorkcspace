@@ -32,4 +32,4 @@ Reference k mechanismům Qt: [request info / initiator](https://doc.qt.io/qt-6/q
 
 `tests/test_desktop.py` ověřuje hranici tokenu/originu, statické assety bez credentials, požadavek bez autentizace, nepovolené cesty a uzavření portu. Volba `M0_DESKTOP_TEST=1` navíc spustí skutečné Qt okno dvakrát: načtení stránky, JS kliknutí, autentizovaný fetch, hodnota 1 a zavření backendu. Bez volby je tento grafický test explicitně skipped. Testy nemění router ani projektová data.
 
-Aktuální výsledky celé sady a zbývající práce jsou v [TODO](../../TODO.md). Tento výsledek uzavírá spustitelné desktopové demo, nikoli Gate M0/M1.
+Aktuální výsledky celé sady jsou ve [WORK_LOG](../../WORK_LOG.md), zbývající práce v [BACKLOG](../../BACKLOG.md). Tento výsledek uzavírá spustitelné desktopové demo, nikoli Gate M0/M1.

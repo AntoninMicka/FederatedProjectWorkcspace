@@ -20,7 +20,7 @@ Test sestaví balík a zkontroluje rozsah souborů, absenci maintainer skriptů,
 
 Jde o validaci balíku a dpkg lifecycle na existujícím hostu, nikoli čistou instalaci celého OS, test výpadku napájení nebo skutečnou persistentní práci UI. Balík neobsahuje síťové instalátory; smoke používá pouze loopback, síťově izolovaný OS test je otevřený. Plné clean-OS ověření, aktualizační zdroj a release inventář musí předcházet produkční distribuci. Maintainer adresa je výslovně nefunkční placeholder pro lokální kandidát, před publikací ji nahradit skutečným kontaktem. Balík se nikam nepublikuje.
 
-Konkrétní kandidát a systémové závislosti zachycuje [inventář M0](0011-runtime-inventory.md). Jde o snapshot s hash vazbou na .deb, nikoli obecné potvrzení licenčních povinností. Aktuální výsledky uživatelských instalací a gate review drží [TODO](../../TODO.md).
+Konkrétní kandidát a systémové závislosti zachycuje [inventář M0](0011-runtime-inventory.md). Jde o snapshot s hash vazbou na .deb, nikoli obecné potvrzení licenčních povinností. Aktuální výsledky uživatelských instalací a gate review drží [WORK_LOG](../../WORK_LOG.md).
 
 ## Následné offline ověření
 
@@ -28,6 +28,6 @@ Konkrétní kandidát a systémové závislosti zachycuje [inventář M0](0011-r
 
 DISPLAY musí označovat lokální X11; test použije unix socket /tmp/.X11-unix a odmítá přesměrovaný displej. Nezasahuje do sítě hostitele ani uživatelského kontejneru. Ověří skutečné JS kliknutí, autentizovanou loopback odpověď, zavření backendu a restart s novým čítačem. Chybějící namespace oprávnění nebo závislosti při explicitním zapnutí znamenají selhání testu, nikoli tichý skip.
 
-Ověřeno na vývojovém Ubuntu arm64 s připravenými systémovými závislostmi. Je to důkaz běhu bez přímé externí IP konektivity, nikoli izolace filesystemu/IPC nebo čerstvé instalace OS. Lokální X server a systémový runtime jsou záměrně sdílené. Chromium sandbox se nevypíná. Předchozí odstavec popisuje historický stav před tímto experimentem; aktuální výsledky testů drží TODO. Výsledek se nepřenáší automaticky na uživatelův Debian s přesměrovanými Xky.
+Ověřeno na vývojovém Ubuntu arm64 s připravenými systémovými závislostmi. Je to důkaz běhu bez přímé externí IP konektivity, nikoli izolace filesystemu/IPC nebo čerstvé instalace OS. Lokální X server a systémový runtime jsou záměrně sdílené. Chromium sandbox se nevypíná. Předchozí odstavec popisuje historický stav před tímto experimentem; aktuální výsledky testů drží WORK_LOG. Výsledek se nepřenáší automaticky na uživatelův Debian s přesměrovanými Xky.
 
 Následné ověření skutečné čisté instalace bez runtime hostitele, včetně interního Xvfb, offline restartu a upgrade/purge, je zaznamenáno v [ADR 0012](0012-clean-os-validation.md). Výše uvedená omezení původního izolovaného dpkg experimentu zůstávají historickým popisem jeho rozsahu.

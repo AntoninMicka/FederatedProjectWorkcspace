@@ -6,7 +6,7 @@ Datum: 2026-09-09. Stav: přijato, **designed**, podložené uvedenými PoC. Uza
 
 | Vrstva | Zvolený základ | Důvod a důkaz |
 | --- | --- | --- |
-| Aplikační jádro desktopu a serveru | Python 3.11+, jeden aplikační backendový proces | Zachovat validátory a koordinovaný Workspace. Linux crash/CAS testy ADR 0003, uživatelské headless demo na Omnia ARMv7 a SSD v TODO. |
+| Aplikační jádro desktopu a serveru | Python 3.11+, jeden aplikační backendový proces | Zachovat validátory a koordinovaný Workspace. Linux crash/CAS testy ADR 0003, uživatelské headless demo na Omnia ARMv7 a SSD ve WORK_LOG. |
 | Projektové úložiště | Git CLI | ADR 0005 porovnalo Git CLI a libgit2; port nepřinesl doloženou potřebu přepsat koordinaci. Git zůstává autorita. |
 | Lokální persistence | Python sqlite3, oddělený index a journal | ADR 0002/0003: index obnovitelný z validovaného commitu, journal autorita nedokončených operací mimo Git. |
 | Metadata | Stávající omezené JSON/YAML validátory, PyYAML 6.0.3 | Zachovat ověřené schéma a parserové limity; rozšíření v M1 musí řešit V-04/V-05 explicitně. |
@@ -31,4 +31,4 @@ Před persistentními UI operacemi zůstávají klientské operation ID/receipts
 
 ## Ověření rozhodnutí
 
-Posouzený checkout 0d38135, čistý pracovní strom. Důkazy pocházejí z existujících ADR, testů a uživatelských výstupů v TODO. Tato změna upravuje pouze návrh a evidenci; nespouští nové benchmarky, aplikaci ani celou testovou sadu. Ověřena konzistence hranic, lokální odkazy a diff. Gate review se zopakuje po M0-05; stav gate zůstává otevřený.
+Posouzený checkout 0d38135, čistý pracovní strom. Důkazy pocházejí z existujících ADR, testů a uživatelských výstupů ve WORK_LOG. Tato změna upravuje pouze návrh a evidenci; nespouští nové benchmarky, aplikaci ani celou testovou sadu. Ověřena konzistence hranic, lokální odkazy a diff. Gate review se zopakuje po M0-05; stav gate zůstává otevřený.

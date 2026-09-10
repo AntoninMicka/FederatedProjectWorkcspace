@@ -24,4 +24,4 @@ Hranice ADR 0014 se nemění. Konstrukce Workspace smí inicializovat lokální 
 
 Dialog má jeden worker mimo Qt event loop; během čtení blokuje další požadavek a běžné zavření. Textové widgety jsou pouze pro čtení. Změna výběru a nový požadavek vymažou předchozí obsah, chyba tedy nevydává starou verzi za novou. Historie nepřidává tlačítko pro checkout/reset/revert a nezasahuje do editorového draftu. PoC limit těla dokumentu zůstává 1 MiB. SQLite čekání a Git deadline nepředstavují preempci libovolného blokujícího filesystemového syscallu.
 
-Ověření drží [testy historie](../../tests/test_artifact_history.py); aktuální výsledek celé sady, Qt a omezení jsou v [TODO](../../TODO.md).
+Ověření drží [testy historie](../../tests/test_artifact_history.py); aktuální výsledek celé sady, Qt a omezení jsou v [WORK_LOG](../../WORK_LOG.md).

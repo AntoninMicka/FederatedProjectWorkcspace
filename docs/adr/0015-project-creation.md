@@ -31,4 +31,4 @@ GUI má jedinou pracovní úlohu mimo Qt event loop; při běhu zakáže další
 
 Tím je vymezen nativní mutující vstup potřebný pro M1-02. Obecný mutující HTTP protokol, klientské retry/receipt API pro editor, produkční RBAC a odolnost proti nekooperujícím FS útočníkům zůstávají V-10/V-06. Stejný node/root/state musí sdílet všichni kooperující klienti. Nezavádí se nový framework, Git adapter ani druhý backendový proces. Reuse: konfigurační validátory, Git, Workspace a fsync/flock vzor stávajícího journalu; uzlový journal má jiný lifecycle než projektové změny.
 
-Ověření: `tests/test_project_creation.py` prochází procesními pády na všech uvedených checkpointech, native dialogem i skutečným běžným startem s automatickou obnovou. Test `.deb` ověřuje vytvoření a zachování dat po odinstalaci. Aktuální výsledky a zbylá omezení drží [TODO](../../TODO.md).
+Ověření: `tests/test_project_creation.py` prochází procesními pády na všech uvedených checkpointech, native dialogem i skutečným běžným startem s automatickou obnovou. Test `.deb` ověřuje vytvoření a zachování dat po odinstalaci. Aktuální výsledky a zbylá omezení drží [WORK_LOG](../../WORK_LOG.md).

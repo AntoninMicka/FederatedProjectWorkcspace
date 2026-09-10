@@ -1,11 +1,11 @@
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální milník: **M0 — Architecture spike**. Operativní úkoly, chyby a ověřovací kroky jsou v [TODO.md](TODO.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+Aktuální milník: **M1 — Single-node project workspace**. Aktuální okno práce je v [TODO.md](TODO.md), další otevřené úkoly v [BACKLOG.md](BACKLOG.md) a dokončená práce s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
 
-Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
+Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO nebo BACKLOG podle priority. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
-Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v TODO; administrativa zůstává v `docs/IP`.
+Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v BACKLOG; administrativa zůstává v `docs/IP`.
 
 ## 0. Cíl MVP
 
@@ -215,7 +215,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## 3C. Import z Google Drive, NotebookLM a chatbotů
 
-**Stav: designed / plánováno, žádný konektor není implementován.** „Gemini notebook“ zde znamená NotebookLM; konkrétní edici účtu ověřit před implementací. Navazuje na import artefaktů M1 a provenance; neblokuje současné desktopové PoC. Operativní kroky drží TODO IMP-01 až IMP-03.
+**Stav: designed / plánováno, žádný konektor není implementován.** „Gemini notebook“ zde znamená NotebookLM; konkrétní edici účtu ověřit před implementací. Navazuje na import artefaktů M1 a provenance; neblokuje současné desktopové PoC. Operativní kroky drží BACKLOG IMP-01 až IMP-03.
 
 - [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje.
 - [ ] NotebookLM: importovat dostupné zdroje, uživatelské poznámky a generované výstupy jako odlišné artefakty; zachovat citace a vazby, pokud jsou exportem/API poskytovány. Nedostupné části uvést v přehledu importu. Rozlišit běžný NotebookLM a Enterprise; existence Enterprise API není důkaz dostupnosti stejné funkce běžnému účtu ani exportu celé historie chatu.
@@ -648,7 +648,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Aktuální výsledky ověření a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 splněn dle závěrečného review M0-09R v TODO; navazuje M1.**
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Výsledky ověření drží [WORK_LOG.md](WORK_LOG.md), zbývající kroky [TODO.md](TODO.md) a [BACKLOG.md](BACKLOG.md). **Gate M0 splněn dle [závěrečného review M0-09R](WORK_LOG.md#gate-m0); navazuje M1.**
 
 - [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
 - [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; minimální schéma projektu/uzlu v1 a samostatná validace viz ADR 0004, storage integrace zbývá.
@@ -656,23 +656,23 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [x] Popsat uživatelský scénář konfliktu a ověřit divergenci stejné entity — designed + Git CLI PoC validated; UI není implementované.
 - [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed; Python, PySide6 a .deb jako základ pro M1 dle ADR 0013.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
-- [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá TODO V-08.
+- [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá BACKLOG V-08.
 - [x] Návrhové kontrakty Backend, Role a Context Manifest — designed v [ADR 0008](docs/adr/0008-context-and-publication-contracts.md); implementace zbývá M2–M4.
 - [x] Designed dle ADR 0008: Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
 - [x] Designed dle ADR 0008: V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
 - [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
 - [x] Designed dle ADR 0008: Uzavřít pravidla větví a publikace (M0-08). Konflikty obsahu/sidecaru včetně textově čistého sémanticky neplatného merge jsou PoC validated v M0-07, scénáře a limity ve [FEDERATION](FEDERATION.md); produkční synchronizace zůstává M5.
-- [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); browser/obal a bootstrap ověřeny v ADR 0010; aplikační integrace zbývá v TODO V-10.
-- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; cílové ověření a PoC balení dokončeny v M0-05/M0-06; produkční TLS/SSH a release zbývají v TODO V-09/V-11.
-- [x] Turris Omnia/LXC a desktop — PoC validated pro zvolený stack: cílový SSD probe M0-05, desktopové měření ADR 0010 a čistá instalace ADR 0012. Přesné metriky a hranice důkazů drží TODO; nejde o produkční kapacitní test.
+- [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); browser/obal a bootstrap ověřeny v ADR 0010; aplikační integrace zbývá v BACKLOG V-10.
+- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; cílové ověření a PoC balení dokončeny v M0-05/M0-06; produkční TLS/SSH a release zbývají v BACKLOG V-09/V-11.
+- [x] Turris Omnia/LXC a desktop — PoC validated pro zvolený stack: cílový SSD probe M0-05, desktopové měření ADR 0010 a čistá instalace ADR 0012. Přesné metriky a hranice důkazů drží WORK_LOG; nejde o produkční kapacitní test.
 - [x] Stack pro M1 uzavřen — designed v [ADR 0013](docs/adr/0013-m1-stack.md): Python, Git CLI/SQLite, Linux PySide6/WebEngine a .deb. Lifecycle a čistá/offline instalace jsou PoC validated dle ADR 0010–0012. Cílové měření M0-05 je PoC validated; produkční release zůstává otevřený.
-- [x] Připravenost pro M1 schválena v závěrečném review M0-09R: cílové ověření M0-05 a stack M0-06 doloženy. Historická negativní review a aktuální důkazy drží [TODO](TODO.md).
+- [x] Připravenost pro M1 schválena v závěrečném review M0-09R: cílové ověření M0-05 a stack M0-06 doloženy. Historická negativní review a aktuální důkazy drží [WORK_LOG](WORK_LOG.md).
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.
 
 ## Milestone M1 – Single-node project workspace
 
-M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy v TODO). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [TODO](TODO.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží TODO. Migrace/registrace již existujících projektů a Gate M1 zůstávají otevřené.
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. Migrace/registrace již existujících projektů a Gate M1 zůstávají otevřené.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -772,10 +772,10 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 
 # 19. Operativní práce a návaznost na implementaci
 
-Konkrétní úkoly byly přesunuty do [TODO.md](TODO.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
+Konkrétní otevřené úkoly drží [BACKLOG.md](BACKLOG.md), bezprostřední okno [TODO.md](TODO.md) a dokončené výstupy [WORK_LOG.md](WORK_LOG.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
 
 - [x] Pracovní architektonické dokumenty, ADR, reuse katalog a kostra experimentů — designed / implemented.
-- [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a TODO.
+- [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a WORK_LOG.
 - [ ] Integrovaná aplikace a nasazení podle M1; existující experimenty adaptovat podle finálního stacku.
 
 ---

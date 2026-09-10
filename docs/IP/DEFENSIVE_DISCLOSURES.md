@@ -19,7 +19,7 @@ ID níže jsou plánované náměty, nikoli záznamy se stavem `draft` nebo `pub
 | DD-009 | Provenance and reproducible LLM execution | [DATA_MODEL](../../DATA_MODEL.md), master roadmapa §16 — návrh; kompletní LLM provenance neimplementována |
 | DD-010 | Federation trust and offline operation | [FEDERATION](../../FEDERATION.md) — designed, síťová federace zůstává M5 |
 
-[Master roadmapa](<../../Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) a [TODO](../../TODO.md) určují skutečný rozsah a stav produktu. Náměty nejsou závazkem vytvořit deset samostatných publikací.
+[Master roadmapa](<../../Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) určuje rozsah produktu; dokončené výstupy a důkazy drží [WORK_LOG](../../WORK_LOG.md), aktuální práci [TODO](../../TODO.md). Náměty nejsou závazkem vytvořit deset samostatných publikací.
 
 ## Šablona záznamu
 

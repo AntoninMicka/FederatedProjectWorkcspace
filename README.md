@@ -96,7 +96,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Aktuální pořadí práce drží [TODO](TODO.md). Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. M1 nyní propojuje čtení registrovaných projektů s desktopem; produkční release zůstává otevřený.
+Aktuální pořadí práce drží [TODO](TODO.md), další otevřené úkoly [BACKLOG](BACKLOG.md) a dokončené výstupy s ověřením [WORK_LOG](WORK_LOG.md). Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. M1 nyní propojuje čtení registrovaných projektů s desktopem; produkční release zůstává otevřený.
 
 ## Ruční deploy na Omnii
 
@@ -120,7 +120,7 @@ lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
   'cd /opt/federated-workspace/current && .venv/bin/python -m spikes.demo'
 ```
 
-Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží TODO u M0-05. Potvrzen je také běh s TMPDIR=/var/tmp/workspace-poc na SSD/Btrfs. Výchozí /tmp je v ověřeném kontejneru tmpfs; měření tohoto běhu nelze vydávat za výkon SSD. Provozní měření a recovery na cílovém zařízení zbývají.
+Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží WORK_LOG u M0-05. Potvrzen je také běh s TMPDIR=/var/tmp/workspace-poc na SSD/Btrfs. Výchozí /tmp je v ověřeném kontejneru tmpfs; měření tohoto běhu nelze vydávat za výkon SSD. Provozní měření a recovery na cílovém zařízení zbývají.
 
 ## Zdrojový balíček desktopového PoC
 

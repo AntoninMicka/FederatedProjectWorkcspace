@@ -30,4 +30,4 @@ Všechny měřené běhy skončily exit 0. Jde o desktopovou režii WebEngine, n
 
 Stávající testy pokrývají policy URL/origin/token, statické assety, API a zavření socketu. Skutečný WebEngine smoke ověřuje JS kliknutí, restart a také rozbalený zdrojový balík. Nový opt-in --smoke-crash po úspěšném spojení ukončí renderer SIGKILL; aplikace musí skončit exit 1, nikoli falešným úspěchem. Není to SIGKILL celého backendu ani recovery persistentního projektu. Zákaz navigace/downloadů zůstává v nativním obalu; úplný adversariální browser test nedůvěryhodných artefaktů zůstává V-10.
 
-Přesný závěrečný výsledek sady drží TODO. Instalační/licenční inventář skutečného releasu a ověření dalších architektur zbývají M0-06e. Současná měření nejsou důvod měnit jeden Python backend ani nasazovat Qt na Omnii.
+Přesný závěrečný výsledek sady drží WORK_LOG. Instalační/licenční inventář skutečného releasu a ověření dalších architektur zbývají M0-06e. Současná měření nejsou důvod měnit jeden Python backend ani nasazovat Qt na Omnii.

@@ -2,11 +2,11 @@
 
 ## Začlenění do repozitáře — designed
 
-Produktové milníky M0–M6 a jejich gates drží [master roadmapa](<../../Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>), implementační práci [TODO](../../TODO.md). Aktuální M0 ani jeho pořadí tato podpůrná roadmapa nemění.
+Produktové milníky M0–M6 a jejich gates drží [master roadmapa](<../../Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>), aktuální implementační práci [TODO](../../TODO.md) a další úkoly [BACKLOG](../../BACKLOG.md). Aktuální milník ani jeho pořadí tato podpůrná roadmapa nemění.
 
 Podle [integračního pokynu](<ip integration instruction>) jsou provozními dokumenty tato dlouhodobá roadmapa, [Patent Risk Register](PATENT_RISK_REGISTER.md) a [Defensive Disclosures](DEFENSIVE_DISCLOSURES.md). Pokyn zůstává zachován jako zdroj. IP/FTO evidence patří do prvního registru, příprava a stav zveřejnění do druhého; crowdfundingové checklisty zůstávají zde.
 
-Stav integrace k 2026-09-09: registry jsou založené, patentový watchlist je **neověřený** a disclosure ID jsou pouze rezervované náměty. Nebyla provedena patentová rešerše, claim analysis ani publikace, release či DOI. Založení registrů není důkaz FTO ani veřejného prior art. Nezaškrtnuté body níže jsou cíle/checklisty; dokončení vyžaduje uvedený důkaz. Operativní položky používají stavy a úrovně z TODO.
+Stav integrace k 2026-09-09: registry jsou založené, patentový watchlist je **neověřený** a disclosure ID jsou pouze rezervované náměty. Nebyla provedena patentová rešerše, claim analysis ani publikace, release či DOI. Založení registrů není důkaz FTO ani veřejného prior art. Nezaškrtnuté body níže jsou cíle/checklisty; dokončení vyžaduje uvedený důkaz. Operativní položky používají stavy a úrovně z [AGENTS.md](../../AGENTS.md).
 
 Vazby na vývoj:
 
@@ -811,16 +811,16 @@ Doporučený veřejný reporting:
 
 Tato roadmapa se nemá stát druhým produktovým backlogem.
 
-Do hlavního `TODO.md` přenášet pouze konkrétní integrace:
+Do `BACKLOG.md` přenášet pouze konkrétní integrace; do `TODO.md` je přesouvat, až budou bezprostředně na řadě:
 
-- [x] Vytvoření IP registrů — implemented; dokončená integrace je evidována v TODO jako IP-00.
+- [x] Vytvoření IP registrů — implemented; dokončená integrace je evidována ve [WORK_LOG](../../WORK_LOG.md) jako IP-00.
 - [ ] implementace release metadata,
 - [ ] vytvoření citation metadata,
 - [ ] automatizace archive/release workflow,
 - [ ] integrace DOI,
 - [ ] crowdfunding milestone příprava.
 
-Strategie produktu zůstává v hlavní roadmapě a jeho operativní implementace v TODO. Zbývající integrační práce je vedena jako IP-01 až IP-03 v TODO; patentové kontroly, jednotlivé disclosures a administrativa kampaně se tam nekopírují.
+Strategie produktu zůstává v hlavní roadmapě a jeho operativní implementace v TODO. Zbývající integrační práce je vedena jako IP-01 až IP-03 v [BACKLOG](../../BACKLOG.md); patentové kontroly, jednotlivé disclosures a administrativa kampaně se tam nekopírují.
 
 ---
 

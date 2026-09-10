@@ -53,7 +53,7 @@ Lokální `node.json`, například `/srv/workspace/node.json`, mimo registrovan�
 
 Obě konfigurace mají limit 64 KiB, maximální JSON hloubku 16 a odmítají duplicity klíčů, neznámá pole/verze a neplatné typy. Verze projektu a uzlu se vyvíjejí nezávisle na artefaktovém schématu. Chybějící konfigurace se negeneruje; neexistuje implicitní migrace z v0 ani downgrade neznámé verze. Budoucí explicitní migrace musí zachovat ID a původní data při selhání, viz ADR 0004.
 
-Ověření konfigurace nepotvrzuje existenci klíče, autentizaci, RBAC ani shodu registrovaného project_id s obsahem repozitáře. Kontrola umístění node.json zná pouze uvedené kořeny; není scannerem secrets v Gitu. Aplikační otevření, bezpečný zápis konfigurace a migrace zůstávají TODO V-08. Stávající Workspace, Index a `check_project` nadále validují jen artefakty/registry, takže staré experimenty bez project.json fungují dál.
+Ověření konfigurace nepotvrzuje existenci klíče, autentizaci, RBAC ani shodu registrovaného project_id s obsahem repozitáře. Kontrola umístění node.json zná pouze uvedené kořeny; není scannerem secrets v Gitu. Aplikační otevření, bezpečný zápis konfigurace a migrace zůstávají BACKLOG V-08. Stávající Workspace, Index a `check_project` nadále validují jen artefakty/registry, takže staré experimenty bez project.json fungují dál.
 
 ## Společná metadata
 
