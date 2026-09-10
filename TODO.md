@@ -16,6 +16,14 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
+- [x] [completed] **V-08 — Registrace existujícího projektu (implemented, 2026-09-10).** Doplněn registrační tok pro již existující Git projekt: nová cesta `ProjectCreation.register` validuje kořenový Git repozitář, `project.json` v `HEAD` i pracovní kopii, kontroluje konfliktní/duplicitní `project_id`, vytváří lokální state vedle repozitáře a zapisuje registraci přes recovery flow.
+
+Ověření V-08:
+- `python3 -m py_compile spikes/project_creation.py tests/test_project_creation.py`
+- `python3 -m unittest tests.test_project_creation.CreationTests -k register -v`: 4 testy OK, 2 testy přeskočeny.
+- `python3 -m unittest tests.test_project_creation.CreationTests -v`: 15 testů, 1 chyba v legacy síťovém testu `test_default_path_is_lazy_and_http_cannot_create` (sandbox PermissionError na HTTP socketu), 2 přeskočeno.
+- `git diff --check`.
+
 - [x] [completed] **M1-06 — Přejmenování souboru Markdown dokumentu (PoC validated, 2026-09-10).** Navazující krok souhrnného M1 podle požadavku na konzistenci po přejmenování. Nativní editor ukládá název souboru, obsah a metadata jednou operací; zachová UUID, strukturované vztahy, hlavní TODO a historii. Sidecar aktualizuje file, frontmatter se přesune; čisté přejmenování přes službu zachová původní bajty. Reuse/adapt Artifacts, Workspace, validátoru a Qt; crash boundaries ADR 0003/0016 beze změny. [Kontrakt a limity](docs/adr/0016-markdown-editor.md#přejmenování-souboru-dokumentu--m1-06), [návod](docs/project-opening.md#přejmenování-souboru-dokumentu).
 
 Ověření M1-06: cílených 21 testů artefaktů se skutečnými Qt widgety OK; doplněná ochrana dlouhého existujícího názvu následně ověřena cíleným Qt testem i závěrečnou celou sadou. Pokryty sidecar/frontmatter, souběžná změna textu/metadat, historie a příchozí vztahy, obnova odstraněného indexu, neplatné názvy, kolize s cizím souborem, stale/busy, cizí editace při recovery, ztracená odpověď/retry a restart, procesní přerušení na 13 checkpointech přejmenování. Závěrečný běh `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v`: **131 testů, 127 prošlo, 4 přeskočeny**, 91,259 s, bez chyb. Přeskočeny pouze volitelné testy porovnání libgit2 kvůli chybějícímu sestavenému probe; skutečný desktop, balení/upgrade/odstranění i offline běžely. Sandbox blokoval první pokus připojení Qt; ověření mimo sandbox prošlo. Místní odkazy včetně kotev, finální diff a `git diff --check` v pořádku. Omezení: volné textové odkazy na názvy se automaticky nepřepisují; Qt může normalizovat konce řádků. Lokální Linux PoC, bez nového ověření na cílovém zařízení. Mazání a import zůstávají otevřenými požadavky souhrnného M1; Gate M1 zůstává otevřený. Záznam zůstává v TODO do uzavření dávky.

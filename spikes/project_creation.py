@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
 from spikes.journal import sync_dir
-from spikes.metadata import uuid
+from spikes.metadata import require, uuid
 from spikes.projects import directory
 from spikes.storage import Git
 from spikes.workspace import Workspace
@@ -156,6 +156,25 @@ class ProjectCreation:
                    (record['operation_id'], json.dumps(record), int(done)))
         db.commit()
 
+    def _read_existing_project(self, root, deadline):
+        git = Git(root, deadline=deadline)
+        require(Path(git.run('rev-parse', '--show-toplevel').stdout.strip()) == root,
+                'Registrace musí odkazovat na kořen Git repozitáře')
+        require(git.run('rev-parse', '--is-bare-repository').stdout.strip() == 'false',
+                'Projekt nesmí být bare repository')
+        commit = git.head()
+        entry = git.run('ls-tree', commit, '--', 'project.json').stdout.strip()
+        require(bool(entry), 'V projektu chybí project.json')
+        info, name = entry.split('\t', 1)
+        mode, kind, oid = info.split()
+        require(name == 'project.json' and mode in {'100644', '100755'} and kind == 'blob',
+                'Project.json musí být Git blob v kořeni projektu')
+        data = git.run('cat-file', 'blob', oid, binary=True).stdout
+        meta = parse_project(data)
+        require(read_config(root / 'project.json') == data,
+                'Pracovní project.json nesouhlasí s commitem')
+        return git, commit, meta
+
     def create(self, title, root, operation_id, *, checkpoint=lambda stage: None):
         uuid(operation_id)
         check(isinstance(title, str) and bool(title.strip()) and len(title) <= 200
@@ -168,7 +187,7 @@ class ProjectCreation:
             row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
             if row:
                 record = json.loads(row[0])
-                check(record['root'] == str(root) and record['title'] == title,
+                check(record.get('type', 'create') == 'create' and record['root'] == str(root) and record['title'] == title,
                       'ID operace už patří jinému požadavku.')
                 if row[1]:
                     return record['receipt']
@@ -200,7 +219,47 @@ class ProjectCreation:
             record = dict(operation_id=operation_id, title=title, root=str(root), state=str(state),
                           stage=str(stage), stage_identity=identity(stage), meta=meta,
                           before=before.decode() if before is not None else None, after=after.decode(),
-                          ready=False, receipt=None)
+                          type='create', ready=False, receipt=None)
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
+    def register(self, root, operation_id, *, checkpoint=lambda stage: None):
+        uuid(operation_id)
+        root = Path(root)
+        check(root.is_absolute() and root == local_path(str(root)), 'Zadejte absolutní cestu bez symlinků.')
+        check(root.exists(), 'Projektový kořen neexistuje.')
+        directory(root.parent)
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type') == 'register' and record['root'] == str(root),
+                      'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené vytvoření projektu.')
+            before, node = self._node()
+            node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
+            git, commit, meta = self._read_existing_project(root, deadline)
+            project_id = meta['id']
+            check(not any(binding['project_id'] == project_id for binding in node['projects']),
+                  'Projekt je již registrovaný.')
+            state = root.parent / ('.workspace-state-' + project_id)
+            check(not os.path.lexists(state), 'Cílový lokální stav již existuje.')
+            node['projects'].append(dict(project_id=project_id, root=str(root), state_dir=str(state)))
+            after = encoded(node)
+            parse_node(after, location=self.node_path)
+            for binding in node['projects']:
+                for key in ('root', 'state_dir'):
+                    check(not overlap(self.runtime, local_path(binding[key])),
+                          'Projekt ani stav nesmí překrývat journal uzlu.')
+            record = dict(operation_id=operation_id, root=str(root), state=str(state), project_id=project_id,
+                          commit_id=commit, meta=meta, ready=False, receipt=None, type='register',
+                          before=before.decode() if before is not None else None, after=after.decode())
             self._save(db, record)
             checkpoint('prepared')
             return self._finish(db, record, deadline, checkpoint)
@@ -218,6 +277,9 @@ class ProjectCreation:
             if time.monotonic() >= deadline:
                 raise TimeoutError('Vytvoření překročilo časový limit; operace zůstala k obnově.')
             checkpoint(stage)
+
+        if record.get('type') == 'register':
+            return self._finish_register(db, record, deadline, boundary)
 
         root, state, stage = (Path(record[k]) for k in ('root', 'state', 'stage'))
         directory(root.parent)
@@ -281,7 +343,39 @@ class ProjectCreation:
             sync_dir(stage.parent)
         except OSError:
             pass  # Never delete unexpected files; retained for later explicit cleanup.
-        checkpoint('completed')
+        boundary('completed')
+        return record['receipt']
+
+    def _finish_register(self, db, record, deadline, boundary):
+        root, state = Path(record['root']), Path(record['state'])
+        before, _ = self._node()
+        check(before in (None if record['before'] is None else record['before'].encode(), record['after'].encode()),
+              'Konfigurace uzlu se mezitím změnila. Cizí změny byly zachovány.')
+        project_id = record['project_id']
+        if not record['ready']:
+            _, commit, meta = self._read_existing_project(root, deadline)
+            check(commit == record['commit_id'], 'Projekt byl po zahájení registrace změněn.')
+            check(meta['id'] == project_id, 'ID projektu se nezměnilo.')
+            if not state.exists():
+                directory(state.parent)
+                state.mkdir(mode=0o700)
+            else:
+                check(state.is_dir(), 'Cílový lokální stav má chybný formát.')
+                check(state.stat().st_mode & 0o777 == 0o700, 'Lokální stav má neplatný režim.')
+            check(state.stat().st_dev == root.stat().st_dev, 'Projektový stav je mimo filesystem projektu.')
+            ws = Workspace(root, state, blocking=True, deadline=deadline)
+            ws.read_project(project_id)
+            boundary('indexed')
+            record.update(ready=True, title=meta['title'], state_identity=identity(state))
+            self._save(db, record)
+        else:
+            check(identity(state) == record['state_identity'], 'Lokální stav byl změněn.')
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=project_id,
+                                 title=record.get('title'), commit_id=record['commit_id'])
+        self._save(db, record, done=True)
+        boundary('completed')
         return record['receipt']
 
     def _publish_node(self, record):

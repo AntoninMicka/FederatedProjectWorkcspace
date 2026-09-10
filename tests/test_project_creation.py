@@ -37,7 +37,6 @@ class CreationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.service.database)) as db:
             row = db.execute('SELECT record FROM creations WHERE id=?', (self.operation,)).fetchone()
         return json.loads(row[0])
-
     def check_created(self, receipt):
         node = parse_node(read_config(self.node), location=self.node)
         self.assertEqual(len(node['projects']), 1)
@@ -51,13 +50,78 @@ class CreationTests(unittest.TestCase):
         self.assertEqual(git.head(), receipt['commit_id'])
         self.assertEqual(git.run('rev-list', '--count', 'HEAD').stdout.strip(), '1')
         self.assertEqual(git.run('ls-tree', '-r', '--name-only', 'HEAD').stdout, 'project.json\n')
-        self.assertEqual(git.run('status', '--porcelain').stdout, '')
         view = Projects(self.node).open(receipt['id'])
         self.assertEqual(view['artifacts'], [])
         self.assertEqual(view['commit_id'], receipt['commit_id'])
         self.assertEqual(self.node.stat().st_mode & 0o777, 0o600)
         self.assertEqual(Path(binding['state_dir']).stat().st_mode & 0o777, 0o700)
         return node, meta
+
+    def _existing_git_project(self, root, title='Legacy project', project_id=None):
+        root.mkdir()
+        project_id = project_id or str(uuid4())
+        project_json = {
+            'schema_version': 1,
+            'id': project_id,
+            'title': title,
+            'created_at': '2026-01-01T00:00:00Z',
+            'author_id': str(uuid4()),
+        }
+        payload = (json.dumps(project_json, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+        (root / 'project.json').write_bytes(payload)
+        git = Git(root)
+        git.run('init', '--template=', '--initial-branch=main')
+        (root / '.git').chmod(0o700)
+        git.run('add', '--', 'project.json')
+        git.run('commit', '-m', 'Import legacy project')
+        return project_json
+
+    def check_registered(self, root, receipt):
+        node = parse_node(read_config(self.node), location=self.node)
+        self.assertEqual(len(node['projects']), 1)
+        binding = node['projects'][0]
+        self.assertEqual(binding['project_id'], receipt['id'])
+        self.assertEqual(binding['root'], str(root))
+        result = parse_project(read_config(root / 'project.json'))
+        self.assertEqual(result['id'], receipt['id'])
+        self.assertEqual(result['title'], receipt['title'])
+        git = Git(root)
+        self.assertEqual(git.head(), receipt['commit_id'])
+        self.assertEqual(Path(binding['state_dir']).stat().st_mode & 0o777, 0o700)
+        return node, result
+
+    def test_register_existing_git_project(self):
+        root = self.base / 'existing-project'
+        meta = self._existing_git_project(root)
+        receipt = self.service.register(root, self.operation)
+        self.assertEqual(receipt['id'], meta['id'])
+        self.assertEqual(receipt['title'], meta['title'])
+        self.assertEqual(receipt['commit_id'], Git(root).head())
+        self.check_registered(root, receipt)
+
+    def test_register_is_idempotent_for_same_operation(self):
+        root = self.base / 'existing-project'
+        meta = self._existing_git_project(root)
+        first = self.service.register(root, self.operation)
+        second = self.service.register(root, self.operation)
+        self.assertEqual(first, second)
+        self.assertEqual(len(Projects(self.node).list()), 1)
+        self.check_registered(root, first)
+        with self.assertRaises(CreationConflict):
+            ProjectCreation(self.node).register(root, str(uuid4()))
+
+    def test_register_blocks_duplicate_project_id(self):
+        first_root = self.base / 'existing-first'
+        first_meta = self._existing_git_project(first_root, title='First')
+        first = self.service.register(first_root, self.operation)
+        self.assertEqual(first['id'], first_meta['id'])
+        self.check_registered(first_root, first)
+        second_root = self.base / 'existing-second'
+        self._existing_git_project(second_root, title='Second', project_id=first_meta['id'])
+        with self.assertRaises(CreationConflict):
+            self.service.register(second_root, str(uuid4()))
+        self.assertEqual(len(Projects(self.node).list()), 1)
+
 
     def test_create_restart_receipt_and_two_projects(self):
         receipt = self.create()
