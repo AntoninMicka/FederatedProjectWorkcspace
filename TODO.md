@@ -22,6 +22,12 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 - [x] [completed] **WF-02 — Práce po dávkách (implemented, 2026-09-10).** Požadavek uživatele: celé milníky v TODO, navazující dávky v BACKLOG, průběžně měnit jen TODO a archivovat až po uzavření dávky; podporovat ad-hoc práci. Upraveny pokyny a pracovní dokumenty, souhrnný úkol M1 přesunut z BACKLOG do této dávky. Ověření: konzistence pravidel a odkazů, zachování původních otevřených položek a historických záznamů, `git diff --check`. Pouze dokumentační změna; aplikační testy znovu nespouštěny. Záznam zůstává zde do uzavření dávky M1.
 
+- [ ] [planned] do roadmapy zanést feature materializovaných kompilátů, tj souborů, které budou obsahovat výstupu zpracování zdrojů podle zadání, například orientační rozpočtové obálky, s možností ruční aktualizace z aktuálnách verzí nebo nových položek zdrojů. Tyto nebude třeba verzovat a přenášet, budou sloužit jako cache.
+
+- [ ] [planned] připravit layout hlavního panelu jako alternující orchestrační chat a náhled artefaktů a jejich metadat, případně souhrnů, podporovat obrázky, pdf, MD
+
+- [ ] [planned] připravit základní UI pro možnost ukázky PoC na schůzce s možnými partnery
+
 ## K předání do backlogu
 
 Zatím bez nových položek. Sem patří ad-hoc práce mimo dávku a doplnění existujících backlogových úkolů s odkazem na jejich ID; nejde o podmínku dokončení této dávky.
