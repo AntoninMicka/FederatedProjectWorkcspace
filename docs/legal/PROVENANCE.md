@@ -40,3 +40,5 @@ the pre-release provenance audit.
 AI tools are used as development assistants. Contributors remain responsible
 for reviewing generated output and must not knowingly submit copied
 third-party material incompatible with the project license.
+
+- `REUSE_CATALOG.private.md` — internal working document; provenance/licensing review pending.
