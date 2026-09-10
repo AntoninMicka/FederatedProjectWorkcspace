@@ -16,6 +16,10 @@ Jeden zapisující proces serializuje operace nad projektem. Návrh toku: valida
 
 Index musí nést commit ID. Dotazy při nesouladu vracejí stav obnovy, nikoli tiše stará data. Necommitnuté změny má editor zobrazovat odděleně. Synchronizace se připravuje v izolovaném pracovním prostoru a publikuje až po validaci a kontrole nezměněného výchozího HEAD.
 
+## Odvozená lokální cache
+
+Navržené materializované kompiláty jsou zahoditelné soubory odvozené ze zdrojů podle zachovaného zadání. Výsledky leží mimo projektový Git, neverzují se ani nesynchronizují; aktualizují se ručně. Nejsou projektovým indexem ani autoritativním journalem/run recordem. [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje aktuálnost, privacy, obnovu po pádu a explicitní uložení výsledku jako artefaktu. Stav je designed, bez implementace.
+
 ## LLM rozhraní
 
 Backend: ID, provider, model, capabilities, privacy policy, lokální odkaz na credentials. Role: ID, prompt template, povolené zdroje, požadovaný výstup a preference backendu. Běh: uživatel, role, backend, konkrétní verze vstupů, kontextový manifest, výsledek a stav schválení.

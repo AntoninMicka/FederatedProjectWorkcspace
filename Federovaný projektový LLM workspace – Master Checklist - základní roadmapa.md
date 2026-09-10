@@ -168,6 +168,20 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Pro velké binární soubory zvážit Git LFS.
 - [ ] Připravit diff-friendly reprezentaci vybraných komplikovaných formátů.
 
+
+## 2E. Materializované kompiláty
+
+**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [TODO](TODO.md).
+
+- [ ] Uchovat zadání a pravidlo výběru zdrojů odděleně od výsledku; přenositelné definice verzovat, výstupní soubory ukládat jako lokální cache mimo projektový Git.
+- [ ] Nabídnout ruční aktualizaci z aktuálních verzí i nových zdrojů odpovídajících pravidlu výběru. Neprovádět automatický výpočet při otevření či restartu.
+- [ ] Zobrazit použitou verzi vstupů, stáří, neaktuálnost a stav výpočtu; změnu/odstranění zdroje neskrývat.
+- [ ] Cache neverzovat ani nepřenášet při federaci/exportu; umožnit její odstranění a nový výpočet bez ztráty zdrojů či zadání.
+- [ ] Respektovat privacy a oprávnění vstupů, Context Manifest pro LLM a recovery oddělené od autoritativního journalu/run recordu.
+- [ ] Výsledek určený k trvalému uchování uložit pouze explicitní akcí jako běžný verzovaný artefakt s provenance.
+
+Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
+
 ---
 
 # 3. Metadata a zdrojování
