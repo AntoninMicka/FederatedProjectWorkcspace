@@ -10,6 +10,7 @@ LICENSE_FILES = (
     'docs/legal/COMPLIANCE.md',
     'docs/legal/DEPENDENCIES.toml',
     'docs/legal/LICENSE_SOURCES.md',
+    'docs/legal/PROVENANCE.md',
     'docs/legal/RELINKING.md',
     'docs/legal/licenses/COPYING.GPL-3.0',
     'docs/legal/licenses/COPYING.LGPL-3.0',
