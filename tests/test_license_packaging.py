@@ -48,6 +48,22 @@ def fixture(root):
 
 
 class LicensePackagingTests(unittest.TestCase):
+    def test_provenance_document_is_required(self):
+        self.assertIn('docs/legal/PROVENANCE.md', LICENSE_FILES)
+
+    def test_missing_provenance_stops_both_builders(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            root = fixture(base / 'root')
+            (root / 'docs/legal/PROVENANCE.md').unlink(missing_ok=True)
+            with self.assertRaises(ValueError):
+                package_desktop.build(root)
+            output = base / 'missing-provenance.deb'
+            with patch.object(package_deb, 'ROOT', root):
+                with self.assertRaises(ValueError):
+                    package_deb.build(output)
+            self.assertFalse(output.exists())
+
     def test_dependency_register_does_not_claim_release_approval(self):
         data = tomllib.loads((SOURCE_ROOT / 'docs/legal/DEPENDENCIES.toml').read_text())
         self.assertEqual(data['schema_version'], 1)
