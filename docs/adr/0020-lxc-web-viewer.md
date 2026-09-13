@@ -17,6 +17,19 @@ Síťový režim odmítne celý projekt obsahující local-only entitu. Katalog 
 
 ## Dlaždice
 
+### Rozšíření 2026-09-13: vytváření projektů a lokální správa
+
+Webový správce nyní může vytvářet projekty přes stávající ProjectCreation
+a journal ADR 0015. Individuální přístupové klíče oddělují lokální uživatele,
+role a projektová členství; původní klíč zůstává bootstrap/recovery správcem.
+Původní popis čistě čtecího a jednoklíčového webu výše je historický rozsah.
+Správa eviduje UUID/domovský uzel uživatele a explicitní důvěru peerů,
+ale neimplementuje federované přihlášení, handshake ani synchronizaci.
+Rozhodnutí o samostatném Git registru správy, oddělených credentials,
+CAS publikaci a crash boundaries popisuje [kontrakt správy](../administration.md).
+Local-only kontrola nadále platí pro všechny identity. Registr není projektový
+index ani distribuovaná autorita; serverový framework a Gate M5 zůstávají otevřené.
+
 Formát registrace vychází z [oficiální specifikace Turris WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md), ověřené 2026-09-10. Nový vlastní kód používá číslovaný JSON pod `/etc/turris-webapps`, vlastní SVG a samostatnou lighttpd konfiguraci; cizí aplikační kód se nekopíruje.
 
 Dlaždice má stálou relativní URL `/federated-workspace/`. Lighttpd předá požadavek pomocnému Python procesu na routerovém loopbacku. Ten spouští pouze pevný `lxc-info` s validovaným názvem kontejneru v `/srv/lxc`, vyžaduje RUNNING a právě jednu IPv4 v určeném subnetu, ověří HTTPS certifikát služby vůči připravené CA a vrátí necacheované 302 na její aktuální adresu. IPv6 se nevybírá. Při chybě, více IPv4, zastavení nebo změně během kontroly vrátí 503. Není použita periodická cache, shell s klientským vstupem ani přístupový klíč aplikace. Změna po dokončené kontrole zůstává přirozeným síťovým závodem; další kliknutí znovu vyhodnotí stav.

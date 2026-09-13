@@ -53,7 +53,7 @@ class DeployTests(unittest.TestCase):
             run.return_value = SimpleNamespace(returncode=0)
             self.assertEqual(deploy_omnia.main(), 0)
             run.assert_called_once()
-            self.assertIn('Web deployment state reset', run.call_args.args[0][6])
+            self.assertIn('Web deployment state reset', run.call_args.args[0][-1])
 
     def test_web_deploy_copies_ca_certificate(self):
         payload = SimpleNamespace(returncode=0, stdout=b'-----BEGIN CERTIFICATE-----\n', stderr=b'')

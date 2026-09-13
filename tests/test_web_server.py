@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 import http.client
 import os
+import json
 from pathlib import Path
 import secrets
 import ssl
@@ -58,7 +59,14 @@ class WebTests(unittest.TestCase):
                               ({'Sec-Fetch-Site':'cross-site'},403)]:
             self.assertEqual(self.request(headers=headers)[0], code)
         self.assertEqual(self.request(headers={'Origin':'https://'+self.authority})[0],200)
-        self.assertEqual(self.request(path='/v1/projects/create')[0],404)
+        self.assertEqual(self.request(path='/v1/projects/create', body='{}')[0], 400)
+        code, data, _ = self.request(path='/v1/projects/create', body=json.dumps({'title':'Nový projekt'}))
+        self.assertEqual(code, 200)
+        created = json.loads(data)
+        code, catalog, _ = self.request(body='{"details":true}')
+        self.assertEqual(code, 200)
+        self.assertIn(created['id'], [p['id'] for p in json.loads(catalog)['projects']])
+        self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':created['id']}))[0], 200)
         for path in ('/', '/app.js', '/app.css'):
             code, data, headers = self.request('GET',path)
             self.assertEqual(code,200)
@@ -67,6 +75,45 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/../node.json')[0],404)
         self.assertNotIn('localStorage', WEB_JS)
         self.assertFalse(WEB_JS.endswith('loadProjects();\n'))
+
+    def test_individual_keys_membership_rotation_and_revocation_over_https(self):
+        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Restricted"}')
+        project = json.loads(data)['id']
+        def admin(request):
+            return self.request(path='/v1/administration', body=json.dumps(request))
+        code, data, _ = admin({'action':'list'})
+        self.assertEqual(code, 200)
+        state = json.loads(data)
+        code, data, _ = admin({'action':'create-user', 'expected_commit':state['commit_id'], 'name':'Reader', 'node_role':'member'})
+        self.assertEqual(code, 200)
+        state = json.loads(data); key = state['access_key']; user = state['users'][0]
+        headers = {'Authorization':'Bearer '+key}
+        self.assertEqual(json.loads(self.request(headers=headers)[1])['projects'], [])
+        self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/projects/create', body='{"title":"Denied"}', headers=headers)[0], 403)
+        code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
+                              'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
+        self.assertEqual(code, 200); state = json.loads(data)
+        self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
+        code, data, _ = admin({'action':'rotate-key', 'expected_commit':state['commit_id'], 'user_id':user['id']})
+        self.assertEqual(code, 200); state=json.loads(data)
+        self.assertEqual(self.request(headers=headers)[0],401)
+        headers={'Authorization':'Bearer '+state['access_key']}
+        self.assertEqual(self.request(headers=headers)[0],200)
+        code, _, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
+                           'active':False, 'node_role':'member', 'memberships':{project:'reader'}})
+        self.assertEqual(code,200)
+        self.assertEqual(self.request(headers=headers)[0],401)
+
+    def test_create_retries_have_one_receipt_and_project(self):
+        from uuid import uuid4
+        body=json.dumps({'title':'Retry', 'operation_id':str(uuid4())})
+        first=self.request(path='/v1/projects/create',body=body)
+        second=self.request(path='/v1/projects/create',body=body)
+        self.assertEqual(first[0],200);self.assertEqual(second[0],200)
+        self.assertEqual(json.loads(first[1]),json.loads(second[1]))
+        self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
 
     def test_router_entry_redirects_to_live_https_and_rejects_bad_certificate(self):
         import ipaddress
