@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 from scripts import deploy_omnia
 
@@ -38,6 +39,14 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(deploy_omnia.main(), 255)
             self.assertIn('StrictHostKeyChecking=yes', run.call_args.args[0])
             self.assertIsInstance(run.call_args.kwargs['input'], bytes)
+
+    def test_remote_retry_recover_flow(self):
+        failed = SimpleNamespace(returncode=255)
+        success = SimpleNamespace(returncode=0)
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--retries', '2']), patch('subprocess.run') as run:
+            run.side_effect = [failed, success, success]
+            self.assertEqual(deploy_omnia.main(), 0)
+            self.assertEqual(run.call_count, 3)
 
     def test_failed_install_preserves_previous_release(self):
         with tempfile.TemporaryDirectory() as tmp:

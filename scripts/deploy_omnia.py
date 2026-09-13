@@ -9,6 +9,7 @@ import re
 import shlex
 import subprocess
 import tarfile
+import time
 import uuid
 
 if __package__:
@@ -19,6 +20,46 @@ else:
     from install_web import install_script as web_install_script
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def remote_recovery_script():
+    return r'''set -eu
+base=/opt/federated-workspace
+unit=/etc/systemd/system/federated-workspace.service
+test -d "$base/web-rollback" || { echo 'No interrupted web deployment state'; exit 0; }
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$base/web-deploy.lock" || exit 1
+  flock -n 9 || exit 1
+fi
+systemctl stop federated-workspace.service || :
+if [ -s "$base/web-rollback/previous" ]; then
+  ln -s "$(cat "$base/web-rollback/previous")" "$base/.manual-restore"
+  mv -Tf "$base/.manual-restore" "$base/current"
+else
+  rm -f "$base/current"
+fi
+if [ -f "$base/web-rollback/unit" ]; then
+  cp -p "$base/web-rollback/unit" "$unit"
+else
+  rm -f "$unit"
+fi
+systemctl daemon-reload
+if [ -f "$base/web-rollback/enabled" ]; then
+  systemctl enable federated-workspace.service
+else
+  systemctl disable federated-workspace.service || true
+fi
+if [ -f "$base/web-rollback/active" ]; then
+  systemctl start federated-workspace.service || true
+fi
+echo 'Recovered interrupted web deployment'
+'''
+
+
+def run_ssh(host, command, payload):
+    args = ['ssh', '-F', '/dev/null', '-o', 'StrictHostKeyChecking=yes',
+            '-o', 'ConnectTimeout=10', host, 'sh -c ' + shlex.quote(command)]
+    return subprocess.run(args, input=payload)
 
 
 def bundle(root):
@@ -80,6 +121,7 @@ def main():
     parser.add_argument('host', help='SSH user@host of the router (password prompt allowed)')
     parser.add_argument('--container', default='workspace-m0')
     parser.add_argument('--dry-run', action='store_true', help='Show plan without SSH or writes')
+    parser.add_argument('--retries', type=int, default=3, help='Deployment retry count on failure')
     parser.add_argument('--web-lan', help='Opt in to HTTPS viewer; allowed private IPv4 client subnet')
     args = parser.parse_args()
     if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*', args.host):
@@ -97,10 +139,24 @@ def main():
         print('Files: ' + ', '.join(files))
         print(command)
         return 0
-    # Ignore broken/implicit client proxy config; retain known-host verification and ssh-agent.
-    result = subprocess.run(['ssh', '-F', '/dev/null', '-o', 'StrictHostKeyChecking=yes',
-                             '-o', 'ConnectTimeout=10', args.host, 'sh -c ' + shlex.quote(command)],
-                            input=payload)
+    if args.retries < 1:
+        parser.error('retries must be >= 1')
+
+    result = None
+    for attempt in range(1, args.retries + 1):
+        if attempt > 1:
+            recover_result = run_ssh(args.host, remote_recovery_script(), b'')
+            if recover_result.returncode != 0:
+                print(f'Attempt {attempt}: recovery failed')
+                return recover_result.returncode
+            print(f'Attempt {attempt}/{args.retries}: retrying deployment')
+        # Ignore broken/implicit client proxy config; retain known-host verification and ssh-agent.
+        result = run_ssh(args.host, command, payload)
+        if result.returncode == 0:
+            return 0
+        if attempt < args.retries:
+            time.sleep(2 ** (attempt - 1))
+            print(f'Attempt {attempt}/{args.retries}: failed, retrying')
     return result.returncode
 
 
