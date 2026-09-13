@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: MPL-2.0
 """Native single-OS-user administration, using the existing process token."""
 import sqlite3
+import os
 import subprocess
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.administration import AccessDenied
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
+from spikes.project_creation import ProjectCreation
 
 ASSETS = {'/': ('text/html; charset=utf-8', HTML.replace('<body>', '<body class="desktop-management">' + ADMIN_HTML)),
           '/app.css': ('text/css; charset=utf-8', CSS + ADMIN_CSS + '\nbody.desktop-management #administration-open{display:block}'),
@@ -22,6 +24,10 @@ class DesktopManagementHandler(DesktopHandler):
             return super().dispatch(request)
         actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
         try:
+            administration = self.server.administration
+            if not os.path.lexists(administration.node) and administration.repo.exists():
+                return self.reply(422, {'error': 'Chybí původní node.json. Obnovte jej ze zálohy; identitu existující federace nelze nahradit.'})
+            ProjectCreation(administration.node).initialize_node()
             result = self.server.administration.request(actor, request)
             result['projects'] = self.server.projects.catalog()
             return self.reply(200, result)

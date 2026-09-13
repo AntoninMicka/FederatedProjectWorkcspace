@@ -48,9 +48,17 @@ Hesla, digesty hesel/klíčů, tokeny, session ani soukromé klíče se nepřen�
 
 ## Oboustranné mapování bez přenosu credentials
 
-Správa federace potřebuje existující node.json; na novém desktopu jej vytvoří
-například první vytvoření projektu. Chybná/chybějící konfigurace se neobchází
-generováním náhradní federované identity.
+Nový prázdný desktop vytvoří node.json při prvním otevření správy; první
+projekt není podmínkou nastavení federace. Inicializace používá stejný uzlový
+zámek a author journal jako ProjectCreation, publikuje kompletní soubor bez
+přepsání a zachovává jeho UUID při opakování. Nedokončené vytvoření projektu
+se neobchází novou konfigurací. Poškozený node.json nebo chybějící konfigurace
+existujícího federačního registru se nenahrazuje novou identitou: zobrazí chybu
+a vyžaduje obnovu původní konfigurace.
+
+Hlášení správy zůstává viditelné při scrollování dialogu. Neplatné pole,
+nevybraný projekt i chyba odpovědi API mají explicitní hlášení; neplatné pole
+se označí a dostane fokus. Po chybě zápisu načtěte správu znovu před retry.
 
 Ve Federaci je otisk vlastního Ed25519 klíče uzlu. Otisk znamená SHA-256
 nad DER SubjectPublicKeyInfo, nikoli otisk TLS certifikátu. Před přidáním
