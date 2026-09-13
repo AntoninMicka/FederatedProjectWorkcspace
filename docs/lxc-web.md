@@ -11,7 +11,7 @@ Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lightt
 
 Určete privátní IPv4 subnet klientů a kontejneru. Příklady používají dokumentační placeholdery `ROUTER` a `LAN_SUBNET`; dosaďte skutečné hodnoty. Výchozí kontejner je `workspace-m0`. Serverový port je 8443, routerový helper používá pouze `127.0.0.1:8846`. Přístup přes IPv6 a DNS jméno zatím není implementovaný.
 
-V kontejneru připravte `/etc/federated-workspace/tls.crt` (certifikát a případný řetězec), `tls.key` a `ca.crt` (důvěryhodná CA pro instalační healthcheck). Certifikát musí být důvěryhodný pro klientské prohlížeče a zahrnovat IP adresy, které může tento kontejner dostat. Lze použít vlastní LAN CA a certifikát se SAN pro vyhrazený DHCP pool; změna mimo SAN vyžaduje obnovu certifikátu a restart služby. Nepoužívejte vypnutí ověřování TLS. Kořenový certifikát CA přeneste na router do `/etc/federated-workspace-ca.pem`; soukromý TLS klíč zůstává v LXC. Instalátor klíč ani certifikát nevytváří, nepřenáší a nezahrnuje do source archivu.
+V kontejneru je potřeba mít `/etc/federated-workspace/tls.crt` (certifikát a případný řetězec), `tls.key` a `ca.crt` (důvěryhodná CA pro instalační healthcheck). Pokud chybí, `deploy-omnia --web-lan` je umí vytvořit automaticky (včetně `keyUsage` a `subjectAltName`, včetně `127.0.0.1`). Certifikát musí být důvěryhodný pro klientské prohlížeče a zahrnovat IP adresy, které může tento kontejner dostat. Lze použít vlastní LAN CA a certifikát se SAN pro vyhrazený DHCP pool; změna mimo SAN vyžaduje obnovu certifikátu a restart služby. Nepoužívejte vypnutí ověřování TLS. `deploy-omnia --web-lan` navíc automaticky přenáší veřejný CA certifikát z kontejneru na router do `/etc/federated-workspace-ca.pem`; soukromý TLS klíč zůstává v LXC.
 
 Prohlížeč vyžaduje náhodný přístupový klíč aplikace. První instalace jej vygeneruje v `/var/lib/federated-workspace/access-key` (0600); správce jej přečte uvnitř LXC a předá oprávněnému operátorovi mimo URL. Restart ani upgrade klíč nemění. Pro odvolání přístupu správce bezpečně nahradí soubor novým náhodným klíčem alespoň 32 bajtů, zachová vlastnictví/mód a restartuje službu. Klíč neopravňuje k práci přes SSH.
 
@@ -38,7 +38,7 @@ journalctl -u federated-workspace.service -n 30
 
 Na routeru musí být Python 3, LXC nástroje, procd, lighttpd a `lighttpd-mod-proxy`. Před instalací ověřte, že cesta `/federated-workspace/` a port 8846 nejsou obsazené jinou aplikací. Podpora lighttpd a umístění JSON odpovídají [oficiální specifikaci WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md).
 
-Po schválení přenosu zkopírujte **pouze** `scripts/router_tile.py` a `scripts/router_entry.py` do společného staging adresáře na routeru, plus veřejný CA certifikát na výše uvedenou cestu. TLS privátní klíč ani přístupový klíč aplikace na router nekopírujte. Ve staging adresáři:
+Po schválení přenosu zkopírujte **pouze** `scripts/router_tile.py` a `scripts/router_entry.py` do společného staging adresáře na routeru. TLS privátní klíč ani přístupový klíč aplikace na router nekopírujte. CA certifikát je už přenesen automaticky při `deploy-omnia --web-lan`. Ve staging adresáři:
 
 ```sh
 python3 router_tile.py plan --container workspace-m0 --lan LAN_SUBNET
@@ -108,7 +108,7 @@ Ověřte otevření dlaždice a přihlášení, skutečný projekt/náhled, změ
 ssh root@ROUTER "cat /etc/turris-version ; lxc list --format csv -n : name,state,ipv4"
 ```
 
-2) Připravte TLS materiály a certifikáty (certifikát na IP, které router klient skutečně udělí).
+2) Připravte TLS materiály a certifikáty (při `--web-lan` se doplní automaticky; ověřte, že SAN obsahuje cílové IP klienta/routeru).
 3) Proveďte simulovaný nasazení:
 
 ```sh
@@ -121,12 +121,23 @@ ssh root@ROUTER "cat /etc/turris-version ; lxc list --format csv -n : name,state
 ./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET
 ```
 
+Při problémové situaci použijte:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --reset
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --regen-tls
+```
+
+`--reset` vyčistí `web-rollback` a znovu načte čistý stav deploymentu.
+`--regen-tls` vynutí nové `/etc/federated-workspace/ca.crt`, `tls.crt`, `tls.key` před deployem.
+
 5) Na routeru proveďte deployment kontrol a reálné scénáře:
 
 ```sh
-ssh root@ROUTER "systemctl status federated-workspace.service; systemctl status omc-federated-workspace-web.service; cat /var/lib/federated-workspace/access-key"
+ssh root@ROUTER "lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/omc-federated-workspace-web status; cat /var/lib/federated-workspace/access-key"
 python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
 ```
+Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/omc-federated-workspace-web status`.
 
 6) Ověření scénářů uživatelem:
 Ověření 1: otevření dlaždice bezchybně načte přihlašovací stránku přes HTTPS 8443.
