@@ -9,7 +9,8 @@ import signal
 import sys
 from urllib.parse import urlsplit
 
-from spikes.desktop_ui import ASSETS, DesktopHandler
+from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
+from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
@@ -97,6 +98,7 @@ def main():
     app.setApplicationName('Projektový workspace')
     node_path = args.node or default_node_path()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
+        server.administration = Administration(node_path, deployment='desktop')
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)

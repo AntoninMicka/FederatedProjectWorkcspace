@@ -7,7 +7,9 @@ SPDX-License-Identifier: MPL-2.0
 
 Každý uzel má trvalé Node ID a klíč; důvěra je explicitní a nezávislá na VPN. Pro první ověření propojit desktop s jedním zvoleným serverovým peerem. Server není globální autorita všech projektů; další topologie přijde až po ověření dvou uzlů.
 
-Synchronizují se pouze autorizované projekty. Credentials se nikdy nekopírují. Distribuce uživatelských identit a revokací vyžaduje samostatný protokol; Git historie sama oprávnění neuděluje. Po reconnectu ověřit aktuální oprávnění před přenosem.
+Synchronizují se pouze autorizované projekty. Credentials se nikdy nekopírují. Git historie sama oprávnění neuděluje. Po reconnectu ověřit aktuální oprávnění před přenosem.
+
+Upřesnění 2026-09-13 podle [ADR 0021](docs/adr/0021-local-accounts-and-bilateral-mapping.md): účty a přihlášení jsou lokální. Desktop má jediného běžícího uživatele, web může mít více vlastních účtů. Federace mapuje kvalifikované identity až po dvou podepsaných potvrzeních; nezavádí vzdálené přihlášení ani sdílená hesla. Offline potvrzení a revokace jsou implementované, automatické doručování a datový transport zůstávají M5. ACL/rights manifest a privacy se musí přenášet s daty, zachovat původní identity a omezit účinná práva průnikem s místní politikou; chybějící ACL není automatický přístup.
 
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 

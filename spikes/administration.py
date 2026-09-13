@@ -3,6 +3,7 @@
 """Local federation administration; no peer transport or automatic trust."""
 from contextlib import contextmanager, closing
 import fcntl
+import getpass
 import hashlib
 import json
 import os
@@ -17,6 +18,8 @@ from uuid import uuid4, UUID
 from spikes.configuration import parse_node, read_config, overlap
 from spikes.journal import sync_dir
 from spikes.storage import Git
+from spikes.project_creation import ProjectCreation
+from spikes.federation_accounts import MappingSignatures, validate_spec, effective_actions
 
 NODE_ROLES = {'member', 'node-admin', 'federation-admin'}
 PROJECT_ROLES = {'project-admin', 'editor', 'reviewer', 'reader'}
@@ -39,7 +42,10 @@ def label(value):
 
 
 class Administration:
-    def __init__(self, node):
+    def __init__(self, node, *, deployment='web'):
+        if deployment not in {'web', 'desktop'}:
+            raise ValueError('Unknown deployment mode')
+        self.deployment = deployment
         self.node = Path(node).absolute()
         self.root = self.node.parent / ('.' + self.node.name + '.administration')
         self.repo = self.root / 'registry.git'
@@ -68,22 +74,29 @@ class Administration:
             git.run('init', '--bare', '--template=', '--initial-branch=main')
             head = git.run('rev-parse', '--verify', 'refs/heads/main', check=False)
             if head.returncode:
-                state = {'schema_version': 1, 'node_id': node['id'], 'users': [], 'peers': []}
+                state = {'schema_version': 2, 'node_id': node['id'], 'users': [], 'peers': [], 'mappings': []}
                 commit = self.publish(git, state, None)
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
             self.validate(state, node['id'])
+            if state['schema_version'] == 1:
+                state = dict(state, schema_version=2, mappings=[])
+                commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
     def validate(self, state, node_id):
-        if set(state) != {'schema_version', 'node_id', 'users', 'peers'} or state['schema_version'] != 1 or state['node_id'] != node_id:
+        version = state.get('schema_version')
+        expected = {'schema_version', 'node_id', 'users', 'peers'} | ({'mappings'} if version == 2 else set())
+        if set(state) != expected or type(version) is not int or version not in {1, 2} or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:
             if set(user) != {'id', 'home_node_id', 'name', 'active', 'node_role', 'memberships', 'credential_ref', 'revision'}:
                 raise ValueError('Invalid user fields')
             identifier(user['id']); identifier(user['home_node_id']); label(user['name'])
+            if user['home_node_id'] != node_id:
+                raise ValueError('Only local accounts may have local credentials')
             if user['id'] in seen or type(user['active']) is not bool or user['node_role'] not in NODE_ROLES:
                 raise ValueError('Invalid user')
             seen.add(user['id'])
@@ -104,6 +117,115 @@ class Administration:
             seen.add(peer['id'])
             if not re.fullmatch(r'[a-f0-9]{64}', peer['fingerprint']) or type(peer['revision']) is not int or peer['revision'] < 1:
                 raise ValueError('Invalid peer fingerprint/revision')
+        seen = set()
+        for mapping in state.get('mappings', []):
+            if set(mapping) != {'spec', 'confirmations', 'revocation'}:
+                raise ValueError('Invalid mapping record')
+            spec = validate_spec(mapping['spec'])
+            if spec['id'] in seen or node_id not in [a['node_id'] for a in spec['accounts']]:
+                raise ValueError('Invalid mapping identity')
+            seen.add(spec['id'])
+            if not isinstance(mapping['confirmations'], dict) or not set(mapping['confirmations']) <= {a['node_id'] for a in spec['accounts']}:
+                raise ValueError('Invalid confirmations')
+            envelopes = list(mapping['confirmations'].values()) + ([mapping['revocation']] if mapping['revocation'] else [])
+            for envelope in envelopes:
+                if envelope['spec'] != spec:
+                    raise ValueError('Confirmation for another mapping')
+
+    def local_account(self, state, user_id):
+        if self.deployment == 'desktop':
+            author = ProjectCreation(self.node).author_id()
+            return {'id': author, 'home_node_id': state['node_id'], 'name': getpass.getuser(),
+                    'active': True, 'node_role': 'federation-admin', 'memberships': {}} if user_id == author else None
+        return next((u for u in state['users'] if u['id'] == user_id and u['active']), None)
+
+    def mapping_context(self, state, spec, *, revoking=False):
+        validate_spec(spec)
+        local = next((a for a in spec['accounts'] if a['node_id'] == state['node_id']), None)
+        account = self.local_account(state, local['user_id']) if local else None
+        if not account and local and revoking and self.deployment == 'web':
+            account = next((u for u in state['users'] if u['id'] == local['user_id']), None)
+        if not local or not account:
+            raise ValueError('Mapping requires an active local account')
+        remote = next(a for a in spec['accounts'] if a != local)
+        peer = next((p for p in state['peers'] if p['id'] == remote['node_id'] and (revoking or p['trust'] == 'approved')), None)
+        if not peer:
+            raise AccessDenied('Peer trust is not approved')
+        return local, remote, peer
+
+    def mapping_active(self, state, mapping):
+        if mapping['revocation'] or len(mapping['confirmations']) != 2:
+            return False
+        try:
+            local, remote, peer = self.mapping_context(state, mapping['spec'])
+            pins = {local['node_id']: MappingSignatures(self.root).identity()['fingerprint'], remote['node_id']: peer['fingerprint']}
+            for signer, envelope in mapping['confirmations'].items():
+                if envelope['signer_node_id'] != signer or envelope['decision'] != 'confirm':
+                    return False
+                MappingSignatures.verify(envelope, pins[signer])
+            return True
+        except (ValueError, OSError, subprocess.SubprocessError):
+            return False
+
+    def mapped_actions(self, user_id, mapping_id, manifest, entity_id, local_actions):
+        with self.locked() as (_, state, _, _):
+            mapping = next((m for m in state['mappings'] if m['spec']['id'] == mapping_id), None)
+            if not mapping or not self.mapping_active(state, mapping):
+                return set()
+            account = self.local_account(state, user_id)
+            if not account or (self.deployment == 'web' and manifest.get('project_id') not in account['memberships']):
+                return set()
+            if self.deployment == 'web':
+                roles = {'reader': {'read'}, 'reviewer': {'read', 'review'},
+                         'editor': {'read', 'write'}, 'project-admin': {'read', 'write', 'review', 'manage'}}
+                local_actions = set(local_actions) & roles.get(account['memberships'][manifest['project_id']], set())
+            return effective_actions(manifest, entity_id, mapping['spec'], state['node_id'], user_id, local_actions)
+
+    def mapping_request(self, state, node, request):
+        action = request['action']
+        export = None
+        if action == 'propose-mapping' and set(request) == {'action', 'expected_commit', 'local_user_id', 'peer_node_id', 'peer_user_id', 'project_ids'}:
+            spec = {'schema_version': 1, 'id': str(uuid4()), 'accounts': sorted([
+                {'node_id': node['id'], 'user_id': identifier(request['local_user_id'])},
+                {'node_id': identifier(request['peer_node_id']), 'user_id': identifier(request['peer_user_id'])}], key=lambda a: a['node_id']),
+                'project_ids': request['project_ids']}
+            self.mapping_context(state, spec)
+            mapping = {'spec': spec, 'confirmations': {}, 'revocation': None}
+            state['mappings'].append(mapping)
+        elif action in {'confirm-mapping', 'revoke-mapping'} and set(request) == {'action', 'expected_commit', 'mapping_id'}:
+            mapping = next((m for m in state['mappings'] if m['spec']['id'] == request['mapping_id']), None)
+            if not mapping or mapping['revocation']:
+                raise ValueError('Unknown or revoked mapping')
+            if action == 'confirm-mapping':
+                self.mapping_context(state, mapping['spec'])
+            export = MappingSignatures(self.root).sign(mapping['spec'], node['id'], 'revoke' if action == 'revoke-mapping' else 'confirm')
+            if action == 'revoke-mapping':
+                mapping['revocation'] = export
+            else:
+                mapping['confirmations'][node['id']] = export
+        elif action == 'import-mapping' and set(request) == {'action', 'expected_commit', 'envelope'}:
+            envelope = request['envelope']
+            if not isinstance(envelope, dict) or 'spec' not in envelope:
+                raise ValueError('Invalid confirmation')
+            local, remote, peer = self.mapping_context(state, envelope['spec'], revoking=envelope.get('decision') == 'revoke')
+            if envelope.get('signer_node_id') != remote['node_id']:
+                raise ValueError('Remote confirmation must be signed by the peer')
+            MappingSignatures.verify(envelope, peer['fingerprint'])
+            mapping = next((m for m in state['mappings'] if m['spec']['id'] == envelope['spec']['id']), None)
+            if not mapping:
+                mapping = {'spec': envelope['spec'], 'confirmations': {}, 'revocation': None}
+                state['mappings'].append(mapping)
+            if mapping['spec'] != envelope['spec'] or (mapping['revocation'] and envelope['decision'] != 'revoke'):
+                raise ValueError('Changed or already revoked mapping')
+            if envelope['decision'] == 'revoke':
+                mapping['revocation'] = envelope
+            else:
+                mapping['confirmations'][remote['node_id']] = envelope
+        else:
+            raise ValueError('Invalid mapping request')
+        if not set(mapping['spec']['project_ids']) <= {p['project_id'] for p in node['projects']}:
+            raise ValueError('Unknown scoped projects')
+        return export
 
     @staticmethod
     def endpoint(value):
@@ -158,6 +280,8 @@ class Administration:
         return reference, token
 
     def authenticate(self, auth):
+        if self.deployment == 'desktop':
+            return None  # Native process token/OS session only, no foreign account login.
         if not auth.startswith('Bearer ') or len(auth) > 256 or not self.node.exists():
             return None
         digest = hashlib.sha256(auth[7:].encode()).hexdigest()
@@ -195,8 +319,11 @@ class Administration:
             if request.get('expected_commit') != commit:
                 raise AccessDenied('Registry changed; reload before editing')
             token = None
+            export = None
             registered = {p['project_id'] for p in node['projects']}
             if action == 'create-user' and set(request) == {'action', 'expected_commit', 'name', 'node_role'}:
+                if self.deployment != 'web':
+                    raise AccessDenied('Desktop has only its running local user')
                 role = request['node_role']
                 if not isinstance(role, str) or role not in NODE_ROLES or (role == 'federation-admin' and actor['node_role'] != 'federation-admin'):
                     raise AccessDenied('Cannot grant federation administrator')
@@ -205,6 +332,8 @@ class Administration:
                 user['credential_ref'], token = self.issue(user['id'])
                 state['users'].append(user)
             elif action in {'update-user', 'rotate-key'}:
+                if self.deployment != 'web':
+                    raise AccessDenied('Desktop has no web account management')
                 user = next((u for u in state['users'] if u['id'] == request.get('user_id')), None)
                 if user is None:
                     raise ValueError('Unknown user')
@@ -239,18 +368,32 @@ class Administration:
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid trust change')
                 peer.update(trust=request['trust'], revision=peer['revision'] + 1)
+                if request['trust'] == 'revoked':
+                    for mapping in state['mappings']:
+                        if not mapping['revocation'] and any(a['node_id'] == peer['id'] for a in mapping['spec']['accounts']):
+                            mapping['revocation'] = MappingSignatures(self.root).sign(mapping['spec'], node['id'], 'revoke')
+            elif action in {'propose-mapping', 'confirm-mapping', 'revoke-mapping', 'import-mapping'}:
+                if actor['node_role'] != 'federation-admin':
+                    raise AccessDenied('Federation administrator required')
+                export = self.mapping_request(state, node, request)
             else:
                 raise ValueError('Unknown administration operation')
             commit = self.publish(git, state, commit)
             result = self.public(state, commit, actor)
             if token:
                 result['access_key'] = token
+            if export:
+                result['mapping_envelope'] = export
             return result
 
-    @staticmethod
-    def public(state, commit, actor):
+    def public(self, state, commit, actor):
+        users = [{k: v for k, v in u.items() if k != 'credential_ref'} for u in state['users']]
+        if self.deployment == 'desktop':
+            users = [self.local_account(state, ProjectCreation(self.node).author_id())]
         return {'node_id': state['node_id'], 'commit_id': commit,
-                'users': [{k: v for k, v in u.items() if k != 'credential_ref'} for u in state['users']],
+                'users': users, 'deployment': self.deployment,
                 'peers': state['peers'] if actor['node_role'] == 'federation-admin' else [],
+                'mapping_identity': MappingSignatures(self.root).identity() if actor['node_role'] == 'federation-admin' else None,
+                'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if actor['node_role'] == 'federation-admin' else [],
                 'federation_admin': actor['node_role'] == 'federation-admin',
                 'transport': 'not-implemented'}
