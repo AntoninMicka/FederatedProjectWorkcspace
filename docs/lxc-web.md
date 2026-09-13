@@ -99,3 +99,50 @@ Zkontrolujte návrat předchozího stavu a teprve poté odstraňte `web-rollback
 ## Cílová akceptace
 
 Ověřte otevření dlaždice a přihlášení, skutečný projekt/náhled, změnu IP v certifikovaném poolu, restart kontejneru i routeru, zastavení LXC, nejednoznačnou adresu, neplatný certifikát, opakované nasazení, obnovu po chybě a odebrání dlaždice se zachováním ostatních aplikací. Výsledky zapisujte do M1-07 v TODO; lokální unit testy nejsou důkazem této cílové akceptace.
+
+## Runbook pro reálné ověření na routeru
+
+1) Ověřte SSH k routeru a identifikujte cílový container:
+
+```sh
+ssh root@ROUTER "cat /etc/turris-version ; lxc list --format csv -n : name,state,ipv4"
+```
+
+2) Připravte TLS materiály a certifikáty (certifikát na IP, které router klient skutečně udělí).
+3) Proveďte simulovaný nasazení:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --dry-run
+```
+
+4) Pokud je plán čistý, proveďte produkční deploy:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET
+```
+
+5) Na routeru proveďte deployment kontrol a reálné scénáře:
+
+```sh
+ssh root@ROUTER "systemctl status federated-workspace.service; systemctl status omc-federated-workspace-web.service; cat /var/lib/federated-workspace/access-key"
+python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
+```
+
+6) Ověření scénářů uživatelem:
+Ověření 1: otevření dlaždice bezchybně načte přihlašovací stránku přes HTTPS 8443.
+Ověření 2: zobrazení katalogu + náhled existujícího projektu.
+Ověření 3: změna IP kontejneru po restarte (`lxc start/stop`, `lxc restart`) vede k nové adrese a tile ji při dalším kliknutí respektuje.
+Ověření 4: restart routeru zachová funkčnost přihlášení po návratu služby.
+Ověření 5: zastavený LXC hlásí srozumitelnou nedostupnost.
+Ověření 6: při neplatném certifikátu je přihlášení odmítnuto.
+Ověření 7: opakované nasazení je idempotentní.
+Ověření 8: `python3 router_tile.py recover` vrací původní stav po přerušené instalaci.
+
+7) Úklid:
+
+```sh
+python3 router_tile.py remove
+```
+
+8) Zapište časový záznam do `TODO.md`:
+Zapište datum a zařízení; výsledky kroků 1–8; popis selhání a přesný příkaz oprav.
