@@ -31,9 +31,17 @@ functional/smoke tests. Retain package hashes, source identification, build inst
 and the results. A normal run with the unmodified distribution library is not proof
 that a modified library can be substituted.
 
-This is the intended LGPL section 4(d)(1) shared-library route. Its suitability,
-including compatibility of a modified interface-compatible library, must be validated
-for the release platform. That validation has **not** been completed by this baseline.
+This is the intended LGPL section 4(d)(1) shared-library route. For the reviewed
+Ubuntu 26.04.1 arm64 reference profile, the project built a modified, interface-compatible
+Shiboken 6.10.2 runtime from the matching `pyside6 6.10.2-6ubuntu1` source package and
+ran the unchanged audit `.deb` with that replacement in an isolated mount namespace.
+The original-library and replacement-library smoke runs both passed; the replacement
+run also verified the diagnostic marker and the mapped candidate library.
+
+This validates the replacement mechanism for that Shiboken component and reference
+profile. It is **not** an assertion that every Qt module was rebuilt or that all ABI
+semantics of Qt/PySide were exhaustively tested. Re-run the replacement check when the
+relevant PySide/Shiboken/Qt ABI, packaging model or launcher isolation changes.
 
 ## Source and development route
 

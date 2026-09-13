@@ -3,30 +3,37 @@
 #
 
 schema_version = 1
-baseline_commit = "84c06ce9b29ba4bdf4cdaa7557c09186f7a6ede5"
-reviewed_on = "2026-09-10"
-scope = "Linux source archive and unbundled .deb builders"
+baseline_commit = "128928e9fe88f9e353a22ca8bdd0db3922126301"
+reviewed_on = "2026-09-13"
+scope = "Linux source archive and unbundled .deb; reference runtime Ubuntu 26.04.1 arm64"
 is_complete_sbom = false
 is_release_approval = false
+reference_platform = "Ubuntu 26.04.1 LTS (resolute) arm64"
+runtime_evidence_sha256 = "3a1daa90b937622d0c343d5c287630f07ab600ba8f1e1f8ae670aefc924a67fc"
+runtime_evidence_status = "reviewed_reference_profile"
+audit_source_archive_sha256 = "7908abe537944c983ca10b09d3aed4ca8d4d1f8c5f4661fa4edbe82561623cf4"
+audit_deb_sha256 = "57a66cb5ec4c54635ca9b9f042290329ad5caf0db79f69a2559abcc31363e5e8"
+lgpl_replacement_status = "pass_shiboken_6_10_2_reference_profile"
+provenance_status = "pass_current_distributed_set"
 
 [[components]]
 id = "workspace"
 name = "Workspace application and original documentation"
-version = "baseline commit"
+version = "128928e9fe88f9e353a22ca8bdd0db3922126301"
 integration = "shipped_source"
 license_summary = "MPL-2.0; subject to provenance of each file"
 license_evidence = "project_declaration"
-release_status = "provenance_review_open"
+release_status = "reviewed_current_distributed_set"
 sources = ["LICENSE", "CONTRIBUTING.md"]
 
 [[components]]
 id = "pyyaml"
 name = "PyYAML"
-version = "6.0.3 required"
+version = "6.0.3 required; reference OS package python3-yaml 6.0.3-1build1"
 integration = "python_import_os_or_separately_installed_pip"
 license_summary = "MIT"
-license_evidence = "upstream_tag_license_verified"
-release_status = "license_direction_approved_artifact_review_open"
+license_evidence = "upstream_tag_and_reference_os_notice_verified"
+release_status = "reviewed_reference_profile_not_bundled"
 sources = ["https://github.com/yaml/pyyaml/blob/6.0.3/LICENSE", "requirements.txt"]
 evidence_blob_sha = "2f1b8e15e5627d92f0521605c9870bc8e5505cb4"
 bundled_by_current_desktop_builders = false
@@ -34,22 +41,22 @@ bundled_by_current_desktop_builders = false
 [[components]]
 id = "libyaml"
 name = "LibYAML"
-version = "unknown_target_build"
+version = "reference runtime 0.2.5; libyaml-0-2 0.2.5-2build3"
 integration = "conditional_transitive_pyyaml_extension"
-license_summary = "must_verify_selected_binary_or_wheel"
-license_evidence = "not_reviewed"
-release_status = "open_if_present"
+license_summary = "Expat for upstream LibYAML; downstream packaging notice separately recorded"
+license_evidence = "reference_os_notice_verified"
+release_status = "reviewed_reference_profile_not_bundled"
 sources = ["https://github.com/yaml/libyaml"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "pyside6"
 name = "PySide6 library runtime"
-version = "target_unknown; reference_source_v6.10.2"
+version = "reference runtime 6.10.2; libpyside6-py3-6.10 6.10.2-6ubuntu1"
 integration = "system_python_binding_in_process"
 license_summary = "LGPL-3.0-only route for covered library portions; component-specific notices also apply"
-license_evidence = "representative_runtime_header_verified_not_whole_package"
-release_status = "target_inventory_notices_and_replacement_test_open"
+license_evidence = "source_header_and_reference_os_notice_verified"
+release_status = "reviewed_reference_profile_lgpl_route"
 sources = ["https://github.com/pyside/pyside-setup/blob/v6.10.2/sources/pyside6/libpyside/pyside.cpp", "https://doc.qt.io/qtforpython-6/licenses.html"]
 evidence_blob_sha = "1f55b30d790c0aeb4a40315e8a00e1b56b3807d4"
 bundled_by_current_desktop_builders = false
@@ -57,11 +64,11 @@ bundled_by_current_desktop_builders = false
 [[components]]
 id = "shiboken6"
 name = "Shiboken6 runtime (not generator tool)"
-version = "target_unknown; reference_source_v6.10.2"
+version = "reference runtime 6.10.2; libshiboken6-py3-6.10 6.10.2-6ubuntu1"
 integration = "system_python_binding_runtime"
 license_summary = "LGPL-3.0-only route for covered library portions; component-specific notices also apply"
-license_evidence = "representative_runtime_header_verified_not_whole_package"
-release_status = "target_inventory_and_replacement_test_open"
+license_evidence = "source_header_reference_os_notice_and_replacement_smoke_verified"
+release_status = "reviewed_reference_profile_lgpl_replacement_pass"
 sources = ["https://github.com/pyside/pyside-setup/blob/v6.10.2/sources/shiboken6/libshiboken/basewrapper.cpp"]
 evidence_blob_sha = "eb9d47c7f17a06f63005eb0f1f38ef31db0049de"
 bundled_by_current_desktop_builders = false
@@ -69,88 +76,88 @@ bundled_by_current_desktop_builders = false
 [[components]]
 id = "qt"
 name = "Qt libraries used by desktop, including Core/Widgets and associated modules"
-version = "unknown_target_build"
+version = "reference Qt runtime 6.10.2; qt6-base 6.10.2+dfsg-7"
 integration = "system_dynamic_libraries"
 license_summary = "LGPLv3 route intended only where offered by the selected module; verify each actual module"
-license_evidence = "official_general_policy_not_exact_binary"
-release_status = "module_and_transitive_inventory_open"
+license_evidence = "official_policy_and_reference_os_notice_verified"
+release_status = "reviewed_reference_profile_unbundled"
 sources = ["https://doc.qt.io/qt-6/licensing.html", "spikes/desktop.py"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "webengine"
 name = "Qt WebEngine / Chromium / plugins"
-version = "unknown_target_build"
+version = "reference Qt WebEngine 6.10.2; qt6-webengine 6.10.2+dfsg-1; Chromium 134.0.6998.208"
 integration = "system_libraries_and_helper_processes"
 license_summary = "Qt-specific LGPLv3 route plus multiple Chromium/third-party licenses"
-license_evidence = "official_module_policy_not_exact_binary"
-release_status = "actual_build_and_third_party_inventory_open"
+license_evidence = "official_module_policy_and_reference_os_source_package_notice"
+release_status = "reviewed_reference_profile_unbundled_component_list_not_claimed_complete"
 sources = ["https://doc.qt.io/qt-6/qtwebengine-licensing.html", "docs/adr/0011-runtime-inventory.md"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "python"
 name = "Python / standard library"
-version = ">=3.11 required; actual target unknown"
+version = ">=3.11 required; reference interpreter 3.14.4 (python3.14-minimal 3.14.4-1ubuntu0.2)"
 integration = "system_interpreter_and_libraries"
 license_summary = "PSF license history and component-specific licenses"
-license_evidence = "official_general_license_history"
-release_status = "exact_version_and_component_inventory_open"
+license_evidence = "official_license_history_and_reference_os_notice_verified"
+release_status = "reviewed_reference_profile_unbundled"
 sources = ["https://docs.python.org/3/license.html"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "sqlite"
 name = "SQLite core via Python sqlite3"
-version = "unknown_target_build"
+version = "reference runtime 3.46.1; libsqlite3-0 3.46.1-9ubuntu0.2"
 integration = "system_transitive_library"
 license_summary = "SQLite core public domain; wrapper/extensions/downstream packaging separately assessed"
-license_evidence = "official_core_copyright_policy"
-release_status = "target_package_inventory_open"
+license_evidence = "official_core_policy_and_reference_os_notice_verified"
+release_status = "reviewed_reference_profile_unbundled"
 sources = ["https://www.sqlite.org/copyright.html"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "git"
 name = "Git CLI"
-version = "unknown_target_build"
+version = "reference package git 1:2.53.0-1ubuntu1"
 integration = "external_system_executable"
 license_summary = "record exact installed package copyright; do not infer whole-package license from program name"
-license_evidence = "target_license_not_reviewed"
-release_status = "target_package_and_source_mapping_open"
+license_evidence = "reference_os_notice_verified"
+release_status = "reviewed_reference_profile_external_program"
 sources = ["scripts/package_deb.py", "spikes/storage.py"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "poppler"
 name = "Poppler pdftoppm"
-version = "unknown_target_build"
+version = "reference package poppler-utils 26.01.0-2ubuntu0.1"
 integration = "external_system_executable_pdf_via_stdio"
 license_summary = "record exact installed poppler-utils and library copyright files"
-license_evidence = "target_license_not_reviewed"
-release_status = "target_package_and_source_mapping_open"
+license_evidence = "reference_os_notice_verified"
+release_status = "reviewed_reference_profile_external_program"
 sources = ["scripts/package_deb.py", "spikes/artifact_preview.py", "https://poppler.freedesktop.org/"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "shell-utils"
 name = "Shell / readlink / dirname / coreutils provider"
-version = "unknown_target_build"
+version = "reference /bin/sh dash 0.5.12-12ubuntu3; readlink/dirname via coreutils-from-uutils 0.0.0~ubuntu25 + rust-coreutils 0.8.0-0ubuntu3; GNU coreutils 9.7-3ubuntu2.1 also installed"
 integration = "external_system_programs"
 license_summary = "provider-dependent; do not assume GNU coreutils in every environment"
-license_evidence = "target_provider_not_reviewed"
-release_status = "actual_executable_owners_and_licenses_open"
+license_evidence = "reference_executable_owners_and_os_notices_verified"
+release_status = "reviewed_reference_profile_external_programs"
 sources = ["run.sh", "scripts/package_deb.py", "docs/adr/0011-runtime-inventory.md"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
 id = "libgit2"
 name = "libgit2 optional comparison experiment"
-version = "reference_source_v1.9.1; optional runtime unknown"
+version = "reference source v1.9.1; optional local probe tested against libgit2 1.9.1"
 integration = "optional_build_test_not_in_deb"
 license_summary = "GPL version 2 only plus upstream LINKING EXCEPTION; not an unconditional exemption for the library"
 license_evidence = "upstream_COPYING_intro_and_exception_verified"
-release_status = "not_shipped_by_current_builders_reopen_for_compiled_probe"
+release_status = "not_shipped_by_current_builders_optional_probe_tests_passed"
 sources = ["https://github.com/libgit2/libgit2/blob/v1.9.1/COPYING", "spikes/libgit2/probe.cpp"]
 evidence_blob_sha = "701792e9acb0875bf4266a97d63a0d5e8b7f0257"
 bundled_by_current_desktop_builders = false
@@ -158,10 +165,10 @@ bundled_by_current_desktop_builders = false
 [[components]]
 id = "build-tools"
 name = "dpkg-deb / optional C++ compiler / test tools"
-version = "unknown_build_environment"
+version = "build/test environment recorded separately in audit evidence"
 integration = "build_or_test_only"
 license_summary = "record build environment; review outputs if a tool embeds runtime code"
 license_evidence = "not_a_distributed_runtime_license_review"
-release_status = "build_inventory_open"
+release_status = "not_runtime_release_gate_record_per_build"
 sources = ["scripts/package_deb.py", "spikes/libgit2/README.md"]
 bundled_by_current_desktop_builders = false

@@ -46,8 +46,8 @@ Copies of the [GNU LGPL v3](docs/legal/licenses/COPYING.LGPL-3.0) and
 The workspace imposes no additional restriction on modification of the LGPL
 library portions or reverse engineering for debugging those modifications.
 The distribution is designed to load system-supplied libraries rather than a
-private frozen runtime. Instructions and the remaining validation requirement
-are in [Library replacement and debugging](docs/legal/RELINKING.md).
+private frozen runtime. Instructions and the reference-platform replacement
+validation record are in [Library replacement and debugging](docs/legal/RELINKING.md).
 
 Upstream evidence:
 - https://github.com/pyside/pyside-setup/blob/v6.10.2/sources/pyside6/libpyside/pyside.cpp

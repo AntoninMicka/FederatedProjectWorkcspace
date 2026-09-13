@@ -14,6 +14,34 @@ licenční audit, právní stanovisko nebo označení `production-ready`. Neře�
 FTO, ochranné známky, GDPR ani AI Act. Ty zůstávají v oddělených existujících evidencích.
 Tento dokument je podklad k existujícím release gates, ne další produktová roadmapa.
 
+## Closure review 2026-09-13
+
+Review target: commit `128928e9fe88f9e353a22ca8bdd0db3922126301`, current
+Linux source archive and unbundled `.deb` distribution model. Reference runtime evidence
+was collected on Ubuntu 26.04.1 LTS (arm64). This closure supersedes the gate states in
+the older baseline table below for this reviewed scope; the baseline text is retained as
+historical context.
+
+**Pre-release compliance verdict: GO WITH CONDITIONS.** No known licensing blocker was
+identified for continued development or for preparing a release candidate under the
+reviewed unbundled model. The remaining condition is release-specific evidence (CE-01):
+a real release branch/tag/version and final artifact hashes do not exist yet by design.
+
+| ID | Closure state | Evidence / boundary |
+| --- | --- | --- |
+| CE-01 | OPEN — release-only | The audit build is bound to commit `128928e9...`, but a final release version/tag and final artifact hashes must be created from the release branch. |
+| CE-02 | PASS for reviewed reference profile | Runtime/provider inventory recorded Python 3.14.4, PyYAML/LibYAML, PySide/Shiboken 6.10.2, Qt/WebEngine 6.10.2, Chromium 134.0.6998.208, SQLite, Git, Poppler and actual shell/coreutils providers. Package copyright evidence was hash-checked. The 356-package conservative OS graph is evidence, not application payload or a claim of a complete SBOM. |
+| CE-03 | PASS for reviewed replacement scenario | A modified compatible Shiboken 6.10.2 library built from matching Ubuntu source was substituted while the audit application remained unchanged; the isolated runtime smoke test passed. No About/license UI is present in the reviewed desktop, so UI notice placement is N/A; notices are delivered as files. |
+| CE-04 | PASS for audit baseline | Source and `.deb` artifacts were bound to the audited Git tree and hashes; manifests/notices were checked. The verification batch reported 148 PASS and 5 BLOCKED; the four libgit2 checks and the CE-03 replacement check were then rerun with their required inputs and reported PASS, with no reported FAIL. Re-run the release-relevant profile on the final release commit. |
+| CE-05 | PASS for current distributed set | The current source builder selects 100 UTF-8 source/document/license files (plus generated manifest), with no binary assets or vendored dependency tree. Project files carry SPDX metadata; intentional third-party license texts retain upstream ownership. Historical planning material is classified as project-originated/AI-assisted. |
+| CE-06 | N/A for current unbundled model | Reopen before shipping a bundled Python/Qt/Chromium runtime, AppImage/container/standalone image, copied virtualenv/wheels, external assets, model weights or other new third-party payload. |
+
+CE-02 and CE-05 are closure decisions for the reviewed distribution scope, not an
+assertion that every package installed on the operating system is part of the workspace
+or that a plagiarism/similarity scan was performed. A material change in dependencies,
+modules, bundling, reused code/assets or supported runtime profile reopens the affected
+gate.
+
 ## Co je doloženo a co nikoli
 
 Z repozitáře byly načteny aktuální branch metadata, dotčené build skripty a jejich
@@ -23,11 +51,12 @@ porovnány s Git blob SHA dodanými GitHubem. Text PyYAML licence byl načten p�
 z tagu 6.0.3 a jeho blob SHA byl rovněž ověřen. Přesné zdroje obsahuje
 [LICENSE_SOURCES.md](LICENSE_SOURCES.md).
 
-Předchozí souhrnné hodnocení typu „vlastní soubory PASS“ se nepovažuje za provedený
-audit autorství každého souboru. SPDX je deklarace, ne důkaz původu. Nebyl proveden
-úplný provenance audit Git historie, podobnostní scan cizího kódu, inventář všech
-tranzitivních licencí ani kontrola skutečné produkční binárky na cílovém systému.
-Historický inventář v ADR 0011 není důkazem obsahu nového releasu.
+Předchozí souhrnné hodnocení typu „vlastní soubory PASS“ se samo o sobě nepovažuje
+za audit autorství každého souboru. SPDX je deklarace, ne důkaz původu. V původní
+baseline nebyl proveden provenance review distribuovaného setu, úplný tranzitivní
+inventář ani kontrola skutečného release kandidáta. Pozdější closure review výše
+doplňuje provenance a runtime evidence pro auditovaný rozsah; nejde o globální
+podobnostní scan ani o důkaz obsahu budoucího releasu.
 
 Schválení PyYAML MIT v `REUSE_CATALOG.md` se zachovává jako schválení licenčního
 směru. Neznamená bezpečnostní audit, schválení libovolného wheelu ani automatické
