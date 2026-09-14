@@ -38,7 +38,8 @@ def fixture(root):
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE_ROOT / name, path)
-    for name in ('package_deb.py', 'package_desktop.py', 'license_files.py'):
+    for name in ('package_deb.py', 'package_desktop.py', 'license_files.py',
+                 'deploy_omnia.py', 'install_web.py'):
         path = root / 'scripts' / name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE_ROOT / 'scripts' / name, path)
