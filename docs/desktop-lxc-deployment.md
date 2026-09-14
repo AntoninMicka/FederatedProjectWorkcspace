@@ -85,3 +85,7 @@ Registr a preference nejsou společná transakce: pád po změně registru můž
 ponechat starou zapamatovanou adresu. Opakování znovu zjistí IP a dokončí lokální
 uložení. Před registry CAS se endpoint nemění. Tato změna neověřuje datový
 transport federace. Implementace zatím neověřena testy ani skutečným GUI během.
+
+Aktivní adresa nového [desktopového HTTPS backendu](desktop-network.md) se nyní
+předvyplní před návrhy IP a před starou zapamatovanou desktopovou adresou.
+Veřejná CA kontejneru se při deployi uloží i lokálně pro podepsaný test spojení.

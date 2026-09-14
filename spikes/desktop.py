@@ -54,6 +54,8 @@ def main():
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
+        from spikes.desktop_network import NetworkDialog
+        from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -115,6 +117,15 @@ def main():
         window.setCentralWidget(view)
         window.setWindowTitle('Projektový workspace · Zkušební verze')
         window.resize(1100, 800)
+        network_backend = NetworkBackend(node_path)
+        if not args.smoke:
+            try:
+                network_config = network_backend.load()
+                if network_config:
+                    network_backend.start(network_config)
+            except Exception as exc:
+                QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
+        app.aboutToQuit.connect(network_backend.stop)
         creation_result = {'receipt': None, 'loaded': False}
         def created(receipt):
             if receipt:
@@ -133,13 +144,24 @@ def main():
         def deploy_node():
             if controller.busy:
                 return
-            dialog = DeploymentDialog(node_path, window)
+            dialog = DeploymentDialog(node_path, window, local_endpoint=network_backend.endpoint)
             dialog.exec()
             if dialog.worker:
                 dialog.worker.wait()
             dialog.deleteLater()
         deploy_button.clicked.connect(deploy_node)
         editor_toolbar.addWidget(deploy_button)
+        network_button = QPushButton('Síť a test spojení…')
+        def network_settings():
+            if controller.busy:
+                return
+            dialog = NetworkDialog(network_backend, window)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        network_button.clicked.connect(network_settings)
+        editor_toolbar.addWidget(network_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open

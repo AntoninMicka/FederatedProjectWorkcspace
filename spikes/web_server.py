@@ -118,6 +118,12 @@ def secret(path):
 class WebHandler(DesktopHandler):
     post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session'}
 
+    def do_POST(self):
+        from spikes.federation_probe import PATH, reply_probe
+        if self.path == PATH:
+            return reply_probe(self)
+        return super().do_POST()
+
     def authorized(self, auth):
         if hmac.compare_digest(auth.encode(), ('Bearer ' + self.server.token).encode()):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}

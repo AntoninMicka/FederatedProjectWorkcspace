@@ -34,9 +34,10 @@ class DeploymentWorker(QThread):
 
 
 class DeploymentDialog(QDialog):
-    def __init__(self, node, parent=None):
+    def __init__(self, node, parent=None, *, local_endpoint=''):
         super().__init__(parent)
         self.node, self.worker = node, None
+        self.local_endpoint = local_endpoint
         self.setWindowTitle('Nasazení LXC uzlu'); self.resize(820, 650)
         layout = QVBoxLayout(self); form = QFormLayout()
         self.targets = QComboBox(); self.targets.addItem('Nový / ručně zadaný uzel', None)
@@ -53,6 +54,8 @@ class DeploymentDialog(QDialog):
         self.endpoint = QComboBox(); self.endpoint.setEditable(True); self.endpoint.addItem('')
         for candidate in address_candidates():
             self.endpoint.addItem(candidate)
+        if local_endpoint:
+            self.endpoint.setEditText(local_endpoint)
         self.endpoint.lineEdit().setPlaceholderText('Vyberte vlastní IP a ověřte HTTPS port backendu')
         self.mode = QComboBox()
         for text, value in [('První instalace a propojení', 'install'), ('Aktualizovat pouze aplikaci', 'update'),
@@ -112,7 +115,7 @@ class DeploymentDialog(QDialog):
         target = self.targets.itemData(index)
         if target:
             self.host.setText(target['host']); self.container.setText(target['container'])
-            self.lan.setText(target['lan']); self.endpoint.setEditText(target['desktop_endpoint'])
+            self.lan.setText(target['lan']); self.endpoint.setEditText(self.local_endpoint or target['desktop_endpoint'])
             self.mode.setCurrentIndex(self.mode.findData('update'))
             self.log.appendPlainText('Zapamatovaná adresa kontejneru: ' + target['endpoint'])
 

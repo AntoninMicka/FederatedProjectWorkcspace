@@ -135,6 +135,8 @@ def deploy(node, host, container, lan, desktop_endpoint, mode, progress, *, reme
         if not certificate.startswith(b'-----BEGIN CERTIFICATE-----'):
             raise ValueError('Invalid public CA response')
         session.run('umask 022; cat > /etc/federated-workspace-ca.pem; chmod 0644 /etc/federated-workspace-ca.pem', certificate)
+        from spikes.network_backend import trust_ca
+        trust_ca(node, target['node_id'], certificate)
         progress('Public CA copied to router; private keys remain in LXC.')
         if mode == 'update':
             progress('Update complete. Existing accounts and pairing unchanged.'); return target
