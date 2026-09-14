@@ -48,3 +48,26 @@ není to důkaz, že firewall je skutečná příčina. Úspěch ověřuje pouze
 revokací či projektových dat. Automatická datová synchronizace zůstává M5.
 
 Implementace zatím nebyla ověřena testy, reálným Qt ani cílovým spojením.
+
+## Test obou směrů z desktopu
+
+Použijte **Ověřit oba směry a nastavit desktopovou CA/adresu na LXC…**.
+Desktopový backend musí běžet a LXC musí být vybraný s důvěryhodnou CA.
+Potvrzení vypíše router, kontejner a aktuální adresu desktopu. Nejprve se ověří
+desktop→LXC. Při selhání prvního směru se na LXC nic nemění.
+
+Potom jedno ověřené SSH spojení přenese pouze veřejnou desktopovou CA a upraví
+endpoint již schváleného desktopového peeru na LXC. Před změnou se kontroluje
+UUID a původní pin LXC i schválený desktopový pin. Cizí identity, chybějící peer
+nebo neschválená důvěra se automaticky neopravují. Soukromé klíče, hesla,
+credentials, projektová data, práva ani firewall se nepřenášejí a nemění.
+
+LXC pak provede stejný nonce-bound HTTPS/podpisový test proti desktopu. Dialog
+vypíše výsledky obou směrů nebo konkrétní selhaný směr. CA je uložená v soukromém
+network adresáři LXC pod UUID desktopu. Úspěch není důkaz synchronizace dat.
+
+CA, Git endpoint a samotný test nejsou společná transakce. Pád či chyba může
+ponechat CA nebo endpoint aktualizovaný i při neúspěšném testu. Opakování po
+kontrole dostupnosti může přípravu dokončit bez resetu funkčního webu. Po
+úspěchu se zapamatuje nová desktopová adresa; chyba lokálního uložení nezneplatní
+ověřené spojení. Tento nový krok zatím nebyl agentem testován ani nasazen.

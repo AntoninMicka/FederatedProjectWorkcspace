@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QComboBox, QLineEdit,
-                               QCheckBox, QPushButton, QPlainTextEdit, QLabel)
+                               QCheckBox, QPushButton, QPlainTextEdit, QLabel, QMessageBox)
 
 from spikes.administration import Administration
 from spikes.deployment_targets import DeploymentTargets, address_candidates
@@ -68,10 +68,13 @@ class NetworkDialog(QDialog):
         test_form = QFormLayout(); test_form.addRow('Protější uzel', self.targets); test_form.addRow('CA protějšího uzlu', self.peer_ca)
         layout.addLayout(test_form)
         self.test = QPushButton('Ověřit HTTPS a identitu protějšího uzlu'); layout.addWidget(self.test)
+        self.both = QPushButton('Ověřit oba směry a nastavit desktopovou CA/adresu na LXC…')
+        layout.addWidget(self.both)
         layout.addWidget(self.log)
         self.targets.currentIndexChanged.connect(self.target_changed)
         self.target_changed()
         self.apply.clicked.connect(self.configure); self.test.clicked.connect(self.check)
+        self.both.clicked.connect(self.check_bilateral)
         self.log.appendPlainText('Aktivní backend: ' + (backend.endpoint or 'vypnutý'))
 
     def target_changed(self, *_):
@@ -84,10 +87,10 @@ class NetworkDialog(QDialog):
     def run_action(self, action):
         if self.worker and self.worker.isRunning():
             return
-        self.apply.setEnabled(False); self.test.setEnabled(False)
+        self.apply.setEnabled(False); self.test.setEnabled(False); self.both.setEnabled(False)
         self.worker = NetworkWorker(action, self)
         self.worker.done.connect(self.log.appendPlainText)
-        self.worker.finished.connect(lambda: (self.apply.setEnabled(True), self.test.setEnabled(True)))
+        self.worker.finished.connect(lambda: (self.apply.setEnabled(True), self.test.setEnabled(True), self.both.setEnabled(True)))
         self.worker.start()
 
     def configure(self):
@@ -117,6 +120,28 @@ class NetworkDialog(QDialog):
                 raise ValueError('Uzel není schválený s původním pinem. Nejdříve vyřešte jeho důvěru ve správě.')
             return check_peer(peer['endpoint'], ca, peer['id'], peer['fingerprint'])
         self.run_action(action)
+
+    def check_bilateral(self):
+        if self.worker and self.worker.isRunning():
+            return
+        target = self.targets.currentData(); ca = self.peer_ca.text().strip()
+        if not target or not ca or not self.backend.endpoint:
+            self.log.appendPlainText('Vyberte LXC a jeho CA a zapněte desktopový HTTPS backend.'); return
+        from PySide6.QtCore import Qt
+        confirmation = QMessageBox(self)
+        confirmation.setWindowTitle('Potvrdit SSH test a veřejnou CA')
+        confirmation.setTextFormat(Qt.TextFormat.PlainText)
+        confirmation.setText('Router: ' + target['host'] + '\nKontejner: ' + target['container'] +
+                             '\nDesktop: ' + self.backend.endpoint + '\n\n'
+                             'Přenést pouze veřejnou CA desktopu do LXC a aktualizovat adresu již schváleného peeru?\n'
+                             'Použije se jedno SSH spojení. Identity, práva, soukromé klíče ani firewall se nemění.\n'
+                             'Při chybě testu mohou CA/adresa již zůstat aktualizované. Pokračovat?')
+        confirmation.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        confirmation.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if confirmation.exec() != QMessageBox.StandardButton.Yes:
+            return
+        from spikes.peer_diagnostics import check_both
+        self.run_action(lambda: check_both(self.backend, target, ca))
 
     def reject(self):
         if not self.worker or not self.worker.isRunning():
