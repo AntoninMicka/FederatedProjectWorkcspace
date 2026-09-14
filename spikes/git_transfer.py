@@ -83,7 +83,10 @@ def transfer(node, target, project_id, operation_id, ca):
     peer = next((p for p in view['peers'] if p['id'] == target['node_id']), None)
     require(peer and peer['trust'] == 'approved' and peer['fingerprint'] == target['fingerprint'], 'Recipient is not an approved peer')
     check_peer(peer['endpoint'], ca, peer['id'], peer['fingerprint'])
-    payload, head, count = export_bundle(node, project_id)
+    from spikes.transfer_outbox import prepare_bundle, complete
+    context = dict(project_id=project_id, source_node_id=view['node_id'],
+                   source_pin=view['mapping_identity']['fingerprint'], recipient_node_id=peer['id'], recipient_pin=peer['fingerprint'])
+    payload, head, count = prepare_bundle(node, context, operation_id)
     request = dict(operation_id=operation_id, project_id=project_id, head=head,
                    digest=hashlib.sha256(payload).hexdigest(), source_node_id=view['node_id'],
                    source_pin=view['mapping_identity']['fingerprint'], recipient_node_id=peer['id'], recipient_pin=peer['fingerprint'])
@@ -95,7 +98,12 @@ def transfer(node, target, project_id, operation_id, ca):
         result = session.run(command, payload)
     finally:
         session.close()
-    return f'Transferred {count} public-history commits, HEAD {head}.\n' + result
+    completion = ''
+    try:
+        complete(node, operation_id, request['digest'])
+    except Exception as exc:
+        completion = '\nRemote transfer succeeded, but local completion failed. Preserve journal and inspect target before retry: ' + str(exc)
+    return f'Transferred {count} public-history commits, HEAD {head}.\n' + result + completion
 
 
 def import_bundle(request, payload):

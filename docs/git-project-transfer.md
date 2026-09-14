@@ -58,3 +58,34 @@ Lokální durable journal celého přenosu zatím není implementovaný.
 Uživatelský souhlas se změnou cíle není souhlas s přepisem cizích dat. Operace
 se označuje jako implemented/unverified, nikoli PoC validated či production-ready.
 Nové testy, GUI ověření ani skutečný přenos nebyly agentem spuštěny.
+
+## Durable journal odchozího přenosu
+
+Desktop nově ukládá celé přesné bundle do autoritativního SQLite journalu
+`.node.json.network/git-transfer-journal.sqlite`, mimo projektový Git.
+Journal obsahuje operation ID, source commit, digest, počet commitů a identity
+obou uzlů; nemá credentials. Není obnovitelným SQLite projektovým indexem.
+
+Export je uložen jednou synchronous=FULL transakcí ještě před SSH importem.
+Pád před commit transakce nemá odchozí autoritativní dávku; po commitu je bundle
+přesně obnovitelný bez závislosti na nedeterminismu opakovaného Git packování.
+Formulář při další operaci stejného projektu/uzlu hledá nedokončený journal a
+pokračuje s původním ID. Stav done se ukládá až po úspěšné odpovědi LXC.
+Ztracená odpověď nechává pending a retry může ověřit již publikovaný import.
+
+Změněný source HEAD/worktree, jiný node/pin nebo digest se odmítají místo
+přepsání dávky. Po změně zdroje nejprve posuďte cíl a journal; funkce nezavádí
+automatické zrušení či aktualizaci již existujícího cíle. Selhání lokálního
+completion výslovně hlásí vzdálený úspěch. Zachované completed bundle zatím
+nemají automatickou retenční politiku a spotřebovávají místo.
+
+Toto doplňuje starší omezení opakovaného exportu popsané výše. Neodstraňuje
+omezení ruční recovery příjemního stagingu před publikací. Změna je neověřená.
+
+### Směr historických práv
+
+Uživatel navrhuje pravidla na úrovni větví, nikoli samostatná oprávnění každého
+commitu. Taková politika musí pokrýt celou dosažitelnou historii větve včetně
+sdílených předků a merge objektů; Git větve nejsou oddělené bezpečnostní kontejnery.
+Není ještě zvolena ani implementována branch ACL či její revokace. První přenos
+proto dál zachovává public-only pravidlo a nikdy nepřenáší local-only historii.

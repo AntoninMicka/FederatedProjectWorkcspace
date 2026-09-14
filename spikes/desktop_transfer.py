@@ -10,6 +10,7 @@ from spikes.desktop_network import NetworkWorker
 from spikes.deployment_targets import DeploymentTargets
 from spikes.git_transfer import transfer
 from spikes.projects import Projects
+from spikes.transfer_outbox import pending_operation
 
 
 class TransferDialog(QDialog):
@@ -60,12 +61,19 @@ class TransferDialog(QDialog):
             confirmation.setText('Projekt: ' + self.projects.currentText() + '\nLXC: ' + target['container'] +
                                  '\nSSH: ' + target['host'] + '\n\n'
                                  'Přenést celou historii veřejného projektu a zaregistrovat nový projekt na LXC?\n'
-                                 'Existující projekt se nepřepíše. Metadata autorů a zprávy commitů jsou součástí historie.')
+                                 'Existující projekt se nepřepíše. Metadata autorů a zprávy commitů jsou součástí historie.\n'
+                                 'Nedokončený přenos stejného projektu/uzlu bude pokračovat s původním bundle a ID operace.')
             confirmation.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
             confirmation.setDefaultButton(QMessageBox.StandardButton.Cancel)
             if confirmation.exec() != QMessageBox.StandardButton.Yes:
                 return
-            self.pending = (target, project, str(uuid4()), ca)
+            try:
+                operation = pending_operation(self.node, project, target['node_id'])
+            except Exception as exc:
+                self.log.appendPlainText('Journal přenosu nelze načíst: ' + str(exc)); return
+            if operation:
+                self.log.appendPlainText('Pokračuji v uloženém přenosu: ' + operation)
+            self.pending = (target, project, operation or str(uuid4()), ca)
         for widget in (self.projects, self.targets, self.ca, self.start):
             widget.setEnabled(False)
         self.log.appendPlainText('Ověřuji historii a přenáším nativní Git bundle…')
