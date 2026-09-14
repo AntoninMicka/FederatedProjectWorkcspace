@@ -287,7 +287,8 @@ def main():
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
-                       document.querySelector('select') || card.querySelector('.project-name').textContent!==expected.title)return null;
+                       document.querySelector('#project-home select, #sidebar-projects select') ||
+                       card.querySelector('.project-name').textContent!==expected.title)return null;
                     const compact=[...document.querySelectorAll('#sidebar-project-list button')].find(e=>e.dataset.id===expected.id);
                     if(!compact || compact.textContent!==expected.title)return null;
                     window.projectSmokeStarted=true;(window.homeReturnChecked?compact:card).click();

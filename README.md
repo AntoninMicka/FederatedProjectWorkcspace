@@ -86,6 +86,14 @@ Kontrola nic nevytváří ani nemigruje. `node.json` musí ležet mimo registrov
 
 `spikes.workspace.Workspace(root, state)` poskytuje `apply(changes, author_name=..., author_email=..., message=...)`, `recover()`, `read()` a `receipt(operation_id)`. Změny jsou mapa projektových cest na bajty nebo `None` pro smazání; validuje se celý výsledný artefaktový/registry snapshot. `apply` vrátí receipt s operation ID, výsledným commit ID a stavem `indexed`. `recover` dokončí pending operaci nebo vrátí `None`. Konflikt zachová journal a vyžaduje lidské řešení; `read` při pending stavu vyvolá `PendingOperation`.
 
+`read_projection()` vrací commit ID, mapu entit na metadata/cestu a explicitní
+směrované vztahy. `read_relations(entity_id, direction='outgoing', relation_type=None)`
+filtruje odchozí nebo (`direction='incoming'`) příchozí vztahy a vrací jejich
+commit ID. Oba lokální backendové vstupy sdílejí pending/rebuild hranici původního
+čtení; nejde o nové HTTP API. Stará ID/title projekce se při rebuild atomicky
+nahradí z HEAD, neznámá verze DB se nepřepisuje. Kontrakt a recovery:
+[ADR 0022](docs/adr/0022-relational-index.md).
+
 Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi, čistým worktree/staging a jediným soukromým stavovým adresářem mimo projekt na stejném filesystemu. Všechny aplikační zápisy a čtení musí procházet tímto vstupem; samostatné `Git.commit`, `Journal` a `Index` zůstávají nízkoúrovňovými experimenty. Nejde o podporu cizích repozitářů, síťové federace ani produkční aplikaci. Crash boundaries a ověření: [ADR 0003](docs/adr/0003-coordinated-operation.md).
 
 ## Dokumentace

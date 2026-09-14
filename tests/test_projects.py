@@ -191,7 +191,12 @@ class ProjectTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT commit_id FROM state').fetchone()[0], previous['commit_id'])
         self.gits[0].run('reset', '--hard', previous['commit_id'])
         ws = Workspace(self.gits[0].root, self.state())
-        with patch.object(ws.git, 'head', side_effect=[previous['commit_id'], previous['commit_id'], 'changed']):
+        calls = 0
+        def changing_head():
+            nonlocal calls
+            calls += 1
+            return previous['commit_id'] if calls <= 2 else 'changed'
+        with patch.object(ws.git, 'head', side_effect=changing_head):
             with self.assertRaises(StaleIndex): ws.read_project(ENTITY)
 
     def test_real_api_auth_validation_and_no_path_access(self):
