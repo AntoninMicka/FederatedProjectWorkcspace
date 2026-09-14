@@ -6,7 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální milník: **M1 — Single-node project workspace**. Aktuální dávka práce je v [TODO.md](TODO.md), další otevřené úkoly v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+Aktuální milník: **M1 — Single-node project workspace**. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
 
 Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
@@ -176,7 +176,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## 2E. Materializované kompiláty
 
-**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [TODO](TODO.md).
+**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [WORK_LOG](WORK_LOG.md).
 
 - [ ] Uchovat zadání a pravidlo výběru zdrojů odděleně od výsledku; přenositelné definice verzovat, výstupní soubory ukládat jako lokální cache mimo projektový Git.
 - [ ] Nabídnout ruční aktualizaci z aktuálních verzí i nových zdrojů odpovídajících pravidlu výběru. Neprovádět automatický výpočet při otevření či restartu.
@@ -606,6 +606,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 # 14. Turris Omnia / LXC deployment
 
 - [ ] Vytvořit minimální LXC image/container setup.
+- [ ] Integrovat dlaždici aplikace na uvítací stránce routeru s odkazem na aktuální adresu LXC služby, včetně změny IP, restartu a nedostupnosti kontejneru (zbývající úkol M1-07 v [BACKLOG](BACKLOG.md)).
 - [ ] Oddělit persistentní:
   - [ ] Git repositories,
   - [ ] DB,

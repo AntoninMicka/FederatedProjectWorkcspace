@@ -149,6 +149,29 @@ class ProjectCreation:
             finally:
                 db.close()
 
+    def initialize_node(self, name='Desktop workspace'):
+        """Bootstrap an empty node under the creation lock; never replace state."""
+        with self._locked() as db:
+            _, existing = self._node()
+            if existing:
+                return existing
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené vytvoření projektu.')
+            node = {'schema_version': 1, 'id': str(uuid4()), 'name': name, 'projects': []}
+            parse_node(encoded(node), location=self.node_path)
+            with tempfile.NamedTemporaryFile(dir=self.node_path.parent, delete=False) as handle:
+                temporary = Path(handle.name)
+                handle.write(encoded(node)); handle.flush(); os.fsync(handle.fileno())
+            try:
+                try:
+                    os.link(temporary, self.node_path)
+                except FileExistsError:
+                    pass
+                sync_dir(self.node_path.parent)
+            finally:
+                temporary.unlink(missing_ok=True)
+            return self._node()[1]
+
     def author_id(self):
         """Reuse the durable local author, never substitute the node UUID."""
         with self._locked() as db:

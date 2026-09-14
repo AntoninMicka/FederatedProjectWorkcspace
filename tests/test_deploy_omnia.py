@@ -8,6 +8,7 @@ from pathlib import Path
 import subprocess
 import tarfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 from scripts import deploy_omnia
 
@@ -38,6 +39,37 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(deploy_omnia.main(), 255)
             self.assertIn('StrictHostKeyChecking=yes', run.call_args.args[0])
             self.assertIsInstance(run.call_args.kwargs['input'], bytes)
+
+    def test_remote_retry_recover_flow(self):
+        failed = SimpleNamespace(returncode=255)
+        success = SimpleNamespace(returncode=0)
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--retries', '2']), patch('subprocess.run') as run:
+            run.side_effect = [failed, success, success]
+            self.assertEqual(deploy_omnia.main(), 0)
+            self.assertEqual(run.call_count, 3)
+
+    def test_web_reset_mode_uses_reset_script(self):
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--web-lan', '192.168.100.0/24', '--reset']), patch('subprocess.run') as run:
+            run.return_value = SimpleNamespace(returncode=0)
+            self.assertEqual(deploy_omnia.main(), 0)
+            run.assert_called_once()
+            self.assertIn('Web deployment state reset', run.call_args.args[0][-1])
+
+    def test_web_deploy_copies_ca_certificate(self):
+        payload = SimpleNamespace(returncode=0, stdout=b'-----BEGIN CERTIFICATE-----\n', stderr=b'')
+        write_ok = SimpleNamespace(returncode=0, stderr=b'', stdout=b'')
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--web-lan', '192.168.100.0/24']), \
+                patch('scripts.deploy_omnia.run_ssh', side_effect=[payload, write_ok]) as run_ssh, \
+                patch('scripts.deploy_omnia.run_ssh_output', return_value=payload):
+            self.assertEqual(deploy_omnia.main(), 0)
+            self.assertEqual(run_ssh.call_count, 2)
+            self.assertEqual(run_ssh.call_args_list[1][0][1], 'cat > /etc/federated-workspace-ca.pem && chmod 0644 /etc/federated-workspace-ca.pem')
+            self.assertEqual(run_ssh.call_args_list[1][0][2], b'-----BEGIN CERTIFICATE-----\n')
+
+    def test_regen_tls_requires_web_lan(self):
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--regen-tls']):
+            with self.assertRaises(SystemExit):
+                deploy_omnia.main()
 
     def test_failed_install_preserves_previous_release(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -37,6 +37,7 @@ class EditorDialog(QDialog):
         self.service, self.project_id, self.want_todo = service, project_id, todo
         self.workers, self.busy, self.dirty, self.pending = [], False, False, None
         self.view, self.current = None, None
+        self.pending_delete = False
         self.setWindowTitle('Dokumenty')
         self.resize(1000, 720)
         layout = QVBoxLayout(self)
@@ -50,7 +51,9 @@ class EditorDialog(QDialog):
         self.history_button = QPushButton('Historie…')
         self.history_button.clicked.connect(self.history)
         self.reload_button = QPushButton('Znovu načíst')
-        for widget in (self.documents, self.new_button, self.todo_button, self.history_button, self.reload_button):
+        self.delete_button = QPushButton('Smazat dokument')
+        self.delete_button.clicked.connect(self.delete_document)
+        for widget in (self.documents, self.new_button, self.todo_button, self.history_button, self.reload_button, self.delete_button):
             bar.addWidget(widget)
         layout.addLayout(bar)
         self.title = QLineEdit(); self.title.setMaxLength(200)
@@ -106,9 +109,11 @@ class EditorDialog(QDialog):
             widget.setEnabled(self.view is not None and not self.busy and self.pending is None)
         self.history_button.setEnabled(not self.busy and self.pending is None and
                                        self.current is not None and not self.current.get('new', False))
+        self.delete_button.setEnabled(self.history_button.isEnabled())
         self.reload_button.setEnabled(not self.busy)
         self.save_button.setEnabled(not self.busy and (self.pending is not None or (editable and self.dirty)))
-        self.save_button.setText('Zopakovat uložení' if self.pending else 'Uložit')
+        self.save_button.setText(('Zopakovat smazání' if self.pending_delete else 'Zopakovat uložení')
+                                 if self.pending else 'Uložit')
 
     def run(self, action, success):
         self.busy = True; self.controls(); self.status.setText('Pracuji…')
@@ -116,7 +121,7 @@ class EditorDialog(QDialog):
         worker.succeeded.connect(success)
         worker.failed.connect(lambda message: self.status.setText(
             'Operace nebyla dokončena: ' + message + '\nText zůstává v editoru. '
-            'Uložení lze zopakovat, nebo znovu načíst projekt a obnovit připravený zápis.'))
+            'Operaci lze zopakovat, nebo znovu načíst projekt a obnovit připravený zápis.'))
         def finished():
             self.busy = False; self.controls()
         worker.finished.connect(finished)
@@ -125,13 +130,14 @@ class EditorDialog(QDialog):
     def discard(self):
         return not (self.dirty or self.pending) or QMessageBox.question(
             self, 'Opustit neuložené změny?',
-            'Zahodit rozepsané změny? Ukládání, které už začalo, se při dalším otevření dokončí.',
+            'Zahodit rozepsané změny? Připravená operace včetně smazání se při dalším otevření dokončí.',
             QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel) == QMessageBox.StandardButton.Discard
 
     def loaded(self, view):
         previous = self.current['id'] if self.current else None
         self.view, self.pending, self.dirty = view, None, False
+        self.pending_delete = False
         self.project_label.setText(view['title'])
         self.documents.clear()
         for doc in view['documents']:
@@ -243,14 +249,38 @@ class EditorDialog(QDialog):
                 request['filename'] = self.filename.text()
             self.pending = (request, str(uuid4()))
         request, operation = self.pending
+        deleting = self.pending_delete
         def save_and_read():
-            self.service.save(request, operation)
+            if deleting:
+                self.service.delete(request, operation)
+            else:
+                self.service.save(request, operation)
             return self.service.open(self.project_id)
         def saved(view):
+            if deleting:
+                self.current = None
             self.loaded(view)
-            self.status.setText('Změny uloženy.')
+            self.status.setText('Dokument odstraněn. Historie zůstává v Gitu.' if deleting else 'Změny uloženy.')
             self.saved.emit(self.project_id)
         self.run(save_and_read, saved)
+
+    def delete_document(self):
+        if self.busy or self.pending or not self.current or self.current.get('new', False):
+            return
+        confirmation = QMessageBox(self)
+        confirmation.setWindowTitle('Smazat dokument?')
+        confirmation.setTextFormat(Qt.TextFormat.PlainText)
+        confirmation.setText('Odstranit dokument „' + self.current['title'] + '“ a jeho metadata?\n'
+                             'Historie zůstane v Gitu. Neuložené změny se zahodí.\n'
+                             'Dokument s příchozími vztahy nelze smazat.')
+        confirmation.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        confirmation.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if confirmation.exec() != QMessageBox.StandardButton.Yes:
+            return
+        self.pending = (dict(project_id=self.project_id, artifact_id=self.current['id'],
+                             base_head=self.view['commit_id']), str(uuid4()))
+        self.pending_delete = True
+        self.save()
 
     def history(self):
         if self.busy or self.pending or not self.current or self.current.get('new', False):

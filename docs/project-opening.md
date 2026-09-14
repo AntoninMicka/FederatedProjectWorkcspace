@@ -143,3 +143,15 @@ V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavn
 Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní automaticky přepne na **Chat**; Enter nebo **Přidat zadání** vloží text do lokálního přehledu zadání, Shift+Enter vytvoří nový řádek. Nic se neodesílá, protože LLM backend zatím není zapojený. Přepnutí záložek zachová rozepsaný text i náhled; změna nebo opětovné otevření projektu je vymaže. Tlačítko **Zpět na seznam projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo. Úvodní obrazovka se v otevřeném projektu nezobrazuje. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
 
 Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.
+
+## Odstranění dokumentu
+
+V nativním editoru vyberte uložený dokument a stiskněte **Smazat dokument**.
+Potvrzení odstraní obsah i metadata, neuložené úpravy se neukládají. Dokument,
+na který vedou strukturované vztahy jiných artefaktů, nejprve vyžaduje vyřešení
+ těchto vztahů. Git historie zůstane zachovaná; volné textové odkazy se neopravují.
+
+Při přerušené operaci použijte **Zopakovat smazání** nebo **Znovu načíst**.
+Načtení dokončí již připravenou operaci; není to její zrušení ani rollback.
+Nový, dosud neuložený dokument se nemaže touto operací. Webový náhled nemá
+novou mazací route. Funkce je implementovaná, zatím bez testového ověření.

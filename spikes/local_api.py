@@ -53,6 +53,10 @@ class Handler(BaseHTTPRequestHandler):
 
     post_paths = {'/v1/counter'}
 
+    def authorized(self, auth):
+        return hmac.compare_digest(auth.encode('utf-8'),
+                                   ('Bearer ' + self.server.token).encode())
+
     def dispatch(self, request):
         if request != {'action': 'increment'}:
             return self.send_error(400)
@@ -68,8 +72,7 @@ class Handler(BaseHTTPRequestHandler):
         if origin and origin != [self.server.origin]:
             return self.send_error(403)
         auth = self.single('Authorization') or ''
-        if not hmac.compare_digest(auth.encode('utf-8'),
-                                   ('Bearer ' + self.server.token).encode()):
+        if not self.authorized(auth):
             return self.send_error(401)
         if self.headers.get_all('Sec-Fetch-Site', []) not in ([], ['same-origin'], ['none']):
             return self.send_error(403)

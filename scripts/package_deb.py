@@ -38,6 +38,15 @@ def build(output, version='0.1.0~m0'):
             write(f'usr/lib/{NAME}/spikes/{source.name}', source.read_bytes())
         for source in legal_sources:
             write(f'usr/share/doc/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
+            # Desktop deployment builds the same source/legal allowlist as CLI deployment.
+            write(f'usr/lib/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
+        write(f'usr/lib/{NAME}/requirements.txt', (ROOT / 'requirements.txt').read_bytes())
+        for script in ('deploy_omnia.py', 'install_web.py', 'license_files.py'):
+            source = ROOT / 'scripts' / script
+            if source.is_symlink() or not source.is_file():
+                raise ValueError('Expected regular deployment source')
+            write(f'usr/lib/{NAME}/scripts/{script}', source.read_bytes())
+        write(f'usr/lib/{NAME}/scripts/__init__.py', b'')
         write(f'usr/share/doc/{NAME}/copyright', (
             'Workspace original sources: Copyright 2026 Antonín Mička\n'
             'License: MPL-2.0. Third-party notices and license documents retain\n'
@@ -51,7 +60,7 @@ def build(output, version='0.1.0~m0'):
             f'Version: {version}\n'
             f'Architecture: all\n'
             f'Maintainer: {maintainer}\n'
-            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils, poppler-utils\n'
+            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils, poppler-utils, openssh-client, openssl\n'
             'Section: utils\n'
             'Priority: optional\n'
             'Homepage: https://github.com/AntoninMicka/FederatedProjectWorkcspace\n'

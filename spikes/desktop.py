@@ -9,7 +9,8 @@ import signal
 import sys
 from urllib.parse import urlsplit
 
-from spikes.desktop_ui import ASSETS, DesktopHandler
+from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
+from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
@@ -52,6 +53,10 @@ def main():
         from spikes.desktop_editor import EditorDialog
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
+        from spikes.desktop_deployment import DeploymentDialog
+        from spikes.desktop_network import NetworkDialog
+        from spikes.desktop_transfer import TransferDialog
+        from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -97,6 +102,7 @@ def main():
     app.setApplicationName('Projektový workspace')
     node_path = args.node or default_node_path()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
+        server.administration = Administration(node_path, deployment='desktop')
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -112,6 +118,15 @@ def main():
         window.setCentralWidget(view)
         window.setWindowTitle('Projektový workspace · Zkušební verze')
         window.resize(1100, 800)
+        network_backend = NetworkBackend(node_path)
+        if not args.smoke:
+            try:
+                network_config = network_backend.load()
+                if network_config:
+                    network_backend.start(network_config)
+            except Exception as exc:
+                QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
+        app.aboutToQuit.connect(network_backend.stop)
         creation_result = {'receipt': None, 'loaded': False}
         def created(receipt):
             if receipt:
@@ -126,6 +141,39 @@ def main():
                 QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         editor_toolbar = window.addToolBar('Dokumenty')
+        deploy_button = QPushButton('Nasadit LXC uzel…')
+        def deploy_node():
+            if controller.busy:
+                return
+            dialog = DeploymentDialog(node_path, window, local_endpoint=network_backend.endpoint)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        deploy_button.clicked.connect(deploy_node)
+        editor_toolbar.addWidget(deploy_button)
+        network_button = QPushButton('Síť a test spojení…')
+        def network_settings():
+            if controller.busy:
+                return
+            dialog = NetworkDialog(network_backend, window)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        network_button.clicked.connect(network_settings)
+        editor_toolbar.addWidget(network_button)
+        transfer_button = QPushButton('Přenést veřejný projekt…')
+        def transfer_project():
+            if controller.busy:
+                return
+            dialog = TransferDialog(node_path, window)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        transfer_button.clicked.connect(transfer_project)
+        editor_toolbar.addWidget(transfer_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open

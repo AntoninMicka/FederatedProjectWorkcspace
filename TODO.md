@@ -3,73 +3,22 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — aktuální dávka M1
+# TODO — aktuální feature dávka WF-03
 
 Aktuální milník: **M1 — Single-node project workspace**. Gate M0 je splněný v rozsahu architecture spike ([review a důkazy](WORK_LOG.md#gate-m0)); Gate M1 zůstává otevřený. Žádná aplikační část zatím není production-ready.
 
 [Roadmapa a gates](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Další backlog](BACKLOG.md) · [Dokončená práce a ověření](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-Dávka obsahuje zbývající práci milníku M1 a přijaté ad-hoc úkoly. Během práce se aktualizuje jen tato evidence; hotové položky i ověření zůstávají zde až do uzavření dávky. Pak se dávka přesune do WORK_LOG a další načte z BACKLOG. Již uzavřené výstupy M1-01 až M1-04 a doplňky sidebaru zůstávají v historickém logu; neopakují se.
+Od 2026-09-14 platí **jedna dávka = jedna feature větev = jeden PR do `develop`**. Milník není dávka. Starší dokončená evidence je ve WORK_LOG, otevřené položky v BACKLOG; zde zůstává jen aktivní WF-03.
 
-## Rozsah a dokončení dávky
+## Aktivní feature dávka — WF-03
 
-- [ ] **[planned] M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
-
-Tento převzatý souhrn M1 je zastřešující úkol; M1-05 níže je jeho konkrétní první krok. Zahrnuje zbývající požadavky sekce M1 roadmapy, včetně typů artefaktů, metadat, obnovy indexu po přejmenování/smazání, recovery zápisů a zachování původních bajtů importu. Hotové části souhrnu doložené ve WORK_LOG se znovu neimplementují. Další kroky rozepisuj zde podle ověřeného stavu; relevantní existující V-* položky v BACKLOG používej jako návaznosti, jejich doplnění dočasně zachyť níže.
-
-Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i přijaté ad-hoc úkoly a doložené review Gate M1 (použitelný workspace bez LLM v LXC i desktopu). Případné zúžení dávky musí výslovně zachovat otevřený gate a odloženou práci; samotné dokončení M1-05 nestačí.
-
-## Na řadě
-
-- [x] [completed] **V-11 — Příprava veřejné distribuce (designed, 2026-09-10).** Distribuční metadata a update channel byly sjednoceny pro aktuální PoC release režim: v `.deb` kontrolním souboru je explicitní `Maintainer` (už bez placeholderu), doplněn `Homepage` repozitáře a v dokumentaci je explicitně řečeno, že update je v této fázi ruční (`.deb` + `apt`), bez auto-updateru. V kontrolním testu .deb je potvrzeno, že placeholder byl odstraněn.
-
-Ověření V-11:
-- `python3 -m unittest tests.test_package_deb -v`
-- `grep -n "Maintainer"` v `scripts/package_deb.py` a `tests/test_package_deb.py` potvrzuje novou hodnotu a regresní kontrolu.
-- `git diff --check`.
-
-Poznámka k otevřené části: před skutečným veřejným releasem zůstává právní review komponent distribuce mimo čistě projektovou kódovou základnu a oficiální potvrzení kontaktních dat v publikované licenci/release metadatech.
-
-- [x] [completed] **V-08 — Registrace existujícího projektu (implemented, 2026-09-10).** Doplněn registrační tok pro již existující Git projekt: nová cesta `ProjectCreation.register` validuje kořenový Git repozitář, `project.json` v `HEAD` i pracovní kopii, kontroluje konfliktní/duplicitní `project_id`, vytváří lokální state vedle repozitáře a zapisuje registraci přes recovery flow.
-
-Ověření V-08:
-- `python3 -m py_compile spikes/project_creation.py tests/test_project_creation.py`
-- `python3 -m unittest tests.test_project_creation.CreationTests -k register -v`: 4 testy OK, 2 testy přeskočeny.
-- `python3 -m unittest tests.test_project_creation.CreationTests -v`: 15 testů, 1 chyba v legacy síťovém testu `test_default_path_is_lazy_and_http_cannot_create` (sandbox PermissionError na HTTP socketu), 2 přeskočeno.
-- `git diff --check`.
-
-- [x] [completed] **M1-06 — Přejmenování souboru Markdown dokumentu (PoC validated, 2026-09-10).** Navazující krok souhrnného M1 podle požadavku na konzistenci po přejmenování. Nativní editor ukládá název souboru, obsah a metadata jednou operací; zachová UUID, strukturované vztahy, hlavní TODO a historii. Sidecar aktualizuje file, frontmatter se přesune; čisté přejmenování přes službu zachová původní bajty. Reuse/adapt Artifacts, Workspace, validátoru a Qt; crash boundaries ADR 0003/0016 beze změny. [Kontrakt a limity](docs/adr/0016-markdown-editor.md#přejmenování-souboru-dokumentu--m1-06), [návod](docs/project-opening.md#přejmenování-souboru-dokumentu).
-
-Ověření M1-06: cílených 21 testů artefaktů se skutečnými Qt widgety OK; doplněná ochrana dlouhého existujícího názvu následně ověřena cíleným Qt testem i závěrečnou celou sadou. Pokryty sidecar/frontmatter, souběžná změna textu/metadat, historie a příchozí vztahy, obnova odstraněného indexu, neplatné názvy, kolize s cizím souborem, stale/busy, cizí editace při recovery, ztracená odpověď/retry a restart, procesní přerušení na 13 checkpointech přejmenování. Závěrečný běh `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v`: **131 testů, 127 prošlo, 4 přeskočeny**, 91,259 s, bez chyb. Přeskočeny pouze volitelné testy porovnání libgit2 kvůli chybějícímu sestavenému probe; skutečný desktop, balení/upgrade/odstranění i offline běžely. Sandbox blokoval první pokus připojení Qt; ověření mimo sandbox prošlo. Místní odkazy včetně kotev, finální diff a `git diff --check` v pořádku. Omezení: volné textové odkazy na názvy se automaticky nepřepisují; Qt může normalizovat konce řádků. Lokální Linux PoC, bez nového ověření na cílovém zařízení. Mazání a import zůstávají otevřenými požadavky souhrnného M1; Gate M1 zůstává otevřený. Záznam zůstává v TODO do uzavření dávky.
-
-- [x] [completed] **M1-05 — Metadata dokumentu v editoru (PoC validated, 2026-09-10).** Záložka Metadata zobrazuje uložená metadata pouze pro čtení a dovoluje upravit popis/štítky. Obsah i explicitní změny metadat se ukládají jednou operací s původním operation ID/retry/receipt; identita, autor, vytvoření, privacy a provenance se zachovávají. Podporovány sidecary i frontmatter, vyčištění hodnot a samostatná editace metadat. Po uložení se čte potvrzený stav z Gitu. Reuse/adapt Artifacts, Qt widgetů a validátoru; crash boundaries ADR 0003/0016 beze změny. Kontrakt a limity: [ADR 0016](docs/adr/0016-markdown-editor.md), [návod](docs/project-opening.md).
-
-Ověření M1-05: cílených 15 testů artefaktů OK se skutečnými Qt widgety; společný obsah/metadata a historie, restart, readonly metadata, ztracená odpověď a retry, vazba digestu na změny metadat, odmítnutí nepovolených/nevalidních/nadměrných metadat bez pending a recovery na všech 12 procesních checkpointech. Celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **119 testů OK, bez vynechání**, 62,895 s. Místní odkazy a `git diff --check` v pořádku. Lokální Linux PoC; produkční připravenost ani nové ověření na cílovém zařízení se tím neprohlašují. Zůstává v TODO do uzavření dávky M1.
-
-
-## Ad-hoc úkoly aktuální dávky
-
-- [x] [completed] **WF-02 — Práce po dávkách (implemented, 2026-09-10).** Požadavek uživatele: celé milníky v TODO, navazující dávky v BACKLOG, průběžně měnit jen TODO a archivovat až po uzavření dávky; podporovat ad-hoc práci. Upraveny pokyny a pracovní dokumenty, souhrnný úkol M1 přesunut z BACKLOG do této dávky. Ověření: konzistence pravidel a odkazů, zachování původních otevřených položek a historických záznamů, `git diff --check`. Pouze dokumentační změna; aplikační testy znovu nespouštěny. Záznam zůstává zde do uzavření dávky M1.
-
-- [x] [completed] **M1-AH-01 — Materializované kompiláty v roadmapě (designed, 2026-09-10).** Ad-hoc požadavek uživatele: soubory s výsledky zpracování zdrojů podle zadání (např. orientační rozpočtové obálky), ručně obnovitelné z aktuálních i nových zdrojů, bez verzování a přenosu výsledků. Doplněna sekce 2E roadmapy, [ADR 0018](docs/adr/0018-materialized-compilations.md) a vazba v architektuře: zachované zadání, lokální cache mimo Git, manifest vstupů, aktuálnost, privacy, recovery a explicitní uložení trvalého artefaktu. Ověřena konzistence s Git autoritou, oddělením indexu/journalu a ADR 0008; návrhové scénáře zahrnují změny zdrojů, revokaci a pády. Místní odkazy a `git diff --check` ověřeny. Pouze návrh, bez implementace či nových runtime testů; Gate M1 se nerozšiřuje. Záznam zůstává v aktuální dávce.
-
-- [x] [completed] **M1-AH-02 — Hlavní panel chatu a náhledů (PoC validated, 2026-09-10).** Hlavní panel přepíná orchestrační chat a náhled vybraného artefaktu s uloženým popisem/metadaty. Podporuje základní Markdown, PNG/JPEG a stránkový raster PDF; chat bez backendu umožňuje pouze lokální rozepsání zadání a odesílání je nedostupné. Přepnutí záložek zachová obsah, změna projektu jej vymaže a opožděné odpovědi se odmítají. Autentizovaný endpoint čte jeden validovaný commit a odmítá pending/stale; projektové soubory se nemění. Reuse Projects/Workspace, token/origin kontrol a DOM; PDF používá systémový Poppler deklarovaný v .deb. Kontrakt, limity a recovery: [ADR 0019](docs/adr/0019-main-panel-preview.md), [návod](docs/project-opening.md).
-
-Ověření M1-AH-02: cílené API a skutečný WebEngine pro Markdown/PNG/PDF, klávesnicové přepínání, zachování draftu mezi záložkami, vymazání při změně projektu, neaktivní HTML, validace registrace/ID, stale/pending, čtení commitnutých bajtů, limity a chybné/nedostupné PDF. Vizuálně zkontrolováno skutečné okno 1100 × 800. Závěrečná celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **123 testů OK, bez vynechání**, 74,043 s, včetně instalace/upgrade/odstranění a offline desktopu. Místní odkazy, syntaxe JS a `git diff --check` ověřeny. Omezení: vstup 4 MiB, Markdown 2000 odřádkování a omezené formátování, PDF stránky 1–100/raster 1200 px/timeout 15 s; není to sandbox PDF parseru, plné RBAC ani zapojený LLM chat. Zůstává v TODO do uzavření dávky M1.
-
-
-- [x] [completed] **M1-AH-03 — Projektové karty a společný prompt (PoC validated, 2026-09-10).** Na požadavek uživatele úvod zobrazuje karty projektů s názvy/popisy a stručný seznam vlevo; otevřený projekt úvod skryje. Výběr artefaktu automaticky aktivuje náhled a označí položku. Prompt zůstává pod náhledem i chatem, psaní přepne na chat, Enter/tlačítko přidá lokální zadání bez volání backendu. Dole je návrat na seznam projektů, který vymaže projektový obsah/draft. Reuse/adapt Projects, Git, validátoru project.json a DOM; katalog čte bez inicializace indexu/journalu a zvládá nedostupné položky jednotlivě. Nativní editor přebírá skutečně otevřené ID. Kontrakt a hranice: [ADR 0019](docs/adr/0019-main-panel-preview.md), [návod](docs/project-opening.md).
-
-Ověření M1-AH-03: cílené testy katalogu/projektů/náhledů a skutečný WebEngine, karty a stručný seznam, automatický chat při psaní, lokální přidání zadání, trvale viditelný prompt, klávesnicové záložky, návrat a znovuotevření, zachování a vymazání draftu, nedůvěryhodné názvy, autentizace a katalog bez zápisů. Obě obrazovky vizuálně ověřeny v okně 1100 × 800. Závěrečná celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **124 testů OK, bez vynechání**, 76,158 s. Syntaxe JS, místní odkazy a `git diff --check` v pořádku. Chat/zadání zůstávají jen v paměti okna; LLM ani trvalý registr úkolů nejsou zapojené. Záznam zůstává v aktuální dávce.
-
-
-- [x] [completed] **M1-AH-04 — Srozumitelné UI pro ukázku partnerům (PoC validated, 2026-09-10).** Požadavek uživatele: lidské popisky a vytvoření chybějícího hlavního seznamu úkolů z levého panelu. UI používá Úkoly, Podklady, Náhled, Chat a srozumitelné popisky editoru, historie i podrobností. Chybějící seznam nabízí Vytvořit seznam úkolů; otevře stávající nativní editor, dokument vznikne až uložením. Po uložení se přehled obnoví a tlačítko zmizí. Reuse/adapt EditorDialog a sidebaru; ukládání/recovery ADR 0016 beze změny, bez nového HTTP zápisu. [Kontrakt](docs/adr/0016-markdown-editor.md), [návod](docs/project-opening.md).
-
-Ověření M1-AH-04: cílených 32 testů OK, následně skutečné zahození návrhu přes potvrzovací dialog, opakované otevření, uložení jediného dokumentu a obnovení sidebaru. Vizuální kontrola levého panelu a editoru v Qt; existující/nepodporovaný seznam nenabízí vytvoření. Závěrečná celá sada `M0_OFFLINE_TEST=1 M0_DEB_TEST=1 M0_DESKTOP_TEST=1 M0_LIBGIT2_PROBE=/tmp/m0-libgit2/probe M0_GIT_HTTP=1 python3 -m unittest discover -s tests -v`: **125 testů OK, bez vynechání**, 83,027 s. Syntaxe JS, místní odkazy a `git diff --check` v pořádku. Úkol pro ukázku UI uzavřen v rozsahu lokálního PoC; asistent nadále neodpovídá a zadání nejsou trvale uložená. Gate M1 zůstává otevřený, záznam zůstává v TODO do uzavření dávky.
-
-
-- [x] [completed] **M1-LC-01 — Compliance baseline a notices (implemented, 2026-09-10).** Dokončena integrace compliance patchu: přidané `THIRD_PARTY_NOTICES.md`, právní evidence pod `docs/legal/*` (`COMPLIANCE.md`, `LICENSE_SOURCES.md`, `DEPENDENCIES.toml`, `RELINKING.md`, `licenses/*`), nový `scripts/license_files.py`, a `tests/test_license_packaging.py`; úprava balicích skriptů pro zařazení povinných licenčních souborů do source i `.deb` distribuce. Ověření: `python3 -m unittest discover -s tests -p 'test_license_packaging.py' -v`, validace `git diff --check` po změnách, dokumentační vazby do `README.md` a `REUSE_CATALOG.md` podle zadání. Ověření plného regresního běhu po tomto commitu: `python3 -m unittest discover -s tests -v` -> selhalo (11 errors, 19 skipped, 114 passed) kvůli sandboxovým omezením síťových socketů/`socket` (PermissionError: Operation not permitted) u API lokálních testů; tyto chyby označují omezení prostředí, ne regresi aplikační logiky. Konkrétně `test_authentication*`, `test_framing*`, `test_same_contract*`, `test_stalled_client*`, `test_unix_peer_uid*`, `test_default_path_is_lazy_and_http_cannot_create`, `test_authenticated_api_and_no_filesystem_parameters`, `test_assets_do_not_bootstrap_token_and_api_still_requires_auth` a `test_real_api_auth_validation_and_no_path_access`. Ověřené i relevantní UI/paketizační testy: `test_deb_carries_notices...`, `test_contents_and_no_overwrite`, `test_source_archive_contains_all_legal_files_and_manifest`, `test_missing_notice_stops_deb_before_publishing` a `test_missing_license_stops_source_build` (závěr: pro compliance commit úspěšně ověřeno). Skippované testy označeny explicitně: Qt/WebEngine (`Requires real Qt/WebEngine`, `Requires real desktop`, `Requires actual sidebar tabs`) a instalační runtime (`Requires installed Debian runtime dependencies`) považuji jako neověřené v tomto prostředí. Testovaná revize: `HEAD`.
+- [ ] [in progress] **WF-03 — Feature dávky, větve a PR do develop (implemented, 2026-09-14; dokumentační ověření předání probíhá).** Explicitní požadavek uživatele před importem.
+- Navržená větev: `feature/wf-03-feature-batches`; základ/cíl jediného PR: `develop`. Větev ani PR nebyly tímto krokem vytvořeny a merge není doložen.
+- Rozsah: AGENTS pravidla, TODO přechod a backlog sestavený z konkrétních feature dávek. Mimo rozsah: aplikace, import implementace, automatický git push/PR/merge a uzavření M1 gate.
+- Akceptace: konzistence pravidel a plánovacích karet, zachované ID/důkazy, každý připravený scope jedna reviewovatelná feature; dokumentační ověření a předání/sloučení jednoho PR do develop. Pravidla předání byla zkontrolována; nyní doplněno povinné čištění a přesun staré evidence. PR ani merge nejsou doložené.
+- Další připravená feature: **F-M1-IMPORT-01** v BACKLOG. Její načtení nezahajuje implementaci automaticky; dosavadní práci předem předat tak, aby nová větev nevznikla s nesouvisejícími změnami.
 
 ## K předání do backlogu
 
-Doplnění k **V-11** při předání dávky: příští distribuční inventář musí zahrnout novou systémovou závislost `poppler-utils` pro PDF náhledy (M1-AH-02). Historické inventáře se nepřepisují; veřejný release zůstává samostatným úkolem.
+Žádné nové nepředané položky. Import F-M1-IMPORT-01 čeká v BACKLOG na předání WF-03; implementace nebyla zahájena.

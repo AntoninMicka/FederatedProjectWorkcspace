@@ -121,7 +121,7 @@ class Workspace:
             self.index.rebuild(self.git)
             return self.index.read(self.git)
 
-    def read_project(self, project_id, *, artifact_id=None, expected_head=None):
+    def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False):
         """Return one committed project view under the shared writer lock."""
         with self.journal.lock(), self.journal.connect() as db:
             if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
@@ -134,6 +134,9 @@ class Workspace:
             meta = committed_project(self.git, commit, project_id)
             files = self.git.snapshot(commit)
             entities = validate_snapshot(files)
+            if network:
+                require(all(item['privacy'] != 'local-only' for item in entities.values()),
+                        'Project contains local-only data')
             rows = self._read_locked(db)
             require(rows == sorted((item['id'], item['title']) for item in entities.values()),
                     'Index differs from validated commit')

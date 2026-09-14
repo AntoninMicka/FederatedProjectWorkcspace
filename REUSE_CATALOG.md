@@ -55,6 +55,8 @@ M0-06a **adaptuje** `spikes/local_api.py` s odděleným statickým UI handlerem 
 
 Ruční deploy **reuse** existující `spikes.demo` a requirements; **adapt** launcheru přidává transport omezeného archivu a oddělená vydání bez nové storage implementace. Aktualizace current nastává až po úspěšném demu; vzdálené ověření zůstává M0-05.
 
+M1-07 **adapt/reuse** Projects, Workspace, statického UI, HTTP validačního handleru, ručního deploye a licenčního allowlistu; síťový režim přidává kontrolu local-only nad čteným commitem. Nový vlastní routerový helper používá LXC CLI a registrační formát [Turris WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md), ověřený 2026-09-10. Soukromá inventura posloužila k posouzení integračních vzorů, žádný externí aplikační kód ani asset se nepřenášel. Nový framework není pro omezený LAN náhled potřebný; nejde o produkční server. Hranice, TLS a recovery: [ADR 0020](docs/adr/0020-lxc-web-viewer.md).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

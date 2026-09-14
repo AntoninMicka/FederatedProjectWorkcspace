@@ -368,6 +368,7 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 
 class DesktopHandler(Handler):
+    assets = ASSETS
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open', '/v1/artifacts/preview'}
 
     def dispatch(self, request):
@@ -398,9 +399,9 @@ class DesktopHandler(Handler):
     def do_GET(self):
         if self.single('Host') != self.server.authority:
             return self.send_error(403)
-        if self.path not in ASSETS:
+        if self.path not in self.assets:
             return self.send_error(404)
-        kind, content = ASSETS[self.path]
+        kind, content = self.assets[self.path]
         data = content.encode()
         self.close_connection = True
         self.send_response_only(200)
