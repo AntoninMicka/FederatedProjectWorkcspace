@@ -56,6 +56,7 @@ def main():
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
         from spikes.desktop_transfer import TransferDialog
+        from spikes.desktop_import import ImportDialog
         from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
@@ -174,6 +175,32 @@ def main():
             dialog.deleteLater()
         transfer_button.clicked.connect(transfer_project)
         editor_toolbar.addWidget(transfer_button)
+        import_button = QPushButton('Importovat zdroj…')
+        import_open = False
+        def import_source():
+            nonlocal import_open
+            if controller.busy or import_open:
+                return
+            import_open = True
+            def selected(project_id):
+                nonlocal import_open
+                try:
+                    if view.closing:
+                        return
+                    if not project_id:
+                        QMessageBox.information(window, 'Import zdroje', 'Nejprve otevřete projekt.')
+                        return
+                    dialog = ImportDialog(node_path, project_id, window)
+                    dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
+                    dialog.exec()
+                    if dialog.worker:
+                        dialog.worker.wait()
+                    dialog.deleteLater()
+                finally:
+                    import_open = False
+            page.runJavaScript('activeProject?.id || null', 0, selected)
+        import_button.clicked.connect(import_source)
+        editor_toolbar.addWidget(import_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open

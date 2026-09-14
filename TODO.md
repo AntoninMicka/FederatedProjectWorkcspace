@@ -3,22 +3,26 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — aktuální feature dávka WF-03
+# TODO — F-M1-IMPORT-01: Nativní import zdrojových dokumentů
 
-Aktuální milník: **M1 — Single-node project workspace**. Gate M0 je splněný v rozsahu architecture spike ([review a důkazy](WORK_LOG.md#gate-m0)); Gate M1 zůstává otevřený. Žádná aplikační část zatím není production-ready.
+Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, jeden PR do `develop`.
+[Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-[Roadmapa a gates](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Další backlog](BACKLOG.md) · [Dokončená práce a ověření](WORK_LOG.md) · [Pravidla](AGENTS.md)
+## Rozsah a předání
 
-Od 2026-09-14 platí **jedna dávka = jedna feature větev = jeden PR do `develop`**. Milník není dávka. Starší dokončená evidence je ve WORK_LOG, otevřené položky v BACKLOG; zde zůstává jen aktivní WF-03.
+- Větev: **`feature/f-m1-import-01-native-sources`**, založená z čistého lokálního `develop` při zahájení úkolu. PR do `develop` zatím nevytvořen; push/merge neprovedeny.
+- Původ: uživatelem schválený import, zbývající požadavek M1; související V-04/V-05, ADR 0003/0016.
+- Cílová úroveň: PoC validated. Aktuálně implemented, **neověřeno**.
+- Výstup: nativní výběr Markdown/PNG/JPEG/PDF, zachování původních bajtů, sidecar metadata/privacy/provenance, potvrzený společný zápis a zobrazení v Podkladech.
+- Mimo rozsah: externí konektory IMP-01–03, LLM, synchronizace, obecná migrace metadat a globální zákaz externích Git úprav zdrojů.
+- Kontrakt: imported source má kind=source/provenance=external, vytvoření artefaktu znamená okamžik importu. Obsah je v nativním editoru nepozměnitelný, nová verze má nové UUID. Samostatné imported_at a původní autor externího zdroje nejsou novými schema fields; V-04/V-05 zůstávají mimo tento omezený kontrakt otevřené.
 
-## Aktivní feature dávka — WF-03
+## Úkoly této feature
 
-- [ ] [in progress] **WF-03 — Feature dávky, větve a PR do develop (implemented, 2026-09-14; dokumentační ověření předání probíhá).** Explicitní požadavek uživatele před importem.
-- Navržená větev: `feature/wf-03-feature-batches`; základ/cíl jediného PR: `develop`. Větev ani PR nebyly tímto krokem vytvořeny a merge není doložen.
-- Rozsah: AGENTS pravidla, TODO přechod a backlog sestavený z konkrétních feature dávek. Mimo rozsah: aplikace, import implementace, automatický git push/PR/merge a uzavření M1 gate.
-- Akceptace: konzistence pravidel a plánovacích karet, zachované ID/důkazy, každý připravený scope jedna reviewovatelná feature; dokumentační ověření a předání/sloučení jednoho PR do develop. Pravidla předání byla zkontrolována; nyní doplněno povinné čištění a přesun staré evidence. PR ani merge nejsou doložené.
-- Další připravená feature: **F-M1-IMPORT-01** v BACKLOG. Její načtení nezahajuje implementaci automaticky; dosavadní práci předem předat tak, aby nová větev nevznikla s nesouvisejícími změnami.
+- [ ] [in progress] **F-M1-IMPORT-01 — Nativní import (implemented, 2026-09-14; neověřeno).** Sources adaptuje Artifacts/Workspace, originální soubor a metadata publikuje jedním commitem, request digest váže SHA-256 přesných bajtů a opakování stejné operation ID. Před přípravou journalu validuje výsledný snapshot. Native picker má explicitní potvrzení a retry/recovery; uložený source se zobrazí přes stávající Podklady/preview. Bez nové mutující HTTP route.
+- [ ] [planned] **Ověření:** byte-identita Markdown včetně CRLF/frontmatter, PNG/JPEG/PDF, 16 MiB limit a nezávislý 4 MiB preview limit, unsafe/symlink/změněný zdroj, metadata/privacy, stale/dirty/busy/foreign, receipt/retry a procesní checkpointy, source-only editor hranice, skutečný Qt a celá sada testů. Testy ani kontrolní běhy zatím nebyly spuštěny.
+- [ ] [planned] **Předání PR:** doložené výsledky, omezení a recovery, jeden PR do `develop`; po jeho uzavření vyčistit TODO podle AGENTS.
 
 ## K předání do backlogu
 
-Žádné nové nepředané položky. Import F-M1-IMPORT-01 čeká v BACKLOG na předání WF-03; implementace nebyla zahájena.
+Žádné nové nezávislé feature. Návaznosti V-04/V-05 zůstávají v BACKLOG se svými původními ID.

@@ -155,3 +155,9 @@ Při přerušené operaci použijte **Zopakovat smazání** nebo **Znovu načís
 Načtení dokončí již připravenou operaci; není to její zrušení ani rollback.
 Nový, dosud neuložený dokument se nemaže touto operací. Webový náhled nemá
 novou mazací route. Funkce je implementovaná, zatím bez testového ověření.
+
+## Import původních zdrojů
+
+Desktopová lišta nabízí **Importovat zdroj…** pro otevřený projekt.
+[Podporované soubory, zachování bajtů, privacy a recovery](native-source-import.md).
+Po úspěchu se zdroj objeví v Podkladech; nativní editor jeho obsah nemění.
