@@ -74,7 +74,7 @@ class SSHSession:
             self.errors.close(); self.directory.cleanup()
 
 
-def deploy(node, host, container, lan, desktop_endpoint, mode, progress):
+def deploy(node, host, container, lan, desktop_endpoint, mode, progress, *, remembered=None):
     if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*', host):
         raise ValueError('Expected SSH user@host')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,62}', container):
@@ -82,10 +82,12 @@ def deploy(node, host, container, lan, desktop_endpoint, mode, progress):
     network = ipaddress.ip_network(lan)
     if network.version != 4 or not network.is_private or network.prefixlen < 8:
         raise ValueError('Expected private IPv4 LAN')
-    if mode not in {'install', 'update', 'recover', 'reset'}:
+    if mode not in {'install', 'update', 'recover', 'reset', 'address'}:
         raise ValueError('Invalid deployment mode')
     if mode == 'install':
         Administration.endpoint(desktop_endpoint)
+    if mode == 'address' and not remembered:
+        raise ValueError('Select a remembered deployment before updating its container address')
     attach = f'lxc-attach -P /srv/lxc -n {container} -- '
     payload = bundle(ROOT)[0] if mode in {'install', 'update'} else b''
     session = SSHSession(host)
@@ -97,33 +99,53 @@ def deploy(node, host, container, lan, desktop_endpoint, mode, progress):
                        if mode == 'recover' else remote_reset_script(container))
             progress(session.run(command)); return
         previous = session.run(attach + "sh -c 'if [ -L /opt/federated-workspace/current ]; then echo existing; else echo new; fi'").strip()
-        progress(session.run(remote_script(container, uuid.uuid4().hex, lan=str(network), update_only=mode == 'update'), payload))
-        installed = True
+        if mode != 'address':
+            progress(session.run(remote_script(container, uuid.uuid4().hex, lan=str(network), update_only=mode == 'update'), payload))
+            installed = True
         addresses = session.run(f'lxc-info -P /srv/lxc -n {container} -iH').split()
         ips = sorted({str(ipaddress.ip_address(value)) for value in addresses
                       if ipaddress.ip_address(value).version == 4 and ipaddress.ip_address(value) in network})
         if len(ips) != 1:
             raise ValueError('Container must have exactly one IPv4 in the configured LAN; found: ' + ', '.join(ips))
         endpoint = f'https://{ips[0]}:8443'
-        progress('Application deployed: ' + endpoint)
+        progress('Container address detected: ' + endpoint)
+        setup_command = attach + "sh -c " + shlex.quote('cd /opt/federated-workspace/current && runuser -u federated-workspace -- .venv/bin/python -m spikes.lxc_setup')
+        def remote(request):
+            return json.loads(session.run(setup_command, json.dumps(request).encode()))
+        identity = remote({'action': 'inspect'})
+        target = dict(host=host, container=container, lan=str(network), desktop_endpoint=desktop_endpoint,
+                      endpoint=endpoint, node_id=identity['node_id'], fingerprint=identity['mapping_identity']['fingerprint'])
+        if remembered and (target['node_id'] != remembered['node_id'] or target['fingerprint'] != remembered['fingerprint']):
+            raise ValueError('Remembered container identity changed; refusing automatic replacement')
+        if mode == 'address':
+            check = ('import http.client,ssl; '
+                     'c=ssl.create_default_context(cafile="/etc/federated-workspace/ca.crt"); '
+                     f'h=http.client.HTTPSConnection({ips[0]!r},8443,context=c,timeout=5); '
+                     'h.request("GET","/"); assert h.getresponse().status==200; h.close()')
+            session.run(attach + 'python3 -c ' + shlex.quote(check))
+            service = Administration(node, deployment='desktop')
+            view = service.request(ACTOR, {'action': 'list'})
+            existing = next((p for p in view['peers'] if p['id'] == target['node_id']), None)
+            if not existing or existing['fingerprint'] != target['fingerprint'] or existing['trust'] != 'approved':
+                raise ValueError('Container identity is not an approved desktop peer; resolve in federation management')
+            call(service, 'update-peer-endpoint', node_id=target['node_id'], endpoint=endpoint)
+            progress('Container TLS and identity verified; desktop peer address updated. No software or certificates changed.')
+            return target
         certificate = session.run(attach + 'cat /etc/federated-workspace/ca.crt').encode()
         if not certificate.startswith(b'-----BEGIN CERTIFICATE-----'):
             raise ValueError('Invalid public CA response')
         session.run('umask 022; cat > /etc/federated-workspace-ca.pem; chmod 0644 /etc/federated-workspace-ca.pem', certificate)
         progress('Public CA copied to router; private keys remain in LXC.')
         if mode == 'update':
-            progress('Update complete. Existing accounts and pairing unchanged.'); return
+            progress('Update complete. Existing accounts and pairing unchanged.'); return target
         if previous != 'new':
-            progress('Existing installation preserved. Automatic administrator provisioning and pairing skipped.'); return
+            progress('Existing installation preserved. Automatic administrator provisioning and pairing skipped.'); return target
         service = Administration(node, deployment='desktop')
         if not os.path.lexists(service.node) and service.repo.exists():
             raise ValueError('Missing original desktop node.json; restore it, do not replace its identity')
         ProjectCreation(node).initialize_node()
         local = service.request(ACTOR, {'action': 'list'})
         user = local['users'][0]
-        setup_command = attach + "sh -c " + shlex.quote('cd /opt/federated-workspace/current && runuser -u federated-workspace -- .venv/bin/python -m spikes.lxc_setup')
-        def remote(request):
-            return json.loads(session.run(setup_command, json.dumps(request).encode()))
         other = remote(dict(action='initialize', desktop_node_id=local['node_id'], desktop_user_id=user['id'],
                             name=user['name'], new_installation=True))
         progress('Local administrator created on LXC. Its access key remains in .node.json.administration/deployment-admin-key on LXC.')
@@ -140,7 +162,7 @@ def deploy(node, host, container, lan, desktop_endpoint, mode, progress):
         remote_projects = session.run(attach + "cat /var/lib/federated-workspace/node.json")
         common = sorted(local_projects & {p['project_id'] for p in json.loads(remote_projects)['projects']})
         if not common:
-            progress('Node pairing complete. Account mapping awaits a common registered project; no synchronization has been enabled.'); return
+            progress('Node pairing complete. Account mapping awaits a common registered project; no synchronization has been enabled.'); return target
         view = call(service, 'propose-mapping', local_user_id=user['id'], peer_node_id=other['node_id'],
                     peer_user_id=other['user_id'], project_ids=common[:16])
         mapping = view['mappings'][-1]['spec']['id']
@@ -148,10 +170,13 @@ def deploy(node, host, container, lan, desktop_endpoint, mode, progress):
         confirmed = remote(dict(action='confirm', envelope=view['mapping_envelope']))
         call(service, 'import-mapping', envelope=confirmed['mapping_envelope'])
         progress('Bilateral project account mapping confirmed. Data transport is not implemented.')
+        return target
     except Exception as exc:
         if installed:
             raise RuntimeError('Application deployed, but subsequent setup failed. Do not reset the working application. '
                                'Inspect federation management before retrying pairing.\n' + str(exc)) from exc
+        if mode == 'address':
+            raise RuntimeError('Container address update failed. Verify TLS SAN and identity; do not reset the application.\n' + str(exc)) from exc
         raise RuntimeError('Deployment failed. Use Recover first; Reset discards the rollback snapshot and is not rollback.\n' + str(exc)) from exc
     finally:
         session.close()

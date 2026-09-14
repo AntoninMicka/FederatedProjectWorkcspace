@@ -62,3 +62,26 @@ Při chybě po úspěšném deployi nejprve řešte navazující krok, ne reset 
 
 Implementace je neověřená: nebyly spuštěny nové testy, packaging ani vzdálené
 nasazení. Nejde o production-ready federaci či ověřenou síťovou komunikaci.
+
+## Zapamatované uzly a adresy
+
+Úspěšné nasazení si průvodce uloží do soukromého souboru vedle node.json
+(`.node.json.deployment-targets.json`). Ukládá pouze SSH cíl, kontejner, LAN,
+adresy a veřejné node ID/pin, nikoli credentials. Příští otevření nabídne uzly;
+jejich výběr předvyplní formulář pro aktualizaci. Lokální preference se publikuje
+přes flock, fsync a atomic replace. Chyba uložení nevrací vzdálenou operaci.
+
+Vlastní adresa je editovatelná nabídka IPv4 aktivních rozhraní. Port 8443 je
+jen návrh: vyberte správnou adresu a HTTPS port skutečného backendu. Zjištěná IP
+sama neznamená, že na ní backend poslouchá. Zapamatovaná adresa se předvyplní.
+
+Pro zapamatovaný uzel použijte **Aktualizovat adresu kontejneru**. Jedno SSH
+zjistí IPv4 v LAN, ověří původní UUID/Ed25519 pin a HTTPS healthcheck včetně
+IP SAN. Aktualizuje pouze endpoint schváleného peeru v desktopovém Git registru
+s CAS. Důvěra, účty, mapování, software i certifikáty zůstávají stejné. Pokud
+nová IP není v certifikátu, operace se odmítne bez vypnutí TLS nebo resetu.
+
+Registr a preference nejsou společná transakce: pád po změně registru může
+ponechat starou zapamatovanou adresu. Opakování znovu zjistí IP a dokončí lokální
+uložení. Před registry CAS se endpoint nemění. Tato změna neověřuje datový
+transport federace. Implementace zatím neověřena testy ani skutečným GUI během.

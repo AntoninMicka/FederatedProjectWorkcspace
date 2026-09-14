@@ -361,6 +361,16 @@ class Administration:
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
                     'trust': 'pending', 'revision': 1})
+            elif action == 'update-peer-endpoint' and set(request) == {'action', 'expected_commit', 'node_id', 'endpoint'}:
+                if actor['node_role'] != 'federation-admin':
+                    raise AccessDenied('Federation administrator required')
+                peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
+                if peer is None or peer['trust'] != 'approved':
+                    raise ValueError('Unknown or unapproved peer')
+                endpoint = self.endpoint(request['endpoint'])
+                if peer['endpoint'] == endpoint:
+                    return self.public(state, commit, actor)
+                peer.update(endpoint=endpoint, revision=peer['revision'] + 1)
             elif action == 'set-trust' and set(request) == {'action', 'expected_commit', 'node_id', 'trust'}:
                 if actor['node_role'] != 'federation-admin':
                     raise AccessDenied('Federation administrator required')
