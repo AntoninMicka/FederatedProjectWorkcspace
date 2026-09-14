@@ -88,4 +88,7 @@ obnoví z validovaného commitu. Cizí změny se nesmějí přepsat. Retry použ
 operation_id a intent odlišený od ukládání, takže ztracená odpověď nevytvoří další
 commit. Reload ani zavření dialogu nejsou rollback již připravené operace.
 Historie zůstává v Gitu; tento krok nezavádí koš ani nové UI obnovy smazaného
-artefaktu. Implementace dosud nebyla ověřena testy ani skutečným Qt během.
+artefaktu. Samostatná akceptace odstranění včetně skutečného Qt zůstává otevřená v
+[F-M1-DELETE-01/M1-08](../../TODO.md). Dílčí backendové ověření odstranění
+a blokování příchozího vztahu je součástí uzavřené indexní dávky
+[F-M1-INDEX-01](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15).

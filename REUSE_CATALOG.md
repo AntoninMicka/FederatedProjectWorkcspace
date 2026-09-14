@@ -19,7 +19,7 @@ Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md
 | --- | --- | --- | --- |
 | Git CLI | adapt (výchozí adapter, ADR 0005) | Referenční storage a Workspace; reuse wrapperu, vlastní staging a compare-and-swap podle ADR 0003 | Produkční izolace, autentizace, cílové balení |
 | libgit2 / C++ | evaluate (PoC validated) | Ověřená alternativa, `spikes/libgit2/probe.cpp`, ADR 0005 | Runtime 1.9.1 dostupný; chybějící dev headers rozbaleny do /tmp. Produkční port Workspace, cílové balení a TLS/SSH neověřeny |
-| Python stdlib SQLite | adapt (M0/M1 PoC) | Obnovitelný relační projektový index (`spikes/storage.py`, ADR 0022) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); aktuální ověření metadat/vztahů v TODO, zbývá produkční integrace, výkon a paměť na Turrisu |
+| Python stdlib SQLite | adapt (M0/M1 PoC) | Obnovitelný relační projektový index (`spikes/storage.py`, ADR 0022) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); ověření metadat/vztahů ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15), zbývá produkční integrace, výkon a paměť na Turrisu |
 | PyYAML 6.0.3 | approved | Omezený frontmatter parser v M0 | Produkční release: doplnit evidence licenčních textů/notice pro všechny distribuované třetí strany; aktuálně je pro PyYAML 6.0.3 v M1 audit potvrzen jako MIT-approved (2026-09-10). |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
 
@@ -43,7 +43,7 @@ Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3
 | --- | --- | --- |
 | [Validace metadat](spikes/metadata.py) | **adapt**: společný omezený JSON/YAML parser, UUID a vztahy; nepřidávat další parser | [Testy](tests/test_metadata.py); V-04/V-05: kontrakt provenance a neměnnost zdrojů |
 | [Journal](spikes/journal.py) a [Workspace](spikes/workspace.py) | **adapt**: zachovat společnou serializaci a obnovitelnou operaci | [ADR 0003](docs/adr/0003-coordinated-operation.md), [testy](tests/test_workspace.py); V-06/V-07: produkční ochrany a lifecycle |
-| [Git a SQLite index](spikes/storage.py) | **adapt**: validovaný commit a atomický rebuild relační projekce místo druhé autority | [Testy](tests/test_storage.py), [relační testy](tests/test_index_projection.py), [ADR 0022](docs/adr/0022-relational-index.md); F-M1-INDEX-01/V-03: aktuální ověření a omezení v TODO |
+| [Git a SQLite index](spikes/storage.py) | **adapt**: validovaný commit a atomický rebuild relační projekce místo druhé autority | [Testy](tests/test_storage.py), [relační testy](tests/test_index_projection.py), [ADR 0022](docs/adr/0022-relational-index.md); F-M1-INDEX-01/V-03: ověření a omezení ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15) |
 | [Konfigurace](spikes/configuration.py) | **adapt**: sdílená validační primitiva, oddělený projekt a uzel | [ADR 0004](docs/adr/0004-project-node-config.md), [testy](tests/test_configuration.py); V-08: zapojení do lifecycle |
 | [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy ve [WORK_LOG](WORK_LOG.md); [BACKLOG](BACKLOG.md) V-01: automatizace CLI validátoru; není to aplikační server/UI |
 

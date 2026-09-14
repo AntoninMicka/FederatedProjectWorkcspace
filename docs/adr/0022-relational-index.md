@@ -6,7 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0022 — Relační projekce metadat a vztahů
 
 Datum: 2026-09-14. Stav: přijato pro F-M1-INDEX-01/V-03, lokální Linux PoC.
-Výsledky ověření a stav předání drží [TODO](../../TODO.md). Navazuje na
+Výsledky ověření a stav předání drží [WORK_LOG](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). Navazuje na
 [ADR 0002](0002-metadata-journal.md) a
 [ADR 0003](0003-coordinated-operation.md); Git schéma v1 se nemění.
 
@@ -97,4 +97,4 @@ FK, neplatný snapshot a drift HEAD, migraci, neznámou verzi, SQL čtenáře b�
 výměny, pády procesu při migraci i rebuild a recovery přes Workspace.
 Integrační scénář používá skutečné native služby importu, metadata editace,
 přejmenování a odstranění, zachování přesných zdrojových bajtů a obnovu chybějící
-DB. Současné výsledky a omezení patří do TODO, nikoli do nové paralelní roadmapy.
+DB. Výsledky a omezení uzavřené dávky drží [WORK_LOG](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15); nevzniká paralelní roadmapa.
