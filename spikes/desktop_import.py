@@ -57,10 +57,10 @@ class ImportDialog(QDialog):
         self.worker.succeeded.connect(done)
         self.worker.failed.connect(lambda message: self.status.setText('Operace nebyla dokončena: ' + message +
                                   '\nPřipravený import lze zopakovat; načtení dokončí již připravený journal, není rollback.'))
-        self.worker.finished.connect(self.finished)
+        self.worker.finished.connect(self.operation_finished)
         self.worker.start()
 
-    def finished(self):
+    def operation_finished(self):
         self.busy = False; self.controls()
 
     def load(self):

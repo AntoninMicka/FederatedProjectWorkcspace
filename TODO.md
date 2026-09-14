@@ -25,4 +25,6 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 ## K předání do backlogu
 
+připrav mi definici vazeb mezi projekty, například využívá/je využit v, skládá se/je součástí, a podoné
+
 Žádné nové nezávislé feature. Návaznosti V-04/V-05 zůstávají v BACKLOG se svými původními ID.
