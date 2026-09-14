@@ -55,6 +55,7 @@ def main():
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
+        from spikes.desktop_transfer import TransferDialog
         from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
@@ -162,6 +163,17 @@ def main():
             dialog.deleteLater()
         network_button.clicked.connect(network_settings)
         editor_toolbar.addWidget(network_button)
+        transfer_button = QPushButton('Přenést veřejný projekt…')
+        def transfer_project():
+            if controller.busy:
+                return
+            dialog = TransferDialog(node_path, window)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        transfer_button.clicked.connect(transfer_project)
+        editor_toolbar.addWidget(transfer_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open
