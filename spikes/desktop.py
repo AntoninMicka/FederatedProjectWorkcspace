@@ -53,6 +53,7 @@ def main():
         from spikes.desktop_editor import EditorDialog
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
+        from spikes.desktop_deployment import DeploymentDialog
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -128,6 +129,17 @@ def main():
                 QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         editor_toolbar = window.addToolBar('Dokumenty')
+        deploy_button = QPushButton('Nasadit LXC uzel…')
+        def deploy_node():
+            if controller.busy:
+                return
+            dialog = DeploymentDialog(node_path, window)
+            dialog.exec()
+            if dialog.worker:
+                dialog.worker.wait()
+            dialog.deleteLater()
+        deploy_button.clicked.connect(deploy_node)
+        editor_toolbar.addWidget(deploy_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open

@@ -190,3 +190,7 @@ reakci na chybu. Chyba deploye nyní vypisuje tyto příkazy pro konkrétní cí
 recover ani reset. Žádný z těchto režimů nemění firewall.
 
 Změny jsou implementované, zatím bez nového testového či cílového ověření.
+
+Desktop nabízí také nativní **Nasadit LXC uzel…** s jedním SSH spojením,
+detekcí IP a prvotním založením lokálního správce/propojením peerů.
+[Průvodce, hranice párování a neověřené scénáře](desktop-lxc-deployment.md).
