@@ -19,9 +19,16 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 ## Úkoly této feature
 
-- [ ] [in progress] **F-M1-IMPORT-01 — Nativní import (implemented, 2026-09-14; částečně ověřeno).** Sources adaptuje Artifacts/Workspace, originální soubor a metadata publikuje jedním commitem, request digest váže SHA-256 přesných bajtů a opakování stejné operation ID. Před přípravou journalu validuje výsledný snapshot. Native picker má explicitní potvrzení a retry/recovery; uložený source se zobrazí přes stávající Podklady/preview. Bez nové mutující HTTP route.
+- [x] [completed] **F-M1-IMPORT-01 — Nativní import (implemented, 2026-09-14; částečně ověřeno).** Sources adaptuje Artifacts/Workspace, originální soubor a metadata publikuje jedním commitem, request digest váže SHA-256 přesných bajtů a opakování stejné operation ID. Před přípravou journalu validuje výsledný snapshot. Native picker má explicitní potvrzení a retry/recovery; uložený source se zobrazí přes stávající Podklady/preview. Bez nové mutující HTTP route.
 - [ ] [completed] **Ověření:** byte-identita Markdown včetně CRLF/frontmatter, PNG/JPEG/PDF, 16 MiB limit a nezávislý 4 MiB preview limit, unsafe/symlink/změněný zdroj, metadata/privacy, stale/dirty/busy/foreign, receipt/retry a procesní checkpointy, source-only editor hranice, skutečný Qt a celá sada testů. Přidané cílené testy v `tests/test_source_import.py` ověřují: 1) podporu a uložení Markdown/PNG/JPEG/PDF, 2) odmítnutí nepodporovaného typu a překročení 16 MiB, 3) nezávislost náhledového limitu 4 MiB na importním limitu.
-- [ ] [planned] **Předání PR:** doložené výsledky, omezení a recovery, jeden PR do `develop`; po jeho uzavření vyčistit TODO podle AGENTS.
+- [ ] [in progress] **Předání PR:** zakreslit scope, důkazy, omezení a recovery; připravit jeden PR `feature/f-m1-import-01-native-sources -> develop` bez mergování.
+
+## Návrh předání PR
+
+- Scope: kompletní implementace nativního importu Markdown/PNG/JPEG/PDF přes picker a importní pipeline, validace integrity (SHA-256 byte-identita), sidecar metadata (`kind=source`, `provenance=external`, `privacy=project`), zobrazení přes Podklady/preview, journaling + recovery flow, validace limitů a bezpečnostních hranic.
+- Důkazy: `tests/test_source_import.py` (lokální cílené scénáře), dočasný harness `/tmp/fw-import-recovery-check.py` (restart a checkpointy), real-time offscreen Qt smoke, a úplný výpis ověřovací sekce v TODO.
+- Omezení: mimo testy nebylo ověřeno nasazení na cílové hardwarové instance/routery; `WorkingDirectory`/deploy path a externí LXC scénáře jsou mimo rozsah; Gate M1 zůstává otevřený.
+- Recovery: retry přes stejné `operation_id` vrací původní receipt; stale/retry konflikty a cizí změny po prepare aktivují `RecoveryConflict`; po explicitní čisté obnově se import dokončí deterministicky, bez pending operací a při zachování cizích změn.
 
 ## Důkazy ověření — 2026-09-14
 
