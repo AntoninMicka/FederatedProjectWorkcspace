@@ -41,4 +41,10 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 ## K předání do backlogu
 
+Ověření 2026-09-14: izolované backendové scénáře importu prošly (původní bajty včetně CRLF/frontmatter, PNG/JPEG/PDF hlavičky, metadata, receipt/retry, náhled Markdown/PNG/PDF, odmítnutí stale HEAD, jiného SHA-256 a symlinku). Obnova po skutečném ukončení procesu na osmi checkpointech prošla s jediným commitem a čistým pracovním stromem. První běh celých testů v sandboxu: 183 testů, 20 socketových errors a 20 volitelných skip; běží opakování mimo socketové omezení. Skutečný Qt odhalil blokující chybu `RuntimeError: Failed to connect signal finished()` při otevření ImportDialog: handler `finished` koliduje s QDialog signálem. Oprava zatím neprovedena, feature není připravena k merge. Dočasné ověřovací scénáře nejsou novými trvalými regresními testy.
+
 Žádné nové nezávislé feature. Návaznosti V-04/V-05 zůstávají v BACKLOG se svými původními ID.
+
+Závěrečný regresní běh mimo socketově omezený sandbox: `python3 -m unittest discover -s tests -v` — 183 testů, 163 prošlo, 20 volitelných přeskočeno, bez chyb, 49,613 s. Tento existující unittest běh neobsahuje nový ImportDialog smoke; jeho samostatně zjištěná Qt chyba proto dál blokuje akceptaci feature. Kompletní oprava/UI re-test zatím nebyly provedeny.
+
+Oprava Qt blockeru (2026-09-14): handler přejmenován na operation_finished. Opakovaný skutečný Qt smoke prošel otevřením dialogu, zrušením potvrzení bez změny HEAD, potvrzeným importem, worker completion, zachováním přesných CRLF/frontmatter bajtů a čistým Git stromem. Qt blocker je odstraněný; po této opravě byla opakována pouze cílená UI kontrola, nikoli znovu celá regresní sada. PR/merge stále neprovedeny.
