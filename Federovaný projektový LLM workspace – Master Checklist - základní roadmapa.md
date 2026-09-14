@@ -176,7 +176,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## 2E. Materializované kompiláty
 
-**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [TODO](TODO.md).
+**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [WORK_LOG](WORK_LOG.md).
 
 - [ ] Uchovat zadání a pravidlo výběru zdrojů odděleně od výsledku; přenositelné definice verzovat, výstupní soubory ukládat jako lokální cache mimo projektový Git.
 - [ ] Nabídnout ruční aktualizaci z aktuálních verzí i nových zdrojů odpovídajících pravidlu výběru. Neprovádět automatický výpočet při otevření či restartu.
@@ -606,7 +606,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 # 14. Turris Omnia / LXC deployment
 
 - [ ] Vytvořit minimální LXC image/container setup.
-- [ ] Integrovat dlaždici aplikace na uvítací stránce routeru s odkazem na aktuální adresu LXC služby, včetně změny IP, restartu a nedostupnosti kontejneru (aktuální úkol M1-07 v [TODO](TODO.md)).
+- [ ] Integrovat dlaždici aplikace na uvítací stránce routeru s odkazem na aktuální adresu LXC služby, včetně změny IP, restartu a nedostupnosti kontejneru (zbývající úkol M1-07 v [BACKLOG](BACKLOG.md)).
 - [ ] Oddělit persistentní:
   - [ ] Git repositories,
   - [ ] DB,

@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Webový náhled v LXC a dlaždice na routeru
 
-Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO a náhledy Markdown/obrázků/PDF; editor, tvorba a historie zůstávají v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../TODO.md).
+Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO a náhledy Markdown/obrázků/PDF; editor, tvorba a historie zůstávají v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../BACKLOG.md).
 
 ## Příprava
 

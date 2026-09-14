@@ -64,6 +64,10 @@ Po dokončení a relevantním ověření všech úkolů aktuální dávky:
 4. Přesuň jednu další feature dávku z BACKLOG do TODO se stejnými ID, rozsahem, feature větví a cílem PR `develop`. Backlog doplň na přibližně tři další konkrétní feature dávky, nikoli celé milníky, bez vymýšlení práce. Další větev má vycházet z aktuálního `develop` po začlenění potřebných závislostí; stacked PR jsou pouze výslovně schválená výjimka. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
 5. Ve stejné změně oprav odkazy a případný stav milníku/gate v roadmapě. Jeden úkol má jediný aktuální záznam; odkazy a historické důkazy nejsou konkurenčními kopiemi stavů.
 
+**Povinné čištění při předání:** po přesunech nahraď obsah TODO pouze hlavičkou, jedinou nově aktivovanou feature dávkou a jejími relevantními poznámkami. Odstraň odtud přenesené dokončené úkoly, výsledky starých testů, odložené úkoly, vyřízenou sekci „K předání do backlogu“ i přechodové přílohy. Nic nezahazuj: dokončené důkazy patří do WORK_LOG, otevřené stavy a odložené požadavky do BACKLOG. Pokud další dávka není aktivována, TODO obsahuje jen informaci o čekání, nikoli kopii backlogu. Žádný podúkol mimo novou feature nesmí v TODO zůstat „pro jistotu“.
+
+Předání není hotové, dokud není zkontrolováno, že TODO drží právě jednu dávku, každý přesunutý úkol má zachované ID a jediný aktuální stav, staré důkazy se neztratily a odkazy míří na nové umístění. Úklid dokumentů není důkaz testů, uzavření milníku ani sloučení PR. Jednorázovou migraci staré široké dávky označ jako administrativní přesun evidence; její neověřené části zůstávají otevřené.
+
 Stavy používej přesně:
 
 - `[ ] [planned]` — zbývající práce.
