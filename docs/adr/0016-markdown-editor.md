@@ -73,3 +73,19 @@ Přejmenování zachová UUID, privacy, provenance, autora, vytvoření a všech
 Crash boundaries ADR 0003 se nemění: před prepared nejsou projektové změny; journal společně drží smazání původní cesty, cílové bajty a změnu sidecaru. Recovery dokončí všechny vlastněné cesty, validuje výsledný snapshot a publikuje jeden commit; po publikaci obnoví index a vrátí receipt. Existující cíl, cizí pracovní změny, symlinky, změněný HEAD nebo cizí staging nejsou přepsány. Pád mezi odstraněním a vytvořením souboru nevyžaduje původní dialog. Testy přerušují proces na všech třinácti checkpointech sidecarového přejmenování včetně tří jednotlivých souborových změn. Neprokazují pád uvnitř syscallu ani výpadek napájení.
 
 Reuse/adapt služby Artifacts, Qt editoru, safe_path, Workspace/Journal a historie; katalog ani soukromá inventura nedávají důvod přebírat jinou storage či editor. Ověření a omezení tohoto kroku drží [TODO](../../TODO.md); mazání, import a úplná produkční projekce metadat zůstávají otevřenou prací M1.
+
+## Odstranění dokumentu — M1-08
+
+Nativní editor nabízí potvrzené odstranění uloženého dokumentu. Adaptuje stávající
+Artifacts/Workspace, nikoli nový zápisový mechanismus. Odstraní pouze soubory
+verzované pod UUID dokumentu; obsah a sidecar metadata tvoří jediný Git commit.
+Příchozí strukturované vztahy odstranění blokují. Výsledný snapshot se validuje
+před přípravou journalu. Volné textové odkazy se automaticky neopravují.
+
+Crash boundaries z ADR 0003 zůstávají stejné: před commitem je autoritativní
+journal, rozpracované odstranění obnoví native open; po změně Git ref se index
+obnoví z validovaného commitu. Cizí změny se nesmějí přepsat. Retry používá stejné
+operation_id a intent odlišený od ukládání, takže ztracená odpověď nevytvoří další
+commit. Reload ani zavření dialogu nejsou rollback již připravené operace.
+Historie zůstává v Gitu; tento krok nezavádí koš ani nové UI obnovy smazaného
+artefaktu. Implementace dosud nebyla ověřena testy ani skutečným Qt během.

@@ -51,6 +51,38 @@ class Artifacts:
             return dict(id=project_id, title=meta['title'], commit_id=head, documents=docs,
                         main_todo_id=main_todo_id(project_id))
 
+    def delete(self, request, operation_id, *, checkpoint=lambda stage: None):
+        require(isinstance(request, dict) and request.keys() == {'project_id', 'artifact_id', 'base_head'},
+                'Invalid document deletion request')
+        for key in ('project_id', 'artifact_id'):
+            uuid(request[key])
+        require(isinstance(request['base_head'], str) and re.fullmatch(r'[0-9a-f]{40,64}', request['base_head']),
+                'Invalid base commit')
+        ws = self.workspace(request['project_id'])
+        author = ProjectCreation(self.node_path).author_id()
+        intent = dict(request, action='delete-document', author_id=author)
+
+        def prepare(workspace):
+            head = workspace.git.head()
+            require(head == request['base_head'], 'Projekt se změnil. Před smazáním načtěte aktuální verzi.')
+            committed_project(workspace.git, head, request['project_id'])
+            files = workspace.git.snapshot(head)
+            entities = validate_snapshot(files)
+            id_ = request['artifact_id']
+            document(files, entities, id_)
+            require(not any(item['id'] != id_ and
+                            any(relation.get('target_id') == id_ for relation in item.get('relations', []))
+                            for item in entities.values()),
+                    'Na dokument odkazují jiné artefakty. Nejdříve vyřešte jejich vztahy.')
+            prefix = f'artifacts/{id_}/'
+            changes = {path: None for path in files if path.startswith(prefix)}
+            require(bool(changes), 'Document files not found')
+            # Reject invalid resulting trees before preparing the persistent journal.
+            validate_snapshot({path: data for path, data in files.items() if path not in changes})
+            return changes, 'Local workspace author', author + '@local.invalid', 'Delete Markdown document'
+
+        return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
         required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
         require(isinstance(request, dict) and required <= request.keys() <= required | {'metadata', 'filename'},
