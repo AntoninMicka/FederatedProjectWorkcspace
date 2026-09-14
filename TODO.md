@@ -3,13 +3,25 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — aktuální dávka M1
+# TODO — feature dávky a přechodová evidence M1
 
 Aktuální milník: **M1 — Single-node project workspace**. Gate M0 je splněný v rozsahu architecture spike ([review a důkazy](WORK_LOG.md#gate-m0)); Gate M1 zůstává otevřený. Žádná aplikační část zatím není production-ready.
 
 [Roadmapa a gates](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Další backlog](BACKLOG.md) · [Dokončená práce a ověření](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-Dávka obsahuje zbývající práci milníku M1 a přijaté ad-hoc úkoly. Během práce se aktualizuje jen tato evidence; hotové položky i ověření zůstávají zde až do uzavření dávky. Pak se dávka přesune do WORK_LOG a další načte z BACKLOG. Již uzavřené výstupy M1-01 až M1-04 a doplňky sidebaru zůstávají v historickém logu; neopakují se.
+Od 2026-09-14 platí **jedna dávka = jedna feature větev = jeden PR do `develop`**. Milník není dávka. Původní široká evidence M1 níže se zachovává jako přechodový záznam, nikoli jako nový společný PR pro všechny feature. Neověřené úkoly zůstávají otevřené. Již uzavřené výstupy M1-01 až M1-04 a doplňky sidebaru se neopakují.
+
+## Aktivní feature dávka — WF-03
+
+- [ ] [in progress] **WF-03 — Feature dávky, větve a PR do develop (implemented, 2026-09-14; dokumentační kontroly neprovedeny).** Explicitní požadavek uživatele před importem.
+- Navržená větev: `feature/wf-03-feature-batches`; základ/cíl jediného PR: `develop`. Větev ani PR nebyly tímto krokem vytvořeny a merge není doložen.
+- Rozsah: AGENTS pravidla, TODO přechod a backlog sestavený z konkrétních feature dávek. Mimo rozsah: aplikace, import implementace, automatický git push/PR/merge a uzavření M1 gate.
+- Akceptace: konzistence pravidel a plánovacích karet, zachované ID/důkazy, každý připravený scope jedna reviewovatelná feature; dokumentační ověření a předání/sloučení jednoho PR do develop. Zatím bez následných kontrol a bez PR.
+- Další připravená feature: **F-M1-IMPORT-01** v BACKLOG. Její načtení nezahajuje implementaci automaticky; dosavadní práci předem předat tak, aby nová větev nevznikla s nesouvisejícími změnami.
+
+## Přechodová evidence původní široké dávky M1
+
+Před zahájením nové aplikační feature vymezit předání dosavadní větve a rozdělit její zbývající práci do samostatných feature dávek podle původu a závislostí. Nedomýšlet stav větve/PR ani zpětně rozdělení Git historie. Níže zachované stavy a důkazy jsou podklady tohoto předání; nejsou aktivními podúkoly WF-03. Historický požadavek „celý milník v jedné dávce“ je nahrazen pravidly WF-03. Neověřený transfer/restart lze odložit s výslovným rozsahem a vlastním budoucím PR, nikoli označit za completed.
 
 ## Rozsah a dokončení dávky
 

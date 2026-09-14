@@ -40,11 +40,15 @@ Externí LLM požadavek musí mít explicitní Context Manifest. RBAC a privacy 
 ## Roadmapa a práce po dávkách
 
 - **Roadmapa** drží strategii, milníky, schopnosti a gates. Zachovej původní katalog požadavků; není to průběžný pracovní deník ani druhý backlog.
-- **TODO.md** obsahuje celou aktuální dávku, zpravidla jeden milník, včetně ad-hoc úkolů. Nemá limit 5 položek. Uvádí rozsah, pořadí práce a podmínky dokončení dávky. Hotové položky i jejich ověření zde zůstávají do uzavření dávky.
-- **BACKLOG.md** připravuje další dávky, typicky tři navazující milníky. Jde o plánovací horizont, nikoli důvod zahazovat již evidované vzdálenější úkoly. Ty lze ponechat v oddělené části bez dalšího rozepisování. Ad-hoc práce může být součástí dávky nebo samostatnou budoucí položkou.
+- **TODO.md** obsahuje jednu aktuální feature dávku, nikoli celý milník. **Jedna dávka = jedna ucelená feature = jedna feature větev = jeden PR do `develop`.** Nemá pevný limit počtu podúkolů. Zahrnuje návrh, implementaci, UI/backend/deploy podle rozsahu, recovery, testy a dokumentaci stejné feature. Hotové podúkoly a důkazy zde zůstávají do uzavření dávky.
+- **BACKLOG.md** připravuje zpravidla tři nejbližší feature dávky podle roadmapy a závislostí. Milníky jsou strategický horizont, ne automatické dávky. Vzdálenější široké požadavky zachovej odděleně; před načtením do TODO je rozděl na reviewovatelnou feature s jedním PR. Nezahazuj původní ID, rozsah ani důkazy.
 - **WORK_LOG.md** obsahuje uzavřené dávky, jejich dokončené úkoly, ověření a historická gate review. Starší jednotlivé záznamy zachovej; nově archivuj po dávkách, nejnovější nahoru.
 
 ### Během dávky
+
+Každá dávka má stabilní ID/název feature, původní požadavky/ID, milník, konkrétní výstup i hranici rozsahu, závislosti, cílovou úroveň, navrženou větev `feature/<id>-<slug>`, základ/cíl PR `develop` a akceptační podmínky. Vytvoření/přepnutí větve, push, otevření PR a merge prováděj jen na výslovný požadavek; navržený název není důkaz existující větve či PR. Dávka může mít více commitů, všechny ale patří jedné feature a jednomu PR.
+
+Nesouvisející feature nepřidávej do aktivní dávky ani její větve. Ad-hoc oprava patří do dávky jen pokud je nutná pro její akceptaci. Nezávisle dodávatelnou nebo příliš velkou práci rozděl před implementací na navazující feature dávky s vlastními větvemi a PR. Dokončení feature neuzavírá automaticky celý milník.
 
 Z těchto pracovních evidencí aktualizuj pouze TODO: stav, výsledky, ověření, omezení a nová zjištění. BACKLOG a WORK_LOG průběžně nesynchronizuj. To neomezuje potřebné změny kódu, testů, návodů či ADR; roadmapu měň jen při skutečné změně rozsahu nebo rozhodnutí, nikoli kvůli každému hotovému úkolu.
 
@@ -54,10 +58,10 @@ Ad-hoc úkol zapiš se stabilním ID, původem/požadavkem, rozsahem, cílovou �
 
 Po dokončení a relevantním ověření všech úkolů aktuální dávky:
 
-1. Vyhodnoť podmínky dávky a příslušný gate. Dokončení dávky samo neprokazuje splnění celého milníku; neověřenou či blokovanou práci neoznačuj jako hotovou. Při nutném odložení výslovně zaznamenej změnu rozsahu a zbývající práci.
+1. Vyhodnoť podmínky feature dávky a relevantní část gate. Neověřenou práci neoznačuj za hotovou. Připrav předání jednoho PR do `develop`: rozsah, důkazy ověření, recovery a omezení. Rozlišuj implemented/validated výstup od stavu PR (není vytvořen / otevřen / sloučen); bez důkazu neuváděj merge. Dávka se uzavírá až po splnění akceptace a sloučení jejího PR, případně po výslovně zaznamenaném rozhodnutí uživatele o jiném předání. Nezačínej nesouvisející feature ve stejné větvi.
 2. Přesuň dokončenou dávku z TODO do WORK_LOG s ID úkolů, daty dokončení, úrovní výsledků, důkazy ověření a omezeními; zachovej i ad-hoc úkoly a důvody změn rozsahu.
 3. Přenes odložené úkoly a poznámky z „K předání do backlogu“ do odpovídajících dávek BACKLOG; aktualizuj stávající položky podle ID. Nedokončené úkoly zůstávají otevřené.
-4. Přesuň další dávku z BACKLOG do TODO, vymez její rozsah a pořadí podle roadmapy a doložených návazností. Backlog podle potřeby doplň směrem k přibližně třem dalším milníkům, bez vymýšlení práce. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
+4. Přesuň jednu další feature dávku z BACKLOG do TODO se stejnými ID, rozsahem, feature větví a cílem PR `develop`. Backlog doplň na přibližně tři další konkrétní feature dávky, nikoli celé milníky, bez vymýšlení práce. Další větev má vycházet z aktuálního `develop` po začlenění potřebných závislostí; stacked PR jsou pouze výslovně schválená výjimka. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
 5. Ve stejné změně oprav odkazy a případný stav milníku/gate v roadmapě. Jeden úkol má jediný aktuální záznam; odkazy a historické důkazy nejsou konkurenčními kopiemi stavů.
 
 Stavy používej přesně:

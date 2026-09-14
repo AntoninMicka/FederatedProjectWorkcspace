@@ -7,7 +7,41 @@ SPDX-License-Identifier: MPL-2.0
 
 Aktuální dávku drží [TODO](TODO.md), uzavřené dávky [WORK_LOG](WORK_LOG.md), milníky a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>). Pravidla určuje [AGENTS](AGENTS.md).
 
-Plánovací horizont tvoří zpravidla tři další milníky (nyní M2–M4). Níže zachované vzdálenější a průřezové položky se nezahazují ani automaticky nerozepisují. Při práci na dávce se tento soubor nemění: nové ad-hoc požadavky a doplnění se dočasně zachycují v TODO. Při uzavření dávky se sem převedou odložené položky a další dávka se přesune do TODO se stejnými ID, rozsahem a návaznostmi. Již ověřené části historických širokých úkolů se neopakují.
+Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jedna dávka, jedna feature větev, jeden PR do `develop`. Milníky M1–M6 zůstávají strategickým rámcem. Níže zachované široké a vzdálenější položky jsou zásobník požadavků, nikoli připravené PR dávky. Při běžné implementaci se tento soubor nemění; tato reorganizace je výslovně zadaná změna workflow. Při předání se další jediná dávka přesune do TODO se stejnými ID a návaznostmi. Ověřená práce se neopakuje.
+
+## Nejbližší feature dávky
+
+Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Aktivace každé dávky vyžaduje vyřešit předání závislostí z dosavadní široké dávky M1; neznamená jejich automatické uzavření ani merge.
+
+### F-M1-IMPORT-01 — Nativní import zdrojových dokumentů
+
+- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
+- Původ: uživatelem schválený import, zbývající požadavek M1; návaznosti V-04/V-05, ADR 0003/0016.
+- Větev: `feature/f-m1-import-01-native-sources`; základ a jediný PR do `develop`.
+- Výstup: nativní výběr Markdown/PNG/JPEG/PDF, zachované původní bajty, metadata/privacy/provenance, potvrzený zápis a zobrazení importu. V-04/V-05 řešit jen v rozsahu nutném pro tento kontrakt, bez konkurenčních stavových záznamů.
+- Mimo rozsah: externí konektory IMP-01–03, LLM, synchronizace projektů a obecná migrace všech metadat.
+- Závislosti: existující Workspace/Projects/preview a explicitní rozhodnutí o neměnnosti importovaného zdroje.
+- Akceptace jednoho PR: byte-identita, validace typu/limitu/cest/metadat, stale/dirty/foreign, lost-response/restart/crash recovery, nativní UI a relevantní celkové testy; TODO důkazy a návod.
+
+### F-M1-INDEX-01 — Relační projekce projektového indexu
+
+- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
+- Původ: V-03 a zbývající integrace metadat/indexu M1; ADR 0002/0003.
+- Větev: `feature/f-m1-index-01-relations`; základ a jediný PR do `develop`.
+- Výstup: doložený kontrakt a implementace lokálně obnovitelné projekce vztahů/metadat, nesoucí přesný commit ID.
+- Mimo rozsah: změna Git autority, synchronizace SQLite, nové LLM/RAG databáze.
+- Závislosti: stabilní metadata kontrakt v `develop`; importní změny pouze pokud jej ovlivní.
+- Akceptace jednoho PR: rebuild z HEAD, stale/pending odmítnutí, referenční integrita a změny po rename/delete/import, bezpečná migrace projekce, testy a dokumentace.
+
+### F-M2-CONTEXT-01 — Bezpečný Context Builder
+
+- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
+- Původ: Context Builder část širokého M2, ADR 0008.
+- Větev: `feature/f-m2-context-01-manifest`; základ a jediný PR do `develop`.
+- Výstup: explicitní výběr vstupů, Context Manifest přesných bajtů a revalidace identity/privacy/oprávnění před předáním backendu.
+- Mimo rozsah: celý M2, Ollama adapter, automatické souhrny, billing a role orchestrace; ty se připraví jako vlastní dávky.
+- Závislosti: příslušné M1 gates a kontrakty ADR 0008; frontu lze posunout podle doložených závislostí, ne automaticky začít M2.
+- Akceptace jednoho PR: exact bytes/digests, změna HEAD/oprávnění mezi výběrem a použitím, zákaz local-only exportu a implicitního fallbacku, testy chybových cest a dokumentace.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -25,16 +59,16 @@ Plánovací horizont tvoří zpravidla tři další milníky (nyní M2–M4). N�
 
 - [ ] [planned] **V-10 — Integrace lokálního API (cílová úroveň: PoC validated).** Qt/WebEngine, same-origin UI a token v nativním interceptoru jsou ověřeny M0-06a. Zbývá lifecycle po násilném pádu, případný úklid Unix socketů a bezpečné vykreslení nedůvěryhodných artefaktů. Před persistentními mutacemi v M1 definovat klientské operation ID/retry/receipt podle ADR 0003, limity souběhu a celkový deadline requestu. Protokolový čítač ADR 0006 toto neprokazuje. M1-02 uzavírá pouze nativní vytváření: operation ID/receipt, jeden worker, neblokující uzlový zámek, deadline a recovery dle ADR 0015. M1-03 přidává nativní editor dle ADR 0016: stabilní operation ID/digest/receipt, kontrolu výchozího HEAD, neblokující zámek, recovery při otevření editoru a textové zobrazení nedůvěryhodného obsahu. Obecné mutující HTTP API zůstává neimplementované a pro tento nativní vstup není potřeba.
 
-## Připravené dávky — M2 až M4
+## Strategický zásobník — M2 až M4 (není připravená dávka)
 
-Přeneseno z původní sekce 19 roadmapy. Společný záznam M3/M4 se při přípravě konkrétní dávky rozdělí podle rozsahu těchto milníků v roadmapě; zachová se původ a návaznosti.
+Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implementací rozdělí na feature dávky s vlastní větví a PR; zachová se původ a návaznosti. Karty výše odkazují na tento strategický rozsah, neprohlašují celý milník za jednu feature.
 
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
-## Vzdálenější dávky
+## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
 
 - [ ] [planned] **M5 — Federovaná publikace (cílová úroveň: PoC validated).** Implementovat izolovaný příjem, autorizaci celého přenášeného obsahu včetně historie, validaci kandidáta a CAS/recovery dle ADR 0008. Ověřit změnu HEAD po lidském řešení, neplatný fast-forward/merge, revokaci a odmítnutí přenosu local-only historie; zachovat konfliktní rodiče.
 
@@ -53,4 +87,3 @@ Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roa
 - [ ] [planned] **IP-01 — Release a citation metadata (cílová úroveň: implemented).** Před prvním publikačním releasem určit archiv a ověřené autory, licenci, repository URL a verzi; doplnit CITATION.cff a/nebo metadata zvoleného archivu. Akceptace: metadata odkazují na konkrétní disclosure, tag a commit, neobsahují vymyšlené identifikátory a projdou validací zvoleného formátu.
 - [ ] [planned] **IP-02 — Archive/release workflow a DOI integrace (cílová úroveň: implemented).** Po určení archivu z IP-01 připravit kontrolu verzí a referencí, následně automatizaci podle sekce 29 IP roadmapy. Akceptace: kontrola odmítne nesoulad tag/commit/disclosure; případné DOI je propojeno obousměrně. Samotné vytvoření tohoto úkolu nepublikuje release ani DOI.
 - [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
-

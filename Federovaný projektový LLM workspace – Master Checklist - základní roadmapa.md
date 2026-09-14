@@ -6,7 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální milník: **M1 — Single-node project workspace**. Aktuální dávka práce je v [TODO.md](TODO.md), další otevřené úkoly v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+Aktuální milník: **M1 — Single-node project workspace**. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
 
 Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
