@@ -13,15 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Aktivace každé dávky vyžaduje vyřešit předání závislostí z dosavadní široké dávky M1; neznamená jejich automatické uzavření ani merge.
 
-### F-M1-IMPORT-01 — Nativní import zdrojových dokumentů
-
-- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
-- Původ: uživatelem schválený import, zbývající požadavek M1; návaznosti V-04/V-05, ADR 0003/0016.
-- Větev: `feature/f-m1-import-01-native-sources`; základ a jediný PR do `develop`.
-- Výstup: nativní výběr Markdown/PNG/JPEG/PDF, zachované původní bajty, metadata/privacy/provenance, potvrzený zápis a zobrazení importu. V-04/V-05 řešit jen v rozsahu nutném pro tento kontrakt, bez konkurenčních stavových záznamů.
-- Mimo rozsah: externí konektory IMP-01–03, LLM, synchronizace projektů a obecná migrace všech metadat.
-- Závislosti: existující Workspace/Projects/preview a explicitní rozhodnutí o neměnnosti importovaného zdroje.
-- Akceptace jednoho PR: byte-identita, validace typu/limitu/cest/metadat, stale/dirty/foreign, lost-response/restart/crash recovery, nativní UI a relevantní celkové testy; TODO důkazy a návod.
+F-M1-IMPORT-01 byla aktivována v [TODO](TODO.md); její současný stav patří pouze tam.
 
 ### F-M1-INDEX-01 — Relační projekce projektového indexu
 

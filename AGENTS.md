@@ -46,7 +46,9 @@ Externí LLM požadavek musí mít explicitní Context Manifest. RBAC a privacy 
 
 ### Během dávky
 
-Každá dávka má stabilní ID/název feature, původní požadavky/ID, milník, konkrétní výstup i hranici rozsahu, závislosti, cílovou úroveň, navrženou větev `feature/<id>-<slug>`, základ/cíl PR `develop` a akceptační podmínky. Vytvoření/přepnutí větve, push, otevření PR a merge prováděj jen na výslovný požadavek; navržený název není důkaz existující větve či PR. Dávka může mít více commitů, všechny ale patří jedné feature a jednomu PR.
+Každá dávka má stabilní ID/název feature, původní požadavky/ID, milník, konkrétní výstup i hranici rozsahu, závislosti, cílovou úroveň, větev `feature/<id>-<slug>`, základ/cíl PR `develop` a akceptační podmínky. Při uživatelem schváleném zahájení nové feature dávky automaticky vytvoř a přepni její feature větev z `develop` ještě před aplikačními změnami; další samostatný souhlas se založením větve není potřeba. Pouhé plánování backlogu nebo úprava pravidel větev nezakládá. Push, otevření PR a merge prováděj pouze na výslovný požadavek. Dávka může mít více commitů, všechny ale patří jedné feature a jednomu PR.
+
+Před automatickým založením zkontroluj pracovní strom, základ `develop` a začlenění závislostí. Pokud už správná feature větev existuje, pokračuj v ní po ověření jejího rozsahu; nevytvářej druhou větev pro stejnou dávku. Při nesouvisejících změnách, nejasném základu, chybějícím `develop` nebo kolizi názvu zastav a domluv bezpečné předání. Nikdy automaticky nestashuj, nezahazuj změny, nepřepisuj existující větev ani nezahajuj feature přímo v `develop`. Skutečný název a stav větve zaznamenej do TODO, plánovaný název není důkaz vytvoření ani sloučení PR.
 
 Nesouvisející feature nepřidávej do aktivní dávky ani její větve. Ad-hoc oprava patří do dávky jen pokud je nutná pro její akceptaci. Nezávisle dodávatelnou nebo příliš velkou práci rozděl před implementací na navazující feature dávky s vlastními větvemi a PR. Dokončení feature neuzavírá automaticky celý milník.
 
@@ -93,5 +95,7 @@ Nevytvářej commit v tomto vývojovém repozitáři bez výslovného požadavku
 Po každé ucelené změně navrhni zprávu odvozenou z **finálního diffu**, ne z původního zadání. Formát: `<type>(<scope>): <short summary>`. Preferované typy: feat, fix, refactor, docs, test, chore, build, ci. Pokud diff obsahuje logicky nezávislé změny, navrhni více commitů a uveď jejich obsah.
 
 Implementační odpovědi (včetně změn dokumentace/workflow) vždy zakonči řádkem `Suggested commit: ...`.
+
+Při předání ucelené feature vždy před řádkem Suggested commit doporuč jeden PR do `develop`: `Suggested PR: <feature branch> -> develop — <title>`. Přidej stručný rozsah, skutečné výsledky ověření a zbývající omezení; neprovedené kontroly označ jako neověřené. Pokud větev není vytvořena nebo feature ještě není připravena k merge, výslovně to u doporučení uveď. Doporučení není otevření PR ani souhlas s push/merge. Nesouvisející feature doporuč jako samostatné dávky a samostatné PR, nikoli společný PR.
 
 Mechanismus souboru AGENTS.md popisuje [oficiální dokumentace OpenAI](https://learn.chatgpt.com/docs/agent-configuration/agents-md); konkrétní pravidla výše jsou pravidla tohoto projektu.

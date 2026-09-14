@@ -5,6 +5,10 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## WF-03 — Předání pravidel feature dávek — 2026-09-14
+
+Pravidla feature větví/PR, čištění TODO a reorganizace backlogu byla předána uživatelem navazujícím pokynem zahájit další feature. Čistý lokální `develop` obsahoval commit `a450205 docs(workflow): automate feature branch creation and recommend pull requests`. Ověřeno při zahájení importní dávky; vzdálený stav PR ani merge nebyly kontrolovány a nejsou tímto tvrzené. Jde o administrativní předání podle pokynu uživatele, nikoli nový gate review. Dřívější kontrola úklidu doložila TODO o 24 řádcích a jednu aktivní dávku; následné úpravy pravidel nebyly znovu kompletně dokumentačně ověřeny. Nativní import má samostatnou větev a jediný plánovaný PR do develop.
+
 Dokončené výstupy, výsledky ověření a historická gate review. Aktuální dávku včetně dosud nearchivovaných dokončených úkolů drží [TODO](TODO.md), vzdálenější otevřené položky [BACKLOG](BACKLOG.md), strategii a gates [roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>).
 
 Starší záznamy od review M0-09R níže byly beze změny důkazů přesunuty z TODO. Časy, počty testů, popisy tehdejšího stavu a starší negativní review jsou historické; neoznačují automaticky dnešní stav. Nové záznamy přidávejte nahoru až při uzavření celé dávky, s ID úkolů, daty, úrovní výsledků, ověřením a omezeními. Během dávky zůstávají výsledky v TODO. Původní ID a důkazy zachovávejte; věcné opravy doplňujte jako datované dodatky.
