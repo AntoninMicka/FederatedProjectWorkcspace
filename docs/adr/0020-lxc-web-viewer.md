@@ -47,3 +47,20 @@ Opt-in deploy nejprve rozbalí nové vydání a ověří závislosti. Před pře
 Routerový instalátor před změnou pěti vlastních souborů publikuje rollback journal s bajty, módy a stavem služby. `lighttpd -tt` musí projít před aktivací. Chyba vrátí původní soubory; přerušenou operaci dokončí příkaz recover. Opakované instalace používají stejné cesty a remove odstraňuje jen tyto soubory. CA je správcem dodaná a zůstává zachovaná. Journal se odstraní až po úspěšné aktivaci/obnově. Při selhání recovery zůstává k dalšímu pokusu. Současně smí běžet pouze jeden instalátor.
 
 Postup, limity a cílová akceptace: [návod](../lxc-web.md). Průběžné testy a stav nasazení drží pouze TODO.
+
+## Rozšíření 2026-09-14: application-only update a vedené recovery
+
+Adaptujeme stávající immutable release/current a rollback snapshot, bez nového
+instalačního frameworku. Běžný deploy detekuje chybějící systémové balíky;
+application-only režim vyžaduje existující nasazení a přeskočí OS provisioning,
+bootstrap identity a TLS generování. Každé vydání má vlastní venv, takže změna
+Python dependencies nepoškodí předchozí vydání. Aktualizace restartuje jen web.
+
+Crash boundaries zůstávají: před publikací current je nová release neaktivní;
+po publikaci rollback snapshot umožňuje obnovu current/unit/active/enabled.
+Bootstrap, systémové balíky a TLS nejsou součástí této rollback transakce.
+Samostatné recover a retry nyní provádějí obnovu uvnitř LXC, nikoli na routeru.
+Při retry se použije nové release ID; neúplná vydání zůstávají pro diagnostiku.
+Reset není obnova a nezapíná se automaticky: zahazuje snapshot a zastavuje
+službu. Chybový výstup tuto hranici výslovně pojmenuje a nabídne recovery příkaz.
+Implementováno, bez nového testového ověření; stav drží M1-AH-09 v TODO.

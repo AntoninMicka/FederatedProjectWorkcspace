@@ -21,6 +21,12 @@ Podmínka uzavření: dokončené a ověřené zbývající požadavky M1 i při
 
 ## Na řadě
 
+- [ ] [in progress] **M1-AH-09 — Inkrementální LXC deploy a vedená obnova (implemented, 2026-09-14; neověřeno).** Požadavek uživatele: aktualizovat pouze vlastní software, přeskočit již splněné instalační kroky a doporučit recovery/reset při chybě. `--update-only` vyžaduje existující web, zachová TLS/identitu/credentials, nepouští apt ani bootstrap; běžná instalace doplňuje pouze chybějící systémové balíky. Nové vydání má vlastní venv a Python dependencies. Reuse release/current a rollback snapshotu ADR 0020. `--recover` obnovuje v LXC, retry dostane nové release ID a obnova již neběží omylem na routeru. Chyby vypisují konkrétní recovery/reset kroky bez automatického destruktivního resetu. Podmínka dokončení: cílené/full testy a cílové update/recovery scénáře; zatím neprovedeno. Restart routeru odložen na přání uživatele kvůli zachování sítě.
+
+Uživatelská akceptace (2026-09-14): webové vytváření projektů (M1-AH-05) a správa uživatelů (M1-AH-06/07) fungují na nasazení. Nastavení federace funguje na úrovni zadání, nikoli doloženého transportu. Jde o potvrzení uživatele, ne nové agentní testy; neuzavírá celý M1/M5 gate ani ostatní scénáře.
+
+K předání podle požadavku uživatele (2026-09-14): pohodlnější lokální přihlašování místo ručně zadávaného tokenu a uhlazení UI správy uživatelů/federace. Zatím pouze požadavek, bez zvolené auth architektury; hesla se mezi uzly nepřenášejí.
+
 - [ ] [in progress] **M1-08 — Bezpečné odstranění dokumentu (implemented, 2026-09-14; neověřeno).** Navazující otevřený požadavek M1 na konzistenci po smazání. Nativní editor vyžaduje potvrzení, Artifacts odstraní verzované soubory dokumentu a metadata jednou Workspace operací; zachová Git historii, odmítne příchozí strukturované vztahy a neplatný výsledný snapshot ještě před přípravou journalu. Reuse stávajícího writer locku, CAS, operation_id/receipt a recovery podle ADR 0003/0016; opakování smazání používá stejný operation_id. Podmínka dokončení: cílené testy sidecar/frontmatter, vztahů, stale/dirty, retry a procesních přerušení; celá sada a ověření Qt. Testy ani následné kontroly v tomto kroku nebyly spuštěny. Import a Gate M1 zůstávají otevřené.
 
 Poznámka uživatele k federaci (2026-09-14): nastavení desktopu a kontejneru dokončeno, vzájemná komunikace přes přímé adresy zatím nepotvrzena; případný firewall není doložená příčina. Na přání uživatele se síťová diagnostika odkládá. Automatický transport zůstává otevřenou prací M5; nebyly měněny firewall ani cílová zařízení.

@@ -157,3 +157,36 @@ python3 router_tile.py remove
 
 8) Zapište časový záznam do `TODO.md`:
 Zapište datum a zařízení; výsledky kroků 1–8; popis selhání a přesný příkaz oprav.
+
+## Aktualizace aplikace a vedená obnova
+
+Pro existující webové nasazení použijte:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --update-only
+```
+
+Režim vyžaduje existující službu, release a node/access-key. Nepouští apt,
+nevytváří účet služby, nebootstrapuje uzel a negeneruje TLS. Připraví nové
+izolované vydání s vlastní venv, nainstaluje jeho Python dependencies a teprve
+pak přepne službu s rollback snapshotem a HTTPS healthcheckem. Aktualizace
+krátce restartuje aplikaci, nikoli router či kontejner. Není to offline update.
+Chybějící systémové závislosti řešte běžným deployem bez `--update-only`;
+ten nyní přeskočí apt, pokud jsou všechny požadované balíky již nainstalované.
+
+Při přerušeném nasazení preferujte skutečnou obnovu:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --recover
+```
+
+Obnova se provede v LXC a vrátí předchozí current, unit a enabled/active stav.
+Snapshot se odstraní až po dokončení obnovy. Retry po selhání používá stejnou
+obnovu a nové release ID; neúplná vydání zůstávají pro diagnostiku.
+`--reset` není rollback: zahodí snapshot a zastaví službu, potom je potřeba
+nový deploy. Používejte jej pouze jako výslovný poslední krok, nikoli první
+reakci na chybu. Chyba deploye nyní vypisuje tyto příkazy pro konkrétní cíl.
+`--regen-tls` patří k běžnému deployi a mění CA důvěru; nelze ho spojit s update,
+recover ani reset. Žádný z těchto režimů nemění firewall.
+
+Změny jsou implementované, zatím bez nového testového či cílového ověření.
