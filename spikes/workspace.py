@@ -12,7 +12,7 @@ from spikes.configuration import committed_project
 from spikes.markdown_documents import main_todo_view
 from spikes.journal import Journal, RecoveryConflict, snapshot
 from spikes.metadata import require, validate_snapshot
-from spikes.storage import Git, Index, StaleIndex
+from spikes.storage import Git, Index, StaleIndex, projection
 
 
 class PendingOperation(RuntimeError):
@@ -112,14 +112,29 @@ class Workspace:
         with self.journal.lock(), self.journal.connect() as db:
             return self._read_locked(db)
 
-    def _read_locked(self, db):
+    def read_projection(self):
+        """Expose committed metadata/relations under the same pending and writer boundary."""
+        with self.journal.lock(), self.journal.connect() as db:
+            return self._read_locked(db, self.index.read_projection)
+
+    def read_relations(self, entity_id, *, direction='outgoing', relation_type=None):
+        from spikes.metadata import uuid as validate_uuid
+        validate_uuid(entity_id)
+        with self.journal.lock(), self.journal.connect() as db:
+            return self._read_locked(db, lambda git: self.index.read_relations(
+                git, entity_id, direction=direction, relation_type=relation_type))
+
+    def _read_locked(self, db, query=None, *, expected_head=None):
         if self._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
+        query = query or self.index.read
         try:
-            return self.index.read(self.git)
+            return query(self.git)
         except StaleIndex:
+            if expected_head is not None and self.git.head() != expected_head:
+                raise StaleIndex('Project changed while reading index')
             self.index.rebuild(self.git)
-            return self.index.read(self.git)
+            return query(self.git)
 
     def read_project(self, project_id, *, artifact_id=None, expected_head=None, network=False):
         """Return one committed project view under the shared writer lock."""
@@ -137,9 +152,12 @@ class Workspace:
             if network:
                 require(all(item['privacy'] != 'local-only' for item in entities.values()),
                         'Project contains local-only data')
-            rows = self._read_locked(db)
-            require(rows == sorted((item['id'], item['title']) for item in entities.values()),
+            view = self._read_locked(db, self.index.read_projection, expected_head=commit)
+            if view['commit_id'] != commit:
+                raise StaleIndex('Project changed while rebuilding index')
+            require(view == projection(files, entities, commit),
                     'Index differs from validated commit')
+            rows = [(id_, item['metadata']['title']) for id_, item in view['entities'].items()]
             if artifact_id is not None:
                 prefix = f'artifacts/{artifact_id}/'
                 entries = {p: raw for p, raw in files.items() if p.startswith(prefix)}
@@ -230,7 +248,7 @@ class Workspace:
         self._check(record)
         self.git.run('read-tree', record['commit_id'])
         checkpoint('git-indexed')
-        indexed = self.index.rebuild(self.git)
+        indexed = self.index.rebuild(self.git, checkpoint=checkpoint)
         require(indexed == record['commit_id'], 'HEAD changed during index rebuild')
         self._check(record)
         self._save(db, record, 'indexed')

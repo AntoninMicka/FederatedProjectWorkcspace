@@ -98,6 +98,12 @@ Stavový adresář musí již existovat, patřit běžnému uživateli a mít pr
 
 Při otevření mohou vzniknout lokální `journal.sqlite`, `writer.lock` a `index.sqlite`. Nový lock/index mají 0600. Existující stavové soubory musejí být soukromé běžné soubory bez hardlinků; aplikace jim automaticky nemění práva. Chybějící/stale index se obnoví z validovaného HEAD. Pending operaci obnoví otevření nativního editoru podle ADR 0003; neplatný či poškozený index se nevydává za aktuální. Kvůli chybě nemažte journal.
 
+Původní index pouze s ID/titulkem se při prvním rebuild nahradí relační projekcí
+metadat, cest, štítků a vztahů. Migrace mění pouze `index.sqlite` a potvrzuje
+celou projekci s commit ID v jedné transakci; projektové soubory a journal
+zachovává. Přerušený rebuild lze opakovat, nepodporovaná budoucí verze se odmítne
+bez automatického smazání nebo downgrade. Viz [ADR 0022](adr/0022-relational-index.md).
+
 ## Izolovaná ukázka bez zásahu do existujících projektů
 
 Z kořene checkoutu spusťte následující blok Pythonem s PyYAML 6.0.3 (`python3`, případně `.venv/bin/python`). Vytvoří pouze vlastní adresář pod `/tmp`, ukázkový Git projekt a oddělený stav; vytiskne příkaz pro spuštění. Data zůstanou pro restart desktopu, systém je může později odstranit jako dočasná.

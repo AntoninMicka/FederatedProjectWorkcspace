@@ -66,10 +66,13 @@ Povinná pole: `schema_version` (1), `id` (UUID), `title` (neprázdný text), `k
 
 ### Definice vazeb mezi entitami
 
-`relations` je seznam vazeb v podobě objektů s minimem klíčů:
+`relations` je ve spustitelném schématu v1 seznam objektů s přesně dvěma klíči:
 - `type` — typ vazby (řetězec),
 - `target_id` — UUID cílové entity,
-- `note` — nepovinný popis významu vazby.
+
+Pole `note` není ve v1 podporováno. Doporučené typy níže nejsou validační
+allowlist; vlastní neprázdný typ, pořadí a duplicity se zachovávají. Inverzní
+vazby se automaticky nedoplňují, viz [ADR 0022](docs/adr/0022-relational-index.md).
 
 Doporučené typy vztahů:
 - `supports` — A je podpůrný kontext pro B; B je základ/zdroj pro A.
@@ -91,7 +94,7 @@ Registry: JSON objekt pro každou entitu, společná metadata plus `status`, `bo
 
 Smazání prověřuje příchozí vztahy. Přejmenování obsahu a změna pole `file` patří do stejného commitu. Zachování obou konfliktních verzí vytváří nové ID pro kopii a vyžaduje rozhodnutí o odkazech. Změna–smazání vyžaduje volbu člověka.
 
-SQLite obsahuje projekci entit a commit ID; neobsahuje jedinou kopii uživatelských dat. Při selhání validace nový index nepublikovat. MVP nepotřebuje sdílenou SQLite databázi ani synchronizaci jejího souboru.
+SQLite obsahuje lokálně obnovitelnou projekci metadat a cest entit, štítků a směrovaných vztahů a jeden commit ID pro celý snapshot; neobsahuje jedinou kopii uživatelských dat. Migruje se z validovaného HEAD atomicky, samostatně od Git schématu a journalu, viz [ADR 0022](docs/adr/0022-relational-index.md). Při selhání validace nový index nepublikovat. MVP nepotřebuje sdílenou SQLite databázi ani synchronizaci jejího souboru.
 
 ## Implementovaný rozsah M0
 

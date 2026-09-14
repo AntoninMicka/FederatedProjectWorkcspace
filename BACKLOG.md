@@ -11,19 +11,21 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 ## Nejbližší feature dávky
 
-Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Aktivace každé dávky vyžaduje vyřešit předání závislostí z dosavadní široké dávky M1; neznamená jejich automatické uzavření ani merge.
+Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-IMPORT-01 byla aktivována v [TODO](TODO.md); její současný stav patří pouze tam.
+F-M1-IMPORT-01 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01 včetně V-03 je připravena v [TODO](TODO.md); implementace zatím nezahájena.
 
-### F-M1-INDEX-01 — Relační projekce projektového indexu
+### F-M1-DELETE-01 — Ověření bezpečného odstranění dokumentu
 
 - Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
-- Původ: V-03 a zbývající integrace metadat/indexu M1; ADR 0002/0003.
-- Větev: `feature/f-m1-index-01-relations`; základ a jediný PR do `develop`.
-- Výstup: doložený kontrakt a implementace lokálně obnovitelné projekce vztahů/metadat, nesoucí přesný commit ID.
-- Mimo rozsah: změna Git autority, synchronizace SQLite, nové LLM/RAG databáze.
-- Závislosti: stabilní metadata kontrakt v `develop`; importní změny pouze pokud jej ovlivní.
-- Akceptace jednoho PR: rebuild z HEAD, stale/pending odmítnutí, referenční integrita a změny po rename/delete/import, bezpečná migrace projekce, testy a dokumentace.
+- Původ: M1-08, konzistence po smazání v M1; ADR 0003/0016.
+- Větev: `feature/f-m1-delete-01-validation`; základ a jediný PR do `develop`.
+- Výstup: ověření existující implementace odstranění a opravy nutné pro její akceptaci.
+- Mimo rozsah: koš, UI obnovy historie, mazání sources, federovaná synchronizace.
+- Závislosti: existující Artifacts/Workspace v `develop`; relační kontrakt F-M1-INDEX-01, pokud jej dokončení ovlivní.
+- Akceptace jednoho PR: sidecar/frontmatter, blokování příchozích vztahů, stale/dirty, retry a procesní přerušení, skutečný Qt, celá sada a dokumentace.
+
+- [ ] [planned] **M1-08 — Bezpečné odstranění dokumentu (implemented, 2026-09-14; neověřeno).** Navazující otevřený požadavek M1 na konzistenci po smazání. Nativní editor vyžaduje potvrzení, Artifacts odstraní verzované soubory dokumentu a metadata jednou Workspace operací; zachová Git historii, odmítne příchozí strukturované vztahy a neplatný výsledný snapshot ještě před přípravou journalu. Reuse stávajícího writer locku, CAS, operation_id/receipt a recovery podle ADR 0003/0016; opakování smazání používá stejný operation_id. Podmínka dokončení: cílené testy sidecar/frontmatter, vztahů, stale/dirty, retry a procesních přerušení; celá sada a ověření Qt. Testy ani následné kontroly v tomto kroku nebyly spuštěny. Gate M1 zůstává otevřený.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 
@@ -40,9 +42,8 @@ F-M1-IMPORT-01 byla aktivována v [TODO](TODO.md); její současný stav patří
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
-- [ ] **[planned] V-03 — Vyjasnit omezení projekce indexu.** Index nyní validuje vztahy, ale ukládá pouze id/title a commit ID. Před relačními dotazy navrhnout a otestovat rozšíření projekce; neoznačovat existující index za kompletní databázi vztahů.
-- [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje.
-- [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
+- [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje. Předání F-M1-IMPORT-01 (2026-09-14): created_at označuje okamžik importu, author_id lokálního importéra; samostatné imported_at ani původní autor zdroje nebyly přidány.
+- [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu. Předání F-M1-IMPORT-01 (2026-09-14): nativní editor source neupravuje a nová importovaná verze má nové UUID; globální ochrana před externími Git úpravami není součástí importní dávky.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
 - [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními. Zahrnout uzlové creation receipts a osiřelé staging složky M1-02; konfliktní pending vytvoření potřebuje explicitní bezpečné zrušení/řešení, které zatím nemá UI.
 - [ ] [planned] **V-08 — Zbývající lifecycle konfigurace (cílová úroveň: implemented).** Ověření při otevření je M1-01; vytvoření nového projektu, stabilní lokální author/node/project ID a obnovitelná registrace jsou M1-02 dle ADR 0015. Zbývá registrace již existujícího projektu s jeho původním stavem, změny/migrace konfigurací a vazba identity na credential úložiště. Projektové změny dále vést přes Workspace; index artefaktů není autoritou projektové konfigurace.
@@ -115,8 +116,6 @@ Uživatelský důkaz M1-AH-09/10/11/12: aktualizace LXC dokončena se zachován�
 Uživatelská akceptace (2026-09-14): webové vytváření projektů (M1-AH-05) a správa uživatelů (M1-AH-06/07) fungují na nasazení. Nastavení federace funguje na úrovni zadání, nikoli doloženého transportu. Jde o potvrzení uživatele, ne nové agentní testy; neuzavírá celý M1/M5 gate ani ostatní scénáře.
 
 K předání podle požadavku uživatele (2026-09-14): pohodlnější lokální přihlašování místo ručně zadávaného tokenu a uhlazení UI správy uživatelů/federace. Zatím pouze požadavek, bez zvolené auth architektury; hesla se mezi uzly nepřenášejí.
-
-- [ ] [planned] **M1-08 — Bezpečné odstranění dokumentu (implemented, 2026-09-14; neověřeno).** Navazující otevřený požadavek M1 na konzistenci po smazání. Nativní editor vyžaduje potvrzení, Artifacts odstraní verzované soubory dokumentu a metadata jednou Workspace operací; zachová Git historii, odmítne příchozí strukturované vztahy a neplatný výsledný snapshot ještě před přípravou journalu. Reuse stávajícího writer locku, CAS, operation_id/receipt a recovery podle ADR 0003/0016; opakování smazání používá stejný operation_id. Podmínka dokončení: cílené testy sidecar/frontmatter, vztahů, stale/dirty, retry a procesních přerušení; celá sada a ověření Qt. Testy ani následné kontroly v tomto kroku nebyly spuštěny. Import a Gate M1 zůstávají otevřené.
 
 Poznámka uživatele k federaci (2026-09-14): nastavení desktopu a kontejneru dokončeno, vzájemná komunikace přes přímé adresy zatím nepotvrzena; případný firewall není doložená příčina. Na přání uživatele se síťová diagnostika odkládá. Automatický transport zůstává otevřenou prací M5; nebyly měněny firewall ani cílová zařízení.
 

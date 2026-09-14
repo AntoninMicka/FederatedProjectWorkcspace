@@ -24,7 +24,7 @@ class SidebarEditorTests(unittest.TestCase):
 import sys
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
-from spikes import desktop_ui, desktop
+from spikes import desktop
 from spikes.desktop_editor import EditorDialog
 from spikes.projects import Projects
 node, project_id = sys.argv[1:]
@@ -55,7 +55,7 @@ def editor_exec(dialog):
         dialog.parent().centralWidget().page().runJavaScript('window.todoCancelled=true')
     return result
 EditorDialog.exec = editor_exec
-kind, js = desktop_ui.ASSETS['/app.js']
+kind, js = desktop.ASSETS['/app.js']
 # The regular shell smoke clicks increment immediately; hold that until this flow passes.
 js += r'''
 let step=0;
@@ -78,7 +78,7 @@ const todoSmoke=setInterval(()=>{
  }
 },100);
 '''
-desktop_ui.ASSETS['/app.js'] = (kind, js)
+desktop.ASSETS['/app.js'] = (kind, js)
 sys.argv = ['desktop', '--node', node, '--smoke']
 result = desktop.main()
 assert opened == [project_id, project_id], opened
