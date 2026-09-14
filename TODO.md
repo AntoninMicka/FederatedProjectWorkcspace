@@ -30,3 +30,5 @@ Ověření 2026-09-14: izolované backendové scénáře importu prošly (původ
 Žádné nové nezávislé feature. Návaznosti V-04/V-05 zůstávají v BACKLOG se svými původními ID.
 
 Závěrečný regresní běh mimo socketově omezený sandbox: `python3 -m unittest discover -s tests -v` — 183 testů, 163 prošlo, 20 volitelných přeskočeno, bez chyb, 49,613 s. Tento existující unittest běh neobsahuje nový ImportDialog smoke; jeho samostatně zjištěná Qt chyba proto dál blokuje akceptaci feature. Kompletní oprava/UI re-test zatím nebyly provedeny.
+
+Oprava Qt blockeru (2026-09-14): handler přejmenován na operation_finished. Opakovaný skutečný Qt smoke prošel otevřením dialogu, zrušením potvrzení bez změny HEAD, potvrzeným importem, worker completion, zachováním přesných CRLF/frontmatter bajtů a čistým Git stromem. Qt blocker je odstraněný; po této opravě byla opakována pouze cílená UI kontrola, nikoli znovu celá regresní sada. PR/merge stále neprovedeny.
