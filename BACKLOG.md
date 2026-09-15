@@ -13,19 +13,27 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-IMPORT-01 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01 včetně V-03 je připravena v [TODO](TODO.md); implementace zatím nezahájena.
+F-M1-IMPORT-01 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je jediná plánovaná dávka v [TODO](TODO.md); implementace této dávky nezahájena.
 
-### F-M1-DELETE-01 — Ověření bezpečného odstranění dokumentu
+### F-M1-META-01 — Přesný kontrakt metadat a importní provenance
 
-- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
-- Původ: M1-08, konzistence po smazání v M1; ADR 0003/0016.
-- Větev: `feature/f-m1-delete-01-validation`; základ a jediný PR do `develop`.
-- Výstup: ověření existující implementace odstranění a opravy nutné pro její akceptaci.
-- Mimo rozsah: koš, UI obnovy historie, mazání sources, federovaná synchronizace.
-- Závislosti: existující Artifacts/Workspace v `develop`; relační kontrakt F-M1-INDEX-01, pokud jej dokončení ovlivní.
-- Akceptace jednoho PR: sidecar/frontmatter, blokování příchozích vztahů, stale/dirty, retry a procesní přerušení, skutečný Qt, celá sada a dokumentace.
+- Stav: [ ] [planned]; milník M1; cílová úroveň designed.
+- Původ: V-04, společná metadata a importní evidence z roadmapy; aktuální otevřený rozsah V-04 zůstává níže pod původním ID.
+- Větev: `feature/f-m1-meta-01-contract`; základ a jediný PR do `develop`.
+- Výstup: schválený kontrakt povinných/volitelných polí a evidence importéra, původního autora, času importu a podrobné provenance, s rozlišením současného v1 a požadovaného rozšíření.
+- Mimo rozsah: externí konektory, plošná migrace Git dat a implementace nové verze schématu bez rozhodnutí.
+- Závislosti: importní a indexní kontrakty v `develop`; zachování dosavadních dat/ID a kompatibility.
+- Akceptace jednoho PR: konzistence DATA_MODEL/validátoru/ADR, konkrétní příklady pro artefakt a registry i import, rozhodnutí o potřebě nové verze a popis případné migrace/recovery. Návrh sám není implementovaná provenance.
 
-- [ ] [planned] **M1-08 — Bezpečné odstranění dokumentu (implemented, 2026-09-14; neověřeno).** Navazující otevřený požadavek M1 na konzistenci po smazání. Nativní editor vyžaduje potvrzení, Artifacts odstraní verzované soubory dokumentu a metadata jednou Workspace operací; zachová Git historii, odmítne příchozí strukturované vztahy a neplatný výsledný snapshot ještě před přípravou journalu. Reuse stávajícího writer locku, CAS, operation_id/receipt a recovery podle ADR 0003/0016; opakování smazání používá stejný operation_id. Podmínka dokončení: cílené testy sidecar/frontmatter, vztahů, stale/dirty, retry a procesních přerušení; celá sada a ověření Qt. Testy ani následné kontroly v tomto kroku nebyly spuštěny. Gate M1 zůstává otevřený.
+### F-M1-SOURCE-01 — Kontrakt neměnnosti a verzování zdrojů
+
+- Stav: [ ] [planned]; milník M1; cílová úroveň designed.
+- Původ: V-05 a neměnné importované zdroje z roadmapy; aktuální otevřený rozsah V-05 zůstává níže pod původním ID.
+- Větev: `feature/f-m1-source-01-versioning`; základ a jediný PR do `develop`.
+- Výstup: rozhodnutá pravidla změn/verzí zdrojů, zachování původních bajtů/UUID a hranice následných zápisů přes Workspace/Journal oproti externím Git úpravám.
+- Mimo rozsah: cloud synchronizace, konektory a globální zákaz externího Git bez konkrétního rozhodnutí.
+- Závislosti: F-M1-META-01 pro provenance kontrakt; existující native import a editor hranice zůstávají zachovány.
+- Akceptace jednoho PR: příklady stejného zdroje/nové verze, povolené změny metadat versus obsahu, konflikt při externí změně a vymezené validační/recovery hranice. Navazující implementace se připraví podle přijatého návrhu, designed výstup se nevydává za vynucenou celoživotní neměnnost.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 

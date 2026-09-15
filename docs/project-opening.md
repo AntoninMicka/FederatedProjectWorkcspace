@@ -155,12 +155,14 @@ Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřet
 V nativním editoru vyberte uložený dokument a stiskněte **Smazat dokument**.
 Potvrzení odstraní obsah i metadata, neuložené úpravy se neukládají. Dokument,
 na který vedou strukturované vztahy jiných artefaktů, nejprve vyžaduje vyřešení
- těchto vztahů. Git historie zůstane zachovaná; volné textové odkazy se neopravují.
+těchto vztahů. Git historie zůstane zachovaná; volné textové odkazy se neopravují.
 
 Při přerušené operaci použijte **Zopakovat smazání** nebo **Znovu načíst**.
 Načtení dokončí již připravenou operaci; není to její zrušení ani rollback.
 Nový, dosud neuložený dokument se nemaže touto operací. Webový náhled nemá
-novou mazací route. Funkce je implementovaná, zatím bez testového ověření.
+novou mazací route. Lokální ověření včetně skutečného Qt a procesní recovery
+dokládá [F-M1-DELETE-01/M1-08](../TODO.md). Smazaný dokument se v editorové
+historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git historii.
 
 ## Import původních zdrojů
 
