@@ -526,6 +526,26 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 
 ---
 
+# 11A. Konverzační vlákna, persistence a projektové otisky
+
+Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM běhů. Není totožné s jedním run recordem, Context Manifestem ani s výsledným projektovým artefaktem. Implementační dávky a jejich závislosti drží BACKLOG; tato sekce je strategický kontrakt, nikoli tvrzení o hotové implementaci.
+
+- [ ] Umožnit běžnou vícekolovou konverzaci s vybraným backendem/modelem a po restartu bezpečně navázat na lokálně perzistentní vlákno.
+- [ ] Samostatnou konverzaci bez explicitního workflow nebo projektové role inicializovat jako `brainstorming`; klasifikace popisuje účel vlákna a sama nemění oprávnění, privacy ani roli jednotlivého LLM běhu.
+- [ ] Lokální pracovní stav vlákna držet mimo projektový Git a mimo obnovitelný projektový index. Oddělit jej od autoritativních run recordů; pád ani ztracená odpověď nesmí způsobit automatické zopakování `unknown` volání.
+- [ ] Umožnit vlákno explicitně přiřadit ke konkrétnímu projektu jako živé vlákno s možností navázání. Projektová reprezentace historie má být verzovaný Markdown s omezenými strukturovanými metadaty; lokální credentials, provider session tokeny a nepublikovaný provozní stav do Gitu nepatří.
+- [ ] Každé pokračování má explicitně určené zprávy a artefakty v Context Manifestu. Backend nesmí skrytě doplnit celou starší historii ani obsah z jiného projektu.
+- [ ] Umožnit explicitní projektový otisk vlákna jako neměnný snapshot:
+  - [ ] kompletní otisk zvolené verze vlákna,
+  - [ ] rozdílový otisk od explicitního základního otisku/verze.
+- [ ] Rozdílový otisk musí nést ID a hash základu, rozsah zpráv a dostatečnou provenance. Chybějící nebo neshodný základ se nesmí tiše vydávat za kompletní konverzaci.
+- [ ] Rozlišit pokračující živé vlákno, jeho historický otisk a samostatný výstup konkrétního úkolu. Oponentura, brainstormingový souhrn, teze, analýza a podobné editovatelné výstupy se ukládají jako samostatné Markdown artefakty s vazbou na zdrojové vlákno/run, vstupy a Context Manifest; nejsou pouze zprávou uvnitř chatu.
+- [ ] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze.
+- [ ] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace.
+- [ ] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace.
+
+---
+
 # 12. Webové UI
 
 ## MVP obrazovky
@@ -538,6 +558,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 - [ ] Metadata editor.
 - [ ] Git history.
 - [ ] LLM action panel.
+- [ ] Konverzační pohled se seznamem lokálních a projektových vláken, stavem persistence, klasifikací, backendem/modelem a akcemi navázat, přiřadit k projektu, uložit kompletní otisk nebo uložit rozdíl od zvoleného základu.
 - [ ] Indikace usage & billing u podporovaných backendů podle sekce 7C, v rozsahu oprávnění uživatele.
 - [ ] Context preview.
 - [ ] Výběr:
@@ -712,13 +733,16 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 ## Milestone M2 – Local AI
 
 - [ ] Ollama backend.
+- [ ] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti. LAN endpoint nesmí být označen jako `same-node` ani dostat `local-only` data; před implementací doplnit v ADR 0008 explicitní síťovou trust boundary, ověření identity/cíle a transportní policy.
+- [ ] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu.
+- [ ] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty.
 - [ ] Summarizer.
 - [ ] Extractor.
 - [ ] Auto-description.
 - [ ] Tagging.
 - [ ] Context builder.
 
-**Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt a sestavit relevantní kontext; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
+**Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 
 ## Milestone M3 – External LLM
 

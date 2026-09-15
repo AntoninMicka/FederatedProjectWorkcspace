@@ -67,6 +67,40 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
+### Navazující konverzační feature dávky
+
+Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek výše. Před aktivací ověřit skutečné závislosti a aktualizovat ADR 0008; názvy větví jsou návrhy, větve ani PR nebyly vytvořeny.
+
+#### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
+
+- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
+- Původ: uživatelské doplnění plánu 2026-09-15; Ollama a execution boundaries z roadmapy/ADR 0008.
+- Větev: `feature/f-m2-ollama-01-locality`; základ a jediný PR do `develop`.
+- Výstup: Ollama adapter a binding, který prokazatelně rozliší `same-node` proces od privátního LAN endpointu; LAN cíl má samostatně rozhodnutou trust boundary, identitu cíle a transportní policy.
+- Mimo rozsah: obecná federace, automatické hledání nedůvěryhodných služeb a cloud fallback.
+- Závislosti: Backend/Context Manifest kontrakt ADR 0008 a F-M2-CONTEXT-01; před implementací zaznamenat rozšíření execution boundary v ADR.
+- Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
+
+#### F-M2-CHAT-01 — Lokálně perzistentní živé konverzace
+
+- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
+- Původ: uživatelské doplnění plánu 2026-09-15; volitelný orchestrator chat a LLM run records z ADR 0008.
+- Větev: `feature/f-m2-chat-01-local-threads`; základ a jediný PR do `develop`.
+- Výstup: backendově nezávislé vícekolové vlákno, lokální trvalé uložení a bezpečné navázání po restartu; samostatný chat má výchozí klasifikaci `brainstorming`.
+- Mimo rozsah: projektová publikace, full/delta otisky, synchronizace vláken a automatické provádění navržených akcí.
+- Závislosti: F-M2-CONTEXT-01 a alespoň jeden povolený backend; před implementací doplnit ADR 0008 o Thread/Message kontrakt, retenci a crash boundaries. Vlákno, jednotlivé run records a projektový index zůstávají oddělené.
+- Akceptace jednoho PR: po pádu je rozlišen poslední potvrzený obsah od draftu a `unknown` běhu, navázání explicitně manifestuje vybrané zprávy, změna backendu/modelu/boundary je viditelná a nevyvolá tichý fallback. Testy pokrývají restart v každém trvalém přechodu, poškozený stav, souběh a oddělení projektů/uživatelů.
+
+#### F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy
+
+- Stav: [ ] [planned]; milník M2/M3; cílová úroveň PoC validated.
+- Původ: uživatelské doplnění plánu 2026-09-15; Git-backed artefakty, provenance a workflow výstupy z roadmapy.
+- Větev: `feature/f-m2-chat-02-project-records`; základ a jediný PR do `develop`.
+- Výstup: explicitní přiřazení vlákna ke konkrétnímu projektu jako navazovatelného živého vlákna; neměnný kompletní nebo rozdílový otisk a samostatné editovatelné Markdown artefakty pro výsledky úkolů, např. oponenturu, brainstormingový souhrn nebo tezi.
+- Mimo rozsah: automatické ukládání každého soukromého chatu do projektu, ukládání credentials/provider session tokenů do Gitu a vydávání rozdílu bez jeho základu za kompletní historii.
+- Závislosti: F-M2-CHAT-01, F-M1-META-01/F-M1-SOURCE-01 podle přijatého kontraktu a standardní Workspace/Journal/Git/index lifecycle.
+- Akceptace jednoho PR: živé vlákno lze po restartu navázat ke správnému projektu; projektová reprezentace editovatelného obsahu je primárně Markdown. Kompletní otisk je samostatně čitelný, rozdílový nese ID/hash základu a odmítne chybějící či neshodný základ. Odvozený artefakt zachová vazbu na vlákno/run/vstupy/manifest a nejpřísnější privacy; expected-HEAD, retry, pád před/po commitu a obnova indexu jsou otestovány.
+
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
 ## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
@@ -144,4 +178,3 @@ Ověření cílového prostředí (2026-09-13): SSH přístup k cílovému route
 Průběžný výsledek M1-07 (2026-09-10, implemented): připraven opt-in HTTPS náhled, přístupový klíč mimo Git, ochrana local-only, bootstrap persistentní identity, systemd nasazení s rollbackem a samostatná routerová dlaždice s dynamickým LXC rozlišením a ověřením TLS. [Návod](docs/lxc-web.md), [ADR 0020](docs/adr/0020-lxc-web-viewer.md). Web zatím pouze čte; nativní editor/tvorba/historie nemají webovou náhradu. Skutečné nasazení a cílová akceptace zůstávají otevřené: SSH přístup k uživatelem určené výchozí bráně jako root byl odmítnut (`Permission denied (publickey,password,keyboard-interactive)`). Na router nebyly přeneseny soubory ani provedeny změny; stav jeho WebApps/Python/LXC a certifikátů nebyl ověřen. Po obnovení SSH přístupu ověřit prostředí a připravit konkrétní nasazení; samostatně doložit restart/změnu IP a ostatní cílové scénáře. Gate M1 zůstává otevřený.
 
 Ověření M1-07 (2026-09-10): závěrečný běh `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v` — **158 testů, 154 prošlo, 4 přeskočeny, bez chyb**, 97,839 s. Testován základ `c2768120bddf5330fee7e90c04ba2d8cf40e191a` plus necommitnuté změny M1-07; nejde o výsledek samotného tohoto commitu. Skutečné Qt/WebEngine včetně webového přihlášení/katalogu/odhlášení, izolovaná instalace/upgrade/odstranění `.deb` a offline testy běžely. Přeskočeny pouze čtyři testy `test_git_comparison` pro nativní libgit2 probe (CAS/restart, clone/merge, HTTP autentizace a nevalidní projekce); bez sestaveného probe zůstávají neověřené. Nové testy ověřují HTTPS/Host/Origin/token, skutečné přesměrování a odmítnutí chybějící CA, ochranu local-only se skutečným Gitem, opakovaný bootstrap identity, změny adres a nedostupnost LXC, opakovanou instalaci/odebrání a návrat souborů při chybě; LXC instalační rollback je ověřen vykonáním shellu s nahrazenými systémovými příkazy, nikoli na skutečném systemd/LXC. První úplný běh odhalil chybějící nový návod v balicím fixture; opraveno a závěrečný běh výše prošel. Ověřena syntaxe JS, shellové instalační plány, lokální odkazy, obsah source allowlistu, finální diff a `git diff --check`. Cílové TLS, procd/lighttpd, restart routeru a změna IP na zařízení zůstávají neověřené; odblokování vyžaduje funkční SSH přístup k potvrzenému routeru a připravené TLS podklady podle návodu.
-
