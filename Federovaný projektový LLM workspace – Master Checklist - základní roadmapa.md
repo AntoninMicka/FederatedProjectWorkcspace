@@ -95,7 +95,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## 2A. Git jako primární projektový datastore
 
-**Stav M0:** autoritativní Git a lokální index jsou přijatý návrh. `spikes/storage.py` má PoC validated obnovu indexu validovaného commitu a kontrolu jeho ID vůči HEAD. Index zatím obsahuje pouze ID/název entity; úplné dotazy nad metadaty a vztahy ani jednotná aplikační operace nejsou hotové.
+**Stav M0/M1:** autoritativní Git a lokální index jsou přijatý návrh; relační projekce metadat a vztahů v1 je lokálně PoC validated dle ADR 0022. F-M1-META-01 upřesňuje význam v1 a navrhuje kompatibilní importní provenance v2 v [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md); v2 parser, index ani migrace nejsou implementovány.
 
 - [ ] Jeden projekt reprezentovat Git repozitářem.
 - [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; minimální project.json/node.json v1 a samostatná validace viz ADR 0004.
@@ -193,6 +193,8 @@ Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavá
 
 ## 3A. Metadata dokumentu
 
+**Stav F-M1-META-01: designed.** Současné `created_at` je vznik entity v projektu a u nativního importu čas importu; `author_id` je projektový aktér/importér, nikoli původní autor zdroje. Podrobná importní provenance vyžaduje verzované schéma v2 podle ADR 0023; v1 zůstává beze změny platné.
+
 - [ ] Každému souboru umožnit přiřadit:
   - [ ] ID,
   - [ ] název,
@@ -200,7 +202,7 @@ Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavá
   - [ ] typ,
   - [ ] autora,
   - [ ] datum vzniku,
-  - [ ] datum importu,
+  - [x] datum importu — designed pro v2 v ADR 0023; implementace a migrace zůstávají otevřené,
   - [ ] zdroj,
   - [ ] URL/reference,
   - [ ] tagy,
@@ -713,7 +715,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 ## Milestone M1 – Single-node project workspace
 
-M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata v1, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15); podrobnější provenance a globální neměnnost zdrojů zůstávají V-04/V-05 v BACKLOG. F-M1-DELETE-01/M1-08 ověřuje bezpečné odstranění Markdown dokumentu, blokování příchozích vztahů, idempotentní recovery a nativní Qt jako lokální PoC; aktuální důkazy drží [TODO](TODO.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata v1, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 upřesňuje v1 a navrhuje podrobnou importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md); implementace v2 a globální neměnnost zdrojů V-05 zůstávají otevřené. Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.

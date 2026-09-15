@@ -85,4 +85,6 @@ M1-04 **reuse/adapt**: ArtifactHistory používá autorizovaný Workspace, Git w
 
 M1-03b **reuse/adapt**: záložky levého panelu používají stejný `result.artifacts` a `main_todo` ze stávajícího projektového čtení. DOM textContent zachovává bezpečné vykreslení názvů/ID, ARIA záložky doplňují klávesnicové přepínání. Bez další knihovny, API, parseru nebo zápisové cesty.
 
-F-M1-DELETE-01/M1-08 **reuse/adapt** existujícího odstranění v Artifacts, Workspace/Journal/Index a nativního potvrzení Qt. Samostatné [akceptační testy](tests/test_artifact_deletion.py) rozšiřují ověření o odstranění sidecar/frontmatter a procesní recovery bez nové storage nebo knihovny. Kontrakt ADR 0003/0016 se nemění; aktuální výsledky drží [TODO](TODO.md).
+F-M1-DELETE-01/M1-08 **reuse/adapt** existujícího odstranění v Artifacts, Workspace/Journal/Index a nativního potvrzení Qt. Samostatné [akceptační testy](tests/test_artifact_deletion.py) rozšiřují ověření o odstranění sidecar/frontmatter a procesní recovery bez nové storage nebo knihovny. Kontrakt ADR 0003/0016 se nemění; výsledky drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15).
+
+F-M1-META-01/V-04 **reuse/adapt** současného striktního validátoru metadat, importního request digestu, Git blobů a Workspace/Journal/Index recovery. Designed výstup [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md) nepřidává parser, storage ani externí závislost; zachovává v1 a vyhrazuje novou verzi pro podrobnou importní provenance. Implementace v2 a migrace jsou samostatná navazující feature.

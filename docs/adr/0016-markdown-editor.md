@@ -92,6 +92,6 @@ artefaktu. Samostatné testy [test_artifact_deletion.py](../../tests/test_artifa
 ověřují sidecar/frontmatter, vztahy v artefaktech i registrech, ochranu cizích
 změn, receipt a skutečný Qt dialog. Procesní přerušení pokrývají také jednotlivé
 souborové změny a atomickou publikaci relačního indexu. Aktuální akceptaci a
-omezení drží [F-M1-DELETE-01/M1-08](../../TODO.md). Dílčí backendové ověření odstranění
+omezení drží [F-M1-DELETE-01/M1-08](../../WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). Dílčí backendové ověření odstranění
 a blokování příchozího vztahu je součástí uzavřené indexní dávky
 [F-M1-INDEX-01](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15).

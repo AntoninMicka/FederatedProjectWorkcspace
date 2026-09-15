@@ -161,7 +161,7 @@ Při přerušené operaci použijte **Zopakovat smazání** nebo **Znovu načís
 Načtení dokončí již připravenou operaci; není to její zrušení ani rollback.
 Nový, dosud neuložený dokument se nemaže touto operací. Webový náhled nemá
 novou mazací route. Lokální ověření včetně skutečného Qt a procesní recovery
-dokládá [F-M1-DELETE-01/M1-08](../TODO.md). Smazaný dokument se v editorové
+dokládá [F-M1-DELETE-01/M1-08](../WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). Smazaný dokument se v editorové
 historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git historii.
 
 ## Import původních zdrojů

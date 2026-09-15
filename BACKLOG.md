@@ -13,17 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-IMPORT-01 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je jediná plánovaná dávka v [TODO](TODO.md); implementace této dávky nezahájena.
-
-### F-M1-META-01 — Přesný kontrakt metadat a importní provenance
-
-- Stav: [ ] [planned]; milník M1; cílová úroveň designed.
-- Původ: V-04, společná metadata a importní evidence z roadmapy; aktuální otevřený rozsah V-04 zůstává níže pod původním ID.
-- Větev: `feature/f-m1-meta-01-contract`; základ a jediný PR do `develop`.
-- Výstup: schválený kontrakt povinných/volitelných polí a evidence importéra, původního autora, času importu a podrobné provenance, s rozlišením současného v1 a požadovaného rozšíření.
-- Mimo rozsah: externí konektory, plošná migrace Git dat a implementace nové verze schématu bez rozhodnutí.
-- Závislosti: importní a indexní kontrakty v `develop`; zachování dosavadních dat/ID a kompatibility.
-- Akceptace jednoho PR: konzistence DATA_MODEL/validátoru/ADR, konkrétní příklady pro artefakt a registry i import, rozhodnutí o potřebě nové verze a popis případné migrace/recovery. Návrh sám není implementovaná provenance.
+F-M1-IMPORT-01, F-M1-INDEX-01/V-03 a F-M1-DELETE-01/M1-08 jsou uzavřeny ve [WORK_LOG](WORK_LOG.md); poslední z nich doloženě začlenil PR #17 (`ab296fd`). F-M1-META-01/V-04 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
 
 ### F-M1-SOURCE-01 — Kontrakt neměnnosti a verzování zdrojů
 
@@ -45,12 +35,21 @@ F-M1-IMPORT-01 je uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-i
 - Závislosti: příslušné M1 gates a kontrakty ADR 0008; frontu lze posunout podle doložených závislostí, ne automaticky začít M2.
 - Akceptace jednoho PR: exact bytes/digests, změna HEAD/oprávnění mezi výběrem a použitím, zákaz local-only exportu a implicitního fallbacku, testy chybových cest a dokumentace.
 
+### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
+
+- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
+- Původ: uživatelské doplnění plánu 2026-09-15; Ollama a execution boundaries z roadmapy/ADR 0008.
+- Větev: `feature/f-m2-ollama-01-locality`; základ a jediný PR do `develop`.
+- Výstup: Ollama adapter a binding, který prokazatelně rozliší `same-node` proces od privátního LAN endpointu; LAN cíl má samostatně rozhodnutou trust boundary, identitu cíle a transportní policy.
+- Mimo rozsah: obecná federace, automatické hledání nedůvěryhodných služeb a cloud fallback.
+- Závislosti: Backend/Context Manifest kontrakt ADR 0008 a F-M2-CONTEXT-01; před implementací zaznamenat rozšíření execution boundary v ADR.
+- Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
+
 ## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
-- [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje. Předání F-M1-IMPORT-01 (2026-09-14): created_at označuje okamžik importu, author_id lokálního importéra; samostatné imported_at ani původní autor zdroje nebyly přidány.
 - [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu. Předání F-M1-IMPORT-01 (2026-09-14): nativní editor source neupravuje a nová importovaná verze má nové UUID; globální ochrana před externími Git úpravami není součástí importní dávky.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
 - [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními. Zahrnout uzlové creation receipts a osiřelé staging složky M1-02; konfliktní pending vytvoření potřebuje explicitní bezpečné zrušení/řešení, které zatím nemá UI.
@@ -70,16 +69,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 ### Navazující konverzační feature dávky
 
 Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek výše. Před aktivací ověřit skutečné závislosti a aktualizovat ADR 0008; názvy větví jsou návrhy, větve ani PR nebyly vytvořeny.
-
-#### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
-
-- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; Ollama a execution boundaries z roadmapy/ADR 0008.
-- Větev: `feature/f-m2-ollama-01-locality`; základ a jediný PR do `develop`.
-- Výstup: Ollama adapter a binding, který prokazatelně rozliší `same-node` proces od privátního LAN endpointu; LAN cíl má samostatně rozhodnutou trust boundary, identitu cíle a transportní policy.
-- Mimo rozsah: obecná federace, automatické hledání nedůvěryhodných služeb a cloud fallback.
-- Závislosti: Backend/Context Manifest kontrakt ADR 0008 a F-M2-CONTEXT-01; před implementací zaznamenat rozšíření execution boundary v ADR.
-- Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
 
 #### F-M2-CHAT-01 — Lokálně perzistentní živé konverzace
 

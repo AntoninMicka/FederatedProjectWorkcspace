@@ -38,8 +38,9 @@ Vztahy jsou pouze explicitně uložené směrované hrany. Pořadí a duplicity 
 i štítků se zachovají; nejsou zakázané schématem v1. Cykly a vlastní neprázdné
 typy vztahů se nezpřísňují. Doporučené typy nejsou validační allowlist a inverzní
 vztahy se nevytvářejí automaticky. V1 přijímá přesně `type` a `target_id`;
-`note` není implementované pole. Tímto ADR se nerozšiřuje schéma ani nedokončuje
-podrobnější provenance nebo celoživotní neměnnost zdrojů V-04/V-05.
+`note` není implementované pole. Tímto ADR se nerozšiřuje schéma. Podrobnější
+provenance v2 je pouze designed v [ADR 0023](0023-metadata-and-import-provenance.md)
+a její indexace není implementovaná; celoživotní neměnnost zdrojů zůstává V-05.
 
 ## Čtení a aplikační hranice
 
