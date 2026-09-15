@@ -62,7 +62,11 @@ Ověření konfigurace nepotvrzuje existenci klíče, autentizaci, RBAC ani shod
 
 ## Společná metadata
 
-Povinná pole: `schema_version` (1), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID).
+Spustitelné schéma v1 přesně odpovídá `spikes/metadata.py`. Povinná pole: `schema_version` (1), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID). Registry navíc povinně obsahují `status` a `body`; `relations` zůstávají volitelné i u registrů.
+
+`created_at` označuje vznik entity v projektu. U dnešního nativního importu je zároveň časem importu, nikoli doloženým časem vzniku externího díla. `author_id` je projektový aktér, který entitu vytvořil nebo import spustil, nikoli automaticky původní autor. `source_url` je pouze volitelný locator a `provenance` hrubá třída, ne kompletní auditní manifest.
+
+Podrobná importní provenance vyžaduje schéma v2, protože v1 odmítá neznámá pole. Navržený podmíněný blok `import` nese `imported_at`, `imported_by`, SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. Přesný kontrakt, příklady, kompatibilitu a recovery stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V2 zatím není implementováno a existující v1 data se automaticky nemigrují.
 
 ### Definice vazeb mezi entitami
 

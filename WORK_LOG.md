@@ -5,6 +5,22 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-DELETE-01 — Ověření bezpečného odstranění dokumentu — 2026-09-15
+
+Dávka uzavřena po doloženém začlenění PR #17 jako squash commit `ab296fd` v `develop`; původní pracovní větev byla `F-M1-DELETE-01/M1-08`. Archivace evidence a aktivace další dávky probíhá na `feature/f-m1-meta-01-contract`; není novým během testů ani uzavřením Gate M1.
+
+- [x] [completed] **M1-08 — Bezpečné odstranění dokumentu (PoC validated, 2026-09-15).** Nativní editor vyžaduje potvrzení; Artifacts odstraní verzovaný Markdown dokument a sidecar/frontmatter jednou Workspace operací, zachová Git historii, odmítne příchozí strukturované vztahy a neplatný kandidátní snapshot. Retry používá stejný operation ID/receipt, writer lock, expected HEAD, CAS a recovery dle ADR 0003/0016.
+- [x] [completed] **Akceptační a recovery ověření (PoC validated, 2026-09-15).** Sidecar/frontmatter, vlastněné cesty, zachování ostatních entit/historie, příchozí vztahy z artefaktů i registrů, self/outgoing vztahy, hlavní TODO, stale/dirty/staged/busy, neplatné vstupy/snapshot, odmítnutí sources a skutečný Qt cancel/retry/reload byly ověřeny.
+
+Osmnáct procesních přerušení sidecaru a sedmnáct frontmatteru (35 hranic včetně `before-ref` a pěti indexových checkpointů) skončilo po native open jedním commitem a indexem bez odstraněného UUID. Receipt zajistil idempotentní retry; cizí znovuvytvořený soubor při pending zůstal zachován a recovery odmítla pokračovat.
+
+Ověření na finálním obsahu dávky:
+
+- `M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_artifact_deletion -v`: 9 testů prošlo (16,350 s).
+- `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v`: 204 testů prošlo za 133,575 s, 4 volitelné libgit2 testy přeskočeny. Skutečné Qt/WebEngine, izolované balení/instalace a offline testy byly zapnuté.
+
+Omezení: lokální Linux PoC bez cílového LXC/routerového ověření, výpadku napájení nebo přerušení uvnitř libovolného Git/SQLite syscallu. Koš, UI obnovy odstraněných dokumentů, mazání sources a federovaná synchronizace nebyly součástí dávky. Gate M1 zůstává otevřený.
+
 ## F-M1-INDEX-01 — Relační projekce projektového indexu — 2026-09-15
 
 Dávka uzavřena po doloženém začlenění PR #16 v lokálním `develop` (`948bf69`); feature větev `feature/f-m1-index-01-relations` končí `22d5098`. Porovnání implementace, testů a ADR 0022 mezi feature větví a `develop` je bez rozdílu. Archivace je dokumentační předání, nikoli nový běh testů ani uzavření Gate M1.

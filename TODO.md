@@ -3,33 +3,32 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M1-DELETE-01: Ověření bezpečného odstranění dokumentu
+# TODO — F-M1-META-01: Přesný kontrakt metadat a importní provenance
 
 Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M1-DELETE-01 — Ověření bezpečného odstranění dokumentu
+## F-M1-META-01 — Přesný kontrakt metadat a importní provenance
 
-- Stav: [x] [completed]; milník M1; cílová úroveň PoC validated.
-- Původ: M1-08, konzistence po smazání v M1; ADR 0003/0016.
-- Skutečná větev: `F-M1-DELETE-01/M1-08`, vytvořená uživatelem; čistý pracovní strom při zahájení, základ `develop` (`948bf69`), přípravný commit `f2ccc1a`. Jediný PR do `develop`; není vytvořen.
-- Výstup: ověření existující implementace odstranění a opravy nutné pro její akceptaci.
-- Mimo rozsah: koš, UI obnovy historie, mazání sources, federovaná synchronizace.
-- Závislosti: existující Artifacts/Workspace v `develop`; relační kontrakt F-M1-INDEX-01, pokud jej dokončení ovlivní.
-- Akceptace jednoho PR: sidecar/frontmatter, blokování příchozích vztahů, stale/dirty, retry a procesní přerušení, skutečný Qt, celá sada a dokumentace.
+- Stav: [x] [completed]; milník M1; cílová úroveň designed.
+- Původ: V-04, společná metadata a importní evidence z roadmapy; uživatelské pokračování na další úkol 2026-09-15.
+- Skutečná větev: `feature/f-m1-meta-01-contract`, vytvořená z čistého `develop` (`5a3529d`) po doloženém začlenění F-M1-DELETE-01 v PR #17 (`ab296fd`). Jediný PR do `develop`; není vytvořen.
+- Výstup: přesný význam povinných/volitelných polí v1 a navržený verzovaný kontrakt v2 pro importéra, původního autora, čas importu, hash a další doloženou provenance.
+- Mimo rozsah: implementace parseru/indexu/importéru v2, plošná migrace Git dat, externí konektory a vynucení celoživotní neměnnosti zdrojů.
+- Závislosti: importní/indexní kontrakty v `develop`; zachování existujících dat, ID a validního v1.
+- Akceptace jednoho PR: konzistence DATA_MODEL/validátoru/ADR, konkrétní příklady pro artefakt a registry i import, rozhodnutí o nové verzi a popis migrace/recovery. Návrh sám není implementovaná provenance.
 
-- [x] [completed] **M1-08 — Bezpečné odstranění dokumentu (implemented, 2026-09-14; částečně ověřeno indexní dávkou).** Navazující otevřený požadavek M1 na konzistenci po smazání. Nativní editor vyžaduje potvrzení, Artifacts odstraní verzované soubory dokumentu a metadata jednou Workspace operací; zachová Git historii, odmítne příchozí strukturované vztahy a neplatný výsledný snapshot ještě před přípravou journalu. Reuse stávajícího writer locku, CAS, operation_id/receipt a recovery podle ADR 0003/0016; opakování smazání používá stejný operation_id. Podmínka dokončení: cílené testy sidecar/frontmatter, vztahů, stale/dirty, retry a procesních přerušení; celá sada a ověření Qt. Původní implementační krok neměl samostatné ověření. F-M1-INDEX-01 dříve doložila backendové odstranění a blokování příchozího vztahu; tato dávka nyní ověřila všechny své akceptační scénáře. Gate M1 zůstává otevřený.
+- [x] [completed] **V-04 — Sjednotit přesný kontrakt metadat (designed, 2026-09-15).** `spikes/metadata.py` zůstává autoritou spustitelného v1: registry povinně nesou `status`/`body`, zatímco `relations` jsou volitelné. `created_at` je vznik entity v projektu a u nativního importu čas importu; `author_id` je projektový aktér/importér, nikoli původní autor. Neznámá provenance se nevymýšlí.
+- [x] [completed] **F-M1-META-01-A — Rozhodnout verzi a importní evidenci (designed, 2026-09-15).** Striktní v1 se nemění; podrobná evidence vyžaduje v2 s podmíněným objektem `import`: povinné `imported_at`, `imported_by`, `content_sha256`, `importer.name`, volitelné doložené `source_author`, `source_created_at`, `source_revision` a `importer.version`. `source_url` zůstává volitelným top-level locatorem.
+- [x] [completed] **F-M1-META-01-B — Vymezit kompatibilitu a recovery (designed, 2026-09-15).** Budoucí čtenář v2 podporuje smíšený validovaný snapshot v1/v2; automatická plošná migrace se neprovádí. Explicitní migrace doplní jen doložitelné hodnoty a použije expected HEAD, writer lock, validaci kandidáta, journal před CAS, commit, index/recovery a receipt dle ADR 0003.
 
-### Základ a postup
+### Výsledek a ověření — 2026-09-15
 
-- Závislost F-M1-INDEX-01 je začleněna v lokálním `develop` (`948bf69`, PR #16). Současná implementace odstranění se nepřepisuje bez zjištěné chyby.
-- Nejbližší úkol je M1-08 výše: doplnit chybějící cílené/recovery/Qt scénáře a teprve podle výsledků provést nutné opravy. Hranice ADR 0003/0016 zůstávají výchozím kontraktem.
+- Kontrakt a příklady: [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md); souhrn současného v1 a navrženého v2: [DATA_MODEL](DATA_MODEL.md).
+- Reuse/adapt stávajícího striktního validátoru, nativního importního request digestu, Git blobů a Workspace/Journal/Index lifecycle. Nový parser, storage ani externí komponenta se pro designed výstup nezavádí.
+- Věcná kontrola proti `spikes/metadata.py`, `spikes/source_import.py`, `spikes/storage.py` a jejich testům potvrzuje popsané současné chování v1. Aplikační kód, schéma a testy nebyly změněny; celá testovací sada se proto neopakovala.
+- Omezení: v2 je pouze designed. Současný import nadále zapisuje v1 bez `import` bloku; parser i index v2 odmítají jako neznámou verzi. Implementace a migrační/recovery testy vyžadují samostatnou navazující feature. Gate M1 zůstává otevřený.
 
-### Ověření M1-08 — 2026-09-15
+## K předání do backlogu
 
-- Reuse stávající implementace bez změn aplikačního kódu; crash boundaries a recovery podle ADR 0003/0016 zůstávají beze změny.
-- `M0_DESKTOP_TEST=1 QT_QPA_PLATFORM=offscreen python3 -m unittest tests.test_artifact_deletion -v`: 9 testů prošlo (16,350 s). Sidecar/frontmatter, přesné odstranění vlastněných cest a zachování historie/ostatních entit, příchozí vztahy z artefaktů i registrů, self/outgoing vztahy, opětovné vytvoření hlavního TODO, stale/dirty/staged/busy, neplatné vstupy/snapshot a odmítnutí sources.
-- Procesní `os._exit(73)` na 18 hranicích sidecaru a 17 frontmatteru (35 přerušení), včetně `before-ref` a pěti checkpointů indexu: native open dokončí jeden commit, index neobsahuje odstraněné UUID, receipt zajistí idempotentní retry i po pozdějším commitu. Cizí znovuvytvořený soubor při pending zůstane zachován a recovery odmítne pokračovat.
-- Skutečný Qt dialog: prostý text a výchozí Cancel, zrušení zachová draft i HEAD, potvrzení po ztracené odpovědi zachová původní operation_id pro retry, úspěch obnoví seznam a vyšle saved; reload dokončí operaci přerušenou v prepared.
-- `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v`: 204 testů prošlo za 133,575 s, 4 volitelné libgit2 testy přeskočeny. Skutečné Qt/WebEngine, izolované balení/instalace a offline testy byly zapnuté.
-- Omezení: pouze lokální Linux PoC. Bez cílového LXC/routerového ověření, výpadku napájení či přerušení uvnitř libovolného Git/SQLite syscallu. Koš, UI obnovy odstraněných dokumentů a mazání sources nejsou součástí dávky. Gate M1 zůstává otevřený.
+- [ ] [planned] **F-M1-META-02 — Implementovat importní provenance v2 (cílová úroveň: PoC validated).** Implementovat souběžné čtení v1/v2 v parseru a indexu, zápis nových importů v2, explicitní migraci pouze doložitelných v1 importů a UI zobrazení všech dostupných provenance polí. Podmínka dokončení: striktní formát/limity, smíšený snapshot, původní bajty/hash, odmítnutí vymyšlených hodnot, expected-HEAD/retry/receipt, procesní recovery před/po commitu, atomická indexace/migrace, skutečný Qt a celá sada. Jde o samostatnou budoucí feature, nikoli podmínku dokončení designed dávky F-M1-META-01.
