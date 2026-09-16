@@ -110,3 +110,76 @@ SQLite obsahuje lokálně obnovitelnou projekci metadat a cest entit, štítků 
 Sidecar má `file` jako jeden název souboru ve stejném adresáři; adresář musí obsahovat právě obsah a metadata.json. Markdown s frontmatterem je jediný soubor svého adresáře. U neměnného Markdown zdroje se projektová metadata čtou pouze ze sidecaru a původní frontmatter je součástí neinterpretovaného zdroje.
 
 Projekce má v PoC limit 16 MiB na soubor, 64 MiB celkem a 10 000 souborů. Minimální project.json/node.json v1 validuje samostatně `spikes/configuration.py`; integrace do storage lifecycle a další konfigurace zůstávají otevřené. Journal podporuje připravené vytvoření, úpravu, přejmenování a smazání souborů s následnou obnovou; podrobnosti a omezení viz [ADR 0002](docs/adr/0002-metadata-journal.md).
+
+## Plánované rozšíření: externí vztahy a řízené sdílení
+
+**Návrhové podklady pro budoucí kontrakt, nikoli implementované schéma v1.** Následující entity a pole dosavadní validátor nepodporuje. Před zavedením vyžadují verzovaný kontrakt, migrační rozhodnutí a testy (BACKLOG ER-01); nelze tiše měnit `STATES`, povinná pole nebo chování starých projektů. Rozsah a návaznost drží sekce 22 master roadmapy.
+
+### Entity a vlastnictví údajů
+
+| Entita / pohled | Účel a hranice |
+| --- | --- |
+| Person | Stabilní UUID osoby; kontaktní adresy jsou atributy se zdrojem, nikoli identita nebo důkaz ověření. |
+| Organization | Samostatné UUID organizace, identifikátory a provenance; příslušnost ke skupině nezpřístupňuje data ostatním členům. |
+| Relationship | Vazba osoba–organizace či partner–projekt, role, platnost od/do a zdroj; historické příjemce nelze odvozovat z dnešního pracovního místa. |
+| Counterparty | Role osoby nebo organizace v konkrétním vztahu. Nemá vytvářet duplicitní kontakt ani automatické RBAC členství. |
+| Meeting | Projekt, pozvaní a skuteční účastníci, agenda, revize decku, interní poznámky, policy a follow-up vazby. |
+| DisclosureEvent | Samostatná událost předání, přijetí nebo opravy s důkazem, rozsahem a neměnnou referencí na obsah. |
+| PresentationSession | Trvalý záznam relace: deck, publikum, verze policy, navštívené revize, expozice a návratový bod; UI je projekce. |
+
+Kandidátní registry mají zachovat konvenci `registries/<kind>/<UUID>.json`; konečné názvy a stavy uzavře návrhový kontrakt. Tato dokumentační změna je nezakládá. Definice decku a slidy jsou verzované artefakty, ne kopie v odděleném prezentačním úložišti.
+
+Soukromý katalog může mít vlastní autoritativní privátní repozitář. Projekt dostane jen autorizované reference nebo projekce; globální vyhledávání je nesmí spojovat bez oprávnění. Meziprojektová reference potřebuje ID repozitáře a entity, ne jen lokální UUID. Stávající validátor vztahů umí pouze lokální cíle; tuto mezeru nelze řešit automatickým kopírováním neveřejných osob nebo falešnými placeholder entitami.
+
+### Tři nezávislé osy
+
+- `privacy`: stávající public/project/confidential/local-only a navazující RBAC určují povolenou hranici přenosu.
+- `exposure_class`: green/orange/red je prezentační varování pro zkontrolovanou revizi a daný kontext, nikoli nové oprávnění nebo náhrada privacy.
+- Evidence sdílení: příjemce, revize, rozsah, kanál a spolehlivost dokladu. „Již předáno“ nezmění citlivost obsahu a neznamená, že příjemce obsah četl.
+
+Hlavní deck může být celý green po kontrole; neznámá klasifikace ani změna revize nesmí mít implicitní povolení. Stav public nevzniká odesláním jedné firmě. Evidovaná veřejná publikace má vlastní rozsah, revizi a zdroj; sama neprokazuje přečtení konkrétní osobou.
+
+### Reference na to, co skutečně odešlo
+
+| Skupina polí | Požadovaný význam |
+| --- | --- |
+| Identita události | UUID události, operation ID, původní node/actor, směr inbound/outbound, čas události a čas záznamu. |
+| Publikum | Konkrétní osoby či kontaktní body známé v okamžiku předání; organizace jako kontext. Skupinová adresa nebo neznámí posluchači zůstávají explicitně neurčení. |
+| Revize | ID projektu/repozitáře, artifact ID, úplný Git commit ID včetně typu hashe; čitelný revision label je jen doplněk. |
+| Payload | Archivovaný přesný předaný nebo renderovaný snapshot, jeho ID a digest s algoritmem, včetně použitých assetů. |
+| Rozsah | `full / excerpt / summary / derived`, identifikátor slidu, výřezu či claimu a odkazy na konkrétní revize zdrojů. |
+| Kontext | Schůzka nebo komunikační operace, kanál, účel, klasifikace a verze policy, výsledek autorizace a případného potvrzení. |
+| Důkaz | Typ pozorované události, stav známý/neověřený a reference na doklad; oprava odkazuje na původní událost a uvádí důvod. |
+| Přijaté podmínky | Zdroj příchozí informace a případná omezení použití nebo dalšího předání; nepřepisovat je odchozí prezentační barvou. |
+
+Commit zdroje sám nepopisuje vyrenderovanou prezentaci nebo přeposlaný e-mail. Zdrojové reference a předaný payload se proto vedou odděleně; sdílení shrnutí nezpřístupňuje celý model. Živá externí data se před prezentací zachytí do snapshotu, nebo se záznam označí za nereprodukovatelný. Retence musí chránit odkazované revize a snapshoty před neúmyslným zánikem; hash bez dostupných bajtů není archiv.
+
+Auditní události se přidávají po souborech s deduplikací podle ID. Oprava, supersession nebo revokace je nová událost; revokace nevrací již předaný obsah. Aplikační append-only nebrání správci přepsat Git historii. Požadavky na podpisy, checkpointy a řízenou retenci jsou samostatný bezpečnostní návrh.
+
+Příprava ani export nejsou předáním. Potvrzení audience rendereru dokládá zobrazení aplikací, nikoli pozornost lidí. SMTP přijetí není přečtení; doručenky a přístupy jsou další doklady, nikoli změna minulého faktu. Ústní sdělení je ruční záznam s určeným autorem a mírou jistoty.
+
+### Relace Presenteru a odvozené pohledy
+
+Globální expozici lze reprezentovat celými půlkroky: green 0, orange 1, red 2; UI zobrazuje 0 / 0,5 / 1 stupně. Součet, prahy a historie jsou deterministické. Počítá se potvrzený nový payload nebo rozsah pro aktuální publikum, ne kliknutí v privátním preview. Opakované promítnutí se zaznamená, ale stejný payload v téže relaci se nezapočítá znovu. Změna účastníků a nové revize vyžadují nové posouzení.
+
+Relace se po pádu obnoví ze záznamů, ne z vynulovaného UI. Zavření backupu nesnižuje skóre. Oprava chybného záznamu může opravit odvozený výsledek, ale musí zůstat vysvětlitelná. Historie předchozích schůzek se zobrazuje zvlášť; badge známé revize nesnižuje její klasifikaci. Při neúplné federované historii se uvádí „neověřeno“, nikoli „dosud nesdíleno“.
+
+Diff má primárně porovnávat skutečně předané výřezy a payloady. Změna neveřejné části zdrojového modelu sama není nově odhalená informace. LLM může rozdíl vysvětlit, ale nesmí bez potvrzení prohlásit novou revizi za již sdílenou.
+
+### Autorita mailu, kalendáře a kontaktů
+
+| Data | Navržená autorita / uložení |
+| --- | --- |
+| Projektově přijatá zpráva, příloha, agenda, poznámka, disclosure event | Vybraný Git artefakt nebo registr; SQLite jen obnovitelný projektový index. |
+| Celá mailbox cache, mailový vyhledávací index a synchronizační kurzory | Oddělený lokální stav adaptéru navázaný na poskytovatele, nikoli celý projektový Git. |
+| Neodeslaný koncept, odchozí fronta a neurčitý výsledek odeslání | Trvalý lokální autoritativní stav s obnovou a zálohou; nikoli zahoditelná cache. |
+| IMAP složky/zprávy, CalDAV události, vzdálené CardDAV kontakty | Explicitní mapování vzdálených zdrojů a konfliktní synchronizace; zdroj pravdy pro jednotlivá pole a operace určí adaptér. |
+| Hesla, OAuth refresh tokeny a klíče | Lokální secret store; projekt může nést pouze netajný odkaz, nikoli hodnotu. |
+
+IMAP identifikace používá účet, mailbox, UIDVALIDITY a UID; Message-ID je doplňková korelace pro threading, ne jediný klíč. CalDAV/CardDAV potřebují mapu vzdálených identit, verzí a konfliktů. Kalendář zachová UID, časové pásmo, opakování a změny pozvánek; interní zápis schůzky není stejný objekt jako veřejně sdílený popis události.
+
+Celá schránka se do projektu automaticky nevkládá podle domény odesílatele. Import vybraných zpráv a příloh zachovává původní bajty a provenance; projektové doplnění metadat je oddělené. Rozšíření nad velikostní limity M0 vyžaduje vlastní návrh streamování a úložiště, nikoli tiché zvětšení limitů.
+
+### Obnova na hranici externího účinku
+
+Lokální Git transakce nemůže atomicky potvrdit zároveň SMTP odeslání nebo zobrazení na druhé obrazovce. Před účinkem musí existovat trvalý operation record a připravený přesný payload; po něm doklad výsledku. Pád mezi účinkem a potvrzením vede na explicitní stav unknown, nikoli automatické opakování odeslání nebo vymyšlený úspěch. Recovery nesmí duplikovat disclosure událost; při nejistotě musí UI vyžádat rozhodnutí a konzervativně počítat s možným zpřístupněním.
