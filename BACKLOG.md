@@ -13,17 +13,17 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-IMPORT-01, F-M1-INDEX-01/V-03 a F-M1-DELETE-01/M1-08 jsou uzavřeny ve [WORK_LOG](WORK_LOG.md); poslední z nich doloženě začlenil PR #17 (`ab296fd`). F-M1-META-01/V-04 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
+F-M1-META-01/V-04 je po PR #19 (`9acd0ef`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-meta-01--přesný-kontrakt-metadat-a-importní-provenance--2026-09-15). F-M1-SOURCE-01/V-05 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
 
-### F-M1-SOURCE-01 — Kontrakt neměnnosti a verzování zdrojů
+### F-M1-META-02 — Implementace importní provenance v2
 
-- Stav: [ ] [planned]; milník M1; cílová úroveň designed.
-- Původ: V-05 a neměnné importované zdroje z roadmapy; aktuální otevřený rozsah V-05 zůstává níže pod původním ID.
-- Větev: `feature/f-m1-source-01-versioning`; základ a jediný PR do `develop`.
-- Výstup: rozhodnutá pravidla změn/verzí zdrojů, zachování původních bajtů/UUID a hranice následných zápisů přes Workspace/Journal oproti externím Git úpravám.
-- Mimo rozsah: cloud synchronizace, konektory a globální zákaz externího Git bez konkrétního rozhodnutí.
-- Závislosti: F-M1-META-01 pro provenance kontrakt; existující native import a editor hranice zůstávají zachovány.
-- Akceptace jednoho PR: příklady stejného zdroje/nové verze, povolené změny metadat versus obsahu, konflikt při externí změně a vymezené validační/recovery hranice. Navazující implementace se připraví podle přijatého návrhu, designed výstup se nevydává za vynucenou celoživotní neměnnost.
+- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
+- Původ: odložená implementace F-M1-META-01/V-04 a ADR 0023.
+- Větev: `feature/f-m1-meta-02-provenance-v2`; základ a jediný PR do `develop`.
+- Výstup: souběžné čtení v1/v2 v parseru a indexu, zápis nových importů v2, explicitní migrace pouze doložitelných v1 importů a UI zobrazení provenance.
+- Mimo rozsah: automatická plošná migrace, vymýšlení původního autora/času/revize a externí konektory.
+- Závislosti: ADR 0023 a F-M1-SOURCE-01/ADR 0024; implementaci source transition pravidel koordinovat s F-M1-SOURCE-02 bez duplikace.
+- Akceptace jednoho PR: striktní formát/limity, smíšený snapshot, původní bajty/hash, expected-HEAD/retry/receipt, procesní recovery před/po commitu, atomická indexace/migrace, skutečný Qt a celá sada.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 
@@ -50,7 +50,6 @@ F-M1-IMPORT-01, F-M1-INDEX-01/V-03 a F-M1-DELETE-01/M1-08 jsou uzavřeny ve [WOR
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
-- [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu. Předání F-M1-IMPORT-01 (2026-09-14): nativní editor source neupravuje a nová importovaná verze má nové UUID; globální ochrana před externími Git úpravami není součástí importní dávky.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
 - [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními. Zahrnout uzlové creation receipts a osiřelé staging složky M1-02; konfliktní pending vytvoření potřebuje explicitní bezpečné zrušení/řešení, které zatím nemá UI.
 - [ ] [planned] **V-08 — Zbývající lifecycle konfigurace (cílová úroveň: implemented).** Ověření při otevření je M1-01; vytvoření nového projektu, stabilní lokální author/node/project ID a obnovitelná registrace jsou M1-02 dle ADR 0015. Zbývá registrace již existujícího projektu s jeho původním stavem, změny/migrace konfigurací a vazba identity na credential úložiště. Projektové změny dále vést přes Workspace; index artefaktů není autoritou projektové konfigurace.
@@ -100,7 +99,7 @@ Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek 
 
 Strategický rozsah drží sekce 3C master roadmapy; tyto úkoly nemění prioritu desktopového PoC.
 
-- [ ] [planned] **IMP-01 — Google Drive import (cílová úroveň: implemented).** Ověřit OAuth scopes a výběr souborů, download/export podle typu a limity; navázat na aplikační import a V-04/V-05. Akceptace: binární soubor i nativní Google dokument, provenance exportu, duplicita/nová revize, odvolané oprávnění, rate limit a přerušený přenos bez částečného publikování do projektu. Před zápisy popsat crash boundaries podle ADR 0003.
+- [ ] [planned] **IMP-01 — Google Drive import (cílová úroveň: implemented).** Ověřit OAuth scopes a výběr souborů, download/export podle typu a limity; navázat na aplikační import, designed kontrakty ADR 0023/0024 a jejich implementační dávky. Akceptace: binární soubor i nativní Google dokument, provenance exportu, duplicita/nová revize, odvolané oprávnění, rate limit a přerušený přenos bez částečného publikování do projektu. Před zápisy popsat crash boundaries podle ADR 0003.
 - [ ] [planned] **IMP-02 — NotebookLM import (cílová úroveň: PoC validated).** Určit edici účtu a ověřit dostupné oficiální exporty/API zvlášť pro zdroje, poznámky, generované výstupy a chat. Enterprise preview nepovažovat za obecné API osobního účtu. Akceptace: uživatelem poskytnutý vzorek, zachované dostupné citace/provenance, jasný seznam neimportovatelných částí a funkční souborový fallback tam, kde export existuje. Nezavádět automaticky placenou Enterprise závislost.
 - [ ] [planned] **IMP-03 — Import exportů konverzací (cílová úroveň: implemented).** Získat uživatelem schválené anonymizované vzorky ChatGPT a Gemini/Takeout, ověřit skutečnou strukturu a vytvořit lokální import s náhledem. Akceptace: role/pořadí/větvení podle dostupnosti, chybějící metadata, přílohy, opakovaný import a poškozený archiv; omezit velikost i rozbalení archivu, odmítnout traversal/symlinky a nevykonávat importované HTML. Generační API není předpokládaným zdrojem historie webového účtu.
 

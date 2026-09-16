@@ -40,7 +40,8 @@ typy vztahů se nezpřísňují. Doporučené typy nejsou validační allowlist 
 vztahy se nevytvářejí automaticky. V1 přijímá přesně `type` a `target_id`;
 `note` není implementované pole. Tímto ADR se nerozšiřuje schéma. Podrobnější
 provenance v2 je pouze designed v [ADR 0023](0023-metadata-and-import-provenance.md)
-a její indexace není implementovaná; celoživotní neměnnost zdrojů zůstává V-05.
+a její indexace není implementovaná. Neměnnost zdrojů je designed v
+[ADR 0024](0024-source-immutability-and-versioning.md), ale transition validátor zůstává neimplementovaný.
 
 ## Čtení a aplikační hranice
 

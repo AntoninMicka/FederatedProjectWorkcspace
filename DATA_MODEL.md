@@ -87,6 +87,7 @@ Doporučené typy vztahů:
 - `references` — A pouze odkazuje na B bez silné závislosti.
 - `cites` — A cituje B.
 - `derived_from` — A vzniklo z B nebo je transformací B.
+- `supersedes` — nový source artefakt nahrazuje uvedenou předchozí verzi; předchozí artefakt se nemění.
 - `implements` — A realizuje zadání nebo návrh popsaný v B.
 - `produces` — A vytváří, generuje nebo odvozuje B.
 
@@ -97,6 +98,8 @@ Registry: JSON objekt pro každou entitu, společná metadata plus `status`, `bo
 ## Konzistence
 
 Smazání prověřuje příchozí vztahy. Přejmenování obsahu a změna pole `file` patří do stejného commitu. Zachování obou konfliktních verzí vytváří nové ID pro kopii a vyžaduje rozhodnutí o odkazech. Změna–smazání vyžaduje volbu člověka.
+
+U `kind: source` jsou obsahové bajty, basename v `file`, identita a importní provenance neměnné pod jedním UUID. Nové bajty se ukládají jako nový artefakt s novým UUID a volitelným vztahem `supersedes` na předchůdce. Běžné projektové anotace lze měnit samostatným commitem; přesná pravidla, transition validace a recovery jsou v [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Současný snapshot validátor tato historická pravidla ještě nevynucuje.
 
 SQLite obsahuje lokálně obnovitelnou projekci metadat a cest entit, štítků a směrovaných vztahů a jeden commit ID pro celý snapshot; neobsahuje jedinou kopii uživatelských dat. Migruje se z validovaného HEAD atomicky, samostatně od Git schématu a journalu, viz [ADR 0022](docs/adr/0022-relational-index.md). Při selhání validace nový index nepublikovat. MVP nepotřebuje sdílenou SQLite databázi ani synchronizaci jejího souboru.
 

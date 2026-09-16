@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-META-01 — Přesný kontrakt metadat a importní provenance — 2026-09-15
+
+Dávka uzavřena po doloženém začlenění PR #19 jako squash commit `9acd0ef` v `develop`; feature větev `feature/f-m1-meta-01-contract` končí `da7647a`. Šlo o designed dokumentační výstup bez změny aplikačního kódu nebo schématu.
+
+- [x] [completed] **V-04 — Přesný kontrakt metadat v1 (designed, 2026-09-15).** Registry povinně nesou `status`/`body`, `relations` jsou volitelné. `created_at` je vznik entity v projektu a u nativního importu čas importu; `author_id` je projektový aktér/importér, nikoli původní autor. Spustitelný validátor v1 zůstal beze změny autoritou současného formátu.
+- [x] [completed] **F-M1-META-01-A/B — Importní provenance, kompatibilita a recovery (designed, 2026-09-15).** [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md) vyhrazuje v2 s podmíněným `import` blokem, zachovává smíšené v1/v2 čtení a zakazuje vymýšlení chybějící provenance. Explicitní migrace použije standardní expected-HEAD/Journal/CAS/index/receipt recovery.
+
+Kontrola proti `spikes/metadata.py`, `spikes/source_import.py`, `spikes/storage.py` a testům potvrdila popsané v1. Oba JSON příklady, lokální odkazy a `git diff --check` prošly; celá testovací sada se neopakovala, protože se kód, testy ani konfigurace nezměnily. Implementace v2, migrace a jejich recovery testy zůstávají F-M1-META-02; Gate M1 zůstává otevřený.
+
 ## F-M1-DELETE-01 — Ověření bezpečného odstranění dokumentu — 2026-09-15
 
 Dávka uzavřena po doloženém začlenění PR #17 jako squash commit `ab296fd` v `develop`; původní pracovní větev byla `F-M1-DELETE-01/M1-08`. Archivace evidence a aktivace další dávky probíhá na `feature/f-m1-meta-01-contract`; není novým během testů ani uzavřením Gate M1.
