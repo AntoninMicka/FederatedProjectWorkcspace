@@ -92,3 +92,5 @@ Budoucí v2 registr s `provenance: external` použije stejný `import` blok. Kon
 - Index musí být před nasazením v2 aktualizován tak, aby neznámou verzi odmítl nebo v2 celou projektoval podle nového indexového schématu. Nesmí vydat částečnou v2 provenance ani starý index jako aktuální.
 
 Implementace parseru, indexu, importéru, migrace a jejich testy je samostatná navazující feature. F-M1-META-01 uzavírá pouze přesný v1 kontrakt a návrh kompatibilního v2.
+
+Neměnnost hodnot v `import` bloku a vytváření nového source UUID při změně bajtů vymezuje navazující [ADR 0024](0024-source-immutability-and-versioning.md).

@@ -14,7 +14,7 @@ Datum: 2026-09-09. Stav: přijato, **designed**, podložené uvedenými PoC. Uza
 | Aplikační jádro desktopu a serveru | Python 3.11+, jeden aplikační backendový proces | Zachovat validátory a koordinovaný Workspace. Linux crash/CAS testy ADR 0003, uživatelské headless demo na Omnia ARMv7 a SSD ve WORK_LOG. |
 | Projektové úložiště | Git CLI | ADR 0005 porovnalo Git CLI a libgit2; port nepřinesl doloženou potřebu přepsat koordinaci. Git zůstává autorita. |
 | Lokální persistence | Python sqlite3, oddělený index a journal | ADR 0002/0003: index obnovitelný z validovaného commitu, journal autorita nedokončených operací mimo Git. |
-| Metadata | Stávající omezené JSON/YAML validátory, PyYAML 6.0.3 | Zachovat ověřené schéma a parserové limity; rozšíření v M1 musí řešit V-04/V-05 explicitně. |
+| Metadata | Stávající omezené JSON/YAML validátory, PyYAML 6.0.3 | Zachovat ověřené schéma a parserové limity; V-04/V-05 jsou designed v ADR 0023/0024, jejich implementace zůstává samostatnou prací. |
 | Desktop | PySide6 + Qt 6 WebEngine | ADR 0010: skutečný callback, token interceptor, start/zavření/restart a pád rendereru; měření zahrnuje Chromium potomky. |
 | Sdílené UI | HTML/CSS/JavaScript přes same-origin loopback HTTP | ADR 0006/0007/0010: token pouze v nativní vrstvě. Stávající statické UI je základ pro Project/Artifact služby, nikoli hotový editor. |
 | První distribuční cíl | Linux; .deb se systémovými dynamickými závislostmi | Ubuntu 26.04 arm64 čistá instalace a offline upgrade/purge dle ADR 0012. Debian 13 x86_64 má oddělené uživatelské potvrzení, ne stejný automatický důkaz. |

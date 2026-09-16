@@ -17,10 +17,12 @@ obsahu, nikoli autoritou interních metadat. Původní soubor se nemaže.
 Nový artefakt má kind=source a provenance=external. created_at je čas vytvoření
 importovaného artefaktu a author_id místní importer, ne tvrzení o původním
 externím autorovi/datu. Nepřidává se imported_at ani nový provenance manifest;
-širší V-04/V-05 tím nejsou uzavřené. SHA-256 je součástí místního operation
+jejich budoucí v2 kontrakt popisuje ADR 0023. SHA-256 je součástí místního operation
 intent, nikoli nové sidecar schema field. Obsah zdroje není editovatelný
-nativním Markdown editorem; novou verzi importujte jako nový zdroj. Toto není
-globální zákaz přímých Git úprav nebo všech obecných Workspace změn.
+nativním Markdown editorem; novou verzi importujte jako nový zdroj. Cílová
+pravidla neměnných bajtů, nového UUID a vztahu `supersedes` popisuje
+[ADR 0024](adr/0024-source-immutability-and-versioning.md). Transition validátor
+proti přímým Git úpravám zatím není implementován.
 
 Privacy má výchozí project. Local-only respektuje stávající síťovou hranici a
 může znepřístupnit celý projekt přes web; historický public-only Git přenos
@@ -46,4 +48,6 @@ Automatická deduplikace ani durable outbox pro dosud nepřipravený import nejs
 součástí první verze. Symlinky a změna stat údajů zdroje během čtení se odmítají;
 nejde o sandbox proti závodícímu nekooperačnímu procesu.
 
-Implementace je neověřená: nové testy ani skutečný GUI/import běh nebyly spuštěny.
+Import je lokálně PoC validated; aktuální důkazy a omezení drží
+[F-M1-IMPORT-01 ve WORK_LOG](../WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14).
+Designed pravidla ADR 0024 sama nedokládají jejich budoucí vynucení.
