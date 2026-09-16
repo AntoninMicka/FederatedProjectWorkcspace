@@ -12,6 +12,8 @@ Tento dokument drží strategii, milníky, gates a původní katalog požadavků
 
 Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v BACKLOG; administrativa zůstává v `docs/IP`.
 
+Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 22. Jde o plánované schopnosti nad stávajícím jádrem, nikoli druhou roadmapu nebo implementovaný mail klient. Původní návrh patche označoval kontrakt jako M0-10; protože Gate M0 je již uzavřen, je požadavek veden jako navazující návrhová práce v BACKLOG a zpětně M0 neotevírá.
+
 ## 0. Cíl MVP
 
 - [ ] Definovat systém jako **self-hosted projektový workspace** provozovatelný primárně:
@@ -261,6 +263,7 @@ Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com
 - [ ] Zavést registr externích zdrojů.
 - [ ] Zavést registr témat vyžadujících odborné ověření.
 - [ ] Zavést registr úkolů.
+- [ ] Navázat registry partnerů, vztahů, schůzek a sdílení konkrétních revizí podle sekce 22; adresář a prezentační či komunikační UI mají používat společné entity, ne paralelní databáze.
 - [ ] Umožnit vztahy typu:
   - [ ] dokument → předpoklad,
   - [ ] předpoklad → rozhodnutí,
@@ -903,3 +906,60 @@ a
 Open WebUI tedy může sloužit jako alternativní konverzační frontend nad projektovými daty, ale **workspace zůstává autoritou pro projektová data, oprávnění, provenance, rozhodnutí a verzování**.
 
 Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř Open WebUI. Konverzační historie může zůstat vlastnictvím externího klienta; do workspace se vracejí explicitně vybrané výsledky, artefakty a jejich dohledatelná provenance.
+
+---
+
+# 22. Externí vztahy, komunikace a řízené sdílení
+
+**Stav: plánovaný rozsah; návrhový kontrakt a implementace jsou budoucí práce.** Cílem je dohledat, komu byl jaký obsah v konkrétní revizi zpřístupněn, v jakém rozsahu, jakým kanálem a s jakým dokladem. Evidence předání není tvrzení o skutečných znalostech příjemce. Datové podklady jsou v [DATA_MODEL.md](DATA_MODEL.md), bezpečnostní mantinely v [SECURITY.md](SECURITY.md) a implementační úkoly ER-01 až ER-08 v [BACKLOG.md](BACKLOG.md).
+
+## 22A. Relationship Registry a schůzky
+
+- [ ] Evidovat osoby, organizace, jejich role a časově vymezené vztahy, kontaktní body, zdroje údajů a vazby na projekty. Partner může být firma, samostatná osoba, poradce nebo veřejná instituce; partner není automaticky uživatel workspace.
+- [ ] Adresář realizovat jako pohled na tento registr. E-mailovou adresu nepoužívat jako identitu člověka; sloučení osob a změna organizace vyžadují kontrolu.
+- [ ] Oddělit soukromý katalog kontaktů od projektově sdílených informací. Meziprojektové propojení nesmí automaticky zpřístupnit cizí korespondenci nebo vztahy.
+- [ ] Schůzku propojit s projektem, skutečnými účastníky, agendou, zdrojovou komunikací, revizí prezentace, poznámkami a následnými úkoly. Interní poznámky nepatří automaticky do pozvánky.
+
+## 22B. Disclosure Registry
+
+- [ ] Evidovat odchozí i přijaté informace, včetně případných omezení jejich dalšího použití. U příjmu zachovat zdroj a původní bajty vybraného importovaného artefaktu.
+- [ ] Odkazovat na stabilní ID projektu nebo repozitáře a artefaktu, úplný Git commit ID a přesný předaný snapshot s hashem. Samotný název, větev nebo štítek revize nestačí.
+- [ ] Rozlišovat `full`, `excerpt`, `summary`, `derived`; prezentace odvozeného shrnutí neznamená předání celého zdrojového modelu. Evidovat konkrétní výřez nebo slide a jeho zdrojové revize.
+- [ ] Rozlišovat přípravu, export, promítnutí, předání dopravnímu serveru, potvrzené doručení nebo přístup a ručně zaznamenané ústní sdělení. Neurčitý výsledek ponechat jako neověřený.
+- [ ] Události zapisovat append-only aplikační cestou s idempotentními ID; opravy přidávat jako navazující události, nikoli přepisovat původní historii. Git sám není nezměnitelný auditní systém.
+- [ ] Nabídnout pohled partnera na evidované sdílení, rozsah a poslední předanou revizi, včetně rozdílu vůči nové verzi. Nepředpokládat, že obsah znají všichni zaměstnanci nebo všechny společnosti skupiny.
+- [ ] Navázat veřejné publikace na existující administrativní registr `docs/IP/DEFENSIVE_DISCLOSURES.md` referencí, nikoli založením jeho konkurenční kopie. Citlivá partner data nepatří do veřejného vývojového repozitáře.
+
+## 22C. Disclosure Presenter
+
+- [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
+- [ ] Základní deck připravovat jako zelený po kontrole obsahu. Každý backup má vlastní `green / orange / red`; změněná nebo nezkontrolovaná revize nesmí zdědit automatické schválení.
+- [ ] Kumulativní globální semafor: zelený slide +0, oranžový +0,5, červený +1 stupeň. Prahy a režim schůzky nastavit předem a evidovat jejich verzi.
+- [ ] Přírůstek účtovat až při evidovaném zobrazení publiku, ne při privátním náhledu. Opakování totožného obsahu stejnému publiku během stejné schůzky logovat, ale nezapočítávat znovu; nová revize, nový rozsah či příjemce vyžadují nové posouzení.
+- [ ] Před zobrazením ukázat dopad na celkové skóre; citlivý slide nebo překročený limit může vyžadovat vědomé potvrzení. Autorizační zákaz nelze potvrzením obejít.
+- [ ] Skóre pouhým zavřením slidu nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat počet backupů a čas, aby i mnoho zelených odboček mohlo vyvolat organizační upozornění.
+- [ ] Dříve sdílený červený obsah zůstává červený; stav předání je samostatná osa. „Známá revize“ není povolení k dalšímu odeslání nebo reklasifikace na public.
+- [ ] Zajistit offline provoz, obnovu relace po pádu, bezpečný neutrální výstup a export pouze vybraného obsahu bez poznámek, skrytých backupů a zdrojových modelů.
+
+## 22D. Communications Hub — plnohodnotný klient
+
+- [ ] Mail: více účtů, IMAP synchronizace, SMTP odesílání, složky, hledání, vlákna, přílohy, odpovědi a přeposílání, koncepty a odchozí fronta. Výchozí obsah a činnosti jsou soukromé; přiřazení projektu je explicitní nebo potvrzené pravidlo.
+- [ ] Připojení stavět na standardních protokolech a capability adaptéru. TLS a podporovaný způsob autentizace včetně OAuth2 řešit už pro prvního cílového poskytovatele; neslibovat univerzální kompatibilitu bez ověření.
+- [ ] Kalendář: CalDAV, více kalendářů, pozvánky a odpovědi, opakování, časová pásma a vazba na interní schůzku. Kontakty: CardDAV pohled nad Relationship Registry, mapování polí a řízené konflikty bez druhého CRM.
+- [ ] Před odesláním zkontrolovat konkrétní příjemce, citovaný text, přílohy a jejich revize. Pozvánka i sdílený kontakt jsou rovněž možné externí přenosy.
+- [ ] Do projektového Gitu ukládat jen vědomě vybrané komunikační artefakty, metadata a disclosure události. Celá schránka, cache, synchronizační kurzory, koncepty a odchozí fronta mají oddělený lokální nebo poskytovatelský životní cyklus.
+
+## 22E. Zařazení a produktové gates rozšíření
+
+Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M1–M6. M4 zůstává Multi-role workflow a M6 Project intelligence. Implementace se plánuje až po nezbytném aplikačním základu; samostatný Presenter nepotřebuje dokončený mail klient ani LLM.
+
+| Rozsah | Návaznost | Podmínka použitelnosti rozšíření |
+| --- | --- | --- |
+| Kontrakty | BACKLOG ER-00 | Zaznamenané entity, revize, privacy hranice a migrace; bez zpětného otevření Gate M0. |
+| Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
+| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, návrat z backupu a restart bez ztráty relace. |
+| Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
+| Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
+| Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |
+
+Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ dovolující zveřejnit další data. Přijaté citlivé informace nesmějí snižovat policy ochranu. Obecný CRM prodejní pipeline, hromadné kampaně ani vlastní mail server nejsou součástí tohoto rozšíření.

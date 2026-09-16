@@ -27,3 +27,39 @@ Souborový journal a jeho limity jsou popsány v [ADR 0002](docs/adr/0002-metada
 ## Kontext a hranice důvěry M0-08
 
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md) váže autorizaci na přesné bajty a cíl před odesláním, chrání manifest stejně jako vstupy a zakazuje implicitní fallback i přenos local-only odvozenin. Zohledňuje také zakázaný obsah v Git historii. Jde o designed kontrakt; metadata validátor ani transportní PoC tyto kontroly nevynucují.
+
+## Externí vztahy a řízené sdílení — plánované požadavky
+
+Níže je návrh pro plánované moduly, nikoli implementované ochrany. Nezavádí nový runtime ani nemění stávající privacy třídy; implementaci a testy drží BACKLOG ER-01 až ER-08.
+
+| Vstup / hranice | Riziko | Požadovaná kontrola | Stav |
+| --- | --- | --- | --- |
+| Partner → projekt | Záměna osoby, organizace, účtu a oprávnění | Stabilní identity, časové vztahy, explicitní příjemci; kontakt neuděluje RBAC | návrh |
+| Presenter → publikum | Únik poznámek, skrytých backupů nebo zdrojového modelu | Publikum dostává pouze schválený payload, ne celý deck skrytý pomocí CSS; samostatné řízení výstupu | návrh |
+| Komunikace → externí příjemce | Chybná adresa, reply-all, citace nebo příloha | Náhled skutečných příjemců a bajtů, kontrola policy těsně před přenosem; adresářové návrhy nejsou souhlas | návrh |
+| Mail/pozvánka → UI a LLM | Aktivní HTML, tracking, příloha nebo prompt injection | Sanitizace a izolace, vzdálené zdroje standardně vypnuté, omezení příloh; obsah je data, nikoli instrukce | návrh |
+| Restart → SMTP/audience | Duplicitní odeslání nebo falešný auditní úspěch | Durable operation record, ID události, explicitní unknown, žádný automatický resend při neurčitém výsledku | návrh |
+| Git/federace → další uzel | Únik přes historii, kontakt nebo metadata sdílení | Autorizovat celou přenášenou množinu včetně historie; selektivní projekce a oddělené trust boundaries | návrh |
+
+### Policy není semafor
+
+- Green/orange/red jsou varování pro řečníka; nezastupují public/project/confidential/local-only, přístupová práva ani účelové omezení.
+- Před promítnutím, odesláním, exportem pro partnera i sdílením pozvánky je nutné ověřit actor, příjemce, přesnou revizi, scope a povolenou hranici. `local-only` nesmí být zobrazeno externímu publiku nebo předáno dál bez explicitní oprávněné reklasifikace.
+- „Přesto zobrazit“ smí obejít jen měkké upozornění na expozici, nikdy autorizační zákaz. U povoleného red obsahu je nutné explicitní potvrzení; zkontrolovaný zelený hlavní deck neobchází tutéž kontrolu.
+- Dřívější sdílení, kladná reciprocita ani označení NDA nejsou samostatná autorizace. Podmínky přijatých informací se zachovávají; LLM je nesmí samo uvolnit nebo reklasifikovat.
+
+### Bezpečný výstup a komunikace
+
+- Publikum ani export nedostanou skryté poznámky, nepoužité backupy, nedovolené zdroje či embedded metadata. Změna payloadu po potvrzení vyžaduje nové posouzení. Při přerušení spojení musí být dostupné zatemnění nebo neutrální slide; odpojené zobrazení nesmí potvrdit novou expozici.
+- Před přenosem se kontrolují To/Cc/Bcc, citovaná korespondence, sdílené adresy a rozšiřování příjemců. Bcc a soukromá historie nesmějí uniknout do veřejného decku, pozvánky ani sdíleného projektového logu.
+- IMAP/SMTP/CalDAV/CardDAV vyžadují ověřené TLS a vhodnou autentizaci. Hesla a OAuth tokeny patří do lokálního secret store mimo Git, adresář partnerů, URL a logy; jejich obnova a revokace nesmí tiše přejít na slabší režim.
+- Příchozí obsah nesmí automaticky odesílat odpovědi, potvrzovat pozvánky, párovat identity, importovat soukromé zprávy do sdíleného projektu nebo měnit policy. Vzdálené obrázky a link previews se bez povolení nenačítají.
+
+### Audit, retence a federace
+
+- Disclosure ledger eviduje pozorovanou akci a kvalitu důkazu, ne garantované znalosti protistrany. Samotný export není doručení a přijetí SMTP serverem není přečtení.
+- Append-only v aplikačním API nezaručuje nezměnitelnost Gitu. Návrh musí určit detekci změn nebo podpisy, správu klíčů, zálohy a kontrolované opravy; bez jejich ověření nelze používat označení forenzně nezměnitelný audit.
+- Samotná metadata „komu, co a kdy“ mohou být citlivá. Je nutné je minimalizovat, řídit jejich retenci a případnou autorizovanou redakci odděleně od běžných uživatelských oprav; nevynucovat neomezené uchovávání osobních údajů.
+- `.gitignore`, barevný štítek ani aplikační filtr neodstraní obsah ze starší Git historie. Celý citlivý projekt se nesmí přenést uzlu oprávněnému pouze k prezentaci; použije se oddělený autorizovaný export nebo projekce. Revokace neodstraní již předané offline kopie.
+- Osobní katalog a mail se nesynchronizují automaticky na všechny uzly. Oprávnění, detekci konfliktů a neúplnou historii je nutné řešit i při offline návratu. Stejné event ID s jiným obsahem je konflikt, ne „poslední vyhrává“.
+- LLM poradce používá jen autorizovaný kontext a explicitní Context Manifest. Nesmí skrytě odeslat komunikaci externímu modelu, vypnout varování podle domnělé reciprocity ani nahradit deterministickou autorizaci.

@@ -91,6 +91,46 @@ Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek 
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
+## Externí vztahy a disclosure — navazující strategický backlog
+
+Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou práci, která nemění pořadí nejbližších dávek ani zpětně neotevírá uzavřený Gate M0. Původní patch označoval návrhový kontrakt jako M0-10; po uzavření M0 je zachován pod ID ER-00. Před použitím protokolových knihoven nebo rendereru provést reuse, licenční a capability review v `REUSE_CATALOG.md`; nevytvářet nový mail server.
+
+- [ ] **[planned] ER-00 — Kontrakt externích vztahů, komunikace a disclosure (cílová úroveň: designed).**
+  Uzavřít entity, identity příjemců, přesnou revizi a rozsah předaného obsahu, oddělení privacy, prezentační klasifikace a evidence a hranice komunikačního úložiště. Rozhodnout veřejný a soukromý katalog, per-project a cross-repo vztahy, append-only opravy, idempotenci, retenci a obnovu neurčitého externího účinku. Zaznamenat autoritu mail/DAV dat, outboxu a projektových importů; hesla a tokeny zůstávají mimo Git.
+  Akceptace: návrhové scénáře částečného sdílení, nové revize, stejného příjmení či adresy, změny organizace, nového účastníka, odpojeného audience okna, pádu po SMTP přijetí a neúplné federované historie. Výstup zahrne migrační hranici vůči striktnímu schématu v1; samotný text roadmapy není důkaz implementace.
+
+- [ ] **[planned] ER-01 — Verze schémat a projekce registrů (cílová úroveň: implemented).**
+  Po ER-00 zavést vybraná schémata a migrace bez tichého rozvolnění v1. Rozšířit obnovitelný index, API a validaci oprávněných vztahů; zachovat jedinou zápisovou cestu Workspace/Journal/Git/index.
+  Akceptace: starý projekt zůstává čitelný, nepodporovaná verze je odmítnuta, migrovaný projekt projde obnovou indexu a neplatný lokální nebo cross-repo vztah nepřinese falešná data. Návaznost V-03/V-04.
+
+- [ ] **[planned] ER-02 — Partneři, adresář a schůzky (cílová úroveň: implemented).**
+  Po ER-01 dodat CRUD osob, organizací a vztahů, kontaktní pohled, časové role a interní schůzky s agendou, skutečnými účastníky a follow-up úkoly. Soukromý katalog sdílet jen explicitně.
+  Akceptace: dvě osoby se stejným jménem nebo sdílenou adresou nesplynou bez potvrzení; změna zaměstnavatele nepřenese historii; jiný projekt neuvidí soukromé poznámky a pozvánka neexportuje interní agendu automaticky.
+
+- [ ] **[planned] ER-03 — Disclosure Registry a snapshoty (cílová úroveň: implemented).**
+  Po ER-01/ER-02 dodat ruční inbound/outbound události, opravy a projekci podle příjemce; přesný payload a hash, úplné source refs a scope. Navrhnout retenci revizí a navázat existující IP publikační registr pouze referencí.
+  Akceptace: summary neoznačí celý zdroj za předaný; přejmenování či nový HEAD nezmění starou revizi; export bez adresáta není doručení; opakovaný operation ID neduplikuje fakt a opravná událost zachová původní záznam. Projít crash boundaries dle DATA_MODEL.
+
+- [ ] **[planned] ER-04 — Offline Disclosure Presenter MVP (cílová úroveň: PoC validated, potom implemented).**
+  Po ER-02/ER-03 dodat hlavní deck, notes, privátní preview, backup triggery a návrat, audience-only renderer a trvalou relaci. Green/orange/red váží 0/0,5/1; prahy, count/time upozornění a klasifikaci vést odděleně od oprávnění. Bez závislosti na LLM nebo mail klientu.
+  Akceptace: preview +0; orange → green → red dává 1,5 stupně; opakování stejného payloadu pro stejné publikum v relaci nezvedne skóre; nová revize nebo příjemce vyžaduje kontrolu a zavření nesníží expozici. Ověřit restarty, odpojenou obrazovku, zákaz přes override, neutral/blackout a safe export bez notes a skrytých dat. Před schůzkou ověřit reálné dvouobrazovkové nastavení Linux desktopu.
+
+- [ ] **[planned] ER-05 — Plnohodnotný mail klient (cílová úroveň: implemented).**
+  Po registry a policy základu vybrat a ověřit IMAP/SMTP adaptér pro první účty, včetně TLS a OAuth2 podle poskytovatele; dodat složky, threading a hledání, přílohy, compose/reply/forward, offline koncepty a durable outbox. Import do projektu je oddělen od synchronizace schránky.
+  Akceptace: změna UIDVALIDITY, ztráta spojení, expirovaný token a částečné odmítnutí příjemců nevedou ke ztrátě či automatické duplicitní zásilce. Ověřit pád po SMTP přijetí se stavem unknown, obnovu fronty, Bcc/reply-all, citovaný citlivý obsah, vazbu přesných příloh na ER-03 a sandbox HTML. Nezvyšovat potichu limity příloh.
+
+- [ ] **[planned] ER-06 — Kalendář a synchronizovaný adresář (cílová úroveň: implemented).**
+  Po ER-02 a relevantní transportní a policy vrstvě přidat CalDAV kalendáře, pozvánky a odpovědi a CardDAV projekci partnerů; určit mapování polí, UID a verzí a zdroj pravdy při oboustranné editaci. Provider-specific adaptér až podle ověřené potřeby.
+  Akceptace: časová pásma, výjimka opakování, změna nebo odvolání pozvánky, ETag konflikt, smazání a offline návrat jsou deterministické; soukromé poznámky nevstoupí do vzdáleného kalendáře nebo kontaktu. Příchozí pozvánka se nepotvrdí bez povolení.
+
+- [ ] **[planned] ER-07 — Federace vztahů a evidence (cílová úroveň: PoC validated, potom implemented).**
+  Navázat na M5 a ER-03. Ověřit autorizované projekce partnerů a událostí bez přenosu celé schránky, secretů nebo citlivé historie zdrojového repozitáře. Zpracovat offline události podle stabilních ID a provenance; nepředstírat globální pořadí jen podle hodin uzlu.
+  Akceptace: dvě offline relace neztratí událost; shodné ID s rozdílným obsahem vyvolá konflikt; peer bez přístupu ke zdroji obdrží jen povolenou projekci a nedostupná historie zůstane neověřená. Před implementací uzavřít přenosové hranice ve FEDERATION/ADR.
+
+- [ ] **[planned] ER-08 — Kontext partnera a volitelný LLM poradce (cílová úroveň: implemented).**
+  Po ER-03 navázat oprávněné vztahy na M6 a volitelné modely M2–M4: návrh klasifikace, rozdíl revizí, příprava schůzky a otázky nebo reciprocita zadávané uživatelem. Používat Context Manifest, zdrojové reference a lidské schválení.
+  Akceptace: nepovolený zdroj ani cizí projekt nevstoupí do kontextu; prompt injection v mailu nevyvolá odeslání; reciprocita sama neodblokuje red slide a nedostupnost lokálního LLM nezpůsobí externí fallback. Základní Presenter a registry fungují i bez modelu.
+
 ## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
 
 - [ ] [planned] **M5 — Federovaná publikace (cílová úroveň: PoC validated).** Implementovat izolovaný příjem, autorizaci celého přenášeného obsahu včetně historie, validaci kandidáta a CAS/recovery dle ADR 0008. Ověřit změnu HEAD po lidském řešení, neplatný fast-forward/merge, revokaci a odmítnutí přenosu local-only historie; zachovat konfliktní rodiče.
