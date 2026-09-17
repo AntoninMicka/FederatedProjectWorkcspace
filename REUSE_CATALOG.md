@@ -57,6 +57,13 @@ Ruční deploy **reuse** existující `spikes.demo` a requirements; **adapt** la
 
 M1-07 **adapt/reuse** Projects, Workspace, statického UI, HTTP validačního handleru, ručního deploye a licenčního allowlistu; síťový režim přidává kontrolu local-only nad čteným commitem. Nový vlastní routerový helper používá LXC CLI a registrační formát [Turris WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md), ověřený 2026-09-10. Soukromá inventura posloužila k posouzení integračních vzorů, žádný externí aplikační kód ani asset se nepřenášel. Nový framework není pro omezený LAN náhled potřebný; nejde o produkční server. Hranice, TLS a recovery: [ADR 0020](docs/adr/0020-lxc-web-viewer.md).
 
+F-M2-CONTEXT-01 **adaptuje** existující `Workspace` writer lock, validaci
+projektového snapshotu, Git commit identity a omezený `require`/UUID kontrakt.
+Context Manifest a kanonický payload jsou nový malý stdlib modul; další storage,
+vektorová databáze ani externí framework nejsou potřeba. Modul je read-only a
+nepředstírá backend adapter, RBAC službu ani durable run recovery; ty zůstávají
+navazujícími schopnostmi podle ADR 0008.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
