@@ -13,17 +13,17 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-META-01/V-04 je po PR #19 (`9acd0ef`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-meta-01--přesný-kontrakt-metadat-a-importní-provenance--2026-09-15). F-M1-SOURCE-01/V-05 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
+F-M1-SOURCE-01/V-05 je po PR #20 (`7152d64`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-source-01--kontrakt-neměnnosti-a-verzování-zdrojů--2026-09-15). F-M1-META-02 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
 
-### F-M1-META-02 — Implementace importní provenance v2
+### F-M1-SOURCE-02 — Vynucení neměnných zdrojů a navazující verze
 
 - Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
-- Původ: odložená implementace F-M1-META-01/V-04 a ADR 0023.
-- Větev: `feature/f-m1-meta-02-provenance-v2`; základ a jediný PR do `develop`.
-- Výstup: souběžné čtení v1/v2 v parseru a indexu, zápis nových importů v2, explicitní migrace pouze doložitelných v1 importů a UI zobrazení provenance.
-- Mimo rozsah: automatická plošná migrace, vymýšlení původního autora/času/revize a externí konektory.
-- Závislosti: ADR 0023 a F-M1-SOURCE-01/ADR 0024; implementaci source transition pravidel koordinovat s F-M1-SOURCE-02 bez duplikace.
-- Akceptace jednoho PR: striktní formát/limity, smíšený snapshot, původní bajty/hash, expected-HEAD/retry/receipt, procesní recovery před/po commitu, atomická indexace/migrace, skutečný Qt a celá sada.
+- Původ: odložená implementace F-M1-SOURCE-01/V-05 a ADR 0024.
+- Větev: `feature/f-m1-source-02-enforcement`; základ a jediný PR do `develop`.
+- Výstup: transition validace všech publish/merge cest, metadata-only editace zdroje, import nové verze s novým UUID/`supersedes`, bezpečná detekce byte-identity a UI konfliktu.
+- Mimo rozsah: content-addressed storage, automatické slučování duplicit a změna trust boundary externích zdrojů.
+- Závislosti: ADR 0024 a aktivní F-M1-META-02; použít její parser/index/migraci bez duplikace.
+- Akceptace jednoho PR: v1/v2, přímá Git změna obsahu/metadat, fast-forward/merge/stejné UUID, privacy reclassification, expected-HEAD/retry/receipt, pády před/po CAS a indexu, skutečný Qt a celá sada.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 
@@ -198,6 +198,8 @@ Poznámka uživatele k federaci (2026-09-14): nastavení desktopu a kontejneru d
 Ověření M1-AH-05/M1-AH-06 (2026-09-13): závěrečná sada `python3 -m unittest discover -s tests -v` mimo socketově omezený sandbox — **171 testů, 151 prošlo, 20 volitelných přeskočeno, bez chyb**, 46,249 s. Ověřeny HTTPS individuální klíče, filtrovaný katalog a otevření jen přiděleného projektu, odmítnutí administrace/vytvoření běžným členem, rotace/deaktivace, stejný receipt po retry, restart registru, stale CAS, credentials mimo Git, osiřelá credential a selhání rotace před změnou ref se zachováním původního klíče, peer approval/revocation a omezení node-admin. Starší deploy reset test opraven: neodkazuje na pevný index SSH volby místo vzdáleného skriptu. Samostatný skutečný Qt/WebEngine login/katalog/logout prošel; další skutečný browser smoke v dočasném serveru prošel vytvořením/otevřením projektu, vydáním uživatelského klíče a přidáním/schválením/odvoláním testovacího peeru. JS syntaxe a jedinečnost HTML ID ověřeny. Volitelné balicí/offline/desktop/libgit2 testy nebyly v celkovém běhu zapnuté; samostatné browser ověření nenahrazuje všechny přeskočené testy. Cílová akceptace na routeru a skutečná federovaná synchronizace nejsou doložené; položky zůstávají otevřené do vymezené cílové akceptace.
 
 Aktualizace M1-07 podle hlášení uživatele (2026-09-13): deploy již proběhl, web běží v LXC i přes routerovou dlaždici a stránka se načítá; dřívější SSH blokace níže je historická. Tyto údaje jsou uživatelské potvrzení, nikoli nové agentní real-device ověření. Restart/změna IP a ostatní akceptační scénáře zůstávají otevřené.
+
+Aktualizace M1-07 podle hlášení uživatele (2026-09-17): restart routeru zachoval instalaci a data, ale kontejner `workspace-m0` se po bootu nespustil automaticky. Jde o částečný real-device důkaz persistence, nikoli splnění restartové akceptace. Doplnit bezpečný LXC autostart a zopakovat reboot bez ručního startu včetně služby uvnitř kontejneru, dlaždice, přihlášení a náhledu.
 
 - [ ] [planned] **M1-07 — LXC webové nasazení a dlaždice na routeru (cílová úroveň: PoC validated).** Navazuje na otevřené LXC nasazení v souhrnném M1; požadavek uživatele z 2026-09-10 doplňuje dlaždici aplikace na uvítací stránce routeru. Implementace je lokálně hotová (`TODO` + ADR + unit testy), cílové ověření čeká na reálné zařízení. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013. Dokončit real-device runbook včetně: SSH ověření routeru, dry-run, produkční deploy bez `--dry-run`, ověření otevření aplikace z dlaždice (login + katalog + náhled), restart/redeploy/retry scénářů, změna IP, restart LXC i routeru, zastavení kontejneru, opakované nasazení a odstranění integrace bez poškození ostatních dlaždic.
 

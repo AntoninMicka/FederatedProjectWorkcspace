@@ -83,6 +83,29 @@ class ProjectionTests(unittest.TestCase):
             db.execute('INSERT INTO state VALUES (1, ?)', (self.original,))
             db.executemany('INSERT INTO entities VALUES (?, ?)', [(ENTITY, 'Document'), (OTHER, 'Decision')])
 
+    def v1(self):
+        self.index.path.unlink()
+        with closing(sqlite3.connect(self.index.path)) as db, db:
+            db.executescript('''
+                CREATE TABLE state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), commit_id TEXT NOT NULL);
+                CREATE TABLE entities (
+                    id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL,
+                    privacy TEXT NOT NULL, provenance TEXT NOT NULL, author_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL, description TEXT, source_url TEXT,
+                    status TEXT, body TEXT, path TEXT NOT NULL, metadata TEXT NOT NULL);
+                CREATE TABLE tags (entity_id TEXT NOT NULL REFERENCES entities(id),
+                    ordinal INTEGER NOT NULL, tag TEXT NOT NULL, PRIMARY KEY(entity_id, ordinal));
+                CREATE TABLE relations (
+                    source_id TEXT NOT NULL REFERENCES entities(id), ordinal INTEGER NOT NULL,
+                    type TEXT NOT NULL, target_id TEXT NOT NULL REFERENCES entities(id),
+                    PRIMARY KEY(source_id, ordinal));
+                CREATE INDEX relations_target ON relations(target_id, type);
+                CREATE INDEX relations_source_type ON relations(source_id, type);
+                CREATE INDEX tags_value ON tags(tag);
+                PRAGMA user_version=1;
+            ''')
+            db.execute('INSERT INTO state VALUES (1, ?)', (self.original,))
+
     def test_metadata_paths_relations_tags_and_legacy_api(self):
         view = self.index.read_projection(self.git)
         self.assertEqual(view, self.expected())
@@ -152,6 +175,34 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             reopened.rebuild(self.git)
         self.assertEqual(self.dump(), before)
+
+    def test_v1_index_migrates_atomically_and_never_serves_partial_v2(self):
+        child = '''
+import os,sys
+from spikes.storage import Git,Index
+def checkpoint(stage):
+    if stage == sys.argv[3]: os._exit(73)
+Index(sys.argv[2]).rebuild(Git(sys.argv[1]),checkpoint=checkpoint)
+'''
+        for stage in BOUNDARIES:
+            with self.subTest(stage=stage):
+                self.v1(); before = self.dump()
+                old = Index(self.index.path)
+                with self.assertRaises(StaleIndex):
+                    old.read_projection(self.git)
+                result = subprocess.run([sys.executable, '-c', child, str(self.root),
+                                         str(self.index.path), stage], capture_output=True,
+                                        text=True, timeout=15)
+                self.assertEqual(result.returncode, 73, result.stderr)
+                if stage != 'index-published':
+                    self.assertEqual(self.dump(), before)
+                    with self.assertRaises(StaleIndex):
+                        Index(self.index.path).read_projection(self.git)
+                else:
+                    self.assertEqual(Index(self.index.path).read_projection(self.git), self.expected())
+                reopened = Index(self.index.path)
+                reopened.rebuild(self.git)
+                self.assertEqual(reopened.read_projection(self.git), self.expected())
 
     def test_unrecognized_legacy_database_is_not_initialized_as_index(self):
         self.index.path.unlink()

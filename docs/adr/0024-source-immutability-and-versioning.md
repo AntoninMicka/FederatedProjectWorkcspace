@@ -15,7 +15,7 @@ U existujícího source UUID jsou neměnné:
 
 - obsahové bajty a basename uložený v sidecar `file`,
 - `id`, `kind`, `created_at`, `author_id` a `provenance`,
-- u budoucího v2 celý `import` blok včetně `content_sha256`.
+- u v2 celý `import` blok včetně `content_sha256`.
 
 Povolené metadata-only změny stejného UUID jsou projektové anotace `title`, `description`, `tags`, `relations` a oprava `source_url`. Všechny procházejí standardní verzovanou Workspace operací, takže původní hodnota zůstává v Git historii. `privacy` lze zpřísnit; její uvolnění je explicitní autorizovaná reklasifikace, nikoli běžná editace metadat. Oprava locatoru nemění neměnná fakta importu a sama nedokládá identitu zdroje.
 

@@ -3,6 +3,7 @@
 #
 """Executable M0 schema and bounded metadata parsing, independent of storage."""
 from datetime import datetime
+import hashlib
 import json
 from pathlib import PurePosixPath
 import re
@@ -26,6 +27,8 @@ STATES = {
 }
 REQUIRED = {'schema_version', 'id', 'title', 'kind', 'created_at', 'author_id', 'privacy', 'provenance'}
 OPTIONAL = {'description', 'tags', 'source_url', 'relations'}
+IMPORT_REQUIRED = {'imported_at', 'imported_by', 'content_sha256', 'importer'}
+IMPORT_OPTIONAL = {'source_author', 'source_created_at', 'source_revision'}
 
 
 class ValidationError(ValueError):
@@ -44,13 +47,34 @@ def uuid(value):
         raise ValidationError('Expected canonical UUID') from exc
 
 
-def timestamp(value):
+def timestamp(value, field='created_at'):
     require(isinstance(value, str) and bool(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', value)),
-            'created_at must be UTC RFC3339 ending in Z')
+            f'{field} must be UTC RFC3339 ending in Z')
     try:
         datetime.fromisoformat(value.replace('Z', '+00:00'))
     except ValueError as exc:
         raise ValidationError('Invalid calendar timestamp') from exc
+
+
+def validate_import(value):
+    require(isinstance(value, dict) and IMPORT_REQUIRED <= value.keys()
+            and value.keys() <= IMPORT_REQUIRED | IMPORT_OPTIONAL, 'Invalid import provenance')
+    timestamp(value['imported_at'], 'imported_at')
+    uuid(value['imported_by'])
+    require(isinstance(value['content_sha256'], str)
+            and bool(re.fullmatch(r'[0-9a-f]{64}', value['content_sha256'])), 'Invalid content_sha256')
+    importer = value['importer']
+    require(isinstance(importer, dict) and importer.keys() in ({'name'}, {'name', 'version'}),
+            'Invalid importer')
+    for key in ('name', 'version'):
+        if key in importer:
+            require(isinstance(importer[key], str) and bool(importer[key].strip()), f'Invalid importer {key}')
+    for key in ('source_author', 'source_revision'):
+        if key in value:
+            require(isinstance(value[key], str) and bool(value[key].strip()), f'Invalid {key}')
+    if 'source_created_at' in value:
+        timestamp(value['source_created_at'], 'source_created_at')
+    return value
 
 
 def safe_path(value):
@@ -152,8 +176,9 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     require(isinstance(meta, dict), 'Metadata must be an object')
     extra = {'file'} if sidecar else ({'status', 'body'} if registry else set())
     require(REQUIRED | extra <= meta.keys(), 'Missing required metadata')
-    require(meta.keys() <= REQUIRED | OPTIONAL | extra, 'Unknown metadata field')
-    require(type(meta['schema_version']) is int and meta['schema_version'] == 1, 'Unknown schema version')
+    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2}, 'Unknown schema version')
+    allowed = REQUIRED | OPTIONAL | extra | ({'import'} if meta['schema_version'] == 2 else set())
+    require(meta.keys() <= allowed, 'Unknown metadata field')
     uuid(meta['id'])
     uuid(meta['author_id'])
     for key in ['title', 'kind', 'created_at', 'privacy', 'provenance']:
@@ -162,6 +187,13 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     require(meta['privacy'] in {'public', 'project', 'confidential', 'local-only'}, 'Invalid privacy')
     require(meta['provenance'] in {'user', 'external', 'llm-generated', 'llm-transformed', 'snapshot'},
             'Invalid provenance')
+    if meta['schema_version'] == 2 and meta['provenance'] == 'external':
+        require('import' in meta, 'External v2 metadata requires import provenance')
+        imported = validate_import(meta['import'])
+        require(imported['imported_at'] == meta['created_at'], 'imported_at must match created_at')
+        require(imported['imported_by'] == meta['author_id'], 'imported_by must match author_id')
+    else:
+        require('import' not in meta, 'Import provenance is only valid for external v2 metadata')
     for key in ('description', 'source_url'):
         if key in meta:
             require(isinstance(meta[key], str), f'Invalid {key}')
@@ -213,11 +245,16 @@ def validate_snapshot(files):
         if 'metadata.json' in entries:
             meta = validate_metadata(parse_json(entries['metadata.json']), sidecar=True)
             require(set(entries) == {'metadata.json', meta['file']}, 'Missing or extra sidecar content')
+            if meta['schema_version'] == 2 and meta['kind'] == 'source':
+                digest = hashlib.sha256(entries[meta['file']]).hexdigest()
+                require(meta['import']['content_sha256'] == digest, 'Source content differs from import provenance')
         else:
             require(len(entries) == 1, 'Expected one Markdown artifact')
             name, data = next(iter(entries.items()))
             require(name.endswith('.md'), 'Binary artifact needs sidecar')
             meta = validate_metadata(frontmatter(data))
+            require(not (meta['schema_version'] == 2 and meta['kind'] == 'source'),
+                    'External v2 source requires sidecar metadata')
         require(meta['id'] == artifact_id, 'Artifact directory must match ID')
         insert(meta)
     for meta in entities.values():

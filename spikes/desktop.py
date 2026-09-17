@@ -365,6 +365,15 @@ def main():
                       document.querySelector('#sidebar-artifact-list button').click();return null;}
                     if(document.querySelector('#preview-title').textContent!==expected.artifacts[0].title ||
                        document.querySelector('#preview-details').hidden)return null;
+                    if(expected.preview.metadata.import){
+                      const details=document.querySelector('#preview-metadata').textContent;
+                      for(const value of [expected.preview.metadata.import.imported_at,
+                                          expected.preview.metadata.import.imported_by,
+                                          expected.preview.metadata.import.content_sha256,
+                                          expected.preview.metadata.import.importer.name]){
+                        if(!details.includes(value))return null;
+                      }
+                    }
                     const content=document.querySelector('#preview-content');
                     if(content.querySelector('script,iframe,object,a'))return null;
                     const image=content.querySelector('img');

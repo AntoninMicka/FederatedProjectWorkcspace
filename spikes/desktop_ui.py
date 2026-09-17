@@ -319,13 +319,21 @@ async function openPreview(id,page=1){
   document.querySelector('#preview-title').textContent=result.metadata.title;
   const metadata=document.querySelector('#preview-metadata');
   for(const [key,value] of Object.entries(result.metadata)){
-   const term=document.createElement('dt');term.textContent=({title:'Název',description:'Popis',tags:'Štítky',id:'Identifikátor',kind:'Typ',file:'Soubor',created_at:'Vytvořeno',author_id:'Autor',privacy:'Soukromí',provenance:'Původ',schema_version:'Verze formátu',relations:'Vztahy',source_url:'Odkaz na zdroj'})[key] || key;
-   const detail=document.createElement('dd');detail.textContent=Array.isArray(value) && value.every(item=>typeof item==='string') ? value.join(', ') : typeof value==='string'?value:JSON.stringify(value);
-   const labels={privacy:{public:'Veřejné',project:'V rámci projektu',confidential:'Důvěrné','local-only':'Jen na tomto počítači'},
-    provenance:{user:'Vytvořeno uživatelem',external:'Převzato ze zdroje','llm-generated':'Vytvořeno AI','llm-transformed':'Upraveno AI',snapshot:'Snímek stavu'},
-    kind:{document:'Dokument',source:'Zdroj'}};
-   if(labels[key] && Object.hasOwn(labels[key],value))detail.textContent=labels[key][value];
-   metadata.append(term,detail);
+   const entries=key==='import' ? [
+    ['imported_at',value.imported_at],['imported_by',value.imported_by],['content_sha256',value.content_sha256],
+    ['source_author',value.source_author],['source_created_at',value.source_created_at],
+    ['source_revision',value.source_revision],['importer_name',value.importer?.name],
+    ['importer_version',value.importer?.version]
+   ].filter(([,item])=>item!==undefined) : [[key,value]];
+   for(const [entryKey,entryValue] of entries){
+    const term=document.createElement('dt');term.textContent=({title:'Název',description:'Popis',tags:'Štítky',id:'Identifikátor',kind:'Typ',file:'Soubor',created_at:'Vytvořeno',author_id:'Autor',privacy:'Soukromí',provenance:'Původ',schema_version:'Verze formátu',relations:'Vztahy',source_url:'Odkaz na zdroj',imported_at:'Importováno',imported_by:'Importoval',content_sha256:'SHA-256 původních bajtů',source_author:'Autor zdroje',source_created_at:'Datum zdroje',source_revision:'Revize zdroje',importer_name:'Importér',importer_version:'Verze importéru'})[entryKey] || entryKey;
+    const detail=document.createElement('dd');detail.textContent=Array.isArray(entryValue) && entryValue.every(item=>typeof item==='string') ? entryValue.join(', ') : typeof entryValue==='string'?entryValue:JSON.stringify(entryValue);
+    const labels={privacy:{public:'Veřejné',project:'V rámci projektu',confidential:'Důvěrné','local-only':'Jen na tomto počítači'},
+     provenance:{user:'Vytvořeno uživatelem',external:'Převzato ze zdroje','llm-generated':'Vytvořeno AI','llm-transformed':'Upraveno AI',snapshot:'Snímek stavu'},
+     kind:{document:'Dokument',source:'Zdroj'}};
+    if(labels[entryKey] && Object.hasOwn(labels[entryKey],entryValue))detail.textContent=labels[entryKey][entryValue];
+    metadata.append(term,detail);
+   }
   }
   document.querySelector('#preview-details').hidden=false;
   if(result.format==='markdown')renderMarkdown(result.text);
