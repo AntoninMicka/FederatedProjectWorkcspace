@@ -51,6 +51,15 @@ Profily `same-company-same-team`, `same-company`, `trusted-partner`,
   nasdílí; nepovoluje background synchronizaci ani procházení projektu,
 - `unspecified` je fail-closed.
 
+Pro `trusted-partner` a `holding-partner` policy povinně určuje právě jednoho
+aktivního místního styčného uživatele přijímajícího uzlu. Přijetí dat samo
+nevytváří přístup ostatním místním uživatelům. Styčný uživatel může přidělit
+nebo odebrat lokální grant pouze jako podmnožinu origin ACL, privacy, akcí a
+omezení dalšího exportu; nemůže původní oprávnění rozšířit ani reklasifikovat
+data. Určení, nahrazení a zneplatnění styčného uživatele i jím provedené změny
+grantů jsou verzované a auditované. Není-li styčný uživatel aktivní, systém
+fail-closed zakáže nové granty, ale dovolí audit a bezpečné odebrání existujících.
+
 Přenos neveřejné historie vyžaduje navíc oboustranně schválený project/branch
 scope, případné mapování uživatelů či organizačního příjemce, origin ACL, právo
 `export` a místní policy. Tím se public-only první přenos nerozšíří pouhou změnou

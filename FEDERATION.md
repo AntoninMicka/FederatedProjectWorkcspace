@@ -23,6 +23,14 @@ data konkrétně mapovaným příjemcům, `holding-partner` navíc dovoluje gran
 společnosti jako celku a `partner` pouze chat a obsah explicitně odeslaný nebo
 nasdílený uživatelem. `unspecified` je fail-closed.
 
+Vztah `trusted-partner` i `holding-partner` musí na přijímajícím uzlu určit
+aktivního místního styčného uživatele. Převzatá data nejsou ostatním místním
+uživatelům automaticky dostupná; styčný uživatel jim přiděluje a odnímá práva
+v mezích origin ACL, privacy, povolených akcí a zákazu dalšího exportu. Určení,
+nahrazení i zneplatnění styčného uživatele je verzované a auditované. Chybějící
+nebo neaktivní styčný uživatel zastaví nové přidělování práv, nikoli však audit
+a bezpečné odvolání již udělených lokálních grantů.
+
 Každý neveřejný projekt/ref i organizační grant přesto vyžaduje oboustranně
 schválený scope, origin ACL, `export` a místní policy; členství společnosti musí
 být ověřené, časově vymezené a verzované. Stejný model chrání federovaný lidský
