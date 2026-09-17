@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## M1-07 — LXC autostart; implementační předání s odloženou cílovou akceptací — 2026-09-17
+
+Implementace byla začleněna PR #24 jako commit `3c09090` v `develop`; feature větev `feature/m1-07-lxc-autostart` dodala bezpečné idempotentní nastavení vlastní sekce `lxc-auto.federated_workspace`, rollback a testy. Dávka je administrativně předána na výslovné rozhodnutí uživatele odložit další restart routeru. Nejde o splnění cílové restartové akceptace ani uzavření Gate M1; otevřené ověření je zachováno v BACKLOG jako `M1-07-C`.
+
+- [x] [completed] **M1-07-A — Lokální implementace autostartu (implemented, 2026-09-17).** Instalace spravuje jen vlastní pojmenovanou UCI sekci, zachovává ostatní kontejnery, odmítá cizí kolizi a zahrnuje stav do rollback journalu.
+- [x] [completed] **M1-07-B — Lokální regresní ověření (PoC validated lokálně, 2026-09-17).** Cílených 15 testů prošlo; plná sada měla 216 úspěšných testů a 22 podmíněných skipů. Skutečný reboot nebyl součástí běhu.
+
+Omezení: uživatel dříve potvrdil zachování instalace a dat po restartu, ale kontejner se tehdy automaticky nespustil. Oprava autostartu po novém reálném restartu dosud ověřena není. Ověřit běh kontejneru a služby, dlaždici, přihlášení a náhled; výsledek teprve může doložit zbývající část Gate M1.
+
 ## F-M1-SOURCE-02 — Vynucení neměnných zdrojů a navazující verze — 2026-09-17
 
 Dávka uzavřena po začlenění PR #23 jako commit `a93dd75` v `develop`; feature větev `feature/f-m1-source-02-enforcement` končí `55c0211`. Dosažená úroveň je lokální PoC validated; Gate M1 zůstává otevřený.

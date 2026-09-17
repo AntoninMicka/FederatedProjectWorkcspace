@@ -3,29 +3,27 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — M1-07: LXC autostart a cílová restartová akceptace
+# TODO — F-M2-CONTEXT-01: Bezpečný Context Builder
 
-Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, jeden PR do `develop`.
+Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci M1-07. Tato dávka je na ní implementačně nezávislá. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## M1-07 — LXC webové nasazení a dlaždice na routeru
+## F-M2-CONTEXT-01 — Bezpečný Context Builder
 
-- Stav: [ ] [blocked]; lokální implementace a regrese dokončeny, cílová úroveň PoC validated na Turris Omnia čeká na uživatelem plánovaný restart routeru.
-- Původ: otevřená restartová akceptace M1-07; uživatel 2026-09-17 potvrdil zachování instalace a dat po restartu, ale kontejner `workspace-m0` se automaticky nespustil.
-- Skutečná větev: `feature/m1-07-lxc-autostart`, založená z `develop` (`a93dd75`, PR #23 začleněn). Jediný PR #24 do `develop` je otevřený; není sloučen.
-- Výstup: bezpečné, idempotentní nastavení autostartu jen zvoleného kontejneru přes Turris `/etc/config/lxc-auto`, rollback instalace/odebrání a doložený restart routeru bez ručního startu.
-- Mimo rozsah: změna dat či rootfs kontejneru, automatický reboot routeru bez explicitního pokynu, obecná správa cizích LXC a federovaná synchronizace M5.
-- Akceptace: ostatní autostart sekce zůstanou zachované; kolize vlastněné sekce se odmítne; opakovaná instalace/odebrání a rollback jsou bezpečné; po cílovém rebootu běží kontejner i `federated-workspace.service`, dlaždice vede na aktuální IP a funguje přihlášení, katalog a náhled.
+- Stav: [x] [completed]; lokálně PoC validated 2026-09-17, PR dosud není vytvořen ani sloučen.
+- Původ: Context Builder část M2 a kontrakt [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+- Skutečná větev: `feature/f-m2-context-01-manifest`, založená z `develop` (`7d985c4`); jediný budoucí PR do `develop`.
+- Výstup: explicitní výběr projektových a neměnných ad-hoc vstupů, Context Manifest přesných bajtů a revalidace identity, HEAD, privacy, oprávnění, bindingu a cíle bezprostředně před předáním backendu.
+- Mimo rozsah: Ollama či jiný backend adapter, skutečné síťové odeslání, automatické souhrny, billing, role orchestrace a publikace výsledku.
+- Závislosti: implementované projektové čtení/validace M1 a návrhový kontrakt ADR 0008. Odložený reboot M1-07 nemění Context Builder; Gate M1 se touto výjimkou neuzavírá.
+- Akceptace: exact bytes/digests, deterministické pořadí a limity; změna HEAD, identity/session, oprávnění, policy, bindingu nebo cíle mezi přípravou a autorizací se odmítne; `local-only` neopustí `same-node`; chybějící povinný vstup a implicitní fallback se odmítnou; volitelné vynechání je viditelné; testy chybových cest a dokumentace.
 
-- [x] [completed] **M1-07-A — Lokální implementace autostartu (implemented, 2026-09-17).** Routerová instalace spravuje výhradně pojmenovanou UCI sekci `lxc-auto.federated_workspace`, zachovává ostatní kontejnery, odmítá cizí kolizi a zahrnuje stav do rollback journalu.
-- [x] [completed] **M1-07-B — Cílené regresní testy (PoC validated lokálně, 2026-09-17).** `python3 -m unittest tests.test_router_tile tests.test_deploy_omnia -v`: 15 testů OK. Pokryto chybějící/existující/cizí UCI nastavení, install/remove, rollback a stávající deploy scénáře.
-- [ ] [blocked] **M1-07-C — Cílové nasazení a restartová akceptace.** Runbook i plná regrese jsou hotové. Uživatel 2026-09-17 rozhodl ověřit změnu ručně při příštím plánovaném restartu routeru; odblokování vyžaduje jeho výsledek pro kontejner, službu, dlaždici, přihlášení a náhled.
-
-Průběžné ověření M1-07-C: `python3 -m unittest discover -s tests -v` mimo socketový sandbox — 216 testů OK, 22 podmíněných skipů. Runbook a ADR odkaz jsou aktualizované; skutečná instalace a restartová akceptace jsou odložené do příštího plánovaného restartu routeru.
+- [x] [completed] **F-M2-CONTEXT-01-A — Striktní kontrakt manifestu a builder (implemented, 2026-09-17).** Verzovaný omezený kontrakt fixuje explicitně zvolené projektové a ad-hoc bajty, SHA-256, velikost, privacy, commit, autoritu, policy a přesný binding/cíl v kanonickém manifestu a payloadu.
+- [x] [completed] **F-M2-CONTEXT-01-B — Autorizační revalidace a dispatch handoff (implemented, 2026-09-17).** `prepare` a `authorize_for_dispatch` jsou oddělené; druhá fáze pod společným writer lockem kontroluje session/uživatele/uzel, HEAD, čtecí práva, policy, binding/cíl, privacy a přesné bajty. Výstup je pouze backendově neutrální handoff, nikoli síťové odeslání.
+- [x] [completed] **F-M2-CONTEXT-01-C — Chybové scénáře, dokumentace a závěrečné ověření (PoC validated lokálně, 2026-09-17).** Cílené 4 testy prošly. Celá sada mimo socketový sandbox: 220 testů OK, 22 podmíněných skipů. První běh uvnitř sandboxu měl 20 očekávaných `PermissionError` chyb při vytvoření HTTP/HTTPS/Unix socketu; nejde o aplikační regresi. ADR 0008 a reuse evidence jsou aktualizované.
 
 ### Recovery hranice
 
-- Před změnou se do existujícího routerového rollback journalu uloží, zda naše přesná UCI sekce existovala. Journal neobsahuje ani nepřepisuje cizí sekce.
-- Instalace nejprve zapíše vlastní soubory a UCI autostart, poté aktivuje dlaždici; při chybě obnoví soubory, služby i předchozí stav autostartu.
-- Odebrání smaže pouze vlastní přesně ověřenou sekci. Částečná nebo cizí sekce stejného jména se odmítne bez přepsání.
-- Reboot je vnější destruktivní/provozní hranice a není automatickou součástí lokálních testů ani deploye.
+- Builder je v této dávce read-only. Připravený manifest a snapshot jsou neměnný lokální objekt; samotný hash bez bajtů není dostačující.
+- `prepare` nesmí nic odeslat. `authorize_for_dispatch` znovu ověří aktuální stav a vrátí pouze krátkodobý autorizovaný handoff přesně stejných bajtů.
+- Skutečný backend adapter, trvalý run record, stav `dispatching/unknown` a placený síťový účinek patří do navazující dávky; nesmí být předstírány tímto PoC.

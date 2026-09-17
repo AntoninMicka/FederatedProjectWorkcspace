@@ -789,6 +789,8 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 po PR #19 upřesňuje v1 a navrhuje podrobnou importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). Aktivní F-M1-META-02 na feature větvi implementuje souběžné v1/v2, nové importy v2, doloženou migraci, úplnou indexovou projekci a UI zobrazení; stav předání a ověření drží [TODO](TODO.md). F-M1-SOURCE-01/V-05 navrhuje neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md); obecný transition validátor zůstává F-M1-SOURCE-02. Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
+Aktualizace 2026-09-17: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený; cílová restartová akceptace `M1-07-C` je na rozhodnutí uživatele odložená v BACKLOG. Gate M1 proto zůstává otevřený. Implementačně nezávislý Context Builder pokračuje jako aktivní F-M2-CONTEXT-01 v TODO; toto pořadí není tvrzením o splnění Gate M1.
+
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
 - [ ] Jeden projekt.
@@ -814,7 +816,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 - [ ] Extractor.
 - [ ] Auto-description.
 - [ ] Tagging.
-- [ ] Context builder.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; backend adapter a durable run record zůstávají navazující práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 

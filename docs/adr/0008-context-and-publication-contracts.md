@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08. Nejde o implementované schéma, LLM adapter, RBAC ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. Nejde o implementovaný LLM adapter, úplné RBAC, trvalý run record ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -48,6 +48,17 @@ Tok: `UI / volitelný orchestrator chat → application orchestrator → Context
 4. Adapter připraví finální obsah požadavku bez síťového odeslání. Po kontrole formátů/limitů se zafixují bajty a manifest; žádné skryté přidání konverzace, vzdálené přílohy nebo instrukcí po schválení.
 5. Bezprostředně před odesláním aplikace znovu ověří aktuální autorizaci, binding/cíl, policy a shodu bajtů s manifestem. Lokální změny policy a přechod do odesílání musí sdílet synchronizaci. Změna relevantních podmínek znamená odmítnutí a nové posouzení, případně nový manifest/souhlas. Odvolání po skutečném odeslání nemůže stáhnout již předaná data.
 6. Adapter provede pouze schválené generate; vrátí výstup, stav, dostupné usage a provider request/model ID. Výstup je nedůvěryhodný návrh. Uložení jako projektový artefakt vyžaduje validaci, oprávnění a explicitní přijetí přes běžnou zápisovou operaci.
+
+F-M2-CONTEXT-01 realizuje kroky 2–5 jako backendově neutrální read-only PoC v
+`spikes/context_builder.py`. `prepare` pod projektovým writer lockem fixuje HEAD,
+explicitně vybrané projektové a ad-hoc bajty, jejich velikosti/SHA-256, privacy,
+autoritu, policy revision a přesný binding/cíl. Obsah je součástí kanonického
+payloadu; samotný hash není snapshot. `authorize_for_dispatch` pod stejným
+zámkem znovu ověří HEAD, session/user/node, čtecí oprávnění, policy, binding,
+cíl, privacy a shodu bajtů a vydá pouze handoff. Nic neposílá ani trvale
+nezapisuje run. Volitelný nedostupný vstup je uveden s důvodem; chybějící
+povinný vstup operaci odmítne. Skutečný adapter musí před sítí použít právě tento
+handoff a dodat vlastní durable přechod `dispatching`/`unknown`.
 
 Fallback je ve výchozím stavu zakázaný. Explicitní pravidlo může povolit náhradní backend/cíl a nákladový rozsah; i potom se sestaví nový manifest a znovu ověří celý požadavek. Uživatelský výběr backendu nepřebíjí zákaz projektu. `local-only` nikdy nejde na peer ani provider bez explicitní, oprávněné a auditované reklasifikace konkrétních dat. Pouhé potvrzení „odeslat“ nestačí.
 

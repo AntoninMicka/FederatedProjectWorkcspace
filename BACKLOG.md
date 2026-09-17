@@ -13,17 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-SOURCE-02 je po PR #23 (`a93dd75`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-source-02--vynucení-neměnných-zdrojů-a-navazující-verze--2026-09-17). M1-07 je jediná aktivní dávka v [TODO](TODO.md). Další pořadí drží F-M2-CONTEXT-01, F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny a aktivace M2 závisí na doloženém Gate M1.
-
-### F-M2-CONTEXT-01 — Bezpečný Context Builder
-
-- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
-- Původ: Context Builder část širokého M2, ADR 0008.
-- Větev: `feature/f-m2-context-01-manifest`; základ a jediný PR do `develop`.
-- Výstup: explicitní výběr vstupů, Context Manifest přesných bajtů a revalidace identity/privacy/oprávnění před předáním backendu.
-- Mimo rozsah: celý M2, Ollama adapter, automatické souhrny, billing a role orchestrace; ty se připraví jako vlastní dávky.
-- Závislosti: doložený Gate M1 a kontrakty ADR 0008; frontu lze posunout podle doložených závislostí, ne automaticky začít M2.
-- Akceptace jednoho PR: exact bytes/digests, změna HEAD/oprávnění mezi výběrem a použitím, zákaz local-only exportu a implicitního fallbacku, testy chybových cest a dokumentace.
+F-M2-CONTEXT-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-context-01-manifest`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislý Context Builder může pokračovat bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny.
 
 ### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
 
@@ -36,6 +26,8 @@ F-M1-SOURCE-02 je po PR #23 (`a93dd75`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1
 - Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Uživatel ověření odložil do příštího plánovaného restartu routeru. Poté potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
