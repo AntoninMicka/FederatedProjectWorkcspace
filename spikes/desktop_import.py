@@ -24,15 +24,22 @@ class ImportDialog(QDialog):
         self.title = QLineEdit(); self.title.setMaxLength(200)
         self.description = QPlainTextEdit(); self.description.setMaximumHeight(110)
         self.tags = QPlainTextEdit(); self.tags.setMaximumHeight(75)
+        self.source_created_at = QLineEdit()
+        self.source_created_at.setPlaceholderText('např. 2024-05-10T14:30:00Z')
+        self.source_created_at.setMaxLength(27)
         self.privacy = QComboBox()
         for text, value in [('Projektové', 'project'), ('Důvěrné', 'confidential'), ('Pouze lokální', 'local-only'), ('Veřejné', 'public')]:
             self.privacy.addItem(text, value)
         for label, widget in [('Zdrojový soubor', self.path), ('', self.browse), ('Název', self.title),
-                              ('Popis', self.description), ('Štítky — jeden na řádek', self.tags), ('Privacy', self.privacy)]:
+                              ('Popis', self.description), ('Štítky — jeden na řádek', self.tags),
+                              ('Doložený čas vzniku zdroje (UTC)', self.source_created_at),
+                              ('Privacy', self.privacy)]:
             form.addRow(label, widget)
         layout.addLayout(form)
         note = QLabel('Původní bajty se zachovají beze změny; metadata se uloží vedle souboru.\n'
                       'Markdown, PNG, JPEG a PDF do 16 MiB. Náhled má samostatný limit 4 MiB.\n'
+                      'Čas importu se uloží automaticky. Čas vzniku zdroje je samostatný, volitelný údaj;\n'
+                      'vyplňte jej jen pokud jej zdroj dokládá — může být starší než import.\n'
                       'Zdroj není editovatelný dokument. Nová verze se importuje jako nový zdroj.\n'
                       'Pouze lokální obsah není dostupný přes web a brání přenosu projektu.')
         note.setWordWrap(True); layout.addWidget(note)
@@ -45,7 +52,8 @@ class ImportDialog(QDialog):
 
     def controls(self):
         editable = not self.busy and self.pending is None and self.view is not None
-        for widget in (self.browse, self.title, self.description, self.tags, self.privacy):
+        for widget in (self.browse, self.title, self.description, self.tags,
+                       self.source_created_at, self.privacy):
             widget.setEnabled(editable)
         self.save.setEnabled(not self.busy and (self.pending is not None or (editable and bool(self.path.text()))))
         self.save.setText('Zopakovat stejný import' if self.pending else 'Potvrdit a importovat')
@@ -98,12 +106,15 @@ class ImportDialog(QDialog):
                 request = request_from_file(self.project_id, self.view['commit_id'], self.path.text(), self.title.text(),
                                             self.description.toPlainText(),
                                             [tag.strip() for tag in self.tags.toPlainText().splitlines() if tag.strip()],
-                                            self.privacy.currentData())
+                                            self.privacy.currentData(),
+                                            source_created_at=self.source_created_at.text().strip() or None)
             except Exception as exc:
                 self.status.setText(str(exc)); return
             message = QMessageBox(self); message.setWindowTitle('Potvrdit import původních bajtů')
             message.setTextFormat(Qt.TextFormat.PlainText)
+            creation = request['source_created_at'] or 'neuveden — nebude odhadnut'
             message.setText('Soubor: ' + request['filename'] + '\nPrivacy: ' + request['privacy'] +
+                            '\nDoložený čas vzniku zdroje: ' + creation +
                             '\nSHA-256: ' + request['sha256'] + '\n\nImportovat jako nový zdroj s vlastními metadaty?')
             message.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
             message.setDefaultButton(QMessageBox.StandardButton.Cancel)
@@ -112,7 +123,7 @@ class ImportDialog(QDialog):
             self.pending = (request, str(uuid4()))
         request, operation = self.pending
         def imported(receipt):
-            self.pending = None; self.path.clear()
+            self.pending = None; self.path.clear(); self.source_created_at.clear()
             self.view = dict(self.view, commit_id=receipt['commit_id'])
             self.status.setText('Zdroj importován beze změny původních bajtů. Najdete jej v Podkladech.\n'
                                 'SHA-256: ' + request['sha256'])

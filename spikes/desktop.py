@@ -370,7 +370,8 @@ def main():
                       for(const value of [expected.preview.metadata.import.imported_at,
                                           expected.preview.metadata.import.imported_by,
                                           expected.preview.metadata.import.content_sha256,
-                                          expected.preview.metadata.import.importer.name]){
+                                          expected.preview.metadata.import.importer.name,
+                                          expected.preview.metadata.import.source_created_at].filter(Boolean)){
                         if(!details.includes(value))return null;
                       }
                     }

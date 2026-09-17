@@ -5,6 +5,7 @@
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -141,6 +142,7 @@ class SourceImportTests(unittest.TestCase):
         self.assertEqual(meta['source_url'], request['source_url'])
         self.assertEqual(meta['import']['source_author'], 'External author')
         self.assertEqual(meta['import']['source_created_at'], '2026-09-16T09:30:00Z')
+        self.assertLess(meta['import']['source_created_at'], meta['import']['imported_at'])
         self.assertEqual(meta['import']['source_revision'], '7')
         self.assertEqual(self.projects.preview(self.project_id, request['artifact_id'], receipt['commit_id'])['metadata'], meta)
 
@@ -194,6 +196,36 @@ Sources(sys.argv[1]).migrate_source(json.loads(sys.argv[2]),sys.argv[3],checkpoi
                 self.assertEqual(validate_snapshot(self.git.snapshot(self.git.head()))[artifact_id]['schema_version'], 2)
                 self.assertEqual(self.git.run('rev-list', '--count', import_commit + '..HEAD').stdout.strip(), '1')
                 self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
+    def test_native_dialog_keeps_source_creation_separate_from_import_time(self):
+        path = self._write('dated.pdf', b'%PDF-1.7\ndated\n')
+        script = r'''
+import os,sys
+from PySide6.QtWidgets import QApplication,QLabel,QMessageBox
+import spikes.desktop_import as module
+from spikes.source_import import request_from_file
+module.ImportDialog.load=lambda self: None
+app=QApplication([])
+dialog=module.ImportDialog(sys.argv[1],sys.argv[2])
+dialog.view={'commit_id':sys.argv[4]}
+dialog.path.setText(sys.argv[3]);dialog.title.setText('Dated source')
+dialog.source_created_at.setText('2020-01-02T03:04:05Z')
+captured={}
+def make_request(*args,**kwargs):
+    captured.update(kwargs);return request_from_file(*args,**kwargs)
+module.request_from_file=make_request
+QMessageBox.exec=lambda self: QMessageBox.StandardButton.Cancel
+dialog.import_file()
+assert captured['source_created_at']=='2020-01-02T03:04:05Z',captured
+assert 'může být starší než import' in ' '.join(x.text() for x in dialog.findChildren(QLabel))
+assert dialog.pending is None
+sys.stdout.write('source/import times separated\n');sys.stdout.flush();os._exit(0)
+'''
+        result = subprocess.run([sys.executable, '-c', script, str(self.node), self.project_id,
+                                 str(path), self.git.head()], capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('source/import times separated', result.stdout)
 
 
 if __name__ == '__main__':

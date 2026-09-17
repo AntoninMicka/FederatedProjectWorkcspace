@@ -58,6 +58,7 @@ class PreviewTests(unittest.TestCase):
             meta['schema_version'] = 2
             meta['import'] = dict(imported_at=meta['created_at'], imported_by=meta['author_id'],
                                   content_sha256=hashlib.sha256(raw).hexdigest(),
+                                  source_created_at='2020-01-02T03:04:05Z',
                                   importer={'name': 'workspace-native-import', 'version': '2'})
         (folder / name).write_bytes(raw); (folder / 'metadata.json').write_text(json.dumps(meta))
         self.git.commit('Fixture'); return id_

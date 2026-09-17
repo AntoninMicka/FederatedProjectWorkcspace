@@ -66,7 +66,7 @@ Spustitelný parser `spikes/metadata.py` přijímá striktní schémata v1 a v2 
 
 `created_at` označuje vznik entity v projektu. U dnešního nativního importu je zároveň časem importu, nikoli doloženým časem vzniku externího díla. `author_id` je projektový aktér, který entitu vytvořil nebo import spustil, nikoli automaticky původní autor. `source_url` je pouze volitelný locator a `provenance` hrubá třída, ne kompletní auditní manifest.
 
-Schéma v2 s `provenance: external` povinně nese striktní blok `import`: `imported_at`, `imported_by`, lowercase SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. U nového native importu se čas/aktér rovnají `created_at`/`author_id`; hash source sidecaru se při validaci snapshotu porovnává se skutečnými bajty. Pro jinou provenance je blok zakázaný. Přesný kontrakt, kompatibilitu a explicitní doloženou migraci stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V1 zůstává čitelné a nemigruje se automaticky.
+Schéma v2 s `provenance: external` povinně nese striktní blok `import`: `imported_at`, `imported_by`, lowercase SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. U nového native importu se čas/aktér rovnají `created_at`/`author_id`; oddělený volitelný `source_created_at` je doložený čas vzniku externího zdroje a může importu předcházet. Hash source sidecaru se při validaci snapshotu porovnává se skutečnými bajty. Pro jinou provenance je blok zakázaný. Přesný kontrakt, kompatibilitu a explicitní doloženou migraci stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V1 zůstává čitelné a nemigruje se automaticky.
 
 ### Definice vazeb mezi entitami
 

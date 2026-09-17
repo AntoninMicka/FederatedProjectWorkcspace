@@ -33,11 +33,13 @@ Objekt `import` přijímá přesně pole uvedená níže a odmítá neznámé kl
 | `imported_by` | Povinné kanonické UUID projektového aktéra; u nativního importu se rovná `author_id`. |
 | `content_sha256` | Povinný lowercase SHA-256 původních přijatých bajtů. Hash nenahrazuje uchování zdroje ani licenci. |
 | `source_author` | Volitelný neprázdný text převzatý z doloženého vstupu; není lokálním user ID. |
-| `source_created_at` | Volitelný UTC RFC3339 čas deklarovaný zdrojem. Neznámý čas se vynechá. |
+| `source_created_at` | Volitelný UTC RFC3339 čas vzniku deklarovaný a doložený zdrojem. Je nezávislý na `imported_at` a běžně mu může předcházet; neznámý čas se vynechá. |
 | `source_revision` | Volitelný neprázdný identifikátor/verze zdroje, beze změny významu poskytovatele. |
 | `importer` | Povinný objekt s neprázdným `name` a volitelnou neprázdnou `version`; popisuje transformační software, ne uživatele. |
 
 `source_url` zůstává volitelným top-level locatorem, aby se neměnil jeho dosavadní význam. Neznámý původní autor, čas, URL ani revize se nevymýšlejí a pole se vynechá. Importovaný neměnný soubor zůstává v původních bajtech; `content_sha256` se počítá z těchto bajtů před publikací.
+
+`created_at` a `imported_at` popisují vznik entity a přijetí do tohoto projektu, nikoli vznik externího díla. UI je proto zobrazuje odděleně od `source_created_at`; pořadí se neslévá do jednoho „data dokumentu“. Doložený čas vzniku může být výrazně starší než import. Schéma nevynucuje jejich pořadí, protože `source_created_at` je tvrzení převzaté ze zdroje a může být chybné či používat jinou publikační událost; původ hodnoty musí nést importér.
 
 Příklad sidecaru v2:
 

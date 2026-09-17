@@ -26,6 +26,11 @@ pravidla neměnných bajtů, nového UUID a vztahu `supersedes` popisuje
 [ADR 0024](adr/0024-source-immutability-and-versioning.md). Transition validátor
 proti přímým Git úpravám zatím není implementován.
 
+Importní dialog nabízí samostatné volitelné pole **Doložený čas vzniku zdroje
+(UTC)** ve formátu RFC3339, například `2024-05-10T14:30:00Z`. Tento údaj se uloží
+jako `source_created_at`; čas importu vznikne automaticky a může být pozdější.
+Nevyplněný čas vzniku se neodhaduje z času souboru, importu ani Git commitu.
+
 Privacy má výchozí project. Local-only respektuje stávající síťovou hranici a
 může znepřístupnit celý projekt přes web; historický public-only Git přenos
 nepřenese ani project/confidential. Import privacy neodvozuje automaticky z
