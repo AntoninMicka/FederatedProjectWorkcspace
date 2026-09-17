@@ -75,6 +75,8 @@ class RouterTests(unittest.TestCase):
                 with patch.object(router_tile,'PATHS',paths), patch.object(router_tile,'JOURNAL',str(journal)), \
                      patch.object(router_tile,'CA',str(ca)), patch.object(router_tile.os,'geteuid',return_value=0), \
                      patch.object(router_tile,'activate',side_effect=activate), \
+                     patch.object(router_tile,'autostart_state',return_value=False), \
+                     patch.object(router_tile,'configure_autostart'), \
                      patch.object(router_tile,'command',return_value=Mock(returncode=0)), \
                      patch('sys.argv',['tile',action,'--lan','192.168.100.0/24']):
                     router_tile.main()
@@ -89,6 +91,45 @@ class RouterTests(unittest.TestCase):
             run('remove',lambda *a:None)
             self.assertTrue(all(not Path(p).exists() for p in paths))
             self.assertEqual(foreign.read_text(),'unchanged')
+
+    def test_turris_autostart_uses_owned_uci_section_only(self):
+        missing = Mock(returncode=1, stdout='')
+        with patch.object(router_tile, 'command', return_value=missing):
+            self.assertFalse(router_tile.autostart_state('workspace-m0'))
+
+        values = [Mock(returncode=0, stdout='container\n'),
+                  Mock(returncode=0, stdout='workspace-m0\n'),
+                  Mock(returncode=0, stdout='60\n')]
+        with patch.object(router_tile, 'command', side_effect=values):
+            self.assertTrue(router_tile.autostart_state('workspace-m0'))
+
+        foreign = [Mock(returncode=0, stdout='container\n'),
+                   Mock(returncode=0, stdout='other\n'),
+                   Mock(returncode=0, stdout='60\n')]
+        with patch.object(router_tile, 'command', side_effect=foreign), self.assertRaises(ValueError):
+            router_tile.autostart_state('workspace-m0')
+
+        calls = []
+        def run(*args, **kwargs):
+            calls.append(args)
+            return Mock(returncode=0, stdout='')
+        with patch.object(router_tile, 'autostart_state', side_effect=[False, True]), \
+             patch.object(router_tile, 'command', side_effect=run):
+            router_tile.configure_autostart('workspace-m0', True)
+            router_tile.configure_autostart('workspace-m0', False)
+        self.assertIn(('uci', 'set', 'lxc-auto.federated_workspace.name=workspace-m0'), calls)
+        self.assertIn(('uci', 'commit', 'lxc-auto'), calls)
+        self.assertIn(('uci', 'delete', 'lxc-auto.federated_workspace'), calls)
+
+        journal = Mock()
+        journal.read_text.return_value = json.dumps({
+            'files': {}, 'enabled': False, 'active': False,
+            'container': 'workspace-m0', 'autostart': False})
+        with patch.object(router_tile, 'restore'), patch.object(router_tile, 'activate'), \
+             patch.object(router_tile, 'write_autostart') as restore_autostart, \
+             patch.object(router_tile, 'command', return_value=Mock(returncode=0)):
+            router_tile.rollback(journal)
+        restore_autostart.assert_called_once_with('workspace-m0', False)
 
     def test_lxc_failed_healthcheck_restores_current_unit_and_keeps_recovery(self):
         import io

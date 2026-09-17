@@ -13,7 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-META-02 je po PR #22 (`fb613ad`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-meta-02--implementace-importní-provenance-v2--2026-09-17). F-M1-SOURCE-02 je jediná aktivní dávka v [TODO](TODO.md). Další pořadí drží F-M2-CONTEXT-01, F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny a aktivace M2 závisí na doloženém Gate M1.
+F-M1-SOURCE-02 je po PR #23 (`a93dd75`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-source-02--vynucení-neměnných-zdrojů-a-navazující-verze--2026-09-17). M1-07 je jediná aktivní dávka v [TODO](TODO.md). Další pořadí drží F-M2-CONTEXT-01, F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny a aktivace M2 závisí na doloženém Gate M1.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 
@@ -208,7 +208,7 @@ Aktualizace M1-07 podle hlášení uživatele (2026-09-13): deploy již proběhl
 
 Aktualizace M1-07 podle hlášení uživatele (2026-09-17): restart routeru zachoval instalaci a data, ale kontejner `workspace-m0` se po bootu nespustil automaticky. Jde o částečný real-device důkaz persistence, nikoli splnění restartové akceptace. Doplnit bezpečný LXC autostart a zopakovat reboot bez ručního startu včetně služby uvnitř kontejneru, dlaždice, přihlášení a náhledu.
 
-- [ ] [planned] **M1-07 — LXC webové nasazení a dlaždice na routeru (cílová úroveň: PoC validated).** Navazuje na otevřené LXC nasazení v souhrnném M1; požadavek uživatele z 2026-09-10 doplňuje dlaždici aplikace na uvítací stránce routeru. Implementace je lokálně hotová (`TODO` + ADR + unit testy), cílové ověření čeká na reálné zařízení. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013. Dokončit real-device runbook včetně: SSH ověření routeru, dry-run, produkční deploy bez `--dry-run`, ověření otevření aplikace z dlaždice (login + katalog + náhled), restart/redeploy/retry scénářů, změna IP, restart LXC i routeru, zastavení kontejneru, opakované nasazení a odstranění integrace bez poškození ostatních dlaždic.
+**M1-07 je aktivní výhradně v [TODO](TODO.md).** Následující odstavce zachovávají historické důkazy před aktivací, nikoli druhý aktuální stav feature. Navazuje na otevřené LXC nasazení v souhrnném M1 a požadavek uživatele z 2026-09-10 na dlaždici aplikace. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013.
 
 Ověření cílového prostředí (2026-09-13): SSH přístup k cílovému routeru zatím blokuje `Permission denied (publickey,password,keyboard-interactive)`, změna cílové cesty už byla dočasně potvrzena v `docs/lxc-web.md` a v `scripts` kódu. Do odblokování SSH a prvního nasazení zůstává celá položka otevřená.
 

@@ -45,6 +45,24 @@ python3 router_tile.py plan --container workspace-m0 --lan LAN_SUBNET
 python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
 ```
 
+Instalace dlaždice zároveň vytvoří výhradně vlastní pojmenovanou UCI sekci
+`lxc-auto.federated_workspace` v `/etc/config/lxc-auto`. Tím se kontejner
+`workspace-m0` spustí při bootu routeru podle mechanismu Turris LXC; ostatní
+sekce a kontejnery se nemění. Existující nekompatibilní sekce stejného jména se
+odmítne bez přepsání. Opakovaná instalace je idempotentní a `remove` odstraní
+jen tuto přesně ověřenou sekci. Stav autostartu je součástí stejného rollback
+journalu jako soubory a služby dlaždice.
+
+Před restartem ověřte konfiguraci bez ruční úpravy souboru:
+
+```sh
+uci show lxc-auto.federated_workspace
+# očekáváno:
+# lxc-auto.federated_workspace=container
+# lxc-auto.federated_workspace.name='workspace-m0'
+# lxc-auto.federated_workspace.timeout='60'
+```
+
 Instalátor spravuje pět vlastních souborů: helper, procd službu, lighttpd konfiguraci, JSON dlaždice a SVG. Ostatních dlaždic se nedotýká. JSON směřuje na stálou routerovou cestu; aktuální IP kontejneru se zjišťuje až při kliknutí. Bez právě jedné IPv4 v subnetu nebo při neplatném TLS/nedostupné službě se zobrazí zpráva o nedostupnosti. Dlaždice neobchází přihlášení do aplikace.
 
 Odebrání integrace (projekty, LXC služba a CA zůstanou):
@@ -134,7 +152,7 @@ Při problémové situaci použijte:
 5) Na routeru proveďte deployment kontrol a reálné scénáře:
 
 ```sh
-ssh root@ROUTER "lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/omc-federated-workspace-web status; cat /var/lib/federated-workspace/access-key"
+ssh root@ROUTER "uci show lxc-auto.federated_workspace; lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/omc-federated-workspace-web status; cat /var/lib/federated-workspace/access-key"
 python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
 ```
 Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/omc-federated-workspace-web status`.
