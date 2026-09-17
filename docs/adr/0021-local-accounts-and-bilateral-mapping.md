@@ -33,6 +33,13 @@ revokuje související mapování; nové schválení uzlu není nové schválen�
 
 ## Data a ACL
 
+Plánované rozšíření M5 rozliší technický stav peeru od úrovně vztahu.
+`same-company` a `partner` jsou explicitní relationship classes vedle výchozího
+`unspecified`; nejsou numerickým žebříčkem důvěry a samy nic neautorizují.
+Přenos neveřejné historie vyžaduje navíc oboustranně schválený project/branch
+scope, mapování uživatelů, origin ACL, právo `export` a místní policy. Tím se
+public-only první přenos nerozšíří pouhou změnou jednoho příznaku.
+
 Portable rights manifest v1 má právě `schema_version`, `project_id`, `commit_id`
 a `entries`. Každá entry má `entity_id`, `privacy` a `grants`; každý grant
 `node_id`, `user_id`, `actions`. Akce jsou read/write/review/manage/export,
@@ -71,3 +78,19 @@ Při chybějícím dříve označeném klíči obnovit originál, negenerovat no
 Pád po commit/ztráta odpovědi nevyžaduje opakované schválení: znovu načíst
 registr a vydat uložený podepsaný soubor. Průběžná evidence a zbývající cílové
 ověření jsou v [TODO](../../TODO.md); provozní postup v [návodu](../administration.md).
+
+## Plánované federované konverzace
+
+Federovaný lidský chat v M5 používá kvalifikované lokální identity a aktivní
+oboustranné mapování; nevytváří globální účet ani vzdálené přihlášení. Zprávy a
+jejich durable outbox/inbox jsou samostatný komunikační stav mimo projektový Git
+a mimo obnovitelný projektový index. Stabilní ID, podpis/transportní provenance
+a idempotentní příjem umožní offline retry bez tvrzení, že hodiny uzlů dávají
+globální pořadí.
+
+Uložení vybraného chatu, shrnutí, zadání nebo jiného podporovaného artefaktu je
+samostatná explicitní Workspace publikace s preview, provenance a zděděnou
+privacy. LLM je volitelný zpracovatel pod Context Manifestem; chat mezi lidmi
+funguje bez něj. Publikovaný artefakt není autoritou živého vlákna a jeho editace
+nemění původní zprávy. Přesný zprávový kontrakt, retence, skupinové členství a
+crash boundaries uzavřou F-M5-CHAT-01/02 před implementací.

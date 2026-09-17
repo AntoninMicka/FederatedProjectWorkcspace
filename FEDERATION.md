@@ -11,6 +11,14 @@ Synchronizují se pouze autorizované projekty. Credentials se nikdy nekopíruj�
 
 Upřesnění 2026-09-13 podle [ADR 0021](docs/adr/0021-local-accounts-and-bilateral-mapping.md): účty a přihlášení jsou lokální. Desktop má jediného běžícího uživatele, web může mít více vlastních účtů. Federace mapuje kvalifikované identity až po dvou podepsaných potvrzeních; nezavádí vzdálené přihlášení ani sdílená hesla. Offline potvrzení a revokace jsou implementované, automatické doručování a datový transport zůstávají M5. ACL/rights manifest a privacy se musí přenášet s daty, zachovat původní identity a omezit účinná práva průnikem s místní politikou; chybějící ACL není automatický přístup.
 
+Plánované M5 rozšíření přidává relationship class `same-company` / `partner`
+vedle výchozího `unspecified`. Je ortogonální k technickému trust state peeru a
+není oprávněním: neveřejný projekt/ref vyžaduje oboustranně schválený scope,
+mapování uživatelů, origin ACL, `export` a místní policy. Stejný model chrání
+federovaný lidský chat. Jeho durable zprávy zůstávají mimo projektový Git;
+uložení konverzace, shrnutí, zadání či jiného podporovaného artefaktu je až
+explicitní Workspace publikace s preview, provenance a zděděnou privacy.
+
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
 ## Scénář konfliktu
