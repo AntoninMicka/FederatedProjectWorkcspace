@@ -10,7 +10,7 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 ## M1-07 — LXC webové nasazení a dlaždice na routeru
 
-- Stav: [ ] [in progress]; cílová úroveň PoC validated na cílovém Turris Omnia.
+- Stav: [ ] [blocked]; lokální implementace a regrese dokončeny, cílová úroveň PoC validated na Turris Omnia čeká na uživatelem plánovaný restart routeru.
 - Původ: otevřená restartová akceptace M1-07; uživatel 2026-09-17 potvrdil zachování instalace a dat po restartu, ale kontejner `workspace-m0` se automaticky nespustil.
 - Skutečná větev: `feature/m1-07-lxc-autostart`, založená z `develop` (`a93dd75`, PR #23 začleněn). Jediný PR do `develop`; není vytvořen.
 - Výstup: bezpečné, idempotentní nastavení autostartu jen zvoleného kontejneru přes Turris `/etc/config/lxc-auto`, rollback instalace/odebrání a doložený restart routeru bez ručního startu.
@@ -19,9 +19,9 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 - [x] [completed] **M1-07-A — Lokální implementace autostartu (implemented, 2026-09-17).** Routerová instalace spravuje výhradně pojmenovanou UCI sekci `lxc-auto.federated_workspace`, zachovává ostatní kontejnery, odmítá cizí kolizi a zahrnuje stav do rollback journalu.
 - [x] [completed] **M1-07-B — Cílené regresní testy (PoC validated lokálně, 2026-09-17).** `python3 -m unittest tests.test_router_tile tests.test_deploy_omnia -v`: 15 testů OK. Pokryto chybějící/existující/cizí UCI nastavení, install/remove, rollback a stávající deploy scénáře.
-- [ ] [in progress] **M1-07-C — Dokumentace, plná regrese a cílové nasazení.** Aktualizovat runbook, spustit celou sadu a připravit přesný instalační/ověřovací krok. Změnu routeru a reboot provést pouze s explicitním oprávněním uživatele.
+- [ ] [blocked] **M1-07-C — Cílové nasazení a restartová akceptace.** Runbook i plná regrese jsou hotové. Uživatel 2026-09-17 rozhodl ověřit změnu ručně při příštím plánovaném restartu routeru; odblokování vyžaduje jeho výsledek pro kontejner, službu, dlaždici, přihlášení a náhled.
 
-Průběžné ověření M1-07-C: `python3 -m unittest discover -s tests -v` mimo socketový sandbox — 216 testů OK, 22 podmíněných skipů. Runbook a ADR odkaz jsou aktualizované; zbývá skutečná instalace a restartová akceptace na routeru.
+Průběžné ověření M1-07-C: `python3 -m unittest discover -s tests -v` mimo socketový sandbox — 216 testů OK, 22 podmíněných skipů. Runbook a ADR odkaz jsou aktualizované; skutečná instalace a restartová akceptace jsou odložené do příštího plánovaného restartu routeru.
 
 ### Recovery hranice
 
