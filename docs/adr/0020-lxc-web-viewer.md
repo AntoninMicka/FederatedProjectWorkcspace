@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0020 — HTTPS náhled v LXC a dynamický vstup z routeru
 
-Datum: 2026-09-10. Stav: přijato pro development PoC, implemented; cílové ověření otevřené v [M1-07](../../BACKLOG.md).
+Datum: 2026-09-10. Stav: přijato pro development PoC, implemented; cílové restartové ověření otevřené v [M1-07](../../TODO.md).
 
 ## Rozsah a rozhodnutí
 

@@ -5,6 +5,16 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-SOURCE-02 — Vynucení neměnných zdrojů a navazující verze — 2026-09-17
+
+Dávka uzavřena po začlenění PR #23 jako commit `a93dd75` v `develop`; feature větev `feature/f-m1-source-02-enforcement` končí `55c0211`. Dosažená úroveň je lokální PoC validated; Gate M1 zůstává otevřený.
+
+- [x] [completed] **F-M1-SOURCE-02-A — Transition validátor a podporované publikační cesty.** Workspace kontroluje base/kandidát před journalem i commitem; první Git přenos kontroluje každý parent→child přechod převzaté historie. Změna či odstranění source bajtů, identity, basename nebo v2 import provenance pod stejným UUID se odmítá.
+- [x] [completed] **F-M1-SOURCE-02-B — Metadata-only editace a navazující verze.** Povolené anotace jsou verzované, uvolnění privacy explicitně autorizované; nová verze má nové UUID a volitelný vztah `supersedes`. SHA-256 duplicity se pouze hlásí a neslučují automaticky.
+- [x] [completed] **F-M1-SOURCE-02-C — UI, recovery a dokumentace.** Importní dialog nabízí předchůdce a upozornění na shodné bajty; operace používají společný Workspace journal/CAS/index/receipt lifecycle.
+
+Ověření: cílená sada 33 testů OK s jedním podmíněným Qt skipem; samostatný skutečný Qt test 1/1 OK; plná sada mimo socketový sandbox 215 testů OK a 22 podmíněných skipů. Obecný merge/fast-forward projektů není současnou aplikační schopností a musí při budoucí implementaci použít stejný transition validátor. Cílové zařízení ani výpadek napájení tato dávka neověřovala.
+
 ## F-M1-META-02 — Implementace importní provenance v2 — 2026-09-17
 
 Dávka uzavřena po doloženém začlenění PR #22 jako commit `fb613ad` v `develop`; feature větev `feature/f-m1-meta-02-provenance-v2` obsahovala implementaci i následné uživatelské upřesnění času vzniku zdroje. Dosažená úroveň je lokální PoC validated; Gate M1 zůstává otevřený.

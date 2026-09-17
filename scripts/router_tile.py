@@ -23,6 +23,7 @@ PATHS = ('/usr/lib/federated-workspace/router_entry.py',
          '/etc/lighttpd/conf.d/federated-workspace.conf',
          '/etc/turris-webapps/90-federated-workspace.json',
          '/www/webapps-icons/federated-workspace.svg')
+AUTOSTART = 'lxc-auto.federated_workspace'
 
 
 def files(container, lan, port):
@@ -118,9 +119,40 @@ def restore(record):
             atomic(path, base64.b64decode(old[0]), old[1])
 
 
-def command(*args, check=True):
+def command(*args, check=True, capture=False):
     return subprocess.run(args, stdin=subprocess.DEVNULL, check=check, timeout=30,
-                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+                          stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                          stderr=subprocess.PIPE, text=capture)
+
+
+def autostart_state(container):
+    """Return whether our exact UCI section exists; reject partial/foreign ownership."""
+    section = command('uci', '-q', 'get', AUTOSTART, check=False, capture=True)
+    if section.returncode != 0:
+        return False
+    name = command('uci', '-q', 'get', AUTOSTART + '.name', check=False, capture=True)
+    timeout = command('uci', '-q', 'get', AUTOSTART + '.timeout', check=False, capture=True)
+    if section.stdout.strip() != 'container' or name.returncode or name.stdout.strip() != container \
+            or timeout.returncode or timeout.stdout.strip() != '60':
+        raise ValueError('UCI section lxc-auto.federated_workspace exists but is not owned by this installation')
+    return True
+
+
+def write_autostart(container, enabled):
+    """Write our deterministic section; caller established ownership or is rolling it back."""
+    if enabled:
+        command('uci', 'set', AUTOSTART + '=container')
+        command('uci', 'set', AUTOSTART + '.name=' + container)
+        command('uci', 'set', AUTOSTART + '.timeout=60')
+    else:
+        command('uci', 'delete', AUTOSTART)
+    command('uci', 'commit', 'lxc-auto')
+
+
+def configure_autostart(container, enabled):
+    current = autostart_state(container)
+    if current != enabled:
+        write_autostart(container, enabled)
 
 
 def activate(enabled, active=None):
@@ -139,6 +171,8 @@ def rollback(journal):
     command(PATHS[1], 'disable', check=False) if Path(PATHS[1]).exists() else None
     restore(record)
     activate(record['enabled'], record['active'])
+    if 'container' in record:
+        write_autostart(record['container'], record.get('autostart', False))
     journal.unlink()
 
 
@@ -168,11 +202,14 @@ def main():
             parser.error('Install the service CA certificate first')
         enabled = Path(PATHS[1]).exists() and command(PATHS[1], 'enabled', check=False).returncode == 0
         active = Path(PATHS[1]).exists() and command(PATHS[1], 'status', check=False).returncode == 0
-        atomic(journal, json.dumps({'files': snapshot(PATHS), 'enabled': enabled, 'active': active}).encode(), 0o600)
+        autostart = autostart_state(args.container)
+        atomic(journal, json.dumps({'files': snapshot(PATHS), 'enabled': enabled, 'active': active,
+                                    'autostart': autostart, 'container': args.container}).encode(), 0o600)
         try:
             if args.action == 'install':
                 for path, (data, mode) in payload.items():
                     atomic(path, data, mode)
+                configure_autostart(args.container, True)
                 activate(True)
             else:
                 if Path(PATHS[1]).exists():
@@ -180,6 +217,7 @@ def main():
                 for path in PATHS:
                     Path(path).unlink(missing_ok=True)
                 activate(False)
+                configure_autostart(args.container, False)
         except BaseException:
             rollback(journal)
             raise
