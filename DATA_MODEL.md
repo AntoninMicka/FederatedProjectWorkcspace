@@ -125,7 +125,9 @@ Projekce má v PoC limit 16 MiB na soubor, 64 MiB celkem a 10 000 souborů. Mini
 | Counterparty | Role osoby nebo organizace v konkrétním vztahu. Nemá vytvářet duplicitní kontakt ani automatické RBAC členství. |
 | Meeting | Projekt, pozvaní a skuteční účastníci, agenda, revize decku, interní poznámky, policy a follow-up vazby. |
 | DisclosureEvent | Samostatná událost předání, přijetí nebo opravy s důkazem, rozsahem a neměnnou referencí na obsah. |
-| PresentationSession | Trvalý záznam relace: deck, publikum, verze policy, navštívené revize, expozice a návratový bod; UI je projekce. |
+| DecisionScenario | Verzovaný interní scénář jednání se stabilními ID uzlů, směrem otázky, očekávanými odpověďmi, připravenými reakcemi, hranami a odkazy na existující backupy; není disclosure událostí. |
+| BackupLibrary | Verzovaný katalog referencí na schválené slidy, grafy, obrázky nebo výřezy. Jeden obsah lze odkazovat z více slidů a větví bez kopírování. |
+| PresentationSession | Trvalý záznam relace: deck a scénář v konkrétní revizi, publikum, verze policy, aktuální větev, navigační zásobník, přerušený slide/krok odhalení, odložená témata, navštívené revize a expozice; UI je projekce. |
 
 Kandidátní registry mají zachovat konvenci `registries/<kind>/<UUID>.json`; konečné názvy a stavy uzavře návrhový kontrakt. Tato dokumentační změna je nezakládá. Definice decku a slidy jsou verzované artefakty, ne kopie v odděleném prezentačním úložišti.
 
@@ -159,6 +161,12 @@ Auditní události se přidávají po souborech s deduplikací podle ID. Oprava,
 Příprava ani export nejsou předáním. Potvrzení audience rendereru dokládá zobrazení aplikací, nikoli pozornost lidí. SMTP přijetí není přečtení; doručenky a přístupy jsou další doklady, nikoli změna minulého faktu. Ústní sdělení je ruční záznam s určeným autorem a mírou jistoty.
 
 ### Relace Presenteru a odvozené pohledy
+
+Scénář je interní graf, nikoli povinná cesta prezentací. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou připravenou reakci, další uzly a volitelné reference na backupy. Obsahuje explicitní větev pro jinou odpověď, nevědomost nebo odmítnutí. Větev smí skončit ústní odpovědí, doplňující otázkou, odložením nebo návratem bez promítnutí slidu. Kontextové doplňky slidu i globální knihovna odkazují na stejný verzovaný obsah; klasifikace doplňku se nedědí z hlavního slidu.
+
+Navigační volba, focus, privátní náhled a skutečné předání jsou samostatné stavy. Volba očekávané odpovědi sama nezaznamená skutečný výrok protistrany ani vyslovení připravené reakce. Skutečná odpověď a citlivé ústní sdělení vyžadují samostatné ruční potvrzení; pouze potvrzené předání vstupuje do Disclosure Registry a expozice. Navigační historie zůstává oddělená od auditní evidence.
+
+Přerušení zachová slide, krok postupného odhalení, rozehranou větev a celý zásobník návratů. Samostatné akce vracejí o uzel, k přerušenému místu nebo do hlavní prezentace. Předběhnutý budoucí slide lze označit jako probraný, ale automaticky se nepřeskakuje. Restart obnoví navigaci, odložená témata i expozici; neurčitý výsledek audience operace zůstává `unknown`.
 
 Globální expozici lze reprezentovat celými půlkroky: green 0, orange 1, red 2; UI zobrazuje 0 / 0,5 / 1 stupně. Součet, prahy a historie jsou deterministické. Počítá se potvrzený nový payload nebo rozsah pro aktuální publikum, ne kliknutí v privátním preview. Opakované promítnutí se zaznamená, ale stejný payload v téže relaci se nezapočítá znovu. Změna účastníků a nové revize vyžadují nové posouzení.
 

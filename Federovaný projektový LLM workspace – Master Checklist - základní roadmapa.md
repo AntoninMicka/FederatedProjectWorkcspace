@@ -986,13 +986,21 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 ## 22C. Disclosure Presenter
 
 - [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
+- [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.
+- [ ] Backup ponechat volitelný: větev může pokračovat doplňující otázkou, ústní odpovědí, odložením tématu nebo návratem bez dalšího slidu. Odkazovat na existující obsah v konkrétní revizi; jeden backup smí sloužit více slidům a větvím bez kopií.
+- [ ] Ke každému slidu i backupu umožnit kontextové doplňující otázky, interní poznámky/zdroje a veřejné doplňky. Vedle nich držet globální knihovnu „Všechny backupy“ dostupnou odkudkoli, s hledáním podle tématu/otázky, filtrem citlivosti a označením již použité revize.
+- [ ] Kokpit nabídne pohledy „K tomuto slidu“, „Všechny backupy“ a „Odložené otázky“. Zobrazí aktuální otázku, připravenou reakci a nejbližší možnosti; celý strom zůstane rozbalitelný. Neočekávanou otázku lze stručně poznamenat nebo odložit bez editace celého scénáře.
+- [ ] Větev vybírá řečník ručně. Focus, výběr, privátní náhled a akce „Zobrazit publiku“ jsou rozdílné stavy; šipky, hledání ani volba možné odpovědi nesmějí promítat obsah nebo tvrdit, že odpověď skutečně zazněla. Klávesnicové ovládání a focus/selection model navrhnout podle [W3C APG Tree View](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/).
+- [ ] Akce „Doplňující otázka“ uloží přesný návratový bod včetně slidu, kroku postupného odhalení a rozehrané větve. Zachovat historii zanoření a samostatné akce „zpět o úroveň“, „návrat k přerušenému výkladu“ a „pokračovat hlavní prezentací“; předběhnutý pozdější slide pouze označit, ne automaticky přeskočit.
 - [ ] Základní deck připravovat jako zelený po kontrole obsahu. Každý backup má vlastní `green / orange / red`; změněná nebo nezkontrolovaná revize nesmí zdědit automatické schválení.
 - [ ] Kumulativní globální semafor: zelený slide +0, oranžový +0,5, červený +1 stupeň. Prahy a režim schůzky nastavit předem a evidovat jejich verzi.
 - [ ] Přírůstek účtovat až při evidovaném zobrazení publiku, ne při privátním náhledu. Opakování totožného obsahu stejnému publiku během stejné schůzky logovat, ale nezapočítávat znovu; nová revize, nový rozsah či příjemce vyžadují nové posouzení.
-- [ ] Před zobrazením ukázat dopad na celkové skóre; citlivý slide nebo překročený limit může vyžadovat vědomé potvrzení. Autorizační zákaz nelze potvrzením obejít.
-- [ ] Skóre pouhým zavřením slidu nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat počet backupů a čas, aby i mnoho zelených odboček mohlo vyvolat organizační upozornění.
+- [ ] Před zobrazením ukázat přírůstek a výslednou expozici; u navržené sekvence také předpokládaný součet bez započtení nevybraných alternativ. Citlivou ústní odpověď započítat pouze po ruční akci „Sděleno ústně“. Citlivý obsah nebo překročený měkký limit může vyžadovat potvrzení, autorizační zákaz jím obejít nelze.
+- [ ] Skóre pouhým zavřením slidu, přechodem mezi větvemi nebo návratem nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat čas, počet odboček a hloubku zanoření. Upozornění nabídne stručnou odpověď, doplňující otázku, odložení nebo návrat.
 - [ ] Dříve sdílený červený obsah zůstává červený; stav předání je samostatná osa. „Známá revize“ není povolení k dalšímu odeslání nebo reklasifikace na public.
-- [ ] Zajistit offline provoz, obnovu relace po pádu, bezpečný neutrální výstup a export pouze vybraného obsahu bez poznámek, skrytých backupů a zdrojových modelů.
+- [ ] Navigační historii oddělit od evidence sdílení a očekávanou odpověď od samostatně potvrzené skutečné odpovědi. Strom, interní reakce a vyjednávací poznámky ponechat pouze řečníkovi; nesmějí být skrytým obsahem audience rendereru ani exportovaného decku.
+- [ ] Zajistit offline provoz, obnovu konkrétní revize decku/scénáře, aktuální větve, návratových bodů, odložených témat a expozice po pádu, bezpečný neutrální výstup a explicitní stav neověřeného promítnutí.
+- [ ] Přidat zkušební režim s kontextovými i obecnými doplňujícími otázkami, simulovaným semaforem, časem odboček a návratem. Nácvik je oddělen od skutečné relace a nikdy nezapisuje DisclosureEvent ani tvrzení, že partner obsah obdržel.
 
 ## 22D. Communications Hub — plnohodnotný klient
 
@@ -1010,7 +1018,7 @@ Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M
 | --- | --- | --- |
 | Kontrakty | BACKLOG ER-00 | Zaznamenané entity, revize, privacy hranice a migrace; bez zpětného otevření Gate M0. |
 | Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
-| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, návrat z backupu a restart bez ztráty relace. |
+| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, verzovaný scénář, kontextové i globální backupy, návrat z přerušení a restart bez ztráty relace. |
 | Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
 | Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
 | Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |

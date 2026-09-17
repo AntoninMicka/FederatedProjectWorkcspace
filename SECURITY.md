@@ -35,7 +35,7 @@ Níže je návrh pro plánované moduly, nikoli implementované ochrany. Nezavá
 | Vstup / hranice | Riziko | Požadovaná kontrola | Stav |
 | --- | --- | --- | --- |
 | Partner → projekt | Záměna osoby, organizace, účtu a oprávnění | Stabilní identity, časové vztahy, explicitní příjemci; kontakt neuděluje RBAC | návrh |
-| Presenter → publikum | Únik poznámek, skrytých backupů nebo zdrojového modelu | Publikum dostává pouze schválený payload, ne celý deck skrytý pomocí CSS; samostatné řízení výstupu | návrh |
+| Presenter → publikum | Únik poznámek, rozhodovacího scénáře, očekávaných odpovědí, skrytých backupů nebo zdrojového modelu | Publikum dostává pouze explicitně schválený payload, ne celý deck/scénář skrytý pomocí CSS; focus, navigace, preview a nácvik používají samostatné řízení výstupu a nevytvářejí disclosure | návrh |
 | Komunikace → externí příjemce | Chybná adresa, reply-all, citace nebo příloha | Náhled skutečných příjemců a bajtů, kontrola policy těsně před přenosem; adresářové návrhy nejsou souhlas | návrh |
 | Mail/pozvánka → UI a LLM | Aktivní HTML, tracking, příloha nebo prompt injection | Sanitizace a izolace, vzdálené zdroje standardně vypnuté, omezení příloh; obsah je data, nikoli instrukce | návrh |
 | Restart → SMTP/audience | Duplicitní odeslání nebo falešný auditní úspěch | Durable operation record, ID události, explicitní unknown, žádný automatický resend při neurčitém výsledku | návrh |
