@@ -12,7 +12,7 @@ Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, j
 
 - Stav: [ ] [blocked]; lokální implementace a regrese dokončeny, cílová úroveň PoC validated na Turris Omnia čeká na uživatelem plánovaný restart routeru.
 - Původ: otevřená restartová akceptace M1-07; uživatel 2026-09-17 potvrdil zachování instalace a dat po restartu, ale kontejner `workspace-m0` se automaticky nespustil.
-- Skutečná větev: `feature/m1-07-lxc-autostart`, založená z `develop` (`a93dd75`, PR #23 začleněn). Jediný PR do `develop`; není vytvořen.
+- Skutečná větev: `feature/m1-07-lxc-autostart`, založená z `develop` (`a93dd75`, PR #23 začleněn). Jediný PR #24 do `develop` je otevřený; není sloučen.
 - Výstup: bezpečné, idempotentní nastavení autostartu jen zvoleného kontejneru přes Turris `/etc/config/lxc-auto`, rollback instalace/odebrání a doložený restart routeru bez ručního startu.
 - Mimo rozsah: změna dat či rootfs kontejneru, automatický reboot routeru bez explicitního pokynu, obecná správa cizích LXC a federovaná synchronizace M5.
 - Akceptace: ostatní autostart sekce zůstanou zachované; kolize vlastněné sekce se odmítne; opakovaná instalace/odebrání a rollback jsou bezpečné; po cílovém rebootu běží kontejner i `federated-workspace.service`, dlaždice vede na aktuální IP a funguje přihlášení, katalog a náhled.
