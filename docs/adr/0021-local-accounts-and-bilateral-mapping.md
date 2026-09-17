@@ -33,12 +33,28 @@ revokuje související mapování; nové schválení uzlu není nové schválen�
 
 ## Data a ACL
 
-Plánované rozšíření M5 rozliší technický stav peeru od úrovně vztahu.
-`same-company` a `partner` jsou explicitní relationship classes vedle výchozího
-`unspecified`; nejsou numerickým žebříčkem důvěry a samy nic neautorizují.
+Plánované rozšíření M5 rozliší technický stav peeru od capability profilu vztahu.
+Profily `same-company-same-team`, `same-company`, `trusted-partner`,
+`holding-partner` a `partner` vedle výchozího `unspecified` nejsou numerickým
+žebříčkem důvěry a samy nic neautorizují:
+
+- `same-company-same-team` může přenášet identity uživatelů a jejich projektové
+  role; hesla, credentials, session a možnost vzdáleného přihlášení zůstávají
+  vždy lokální,
+- `same-company` synchronizuje data, ale vzdáleného uživatele pouze eviduje jako
+  kvalifikovanou identitu pro provenance a audit; nepřebírá jej jako lokální účet
+  ani nesynchronizuje jeho role,
+- `trusted-partner` dovoluje výběrové sdílení konkrétně mapovaným příjemcům,
+- `holding-partner` dovoluje výběrové sdílení také ověřené společnosti jako celku;
+  její členství je časově vymezené a verzované,
+- `partner` dovoluje pouze chat a obsah, který uživatel explicitně odešle nebo
+  nasdílí; nepovoluje background synchronizaci ani procházení projektu,
+- `unspecified` je fail-closed.
+
 Přenos neveřejné historie vyžaduje navíc oboustranně schválený project/branch
-scope, mapování uživatelů, origin ACL, právo `export` a místní policy. Tím se
-public-only první přenos nerozšíří pouhou změnou jednoho příznaku.
+scope, případné mapování uživatelů či organizačního příjemce, origin ACL, právo
+`export` a místní policy. Tím se public-only první přenos nerozšíří pouhou změnou
+jednoho příznaku.
 
 Portable rights manifest v1 má právě `schema_version`, `project_id`, `commit_id`
 a `entries`. Každá entry má `entity_id`, `privacy` a `grants`; každý grant

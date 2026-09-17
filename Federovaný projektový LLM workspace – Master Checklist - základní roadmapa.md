@@ -358,8 +358,10 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] projekty,
   - [ ] stav synchronizace.
 - [ ] Definovat trust model mezi uzly.
-- [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat úroveň federačního vztahu `same-company` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčená úroveň zůstává explicitně `unspecified`.
-- [ ] Úroveň vztahu svázat s verzovanou lokální policy, nikoli s implicitním přístupem. Přenos `project`/`confidential` vyžaduje konkrétní project/branch scope, mapované uživatele a právo `export`; `local-only` federaci nikdy neopouští.
+- [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat capability profil federačního vztahu `same-company-same-team`, `same-company`, `trusted-partner`, `holding-partner` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčený profil zůstává explicitně `unspecified` a je fail-closed.
+- [ ] `same-company-same-team` smí federovat identity uživatelů a jejich projektové role; credentials, session a vzdálené přihlášení zůstávají lokální. `same-company` federuje data, ale vzdálené uživatele pouze eviduje pro provenance a audit, nepřebírá je jako lokální účty ani nesynchronizuje jejich role.
+- [ ] `trusted-partner` smí obdržet jen vybraná data konkrétně mapovanými příjemci. `holding-partner` smí obdržet jen vybraná data, ale grant lze udělit také ověřené společnosti jako celku; členství společnosti musí být časově vymezené a verzované. `partner` má jen chat a obsah explicitně odeslaný nebo nasdílený uživatelem, bez background synchronizace a procházení projektu.
+- [ ] Profil vztahu svázat s verzovanou lokální policy, nikoli s implicitním přístupem. Přenos `project`/`confidential` vyžaduje konkrétní project/branch scope, příslušné mapování uživatele či organizačního příjemce a právo `export`; `local-only` federaci nikdy neopouští.
 - [ ] Autorizovat celý dosažitelný Git graf vybraného refu, nejen HEAD. Změna úrovně, scope, mapování nebo revokace nesmí zpětně zpřístupnit dříve odmítnutou historii bez nového explicitního rozhodnutí.
 
 ## 6B. Transport
@@ -842,7 +844,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 
 - [ ] Node identity.
 - [ ] Trust.
-- [ ] Úrovně vztahu `same-company` / `partner` oddělené od peer trust state a explicitních oprávnění.
+- [ ] Capability profily `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner` oddělené od peer trust state a explicitních oprávnění.
 - [ ] Git sync.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
@@ -856,7 +858,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
-**Gate M5:** desktopový a serverový uzel mohou podle explicitní relationship/branch policy sdílet projekt a mapované uživatele, používat rozdílné LLM backendy, synchronizovat změny po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení či odvození do projektu je explicitní, auditovatelné a neobchází privacy ani lidskou akceptaci.
+**Gate M5:** desktopový a serverový uzel mohou podle explicitního capability profilu a relationship/branch policy sdílet jen povolená data; pouze `same-company-same-team` federuje uživatele a jejich projektové role, zatímco ostatní profily zachovají své užší hranice. Uzly mohou používat rozdílné LLM backendy, synchronizovat změny po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení, explicitní sdílení či odvození do projektu je auditovatelné a neobchází privacy ani lidskou akceptaci.
 
 ## Milestone M6 – Project intelligence
 
