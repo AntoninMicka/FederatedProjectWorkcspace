@@ -11,6 +11,42 @@ Synchronizují se pouze autorizované projekty. Credentials se nikdy nekopíruj�
 
 Upřesnění 2026-09-13 podle [ADR 0021](docs/adr/0021-local-accounts-and-bilateral-mapping.md): účty a přihlášení jsou lokální. Desktop má jediného běžícího uživatele, web může mít více vlastních účtů. Federace mapuje kvalifikované identity až po dvou podepsaných potvrzeních; nezavádí vzdálené přihlášení ani sdílená hesla. Offline potvrzení a revokace jsou implementované, automatické doručování a datový transport zůstávají M5. ACL/rights manifest a privacy se musí přenášet s daty, zachovat původní identity a omezit účinná práva průnikem s místní politikou; chybějící ACL není automatický přístup.
 
+Plánované M5 rozšíření přidává capability profily `same-company-same-team`,
+`same-company`, `trusted-partner`, `holding-partner` a `partner` vedle výchozího
+`unspecified`. Nejde o numerický žebříček ani oprávnění; profil pouze omezuje,
+jaký druh grantu smí lokální verzovaná policy vytvořit. `same-company-same-team`
+smí federovat identity uživatelů a jejich projektové role, nikdy však credentials,
+session nebo vzdálené přihlášení. `same-company` federuje data; vzdálené uživatele
+vede jen jako kvalifikované identity pro provenance a audit, nevytváří z nich
+lokální účty ani nesynchronizuje jejich role. `trusted-partner` dovoluje vybraná
+data konkrétně mapovaným příjemcům, `holding-partner` navíc dovoluje grant ověřené
+společnosti jako celku a `partner` pouze chat a obsah explicitně odeslaný nebo
+nasdílený uživatelem. `unspecified` je fail-closed.
+
+Vazba desktopu s libovolným běžným peerem může mít nejvýše profil
+`same-company`; dovoluje mapování kvalifikovaných identit, nikoli synchronizaci
+účtů a rolí. Jedinou výjimkou je peer přímo založený z daného desktopu: vůči
+zakládajícímu desktopu může mít `same-company-same-team`, doložené neměnnou
+podepsanou vazbou původu. Takový peer nesmí mít `same-company-same-team` s žádným
+dalším uzlem, nesmí tuto vazbu delegovat a ve všech ostatních vztazích se
+posuzuje jako desktop. Běžný peer nelze dodatečně povýšit na tuto výjimku;
+relationship policy nesmí měnit ani obcházet původ uzlu.
+
+Vztah `trusted-partner` i `holding-partner` musí na přijímajícím uzlu určit
+aktivního místního styčného uživatele. Převzatá data nejsou ostatním místním
+uživatelům automaticky dostupná; styčný uživatel jim přiděluje a odnímá práva
+v mezích origin ACL, privacy, povolených akcí a zákazu dalšího exportu. Určení,
+nahrazení i zneplatnění styčného uživatele je verzované a auditované. Chybějící
+nebo neaktivní styčný uživatel zastaví nové přidělování práv, nikoli však audit
+a bezpečné odvolání již udělených lokálních grantů.
+
+Každý neveřejný projekt/ref i organizační grant přesto vyžaduje oboustranně
+schválený scope, origin ACL, `export` a místní policy; členství společnosti musí
+být ověřené, časově vymezené a verzované. Stejný model chrání federovaný lidský
+chat. Jeho durable zprávy zůstávají mimo projektový Git;
+uložení konverzace, shrnutí, zadání či jiného podporovaného artefaktu je až
+explicitní Workspace publikace s preview, provenance a zděděnou privacy.
+
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
 ## Scénář konfliktu

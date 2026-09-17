@@ -358,6 +358,13 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] projekty,
   - [ ] stav synchronizace.
 - [ ] Definovat trust model mezi uzly.
+- [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat capability profil federačního vztahu `same-company-same-team`, `same-company`, `trusted-partner`, `holding-partner` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčený profil zůstává explicitně `unspecified` a je fail-closed.
+- [ ] `same-company-same-team` smí federovat identity uživatelů a jejich projektové role; credentials, session a vzdálené přihlášení zůstávají lokální. `same-company` federuje data, ale vzdálené uživatele pouze eviduje pro provenance a audit, nepřebírá je jako lokální účty ani nesynchronizuje jejich role.
+- [ ] Desktop může mít s běžným peerem nejvýše `same-company`, včetně mapování kvalifikovaných identit. Pouze peer přímo založený z desktopu může mít se svým zakládajícím desktopem jednu `same-company-same-team` vazbu doloženou neměnným podepsaným původem. Tento peer ji nesmí navázat ani delegovat vůči nikomu dalšímu, ve všech ostatních vztazích se posuzuje jako desktop a běžný peer nelze dodatečně povýšit na tuto výjimku.
+- [ ] `trusted-partner` smí obdržet jen vybraná data konkrétně mapovanými příjemci. `holding-partner` smí obdržet jen vybraná data, ale grant lze udělit také ověřené společnosti jako celku; členství společnosti musí být časově vymezené a verzované. `partner` má jen chat a obsah explicitně odeslaný nebo nasdílený uživatelem, bez background synchronizace a procházení projektu.
+- [ ] Pro `trusted-partner` a `holding-partner` určit na přijímajícím uzlu aktivního místního styčného uživatele. Převzatá data nezpřístupnit ostatním automaticky; styčný uživatel jim přiděluje a odnímá lokální práva jen jako podmnožinu origin ACL, privacy, povolených akcí a exportních omezení. Jeho určení, výměna, deaktivace a změny grantů jsou verzované a auditované; bez aktivního styčného uživatele se nové granty odmítnou.
+- [ ] Profil vztahu svázat s verzovanou lokální policy, nikoli s implicitním přístupem. Přenos `project`/`confidential` vyžaduje konkrétní project/branch scope, příslušné mapování uživatele či organizačního příjemce a právo `export`; `local-only` federaci nikdy neopouští.
+- [ ] Autorizovat celý dosažitelný Git graf vybraného refu, nejen HEAD. Změna úrovně, scope, mapování nebo revokace nesmí zpětně zpřístupnit dříve odmítnutou historii bez nového explicitního rozhodnutí.
 
 ## 6B. Transport
 
@@ -373,6 +380,7 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] uživatelů,
   - [ ] node konfigurace,
   - [ ] federation metadata.
+
 - [ ] Definovat:
   - [ ] pull,
   - [ ] push,
@@ -389,6 +397,16 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Již v M0 navrhnout UI konfliktu s verzemi „moje“, „příchozí“ a společným základem, náhledem výsledku a možností řešení odložit.
 - [ ] Pro binární soubory nabídnout výběr verze nebo zachování obou jako samostatných artefaktů.
 - [ ] Nevyřešený merge nepublikovat jako aktuální projektový stav; zachovat původní data a zobrazit blokovanou synchronizaci.
+
+## 6D. Federovaný uživatelský chat
+
+- [ ] Umožnit chat mezi explicitně mapovanými lokálními uživateli schválených peerů; federace nezavádí vzdálené přihlášení, globální účet ani přenos credentials.
+- [ ] První rozsah tvoří přímé a explicitně založené skupinové vlákno. Každá zpráva má stabilní ID, kvalifikovaného autora, thread ID, lokální pořadí, čas přijetí a podpis/transportní provenance; samotné hodiny uzlů neurčují globální pořadí.
+- [ ] Zprávy přenášet přes durable outbox/inbox s idempotentním doručením, deduplikací, stavy pending/sent/delivered/failed/unknown, offline pokračováním a revokací dalšího přístupu. Již přijatou historii tiše nepřepisovat ani nevydávat odvolání za kryptografické smazání cizí kopie.
+- [ ] Vlákno bez jiného účelu klasifikovat jako `brainstorming`. Lidský chat funguje bez LLM; volitelné shrnutí nebo návrh zadání smí použít jen backend povolený privacy a execution-boundary policy.
+- [ ] Nabídnout explicitní uložení vybraného rozsahu konverzace, shrnutí, zadání nebo jiného podporovaného typu artefaktu. Před zápisem zobrazit cílový projekt, typ, obsah, provenance, účastníky a výslednou privacy; samotná zpráva ani LLM návrh nic nepublikuje.
+- [ ] Publikovaný artefakt váže thread/message ID a přesné revize vstupů, dědí nejpřísnější privacy a průnik oprávnění použitých zpráv/příloh a zapisuje se standardním Workspace expected-HEAD/journal/CAS/index/receipt lifecycle. Libovolný artefakt znamená pouze typ podporovaný schématem a oprávněními, nikoli spustitelný či nevalidovaný obsah.
+- [ ] Oddělit lokální pracovní stav chatu, federované doručení a Git artefakt. Snapshot či shrnutí v projektu není autoritativní kopií živého vlákna a jeho editace nepřepisuje původní zprávy.
 
 ---
 
@@ -565,6 +583,8 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 # 11A. Konverzační vlákna, persistence a projektové otisky
 
 Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM běhů. Není totožné s jedním run recordem, Context Manifestem ani s výsledným projektovým artefaktem. Implementační dávky a jejich závislosti drží BACKLOG; tato sekce je strategický kontrakt, nikoli tvrzení o hotové implementaci.
+
+Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi používá stejné principy explicitního otisku a publikace, ale má vlastní zprávový transport, identity a recovery v sekci 6D; lidská zpráva není LLM run record.
 
 - [ ] Umožnit běžnou vícekolovou konverzaci s vybraným backendem/modelem a po restartu bezpečně navázat na lokálně perzistentní vlákno.
 - [ ] Samostatnou konverzaci bez explicitního workflow nebo projektové role inicializovat jako `brainstorming`; klasifikace popisuje účel vlákna a sama nemění oprávnění, privacy ani roli jednotlivého LLM běhu.
@@ -826,8 +846,11 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 
 - [ ] Node identity.
 - [ ] Trust.
+- [ ] Capability profily `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner` oddělené od peer trust state a explicitních oprávnění.
 - [ ] Git sync.
 - [ ] Shared users.
+- [ ] Federovaný uživatelský chat s offline doručením.
+- [ ] Explicitní publikace chatu, shrnutí, zadání nebo jiného podporovaného artefaktu do projektu.
 - [ ] Node-local backend registry.
 - [ ] Federation status.
 - [ ] Offline/reconnect.
@@ -837,7 +860,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
-**Gate M5:** desktopový a serverový uzel mohou sdílet projekt a uživatele, používat rozdílné LLM backendy a synchronizovat změny po offline práci bez ztráty historie.
+**Gate M5:** desktopový a serverový uzel mohou podle explicitního capability profilu a relationship/branch policy sdílet jen povolená data; pouze neměnným původem doložená vazba zakládající desktop–jím založený peer používá `same-company-same-team` a federuje uživatele a jejich projektové role. Druhá, tranzitivní nebo dodatečně povýšená same-team vazba se odmítne; ostatní profily zachovají své užší hranice. Uzly mohou používat rozdílné LLM backendy, synchronizovat změny po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení, explicitní sdílení či odvození do projektu je auditovatelné a neobchází privacy ani lidskou akceptaci.
 
 ## Milestone M6 – Project intelligence
 

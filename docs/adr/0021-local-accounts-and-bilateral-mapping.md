@@ -33,6 +33,49 @@ revokuje související mapování; nové schválení uzlu není nové schválen�
 
 ## Data a ACL
 
+Plánované rozšíření M5 rozliší technický stav peeru od capability profilu vztahu.
+Profily `same-company-same-team`, `same-company`, `trusted-partner`,
+`holding-partner` a `partner` vedle výchozího `unspecified` nejsou numerickým
+žebříčkem důvěry a samy nic neautorizují:
+
+- `same-company-same-team` může přenášet identity uživatelů a jejich projektové
+  role; hesla, credentials, session a možnost vzdáleného přihlášení zůstávají
+  vždy lokální,
+- `same-company` synchronizuje data, ale vzdáleného uživatele pouze eviduje jako
+  kvalifikovanou identitu pro provenance a audit; nepřebírá jej jako lokální účet
+  ani nesynchronizuje jeho role,
+- `trusted-partner` dovoluje výběrové sdílení konkrétně mapovaným příjemcům,
+- `holding-partner` dovoluje výběrové sdílení také ověřené společnosti jako celku;
+  její členství je časově vymezené a verzované,
+- `partner` dovoluje pouze chat a obsah, který uživatel explicitně odešle nebo
+  nasdílí; nepovoluje background synchronizaci ani procházení projektu,
+- `unspecified` je fail-closed.
+
+Desktop může mít s libovolným běžným peerem nejvýše `same-company`. Mapování
+kvalifikovaných identit je v této vazbě dovoleno pro provenance a ACL, ale
+neznamená převzetí účtu ani synchronizaci role. Výjimkou je peer vytvořený přímo
+z desktopu. Pouze dvojice zakládající desktop–jím založený peer může používat
+`same-company-same-team`; vznik musí doložit neměnná, oběma uzly podepsaná vazba
+původu. Založený peer smí mít právě jednu takovou vazbu, nesmí ji delegovat a
+pro všechny ostatní vztahy se posuzuje jako desktop, tedy nejvýše
+`same-company`. Existující běžný peer nelze změnou policy, importem ani novým
+schválením povýšit na založený peer. Revokace může vazbu ukončit, ale její
+opětovné schválení nesmí změnit zakladatele ani vytvořit další same-team hranu.
+
+Pro `trusted-partner` a `holding-partner` policy povinně určuje právě jednoho
+aktivního místního styčného uživatele přijímajícího uzlu. Přijetí dat samo
+nevytváří přístup ostatním místním uživatelům. Styčný uživatel může přidělit
+nebo odebrat lokální grant pouze jako podmnožinu origin ACL, privacy, akcí a
+omezení dalšího exportu; nemůže původní oprávnění rozšířit ani reklasifikovat
+data. Určení, nahrazení a zneplatnění styčného uživatele i jím provedené změny
+grantů jsou verzované a auditované. Není-li styčný uživatel aktivní, systém
+fail-closed zakáže nové granty, ale dovolí audit a bezpečné odebrání existujících.
+
+Přenos neveřejné historie vyžaduje navíc oboustranně schválený project/branch
+scope, případné mapování uživatelů či organizačního příjemce, origin ACL, právo
+`export` a místní policy. Tím se public-only první přenos nerozšíří pouhou změnou
+jednoho příznaku.
+
 Portable rights manifest v1 má právě `schema_version`, `project_id`, `commit_id`
 a `entries`. Každá entry má `entity_id`, `privacy` a `grants`; každý grant
 `node_id`, `user_id`, `actions`. Akce jsou read/write/review/manage/export,
@@ -71,3 +114,19 @@ Při chybějícím dříve označeném klíči obnovit originál, negenerovat no
 Pád po commit/ztráta odpovědi nevyžaduje opakované schválení: znovu načíst
 registr a vydat uložený podepsaný soubor. Průběžná evidence a zbývající cílové
 ověření jsou v [TODO](../../TODO.md); provozní postup v [návodu](../administration.md).
+
+## Plánované federované konverzace
+
+Federovaný lidský chat v M5 používá kvalifikované lokální identity a aktivní
+oboustranné mapování; nevytváří globální účet ani vzdálené přihlášení. Zprávy a
+jejich durable outbox/inbox jsou samostatný komunikační stav mimo projektový Git
+a mimo obnovitelný projektový index. Stabilní ID, podpis/transportní provenance
+a idempotentní příjem umožní offline retry bez tvrzení, že hodiny uzlů dávají
+globální pořadí.
+
+Uložení vybraného chatu, shrnutí, zadání nebo jiného podporovaného artefaktu je
+samostatná explicitní Workspace publikace s preview, provenance a zděděnou
+privacy. LLM je volitelný zpracovatel pod Context Manifestem; chat mezi lidmi
+funguje bez něj. Publikovaný artefakt není autoritou živého vlákna a jeho editace
+nemění původní zprávy. Přesný zprávový kontrakt, retence, skupinové členství a
+crash boundaries uzavřou F-M5-CHAT-01/02 před implementací.
