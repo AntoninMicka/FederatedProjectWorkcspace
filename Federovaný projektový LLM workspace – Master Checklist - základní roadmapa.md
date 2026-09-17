@@ -568,19 +568,21 @@ Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM 
 
 ---
 
-# 11B. Vlastní rozvoj produktu a integrace coding agenta
+# 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
 
-**Stav: designed / plánováno, neimplementováno.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu; workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+**Stav: designed / plánováno, neimplementováno.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
-- [ ] Konkrétní Codex adaptér realizovat přes v době implementace oficiálně podporované a ověřené rozhraní, preferenčně plugin/MCP nebo bezpečný CLI adaptér. Produktový kontrakt nevázat napevno na jednu dnešní podobu integrace ani na jediného providera.
+- [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu.
+- [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.
+- [ ] Konkrétní Codex adaptér držet odděleně od IDE rozšíření a realizovat přes v době implementace oficiálně podporované a ověřené rozhraní. Produktový kontrakt nevázat napevno na jednu dnešní podobu integrace ani na jediného providera; stejné IDE rozšíření může později použít jiný kompatibilní coding-agent adaptér.
 - [ ] Výsledek běhu importovat jako oddělený run record a návrh aktualizace projektových dat: stav, shrnutí, diff/změněné soubory, testy a jejich skutečné výsledky, vytvořené commity/PR pouze pokud byly povoleny, omezení a vazbu na původní task ID a vstupní revizi. Přerušený běh má stav `unknown`, nikoli automaticky failed nebo completed.
 - [ ] Workspace označí úkol za dokončený až po validaci deklarovaných důkazů a lidském nebo explicitně schváleném policy rozhodnutí. Text reportu agenta, úspěšný exit code ani existence commitu samy nejsou důkazem splnění akceptace.
 - [ ] Ošetřit stale vstupní commit, souběžnou změnu roadmapy/úkolu, opakované předání, restart, duplicitní výsledek a částečně provedené externí akce. Každý export i import výsledku musí mít stabilní operation/run ID a idempotentní receipt.
 
-Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG DEV-01 až DEV-03.
+Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG DEV-01 až DEV-04.
 
 ---
 
@@ -834,7 +836,7 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 - [ ] Advanced context selection.
 - [ ] Převod roadmapy na projektové entity a export TODO/task balíčků.
 - [ ] Provider-neutral předání implementačního úkolu coding agentovi a import ověřitelného výsledku.
-- [ ] Volitelná integrace s Codexem pro implementaci vlastního produktu bez převzetí autority nad plánem a akceptací.
+- [ ] Rozšíření pro Microsoft Visual Studio Code/VSCodium a volitelné coding-agent adaptéry včetně Codexu, bez převzetí autority nad plánem a akceptací.
 
 **Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine. Umí také převést schválený plán na dohledatelné projektové úkoly a bezpečně předat implementaci coding agentovi, aniž by jeho report automaticky měnil autoritativní stav nebo obcházel lidskou akceptaci.
 
