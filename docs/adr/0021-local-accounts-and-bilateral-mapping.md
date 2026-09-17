@@ -51,6 +51,17 @@ Profily `same-company-same-team`, `same-company`, `trusted-partner`,
   nasdílí; nepovoluje background synchronizaci ani procházení projektu,
 - `unspecified` je fail-closed.
 
+Desktop může mít s libovolným běžným peerem nejvýše `same-company`. Mapování
+kvalifikovaných identit je v této vazbě dovoleno pro provenance a ACL, ale
+neznamená převzetí účtu ani synchronizaci role. Výjimkou je peer vytvořený přímo
+z desktopu. Pouze dvojice zakládající desktop–jím založený peer může používat
+`same-company-same-team`; vznik musí doložit neměnná, oběma uzly podepsaná vazba
+původu. Založený peer smí mít právě jednu takovou vazbu, nesmí ji delegovat a
+pro všechny ostatní vztahy se posuzuje jako desktop, tedy nejvýše
+`same-company`. Existující běžný peer nelze změnou policy, importem ani novým
+schválením povýšit na založený peer. Revokace může vazbu ukončit, ale její
+opětovné schválení nesmí změnit zakladatele ani vytvořit další same-team hranu.
+
 Pro `trusted-partner` a `holding-partner` policy povinně určuje právě jednoho
 aktivního místního styčného uživatele přijímajícího uzlu. Přijetí dat samo
 nevytváří přístup ostatním místním uživatelům. Styčný uživatel může přidělit

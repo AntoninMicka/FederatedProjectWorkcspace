@@ -23,6 +23,15 @@ data konkrétně mapovaným příjemcům, `holding-partner` navíc dovoluje gran
 společnosti jako celku a `partner` pouze chat a obsah explicitně odeslaný nebo
 nasdílený uživatelem. `unspecified` je fail-closed.
 
+Vazba desktopu s libovolným běžným peerem může mít nejvýše profil
+`same-company`; dovoluje mapování kvalifikovaných identit, nikoli synchronizaci
+účtů a rolí. Jedinou výjimkou je peer přímo založený z daného desktopu: vůči
+zakládajícímu desktopu může mít `same-company-same-team`, doložené neměnnou
+podepsanou vazbou původu. Takový peer nesmí mít `same-company-same-team` s žádným
+dalším uzlem, nesmí tuto vazbu delegovat a ve všech ostatních vztazích se
+posuzuje jako desktop. Běžný peer nelze dodatečně povýšit na tuto výjimku;
+relationship policy nesmí měnit ani obcházet původ uzlu.
+
 Vztah `trusted-partner` i `holding-partner` musí na přijímajícím uzlu určit
 aktivního místního styčného uživatele. Převzatá data nejsou ostatním místním
 uživatelům automaticky dostupná; styčný uživatel jim přiděluje a odnímá práva
