@@ -3,32 +3,37 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M1-SOURCE-01: Kontrakt neměnnosti a verzování zdrojů
+# TODO — F-M1-META-02: Implementace importní provenance v2
 
 Milník M1; Gate M1 zůstává otevřený. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M1-SOURCE-01 — Kontrakt neměnných zdrojů a jejich verzí
+## F-M1-META-02 — Implementace importní provenance v2
 
-- Stav: [x] [completed]; milník M1; cílová úroveň designed.
-- Původ: V-05 a neměnné importované zdroje z roadmapy; uživatelské pokračování na další úkol 2026-09-15.
-- Skutečná větev: `feature/f-m1-source-01-versioning`, vytvořená z čistého `develop` (`9acd0ef`) po doloženém začlenění F-M1-META-01 v PR #19. Jediný PR do `develop`; není vytvořen.
-- Výstup: pravidla neměnných bajtů a provenance pod jedním source UUID, povolených metadata-only změn, nové verze s novým UUID a transition validace přímých Git změn.
-- Mimo rozsah: implementace transition validátoru/UI, provenance v2, odstranění zdrojů, konektory a content-addressed storage.
-- Závislosti: F-M1-META-01/ADR 0023; existující nativní import, Workspace/Journal/Index a vztahy.
-- Akceptace jednoho PR: příklady stejného zdroje/nové verze, povolené změny metadat versus obsahu, konflikt při externí změně a vymezené validační/recovery hranice. Designed výstup se nevydává za vynucenou globální neměnnost.
+- Stav: [x] [completed]; milník M1; dosažená úroveň PoC validated.
+- Původ: odložená implementace F-M1-META-01/V-04 a ADR 0023; uživatelské pokračování na další úkol 2026-09-17.
+- Skutečná větev: `feature/f-m1-meta-02-provenance-v2`, vytvořená z čistého `develop` (`0e61e64`) po doloženém začlenění F-M1-SOURCE-01 v PR #20 (`7152d64`). Jediný PR do `develop`; není vytvořen.
+- Výstup: souběžné čtení v1/v2 v parseru a indexu, zápis nových importů v2, explicitní migrace pouze doložitelných v1 importů a UI zobrazení provenance.
+- Mimo rozsah: automatická plošná migrace, vymýšlení původního autora/času/revize, obecný transition validátor F-M1-SOURCE-02 a externí konektory.
+- Závislosti: ADR 0023, F-M1-SOURCE-01/ADR 0024 a existující import/Workspace/Index/preview.
+- Akceptace jednoho PR: striktní formát/limity, smíšený snapshot, původní bajty/hash, expected-HEAD/retry/receipt, procesní recovery před/po commitu, atomická indexace/migrace, skutečný Qt a celá sada.
 
-- [x] [completed] **V-05 — Vymezit neměnnost zdrojů (designed, 2026-09-15).** Obsahové bajty, basename, identita a importní provenance jsou pod jedním source UUID neměnné. Povolené jsou verzované projektové anotace; privacy lze uvolnit jen explicitní autorizovanou reklasifikací.
-- [x] [completed] **F-M1-SOURCE-01-A — Verze a duplicity (designed, 2026-09-15).** Nové bajty/revize dostanou nové UUID a mohou nést vztah `supersedes` na předchůdce. SHA-256 shoda pouze upozorňuje na stejné bajty; neslučuje automaticky odlišnou provenance, privacy ani projektový význam.
-- [x] [completed] **F-M1-SOURCE-01-B — Transition validace a recovery (designed, 2026-09-15).** Snapshot kontrola nestačí: publish/fast-forward/merge musí porovnat base a kandidáta a odmítnout změnu chráněných polí/bajtů stejného UUID. Nová verze publikuje obsah, sidecar a vztah jednou expected-HEAD/Journal/CAS/index/receipt operací.
+- [x] [completed] **F-M1-META-02-A — Parser a projekce v2 (PoC validated, 2026-09-17).** Striktní parser přijímá v1/v2 ve smíšeném snapshotu, podmíněný `import` blok odmítá neznámá a nedoložená pole a source hash váže skutečné bajty. Index v2 normalizuje úplný importní blok; v0/v1 migruje pouze atomickým rebuildem z validovaného HEAD a starou/částečnou projekci nevydá.
+- [x] [completed] **F-M1-META-02-B — Nový import a doložená migrace (PoC validated, 2026-09-17).** Native import zapisuje schema v2 a request digest váže bajty, hash i všechna vstupní provenance pole. Explicitní migrace vyžaduje původní Workspace importní commit, ancestry, přidání artefaktu, trailer operace a shodu neměnných polí/bajtů; žádná externí fakta nevymýšlí.
+- [x] [completed] **F-M1-META-02-C — UI, recovery a akceptace (PoC validated, 2026-09-17).** Podrobnosti bezpečně zobrazují čas/aktéra importu, hash, importér a dostupná volitelná pole. Retry/receipt, odmítnutí chyb, pády před/po CAS a během indexace, skutečný Qt/WebEngine, balení i offline provoz prošly.
+- [x] [completed] **F-M1-META-AH-01 — Oddělit čas importu a vznik zdroje (implemented, 2026-09-17).** Původ: uživatelské upřesnění. Importní dialog přijímá pouze explicitní doložený `source_created_at`; automatický `imported_at` zůstává samostatný a pozdější čas. Náhled používá nezaměnitelné popisky a neznámý vznik neodhaduje.
 
-### Výsledek a ověření — 2026-09-15
+### Průběžný návrh a recovery — 2026-09-17
 
-- Kontrakt: [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md); datový souhrn a vztah `supersedes`: [DATA_MODEL](DATA_MODEL.md).
-- Reuse/adapt stávajícího importu, metadatového validátoru, Git historie, Workspace/Journal/Index a relačních vztahů. Nová databáze ani externí komponenta nejsou potřeba.
-- Věcná kontrola proti importu, validátoru, mazání a existujícím testům potvrzuje, že dnešní UI source neupravuje ani nemaže, ale obecný transition invariant zatím není implementovaný. Kód/testy se nemění; celá sada se neopakovala.
-- Omezení: pouze designed. Čerstvě přijatý repozitář bez externího důkazu neumí prokázat pravost původního souboru; v2 hash ani transition validace nejsou implementovány. Gate M1 zůstává otevřený.
+- Reuse/adapt stávajícího striktního parseru, nativního importu, Workspace/Journal/Git/index lifecycle a bezpečného preview. Soukromá inventura neposkytuje vhodnější komponentu; nový framework ani databáze nejsou potřeba.
+- Nový import i explicitní migrace jsou jedna idempotentní operace: request a přesné bajty se svážou digestem, journal vznikne před publikací kandidáta, ref se posune CAS a index se po commitu atomicky obnoví. Pád před refem v2 nezveřejní; po refu recovery dokončí index a receipt bez druhého commitu.
+- Migrace nebude odhadovat externího autora, čas, URL ani revizi. Převzetí `created_at`/`author_id` a výpočet hashe je dovoleno jen po ověření explicitně zadaného commitu, který původní source artefakt přidal se shodnými bajty a neměnnými poli.
 
-## K předání do backlogu
+### Výsledek a ověření — 2026-09-17
 
-- [ ] [planned] **F-M1-SOURCE-02 — Vynutit neměnné zdroje a import navazující verze (cílová úroveň: PoC validated).** Implementovat transition validaci všech publish/merge cest, metadata-only editaci zdroje, import nové verze s novým UUID/`supersedes`, bezpečnou detekci byte-identity a UI konfliktu. Propojit s F-M1-META-02 bez duplikace parseru/migrace. Podmínka dokončení: v1/v2, přímá Git změna obsahu/metadat, fast-forward/merge/stejné UUID, privacy reclassification, expected-HEAD/retry/receipt, pády před/po CAS a indexu, skutečný Qt a celá sada. Jde o samostatnou budoucí feature, nikoli podmínku designed dávky F-M1-SOURCE-01.
+- Implementace: `spikes/metadata.py`, `spikes/source_import.py`, `spikes/storage.py` a bezpečné zobrazení v `spikes/desktop_ui.py`; kontrakt a provozní popis aktualizují ADR 0022/0023/0024, DATA_MODEL a návody.
+- Cílená sada `python3 -m unittest tests.test_metadata tests.test_source_import tests.test_index_projection -v`: 24 testů prošlo bez chyb a skipů. Pokrývá striktní v2, smíšený v1/v2 snapshot, nesoulad hashe, nové importy, volitelnou doloženou provenance, idempotentní migraci a procesní pády před/po publikaci i při indexaci.
+- Závěrečná sada `M0_DESKTOP_TEST=1 M0_DEB_TEST=1 M0_OFFLINE_TEST=1 python3 -m unittest discover -s tests -v` mimo socketový sandbox: 209 testů, 205 prošlo, čtyři volitelné libgit2 probe testy přeskočeny, bez chyb (130,346 s). Skutečný WebEngine ověřil i zobrazení v2 hashe/aktéra/importéra; běžely Qt dialogy, izolovaná instalace/upgrade/remove `.deb` a offline desktop.
+- Před závěrečným úspěšným během jednou selhal nesouvisející HTTPS browser smoke na TLS handshake; izolovaný retry prošel a celý opakovaný běh výše následně prošel. Nejde o routerové ani cloudové ověření.
+- Po F-M1-META-AH-01 cílená backendová sada měla 14 úspěšných testů a jeden očekávaný Qt skip; samostatné skutečné Qt dialog + WebEngine scénáře následně prošly 2/2 a ověřily starší `source_created_at` v requestu i zobrazení. Celá rozšířená sada po UI změně měla 210 testů: 205 prošlo, čtyři libgit2 skipy a jediný nesouvisející HTTPS browser smoke bez očekávaného stdout; jeho bezprostřední izolovaný retry prošel. Předchozí celý běh 209 testů byl čistý; po poslední UI změně není doložen další celý běh bez tohoto přechodného smoke selhání.
+- Omezení: migrace je explicitní programová operace, nikoli plošný UI wizard. Obecná neměnnost přes všechny publish/fast-forward/merge cesty, metadata editace source a import navazující verze zůstávají F-M1-SOURCE-02. Výpadek napájení, pád uvnitř libovolného syscallu a cílové zařízení nejsou tímto lokálním PoC doloženy; Gate M1 zůstává otevřený. PR není vytvořen ani sloučen.

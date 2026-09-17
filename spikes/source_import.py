@@ -55,18 +55,22 @@ def read_source(path):
     return raw
 
 
-def request_from_file(project_id, base_head, path, title, description, tags, privacy):
+def request_from_file(project_id, base_head, path, title, description, tags, privacy, *,
+                      source_url=None, source_author=None, source_created_at=None, source_revision=None):
     raw = read_source(path)
     return dict(project_id=project_id, artifact_id=str(uuid4()), base_head=base_head,
                 filename=Path(path).name, title=title, description=description, tags=tags, privacy=privacy,
                 created_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest())
+                content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest(),
+                source_url=source_url, source_author=source_author,
+                source_created_at=source_created_at, source_revision=source_revision)
 
 
 class Sources(Artifacts):
     def import_source(self, request, operation_id, *, checkpoint=lambda stage: None):
         fields = {'project_id', 'artifact_id', 'base_head', 'filename', 'title', 'description',
-                  'tags', 'privacy', 'created_at', 'content', 'sha256'}
+                  'tags', 'privacy', 'created_at', 'content', 'sha256', 'source_url',
+                  'source_author', 'source_created_at', 'source_revision'}
         require(isinstance(request, dict) and request.keys() == fields, 'Invalid source import request')
         uuid(request['project_id']); uuid(request['artifact_id'])
         require(isinstance(request['base_head'], str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', request['base_head'])), 'Invalid base commit')
@@ -78,9 +82,18 @@ class Sources(Artifacts):
                 and not any(c in request['title'] for c in '\r\n\0'), 'Vyplňte název zdroje do 200 znaků.')
         ws = self.workspace(request['project_id'])
         author = ProjectCreation(self.node_path).author_id()
-        meta = dict(schema_version=1, id=request['artifact_id'], title=request['title'], kind='source',
+        imported = dict(imported_at=request['created_at'], imported_by=author,
+                        content_sha256=request['sha256'],
+                        importer={'name': 'workspace-native-import', 'version': '2'})
+        for key in ('source_author', 'source_created_at', 'source_revision'):
+            if request[key] is not None:
+                imported[key] = request[key]
+        meta = dict(schema_version=2, id=request['artifact_id'], title=request['title'], kind='source',
                     created_at=request['created_at'], author_id=author, privacy=request['privacy'], provenance='external',
                     file=request['filename'], description=request['description'], tags=request['tags'])
+        meta['import'] = imported
+        if request['source_url'] is not None:
+            meta['source_url'] = request['source_url']
         validate_metadata(meta, sidecar=True)
         encoded_meta = (json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
         require(len(encoded_meta) <= MAX_METADATA, 'Metadata importu přesahují 64 KiB.')
@@ -101,5 +114,63 @@ class Sources(Artifacts):
             candidate = dict(files); candidate.update(changes)
             validate_snapshot(candidate)
             return changes, 'Local workspace author', author + '@local.invalid', 'Import original source'
+
+        return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+
+    def migrate_source(self, request, operation_id, *, checkpoint=lambda stage: None):
+        """Upgrade one evidenced native v1 import without inventing source facts."""
+        fields = {'project_id', 'artifact_id', 'base_head', 'import_commit'}
+        require(isinstance(request, dict) and request.keys() == fields, 'Invalid source migration request')
+        uuid(request['project_id']); uuid(request['artifact_id'])
+        for key in ('base_head', 'import_commit'):
+            require(isinstance(request[key], str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', request[key])),
+                    'Invalid commit')
+        ws = self.workspace(request['project_id'])
+        author = ProjectCreation(self.node_path).author_id()
+        intent = dict(request, action='migrate-source-provenance-v2', author_id=author)
+
+        def prepare(workspace):
+            head = workspace.git.head()
+            require(head == request['base_head'], 'Projekt se změnil. Migraci opakujte nad aktuálním HEAD.')
+            committed_project(workspace.git, head, request['project_id'])
+            ancestor = workspace.git.run('merge-base', '--is-ancestor', request['import_commit'], head, check=False)
+            require(ancestor.returncode == 0, 'Import commit is not an ancestor of current HEAD')
+            prefix = 'artifacts/' + request['artifact_id'] + '/'
+            current_files = workspace.git.snapshot(head)
+            current_entities = validate_snapshot(current_files)
+            current = current_entities.get(request['artifact_id'])
+            require(current is not None and current['kind'] == 'source' and current['provenance'] == 'external'
+                    and current['schema_version'] == 1, 'Only external v1 sources can be migrated')
+            origin_files = workspace.git.snapshot(request['import_commit'])
+            origin_entities = validate_snapshot(origin_files)
+            origin = origin_entities.get(request['artifact_id'])
+            require(origin is not None and origin['kind'] == 'source' and origin['provenance'] == 'external'
+                    and origin['schema_version'] == 1, 'Import commit does not contain the v1 source')
+            parent = workspace.git.run('rev-parse', request['import_commit'] + '^', check=False)
+            if parent.returncode == 0:
+                require(not any(path.startswith(prefix) for path in workspace.git.snapshot(parent.stdout.strip())),
+                        'Source already existed before the claimed import commit')
+            proof = workspace.git.run('show', '-s', '--format=%s%n%b', request['import_commit']).stdout
+            operation = re.search(r'^Workspace-Operation: ([^\r\n]+)$', proof, re.MULTILINE)
+            require(proof.splitlines()[:1] == ['Import original source'] and operation is not None,
+                    'Import commit lacks native Workspace evidence')
+            uuid(operation.group(1))
+            immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file')
+            require(all(current[key] == origin[key] for key in immutable),
+                    'Current source no longer matches immutable import metadata')
+            content_path = prefix + current['file']
+            require(content_path in current_files and current_files[content_path] == origin_files.get(content_path),
+                    'Current source bytes differ from the import commit')
+            upgraded = dict(current, schema_version=2)
+            upgraded['import'] = dict(imported_at=origin['created_at'], imported_by=origin['author_id'],
+                                      content_sha256=hashlib.sha256(origin_files[content_path]).hexdigest(),
+                                      importer={'name': 'workspace-native-import', 'version': '1'})
+            validate_metadata(upgraded, sidecar=True)
+            encoded = (json.dumps(upgraded, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+            require(len(encoded) <= MAX_METADATA, 'Metadata importu přesahují 64 KiB.')
+            changes = {prefix + 'metadata.json': encoded}
+            candidate = dict(current_files); candidate.update(changes)
+            validate_snapshot(candidate)
+            return changes, 'Local workspace author', author + '@local.invalid', 'Migrate source provenance to v2'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)

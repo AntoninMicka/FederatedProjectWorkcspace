@@ -17,12 +17,13 @@ SQLite. Další databáze/framework ani externí kód nejsou pro tuto projekci p
 současná koordinace už řeší Git commit, journal a recovery. Soukromá inventura
 nedává důvod tento mechanismus nahrazovat.
 
-Dosavadní index ukládal pouze ID/title a commit ID. Nová lokální verze indexu
-(`PRAGMA user_version=1`, nezávislá na verzi metadat) obsahuje:
+Dosavadní index ukládal pouze ID/title a commit ID. Aktuální lokální verze indexu
+(`PRAGMA user_version=2`, nezávislá na verzi metadat) obsahuje:
 
-- `entities`: ID, title, kind, privacy, provenance, author_id, created_at,
-  description, source_url, status/body registru, cestu obsahu nebo registry JSON
+- `entities`: schema_version, ID, title, kind, privacy, provenance, author_id,
+  created_at, description, source_url, status/body registru, cestu obsahu nebo registry JSON
   a kanonický JSON validovaných metadat;
+- `imports`: úplný normalizovaný blok provenance v2 včetně identity/verze importéru;
 - `tags`: entity_id, ordinal a přesný text štítku;
 - `relations`: source_id, ordinal, type a target_id, s cizími klíči na entity;
 - `state`: jediný commit ID pro celý současně publikovaný snapshot.
@@ -39,8 +40,8 @@ i štítků se zachovají; nejsou zakázané schématem v1. Cykly a vlastní nep
 typy vztahů se nezpřísňují. Doporučené typy nejsou validační allowlist a inverzní
 vztahy se nevytvářejí automaticky. V1 přijímá přesně `type` a `target_id`;
 `note` není implementované pole. Tímto ADR se nerozšiřuje schéma. Podrobnější
-provenance v2 je pouze designed v [ADR 0023](0023-metadata-and-import-provenance.md)
-a její indexace není implementovaná. Neměnnost zdrojů je designed v
+provenance v2 a její úplná projekce jsou implementovány dle [ADR 0023](0023-metadata-and-import-provenance.md).
+Neměnnost zdrojů je designed v
 [ADR 0024](0024-source-immutability-and-versioning.md), ale transition validátor zůstává neimplementovaný.
 
 ## Čtení a aplikační hranice
@@ -69,9 +70,9 @@ Hranice ADR 0003 se nemění: před commitem drží nedokončenou operaci journa
 po publikaci commitu lze index znovu postavit z HEAD. Změna indexu neovlivňuje
 projektové soubory, Git historii, operation ID ani receipts.
 
-Původní dvousloupcová projekce má user_version=0. Její otevření nemigruje ani
+Původní dvousloupcová projekce má user_version=0 a první relační projekce user_version=1. Jejich otevření nemigruje ani
 nevydává staré řádky za současnou plnou projekci: čtení vyvolá StaleIndex.
-Workspace rebuild ji nahradí z validovaného HEAD. Neznámá budoucí verze nebo
+Workspace rebuild je nahradí úplnou v2 projekcí z validovaného HEAD. Neznámá budoucí verze nebo
 neznámý legacy layout (včetně journalových tabulek) se odmítne bez přepsání; neprovádí se downgrade.
 
 Migrace tabulek, FK, indexů, user_version, všech dat a commit ID proběhne v jedné

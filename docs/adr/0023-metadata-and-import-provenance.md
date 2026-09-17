@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0023 — Metadata v1 a rozšířená importní provenance
 
-Datum: 2026-09-15. Stav: přijato jako **designed** pro F-M1-META-01/V-04. Nejde o implementaci schématu v2 ani migraci existujících projektů.
+Datum: 2026-09-15. Stav: přijato pro F-M1-META-01/V-04; schema v2, nový import a doložená migrace implementovány ve F-M1-META-02 dne 2026-09-17 jako lokální PoC.
 
 ## Kontext a rozhodnutí
 
@@ -21,7 +21,7 @@ Význam společných polí v1:
 
 Artefakt i registry používají stejnou hlavičku v1. Registry navíc vyžadují `status` a `body`; `relations` jsou v obou případech volitelné. Sidecar vyžaduje `file`. Tato formulace odpovídá validátoru a nic tiše nezpřísňuje.
 
-## Cílový importní blok v2
+## Importní blok v2
 
 Schéma v2 zachová význam existujících polí a pro entitu s `provenance: external` přidá objekt `import`. Pro nový nativní import zdroje je povinný; pro jinou provenance je zakázaný.
 
@@ -33,13 +33,15 @@ Objekt `import` přijímá přesně pole uvedená níže a odmítá neznámé kl
 | `imported_by` | Povinné kanonické UUID projektového aktéra; u nativního importu se rovná `author_id`. |
 | `content_sha256` | Povinný lowercase SHA-256 původních přijatých bajtů. Hash nenahrazuje uchování zdroje ani licenci. |
 | `source_author` | Volitelný neprázdný text převzatý z doloženého vstupu; není lokálním user ID. |
-| `source_created_at` | Volitelný UTC RFC3339 čas deklarovaný zdrojem. Neznámý čas se vynechá. |
+| `source_created_at` | Volitelný UTC RFC3339 čas vzniku deklarovaný a doložený zdrojem. Je nezávislý na `imported_at` a běžně mu může předcházet; neznámý čas se vynechá. |
 | `source_revision` | Volitelný neprázdný identifikátor/verze zdroje, beze změny významu poskytovatele. |
 | `importer` | Povinný objekt s neprázdným `name` a volitelnou neprázdnou `version`; popisuje transformační software, ne uživatele. |
 
 `source_url` zůstává volitelným top-level locatorem, aby se neměnil jeho dosavadní význam. Neznámý původní autor, čas, URL ani revize se nevymýšlejí a pole se vynechá. Importovaný neměnný soubor zůstává v původních bajtech; `content_sha256` se počítá z těchto bajtů před publikací.
 
-Příklad budoucího sidecaru v2:
+`created_at` a `imported_at` popisují vznik entity a přijetí do tohoto projektu, nikoli vznik externího díla. UI je proto zobrazuje odděleně od `source_created_at`; pořadí se neslévá do jednoho „data dokumentu“. Doložený čas vzniku může být výrazně starší než import. Schéma nevynucuje jejich pořadí, protože `source_created_at` je tvrzení převzaté ze zdroje a může být chybné či používat jinou publikační událost; původ hodnoty musí nést importér.
+
+Příklad sidecaru v2:
 
 ```json
 {
@@ -81,7 +83,7 @@ Registry v1 nadále používá stejná společná pole a svá povinná data:
 }
 ```
 
-Budoucí v2 registr s `provenance: external` použije stejný `import` blok. Konkrétní implementace musí rozhodnout, které importéry registry vytvářejí; tento ADR je nezavádí.
+V2 registr s `provenance: external` používá stejný validovaný `import` blok. Současné native UI registry tohoto typu nevytváří.
 
 ## Kompatibilita, migrace a recovery
 
@@ -91,6 +93,6 @@ Budoucí v2 registr s `provenance: external` použije stejný `import` blok. Kon
 - Migrace nebo budoucí import přes více persistentních vrstev použije standardní Workspace operaci: expected HEAD, writer lock, kandidátní snapshot, validaci, journal před CAS, commit, obnovu/index a receipt podle ADR 0003. Pád před posunem refu nepublikuje v2; po posunu refu recovery dokončí index bez druhého commitu.
 - Index musí být před nasazením v2 aktualizován tak, aby neznámou verzi odmítl nebo v2 celou projektoval podle nového indexového schématu. Nesmí vydat částečnou v2 provenance ani starý index jako aktuální.
 
-Implementace parseru, indexu, importéru, migrace a jejich testy je samostatná navazující feature. F-M1-META-01 uzavírá pouze přesný v1 kontrakt a návrh kompatibilního v2.
+F-M1-META-02 implementuje souběžné čtení v1/v2, zápis native importu v2, kontrolu source hashe, úplnou indexovou projekci a zobrazení provenance v Podrobnostech. Explicitní `Sources.migrate_source` vyžaduje původní native Workspace importní commit: ancestry, přidání artefaktu v daném commitu, trailer operace a shodu neměnných polí/bajtů. Vytvoří pouze povinná doložitelná pole a identitu původního v1 importéru; žádná externí fakta neodhaduje. Automatická plošná migrace neexistuje.
 
 Neměnnost hodnot v `import` bloku a vytváření nového source UUID při změně bajtů vymezuje navazující [ADR 0024](0024-source-immutability-and-versioning.md).

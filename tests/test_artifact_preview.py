@@ -3,6 +3,7 @@
 #
 """Preview reads are HEAD-bound and never execute document content."""
 import base64
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -49,10 +50,16 @@ class PreviewTests(unittest.TestCase):
         self.id = ProjectCreation(self.node).create('Preview', str(self.root), str(uuid4()))['id']
         self.projects = Projects(self.node); self.git = Git(self.root)
 
-    def add(self, name, raw):
+    def add(self, name, raw, *, v2=False):
         id_ = str(uuid4()); folder = self.root / 'artifacts' / id_; folder.mkdir(parents=True)
         meta = dict(metadata('<img src=x onerror=alert(1)>', id_), kind='source', file=name,
                     description='Existing summary', privacy='local-only', provenance='external')
+        if v2:
+            meta['schema_version'] = 2
+            meta['import'] = dict(imported_at=meta['created_at'], imported_by=meta['author_id'],
+                                  content_sha256=hashlib.sha256(raw).hexdigest(),
+                                  source_created_at='2020-01-02T03:04:05Z',
+                                  importer={'name': 'workspace-native-import', 'version': '2'})
         (folder / name).write_bytes(raw); (folder / 'metadata.json').write_text(json.dumps(meta))
         self.git.commit('Fixture'); return id_
 
@@ -107,7 +114,7 @@ class PreviewTests(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real WebEngine')
     def test_real_main_panel_markdown_image_pdf(self):
         for name, raw in [('note.md', b'# Heading\n<script>evil()</script>'), ('image.png', PNG), ('source.pdf', pdf_bytes())]:
-            id_ = self.add(name, raw)
+            id_ = self.add(name, raw, v2=name == 'source.pdf')
             # One displayed artifact per smoke; preserve the same project identity.
             for folder in (self.root / 'artifacts').iterdir():
                 if folder.name != id_:

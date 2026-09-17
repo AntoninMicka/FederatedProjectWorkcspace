@@ -189,6 +189,33 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
 
+## 2F. Read-only artefakty sdílené mezi projekty
+
+**Stav: designed / plánováno, neimplementováno.** Cílem je umožnit použít jeden autoritativní artefakt ve více projektech bez tichého vytvoření editovatelných kopií. Jde o aplikační meziprojektovou referenci podobnou symlinku, nikoli o filesystemový symlink; ten současné bezpečnostní a validační kontrakty nadále odmítají.
+
+- [ ] Konzumující projekt ukládá verzovaný referenční záznam, který identifikuje zdrojový projekt/repozitář, artifact ID, úplný Git commit, očekávaný hash obsahu a rozsah reference. Samotná lokální cesta, název projektu, branch nebo pohyblivý `HEAD` nestačí.
+- [ ] Výchozí reference je připnutá na konkrétní revizi a v cílovém projektu pouze pro čtení. Volitelné sledování zdroje smí nabídnout novou revizi, ale nesmí bez potvrzení přepsat použitý obsah ani reprodukovatelnost starého commitu.
+- [ ] Oprávnění kontrolovat při vytvoření i každém rozlišení reference. Přístup cílového projektu nezakládá přístup ke zdrojovému projektu; efektivní privacy nesmí být méně přísná než u zdroje. Revokovaný, smazaný nebo nedostupný zdroj zobrazit jako nerozlišenou/stale referenci, ne jako prázdný či nový artefakt.
+- [ ] Offline cache je pouze lokální ověřená projekce konkrétní revize s hashem a stavem stáří; není druhou autoritativní kopií a nesmí se automaticky commitnout do konzumenta nebo federovat bez oprávnění.
+- [ ] Pokus o editaci nabídne explicitní vytvoření vlastní kopie/forku s novým artifact ID a provenance na přesnou zdrojovou revizi. Původní reference zůstává beze změny; zpětný zápis do zdrojového projektu není součástí této schopnosti.
+- [ ] Index, hledání, Context Builder a export musejí odlišit vlastní artefakt, read-only referenci, lokální cache a explicitní snapshot. Do LLM kontextu nebo exportu lze zahrnout jen znovu autorizované bajty přesné revize; bez nich se přenáší pouze reference a stav nedostupnosti.
+
+První implementační rozsah je sdílení mezi dvěma lokálně registrovanými projekty na jednom uzlu. Vzdálené rozlišení reference a federace cache navazují na M5; obecný externí katalog a cross-repo identity koordinovat s ER-00/ER-01. Konkrétní dávku drží BACKLOG XREF-01.
+
+## 2G. Modelování a výpočty v Julii
+
+**Stav: Julia zvolena jako preferovaný výpočetní backend; integrace je designed / plánována, neimplementována.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace.
+
+- [ ] Verzovat zdrojový model jako běžné projektové artefakty (`.jl` a související dokumentace), jeho deklarované vstupy a reprodukovatelné Julia prostředí. Minimální kontrakt prostředí zahrne `Project.toml` a odpovídající `Manifest.toml`; credentials, registry cache, stažené balíčky, compiled cache a uživatelský startup do projektového Gitu nepatří.
+- [ ] První rozsah realizovat jako lokální CLI runner pro explicitně zvolený entry point, parametry a zmrazené revize vstupů. Notebookové UI (např. Pluto/Jupyter) ani interaktivní MATLAB-like desktop nejsou podmínkou prvního PoC a vyžadují samostatné capability, bezpečnostní a distribuční posouzení.
+- [ ] Run record uchová project/operation/run ID, commit modelu, artifact ID a hash každého vstupu, entry point a parametry, verzi Julia/runtime a platformu, hash prostředí, volitelný seed, časy, stav/exit code, stdout/stderr a hashe výstupů. Shodné vstupy ani seed samy negarantují bitově shodný numerický výsledek napříč verzemi, platformami a knihovnami.
+- [ ] Výstupy nejprve publikovat jako atomickou lokální generaci materializovaného kompilátu mimo projektový Git. Tabulku, graf, report, dataset nebo jiný výsledek uložit jako verzovaný projektový artefakt pouze explicitní akcí s provenance na run record, model, prostředí a přesné vstupy.
+- [ ] Julia kód považovat za spustitelný a potenciálně nedůvěryhodný. Import ani otevření projektu jej nesmí spustit; běh vyžaduje explicitní potvrzení, execution policy, limity času/procesů/paměti/výstupu, izolovaný pracovní adresář a výchozí zákaz sítě. Izolaci nevydávat za bezpečný sandbox bez samostatného ověření cílového OS.
+- [ ] Privacy a oprávnění vstupů znovu ověřit před během i před publikací; výstup nesmí automaticky dostat slabší privacy než nejpřísnější vstup. Nedostupný runtime/balíček, změna HEAD, timeout, pád, neúplný výstup a přerušený běh musí mít rozlišitelné stavy a bezpečný retry bez vydávání staré cache za aktuální.
+- [ ] Způsob instalace Julia runtime a balíčků, podporované verze/platformy, offline depot, aktualizace, licence a distribuční velikost rozhodnout a ověřit před přidáním do `.deb`; vývojová instalace na jednom stroji není důkazem podporované distribuce.
+
+Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí evidenčně smíchat s LLM run records.
+
 ---
 
 # 3. Metadata a zdrojování
@@ -236,19 +263,23 @@ Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavá
 
 ---
 
-## 3C. Import z Google Drive, NotebookLM a chatbotů
+## 3C. Import z Google služeb, NotebookLM a chatbotů
 
-**Stav: designed / plánováno, žádný konektor není implementován.** „Gemini notebook“ zde znamená NotebookLM; konkrétní edici účtu ověřit před implementací. Navazuje na import artefaktů M1 a provenance; neblokuje současné desktopové PoC. Operativní kroky drží BACKLOG IMP-01 až IMP-03.
+**Stav: designed / plánováno, žádný konektor ani automatické zařazení nejsou implementovány.** „Gemini notebook“ zde znamená NotebookLM; konkrétní edici účtu ověřit před implementací. Navazuje na import artefaktů M1 a provenance; neblokuje současné desktopové PoC. Operativní kroky drží BACKLOG IMP-01 až IMP-04.
 
-- [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje.
+- [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
+- [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.
 - [ ] NotebookLM: importovat dostupné zdroje, uživatelské poznámky a generované výstupy jako odlišné artefakty; zachovat citace a vazby, pokud jsou exportem/API poskytovány. Nedostupné části uvést v přehledu importu. Rozlišit běžný NotebookLM a Enterprise; existence Enterprise API není důkaz dostupnosti stejné funkce běžnému účtu ani exportu celé historie chatu.
 - [ ] Chatboty: podporovat import uživatelem získaných exportů (např. ChatGPT nebo Gemini/Takeout) a ručně dodaného textu/Markdownu. Konkrétní formáty potvrdit na vzorcích; odlišit archiv konverzace od samostatné odpovědi. Zachovat role, pořadí, čas, větvení, přílohy a zdrojová ID, pokud je export obsahuje; chybějící hodnoty nevymýšlet.
 - [ ] Dostupnost čtení historie ověřovat samostatně pro každý produkt a edici. Generační API modelu není automaticky přístup k historii jeho webového chatbota. Při chybějícím oficiálním API nabídnout souborový import; nevyžadovat session cookies ani neoficiální interní endpointy.
-- [ ] Import nejprve nabídne náhled výběru, cílový projekt a privacy třídu. Oprávnění cloudového zdroje nepřenášet automaticky na projektové RBAC; OAuth credentials držet mimo Git, používat minimální potřebná oprávnění a zvládnout odvolání přístupu.
-- [ ] Evidovat původní službu/ID/URL, zdrojovou revizi nebo dostupný čas změny, datum importu, hash importovaných bajtů a způsob převodu. Uchovat přijatý export jako neměnný zdroj a odvozený text odděleně. U LLM výstupů nepředpokládat dostupnost modelu, promptu či úplného Context Manifestu.
+- [ ] Import s aktivním projektem nejprve nabídne náhled výběru, cílový projekt a privacy třídu. Oprávnění cloudového zdroje nepřenášet automaticky na projektové RBAC; OAuth credentials držet mimo Git, používat minimální potřebná oprávnění a zvládnout odvolání přístupu.
+- [ ] Podporovat také import bez aktivního projektu do lokální soukromé vstupní fronty. Přijatá data se před rozhodnutím nesmějí zapsat do projektového Gitu ani automaticky sdílet; fronta musí mít doložený lifecycle, limity, karanténu chyb, obnovu po pádu a explicitní odstranění.
+- [ ] Volitelný lokální LLM nad vstupní frontou navrhne zařazení do nuly, jednoho nebo více projektů, včetně důvodu, confidence, navržené privacy třídy a metadat. Smí posuzovat pouze projekty, do nichž má aktér právo zapisovat; `local-only` obsah nesmí opustit stejný uzel a nedostupnost lokálního modelu nesmí vyvolat externí fallback. Návrh sám nic nezapisuje a uživatel jej může upravit, odmítnout nebo ponechat nezařazený.
+- [ ] Potvrzené zařazení do více projektů provést jako samostatné obnovitelné Workspace operace s výsledkem pro každý projekt; částečný úspěch neskrývat ani kompenzačně nemažat již publikovaný commit. Společný vstup, hash a bezpečný identifikátor příjmu musí umožnit dohledání a idempotentní retry bez předstírání jedné atomické transakce napříč repozitáři.
+- [ ] Evidovat původní službu/ID/URL, zdrojovou revizi, doložený `source_created_at` a dostupné zdrojové časy změny/exportu odděleně od `imported_at`, dále hash importovaných bajtů a způsob převodu. Časy vzniku mohou importu předcházet a chybějící hodnoty se neodhadují z času importu ani souborového mtime. Uchovat přijatý export jako neměnný zdroj a odvozený text odděleně. U LLM výstupů nepředpokládat dostupnost modelu, promptu či úplného Context Manifestu.
 - [ ] Opakovaný import musí rozpoznat duplicity a nabídnout novou verzi při změně zdroje; lokální editace nesmí tiše přepsat. Import není obousměrná synchronizace ani automatický zápis zpět do cloudu. Importované dokumenty se bez explicitního dalšího kroku neposílají LLM.
 
-Podklady ověřené 2026-09-09: [Drive export API](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/export), [Notebook Enterprise API — preview](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks), [ChatGPT export](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data), [Gemini Apps export přes Takeout](https://support.google.com/gemini/answer/16920332?hl=en). Tyto podklady potvrzují dílčí rozhraní/exporty, nikoli úplnost importu nebo přístup k uživatelovu účtu.
+Podklady ověřené 2026-09-17: [Drive download/export](https://developers.google.com/workspace/drive/api/guides/manage-downloads), [Google Takeout](https://support.google.com/accounts/answer/3024190?hl=en), [Data Portability API](https://developers.google.com/data-portability/user-guide/overview), [Notebook Enterprise API — preview](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks), [ChatGPT export](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data), [Gemini Apps export přes Takeout](https://support.google.com/gemini/answer/16920332?hl=en). Tyto podklady potvrzují dílčí rozhraní/exporty, nikoli jejich dostupnost pro každý produkt, region, edici nebo účet ani úplnost importu.
 
 ---
 
@@ -551,6 +582,24 @@ Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM 
 
 ---
 
+# 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
+
+**Stav: designed / plánováno, neimplementováno.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+
+- [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
+- [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
+- [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
+- [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu.
+- [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.
+- [ ] Konkrétní Codex adaptér držet odděleně od IDE rozšíření a realizovat přes v době implementace oficiálně podporované a ověřené rozhraní. Produktový kontrakt nevázat napevno na jednu dnešní podobu integrace ani na jediného providera; stejné IDE rozšíření může později použít jiný kompatibilní coding-agent adaptér.
+- [ ] Výsledek běhu importovat jako oddělený run record a návrh aktualizace projektových dat: stav, shrnutí, diff/změněné soubory, testy a jejich skutečné výsledky, vytvořené commity/PR pouze pokud byly povoleny, omezení a vazbu na původní task ID a vstupní revizi. Přerušený běh má stav `unknown`, nikoli automaticky failed nebo completed.
+- [ ] Workspace označí úkol za dokončený až po validaci deklarovaných důkazů a lidském nebo explicitně schváleném policy rozhodnutí. Text reportu agenta, úspěšný exit code ani existence commitu samy nejsou důkazem splnění akceptace.
+- [ ] Ošetřit stale vstupní commit, souběžnou změnu roadmapy/úkolu, opakované předání, restart, duplicitní výsledek a částečně provedené externí akce. Každý export i import výsledku musí mít stabilní operation/run ID a idempotentní receipt.
+
+Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG DEV-01 až DEV-04.
+
+---
+
 # 12. Webové UI
 
 ## MVP obrazovky
@@ -718,7 +767,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 ## Milestone M1 – Single-node project workspace
 
-M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata v1, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 po PR #19 upřesňuje v1 a navrhuje podrobnou importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 navrhuje neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md); v2 a transition validátor zůstávají neimplementované. Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 po PR #19 upřesňuje v1 a navrhuje podrobnou importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). Aktivní F-M1-META-02 na feature větvi implementuje souběžné v1/v2, nové importy v2, doloženou migraci, úplnou indexovou projekci a UI zobrazení; stav předání a ověření drží [TODO](TODO.md). F-M1-SOURCE-01/V-05 navrhuje neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md); obecný transition validátor zůstává F-M1-SOURCE-02. Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -799,8 +848,12 @@ M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s deskto
 - [ ] Relations.
 - [ ] Impact analysis.
 - [ ] Advanced context selection.
+- [ ] Reprodukovatelné modelování a numerické výpočty s preferovaným Julia backendem.
+- [ ] Převod roadmapy na projektové entity a export TODO/task balíčků.
+- [ ] Provider-neutral předání implementačního úkolu coding agentovi a import ověřitelného výsledku.
+- [ ] Rozšíření pro Microsoft Visual Studio Code/VSCodium a volitelné coding-agent adaptéry včetně Codexu, bez převzetí autority nad plánem a akceptací.
 
-**Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine.
+**Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine. Umí také převést schválený plán na dohledatelné projektové úkoly a bezpečně předat implementaci coding agentovi, aniž by jeho report automaticky měnil autoritativní stav nebo obcházel lidskou akceptaci.
 
 ---
 
@@ -933,13 +986,21 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 ## 22C. Disclosure Presenter
 
 - [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
+- [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.
+- [ ] Backup ponechat volitelný: větev může pokračovat doplňující otázkou, ústní odpovědí, odložením tématu nebo návratem bez dalšího slidu. Odkazovat na existující obsah v konkrétní revizi; jeden backup smí sloužit více slidům a větvím bez kopií.
+- [ ] Ke každému slidu i backupu umožnit kontextové doplňující otázky, interní poznámky/zdroje a veřejné doplňky. Vedle nich držet globální knihovnu „Všechny backupy“ dostupnou odkudkoli, s hledáním podle tématu/otázky, filtrem citlivosti a označením již použité revize.
+- [ ] Kokpit nabídne pohledy „K tomuto slidu“, „Všechny backupy“ a „Odložené otázky“. Zobrazí aktuální otázku, připravenou reakci a nejbližší možnosti; celý strom zůstane rozbalitelný. Neočekávanou otázku lze stručně poznamenat nebo odložit bez editace celého scénáře.
+- [ ] Větev vybírá řečník ručně. Focus, výběr, privátní náhled a akce „Zobrazit publiku“ jsou rozdílné stavy; šipky, hledání ani volba možné odpovědi nesmějí promítat obsah nebo tvrdit, že odpověď skutečně zazněla. Klávesnicové ovládání a focus/selection model navrhnout podle [W3C APG Tree View](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/).
+- [ ] Akce „Doplňující otázka“ uloží přesný návratový bod včetně slidu, kroku postupného odhalení a rozehrané větve. Zachovat historii zanoření a samostatné akce „zpět o úroveň“, „návrat k přerušenému výkladu“ a „pokračovat hlavní prezentací“; předběhnutý pozdější slide pouze označit, ne automaticky přeskočit.
 - [ ] Základní deck připravovat jako zelený po kontrole obsahu. Každý backup má vlastní `green / orange / red`; změněná nebo nezkontrolovaná revize nesmí zdědit automatické schválení.
 - [ ] Kumulativní globální semafor: zelený slide +0, oranžový +0,5, červený +1 stupeň. Prahy a režim schůzky nastavit předem a evidovat jejich verzi.
 - [ ] Přírůstek účtovat až při evidovaném zobrazení publiku, ne při privátním náhledu. Opakování totožného obsahu stejnému publiku během stejné schůzky logovat, ale nezapočítávat znovu; nová revize, nový rozsah či příjemce vyžadují nové posouzení.
-- [ ] Před zobrazením ukázat dopad na celkové skóre; citlivý slide nebo překročený limit může vyžadovat vědomé potvrzení. Autorizační zákaz nelze potvrzením obejít.
-- [ ] Skóre pouhým zavřením slidu nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat počet backupů a čas, aby i mnoho zelených odboček mohlo vyvolat organizační upozornění.
+- [ ] Před zobrazením ukázat přírůstek a výslednou expozici; u navržené sekvence také předpokládaný součet bez započtení nevybraných alternativ. Citlivou ústní odpověď započítat pouze po ruční akci „Sděleno ústně“. Citlivý obsah nebo překročený měkký limit může vyžadovat potvrzení, autorizační zákaz jím obejít nelze.
+- [ ] Skóre pouhým zavřením slidu, přechodem mezi větvemi nebo návratem nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat čas, počet odboček a hloubku zanoření. Upozornění nabídne stručnou odpověď, doplňující otázku, odložení nebo návrat.
 - [ ] Dříve sdílený červený obsah zůstává červený; stav předání je samostatná osa. „Známá revize“ není povolení k dalšímu odeslání nebo reklasifikace na public.
-- [ ] Zajistit offline provoz, obnovu relace po pádu, bezpečný neutrální výstup a export pouze vybraného obsahu bez poznámek, skrytých backupů a zdrojových modelů.
+- [ ] Navigační historii oddělit od evidence sdílení a očekávanou odpověď od samostatně potvrzené skutečné odpovědi. Strom, interní reakce a vyjednávací poznámky ponechat pouze řečníkovi; nesmějí být skrytým obsahem audience rendereru ani exportovaného decku.
+- [ ] Zajistit offline provoz, obnovu konkrétní revize decku/scénáře, aktuální větve, návratových bodů, odložených témat a expozice po pádu, bezpečný neutrální výstup a explicitní stav neověřeného promítnutí.
+- [ ] Přidat zkušební režim s kontextovými i obecnými doplňujícími otázkami, simulovaným semaforem, časem odboček a návratem. Nácvik je oddělen od skutečné relace a nikdy nezapisuje DisclosureEvent ani tvrzení, že partner obsah obdržel.
 
 ## 22D. Communications Hub — plnohodnotný klient
 
@@ -957,7 +1018,7 @@ Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M
 | --- | --- | --- |
 | Kontrakty | BACKLOG ER-00 | Zaznamenané entity, revize, privacy hranice a migrace; bez zpětného otevření Gate M0. |
 | Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
-| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, návrat z backupu a restart bez ztráty relace. |
+| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, verzovaný scénář, kontextové i globální backupy, návrat z přerušení a restart bez ztráty relace. |
 | Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
 | Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
 | Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |

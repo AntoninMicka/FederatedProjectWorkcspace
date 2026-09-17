@@ -3,7 +3,7 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# Datový model — návrh v1
+# Datový model
 
 ## Layout projektového repozitáře
 
@@ -62,11 +62,11 @@ Ověření konfigurace nepotvrzuje existenci klíče, autentizaci, RBAC ani shod
 
 ## Společná metadata
 
-Spustitelné schéma v1 přesně odpovídá `spikes/metadata.py`. Povinná pole: `schema_version` (1), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID). Registry navíc povinně obsahují `status` a `body`; `relations` zůstávají volitelné i u registrů.
+Spustitelný parser `spikes/metadata.py` přijímá striktní schémata v1 a v2 ve stejném snapshotu. Společná povinná pole: `schema_version` (1 nebo 2), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID). Registry navíc povinně obsahují `status` a `body`; `relations` zůstávají volitelné i u registrů.
 
 `created_at` označuje vznik entity v projektu. U dnešního nativního importu je zároveň časem importu, nikoli doloženým časem vzniku externího díla. `author_id` je projektový aktér, který entitu vytvořil nebo import spustil, nikoli automaticky původní autor. `source_url` je pouze volitelný locator a `provenance` hrubá třída, ne kompletní auditní manifest.
 
-Podrobná importní provenance vyžaduje schéma v2, protože v1 odmítá neznámá pole. Navržený podmíněný blok `import` nese `imported_at`, `imported_by`, SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. Přesný kontrakt, příklady, kompatibilitu a recovery stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V2 zatím není implementováno a existující v1 data se automaticky nemigrují.
+Schéma v2 s `provenance: external` povinně nese striktní blok `import`: `imported_at`, `imported_by`, lowercase SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. U nového native importu se čas/aktér rovnají `created_at`/`author_id`; oddělený volitelný `source_created_at` je doložený čas vzniku externího zdroje a může importu předcházet. Hash source sidecaru se při validaci snapshotu porovnává se skutečnými bajty. Pro jinou provenance je blok zakázaný. Přesný kontrakt, kompatibilitu a explicitní doloženou migraci stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V1 zůstává čitelné a nemigruje se automaticky.
 
 ### Definice vazeb mezi entitami
 
@@ -125,7 +125,9 @@ Projekce má v PoC limit 16 MiB na soubor, 64 MiB celkem a 10 000 souborů. Mini
 | Counterparty | Role osoby nebo organizace v konkrétním vztahu. Nemá vytvářet duplicitní kontakt ani automatické RBAC členství. |
 | Meeting | Projekt, pozvaní a skuteční účastníci, agenda, revize decku, interní poznámky, policy a follow-up vazby. |
 | DisclosureEvent | Samostatná událost předání, přijetí nebo opravy s důkazem, rozsahem a neměnnou referencí na obsah. |
-| PresentationSession | Trvalý záznam relace: deck, publikum, verze policy, navštívené revize, expozice a návratový bod; UI je projekce. |
+| DecisionScenario | Verzovaný interní scénář jednání se stabilními ID uzlů, směrem otázky, očekávanými odpověďmi, připravenými reakcemi, hranami a odkazy na existující backupy; není disclosure událostí. |
+| BackupLibrary | Verzovaný katalog referencí na schválené slidy, grafy, obrázky nebo výřezy. Jeden obsah lze odkazovat z více slidů a větví bez kopírování. |
+| PresentationSession | Trvalý záznam relace: deck a scénář v konkrétní revizi, publikum, verze policy, aktuální větev, navigační zásobník, přerušený slide/krok odhalení, odložená témata, navštívené revize a expozice; UI je projekce. |
 
 Kandidátní registry mají zachovat konvenci `registries/<kind>/<UUID>.json`; konečné názvy a stavy uzavře návrhový kontrakt. Tato dokumentační změna je nezakládá. Definice decku a slidy jsou verzované artefakty, ne kopie v odděleném prezentačním úložišti.
 
@@ -159,6 +161,12 @@ Auditní události se přidávají po souborech s deduplikací podle ID. Oprava,
 Příprava ani export nejsou předáním. Potvrzení audience rendereru dokládá zobrazení aplikací, nikoli pozornost lidí. SMTP přijetí není přečtení; doručenky a přístupy jsou další doklady, nikoli změna minulého faktu. Ústní sdělení je ruční záznam s určeným autorem a mírou jistoty.
 
 ### Relace Presenteru a odvozené pohledy
+
+Scénář je interní graf, nikoli povinná cesta prezentací. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou připravenou reakci, další uzly a volitelné reference na backupy. Obsahuje explicitní větev pro jinou odpověď, nevědomost nebo odmítnutí. Větev smí skončit ústní odpovědí, doplňující otázkou, odložením nebo návratem bez promítnutí slidu. Kontextové doplňky slidu i globální knihovna odkazují na stejný verzovaný obsah; klasifikace doplňku se nedědí z hlavního slidu.
+
+Navigační volba, focus, privátní náhled a skutečné předání jsou samostatné stavy. Volba očekávané odpovědi sama nezaznamená skutečný výrok protistrany ani vyslovení připravené reakce. Skutečná odpověď a citlivé ústní sdělení vyžadují samostatné ruční potvrzení; pouze potvrzené předání vstupuje do Disclosure Registry a expozice. Navigační historie zůstává oddělená od auditní evidence.
+
+Přerušení zachová slide, krok postupného odhalení, rozehranou větev a celý zásobník návratů. Samostatné akce vracejí o uzel, k přerušenému místu nebo do hlavní prezentace. Předběhnutý budoucí slide lze označit jako probraný, ale automaticky se nepřeskakuje. Restart obnoví navigaci, odložená témata i expozici; neurčitý výsledek audience operace zůstává `unknown`.
 
 Globální expozici lze reprezentovat celými půlkroky: green 0, orange 1, red 2; UI zobrazuje 0 / 0,5 / 1 stupně. Součet, prahy a historie jsou deterministické. Počítá se potvrzený nový payload nebo rozsah pro aktuální publikum, ne kliknutí v privátním preview. Opakované promítnutí se zaznamená, ale stejný payload v téže relaci se nezapočítá znovu. Změna účastníků a nové revize vyžadují nové posouzení.
 

@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-SOURCE-01 — Kontrakt neměnnosti a verzování zdrojů — 2026-09-15
+
+Dávka uzavřena po doloženém začlenění PR #20 jako squash commit `7152d64` v `develop`; feature větev `feature/f-m1-source-01-versioning` končí `f20482f`. Šlo o designed dokumentační výstup bez implementace transition validátoru nebo schématu v2.
+
+- [x] [completed] **V-05 — Neměnnost zdrojů (designed, 2026-09-15).** [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md) vymezuje neměnné bajty, basename, identitu a importní provenance pod jedním source UUID; projektové anotace zůstávají verzovaně editovatelné a uvolnění privacy vyžaduje explicitní autorizovanou reklasifikaci.
+- [x] [completed] **F-M1-SOURCE-01-A/B — Verze, duplicity, transition validace a recovery (designed, 2026-09-15).** Nové bajty nebo revize dostávají nové UUID a mohou použít vztah `supersedes`; SHA-256 shoda sama neslučuje provenance ani privacy. Publish/fast-forward/merge musí v budoucí implementaci porovnávat base a kandidáta a novou verzi publikovat jednou expected-HEAD/Journal/CAS/index/receipt operací.
+
+Kontrakt byl věcně zkontrolován proti importu, validátoru, mazání, Git historii a existujícím testům; lokální odkazy a `git diff --check` prošly. Celá sada se neopakovala, protože se aplikační kód, testy ani konfigurace nezměnily. Implementace provenance v2 pokračuje ve F-M1-META-02 a obecná transition ochrana/import navazující verze ve F-M1-SOURCE-02; Gate M1 zůstává otevřený.
+
 ## F-M1-META-01 — Přesný kontrakt metadat a importní provenance — 2026-09-15
 
 Dávka uzavřena po doloženém začlenění PR #19 jako squash commit `9acd0ef` v `develop`; feature větev `feature/f-m1-meta-01-contract` končí `da7647a`. Šlo o designed dokumentační výstup bez změny aplikačního kódu nebo schématu.

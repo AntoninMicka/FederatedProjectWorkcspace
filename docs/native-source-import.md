@@ -16,13 +16,20 @@ obsahu, nikoli autoritou interních metadat. Původní soubor se nemaže.
 
 Nový artefakt má kind=source a provenance=external. created_at je čas vytvoření
 importovaného artefaktu a author_id místní importer, ne tvrzení o původním
-externím autorovi/datu. Nepřidává se imported_at ani nový provenance manifest;
-jejich budoucí v2 kontrakt popisuje ADR 0023. SHA-256 je součástí místního operation
-intent, nikoli nové sidecar schema field. Obsah zdroje není editovatelný
+externím autorovi/datu. Nové importy zapisují schema v2 s blokem `import`:
+`imported_at`, `imported_by`, SHA-256 původních bajtů a jméno/verzi importéru.
+Volitelný původní autor, datum a revize se zapíší pouze pokud je importér dostane
+jako doložený vstup; běžný picker je nevymýšlí. Přesný kontrakt popisuje
+[ADR 0023](adr/0023-metadata-and-import-provenance.md). Obsah zdroje není editovatelný
 nativním Markdown editorem; novou verzi importujte jako nový zdroj. Cílová
 pravidla neměnných bajtů, nového UUID a vztahu `supersedes` popisuje
 [ADR 0024](adr/0024-source-immutability-and-versioning.md). Transition validátor
 proti přímým Git úpravám zatím není implementován.
+
+Importní dialog nabízí samostatné volitelné pole **Doložený čas vzniku zdroje
+(UTC)** ve formátu RFC3339, například `2024-05-10T14:30:00Z`. Tento údaj se uloží
+jako `source_created_at`; čas importu vznikne automaticky a může být pozdější.
+Nevyplněný čas vzniku se neodhaduje z času souboru, importu ani Git commitu.
 
 Privacy má výchozí project. Local-only respektuje stávající síťovou hranici a
 může znepřístupnit celý projekt přes web; historický public-only Git přenos
@@ -47,6 +54,13 @@ nejprve ověřte Podklady, než importujete tentýž soubor znovu jako novou ope
 Automatická deduplikace ani durable outbox pro dosud nepřipravený import nejsou
 součástí první verze. Symlinky a změna stat údajů zdroje během čtení se odmítají;
 nejde o sandbox proti závodícímu nekooperačnímu procesu.
+
+V1 zdroj se nemigruje automaticky. Programová operace `Sources.migrate_source`
+vyžaduje jeho UUID, aktuální HEAD a commit, který artefakt původně přidal jako
+native Workspace import. Ověří ancestry, nepřítomnost artefaktu v rodiči,
+Workspace trailer, shodné neměnné údaje i bajty. Teprve potom převezme
+`created_at`/`author_id`, spočítá hash z importního blobu a jednou Workspace
+operací zapíše v2; původního autora, datum, URL ani revizi nedoplňuje.
 
 Import je lokálně PoC validated; aktuální důkazy a omezení drží
 [F-M1-IMPORT-01 ve WORK_LOG](../WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14).

@@ -81,15 +81,22 @@ def projection(files, entities, commit):
 
 
 class Index:
-    VERSION = 1
-    FIELDS = ('id', 'title', 'kind', 'privacy', 'provenance', 'author_id', 'created_at',
+    VERSION = 2
+    FIELDS = ('schema_version', 'id', 'title', 'kind', 'privacy', 'provenance', 'author_id', 'created_at',
               'description', 'source_url', 'status', 'body')
+    IMPORT_FIELDS = ('imported_at', 'imported_by', 'content_sha256', 'source_author',
+                     'source_created_at', 'source_revision')
     SCHEMA = (
         '''CREATE TABLE entities (
-            id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL,
+            schema_version INTEGER NOT NULL, id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL,
             privacy TEXT NOT NULL, provenance TEXT NOT NULL, author_id TEXT NOT NULL,
             created_at TEXT NOT NULL, description TEXT, source_url TEXT,
             status TEXT, body TEXT, path TEXT NOT NULL, metadata TEXT NOT NULL)''',
+        '''CREATE TABLE imports (
+            entity_id TEXT PRIMARY KEY REFERENCES entities(id), imported_at TEXT NOT NULL,
+            imported_by TEXT NOT NULL, content_sha256 TEXT NOT NULL, source_author TEXT,
+            source_created_at TEXT, source_revision TEXT, importer_name TEXT NOT NULL,
+            importer_version TEXT)''',
         '''CREATE TABLE tags (entity_id TEXT NOT NULL REFERENCES entities(id),
             ordinal INTEGER NOT NULL, tag TEXT NOT NULL, PRIMARY KEY(entity_id, ordinal))''',
         '''CREATE TABLE relations (
@@ -106,7 +113,8 @@ class Index:
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         os.close(fd)
         with closing(sqlite3.connect(self.path)) as db, db:
-            if self._version(db) == 0:
+            version = self._version(db)
+            if version == 0:
                 tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
                 require(tables <= {'state', 'entities'}, 'Unrecognized legacy index; index retained')
                 for table, expected in (('entities', ['id', 'title']), ('state', ['singleton', 'commit_id'])):
@@ -117,10 +125,24 @@ class Index:
                     CREATE TABLE IF NOT EXISTS state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), commit_id TEXT NOT NULL);
                     CREATE TABLE IF NOT EXISTS entities (id TEXT PRIMARY KEY, title TEXT NOT NULL);
                 ''')
+            elif version == 1:
+                tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                require(tables == {'state', 'entities', 'tags', 'relations'},
+                        'Unrecognized v1 index; index retained')
+                expected = {
+                    'state': ['singleton', 'commit_id'],
+                    'entities': ['id', 'title', 'kind', 'privacy', 'provenance', 'author_id', 'created_at',
+                                 'description', 'source_url', 'status', 'body', 'path', 'metadata'],
+                    'tags': ['entity_id', 'ordinal', 'tag'],
+                    'relations': ['source_id', 'ordinal', 'type', 'target_id'],
+                }
+                for table, columns in expected.items():
+                    require([row[1] for row in db.execute('PRAGMA table_info(' + table + ')')] == columns,
+                            'Unrecognized v1 index; index retained')
 
     def _version(self, db):
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        require(version in {0, self.VERSION}, 'Unsupported index schema version; index retained')
+        require(version in {0, 1, self.VERSION}, 'Unsupported index schema version; index retained')
         return version
 
     def rebuild(self, git, *, checkpoint=lambda stage: None):
@@ -134,21 +156,33 @@ class Index:
         rows = [tuple(item['metadata'].get(key) for key in self.FIELDS) +
                 (item['path'], json.dumps(item['metadata'], ensure_ascii=False, sort_keys=True))
                 for item in view['entities'].values()]
+        imports = []
+        for id_, meta in entities.items():
+            if 'import' not in meta:
+                continue
+            imported = meta['import']; importer = imported['importer']
+            imports.append((id_, *(imported.get(key) for key in self.IMPORT_FIELDS),
+                            importer['name'], importer.get('version')))
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute('PRAGMA foreign_keys=ON')
             db.execute('BEGIN IMMEDIATE')
-            if self._version(db) == 0:
-                columns = [row[1] for row in db.execute('PRAGMA table_info(entities)')]
-                require(columns == ['id', 'title'], 'Unrecognized legacy index; index retained')
+            if self._version(db) != self.VERSION:
+                if self._version(db) == 0:
+                    columns = [row[1] for row in db.execute('PRAGMA table_info(entities)')]
+                    require(columns == ['id', 'title'], 'Unrecognized legacy index; index retained')
+                db.execute('DROP TABLE IF EXISTS relations')
+                db.execute('DROP TABLE IF EXISTS tags')
                 db.execute('DROP TABLE entities')
                 for statement in self.SCHEMA:
                     db.execute(statement)
                 db.execute(f'PRAGMA user_version={self.VERSION}')
+            db.execute('DELETE FROM imports')
             db.execute('DELETE FROM relations')
             db.execute('DELETE FROM tags')
             db.execute('DELETE FROM entities')
             checkpoint('index-cleared')
-            db.executemany('INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', rows)
+            db.executemany('INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', rows)
+            db.executemany('INSERT INTO imports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', imports)
             checkpoint('index-entities')
             db.executemany('INSERT INTO tags VALUES (?, ?, ?)',
                            [(id_, n, tag) for id_, meta in entities.items()
@@ -169,6 +203,8 @@ class Index:
             db.execute('BEGIN')
             if self._version(db) == 0:
                 raise StaleIndex('Legacy index must be rebuilt from current HEAD')
+            if self._version(db) == 1:
+                raise StaleIndex('V1 index must be rebuilt from current HEAD')
             state = db.execute('SELECT commit_id FROM state WHERE singleton=1').fetchone()
             if state is None or state[0] != git.head():
                 raise StaleIndex('Index must be rebuilt from current HEAD')
@@ -199,23 +235,35 @@ class Index:
             for id_, tag in db.execute('SELECT entity_id, tag FROM tags ORDER BY entity_id, ordinal'):
                 tags.setdefault(id_, []).append(tag)
             entities = {}
+            imported = {}
+            for row in db.execute('SELECT entity_id, ' + ', '.join(self.IMPORT_FIELDS) +
+                                  ', importer_name, importer_version FROM imports ORDER BY entity_id'):
+                block = {key: value for key, value in zip(self.IMPORT_FIELDS, row[1:]) if value is not None}
+                block['importer'] = {'name': row[-2]}
+                if row[-1] is not None:
+                    block['importer']['version'] = row[-1]
+                imported[row[0]] = block
             for row in db.execute('SELECT ' + ', '.join(self.FIELDS) +
                                   ', path, metadata FROM entities ORDER BY id'):
                 path, canonical = row[-2], json.loads(row[-1])
                 meta = {key: value for key, value in zip(self.FIELDS, row)
                         if key in canonical}
-                meta['schema_version'] = 1
+                id_ = meta['id']
                 if 'file' in canonical:
                     meta['file'] = path.rsplit('/', 1)[-1]
                 if 'tags' in canonical:
-                    meta['tags'] = tags.get(row[0], [])
+                    meta['tags'] = tags.get(id_, [])
                 if 'relations' in canonical:
-                    meta['relations'] = relations.get(row[0], [])
+                    meta['relations'] = relations.get(id_, [])
+                if 'import' in canonical:
+                    require(id_ in imported, 'Index differs from stored metadata')
+                    meta['import'] = imported[id_]
                 require(meta == canonical and
-                        ('tags' in canonical or row[0] not in tags) and
-                        ('relations' in canonical or row[0] not in relations),
+                        ('tags' in canonical or id_ not in tags) and
+                        ('relations' in canonical or id_ not in relations) and
+                        ('import' in canonical or id_ not in imported),
                         'Index differs from stored metadata')
-                entities[row[0]] = dict(metadata=meta, path=path)
+                entities[id_] = dict(metadata=meta, path=path)
             return dict(commit_id=commit, entities=entities, relations=edges)
         return self._read(git, query)
 
