@@ -16,7 +16,7 @@ from spikes.configuration import committed_project
 from spikes.federation_probe import check_peer
 from spikes.journal import sync_dir
 from spikes.lxc_setup import ACTOR
-from spikes.metadata import require, validate_snapshot
+from spikes.metadata import require, validate_snapshot, validate_transition
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
@@ -41,6 +41,10 @@ def validate_history(git, head, project_id):
             require(path == 'project.json' or path.startswith(('artifacts/', 'registries/')),
                     'Unclassified historical file cannot be transferred: ' + path)
         entities = validate_snapshot(git.snapshot(commit))
+        candidate = git.snapshot(commit)
+        parents = git_run(git, 'show', '-s', '--format=%P', commit).stdout.split()
+        for parent in parents:
+            validate_transition(git.snapshot(parent), candidate)
         for item in entities.values():
             require(item['privacy'] == 'public',
                     'Historical rights are not yet implemented: transfer refused for ' + item['privacy'] +

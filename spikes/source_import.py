@@ -56,22 +56,50 @@ def read_source(path):
 
 
 def request_from_file(project_id, base_head, path, title, description, tags, privacy, *,
-                      source_url=None, source_author=None, source_created_at=None, source_revision=None):
+                      source_url=None, source_author=None, source_created_at=None, source_revision=None,
+                      supersedes=None):
     raw = read_source(path)
-    return dict(project_id=project_id, artifact_id=str(uuid4()), base_head=base_head,
-                filename=Path(path).name, title=title, description=description, tags=tags, privacy=privacy,
-                created_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest(),
-                source_url=source_url, source_author=source_author,
-                source_created_at=source_created_at, source_revision=source_revision)
+    request = dict(project_id=project_id, artifact_id=str(uuid4()), base_head=base_head,
+                   filename=Path(path).name, title=title, description=description, tags=tags, privacy=privacy,
+                   created_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
+                   content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest(),
+                   source_url=source_url, source_author=source_author,
+                   source_created_at=source_created_at, source_revision=source_revision)
+    if supersedes is not None:
+        request['supersedes'] = supersedes
+    return request
 
 
 class Sources(Artifacts):
+    def duplicate_ids(self, project_id, base_head, digest):
+        """Return same-project source IDs with identical evidenced bytes."""
+        uuid(project_id)
+        require(isinstance(base_head, str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', base_head)),
+                'Invalid base commit')
+        require(isinstance(digest, str) and bool(re.fullmatch(r'[a-f0-9]{64}', digest)),
+                'Invalid source digest')
+        ws = self.workspace(project_id)
+        with ws.journal.lock(), ws.journal.connect() as db:
+            require(ws.git.head() == base_head, 'Projekt se změnil. Načtěte jej znovu.')
+            files = ws.git.snapshot(base_head)
+            entities = validate_snapshot(files)
+            matches = []
+            for id_, meta in entities.items():
+                if meta['kind'] != 'source':
+                    continue
+                prefix = f'artifacts/{id_}/'
+                path = prefix + meta['file'] if 'file' in meta else next(
+                    path for path in files if path.startswith(prefix))
+                if hashlib.sha256(files[path]).hexdigest() == digest:
+                    matches.append(id_)
+            return sorted(matches)
+
     def import_source(self, request, operation_id, *, checkpoint=lambda stage: None):
         fields = {'project_id', 'artifact_id', 'base_head', 'filename', 'title', 'description',
                   'tags', 'privacy', 'created_at', 'content', 'sha256', 'source_url',
                   'source_author', 'source_created_at', 'source_revision'}
-        require(isinstance(request, dict) and request.keys() == fields, 'Invalid source import request')
+        require(isinstance(request, dict) and fields <= request.keys() <= fields | {'supersedes'},
+                'Invalid source import request')
         uuid(request['project_id']); uuid(request['artifact_id'])
         require(isinstance(request['base_head'], str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', request['base_head'])), 'Invalid base commit')
         require(isinstance(request['content'], str) and len(request['content']) <= 4 * ((MAX_FILE + 2) // 3), 'Oversized encoded source')
@@ -108,14 +136,57 @@ class Sources(Artifacts):
             files = workspace.git.snapshot(head)
             entities = validate_snapshot(files)
             require(request['artifact_id'] not in entities, 'Source UUID already exists')
+            candidate_meta = meta
+            if 'supersedes' in request:
+                uuid(request['supersedes'])
+                predecessor = entities.get(request['supersedes'])
+                require(predecessor is not None and predecessor['kind'] == 'source',
+                        'Superseded source is missing or is not a source')
+                candidate_meta = dict(meta, relations=[{'type': 'supersedes', 'target_id': request['supersedes']}])
+                validate_metadata(candidate_meta, sidecar=True)
+            candidate_encoded = (json.dumps(candidate_meta, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+            require(len(candidate_encoded) <= MAX_METADATA, 'Metadata importu přesahují 64 KiB.')
             prefix = 'artifacts/' + request['artifact_id'] + '/'
             require(not any(path.startswith(prefix) for path in files), 'Source directory already exists')
-            changes = {prefix + request['filename']: raw, prefix + 'metadata.json': encoded_meta}
+            changes = {prefix + request['filename']: raw, prefix + 'metadata.json': candidate_encoded}
             candidate = dict(files); candidate.update(changes)
             validate_snapshot(candidate)
             return changes, 'Local workspace author', author + '@local.invalid', 'Import original source'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+
+    def edit_metadata(self, request, operation_id, *, checkpoint=lambda stage: None):
+        """Version allowed source annotations; privacy relaxation needs an explicit authorization bit."""
+        fields = {'project_id', 'artifact_id', 'base_head', 'patch', 'authorize_privacy_relaxation'}
+        require(isinstance(request, dict) and request.keys() == fields, 'Invalid source metadata request')
+        uuid(request['project_id']); uuid(request['artifact_id'])
+        require(type(request['authorize_privacy_relaxation']) is bool, 'Invalid privacy authorization')
+        require(isinstance(request['patch'], dict) and request['patch'].keys() <=
+                {'title', 'description', 'tags', 'relations', 'source_url', 'privacy'} and request['patch'],
+                'Invalid source metadata patch')
+        ws = self.workspace(request['project_id'])
+        author = ProjectCreation(self.node_path).author_id()
+        intent = dict(request, action='edit-source-metadata', author_id=author)
+
+        def prepare(workspace):
+            head = workspace.git.head()
+            require(head == request['base_head'], 'Projekt se změnil. Načtěte aktuální zdroj.')
+            committed_project(workspace.git, head, request['project_id'])
+            files = workspace.git.snapshot(head)
+            entities = validate_snapshot(files)
+            meta = entities.get(request['artifact_id'])
+            require(meta is not None and meta['kind'] == 'source' and 'file' in meta,
+                    'Source artifact not found')
+            updated = dict(meta); updated.update(request['patch'])
+            validate_metadata(updated, sidecar=True)
+            encoded = (json.dumps(updated, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+            require(len(encoded) <= MAX_METADATA, 'Metadata přesahují 64 KiB.')
+            return {f"artifacts/{request['artifact_id']}/metadata.json": encoded}, \
+                'Local workspace author', author + '@local.invalid', 'Edit source metadata'
+
+        return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'],
+                           allow_privacy_relaxation=request['authorize_privacy_relaxation'],
+                           checkpoint=checkpoint)
 
     def migrate_source(self, request, operation_id, *, checkpoint=lambda stage: None):
         """Upgrade one evidenced native v1 import without inventing source facts."""

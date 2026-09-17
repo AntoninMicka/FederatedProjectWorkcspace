@@ -23,8 +23,17 @@ jako doložený vstup; běžný picker je nevymýšlí. Přesný kontrakt popisu
 [ADR 0023](adr/0023-metadata-and-import-provenance.md). Obsah zdroje není editovatelný
 nativním Markdown editorem; novou verzi importujte jako nový zdroj. Cílová
 pravidla neměnných bajtů, nového UUID a vztahu `supersedes` popisuje
-[ADR 0024](adr/0024-source-immutability-and-versioning.md). Transition validátor
-proti přímým Git úpravám zatím není implementován.
+[ADR 0024](adr/0024-source-immutability-and-versioning.md). Workspace porovnává
+výchozí a kandidátní strom před přípravou journalu i před commitem. První Git
+přenos navíc kontroluje každý přechod převzaté historie; změnu původních bajtů,
+identity, basename nebo import provenance pod stejným UUID odmítne.
+
+V importním dialogu lze volitelně vybrat předchozí zdroj. Nový import pak dostane
+nové UUID a vztah `supersedes`; předchozí artefakt se nemění. Dialog upozorní na
+již existující zdroje se shodným SHA-256, ale neslučuje je automaticky. Programová
+operace `Sources.edit_metadata` dovoluje pouze `title`, `description`, `tags`,
+`relations`, `source_url` a `privacy`; uvolnění privacy vyžaduje samostatný
+autorizační příznak. Zpřísnění privacy běžnou editací povoleno je.
 
 Importní dialog nabízí samostatné volitelné pole **Doložený čas vzniku zdroje
 (UTC)** ve formátu RFC3339, například `2024-05-10T14:30:00Z`. Tento údaj se uloží
@@ -64,4 +73,4 @@ operací zapíše v2; původního autora, datum, URL ani revizi nedoplňuje.
 
 Import je lokálně PoC validated; aktuální důkazy a omezení drží
 [F-M1-IMPORT-01 ve WORK_LOG](../WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14).
-Designed pravidla ADR 0024 sama nedokládají jejich budoucí vynucení.
+Obecný merge/fast-forward projektů není součástí současné aplikace ani tohoto PoC.

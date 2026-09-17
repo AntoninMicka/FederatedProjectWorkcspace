@@ -5,6 +5,23 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-META-02 — Implementace importní provenance v2 — 2026-09-17
+
+Dávka uzavřena po doloženém začlenění PR #22 jako commit `fb613ad` v `develop`; feature větev `feature/f-m1-meta-02-provenance-v2` obsahovala implementaci i následné uživatelské upřesnění času vzniku zdroje. Dosažená úroveň je lokální PoC validated; Gate M1 zůstává otevřený.
+
+- [x] [completed] **F-M1-META-02-A — Parser a projekce v2 (PoC validated, 2026-09-17).** Striktní parser podporuje smíšený v1/v2 snapshot, podmíněný importní blok a vazbu hashe na skutečné source bajty. Index projektuje úplnou provenance a staré/rozpracované schéma atomicky obnovuje z validovaného HEAD.
+- [x] [completed] **F-M1-META-02-B — Nový import a doložená migrace (PoC validated, 2026-09-17).** Nové importy zapisují v2; request digest váže bajty, hash i provenance. Explicitní migrace vyžaduje doložený původní Workspace commit, ancestry, operation trailer a shodu neměnných polí/bajtů.
+- [x] [completed] **F-M1-META-02-C — UI, recovery a akceptace (PoC validated, 2026-09-17).** UI bezpečně zobrazuje importní provenance; retry/receipt, chybné vstupy, pády před/po CAS a při indexaci, skutečné Qt/WebEngine, balení a offline provoz byly ověřeny.
+- [x] [completed] **F-M1-META-AH-01 — Oddělit čas importu a vznik zdroje (implemented, 2026-09-17).** Import přijímá pouze explicitní doložený `source_created_at`; automatický `imported_at` zůstává samostatný a pozdější. Neznámý vznik se neodhaduje.
+
+Oveření na finálním obsahu před předáním:
+
+- Cílená sada metadata/import/index: 24 testů prošlo bez chyb a skipů.
+- Rozšířená sada před posledním ad-hoc UI doplněním: 209 testů, 205 prošlo a čtyři volitelné libgit2 probe testy byly přeskočeny; skutečné Qt/WebEngine, `.deb` a offline scénáře běžely.
+- Po F-M1-META-AH-01 prošlo 14 cílených backendových testů s jedním očekávaným Qt skipem a samostatné skutečné Qt dialog + WebEngine scénáře 2/2. Celá rozšířená sada měla 210 testů: 205 prošlo, čtyři libgit2 byly přeskočeny a jednou selhal nesouvisející HTTPS browser smoke bez očekávaného stdout; bezprostřední izolovaný retry prošel. Po poslední UI změně proto není doložen nový celý bezchybný běh.
+
+Omezení: migrace je programová, nikoli plošný UI wizard. Obecná transition ochrana všech publish/fast-forward/merge cest, metadata-only editace source a import navazující verze pokračují ve F-M1-SOURCE-02. Výpadek napájení, pád uvnitř libovolného syscallu a cílové zařízení nebyly touto dávkou doloženy.
+
 ## F-M1-SOURCE-01 — Kontrakt neměnnosti a verzování zdrojů — 2026-09-15
 
 Dávka uzavřena po doloženém začlenění PR #20 jako squash commit `7152d64` v `develop`; feature větev `feature/f-m1-source-01-versioning` končí `f20482f`. Šlo o designed dokumentační výstup bez implementace transition validátoru nebo schématu v2.
