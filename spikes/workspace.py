@@ -11,7 +11,7 @@ import uuid
 from spikes.configuration import committed_project
 from spikes.markdown_documents import main_todo_view
 from spikes.journal import Journal, RecoveryConflict, snapshot
-from spikes.metadata import require, validate_snapshot
+from spikes.metadata import require, validate_snapshot, validate_transition
 from spikes.storage import Git, Index, StaleIndex, projection
 
 
@@ -50,7 +50,8 @@ class Workspace:
         with self.journal.lock(), self.journal.connect() as db:
             return self._apply_locked(db, changes, author_name, author_email, message, checkpoint)
 
-    def transact(self, operation_id, request, prepare, *, expected_head=None, checkpoint=lambda stage: None):
+    def transact(self, operation_id, request, prepare, *, expected_head=None,
+                 allow_privacy_relaxation=False, checkpoint=lambda stage: None):
         """Bind a native request to one durable operation, including lost-response retries.
 
         prepare runs under the writer lock, only for a new request, and returns
@@ -69,10 +70,12 @@ class Workspace:
                 raise PendingOperation('Recover the pending operation first')
             changes, name, email, message = prepare(self)
             return self._apply_locked(db, changes, name, email, message, checkpoint,
-                                      operation_id=operation_id, request_digest=digest, expected_head=expected_head)
+                                      operation_id=operation_id, request_digest=digest, expected_head=expected_head,
+                                      allow_privacy_relaxation=allow_privacy_relaxation)
 
     def _apply_locked(self, db, changes, author_name, author_email, message, checkpoint,
-                      *, operation_id=None, request_digest=None, expected_head=None):
+                      *, operation_id=None, request_digest=None, expected_head=None,
+                      allow_privacy_relaxation=False):
         for value in (author_name, author_email):
             require(isinstance(value, str) and value.strip() == value and bool(value)
                     and not any(c in value for c in '\n\r\0<>'), 'Explicit Git identity required')
@@ -87,11 +90,23 @@ class Workspace:
                 'Clean worktree and staging index required')
         require(snapshot(self.git.root) == self.git.snapshot(base),
                 'Working projection differs from HEAD (including ignored files)')
+        base_files = self.git.snapshot(base)
+        candidate_files = dict(base_files)
+        for path, data in changes.items():
+            if not path.startswith(('artifacts/', 'registries/')):
+                continue
+            if data is None:
+                candidate_files.pop(path, None)
+            else:
+                candidate_files[path] = data
+        validate_transition(base_files, candidate_files,
+                            allow_privacy_relaxation=allow_privacy_relaxation)
         paths = self.journal._prepare(db, changes)
         require(bool(paths), 'Operation has no changes')
         record = dict(operation_id=operation_id or str(uuid.uuid4()), base_head=base, branch=branch,
                       paths=paths, author_name=author_name, author_email=author_email,
-                      message=message, state='prepared', commit_id=None, request_digest=request_digest)
+                      message=message, state='prepared', commit_id=None, request_digest=request_digest,
+                      allow_privacy_relaxation=allow_privacy_relaxation)
         db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
                    (record['operation_id'], json.dumps(record)))
         db.commit()
@@ -215,7 +230,10 @@ class Workspace:
                     oid = self.git.run('hash-object', '-w', '--stdin', input=data, binary=True).stdout.decode().strip()
                     self.git.run('update-index', '--add', '--cacheinfo', '100644', oid, path, env_extra=env)
             tree = self.git.run('write-tree', env_extra=env).stdout.strip()
-        validate_snapshot(self.git.snapshot(tree))
+        base_files = self.git.snapshot(record['base_head'])
+        candidate_files = self.git.snapshot(tree)
+        validate_transition(base_files, candidate_files,
+                            allow_privacy_relaxation=record.get('allow_privacy_relaxation', False))
         identity = {'GIT_AUTHOR_NAME': record['author_name'], 'GIT_AUTHOR_EMAIL': record['author_email'],
                     'GIT_COMMITTER_NAME': record['author_name'], 'GIT_COMMITTER_EMAIL': record['author_email']}
         commit = self.git.run('commit-tree', tree, '-p', record['base_head'],

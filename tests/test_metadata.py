@@ -5,7 +5,7 @@ import hashlib
 import unittest
 
 from spikes.metadata import (MAX_METADATA, ValidationError, frontmatter, parse_json,
-                             validate_metadata, validate_snapshot)
+                             validate_metadata, validate_snapshot, validate_transition)
 from tests.fixtures import ENTITY, OTHER, encoded, markdown, metadata, registry, source
 
 
@@ -80,6 +80,30 @@ class MetadataTests(unittest.TestCase):
         external_without_import.update(schema_version=2, provenance='external')
         with self.assertRaises(ValidationError):
             validate_metadata(external_without_import)
+
+    def test_source_transition_preserves_bytes_identity_and_v2_provenance(self):
+        base = source()
+        allowed = dict(base)
+        meta = parse_json(allowed[f'artifacts/{ENTITY}/metadata.json'])
+        meta.update(title='Updated title', description='Project annotation', tags=['reviewed'])
+        allowed[f'artifacts/{ENTITY}/metadata.json'] = encoded(meta)
+        self.assertIn(ENTITY, validate_transition(base, allowed))
+
+        for path, value, message in [
+                (f'artifacts/{ENTITY}/source.pdf', b'%PDF-changed', 'content'),
+                (f'artifacts/{ENTITY}/metadata.json', encoded(dict(meta, author_id=OTHER)), 'metadata')]:
+            changed = dict(allowed); changed[path] = value
+            with self.subTest(message=message), self.assertRaisesRegex(ValidationError, 'Immutable source'):
+                validate_transition(base, changed)
+
+        relaxed = dict(allowed)
+        relaxed_meta = dict(meta, privacy='public')
+        relaxed[f'artifacts/{ENTITY}/metadata.json'] = encoded(relaxed_meta)
+        with self.assertRaisesRegex(ValidationError, 'privacy relaxation'):
+            validate_transition(base, relaxed)
+        self.assertIn(ENTITY, validate_transition(base, relaxed, allow_privacy_relaxation=True))
+        with self.assertRaisesRegex(ValidationError, 'removal'):
+            validate_transition(base, {})
 
     def test_sidecar_paths_orphans_and_identity(self):
         for filename in ['../escape', '/tmp/escape', '.git', 'C:\\escape', 'metadata.json']:

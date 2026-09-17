@@ -13,17 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M1-SOURCE-01/V-05 je po PR #20 (`7152d64`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-source-01--kontrakt-neměnnosti-a-verzování-zdrojů--2026-09-15). F-M1-META-02 je jediná aktivní dávka v [TODO](TODO.md). Backlog nyní drží tři další konkrétní dávky; jejich větve ani PR nejsou vytvořeny.
-
-### F-M1-SOURCE-02 — Vynucení neměnných zdrojů a navazující verze
-
-- Stav: [ ] [planned]; milník M1; cílová úroveň PoC validated.
-- Původ: odložená implementace F-M1-SOURCE-01/V-05 a ADR 0024.
-- Větev: `feature/f-m1-source-02-enforcement`; základ a jediný PR do `develop`.
-- Výstup: transition validace všech publish/merge cest, metadata-only editace zdroje, import nové verze s novým UUID/`supersedes`, bezpečná detekce byte-identity a UI konfliktu.
-- Mimo rozsah: content-addressed storage, automatické slučování duplicit a změna trust boundary externích zdrojů.
-- Závislosti: ADR 0024 a aktivní F-M1-META-02; použít její parser/index/migraci bez duplikace.
-- Akceptace jednoho PR: v1/v2, přímá Git změna obsahu/metadat, fast-forward/merge/stejné UUID, privacy reclassification, expected-HEAD/retry/receipt, pády před/po CAS a indexu, skutečný Qt a celá sada.
+F-M1-META-02 je po PR #22 (`fb613ad`) uzavřena ve [WORK_LOG](WORK_LOG.md#f-m1-meta-02--implementace-importní-provenance-v2--2026-09-17). F-M1-SOURCE-02 je jediná aktivní dávka v [TODO](TODO.md). Další pořadí drží F-M2-CONTEXT-01, F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny a aktivace M2 závisí na doloženém Gate M1.
 
 ### F-M2-CONTEXT-01 — Bezpečný Context Builder
 
@@ -32,7 +22,7 @@ F-M1-SOURCE-01/V-05 je po PR #20 (`7152d64`) uzavřena ve [WORK_LOG](WORK_LOG.md
 - Větev: `feature/f-m2-context-01-manifest`; základ a jediný PR do `develop`.
 - Výstup: explicitní výběr vstupů, Context Manifest přesných bajtů a revalidace identity/privacy/oprávnění před předáním backendu.
 - Mimo rozsah: celý M2, Ollama adapter, automatické souhrny, billing a role orchestrace; ty se připraví jako vlastní dávky.
-- Závislosti: příslušné M1 gates a kontrakty ADR 0008; frontu lze posunout podle doložených závislostí, ne automaticky začít M2.
+- Závislosti: doložený Gate M1 a kontrakty ADR 0008; frontu lze posunout podle doložených závislostí, ne automaticky začít M2.
 - Akceptace jednoho PR: exact bytes/digests, změna HEAD/oprávnění mezi výběrem a použitím, zákaz local-only exportu a implicitního fallbacku, testy chybových cest a dokumentace.
 
 ### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu

@@ -48,7 +48,9 @@ class Artifacts:
                     docs.append(document(files, entities, id_))
             if ws.git.head() != head:
                 raise StaleIndex('Project changed while reading')
-            return dict(id=project_id, title=meta['title'], commit_id=head, documents=docs,
+            sources = [dict(id=id_, title=item['title']) for id_, item in entities.items()
+                       if item['kind'] == 'source']
+            return dict(id=project_id, title=meta['title'], commit_id=head, documents=docs, sources=sources,
                         main_todo_id=main_todo_id(project_id))
 
     def delete(self, request, operation_id, *, checkpoint=lambda stage: None):

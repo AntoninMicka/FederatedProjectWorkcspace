@@ -16,7 +16,7 @@ from spikes.journal import RecoveryConflict, snapshot
 from spikes.metadata import ValidationError
 from spikes.storage import Git
 from spikes.workspace import PendingOperation, Workspace
-from tests.fixtures import ENTITY, OTHER, source, registry
+from tests.fixtures import ENTITY, OTHER, markdown, source, registry
 
 
 IDENTITY = dict(author_name='Alice Example', author_email='alice@example.invalid', message='Import source')
@@ -98,6 +98,16 @@ else:
                 self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
                 self.git.run('reset', '--hard', self.initial)
 
+    def test_invalid_source_transition_is_rejected_before_journal(self):
+        self.workspace.apply(source(), **IDENTITY)
+        committed = self.git.head()
+        path = f'artifacts/{ENTITY}/source.pdf'
+        with self.assertRaisesRegex(ValidationError, 'Immutable source content changed'):
+            self.workspace.apply({path: b'%PDF-changed'}, **IDENTITY)
+        self.assertEqual(self.git.head(), committed)
+        self.assertIsNone(self.active())
+        self.assertEqual(snapshot(self.root), self.git.snapshot(committed))
+
     def test_recovery_itself_can_crash_repeatedly(self):
         self.crash('prepared')
         operation_id = self.active()['operation_id']
@@ -109,20 +119,22 @@ else:
         self.assertEqual(self.git.run('rev-list', '--count', 'HEAD').stdout.strip(), '2')
         self.assertIsNone(self.workspace.recover())
 
-    def test_import_rename_delete_keep_exact_bytes_and_paths(self):
+    def test_create_rename_delete_keep_exact_bytes_and_paths(self):
         (self.root / 'unrelated.txt').write_text('Keep me')
         self.git.commit('Unrelated baseline')
         original = self.git.head()
-        first = self.workspace.apply(source(), **IDENTITY)
+        initial = {f'artifacts/{ENTITY}/document.md': markdown()}
+        first = self.workspace.apply(initial, **IDENTITY)
         self.assertEqual(self.git.run('show', '-s', '--format=%P', first['commit_id']).stdout.strip(), original)
         self.assertEqual(set(self.git.run('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').stdout.splitlines()),
-                         set(source()))
-        changes = source(name='renamed.pdf')
-        changes[f'artifacts/{ENTITY}/source.pdf'] = None
+                         set(initial))
+        renamed = {f'artifacts/{ENTITY}/renamed.md': markdown()}
+        changes = dict(renamed)
+        changes[f'artifacts/{ENTITY}/document.md'] = None
         self.crash('file:0', changes=changes)
         self.workspace.recover()
-        self.assertEqual(self.git.snapshot(self.git.head()), source(name='renamed.pdf'))
-        self.crash('ref-updated', changes={p: None for p in source(name='renamed.pdf')})
+        self.assertEqual(self.git.snapshot(self.git.head()), renamed)
+        self.crash('ref-updated', changes={p: None for p in renamed})
         self.workspace.recover()
         self.assertEqual(self.workspace.read(), [])
         self.assertEqual((self.root / 'unrelated.txt').read_text(), 'Keep me')

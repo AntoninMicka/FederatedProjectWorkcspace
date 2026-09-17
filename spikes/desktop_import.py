@@ -27,12 +27,15 @@ class ImportDialog(QDialog):
         self.source_created_at = QLineEdit()
         self.source_created_at.setPlaceholderText('např. 2024-05-10T14:30:00Z')
         self.source_created_at.setMaxLength(27)
+        self.supersedes = QComboBox()
+        self.supersedes.addItem('Samostatný zdroj', None)
         self.privacy = QComboBox()
         for text, value in [('Projektové', 'project'), ('Důvěrné', 'confidential'), ('Pouze lokální', 'local-only'), ('Veřejné', 'public')]:
             self.privacy.addItem(text, value)
         for label, widget in [('Zdrojový soubor', self.path), ('', self.browse), ('Název', self.title),
                               ('Popis', self.description), ('Štítky — jeden na řádek', self.tags),
                               ('Doložený čas vzniku zdroje (UTC)', self.source_created_at),
+                              ('Navazuje na předchozí zdroj', self.supersedes),
                               ('Privacy', self.privacy)]:
             form.addRow(label, widget)
         layout.addLayout(form)
@@ -53,7 +56,7 @@ class ImportDialog(QDialog):
     def controls(self):
         editable = not self.busy and self.pending is None and self.view is not None
         for widget in (self.browse, self.title, self.description, self.tags,
-                       self.source_created_at, self.privacy):
+                       self.source_created_at, self.supersedes, self.privacy):
             widget.setEnabled(editable)
         self.save.setEnabled(not self.busy and (self.pending is not None or (editable and bool(self.path.text()))))
         self.save.setText('Zopakovat stejný import' if self.pending else 'Potvrdit a importovat')
@@ -85,6 +88,9 @@ class ImportDialog(QDialog):
         def loaded(view):
             recovering = self.pending is not None
             self.view, self.pending = view, None
+            self.supersedes.clear(); self.supersedes.addItem('Samostatný zdroj', None)
+            for source in view.get('sources', []):
+                self.supersedes.addItem(source['title'] + ' — ' + source['id'], source['id'])
             if recovering:
                 self.path.clear(); self.saved.emit(self.project_id)
             self.status.setText('Projekt načten. Vyberte zdroj; do potvrzení se nic neimportuje.')
@@ -107,15 +113,21 @@ class ImportDialog(QDialog):
                                             self.description.toPlainText(),
                                             [tag.strip() for tag in self.tags.toPlainText().splitlines() if tag.strip()],
                                             self.privacy.currentData(),
-                                            source_created_at=self.source_created_at.text().strip() or None)
+                                            source_created_at=self.source_created_at.text().strip() or None,
+                                            supersedes=self.supersedes.currentData())
             except Exception as exc:
                 self.status.setText(str(exc)); return
             message = QMessageBox(self); message.setWindowTitle('Potvrdit import původních bajtů')
             message.setTextFormat(Qt.TextFormat.PlainText)
             creation = request['source_created_at'] or 'neuveden — nebude odhadnut'
+            duplicates = self.service.duplicate_ids(self.project_id, self.view['commit_id'], request['sha256'])
+            duplicate_note = ('\nShodné bajty už mají zdroje: ' + ', '.join(duplicates) +
+                              '\nPokračujte jen pokud jde o samostatný projektový význam.') if duplicates else ''
+            version_note = ('\nNavazuje na: ' + request['supersedes']) if request.get('supersedes') else ''
             message.setText('Soubor: ' + request['filename'] + '\nPrivacy: ' + request['privacy'] +
                             '\nDoložený čas vzniku zdroje: ' + creation +
-                            '\nSHA-256: ' + request['sha256'] + '\n\nImportovat jako nový zdroj s vlastními metadaty?')
+                            '\nSHA-256: ' + request['sha256'] + version_note + duplicate_note +
+                            '\n\nImportovat jako nový zdroj s vlastními metadaty?')
             message.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
             message.setDefaultButton(QMessageBox.StandardButton.Cancel)
             if message.exec() != QMessageBox.StandardButton.Yes:

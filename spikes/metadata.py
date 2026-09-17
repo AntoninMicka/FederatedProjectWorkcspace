@@ -261,3 +261,35 @@ def validate_snapshot(files):
         for relation in meta.get('relations', []):
             require(relation['target_id'] in entities, 'Dangling relation')
     return entities
+
+
+def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation=False):
+    """Enforce invariants that require comparing two valid project snapshots."""
+    base = validate_snapshot(base_files)
+    candidate = validate_snapshot(candidate_files)
+    privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+    immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file')
+
+    def content(files, meta):
+        prefix = f"artifacts/{meta['id']}/"
+        if 'file' in meta:
+            return files[prefix + meta['file']]
+        paths = [path for path in files if path.startswith(prefix)]
+        require(len(paths) == 1, 'Unsupported source layout')
+        return files[paths[0]]
+
+    for id_, before in base.items():
+        after = candidate.get(id_)
+        if before['kind'] != 'source':
+            continue
+        require(after is not None, 'Source removal is unsupported')
+        require(all(before.get(key) == after.get(key) for key in immutable),
+                'Immutable source metadata changed')
+        require(content(base_files, before) == content(candidate_files, after),
+                'Immutable source content changed')
+        if before['schema_version'] == 2:
+            require(after['schema_version'] == 2 and before['import'] == after.get('import'),
+                    'Immutable source import provenance changed')
+        require(allow_privacy_relaxation or privacy[after['privacy']] >= privacy[before['privacy']],
+                'Source privacy relaxation requires explicit authorization')
+    return candidate

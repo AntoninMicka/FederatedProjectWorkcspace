@@ -151,6 +151,51 @@ class SourceImportTests(unittest.TestCase):
             self.sources.import_source(invalid, str(uuid4()))
         self.assertIsNone(self.sources.workspace(self.project_id).recover())
 
+    def test_metadata_edit_and_successor_preserve_original_source(self):
+        original_path = self._write('edition-1.pdf', b'%PDF-1.7\nedition one\n')
+        original = self._request_for(original_path, 'Edition 1')
+        first = self.sources.import_source(original, str(uuid4()))
+
+        edit = dict(project_id=self.project_id, artifact_id=original['artifact_id'],
+                    base_head=first['commit_id'],
+                    patch={'title': 'First edition', 'privacy': 'confidential'},
+                    authorize_privacy_relaxation=False)
+        edited = self.sources.edit_metadata(edit, str(uuid4()))
+        old_meta = validate_snapshot(self.git.snapshot(edited['commit_id']))[original['artifact_id']]
+        self.assertEqual(old_meta['title'], 'First edition')
+        self.assertEqual(old_meta['privacy'], 'confidential')
+        self.assertEqual((self.project_root / 'artifacts' / original['artifact_id'] / 'edition-1.pdf').read_bytes(),
+                         b'%PDF-1.7\nedition one\n')
+
+        relaxation = dict(edit, base_head=edited['commit_id'], patch={'privacy': 'public'})
+        with self.assertRaisesRegex(ValueError, 'privacy relaxation'):
+            self.sources.edit_metadata(relaxation, str(uuid4()))
+        relaxation['authorize_privacy_relaxation'] = True
+        relaxed = self.sources.edit_metadata(relaxation, str(uuid4()))
+
+        successor_path = self._write('edition-2.pdf', b'%PDF-1.7\nedition two\n')
+        successor = request_from_file(self.project_id, relaxed['commit_id'], str(successor_path),
+                                      'Edition 2', '', [], 'project',
+                                      supersedes=original['artifact_id'])
+        final = self.sources.import_source(successor, str(uuid4()))
+        entities = validate_snapshot(self.git.snapshot(final['commit_id']))
+        self.assertEqual(entities[successor['artifact_id']]['relations'],
+                         [{'type': 'supersedes', 'target_id': original['artifact_id']}])
+        self.assertIn(original['artifact_id'],
+                      [item['id'] for item in self.sources.open(self.project_id)['sources']])
+
+    def test_duplicate_detection_is_same_project_and_does_not_merge_sources(self):
+        raw = b'%PDF-1.7\nduplicate\n'
+        path = self._write('duplicate.pdf', raw)
+        request = self._request_for(path, 'First')
+        receipt = self.sources.import_source(request, str(uuid4()))
+        self.assertEqual(self.sources.duplicate_ids(self.project_id, receipt['commit_id'], request['sha256']),
+                         [request['artifact_id']])
+        duplicate = request_from_file(self.project_id, receipt['commit_id'], str(path), 'Second', '', [], 'project')
+        second = self.sources.import_source(duplicate, str(uuid4()))
+        self.assertNotEqual(request['artifact_id'], duplicate['artifact_id'])
+        self.assertEqual(len(self.sources.duplicate_ids(self.project_id, second['commit_id'], request['sha256'])), 2)
+
     def test_explicit_v1_migration_requires_native_import_commit_and_is_idempotent(self):
         artifact_id, import_commit, raw = self._legacy_import()
         request = dict(project_id=self.project_id, artifact_id=artifact_id,

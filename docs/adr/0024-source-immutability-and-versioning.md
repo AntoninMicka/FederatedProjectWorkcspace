@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0024 — Neměnnost a verzování importovaných zdrojů
 
-Datum: 2026-09-15. Stav: přijato jako **designed** pro F-M1-SOURCE-01/V-05. Nejde o implementovaný transition validátor ani globální ochranu před přímými Git změnami.
+Datum: 2026-09-15. Stav: přijato; transition pravidla jsou **PoC validated** ve F-M1-SOURCE-02 pro Workspace a podporovaný první Git přenos. Obecný merge/fast-forward projektů zatím není aplikační schopnost.
 
 ## Rozhodnutí
 
@@ -38,7 +38,7 @@ Neměnnost je přechodový invariant, ne pouze vlastnost jednoho stromu:
 3. Fast-forward, merge i explicitní přijetí externího Git stavu podléhají stejné kontrole. Stejné UUID zavedené nezávisle s jinými bajty je sémantický konflikt, i když textový merge projde.
 4. Změna provedená mimo aplikační zámek se nesmí automaticky přijmout jako nová verze. Vůči poslednímu validovanému commitu se označí jako konflikt; u čerstvě přijatého repozitáře lze ověřit vnitřní historii/hash, nikoli pravost původního externího souboru bez dalšího důkazu.
 
-Samotný `validate_snapshot()` dnes tyto historické podmínky nevynucuje. Až navazující implementace smí tvrdit globální ochranu, musí transition validátor zapojit do všech aplikačních publish/merge cest a doložit přijetí nebo odmítnutí cizí historie.
+`validate_snapshot()` kontroluje jeden strom; `validate_transition()` navíc porovnává base a kandidáta. Workspace jej volá před journalem i nad sestaveným Git stromem před commitem. První Git přenos ověřuje každý parent→child přechod celé přijímané historie. Obecné merge/fast-forward přijímání dosud není podporováno a nesmí být přidáno bez stejné kontroly.
 
 ## Zápis a recovery
 
