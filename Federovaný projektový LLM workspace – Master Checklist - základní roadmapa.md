@@ -189,6 +189,19 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
 
+## 2F. Read-only artefakty sdílené mezi projekty
+
+**Stav: designed / plánováno, neimplementováno.** Cílem je umožnit použít jeden autoritativní artefakt ve více projektech bez tichého vytvoření editovatelných kopií. Jde o aplikační meziprojektovou referenci podobnou symlinku, nikoli o filesystemový symlink; ten současné bezpečnostní a validační kontrakty nadále odmítají.
+
+- [ ] Konzumující projekt ukládá verzovaný referenční záznam, který identifikuje zdrojový projekt/repozitář, artifact ID, úplný Git commit, očekávaný hash obsahu a rozsah reference. Samotná lokální cesta, název projektu, branch nebo pohyblivý `HEAD` nestačí.
+- [ ] Výchozí reference je připnutá na konkrétní revizi a v cílovém projektu pouze pro čtení. Volitelné sledování zdroje smí nabídnout novou revizi, ale nesmí bez potvrzení přepsat použitý obsah ani reprodukovatelnost starého commitu.
+- [ ] Oprávnění kontrolovat při vytvoření i každém rozlišení reference. Přístup cílového projektu nezakládá přístup ke zdrojovému projektu; efektivní privacy nesmí být méně přísná než u zdroje. Revokovaný, smazaný nebo nedostupný zdroj zobrazit jako nerozlišenou/stale referenci, ne jako prázdný či nový artefakt.
+- [ ] Offline cache je pouze lokální ověřená projekce konkrétní revize s hashem a stavem stáří; není druhou autoritativní kopií a nesmí se automaticky commitnout do konzumenta nebo federovat bez oprávnění.
+- [ ] Pokus o editaci nabídne explicitní vytvoření vlastní kopie/forku s novým artifact ID a provenance na přesnou zdrojovou revizi. Původní reference zůstává beze změny; zpětný zápis do zdrojového projektu není součástí této schopnosti.
+- [ ] Index, hledání, Context Builder a export musejí odlišit vlastní artefakt, read-only referenci, lokální cache a explicitní snapshot. Do LLM kontextu nebo exportu lze zahrnout jen znovu autorizované bajty přesné revize; bez nich se přenáší pouze reference a stav nedostupnosti.
+
+První implementační rozsah je sdílení mezi dvěma lokálně registrovanými projekty na jednom uzlu. Vzdálené rozlišení reference a federace cache navazují na M5; obecný externí katalog a cross-repo identity koordinovat s ER-00/ER-01. Konkrétní dávku drží BACKLOG XREF-01.
+
 ---
 
 # 3. Metadata a zdrojování
