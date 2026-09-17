@@ -3,27 +3,26 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M2-CONTEXT-01: Bezpečný Context Builder
+# TODO — F-M2-OLLAMA-01: Důvěryhodná lokalita Ollama backendu
 
-Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci M1-07. Tato dávka je na ní implementačně nezávislá. Jedna dávka, jedna feature větev, jeden PR do `develop`.
+Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci M1-07. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M2-CONTEXT-01 — Bezpečný Context Builder
+## F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
 
-- Stav: [x] [completed]; lokálně PoC validated 2026-09-17, PR dosud není vytvořen ani sloučen.
-- Původ: Context Builder část M2 a kontrakt [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
-- Skutečná větev: `feature/f-m2-context-01-manifest`, založená z `develop` (`7d985c4`); jediný budoucí PR do `develop`.
-- Výstup: explicitní výběr projektových a neměnných ad-hoc vstupů, Context Manifest přesných bajtů a revalidace identity, HEAD, privacy, oprávnění, bindingu a cíle bezprostředně před předáním backendu.
-- Mimo rozsah: Ollama či jiný backend adapter, skutečné síťové odeslání, automatické souhrny, billing, role orchestrace a publikace výsledku.
-- Závislosti: implementované projektové čtení/validace M1 a návrhový kontrakt ADR 0008. Odložený reboot M1-07 nemění Context Builder; Gate M1 se touto výjimkou neuzavírá.
-- Akceptace: exact bytes/digests, deterministické pořadí a limity; změna HEAD, identity/session, oprávnění, policy, bindingu nebo cíle mezi přípravou a autorizací se odmítne; `local-only` neopustí `same-node`; chybějící povinný vstup a implicitní fallback se odmítnou; volitelné vynechání je viditelné; testy chybových cest a dokumentace.
+- Stav: [ ] [in progress]; cílová úroveň PoC validated.
+- Původ: Ollama a execution boundaries z roadmapy a [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+- Skutečná větev: `feature/f-m2-ollama-01-locality`, založená z `develop` (`ab2a5ea`, PR #26 začleněn); jediný budoucí PR do `develop`.
+- Výstup: Ollama adapter a lokální binding, které prokazatelně odliší proces na stejném uzlu od privátního LAN endpointu a vážou skutečný cíl/model do Context Manifest handoffu.
+- Mimo rozsah: cloud provider, obecná federace, automatické vyhledávání Ollama služeb, chat UI, sumarizace a publikace výsledků.
+- Akceptace: `same-node` a LAN nelze zaměnit konfigurací, DNS rebindingem ani HTTP redirectem; LAN má vlastní explicitní boundary, identitu cíle a transportní policy; `local-only` se na LAN neposílá; neexistuje implicitní LAN/cloud fallback; testy pokrývají nedostupnost, změnu cíle a restart.
 
-- [x] [completed] **F-M2-CONTEXT-01-A — Striktní kontrakt manifestu a builder (implemented, 2026-09-17).** Verzovaný omezený kontrakt fixuje explicitně zvolené projektové a ad-hoc bajty, SHA-256, velikost, privacy, commit, autoritu, policy a přesný binding/cíl v kanonickém manifestu a payloadu.
-- [x] [completed] **F-M2-CONTEXT-01-B — Autorizační revalidace a dispatch handoff (implemented, 2026-09-17).** `prepare` a `authorize_for_dispatch` jsou oddělené; druhá fáze pod společným writer lockem kontroluje session/uživatele/uzel, HEAD, čtecí práva, policy, binding/cíl, privacy a přesné bajty. Výstup je pouze backendově neutrální handoff, nikoli síťové odeslání.
-- [x] [completed] **F-M2-CONTEXT-01-C — Chybové scénáře, dokumentace a závěrečné ověření (PoC validated lokálně, 2026-09-17).** Cílené 4 testy prošly. Celá sada mimo socketový sandbox: 220 testů OK, 22 podmíněných skipů. První běh uvnitř sandboxu měl 20 očekávaných `PermissionError` chyb při vytvoření HTTP/HTTPS/Unix socketu; nejde o aplikační regresi. ADR 0008 a reuse evidence jsou aktualizované.
+- [x] [completed] **F-M2-OLLAMA-01-A — Execution boundary a binding kontrakt (implemented, 2026-09-17).** ADR 0008 a striktní node-local kontrakt rozlišují `same-node` číselný loopback od `private-network` číselné privátní HTTPS adresy s připnutým certifikátem a stabilní identitou; DNS, credentials v bindingu a neznámá pole se odmítají.
+- [ ] [in progress] **F-M2-OLLAMA-01-B — Ollama adapter a bezpečný dispatch (cílová úroveň: implemented).** Přijmout pouze autorizovaný Context Builder handoff, zakázat redirect/fallback a před odesláním ověřit skutečný socketový cíl a binding.
+- [ ] [planned] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření (cílová úroveň: PoC validated).** Pokrýt same-node/LAN, DNS změnu, redirect, nedostupnost, změnu modelu/cíle, local-only a restart konfigurace; aktualizovat dokumentaci/reuse a spustit cílenou i celou sadu.
 
 ### Recovery hranice
 
-- Builder je v této dávce read-only. Připravený manifest a snapshot jsou neměnný lokální objekt; samotný hash bez bajtů není dostačující.
-- `prepare` nesmí nic odeslat. `authorize_for_dispatch` znovu ověří aktuální stav a vrátí pouze krátkodobý autorizovaný handoff přesně stejných bajtů.
-- Skutečný backend adapter, trvalý run record, stav `dispatching/unknown` a placený síťový účinek patří do navazující dávky; nesmí být předstírány tímto PoC.
+- Binding/configurace je node-local stav mimo projektový Git a nesmí obsahovat přihlašovací tajemství.
+- Adapter před síťovým pokusem potřebuje durable run record s přechodem `dispatching`; jeho návrh a implementace jsou součástí této dávky jen v rozsahu nutném pro bezpečný Ollama dispatch.
+- Po ztrátě odpovědi se výsledek označí `unknown`; automatický retry nesmí zopakovat potenciálně nákladný nebo stavově významný běh.

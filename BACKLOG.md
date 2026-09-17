@@ -13,17 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-context-01-manifest`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislý Context Builder může pokračovat bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny.
-
-### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
-
-- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; Ollama a execution boundaries z roadmapy/ADR 0008.
-- Větev: `feature/f-m2-ollama-01-locality`; základ a jediný PR do `develop`.
-- Výstup: Ollama adapter a binding, který prokazatelně rozliší `same-node` proces od privátního LAN endpointu; LAN cíl má samostatně rozhodnutou trust boundary, identitu cíle a transportní policy.
-- Mimo rozsah: obecná federace, automatické hledání nedůvěryhodných služeb a cloud fallback.
-- Závislosti: Backend/Context Manifest kontrakt ADR 0008 a F-M2-CONTEXT-01; před implementací zaznamenat rozšíření execution boundary v ADR.
-- Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
+F-M2-CONTEXT-01 je po PR #26 (`ab2a5ea`) uzavřena ve WORK_LOG. F-M2-OLLAMA-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-ollama-01-locality`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce M2 pokračuje bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-CHAT-01; jeho větev ani PR nejsou vytvořeny.
 
 ## Zjištěné mezery a navazující ověření
 

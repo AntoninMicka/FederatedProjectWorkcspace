@@ -13,7 +13,7 @@ from spikes.workspace import PendingOperation
 
 
 MAX_CONTEXT = 16 * 1024 * 1024
-BOUNDARIES = {'same-node', 'trusted-federation', 'external-provider'}
+BOUNDARIES = {'same-node', 'private-network', 'trusted-federation', 'external-provider'}
 PRIVACY = {'public', 'project', 'confidential', 'local-only'}
 
 

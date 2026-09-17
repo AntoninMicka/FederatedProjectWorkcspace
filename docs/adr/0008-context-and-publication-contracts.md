@@ -19,10 +19,19 @@ Reuse: zachovat Workspace, validaci celého kandidátního stromu a compare-and-
 | --- | --- |
 | BackendDefinition | Stabilní ID, revize definice, název, typ adapteru/provider, model nebo pravidlo jeho výběru; deklarované účely (např. role execution, orchestrator chat, extraction), formáty a limity. Přenositelná definice neobsahuje secrets ani soukromé adresy uzlu. |
 | BackendBinding | Lokální vazba definice na spravující node ID, endpoint, skutečný model, ověřené capabilities, dostupnost a execution boundary. Credentials pouze jako lokální opaque reference mimo Git; binding se automaticky nesynchronizuje. |
-| ExecutionBoundary | `same-node`: zpracování i obsah zůstávají na původním uzlu; `trusted-federation`: konkrétní autentizovaný a povolený peer; `external-provider`: konkrétní externí služba. Localhost proxy sama nedokládá same-node. Přesměrování ani další zpracovatel nesmějí nepozorovaně změnit schválený cíl. |
+| ExecutionBoundary | `same-node`: zpracování i obsah zůstávají na původním uzlu; `private-network`: explicitní připnutá služba v privátní síti, která není lokální ani federovaným peerem; `trusted-federation`: konkrétní autentizovaný a povolený peer; `external-provider`: konkrétní externí služba. Localhost proxy sama nedokládá same-node. Přesměrování ani další zpracovatel nesmějí nepozorovaně změnit schválený cíl. |
 | RoleDefinition | Stabilní ID a revize, verzovaná šablona instrukcí, povolené zdroje, povinné/volitelné vstupy, výstupní formát, požadované capabilities, preference modelu/backendu a omezení privacy. Projektový override má vlastní revizi a dohledatelný základ. |
 
 Role zahrnují creator, opponent, analyst, researcher, editor, extractor, summarizer, classifier a issue-spotter. Role ani projektový override neudělují uživateli další oprávnění. Backend preference není souhlas s přenosem. Efektivní povolení je průnik aktuálních oprávnění uživatele, projektu, uzlu, role a pravidel cíle; zákaz má přednost. Stejná capability může existovat ve všech třech boundaries. Dostupnost ani nízká cena nejsou autorizace.
+
+Pro Ollama znamená `same-node` pouze explicitní číselný loopback endpoint na
+původním uzlu; hostname `localhost`, LAN adresa ani proxy tuto boundary
+nedokládají. `private-network` používá výhradně číselnou privátní IP, HTTPS,
+připnutý SHA-256 certifikátu a stabilní ID cílového uzlu/služby. DNS se pro tuto
+boundary nepoužívá. Redirect je zakázán a změna adresy, pinu, modelu či identity
+je změnou bindingu vyžadující nový Context Manifest. `local-only` smí pouze na
+`same-node`; důvěryhodná LAN není výjimka. Binding je node-local mimo projektový
+Git a nesmí obsahovat credentials. Adapter nemá implicitní LAN/cloud fallback.
 
 Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Obnovování/cache a provider API zůstávají M3-UB-01.
 
