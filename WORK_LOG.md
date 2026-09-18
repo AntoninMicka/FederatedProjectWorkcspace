@@ -5,6 +5,16 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CONTEXT-01 — Bezpečný Context Builder — 2026-09-17
+
+Dávka uzavřena po začlenění PR #26 jako commit `ab2a5ea` v `develop`; feature větev `feature/f-m2-context-01-manifest` dodala backendově neutrální read-only Context Builder. Dosažená úroveň je lokální PoC validated; Gate M1 ani Gate M2 tím nejsou uzavřeny.
+
+- [x] [completed] **F-M2-CONTEXT-01-A — Striktní manifest a snapshoty.** Kanonický manifest a payload vážou explicitní projektové/ad-hoc bajty, SHA-256, velikost, privacy, commit, autoritu, policy a přesný binding/cíl.
+- [x] [completed] **F-M2-CONTEXT-01-B — Revalidace dispatch handoffu.** Oddělené `prepare` a `authorize_for_dispatch` pod writer lockem znovu kontrolují session/uživatele/uzel, HEAD, čtecí práva, policy, cíl a bajty; nic samy neodesílají.
+- [x] [completed] **F-M2-CONTEXT-01-C — Chybové scénáře a dokumentace.** Stale/tampered/unauthorized/local-only/fallback hranice jsou pokryté testy a ADR 0008/reuse evidence jsou aktualizované.
+
+Ověření: 4 cílené testy OK; celá sada mimo socketový sandbox 220 testů OK a 22 podmíněných skipů. První sandboxový běh selhal pouze na 20 zakázaných HTTP/HTTPS/Unix socketech. Backend adapter, durable run record a skutečný síťový účinek zůstaly mimo rozsah.
+
 ## M1-07 — LXC autostart; implementační předání s odloženou cílovou akceptací — 2026-09-17
 
 Implementace byla začleněna PR #24 jako commit `3c09090` v `develop`; feature větev `feature/m1-07-lxc-autostart` dodala bezpečné idempotentní nastavení vlastní sekce `lxc-auto.federated_workspace`, rollback a testy. Dávka je administrativně předána na výslovné rozhodnutí uživatele odložit další restart routeru. Nejde o splnění cílové restartové akceptace ani uzavření Gate M1; otevřené ověření je zachováno v BACKLOG jako `M1-07-C`.

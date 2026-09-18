@@ -64,6 +64,17 @@ vektorová databáze ani externí framework nejsou potřeba. Modul je read-only 
 nepředstírá backend adapter, RBAC službu ani durable run recovery; ty zůstávají
 navazujícími schopnostmi podle ADR 0008.
 
+F-M2-OLLAMA-01 **adaptuje** Context Builder `Target` a validační primitiva;
+endpoint parsing používá pouze Python stdlib `urllib.parse` a `ipaddress`.
+PoC nezavádí discovery knihovnu ani obecný HTTP framework: číselné adresy a
+explicitní TLS pin jsou záměrná ochrana před DNS rebindingem. Transport musí
+zakázat redirect a ověřit skutečný socketový cíl. Adapter používá stdlib
+`http.client`, `ssl` a autoritativní lokální SQLite run journal; nevytváří další
+projektové úložiště ani implicitní retry/fallback vrstvu. Perzistence bindingu
+adaptuje stejný bezpečný vzor node-local stavu: omezená oprávnění, bounded read,
+striktní revalidace a atomické nahrazení po `fsync`; není obnovitelným projektovým
+indexem ani synchronizovanou konfigurací.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

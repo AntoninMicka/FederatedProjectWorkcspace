@@ -13,17 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-context-01-manifest`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislý Context Builder může pokračovat bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-OLLAMA-01 a navazující F-M2-CHAT-01; jejich větve ani PR nejsou vytvořeny.
-
-### F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
-
-- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; Ollama a execution boundaries z roadmapy/ADR 0008.
-- Větev: `feature/f-m2-ollama-01-locality`; základ a jediný PR do `develop`.
-- Výstup: Ollama adapter a binding, který prokazatelně rozliší `same-node` proces od privátního LAN endpointu; LAN cíl má samostatně rozhodnutou trust boundary, identitu cíle a transportní policy.
-- Mimo rozsah: obecná federace, automatické hledání nedůvěryhodných služeb a cloud fallback.
-- Závislosti: Backend/Context Manifest kontrakt ADR 0008 a F-M2-CONTEXT-01; před implementací zaznamenat rozšíření execution boundary v ADR.
-- Akceptace jednoho PR: same-node/LAN nelze zaměnit konfigurací, DNS rebindingem ani redirectem; identita a skutečný cíl jsou součástí manifestu a revalidace. `local-only` se na LAN nikdy neposílá bez explicitní reklasifikace, neexistuje implicitní LAN/cloud fallback a testy pokrývají nedostupnost, změnu cíle a restart.
+F-M2-CONTEXT-01 je po PR #26 (`ab2a5ea`) uzavřena ve WORK_LOG. F-M2-OLLAMA-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-ollama-01-locality`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce M2 pokračuje bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-CHAT-01; jeho větev ani PR nejsou vytvořeny.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -149,6 +139,18 @@ Strategický rozsah drží sekce 3C master roadmapy; tyto úkoly nemění priori
 ## Read-only artefakty sdílené mezi projekty
 
 - [ ] [planned] **XREF-01 — Připnuté meziprojektové reference artefaktů (cílová úroveň: PoC validated).** Navrhnout verzovaný referenční záznam a implementovat první rozsah mezi dvěma lokálně registrovanými projekty. Reference je read-only, identifikuje zdrojový projekt/repozitář, artifact ID, úplný commit a hash; není filesystemový symlink ani kopie bajtů. Akceptace: vytvoření a zobrazení připnuté revize, nabídka novější revize bez automatického přepnutí, opětovná kontrola oprávnění/privacy, offline cache se stale indikací, revokovaný/smazaný/nedostupný zdroj, explicitní fork s novým ID a provenance, zahrnutí do indexu/Context Manifestu pouze s autorizovanými přesnými bajty a recovery zápisu reference přes Workspace. Závisí na F-M1-SOURCE-02 a stabilní registraci projektů; vzdálené reference zůstávají pro M5 a identity cross-repo koordinovat s ER-00/ER-01.
+
+## Periodický monitoring a reporting — navazuje na M6
+
+Strategický rozsah drží sekce 23 master roadmapy. Jde o plánovanou schopnost a referenční task, nikoli běžící scheduler nebo schválení automatického publikování. Před aktivací rozdělit každý krok na jednu feature větev a jeden PR; externí zdroje a konkrétní provider adaptéry vyžadují capability, licenční a bezpečnostní review.
+
+- [ ] [planned] **MON-00 — Reporting kontrakt a hranice (cílová úroveň: designed).** Uzavřít verze ReportingTask, Event, Source, Story, evidence/maturity hodnocení, ReportRun a vydaného ReportSnapshotu. Akceptace: oddělené `event_date`/`detected_at`/import, neznámé datum, append-only oprava, source versus tvrzení, late discovery, změna hodnoticí škály, privacy odvozeniny a migrace starší verze jsou jednoznačné; návrh popíše lokální autority, crash boundaries, retenci a co nikdy nepatří do projektového Gitu.
+- [ ] [planned] **MON-01 — Ruční task, event/story registry a report snapshot (cílová úroveň: implemented).** Implementovat bez scheduleru a bez povinného LLM ruční založení tasku, události s více zdroji, explicitní deduplikaci/story vazbu a vydání připnutého Markdown reportu. Akceptace: opakované operation ID, konflikt editací, zrušená deduplikace, nový odporující zdroj, oprava vydaného reportu následníkem, obnova indexu a pády před/po Git CAS.
+- [ ] [planned] **MON-02 — Bezpečný Source Collector (cílová úroveň: PoC validated).** Začít jedním ověřeným typem veřejného zdroje; allowlist, limity, licence/robots/podmínky přístupu, timeout, redirect, obsahový typ, velikost a prompt injection fail-closed. Akceptace: změněný/stažený zdroj, duplicita URL versus shodný obsah, rate limit, částečný download, neplatný certifikát, přihlášení, smazání a nedostupnost nepublikují falešnou událost; původní bajty/provenance se zachovají podle policy.
+- [ ] [planned] **MON-03 — Extrakce, evidence a story tracking (cílová úroveň: PoC validated).** Nad Context Manifestem přidat volitelné role extractor/researcher/evidence evaluator; LLM pouze navrhuje entity, deduplikaci, maturity a story vazby. Akceptace: lidské/policy potvrzení významných tvrzení, marketing versus provoz, konfliktní zdroje, komunitní signál, chybějící primární důkaz, změna modelu/promptu a běh bez LLM; žádné automatické přepsání historie.
+- [ ] [planned] **MON-04 — Idempotentní scheduler a run recovery (cílová úroveň: PoC validated).** Spouštět task podle timezone a typu periody se stabilním klíčem task+period+revision. Akceptace: DST, missed run/catch-up, dvojí worker, restart ve všech persistentních stavech, změna tasku uprostřed období, ruční rerun a stav externího účinku `unknown`; jeden běh nevytvoří dvě vydání a neúspěch neposune poslední úspěšný cutoff.
+- [ ] [planned] **MON-05 — Týdenní, měsíční a výroční syntéza (cílová úroveň: implemented).** Generovat rozdílovou weekly noticku, samostatnou měsíční trendovou syntézu, kvartální rozšíření a výroční dokument z připnutých vstupů. Akceptace: nulová změna, pozdní stará událost, změna trendu, opravený zdroj, přesný cutoff, reprodukce, draft/review/publish, neúplný či nedostupný LLM bez implicitního fallbacku a bezpečný Markdown export.
+- [ ] [planned] **MON-06 — Case studies, federované role a Humanoid Robotics Watch (cílová úroveň: PoC validated).** Zavést provenance vizualizace a referenční task s verzovanými benchmarky a periodami z roadmapy. Akceptace: realistický scénář versus výhled, syntetické označení, prompt/model/inputs, fyzická care safety hranice, lokální citlivý zdroj, vzdálený veřejný collector, revokace a částečný federovaný výsledek; nejméně dvě simulované po sobě jdoucí periody bez duplicitního vydání.
 
 ## Podpůrné IP / release integrace — nepřebírají prioritu M0
 

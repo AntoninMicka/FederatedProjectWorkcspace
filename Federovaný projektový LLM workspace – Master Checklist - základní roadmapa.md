@@ -808,15 +808,15 @@ Aktualizace 2026-09-17: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 
 ## Milestone M2 – Local AI
 
-- [ ] Ollama backend.
-- [ ] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti. LAN endpoint nesmí být označen jako `same-node` ani dostat `local-only` data; před implementací doplnit v ADR 0008 explicitní síťovou trust boundary, ověření identity/cíle a transportní policy.
+- [x] Ollama backend — lokální PoC adapteru váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; živá služba a produkční provoz zůstávají neověřené.
+- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — lokální PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. Skutečný LAN/TLS endpoint nebyl ověřen.
 - [ ] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu.
 - [ ] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty.
 - [ ] Summarizer.
 - [ ] Extractor.
 - [ ] Auto-description.
 - [ ] Tagging.
-- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; backend adapter a durable run record zůstávají navazující práce.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány v lokálním PoC, obecná backendová integrace zůstává další práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 
@@ -1049,3 +1049,57 @@ Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M
 | Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |
 
 Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ dovolující zveřejnit další data. Přijaté citlivé informace nesmějí snižovat policy ochranu. Obecný CRM prodejní pipeline, hromadné kampaně ani vlastní mail server nejsou součástí tohoto rozšíření.
+
+---
+
+# 23. Periodický monitoring a analytický reporting
+
+**Stav: plánovaný rozsah navazující na M6; nejde o implementovaný scheduler, webový výzkum ani automatickou publikaci.** Reporting Framework je obecná schopnost workspace, zatímco Reporting Task je samostatná verzovaná definice tématu, zdrojů, periodicity, hodnoticích kritérií a výstupů. První referenční task je Humanoid Robotics Watch. Implementační dávky `MON-00` až `MON-06` drží [BACKLOG](BACKLOG.md).
+
+## 23A. Události, zdroje a dlouhodobé příběhy
+
+- [ ] Evidovat každý poznatek jako samostatnou událost se stabilním ID a `task_id`; oddělit čas zjištění `detected_at`, doložený čas události `event_date` a čas importu. Neznámé či pouze odhadované datum výslovně označit a neodvozovat je z času stažení.
+- [ ] Událost nese titulek, shrnutí, kategorii, entity, geografii, relevance, confidence, maturity, novelty, impact, evidence, tagy a provenance. Původní dokument, přesná citace, screenshot, fotografie, video či PDF jsou samostatné zdroje/artefakty s vlastní privacy a hashem, nikoli neověřená součást shrnutí.
+- [ ] Rozlišit primární, sekundární a komunitní zdroje. Komunitní zdroj je signál; zásadní tvrzení má nést nezávislý či primární důkaz, případně zůstat výslovně neověřené.
+- [ ] Oddělit oznámení, demonstraci, laboratorní výsledek, řízené demo, pilot, omezené produkční nasazení a nezávisle ověřený provoz. Marketingové tvrzení se nesmí automaticky změnit na prokázanou schopnost.
+- [ ] Použít verzovanou škálu zralosti 0–5 od konceptu po běžně použitelnou technologii. Hodnocení relevance, novosti, praktického dopadu a confidence uchovat společně s použitou revizí pravidel a důkazy.
+- [ ] Deduplikace vytváří jednu událost s více `Sources[]`; neodstraňuje ani nepřepisuje původní zdroje. Nové zjištění je nová událost/revize nebo explicitní vazba na předchozí záznam. Události se propojují do dlouhodobých `Story / Development Thread`, aby šel rekonstruovat vývoj, nikoli jen seznam článků.
+
+## 23B. Reportingové vrstvy a neměnné snapshoty
+
+- [ ] Týdenní noticka obsahuje jen významné změny oproti předchozímu uzavřenému reportu, typicky 3–7 položek: co se stalo, význam, stav důkazu, možný dopad a zdroj.
+- [ ] Měsíční report je nová syntéza, nikoli spojení týdenních textů. Obsahuje executive summary, události, vývoj oblastí a zralosti, produkty/projekty, piloty/nasazení, výzkum, problémy/neúspěchy, trendy a výhled; výslovně hodnotí změnu trendu.
+- [ ] Každý třetí měsíční report může přidat kvartální srovnání a realistickou vizuální case study. Výroční zpráva je samostatný analytický dokument se stavem na začátku roku, milníky, ekonomikou/dostupností, regulací, bezpečností, slepými cestami, posunem k praxi, výhledem a archivem hlavních zdrojů.
+- [ ] Vydaný report je připnutý neměnný snapshot s obdobím, časovým pásmem, query/cutoff, revizí tasku, revizí hodnoticích pravidel, přesnými vstupními event/source ID a Context Manifest/run provenance. Oprava vytvoří následníka; nepřepisuje vydaný report. Editovatelný draft a vydaný snapshot jsou rozdílné stavy.
+- [ ] Report bez nového vývoje nesmí vyrábět falešnou novinku. Pozdně nalezená starší událost zachová skutečné `event_date`, pozdější `detected_at` a je viditelně označena jako doplnění, aby nebyl zkreslen trend.
+
+## 23C. Scheduler, sběr a recovery
+
+- [ ] Scheduler spouští konkrétní Reporting Task s typem `weekly`, `monthly`, `quarterly` nebo `annual`, stabilním run ID, časovým pásmem a vypočteným intervalem. DST, zmeškaný běh, souběh, ruční opakování a změna konfigurace nesmějí vytvořit dvojí vydání stejného tasku/období.
+- [ ] Pipeline odděluje sběr, extrakci, deduplikaci, hodnocení důkazů, aktualizaci story, generaci reportu, volitelnou vizualizaci, lidskou kontrolu a publikaci. Částečný výsledek zůstává draft/failed/unknown; neposune „poslední vydaný report“.
+- [ ] Externí rešerše a stažení mají allowlist zdrojů, limity, rate limiting, respektování přístupových pravidel/licencí a ochranu proti prompt injection. Stažený obsah je nedůvěryhodný vstup a nesmí měnit task, policy, scheduler ani sám spouštět akce.
+- [ ] Automatické publikování je výslovná per-task policy. Výchozí režim vyžaduje lidské schválení; nedostupný LLM, zdroj nebo generátor obrázků nesmí vést k implicitnímu externímu fallbacku ani k vydání neúplného reportu jako hotového.
+
+## 23D. Vizualizace a federované provedení
+
+- [ ] Generovaná či dokumentární case study ukládá prompt/zadání, datum, model/nástroj, seed a parametry podle dostupnosti, vstupní důkazy, vztah k přesnému reportu a popis scénáře. Dokumentární asset zachová licenci a zdroj; syntetický obraz je viditelně označen.
+- [ ] Realistická case study popisuje prostředí, úlohy systému, činnosti člověka, bezpečnostní omezení a technologické limity. Smí zobrazit prokázané schopnosti, současný pilot nebo explicitně označený krátkodobý výhled; nesmí vydávat sci-fi či marketing za doložený stav.
+- [ ] Federované uzly mohou plnit role collector, extractor, evidence evaluator, story tracker, report generator a visualization generator pouze podle Context Manifestu, privacy a execution boundary. Citlivý zdroj zůstává lokální; odvozenina dědí nejpřísnější omezení a federovaný výsledek se před přijetím znovu validuje.
+
+## 23E. Referenční task Humanoid Robotics Watch
+
+- [ ] Sledovat humanoidní a humanlike robotiku se zaměřením na housekeeping, péči o seniory/pacienty, domácí a kancelářskou asistenci; dynamicky evidovat významné výrobce a projekty bez automatického tvrzení o jejich relevanci či úspěchu.
+- [ ] Verzovat benchmarky humanlike interakce, manipulace, lokomoce, housekeeping a care. U přímé fyzické péče (hygiena, vstávání, transfer, prevence pádu a práce s nepohyblivým pacientem) vyžadovat zvláštní bezpečnostní klasifikaci a nezávislé důkazy; report není klinické ani bezpečnostní schválení.
+- [ ] Výstupy: Humanoid Robotics Weekly Notes, Monthly Report, kvartální Hospital Room case study a Annual Report se čtyřmi case studies Hotel/Hospital/Home/Office. Konkrétní názvy firem, schopnosti, ceny a predikce jsou data tasku v dané revizi, nikoli trvalá fakta roadmapy.
+- [ ] Dlouhodobé dotazy nad event/story registry musí umět doložit první výskyt a vývoj schopnosti, nasazení, ceny, autonomie, problémů a rozdílu mezi opakovaným provozem a demonstrací; odpověď odkazuje na přesné události a zdroje a přizná mezery v datech.
+
+## 23F. Gate rozšíření
+
+| Rozsah | Návaznost | Podmínka použitelnosti |
+| --- | --- | --- |
+| Kontrakt a ruční task | Po M1; MON-00/MON-01 | Striktní verze schémat, oddělené časy, provenance, append-only opravy a ručně spustitelný report bez LLM. |
+| Sběr a evidence | M2–M4/M6; MON-02/MON-03 | Bezpečný source adapter, deduplikace se zachováním zdrojů, evidence/maturity review a reprodukovatelný story update. |
+| Scheduler a reporty | Po stabilním run recovery; MON-04/MON-05 | Idempotentní perioda, restart/souběh/missed run, draft versus vydání a report připnutý na přesné vstupy. |
+| Vizualizace a federace | Volitelně po M5/M6; MON-06 | Auditovatelná realistická case study a rozdělené provedení bez úniku privacy či implicitního fallbacku. |
+
+**Gate periodického reportingu:** jeden obecný task a Humanoid Robotics Watch projdou alespoň dvěma po sobě jdoucími periodami; opakovaný či přerušený běh nevytvoří duplicitní vydání, zdrojové události a pozdní doplnění zůstanou dohledatelné, report lze reprodukovat z připnutých vstupů a žádné tvrzení ani vizualizace nejsou vydány jako ověřené bez odpovídající evidence a policy rozhodnutí.

@@ -13,7 +13,7 @@ from spikes.workspace import PendingOperation
 
 
 MAX_CONTEXT = 16 * 1024 * 1024
-BOUNDARIES = {'same-node', 'trusted-federation', 'external-provider'}
+BOUNDARIES = {'same-node', 'private-network', 'trusted-federation', 'external-provider'}
 PRIVACY = {'public', 'project', 'confidential', 'local-only'}
 
 
@@ -89,8 +89,10 @@ class PreparedContext:
 
 @dataclass(frozen=True)
 class DispatchHandoff:
+    run_id: str
     manifest_id: str
     manifest_sha256: str
+    target: Target
     payload: bytes
 
 
@@ -213,5 +215,6 @@ class ContextBuilder:
                         'local-only requires same-node execution')
             require(self.workspace.git.head() == manifest['project_commit'],
                     'Project changed during dispatch authorization')
-            return DispatchHandoff(manifest['manifest_id'], _digest(prepared.manifest_bytes),
+            return DispatchHandoff(manifest['run_id'], manifest['manifest_id'],
+                                   _digest(prepared.manifest_bytes), target,
                                    prepared.payload)
