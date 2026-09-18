@@ -12,7 +12,11 @@ from spikes.ollama_backend import OllamaAdapter, UnknownRun
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import Git
-from spikes.summary_service import SummaryService
+from spikes.summary_service import SUMMARY_END, SUMMARY_MARKER, SummaryService
+from spikes.metadata import ValidationError, validate_snapshot
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+from tests import test_local_api
 
 
 class SummaryServiceTests(unittest.TestCase):
@@ -140,6 +144,108 @@ class SummaryServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'same-node'):
             self.service.configure(lan)
         self.assertEqual(self.calls, [])
+
+    def publication(self, preview, **changes):
+        value = dict(task_id=preview['task_id'], preview_sha256=preview['response_sha256'],
+            project_id=self.project_id, expected_head=self.git.head(), artifact_id=str(uuid4()),
+            title='Local summary', created_at='2026-09-18T15:00:00Z',
+            operation_id=str(uuid4()))
+        value.update(changes)
+        return value
+
+    def test_confirmed_publication_preserves_provenance_privacy_and_is_idempotent(self):
+        preview = self.service.preview(self.request(focus={'input_id': str(uuid4()),
+            'content': 'Private focus', 'privacy': 'confidential'}))
+        request = self.publication(preview)
+        result = self.service.publish(request)
+        self.assertEqual(result['state'], 'published')
+        first_head = self.git.head()
+        self.assertEqual(self.service.publish(request)['receipt']['commit_id'], first_head)
+        self.assertEqual(self.git.head(), first_head)
+        files = self.git.snapshot(first_head); entities = validate_snapshot(files)
+        metadata = entities[request['artifact_id']]
+        self.assertEqual((metadata['privacy'], metadata['provenance']),
+                         ('confidential', 'llm-generated'))
+        self.assertEqual(metadata['relations'],
+                         [{'type': 'summarizes', 'target_id': self.artifact_id}])
+        raw = files[f'artifacts/{request["artifact_id"]}/content.md']
+        self.assertTrue(raw.startswith(SUMMARY_MARKER.encode()))
+        record = json.loads(raw.split(SUMMARY_MARKER.encode(), 1)[1]
+                            .split(SUMMARY_END.encode(), 1)[0])
+        self.assertEqual(record['preview_sha256'], preview['response_sha256'])
+        self.assertEqual(record['sources'][0]['input_id'], self.artifact_id)
+        self.assertEqual(record['privacy'], 'confidential')
+
+        document = next(item for item in Artifacts(self.node).open(self.project_id)['documents']
+                        if item['metadata']['id'] == request['artifact_id'])
+        with self.assertRaisesRegex(ValidationError, 'provenance changed'):
+            Artifacts(self.node).save(dict(project_id=self.project_id,
+                artifact_id=request['artifact_id'], base_head=self.git.head(),
+                title='Local summary', body='# Replaced without envelope\n', new=False),
+                str(uuid4()))
+
+    def test_publish_recovery_after_workspace_completion_and_stale_head(self):
+        preview = self.service.preview(self.request())
+        request = self.publication(preview)
+        def checkpoint(stage):
+            if stage == 'workspace-complete':
+                raise RuntimeError('lost publication response')
+        with self.assertRaisesRegex(RuntimeError, 'lost publication'):
+            self.service.publish(request, checkpoint=checkpoint)
+        committed = self.git.head()
+        self.assertEqual(self.service.status()['tasks'][0]['state'], 'publishing')
+        result = self.service.publish(request)
+        self.assertEqual(result['state'], 'published')
+        self.assertEqual(result['receipt']['commit_id'], committed)
+        self.assertEqual(self.git.head(), committed)
+
+        later_preview = self.service.preview(self.request())
+        stale = self.publication(later_preview)
+        self.git.run('commit', '--allow-empty', '-m', 'Move HEAD')
+        with self.assertRaisesRegex(ValueError, 'differs from preview'):
+            self.service.publish(dict(stale, expected_head=self.git.head()))
+
+    def test_publish_recovers_before_and_after_ref_without_duplicate_artifact(self):
+        for crash_stage in ('before-ref', 'ref-updated'):
+            with self.subTest(stage=crash_stage):
+                preview = self.service.preview(self.request())
+                request = self.publication(preview)
+                seen = False
+                def checkpoint(stage):
+                    nonlocal seen
+                    if stage == crash_stage and not seen:
+                        seen = True
+                        raise RuntimeError('publication crash')
+                with self.assertRaisesRegex(RuntimeError, 'publication crash'):
+                    self.service.publish(request, checkpoint=checkpoint)
+                result = self.service.publish(request)
+                self.assertEqual(result['state'], 'published')
+                files = self.git.snapshot(self.git.head())
+                entities = validate_snapshot(files)
+                self.assertIn(request['artifact_id'], entities)
+                self.assertEqual(sum(value == request['artifact_id'] for value in entities), 1)
+
+    def test_authenticated_desktop_api_exposes_preview_and_publish(self):
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler,
+                         projects=Projects(self.node)) as server:
+            server.summary_service = self.service
+            preview_request = self.request()
+            response = driver.request(server, path='/v1/summary/preview',
+                                      body=json.dumps(preview_request).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            preview = json.loads(body)
+            publish = self.publication(preview)
+            response = driver.request(server, path='/v1/summary/publish',
+                                      body=json.dumps(publish).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/summary/status', body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body)['tasks'][0]['state'], 'published')
+            driver.rejected(server, path='/v1/summary/status', body=b'{}',
+                            headers={'Authorization': None})
 
 
 if __name__ == '__main__':

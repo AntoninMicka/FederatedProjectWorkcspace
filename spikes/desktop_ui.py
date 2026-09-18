@@ -45,7 +45,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
 <button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
-<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button></div>
+<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
+<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button></div>
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -65,7 +66,23 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>ID cíle <input name="target_id" value="local-process" required></label>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
 <button type="submit">Uložit backend</button></form></details>
-<div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div></div>
+<div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
+<div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
+<p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
+<label>Zdroj <select id="summary-kind"><option value="artifacts">Vybrané podklady</option>
+<option value="messages">Aktuální chat</option></select></label>
+<fieldset id="summary-artifacts"><legend>Podklady</legend><div id="summary-artifact-list"></div></fieldset>
+<label for="summary-focus">Zaměření (volitelné)</label>
+<textarea id="summary-focus" rows="2" maxlength="16384"></textarea>
+<label for="summary-focus-privacy">Soukromí zaměření</label><select id="summary-focus-privacy">
+<option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option>
+<option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
+<button id="summary-generate" type="button">Vytvořit náhled</button>
+<p id="summary-status" role="status" aria-live="polite"></p>
+<div id="summary-preview" aria-label="Náhled souhrnu"></div>
+<div id="summary-publish-controls" hidden><label for="summary-title">Název dokumentu</label>
+<input id="summary-title" maxlength="200" value="Souhrn projektu">
+<button id="summary-publish" type="button">Uložit do projektu</button></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
@@ -117,6 +134,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
+#summary-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select{padding:9px;max-width:100%}#summary-focus{width:100%;resize:vertical}#summary-artifacts{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label{font-weight:400}#summary-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#summary-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -160,7 +178,9 @@ for(const [index,tab] of sidebarTabs.entries()){
   event.preventDefault();selectSidebarTab(sidebarTabs[next]);sidebarTabs[next].focus();
  });
 }
+let currentArtifacts=[];
 function renderSidebarArtifacts(items){
+ currentArtifacts=items;
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
@@ -169,8 +189,9 @@ function renderSidebarArtifacts(items){
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
   const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
-  row.append(title,id);sidebarArtifacts.append(row);
+ row.append(title,id);sidebarArtifacts.append(row);
  }
+ renderSummarySources();
 }
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
@@ -208,6 +229,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
+ currentArtifacts=[];clearSummary();
  activeThread=null;pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
@@ -294,7 +316,8 @@ function selectMainTab(tab){
 for(const [index,tab] of mainTabs.entries()){
  tab.addEventListener('click',()=>selectMainTab(tab));
  tab.addEventListener('keydown',event=>{
-  const next={ArrowRight:1-index,ArrowLeft:1-index,Home:0,End:1}[event.key];
+  const next={ArrowRight:(index+1)%mainTabs.length,
+   ArrowLeft:(index+mainTabs.length-1)%mainTabs.length,Home:0,End:mainTabs.length-1}[event.key];
   if(next===undefined)return;
   event.preventDefault();selectMainTab(mainTabs[next]);mainTabs[next].focus();
  });
@@ -480,6 +503,82 @@ document.querySelector('#chat-save-output').addEventListener('click',event=>runC
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
 });
+let summaryPreview=null,pendingSummaryRequest=null,pendingSummaryPublish=null;
+const summaryStatus=document.querySelector('#summary-status');
+const summaryPreviewElement=document.querySelector('#summary-preview');
+function clearSummary(){
+ summaryPreview=null;pendingSummaryRequest=null;pendingSummaryPublish=null;
+ if(summaryPreviewElement)summaryPreviewElement.replaceChildren();
+ const controls=document.querySelector('#summary-publish-controls');if(controls)controls.hidden=true;
+ if(summaryStatus)summaryStatus.textContent='';
+}
+function renderSummarySources(){
+ const list=document.querySelector('#summary-artifact-list');if(!list)return;list.replaceChildren();
+ for(const item of currentArtifacts){
+  const label=document.createElement('label');const input=document.createElement('input');
+  input.type='checkbox';input.value=item.id;label.append(input,document.createTextNode(' '+item.title));list.append(label);
+ }
+}
+function renderSummary(text){
+ summaryPreviewElement.replaceChildren();
+ for(const line of text.split('\\n')){
+  const heading=line.match(/^(#{1,6})\\s+(.*)$/);
+  const item=document.createElement(heading?'h'+heading[1].length:'p');
+  item.textContent=heading?heading[2]:line;summaryPreviewElement.append(item);
+ }
+}
+document.querySelector('#summary-kind').addEventListener('change',event=>{
+ document.querySelector('#summary-artifacts').hidden=event.target.value!=='artifacts';
+ pendingSummaryRequest=null;summaryPreview=null;summaryPreviewElement.replaceChildren();
+ document.querySelector('#summary-publish-controls').hidden=true;
+});
+document.querySelector('#summary-generate').addEventListener('click',async event=>{
+ if(!activeProject || !chatBinding){summaryStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
+ const kind=document.querySelector('#summary-kind').value;
+ try{
+  let selection;
+  if(kind==='artifacts'){
+   const ids=[...document.querySelectorAll('#summary-artifact-list input:checked')].map(item=>item.value);
+   if(!ids.length)throw new Error('Vyberte alespoň jeden podklad.');
+   selection={kind:'artifacts',artifact_ids:ids};
+  }else{
+   const thread=await assignActiveThread();
+   if(!thread.messages.length)throw new Error('Aktuální chat nemá zprávy.');
+   selection={kind:'messages',thread_id:thread.thread_id,thread_revision:thread.revision,
+    message_ids:thread.messages.map(item=>item.message_id)};
+  }
+  if(!pendingSummaryRequest){
+   const focusText=document.querySelector('#summary-focus').value.trim();
+   pendingSummaryRequest={schema:'fpw-summary-request-v1',task_id:crypto.randomUUID(),
+    run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),project_id:activeProject.id,
+    expected_head:activeProject.head,role_id:'summarizer',role_revision:'summarizer-v1',
+    target:chatBinding,selection,focus:focusText?{input_id:crypto.randomUUID(),content:focusText,
+     privacy:document.querySelector('#summary-focus-privacy').value}:null};
+  }
+  event.currentTarget.disabled=true;summaryStatus.textContent='Připravuji souhrn…';
+  const result=await projectRequest('/v1/summary/preview',pendingSummaryRequest,210000);
+  summaryPreview=result;pendingSummaryRequest=null;pendingSummaryPublish=null;renderSummary(result.response);
+  document.querySelector('#summary-publish-controls').hidden=false;
+  summaryStatus.textContent=`Náhled je připraven · soukromí: ${result.privacy}.`;
+ }catch(error){summaryStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#summary-publish').addEventListener('click',async event=>{
+ if(!summaryPreview || !activeProject)return;
+ try{
+  const title=document.querySelector('#summary-title').value.trim();
+  if(!title)throw new Error('Zadejte název souhrnu.');
+  if(!pendingSummaryPublish)pendingSummaryPublish={task_id:summaryPreview.task_id,
+   preview_sha256:summaryPreview.response_sha256,project_id:activeProject.id,
+   expected_head:activeProject.head,artifact_id:crypto.randomUUID(),title,
+   created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
+  event.currentTarget.disabled=true;summaryStatus.textContent='Ukládám souhrn do projektu…';
+  await projectRequest('/v1/summary/publish',pendingSummaryPublish);
+  const projectId=activeProject.id;summaryStatus.textContent='Souhrn byl uložen do projektu.';
+  await openRegisteredProject(projectId);
+ }catch(error){summaryStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
 loadProjects();
 """
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
@@ -491,13 +590,20 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
-        '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output'}
+        '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
+        '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path == '/v1/summary/status' and request == {}:
+                return self.reply(200, self.server.summary_service.status())
+            if self.path == '/v1/summary/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.summary_service.preview(request))
+            if self.path == '/v1/summary/publish' and isinstance(request, dict):
+                return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
@@ -536,7 +642,7 @@ class DesktopHandler(Handler):
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-            if self.path.startswith('/v1/chat/'):
+            if self.path.startswith(('/v1/chat/', '/v1/summary/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
                                        'projekt, výběr kontextu a lokální stav.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.

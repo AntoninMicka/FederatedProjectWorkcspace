@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. Kontrakt summarizeru je navržen ve F-M2-SUMMARY-01-A. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
 
 ## Rozsah a návaznost
 

@@ -42,7 +42,7 @@ class SummaryTasks:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(1);
+                    INSERT INTO schema_info VALUES(2);
                     CREATE TABLE tasks(
                         task_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                         request_digest TEXT NOT NULL, request_json BLOB NOT NULL,
@@ -53,16 +53,24 @@ class SummaryTasks:
                         state TEXT NOT NULL CHECK(state IN
                             ('prepared','run-bound','succeeded','failed','cancelled','unknown',
                              'publishing','published')),
-                        response BLOB, response_sha256 TEXT, error TEXT);
+                        response BLOB, response_sha256 TEXT, error TEXT,
+                        publish_digest TEXT, publish_json BLOB, receipt_json BLOB);
                 ''')
             else:
                 require(tables == {'schema_info', 'tasks'}, 'Unknown or incomplete summary schema')
-                require(db.execute('SELECT version FROM schema_info').fetchall() == [(1,)],
+                version = db.execute('SELECT version FROM schema_info').fetchall()
+                require(version in ([(1,)], [(2,)]),
                         'Unsupported summary schema version')
+                if version == [(1,)]:
+                    db.execute('ALTER TABLE tasks ADD COLUMN publish_digest TEXT')
+                    db.execute('ALTER TABLE tasks ADD COLUMN publish_json BLOB')
+                    db.execute('ALTER TABLE tasks ADD COLUMN receipt_json BLOB')
+                    db.execute('UPDATE schema_info SET version=2')
                 columns = [row[1] for row in db.execute('PRAGMA table_info(tasks)')]
                 require(columns == ['task_id', 'node_id', 'user_id', 'request_digest',
                     'request_json', 'run_id', 'manifest_id', 'manifest', 'payload', 'privacy',
-                    'state', 'response', 'response_sha256', 'error'],
+                    'state', 'response', 'response_sha256', 'error', 'publish_digest',
+                    'publish_json', 'receipt_json'],
                     'Unknown or incomplete summary schema')
             db.commit()
             return closing(db)
@@ -94,7 +102,8 @@ class SummaryTasks:
             if row:
                 require(row == expected, 'Task ID belongs to a different summary request')
             else:
-                db.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)',
+                db.execute('INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL,'
+                           'NULL,NULL,NULL)',
                            (task_id, node_id, user_id, digest, request_raw, manifest['run_id'],
                             manifest['manifest_id'], manifest_raw, payload, privacy, 'prepared'))
             db.commit()
@@ -149,11 +158,49 @@ class SummaryTasks:
             db.commit()
         return self.get(task_id, node_id, user_id)
 
+    def begin_publish(self, task_id, node_id, user_id, request):
+        raw = json.dumps(request, ensure_ascii=False, sort_keys=True,
+                         separators=(',', ':')).encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT node_id,user_id,state,publish_digest,publish_json '
+                             'FROM tasks WHERE task_id=?', (task_id,)).fetchone()
+            self._owned(row, node_id, user_id)
+            if row[2] == 'succeeded':
+                require(row[3:] == (None, None), 'Summary already has publication data')
+                db.execute("UPDATE tasks SET state='publishing',publish_digest=?,publish_json=? "
+                           'WHERE task_id=?', (digest, raw, task_id))
+            else:
+                require(row[2] in {'publishing', 'published'}
+                        and row[3:] == (digest, raw),
+                        'Summary has a different publication request')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
+    def complete_publish(self, task_id, node_id, user_id, receipt):
+        raw = json.dumps(receipt, ensure_ascii=False, sort_keys=True,
+                         separators=(',', ':')).encode()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT node_id,user_id,state,receipt_json FROM tasks '
+                             'WHERE task_id=?', (task_id,)).fetchone()
+            self._owned(row, node_id, user_id)
+            if row[2] == 'publishing':
+                db.execute("UPDATE tasks SET state='published',receipt_json=? WHERE task_id=?",
+                           (raw, task_id))
+            else:
+                require(row[2] == 'published' and row[3] == raw,
+                        'Published summary differs from durable receipt')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
     def get(self, task_id, node_id, user_id):
         uuid(task_id); uuid(node_id); uuid(user_id)
         with self.connect() as db:
             row = db.execute('SELECT node_id,user_id,request_digest,request_json,run_id,'
-                'manifest_id,manifest,payload,privacy,state,response,response_sha256,error '
+                'manifest_id,manifest,payload,privacy,state,response,response_sha256,error,'
+                'publish_digest,publish_json,receipt_json '
                 'FROM tasks WHERE task_id=?', (task_id,)).fetchone()
         self._owned(row, node_id, user_id)
         require(row[9] in STATES, 'Invalid stored summary state')
@@ -175,10 +222,22 @@ class SummaryTasks:
             response = row[10].decode('utf-8')
             require(hashlib.sha256(row[10]).hexdigest() == row[11],
                     'Stored summary response changed')
+        publish = json.loads(row[14]) if row[14] is not None else None
+        receipt = json.loads(row[15]) if row[15] is not None else None
+        if publish is not None:
+            canonical = json.dumps(publish, ensure_ascii=False, sort_keys=True,
+                                   separators=(',', ':')).encode()
+            require(canonical == row[14] and hashlib.sha256(canonical).hexdigest() == row[13],
+                    'Stored summary publication changed')
+        if receipt is not None:
+            require(json.dumps(receipt, ensure_ascii=False, sort_keys=True,
+                               separators=(',', ':')).encode() == row[15],
+                    'Stored summary receipt changed')
         keys = ('node_id', 'user_id', 'request_digest', 'request', 'run_id', 'manifest_id',
-                'manifest', 'payload', 'privacy', 'state', 'response', 'response_sha256', 'error')
+                'manifest', 'payload', 'privacy', 'state', 'response', 'response_sha256', 'error',
+                'publish_digest', 'publish', 'receipt')
         return dict(zip(keys, row[:3] + (request,) + row[4:6] + (manifest,) + row[7:10]
-                             + (response,) + row[11:]))
+                             + (response,) + row[11:14] + (publish, receipt)))
 
     def list(self, node_id, user_id):
         uuid(node_id); uuid(user_id)

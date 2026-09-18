@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 
 from spikes.chat_threads import ChatThreads
-from spikes.configuration import parse_node, read_config
+from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
     ConversationSelection, DispatchHandoff, ProjectInput, TaskInstruction)
-from spikes.metadata import ValidationError, require, uuid, validate_snapshot
+from spikes.metadata import MAX_FILE, ValidationError, require, timestamp, uuid, validate_snapshot
 from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaBindings,
                                    OllamaResponseError, OllamaRuns, UnknownRun)
 from spikes.project_creation import ProjectCreation
@@ -21,6 +22,13 @@ from spikes.summary_tasks import SummaryTasks
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 SUMMARY_INSTRUCTION = ('Create a faithful Markdown summary using only the supplied sources. '
                        'Separate established facts from uncertainty and do not invent missing context.')
+SUMMARY_MARKER = '<!-- fpw-summary-v1\n'
+SUMMARY_END = '\n-->\n'
+
+
+def _canonical(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True,
+                      separators=(',', ':')).encode()
 
 
 class SummaryService:
@@ -68,7 +76,15 @@ class SummaryService:
             binding = bindings.load().serialize()
         except FileNotFoundError:
             binding = None
-        return {'binding': binding, 'tasks': tasks.list(node_id, user_id)}
+        rows = []
+        for task in tasks.list(node_id, user_id):
+            rows.append(dict(task_id=task['task_id'], state=task['state'],
+                run_id=task['run_id'], manifest_id=task['manifest_id'],
+                project_id=task['manifest']['project_id'],
+                project_commit=task['manifest']['project_commit'], privacy=task['privacy'],
+                response=task['response'], response_sha256=task['response_sha256'],
+                publish=task['publish'], receipt=task['receipt']))
+        return {'binding': binding, 'tasks': rows}
 
     @staticmethod
     def _request(request):
@@ -223,6 +239,127 @@ class SummaryService:
         except (OllamaResponseError, ValidationError) as exc:
             tasks.finish(request['task_id'], node_id, user_id, 'failed', str(exc)); raise
 
+    def publish(self, request, *, checkpoint=lambda stage: None):
+        required = {'task_id', 'preview_sha256', 'project_id', 'expected_head',
+                    'artifact_id', 'title', 'created_at', 'operation_id'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid summary publication request')
+        for key in ('task_id', 'project_id', 'artifact_id', 'operation_id'):
+            uuid(request[key])
+        require(isinstance(request['preview_sha256'], str)
+                and re.fullmatch(r'[0-9a-f]{64}', request['preview_sha256']),
+                'Invalid preview digest')
+        require(isinstance(request['expected_head'], str)
+                and re.fullmatch(r'[0-9a-f]{40,64}', request['expected_head']),
+                'Invalid expected project commit')
+        require(isinstance(request['title'], str)
+                and request['title'].strip() == request['title']
+                and 0 < len(request['title']) <= 200
+                and not any(char in request['title'] for char in '\0\r\n'),
+                'Invalid summary title')
+        timestamp(request['created_at'])
+        node_id, user_id = self._identity()
+        tasks, _, _ = self._stores()
+        task = tasks.get(request['task_id'], node_id, user_id)
+        require(task['state'] in {'succeeded', 'publishing', 'published'},
+                'Summary preview is not publishable')
+        require(task['response_sha256'] == request['preview_sha256'],
+                'Summary preview changed before publication')
+        require(task['manifest']['project_id'] == request['project_id']
+                and task['manifest']['project_commit'] == request['expected_head'],
+                'Summary publication project or HEAD differs from preview')
+        task = tasks.begin_publish(request['task_id'], node_id, user_id, request)
+        checkpoint('publishing')
+        if task['state'] == 'published':
+            return self._published_result(request['task_id'], task)
+
+        workspace = self.projects.workspace(request['project_id'], blocking=False)
+        intent = dict(request, action='publish-summary', author_id=user_id,
+                      task_request_digest=task['request_digest'])
+
+        def prepare(ws):
+            head = ws.git.head()
+            require(head == request['expected_head'],
+                    'Project changed before summary publication')
+            committed_project(ws.git, head, request['project_id'])
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            require(request['artifact_id'] not in entities, 'Artifact ID already exists')
+            original = task['request']; selection = original['selection']
+            manifest = task['manifest']
+            if selection['kind'] == 'artifacts':
+                selected_ids = selection['artifact_ids']
+                require(all(value in entities for value in selected_ids),
+                        'Summary source artifact is unavailable')
+                by_id = {item['input_id']: item for item in manifest['inputs']
+                         if item['source'] == 'project'}
+                require(set(by_id) == set(selected_ids),
+                        'Summary manifest source selection changed')
+                for value in selected_ids:
+                    item = by_id[value]
+                    raw = files.get(item['path'])
+                    require(raw is not None and len(raw) == item['size']
+                            and hashlib.sha256(raw).hexdigest() == item['sha256']
+                            and entities[value]['privacy'] == item['privacy'],
+                            'Summary source artifact changed')
+            else:
+                thread = ChatThreads(self.chat_state_dir).get(
+                    selection['thread_id'], node_id, user_id)
+                require(thread['project_id'] == request['project_id']
+                        and thread['revision'] == selection['thread_revision'],
+                        'Summary chat selection changed')
+                by_id = {item['message_id']: item for item in thread['messages']}
+                ids = selection['message_ids']
+                require(all(value in by_id for value in ids)
+                        and [item['message_id'] for item in thread['messages']
+                             if item['message_id'] in ids] == ids,
+                        'Summary chat messages changed')
+                manifest_messages = manifest['conversation']['messages']
+                require([item['message_id'] for item in manifest_messages] == ids,
+                        'Summary manifest messages changed')
+                manifest_inputs = {item['input_id']: item for item in manifest['inputs']}
+                for value in ids:
+                    message = by_id[value]; item = manifest_inputs[value]
+                    raw = message['content'].encode()
+                    require(hashlib.sha256(raw).hexdigest() == item['sha256']
+                            and message['privacy'] == item['privacy'],
+                            'Summary chat message changed')
+            manifest_sha256 = hashlib.sha256(_canonical(manifest)).hexdigest()
+            sources = [dict(input_id=item['input_id'], source=item['source'],
+                            sha256=item['sha256'], privacy=item['privacy'])
+                       for item in manifest['inputs']]
+            record = {'schema': 'fpw-summary-v1', 'task_id': request['task_id'],
+                'run_id': task['run_id'], 'manifest_id': task['manifest_id'],
+                'manifest_sha256': manifest_sha256,
+                'role_id': original['role_id'], 'role_revision': original['role_revision'],
+                'project_id': request['project_id'], 'project_commit': head,
+                'sources': sources, 'target': manifest['target'],
+                'preview_sha256': task['response_sha256'], 'privacy': task['privacy']}
+            envelope = _canonical(record).decode()
+            content = (SUMMARY_MARKER + envelope + SUMMARY_END + '\n'
+                       + task['response'].rstrip() + '\n').encode()
+            require(len(content) <= MAX_FILE, 'Published summary exceeds artifact limit')
+            relations = ([{'type': 'summarizes', 'target_id': value}
+                          for value in selection['artifact_ids']]
+                         if selection['kind'] == 'artifacts' else [])
+            metadata = {'schema_version': 1, 'id': request['artifact_id'],
+                'title': request['title'], 'kind': 'document',
+                'created_at': request['created_at'], 'author_id': user_id,
+                'privacy': task['privacy'], 'provenance': 'llm-generated',
+                'file': 'content.md', 'relations': relations}
+            prefix = f'artifacts/{request["artifact_id"]}/'
+            changes = {prefix + 'content.md': content,
+                prefix + 'metadata.json': (json.dumps(metadata, ensure_ascii=False,
+                    sort_keys=True, indent=2) + '\n').encode()}
+            return changes, 'Local workspace author', user_id + '@local.invalid', \
+                'Publish local summary'
+
+        receipt = workspace.transact(request['operation_id'], intent, prepare,
+            expected_head=request['expected_head'], checkpoint=checkpoint)
+        checkpoint('workspace-complete')
+        task = tasks.complete_publish(request['task_id'], node_id, user_id, receipt)
+        checkpoint('published')
+        return self._published_result(request['task_id'], task)
+
     @staticmethod
     def _result(task_id, task):
         return dict(task_id=task_id, state=task['state'], run_id=task['run_id'],
@@ -230,3 +367,9 @@ class SummaryService:
                     project_id=task['manifest']['project_id'],
                     project_commit=task['manifest']['project_commit'],
                     response=task['response'], response_sha256=task['response_sha256'])
+
+    @staticmethod
+    def _published_result(task_id, task):
+        return dict(task_id=task_id, state=task['state'], receipt=task['receipt'],
+                    artifact_id=task['publish']['artifact_id'],
+                    preview_sha256=task['response_sha256'])
