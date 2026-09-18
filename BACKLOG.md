@@ -13,7 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01 je po PR #26 (`ab2a5ea`) uzavřena ve WORK_LOG. F-M2-OLLAMA-01 je aktivní v [TODO](TODO.md) na `feature/f-m2-ollama-01-locality`. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce M2 pokračuje bez tvrzení, že je Gate uzavřený. Další pořadí drží F-M2-CHAT-01; jeho větev ani PR nejsou vytvořeny.
+F-M2-CONTEXT-01 a F-M2-OLLAMA-01 jsou po PR #26/#27 (`ab2a5ea`/`d1fc6f4`) uzavřeny ve WORK_LOG. Aktivní malou UI dávku F-M1-UI-01 drží [TODO](TODO.md); po jejím předání pokračuje pořadí F-M2-CHAT-01. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený. Větev ani PR pro F-M2-CHAT-01 nejsou vytvořeny.
 
 ## Zjištěné mezery a navazující ověření
 

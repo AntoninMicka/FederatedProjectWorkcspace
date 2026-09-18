@@ -5,6 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu — 2026-09-18
+
+Dávka uzavřena po začlenění PR #27 jako commit `d1fc6f4` v `develop`; feature větev `feature/f-m2-ollama-01-locality` dodala lokální PoC Ollama adapteru, striktního node-local bindingu a durable run journalu. Gate M2 tím není uzavřen.
+
+- [x] [completed] **F-M2-OLLAMA-01-A — Execution boundary a binding kontrakt.** `same-node` přijímá jen číselný loopback HTTP; `private-network` jen číselnou privátní HTTPS adresu, pin certifikátu a stabilní identitu. DNS, credentials a neznámá pole se odmítají.
+- [x] [completed] **F-M2-OLLAMA-01-B — Ollama adapter a bezpečný dispatch.** Autorizovaný handoff je vázán na přesný Target a request digest; `dispatching` je durable před sítí, ztracená odpověď skončí `unknown` bez automatického retry a úspěch se po restartu znovu neodesílá.
+- [x] [completed] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření.** Atomicky uložený binding se po restartu striktně načte; testy pokryly redirect, kontrolu TLS pinu před requestem, změny cíle/modelu, nedostupnost a zákaz `local-only` na LAN.
+- [x] [completed] **F-M2-OLLAMA-AH-01 — Návrh periodického monitoringu.** Strategický požadavek je zachován v sekci 23 roadmapy a dávkách `MON-00` až `MON-06` v BACKLOG; nebyl součástí implementace adapteru.
+
+Ověření: 14 cílených testů OK; celá sada 230 testů OK a 22 podmíněných skipů. `py_compile` a `git diff --check` prošly. Živá Ollama ani skutečný LAN/TLS endpoint nebyly ověřeny; jde o lokální PoC, nikoli production-ready síťovou integraci.
+
 ## F-M2-CONTEXT-01 — Bezpečný Context Builder — 2026-09-17
 
 Dávka uzavřena po začlenění PR #26 jako commit `ab2a5ea` v `develop`; feature větev `feature/f-m2-context-01-manifest` dodala backendově neutrální read-only Context Builder. Dosažená úroveň je lokální PoC validated; Gate M1 ani Gate M2 tím nejsou uzavřeny.

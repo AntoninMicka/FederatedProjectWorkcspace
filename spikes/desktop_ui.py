@@ -356,7 +356,6 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
 const draft=document.querySelector('#chat-draft');
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
- if(activeProject && draft.value.trim())selectMainTab(mainTabs[1]);
 });
 document.querySelector('#chat-composer').addEventListener('submit',event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
