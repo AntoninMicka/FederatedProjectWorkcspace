@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01-B implementuje node-local thread store a recovery. Nejde o úplné RBAC, obecnou backendovou integraci, hotové chat UI ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -129,6 +129,14 @@ rozsah a respektovat vazby na manifest/run; není součástí první implementac
 Provozní limit nebo nedostatek místa musí odmítnout nový zápis, nikoli tiše
 odstraňovat starší kontext. Projektový snapshot či odvozený artefakt a jeho
 retence patří do F-M2-CHAT-02 a běžného Workspace lifecycle.
+
+Implementace F-M2-CHAT-01-B v `spikes/chat_threads.py` používá samostatný SQLite
+soubor s vlastněným režimem 0600 ve vlastněném stavovém adresáři 0700,
+`foreign_keys=ON`, `synchronous=FULL` a `BEGIN IMMEDIATE` pro serializované
+přechody. Při otevření kontroluje přesnou sadu tabulek/sloupců a verzi schématu;
+neznámý, neúplný, symlinkovaný nebo příliš otevřený stav odmítne. Jde o
+backendově neutrální storage/recovery vrstvu; Context Manifest, dispatch a UI
+napojení zůstávají F-M2-CHAT-01-C.
 
 ## Větve a publikace při změně HEAD
 

@@ -80,8 +80,10 @@ striktní UUID/text/privacy validaci Context Builderu a jeho explicitní výběr
 přesných bajtů. Thread store je samostatná autorita pro vlákna, zprávy a turny;
 nesmí sdílet tabulky ani recovery s obnovitelným projektovým indexem a nesmí
 předstírat atomickou transakci s backendovým run storem. Vazba přes stabilní run
-ID a idempotentní reconciliation řeší crash boundary bez nové databáze či
-externí message-queue závislosti. UI draft se nereusuje jako persistentní zpráva.
+ID a idempotentní reconciliation řeší crash boundary bez externí databáze či
+message-queue závislosti. Implementovaný `spikes/chat_threads.py` používá stdlib
+SQLite jako samostatný node-local store; UI draft se nereusuje jako persistentní
+zpráva.
 
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
