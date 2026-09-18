@@ -26,3 +26,7 @@ Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové
 - Binding/configurace je node-local stav mimo projektový Git a nesmí obsahovat přihlašovací tajemství.
 - Adapter před síťovým pokusem potřebuje durable run record s přechodem `dispatching`; jeho návrh a implementace jsou součástí této dávky jen v rozsahu nutném pro bezpečný Ollama dispatch.
 - Po ztrátě odpovědi se výsledek označí `unknown`; automatický retry nesmí zopakovat potenciálně nákladný nebo stavově významný běh.
+
+### K předání do backlogu
+
+- [x] [completed] **F-M2-OLLAMA-AH-01 — Začlenit návrh periodického monitoringu do roadmapy (designed, 2026-09-18).** Požadavek je zachycen v sekci 23 roadmapy a dávkách `MON-00` až `MON-06` v BACKLOG. Nemění akceptaci ani rozsah aktivní Ollama feature; při jejím předání se tato evidence odstraní z TODO, protože aktuální stav požadavku drží BACKLOG.
