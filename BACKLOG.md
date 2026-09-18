@@ -13,7 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01 a F-M2-OLLAMA-01 jsou po PR #26/#27 (`ab2a5ea`/`d1fc6f4`) uzavřeny ve WORK_LOG. Aktivní malou UI dávku F-M1-UI-01 drží [TODO](TODO.md); po jejím předání pokračuje pořadí F-M2-CHAT-01. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený. Větev ani PR pro F-M2-CHAT-01 nejsou vytvořeny.
+F-M2-CONTEXT-01, F-M2-OLLAMA-01 a malá UI dávka F-M1-UI-01 jsou po PR #26–#28 uzavřeny ve WORK_LOG. Aktivní F-M2-CHAT-01 drží [TODO](TODO.md); po ní následuje F-M2-CHAT-02. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený. Větev ani PR pro F-M2-CHAT-02 nejsou vytvořeny.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -40,16 +40,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 ### Navazující konverzační feature dávky
 
 Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek výše. Před aktivací ověřit skutečné závislosti a aktualizovat ADR 0008; názvy větví jsou návrhy, větve ani PR nebyly vytvořeny.
-
-#### F-M2-CHAT-01 — Lokálně perzistentní živé konverzace
-
-- Stav: [ ] [planned]; milník M2; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; volitelný orchestrator chat a LLM run records z ADR 0008.
-- Větev: `feature/f-m2-chat-01-local-threads`; základ a jediný PR do `develop`.
-- Výstup: backendově nezávislé vícekolové vlákno, lokální trvalé uložení a bezpečné navázání po restartu; samostatný chat má výchozí klasifikaci `brainstorming`.
-- Mimo rozsah: projektová publikace, full/delta otisky, synchronizace vláken a automatické provádění navržených akcí.
-- Závislosti: F-M2-CONTEXT-01 a alespoň jeden povolený backend; před implementací doplnit ADR 0008 o Thread/Message kontrakt, retenci a crash boundaries. Vlákno, jednotlivé run records a projektový index zůstávají oddělené.
-- Akceptace jednoho PR: po pádu je rozlišen poslední potvrzený obsah od draftu a `unknown` běhu, navázání explicitně manifestuje vybrané zprávy, změna backendu/modelu/boundary je viditelná a nevyvolá tichý fallback. Testy pokrývají restart v každém trvalém přechodu, poškozený stav, souběh a oddělení projektů/uživatelů.
 
 #### F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy
 

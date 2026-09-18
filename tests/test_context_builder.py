@@ -8,7 +8,7 @@ import unittest
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
-from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
+from spikes.context_builder import (AdHocInput, Authority, ContextBuilder, ConversationSelection,
                                     ProjectInput, Target)
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
@@ -48,6 +48,29 @@ class ContextBuilderTests(unittest.TestCase):
         handoff = self.builder.authorize_for_dispatch(prepared, authority=self.authority,
                                                       target=self.target)
         self.assertEqual(handoff.payload, prepared.payload)
+
+    def test_conversation_selection_is_explicit_and_bound_to_input_order(self):
+        first, second = str(uuid4()), str(uuid4())
+        conversation = ConversationSelection(str(uuid4()), 2, (first, second),
+                                             ('user', 'assistant'))
+        prepared = self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+            authority=self.authority, target=self.target,
+            ad_hoc_inputs=(AdHocInput(first, b'one', 'project'),
+                           AdHocInput(second, b'two', 'confidential')),
+            conversation=conversation)
+        self.assertEqual(prepared.manifest['conversation'], dict(
+            thread_id=conversation.thread_id, thread_revision=2,
+            messages=[dict(message_id=first, role='user'),
+                      dict(message_id=second, role='assistant')]))
+        self.assertEqual(json.loads(prepared.payload)['conversation'], [
+            dict(message_id=first, role='user'),
+            dict(message_id=second, role='assistant')])
+        with self.assertRaisesRegex(ValidationError, 'match included input order'):
+            self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+                authority=self.authority, target=self.target,
+                ad_hoc_inputs=(AdHocInput(first, b'one', 'project'),
+                               AdHocInput(second, b'two', 'project')),
+                conversation=dataclasses.replace(conversation, message_ids=(second, first)))
 
     def test_stale_head_authority_and_target_are_rejected(self):
         prepared = self.prepare()

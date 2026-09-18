@@ -3,6 +3,7 @@
 """Strict node-local Ollama binding contract; transport is added separately."""
 from dataclasses import dataclass
 from contextlib import closing
+import base64
 import hashlib
 import http.client
 import ipaddress
@@ -17,6 +18,9 @@ from urllib.parse import urlsplit
 
 from spikes.context_builder import Target
 from spikes.metadata import require, uuid
+
+
+OLLAMA_GENERATE_TIMEOUT = 180
 
 
 class UnknownRun(RuntimeError):
@@ -180,29 +184,71 @@ class OllamaAdapter:
         self.runs = runs
         self.transport = transport or self._http_transport
 
-    def dispatch(self, handoff, binding):
+    @staticmethod
+    def _prompt(payload):
+        try:
+            value = json.loads(payload)
+        except (UnicodeError, ValueError):
+            return payload.decode('utf-8')
+        conversation = value.get('conversation') if isinstance(value, dict) else None
+        if conversation is None:
+            return payload.decode('utf-8')
+        inputs = value.get('inputs')
+        require(isinstance(inputs, list) and isinstance(conversation, list)
+                and len(inputs) == len(conversation) and bool(inputs),
+                'Invalid conversation payload for Ollama')
+        transcript = []
+        for source, message in zip(inputs, conversation):
+            require(isinstance(source, dict) and isinstance(message, dict)
+                    and set(source) == {'input_id', 'content_b64'}
+                    and set(message) == {'message_id', 'role'}
+                    and source['input_id'] == message['message_id']
+                    and message['role'] in {'user', 'assistant'},
+                    'Invalid conversation payload for Ollama')
+            try:
+                content = base64.b64decode(source['content_b64'], validate=True).decode('utf-8')
+            except (TypeError, ValueError, UnicodeError) as exc:
+                raise ValueError('Ollama conversation message is not valid UTF-8') from exc
+            transcript.append(('User' if message['role'] == 'user' else 'Assistant')
+                              + ':\n' + content)
+        transcript.append('Assistant:\n')
+        return '\n\n'.join(transcript)
+
+    @staticmethod
+    def _request(handoff, binding):
         from spikes.context_builder import DispatchHandoff
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
         require(handoff.target == binding.target(), 'Ollama binding differs from authorized target')
-        request = json.dumps(dict(model=binding.model, prompt=handoff.payload.decode('utf-8'),
+        request = json.dumps(dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                                   stream=False), sort_keys=True,
                              separators=(',', ':')).encode()
         digest = hashlib.sha256(handoff.manifest_sha256.encode() + b'\0' + request).hexdigest()
+        return request, digest
+
+    def prepare(self, handoff, binding):
+        _, digest = self._request(handoff, binding)
         with self.runs.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT request_digest,state,response,error FROM runs WHERE run_id=?',
                              (handoff.run_id,)).fetchone()
             if row:
                 require(row[0] == digest, 'Run ID belongs to a different Ollama request')
-                if row[1] == 'succeeded':
-                    return json.loads(row[2])
-                if row[1] in {'dispatching', 'unknown'}:
-                    raise UnknownRun('Ollama result is unknown; automatic retry is forbidden')
-                raise OllamaResponseError(row[3] or 'Ollama run failed; explicit new run required')
-            db.execute('INSERT INTO runs(run_id,request_digest,state) VALUES (?,?,?)',
-                       (handoff.run_id, digest, 'prepared'))
+            else:
+                db.execute('INSERT INTO runs(run_id,request_digest,state) VALUES (?,?,?)',
+                           (handoff.run_id, digest, 'prepared'))
             db.commit()
+        return self.runs.get(handoff.run_id)
+
+    def dispatch(self, handoff, binding):
+        request, digest = self._request(handoff, binding)
+        row = self.prepare(handoff, binding)
+        if row['state'] == 'succeeded':
+            return row['response']
+        if row['state'] in {'dispatching', 'unknown'}:
+            raise UnknownRun('Ollama result is unknown; automatic retry is forbidden')
+        if row['state'] != 'prepared':
+            raise OllamaResponseError(row['error'] or 'Ollama run failed; explicit new run required')
         # Revalidate the exact binding again immediately before crossing the transport boundary.
         require(handoff.target == binding.target(), 'Ollama binding changed before dispatch')
         with self.runs.connect() as db:
@@ -237,11 +283,13 @@ class OllamaAdapter:
     def _http_transport(binding, request):
         parsed = urlsplit(binding.endpoint)
         if binding.boundary == 'same-node':
-            connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=30)
+            connection = http.client.HTTPConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT)
         else:
             context = ssl._create_unverified_context()
-            connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=30,
-                                                       context=context)
+            connection = http.client.HTTPSConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT,
+                context=context)
         try:
             connection.connect()
             if binding.tls_cert_sha256:

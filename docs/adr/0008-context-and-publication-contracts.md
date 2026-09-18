@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01 propojuje node-local thread store, Context Manifest, Ollama adapter a desktopové UI. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -81,7 +81,70 @@ handoff a dodat vlastní durable přechod `dispatching`/`unknown`.
 
 Fallback je ve výchozím stavu zakázaný. Explicitní pravidlo může povolit náhradní backend/cíl a nákladový rozsah; i potom se sestaví nový manifest a znovu ověří celý požadavek. Uživatelský výběr backendu nepřebíjí zákaz projektu. `local-only` nikdy nejde na peer ani provider bez explicitní, oprávněné a auditované reklasifikace konkrétních dat. Pouhé potvrzení „odeslat“ nestačí.
 
-Lokální run record rozlišuje prepared, authorized, dispatching, succeeded, failed, cancelled a unknown. Přechod dispatching se trvale zaznamená před síťovým pokusem. Pád v této fázi nebo ztráta odpovědi znamená unknown, pokud provider nedoloží výsledek; není důvod automaticky opakovat potenciálně placený požadavek. Cancel requested není potvrzené cancelled. Budoucí implementace určí vlastní crash boundaries run recordu; nelze tvrdit, že Git journal z ADR 0003 zajišťuje právě-jednou síťové volání.
+Lokální run record rozlišuje prepared, authorized, dispatching, succeeded, failed, cancelled a unknown. Přechod dispatching se trvale zaznamená před síťovým pokusem. Pád v této fázi nebo ztráta odpovědi znamená unknown, pokud provider nedoloží výsledek; není důvod automaticky opakovat potenciálně placený požadavek. Cancel requested není potvrzené cancelled. Ollama PoC tyto hranice realizuje vlastním node-local journalem; každý další adapter je musí doložit samostatně. Git journal z ADR 0003 nezajišťuje právě-jednou síťové volání.
+
+## Lokální živé vlákno, zprávy a turn
+
+F-M2-CHAT-01 zavádí autoritativní node-local thread store mimo projektový Git.
+Není obnovitelným indexem, backendovým run storem ani projektovým artefaktem a
+automaticky se nesynchronizuje. V1 má explicitní verzi schématu a odmítá
+neznámou verzi nebo poškozené vazby. Každé vlákno nese stabilní UUID, vlastnící
+node/user UUID, klasifikaci (výchozí `brainstorming`), stav active/archived,
+čas vytvoření a monotónní revizi. Čas je informativní; autoritativní pořadí tvoří
+transakčně přidělené celé pořadové číslo v rámci vlákna.
+
+Zpráva je po potvrzení neměnná: stabilní UUID, thread ID, pořadí, role `user`
+nebo `assistant`, přesné UTF-8 bajty, jejich SHA-256, privacy, autor a čas přijetí.
+Oprava vytváří novou zprávu s vazbou na předchůdce; nepřepisuje historii.
+UI draft není zpráva ani auditní záznam, v první verzi zůstává jen v paměti a po
+pádu se může ztratit. Credentials, skryté provider instrukce a provider session
+tokeny do thread store nepatří. Limity velikosti zprávy, počtu vybraných zpráv a
+celého manifestu se kontrolují před trvalým přijetím nebo dispatch handoffem.
+
+Jeden turn váže právě jednu uživatelskou zprávu, volitelný backendový run ID a
+nejvýše jednu assistant zprávu. Jeho lokální stav je `prepared`, `run-bound`,
+`completed`, `failed`, `cancelled` nebo `unknown`; není náhradou detailního stavu
+backendového runu. Uživatelská zpráva a `prepared` turn vzniknou jednou SQLite
+transakcí. Následně se vytvoří nový run a jeho ID se připne k turnu ještě před
+dispatch. Pád před vznikem run recordu znamená bezpečně neodeslaný prepared turn.
+Po připnutí se při obnově načte durable backendový stav: `dispatching` nebo
+`unknown` se nikdy automaticky neopakuje, `failed` nevytvoří assistant zprávu a
+`succeeded` lze idempotentně dokončit. Assistant zpráva a stav `completed`
+vzniknou jednou thread-store transakcí s unikátní vazbou na turn; opakovaná
+reconciliation tak nevytvoří duplikát.
+
+Pokračování konverzace není implicitní přeposlání celého vlákna. Každý nový běh
+explicitně vybere seřazené message UUID a jejich přesné bajty; Context Manifest
+nese thread ID/revizi, message ID/pořadí/hash/privacy a nový uživatelský vstup.
+Před dispatch se znovu ověří vlastník, nezměněná revize/výběr, privacy, policy a
+přesný backend binding/model/boundary. Změna cíle vytváří nový manifest a run,
+nikoli fallback. Projektové zdroje případně vybrané pro jednotlivý run zůstávají
+samostatnými manifest inputs; v této dávce tím vlákno nevzniká jako projektový
+artefakt ani nezískává trvalé přiřazení k projektu.
+
+V1 uchovává potvrzená vlákna, zprávy a turny bez automatického časového mazání.
+Archivace pouze skryje vlákno z běžného seznamu. Budoucí explicitní purge musí
+být oprávněná operace vlastníka, odmítnout aktivní či neurčitý run, auditovat
+rozsah a respektovat vazby na manifest/run; není součástí první implementace.
+Provozní limit nebo nedostatek místa musí odmítnout nový zápis, nikoli tiše
+odstraňovat starší kontext. Projektový snapshot či odvozený artefakt a jeho
+retence patří do F-M2-CHAT-02 a běžného Workspace lifecycle.
+
+Implementace F-M2-CHAT-01 v `spikes/chat_threads.py` používá samostatný SQLite
+soubor s vlastněným režimem 0600 ve vlastněném stavovém adresáři 0700,
+`foreign_keys=ON`, `synchronous=FULL` a `BEGIN IMMEDIATE` pro serializované
+přechody. Při otevření kontroluje přesnou sadu tabulek/sloupců a verzi schématu;
+neznámý, neúplný, symlinkovaný nebo příliš otevřený stav odmítne. Jde o
+backendově neutrální storage/recovery vrstvu. `spikes/chat_service.py` váže nový
+turn na explicitně seřazený výběr zpráv; manifest nese thread ID, revizi a
+message ID, následně se revize před autorizací znovu ověří. Desktop ukládá
+node-local Ollama binding a zobrazuje lokálně trvalé vlákno. UI nepřidává
+projektové artefakty, neprovádí automatický retry neurčitého běhu a nepoužívá
+náhradní cíl.
+Ollama adapter z konverzačního payloadu deterministicky dekóduje přesné UTF-8
+bajty a sestaví čitelný transcript `User`/`Assistant`; interní JSON a Base64
+nepředává modelu jako uživatelský text. Odvozený request zůstává spolu s hashem
+manifestu součástí durable request digestu.
 
 ## Větve a publikace při změně HEAD
 

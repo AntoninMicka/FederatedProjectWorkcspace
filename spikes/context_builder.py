@@ -81,6 +81,29 @@ class AdHocInput:
 
 
 @dataclass(frozen=True)
+class ConversationSelection:
+    thread_id: str
+    thread_revision: int
+    message_ids: tuple
+    message_roles: tuple
+
+    def validate(self):
+        uuid(self.thread_id)
+        require(type(self.thread_revision) is int and self.thread_revision >= 0,
+                'Invalid conversation revision')
+        require(isinstance(self.message_ids, tuple) and bool(self.message_ids)
+                and len(self.message_ids) == len(set(self.message_ids)),
+                'Conversation message IDs must be a non-empty unique tuple')
+        for value in self.message_ids:
+            uuid(value)
+        require(isinstance(self.message_roles, tuple)
+                and len(self.message_roles) == len(self.message_ids)
+                and all(value in {'user', 'assistant'} for value in self.message_roles),
+                'Conversation roles must match selected messages')
+        return self
+
+
+@dataclass(frozen=True)
 class PreparedContext:
     manifest: MappingProxyType
     manifest_bytes: bytes
@@ -103,18 +126,20 @@ class ContextBuilder:
         self.project_id = project_id
 
     def prepare(self, *, manifest_id, run_id, authority, target, project_inputs=(),
-                ad_hoc_inputs=(), omitted=()):
+                ad_hoc_inputs=(), omitted=(), conversation=None):
         uuid(manifest_id); uuid(run_id)
         authority.validate(); target.validate()
         require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple),
                 'Inputs must be immutable tuples')
         require(isinstance(omitted, tuple), 'Omissions must be an immutable tuple')
+        if conversation is not None:
+            conversation.validate()
         with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
-                                        project_inputs, ad_hoc_inputs, omitted)
+                                        project_inputs, ad_hoc_inputs, omitted, conversation)
 
     def _prepare_locked(self, db, manifest_id, run_id, authority, target,
-                        project_inputs, ad_hoc_inputs, omitted):
+                        project_inputs, ad_hoc_inputs, omitted, conversation):
         if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
         self.workspace._branch()
@@ -168,7 +193,14 @@ class ContextBuilder:
         require(records, 'At least one included input is required')
         require(not any(row['privacy'] == 'local-only' for row in records)
                 or target.boundary == 'same-node', 'local-only requires same-node execution')
-        payload = _canonical(dict(schema_version=1, inputs=parts))
+        payload_value = dict(schema_version=1, inputs=parts)
+        if conversation is not None:
+            require(conversation.message_ids == tuple(row['input_id'] for row in records),
+                    'Conversation selection must match included input order')
+            payload_value['conversation'] = [dict(message_id=message_id, role=role)
+                for message_id, role in zip(conversation.message_ids,
+                                            conversation.message_roles)]
+        payload = _canonical(payload_value)
         manifest = dict(schema_version=1, manifest_id=manifest_id, run_id=run_id,
                         project_id=self.project_id, project_commit=head,
                         session_id=authority.session_id, user_id=authority.user_id,
@@ -178,6 +210,12 @@ class ContextBuilder:
                                     boundary=target.boundary, target_id=target.target_id,
                                     model=target.model), inputs=records, omitted=omissions,
                         payload_sha256=_digest(payload), payload_size=len(payload))
+        if conversation is not None:
+            manifest['conversation'] = dict(thread_id=conversation.thread_id,
+                thread_revision=conversation.thread_revision,
+                messages=[dict(message_id=message_id, role=role)
+                          for message_id, role in zip(conversation.message_ids,
+                                                     conversation.message_roles)])
         manifest_bytes = _canonical(manifest)
         require(self.workspace.git.head() == head, 'Project changed during context preparation')
         return PreparedContext(MappingProxyType(manifest), manifest_bytes, payload)

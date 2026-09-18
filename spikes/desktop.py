@@ -14,6 +14,7 @@ from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
+from spikes.chat_service import ChatService
 
 
 def request_policy(url, initiator, method, origin):
@@ -104,6 +105,7 @@ def main():
     node_path = args.node or default_node_path()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
+        server.chat_service = ChatService(node_path, server.projects)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -353,9 +355,9 @@ def main():
                     const before=document.querySelector('#count').textContent;
                     draft.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
                     if(document.querySelector('#chat-panel').hidden ||
-                       document.querySelector('#chat-messages').lastElementChild?.textContent!=='Local draft' || draft.value ||
+                       draft.value!=='Local draft' ||
                        document.querySelector('#count').textContent!==before)return null;
-                    window.promptSubmitChecked=true;draft.value='Local draft';draft.dispatchEvent(new Event('input'));
+                    window.promptSubmitChecked=true;
                   }
                   const composer=document.querySelector('#chat-composer');
                   if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
