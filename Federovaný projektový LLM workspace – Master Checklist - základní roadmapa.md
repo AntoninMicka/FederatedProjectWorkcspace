@@ -586,19 +586,19 @@ Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM 
 
 Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi používá stejné principy explicitního otisku a publikace, ale má vlastní zprávový transport, identity a recovery v sekci 6D; lidská zpráva není LLM run record.
 
-- [ ] Umožnit běžnou vícekolovou konverzaci s vybraným backendem/modelem a po restartu bezpečně navázat na lokálně perzistentní vlákno.
-- [ ] Samostatnou konverzaci bez explicitního workflow nebo projektové role inicializovat jako `brainstorming`; klasifikace popisuje účel vlákna a sama nemění oprávnění, privacy ani roli jednotlivého LLM běhu.
-- [ ] Lokální pracovní stav vlákna držet mimo projektový Git a mimo obnovitelný projektový index. Oddělit jej od autoritativních run recordů; pád ani ztracená odpověď nesmí způsobit automatické zopakování `unknown` volání.
-- [ ] Umožnit vlákno explicitně přiřadit ke konkrétnímu projektu jako živé vlákno s možností navázání. Projektová reprezentace historie má být verzovaný Markdown s omezenými strukturovanými metadaty; lokální credentials, provider session tokeny a nepublikovaný provozní stav do Gitu nepatří.
+- [x] Umožnit běžnou vícekolovou konverzaci s vybraným backendem/modelem a po restartu bezpečně navázat na lokálně perzistentní vlákno — F-M2-CHAT-01, PR #29.
+- [x] Samostatnou konverzaci bez explicitního workflow nebo projektové role inicializovat jako `brainstorming`; klasifikace popisuje účel vlákna a sama nemění oprávnění, privacy ani roli jednotlivého LLM běhu — F-M2-CHAT-01.
+- [x] Lokální pracovní stav vlákna držet mimo projektový Git a mimo obnovitelný projektový index. Oddělit jej od autoritativních run recordů; pád ani ztracená odpověď nesmí způsobit automatické zopakování `unknown` volání — F-M2-CHAT-01.
+- [x] Umožnit vlákno explicitně přiřadit ke konkrétnímu projektu jako živé vlákno s možností navázání. Projektová reprezentace historie má být verzovaný Markdown s omezenými strukturovanými metadaty; lokální credentials, provider session tokeny a nepublikovaný provozní stav do Gitu nepatří — F-M2-CHAT-02.
 - [ ] Každé pokračování má explicitně určené zprávy a artefakty v Context Manifestu. Backend nesmí skrytě doplnit celou starší historii ani obsah z jiného projektu.
-- [ ] Umožnit explicitní projektový otisk vlákna jako neměnný snapshot:
-  - [ ] kompletní otisk zvolené verze vlákna,
-  - [ ] rozdílový otisk od explicitního základního otisku/verze.
-- [ ] Rozdílový otisk musí nést ID a hash základu, rozsah zpráv a dostatečnou provenance. Chybějící nebo neshodný základ se nesmí tiše vydávat za kompletní konverzaci.
-- [ ] Rozlišit pokračující živé vlákno, jeho historický otisk a samostatný výstup konkrétního úkolu. Oponentura, brainstormingový souhrn, teze, analýza a podobné editovatelné výstupy se ukládají jako samostatné Markdown artefakty s vazbou na zdrojové vlákno/run, vstupy a Context Manifest; nejsou pouze zprávou uvnitř chatu.
-- [ ] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze.
-- [ ] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace.
-- [ ] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace.
+- [x] Umožnit explicitní projektový otisk vlákna jako neměnný snapshot — F-M2-CHAT-02:
+  - [x] kompletní otisk zvolené verze vlákna,
+  - [x] rozdílový otisk od explicitního základního otisku/verze.
+- [x] Rozdílový otisk musí nést ID a hash základu, rozsah zpráv a dostatečnou provenance. Chybějící nebo neshodný základ se nesmí tiše vydávat za kompletní konverzaci — F-M2-CHAT-02.
+- [x] Rozlišit pokračující živé vlákno, jeho historický otisk a samostatný výstup konkrétního úkolu. Oponentura, brainstormingový souhrn, teze, analýza a podobné editovatelné výstupy se ukládají jako samostatné Markdown artefakty s vazbou na zdrojové vlákno/run, vstupy a Context Manifest; nejsou pouze zprávou uvnitř chatu — F-M2-CHAT-02.
+- [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
+- [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
+- [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
 
 ---
 
@@ -789,7 +789,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
-Aktualizace 2026-09-18: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený; cílová restartová akceptace `M1-07-C` je na rozhodnutí uživatele odložená v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter a drobná UI oprava jsou po PR #26–#28 začleněné; implementačně nezávislá perzistentní konverzace pokračuje jako aktivní F-M2-CHAT-01 v TODO. Toto pořadí není tvrzením o splnění Gate M1.
+Aktualizace 2026-09-18: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený; cílová restartová akceptace `M1-07-C` je na rozhodnutí uživatele odložená v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava a lokálně perzistentní konverzace jsou po PR #26–#29 začleněné; F-M2-CHAT-02 má implementované a lokálně PoC ověřené projektové přiřazení, full/delta otisky a odvozené Markdown výstupy, ale jeho PR dosud není doložen jako začleněný. Toto pořadí není tvrzením o splnění Gate M1.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -810,7 +810,7 @@ Aktualizace 2026-09-18: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 
 - [x] Ollama backend — lokální PoC adapteru váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; živá služba a produkční provoz zůstávají neověřené.
 - [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — lokální PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. Skutečný LAN/TLS endpoint nebyl ověřen.
-- [ ] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu.
+- [x] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu — F-M2-CHAT-01, PR #29.
 - [ ] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty.
 - [ ] Summarizer.
 - [ ] Extractor.

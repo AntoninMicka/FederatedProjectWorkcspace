@@ -85,6 +85,13 @@ message-queue závislosti. Implementovaný `spikes/chat_threads.py` používá s
 SQLite jako samostatný node-local store; UI draft se nereusuje jako persistentní
 zpráva.
 
+F-M2-CHAT-02 **reuse/adaptuje** `ChatThreads`, standardní artifact metadata,
+`Artifacts` a jediný `Workspace`/Journal/Index lifecycle. Projektový full/delta
+otisk je validovaný Markdown snapshot v existujícím Gitu, nikoli nová databáze
+nebo content-addressed storage; editovatelný výstup zůstává běžný Markdown
+document. Obecné Git utility se nepřebírají, protože nenahrazují explicitní
+vlastněné cesty, expected HEAD, kandidátní validaci a recovery ADR 0003.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

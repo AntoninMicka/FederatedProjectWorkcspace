@@ -3,30 +3,31 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M2-CHAT-01: Lokálně perzistentní živé konverzace
+# TODO — F-M2-CHAT-02: Projektová vlákna, otisky a Markdown výstupy
 
 Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci M1-07. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M2-CHAT-01 — Lokálně perzistentní živé konverzace
+## F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy
 
 - Stav: [ ] [in progress]; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; volitelný orchestrator chat a LLM run records z ADR 0008.
-- Skutečná větev: `feature/f-m2-chat-01-local-threads`, založená z `develop` (`a6dfbf6`, PR #28 začleněn); jediný budoucí PR do `develop`.
-- Výstup: backendově nezávislé vícekolové vlákno, lokální trvalé uložení a bezpečné navázání po restartu; samostatný chat má výchozí klasifikaci `brainstorming`.
-- Mimo rozsah: projektová publikace, full/delta otisky, federovaná synchronizace vláken a automatické provádění navržených akcí.
-- Závislosti: F-M2-CONTEXT-01 a F-M2-OLLAMA-01 jsou začleněné v `develop`; vlákno, backendové run records a projektový index zůstávají oddělené.
-- Akceptace: po pádu je rozlišen poslední potvrzený obsah od draftu a `unknown` běhu; navázání explicitně manifestuje vybrané zprávy; změna backendu/modelu/boundary je viditelná a nevyvolá tichý fallback. Testy pokrývají restart v každém trvalém přechodu, poškozený stav, souběh a oddělení uživatelů i projektových kontextů.
+- Původ: uživatelské doplnění plánu 2026-09-15; roadmapa §11A a navazující Git-backed artefakty/provenance.
+- Skutečná větev: `feature/f-m2-chat-02-project-records`, založená z `develop` (`5dec3a8`, PR #29 začleněn); jediný budoucí PR do `develop`.
+- Výstup: explicitní přiřazení živého vlákna k projektu, neměnný kompletní nebo rozdílový otisk a samostatné editovatelné Markdown výstupy.
+- Mimo rozsah: automatická publikace každého soukromého chatu, credentials/provider session tokeny v Gitu, federovaná synchronizace a vydávání rozdílu bez ověřeného základu za úplný záznam.
+- Závislosti: F-M2-CHAT-01 je začleněná PR #29; F-M1-META-02/F-M1-SOURCE-02 a standardní Workspace/Journal/Git/index lifecycle jsou v `develop`.
+- Akceptace: živé vlákno lze po restartu navázat ke správnému projektu; full snapshot je samostatně čitelný, delta nese ID/hash základu a fail-closed kontrolu; odvozený Markdown zachová thread/run/message/manifest provenance a nejpřísnější privacy; expected HEAD, idempotentní retry a recovery před/po commitu jsou otestované.
 
-- [x] [completed] **F-M2-CHAT-01-A — Thread/Message kontrakt, retence a crash boundaries (designed, 2026-09-18).** ADR 0008 odděluje autoritativní node-local vlákno, neměnné zprávy, UI draft, turn a backendový run; určuje pořadí, privacy, manifest výběr, explicitní retenci a obnovu před/po dispatchi bez duplicitního odeslání.
-- [x] [completed] **F-M2-CHAT-01-B — Lokální thread store a recovery (implemented, 2026-09-18).** `ChatThreads` je samostatná node-local SQLite autorita se striktním v1 schématem, vlastnictvím node/user, neměnnými hashovanými zprávami, transakčním pořadím, turn/run vazbou, idempotentní reconciliation a explicitními terminal states. Šest cílených testů pokrývá restart, rollback před všemi třemi commity, souběh, oddělení vlastníků, limity, archivaci, unsafe/poškozený stav a neznámé schéma; celá sada prošla 237 testy (22 přeskočeno).
-- [x] [completed] **F-M2-CHAT-01-C — Context/adapter napojení a desktop UI (PoC validated, 2026-09-18).** `ChatService` propojuje přesný projektový HEAD, explicitně seřazené message UUID a jejich bajty s Context Manifestem, trvalým Ollama runem a přesným bindingem bez fallbacku. Manifest nese thread ID/revizi/výběr a služba před autorizací znovu ověří nezměněné vlákno. Autentizované same-origin API a desktop načítají vlákna po restartu, konfigurují same-node nebo připnutý private-network backend a zachovávají `failed`/`unknown` bez assistant zprávy či automatického opakování. Cílených 32 testů prošlo (2 opt-in přeskočeny), celá sada prošla 244 testy (22 přeskočeno) a samostatný reálný Qt/WebEngine test otevření projektu/restartu prošel. Skutečné volání běžící Ollamy a reálný LAN TLS endpoint nebyly součástí automatického ověření.
-- [x] [completed] **F-M2-CHAT-01-AH-01 — Odolnost vůči studenému startu Ollamy (PoC validated, 2026-09-18).** Po diagnostikovaném `TimeoutError` nad dostupnou lokální Ollamou prodloužen generate timeout z 30 na 180 sekund a desktop čeká 210 sekund; bezpečné `unknown` a zákaz automatického retry zůstávají zachovány. Cílených 21 testů prošlo (2 opt-in přeskočeny), celá sada znovu prošla 244 testy (22 přeskočeno) a nový minimální živý běh `gemma4` odpověděl `OK` přes loopback za 7,74 s (`HTTP 200`); předchozí neurčitý run nebyl opakován.
-- [x] [completed] **F-M2-CHAT-01-AH-02 — Čitelný konverzační prompt (PoC validated, 2026-09-18).** Screenshot živé odpovědi doložil, že model dostával kanonický JSON/Base64 payload jako text. Adapter nyní deterministicky převádí manifestované message ID/role a přesné UTF-8 bajty na transcript `User`/`Assistant`; request digest nadále váže výsledný request k manifestu. Cílených 21 testů a celá sada 245 testů prošly (22 podmíněně přeskočeno); nový test odmítá návrat `content_b64` do modelového promptu.
-- [x] [completed] **F-M2-CHAT-01-AH-03 — Čisté navázání po chybné odpovědi (implemented, 2026-09-18).** Desktop nabízí nové prázdné vlákno bez smazání starší lokální historie, takže diagnostická či chybná assistant zpráva nemusí vstoupit do dalšího explicitního kontextu.
+- [x] [completed] **F-M2-CHAT-02-A — Kontrakt přiřazení, full/delta otisku a odvozeného výstupu (designed, 2026-09-18).** ADR 0008 definuje node-local projektovou vazbu, `fpw-chat-snapshot-v1` v čitelném Markdownu, samostatný full a fail-closed delta záznam s kanonickým hashem základu, `fpw-chat-output-v1`, nejpřísnější privacy a standardní expected-HEAD/Journal/CAS/index recovery. Reuse review volí stávající ChatThreads/metadata/Artifacts/Workspace a odmítá novou storage i paralelní Git lifecycle.
+- [x] [completed] **F-M2-CHAT-02-B — Projektové záznamy a recovery (implemented, 2026-09-18).** `ChatThreads` migruje v1→v2 a trvale váže vlákno na registrovaný projekt i turn na Context Manifest; `ChatRecords` publikuje neměnné full/delta `fpw-chat-snapshot-v1` přes expected HEAD a standardní Workspace journal/CAS/index. Delta ověřuje existenci, project/thread ID, kanonický hash a souvislou sequence základu před journalem; retry po pádu vrací jediný commit/receipt. Cíleně ověřeno 12 testy úložiště a záznamů, návaznost 4 testy orchestrace; celá sada `251 OK, 22 skipped`.
+- [x] [completed] **F-M2-CHAT-02-C — Markdown výstup, desktop UI a akceptace (PoC validated, 2026-09-18).** `fpw-chat-output-v1` ukládá vybranou odpověď jako editovatelný dokument s thread/message/turn/run/manifest provenance, nejpřísnější privacy a volitelným vztahem na snapshot; další editace nesmí odstranit ani změnit původní obálku. Autentizované desktopové API a UI nabízí explicitní přiřazení, full otisk a uložení poslední odpovědi; po zápisu obnoví projektový HEAD. Stav „Odesílám/Model přemýšlí“ je přímo pod promptem a nezmizí při scrollování historie. Ověřeno restartem služby, stale HEAD, pádem po journal prepare, idempotentním retry, rebuildem indexu, cílenými API/UI testy a celou sadou `253 OK, 22 skipped`; reálný Qt/WebEngine smoke zůstal přeskočen podle opt-in podmínky testu.
 
-### Recovery hranice
+### Povinné recovery hranice
 
-- Uživatelská zpráva a připravený turn se potvrdí v thread store před vytvořením backendového runu; bez run recordu nebyl dispatch zahájen.
-- Run ID se k turnu připne před dispatch; po restartu se jeho durable stav načte z backendového run store. `dispatching`/`unknown` se automaticky neopakuje.
-- Assistant zpráva a dokončení turnu se zapíší jednou transakcí až z durable úspěšného výsledku; opakovaná reconciliation nesmí vytvořit druhou zprávu.
+- Node-local thread store zůstává autoritou živého vlákna; Git záznam je explicitní projektová reprezentace, nikoli synchronizovaná kopie provozního SQLite.
+- Před commitem drží přesný kandidát a request digest Workspace journal; po posunu refu lze index obnovit z validovaného HEAD bez opakované publikace.
+- Delta se publikuje pouze proti existujícímu základu se shodným ID/hash; jinak operace končí před journalem/commitem.
+
+### K předání do backlogu
+
+- [ ] [planned] **F-UX-SETTINGS-01 — Centralizovaná stránka nastavení (cílová úroveň: designed → implemented).** Původ: uživatelský požadavek 2026-09-18. Navrhnout společné místo pro aplikační a backendová nastavení a následně do něj přesunout současné inline nastavení Ollama; zachovat node-local uložení, privacy hranice, validaci a bezpečný návrat při chybě. Neprovádět jako vedlejší zásah do F-M2-CHAT-02.

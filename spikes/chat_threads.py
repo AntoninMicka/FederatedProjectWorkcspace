@@ -59,8 +59,14 @@ class ChatThreads:
                 require(tables == {'schema_info', 'threads', 'messages', 'turns'},
                         'Unknown or incomplete chat schema')
                 row = db.execute('SELECT version FROM schema_info').fetchall()
-                require(row == [(1,)], 'Unsupported chat schema version')
-                self._validate_columns(db)
+                require(row in ([(1,)], [(2,)]), 'Unsupported chat schema version')
+                self._validate_columns(db, version=row[0][0])
+                if row == [(1,)]:
+                    db.execute('ALTER TABLE threads ADD COLUMN project_id TEXT')
+                    db.execute('ALTER TABLE threads ADD COLUMN assignment_revision INTEGER NOT NULL DEFAULT 0')
+                    db.execute('ALTER TABLE turns ADD COLUMN manifest_id TEXT')
+                    db.execute('UPDATE schema_info SET version=2')
+                    self._validate_columns(db, version=2)
             db.commit()
             return closing(db)
         except Exception:
@@ -71,13 +77,14 @@ class ChatThreads:
     def _create(db):
         db.executescript('''
             CREATE TABLE schema_info(version INTEGER NOT NULL);
-            INSERT INTO schema_info VALUES(1);
+            INSERT INTO schema_info VALUES(2);
             CREATE TABLE threads(
                 thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 classification TEXT NOT NULL CHECK(classification='brainstorming'),
                 status TEXT NOT NULL CHECK(status IN ('active','archived')),
                 created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
-                next_sequence INTEGER NOT NULL CHECK(next_sequence>=0));
+                next_sequence INTEGER NOT NULL CHECK(next_sequence>=0),
+                project_id TEXT, assignment_revision INTEGER NOT NULL CHECK(assignment_revision>=0));
             CREATE TABLE messages(
                 message_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(thread_id),
                 sequence INTEGER NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','assistant')),
@@ -92,19 +99,21 @@ class ChatThreads:
                 run_id TEXT UNIQUE, assistant_message_id TEXT UNIQUE REFERENCES messages(message_id),
                 state TEXT NOT NULL CHECK(state IN
                     ('prepared','run-bound','completed','failed','cancelled','unknown')),
-                error TEXT);
+                error TEXT, manifest_id TEXT);
         ''')
 
     @staticmethod
-    def _validate_columns(db):
+    def _validate_columns(db, *, version=2):
         expected = {
             'schema_info': ['version'],
             'threads': ['thread_id', 'node_id', 'user_id', 'classification', 'status',
-                        'created_at', 'revision', 'next_sequence'],
+                        'created_at', 'revision', 'next_sequence'] +
+                       (['project_id', 'assignment_revision'] if version == 2 else []),
             'messages': ['message_id', 'thread_id', 'sequence', 'role', 'content',
                          'content_sha256', 'privacy', 'author_id', 'created_at', 'supersedes_id'],
             'turns': ['turn_id', 'thread_id', 'user_message_id', 'run_id',
-                      'assistant_message_id', 'state', 'error'],
+                      'assistant_message_id', 'state', 'error'] +
+                     (['manifest_id'] if version == 2 else []),
         }
         for table, columns in expected.items():
             actual = [row[1] for row in db.execute(f'PRAGMA table_info({table})')]
@@ -115,7 +124,8 @@ class ChatThreads:
         for value in (thread_id, node_id, user_id):
             uuid(value)
         row = db.execute('SELECT node_id,user_id,status,classification,created_at,revision,'
-                         'next_sequence FROM threads WHERE thread_id=?', (thread_id,)).fetchone()
+                         'next_sequence,project_id,assignment_revision FROM threads WHERE thread_id=?',
+                         (thread_id,)).fetchone()
         require(row is not None and row[0] == node_id and row[1] == user_id,
                 'Chat thread is unavailable to this owner')
         require(row[2] in {'active', 'archived'} and row[3] == 'brainstorming',
@@ -123,6 +133,9 @@ class ChatThreads:
         timestamp(row[4])
         require(type(row[5]) is int and row[5] >= 0 and type(row[6]) is int and row[6] >= 0,
                 'Invalid stored chat thread counters')
+        if row[7] is not None:
+            uuid(row[7])
+        require(type(row[8]) is int and row[8] >= 0, 'Invalid assignment revision')
         require(not active or row[2] == 'active', 'Chat thread is archived')
         return row
 
@@ -140,9 +153,9 @@ class ChatThreads:
             if row:
                 require(row == request, 'Thread ID belongs to a different request')
             else:
-                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, classification, 'active',
-                            created_at, 0, 0))
+                            created_at, 0, 0, None, 0))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
@@ -170,29 +183,32 @@ class ChatThreads:
                 db.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,NULL)',
                            (message_id, thread_id, sequence, 'user', raw, digest,
                             privacy, user_id, created_at))
-                db.execute('INSERT INTO turns VALUES(?,?,?,?,?,?,?)',
-                           (turn_id, thread_id, message_id, None, None, 'prepared', None))
+                db.execute('INSERT INTO turns VALUES(?,?,?,?,?,?,?,?)',
+                           (turn_id, thread_id, message_id, None, None, 'prepared', None, None))
                 db.execute('UPDATE threads SET revision=revision+1,next_sequence=? '
                            'WHERE thread_id=?', (sequence, thread_id))
             checkpoint('prepared')
             db.commit()
         return self.get_turn(turn_id, node_id, user_id)
 
-    def bind_run(self, *, turn_id, node_id, user_id, run_id,
+    def bind_run(self, *, turn_id, node_id, user_id, run_id, manifest_id=None,
                  checkpoint=lambda stage: None):
         uuid(turn_id); uuid(run_id)
+        if manifest_id is not None:
+            uuid(manifest_id)
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            row = db.execute('SELECT thread_id,run_id,state FROM turns WHERE turn_id=?',
+            row = db.execute('SELECT thread_id,run_id,state,manifest_id FROM turns WHERE turn_id=?',
                              (turn_id,)).fetchone()
             require(row is not None, 'Unknown chat turn')
             self._owner(db, row[0], node_id, user_id, active=True)
             if row[2] == 'prepared':
                 require(row[1] is None, 'Prepared turn already has a run')
-                db.execute("UPDATE turns SET run_id=?,state='run-bound' WHERE turn_id=?",
-                           (run_id, turn_id))
+                db.execute("UPDATE turns SET run_id=?,manifest_id=?,state='run-bound' WHERE turn_id=?",
+                           (run_id, manifest_id, turn_id))
             else:
-                require(row[2] in {'run-bound', 'completed'} | TERMINAL and row[1] == run_id,
+                require(row[2] in {'run-bound', 'completed'} | TERMINAL and row[1] == run_id
+                        and row[3] == manifest_id,
                         'Turn cannot bind this run')
             checkpoint('run-bound')
             db.commit()
@@ -267,11 +283,27 @@ class ChatThreads:
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
+    def assign_project(self, *, thread_id, node_id, user_id, project_id,
+                       expected_revision, checkpoint=lambda stage: None):
+        uuid(project_id)
+        require(type(expected_revision) is int and expected_revision >= 0,
+                'Invalid expected thread revision')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = self._owner(db, thread_id, node_id, user_id, active=True)
+            if row[7] != project_id:
+                require(row[5] == expected_revision, 'Chat thread changed before assignment')
+                db.execute('UPDATE threads SET project_id=?,assignment_revision=assignment_revision+1,'
+                           'revision=revision+1 WHERE thread_id=?', (project_id, thread_id))
+            checkpoint('assigned')
+            db.commit()
+        return self.get(thread_id, node_id, user_id)
+
     def get_turn(self, turn_id, node_id, user_id):
         uuid(turn_id)
         with self.connect() as db:
             row = db.execute('SELECT turn_id,thread_id,user_message_id,run_id,'
-                             'assistant_message_id,state,error FROM turns WHERE turn_id=?',
+                             'assistant_message_id,state,error,manifest_id FROM turns WHERE turn_id=?',
                              (turn_id,)).fetchone()
             require(row is not None, 'Unknown chat turn')
             self._owner(db, row[1], node_id, user_id)
@@ -283,8 +315,10 @@ class ChatThreads:
                 uuid(row[4])
             require(row[5] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
                     'Invalid stored chat turn')
+            if row[7] is not None:
+                uuid(row[7])
             return dict(zip(('turn_id', 'thread_id', 'user_message_id', 'run_id',
-                             'assistant_message_id', 'state', 'error'), row))
+                             'assistant_message_id', 'state', 'error', 'manifest_id'), row))
 
     def get(self, thread_id, node_id, user_id):
         with self.connect() as db:
@@ -320,7 +354,7 @@ class ChatThreads:
             require(row[6] == len(messages), 'Invalid stored chat sequence counter')
             turns = []
             for item in db.execute('SELECT turn_id,user_message_id,run_id,assistant_message_id,'
-                                   'state,error FROM turns WHERE thread_id=? ORDER BY rowid',
+                                   'state,error,manifest_id FROM turns WHERE thread_id=? ORDER BY rowid',
                                    (thread_id,)):
                 for value in item[:2]:
                     uuid(value)
@@ -328,12 +362,15 @@ class ChatThreads:
                     uuid(item[2])
                 if item[3] is not None:
                     uuid(item[3])
+                if item[6] is not None:
+                    uuid(item[6])
                 require(item[4] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
                         'Invalid stored chat turn')
                 turns.append(dict(zip(('turn_id', 'user_message_id', 'run_id',
-                                       'assistant_message_id', 'state', 'error'), item)))
+                                       'assistant_message_id', 'state', 'error', 'manifest_id'), item)))
             return dict(thread_id=thread_id, node_id=row[0], user_id=row[1], status=row[2],
                         classification=row[3], created_at=row[4], revision=row[5],
+                        project_id=row[7], assignment_revision=row[8],
                         messages=messages, turns=turns)
 
     def list(self, node_id, user_id):

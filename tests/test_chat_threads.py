@@ -56,6 +56,7 @@ class ChatThreadTests(unittest.TestCase):
                          ['user', 'assistant'])
         self.assertEqual([message['sequence'] for message in thread['messages']], [1, 2])
         self.assertEqual(thread['revision'], 2)
+        self.assertIsNone(thread['project_id'])
 
     def test_crash_before_each_commit_rolls_back_without_partial_state(self):
         request = self.prepare()
@@ -132,7 +133,7 @@ class ChatThreadTests(unittest.TestCase):
             ChatThreads(self.state).connect()
         self.store.path.chmod(0o600)
         with sqlite3.connect(self.store.path) as db:
-            db.execute('UPDATE schema_info SET version=2')
+            db.execute('UPDATE schema_info SET version=3')
         with self.assertRaisesRegex(ValidationError, 'version'):
             ChatThreads(self.state).connect()
 
@@ -143,6 +144,45 @@ class ChatThreadTests(unittest.TestCase):
         path.chmod(0o600)
         with self.assertRaisesRegex(ValidationError, 'schema'):
             ChatThreads(other_state).connect()
+
+    def test_project_assignment_is_explicit_idempotent_and_atomic(self):
+        project_id = str(uuid4())
+        assigned = self.store.assign_project(
+            thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+            project_id=project_id, expected_revision=0)
+        self.assertEqual((assigned['project_id'], assigned['assignment_revision'],
+                          assigned['revision']), (project_id, 1, 1))
+        self.assertEqual(self.store.assign_project(
+            thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+            project_id=project_id, expected_revision=0), assigned)
+        with self.assertRaisesRegex(ValidationError, 'changed'):
+            self.store.assign_project(
+                thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+                project_id=str(uuid4()), expected_revision=0)
+        def crash(stage):
+            raise RuntimeError(stage)
+        with self.assertRaisesRegex(RuntimeError, 'assigned'):
+            self.store.assign_project(
+                thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+                project_id=str(uuid4()), expected_revision=1, checkpoint=crash)
+        self.assertEqual(self.store.get(self.thread_id, self.node_id, self.user_id), assigned)
+
+    def test_v1_store_migrates_and_run_manifest_is_durable(self):
+        with sqlite3.connect(self.store.path) as db:
+            db.execute('UPDATE schema_info SET version=1')
+            db.execute('ALTER TABLE threads DROP COLUMN assignment_revision')
+            db.execute('ALTER TABLE threads DROP COLUMN project_id')
+            db.execute('ALTER TABLE turns DROP COLUMN manifest_id')
+        migrated = ChatThreads(self.state)
+        self.assertIsNone(migrated.get(self.thread_id, self.node_id, self.user_id)['project_id'])
+        request = self.prepare(); migrated.prepare_turn(**request)
+        run_id, manifest_id = str(uuid4()), str(uuid4())
+        turn = migrated.bind_run(turn_id=request['turn_id'], node_id=self.node_id,
+                                 user_id=self.user_id, run_id=run_id,
+                                 manifest_id=manifest_id)
+        self.assertEqual(turn['manifest_id'], manifest_id)
+        with sqlite3.connect(self.store.path) as db:
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (2,))
 
 
 if __name__ == '__main__':

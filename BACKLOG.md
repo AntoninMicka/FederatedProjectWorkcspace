@@ -13,7 +13,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01, F-M2-OLLAMA-01 a malá UI dávka F-M1-UI-01 jsou po PR #26–#28 uzavřeny ve WORK_LOG. Aktivní F-M2-CHAT-01 drží [TODO](TODO.md); po ní následuje F-M2-CHAT-02. Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený. Větev ani PR pro F-M2-CHAT-02 nejsou vytvořeny.
+F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01 a F-M2-CHAT-01 jsou po PR #26–#29 uzavřeny ve WORK_LOG. Aktivní F-M2-CHAT-02 drží [TODO](TODO.md). Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -40,16 +40,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 ### Navazující konverzační feature dávky
 
 Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek výše. Před aktivací ověřit skutečné závislosti a aktualizovat ADR 0008; názvy větví jsou návrhy, větve ani PR nebyly vytvořeny.
-
-#### F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy
-
-- Stav: [ ] [planned]; milník M2/M3; cílová úroveň PoC validated.
-- Původ: uživatelské doplnění plánu 2026-09-15; Git-backed artefakty, provenance a workflow výstupy z roadmapy.
-- Větev: `feature/f-m2-chat-02-project-records`; základ a jediný PR do `develop`.
-- Výstup: explicitní přiřazení vlákna ke konkrétnímu projektu jako navazovatelného živého vlákna; neměnný kompletní nebo rozdílový otisk a samostatné editovatelné Markdown artefakty pro výsledky úkolů, např. oponenturu, brainstormingový souhrn nebo tezi.
-- Mimo rozsah: automatické ukládání každého soukromého chatu do projektu, ukládání credentials/provider session tokenů do Gitu a vydávání rozdílu bez jeho základu za kompletní historii.
-- Závislosti: F-M2-CHAT-01, F-M1-META-01/F-M1-SOURCE-01 podle přijatého kontraktu a standardní Workspace/Journal/Git/index lifecycle.
-- Akceptace jednoho PR: živé vlákno lze po restartu navázat ke správnému projektu; projektová reprezentace editovatelného obsahu je primárně Markdown. Kompletní otisk je samostatně čitelný, rozdílový nese ID/hash základu a odmítne chybějící či neshodný základ. Odvozený artefakt zachová vazbu na vlákno/run/vstupy/manifest a nejpřísnější privacy; expected-HEAD, retry, pád před/po commitu a obnova indexu jsou otestovány.
 
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 

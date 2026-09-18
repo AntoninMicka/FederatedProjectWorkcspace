@@ -30,6 +30,16 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("activeThread=null;pendingChatRequest=null", JS)
         self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
         self.assertIn("pendingChatRequest=null;renderChat(null)", JS)
+        self.assertIn("projectRequest('/v1/chat/assign'", JS)
+        self.assertIn("projectRequest('/v1/chat/snapshot'", JS)
+        self.assertIn("projectRequest('/v1/chat/output'", JS)
+
+    def test_chat_progress_stays_with_prompt(self):
+        from spikes.desktop_ui import HTML
+        composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        self.assertIn('id="chat-operation-status"', composer)
+        self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
+        self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'

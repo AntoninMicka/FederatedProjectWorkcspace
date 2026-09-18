@@ -56,6 +56,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
 <button id="chat-new-thread" type="button">Nové vlákno</button>
+<span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
+<button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
 <details id="chat-backend-settings"><summary>Nastavení Ollama backendu</summary>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
@@ -68,6 +70,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
 <button id="chat-submit" type="submit" disabled>Odeslat</button></div>
+<p id="chat-operation-status" role="status" aria-live="polite"></p>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
@@ -113,7 +116,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -208,6 +211,7 @@ function clearProject(){
  activeThread=null;pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
+ document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
  document.querySelector('#project-home').hidden=false;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
@@ -371,6 +375,7 @@ const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
+const chatOperationStatus=document.querySelector('#chat-operation-status');
 let activeThread=null,chatBinding=null,pendingChatRequest=null;
 function renderChat(thread){
  activeThread=thread || null;chatMessages.replaceChildren();
@@ -380,9 +385,11 @@ function renderChat(thread){
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
   message.append(detail);chatMessages.append(message);
  }
+ document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
 }
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  pendingChatRequest=null;renderChat(null);draft.value='';
+ chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
  chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
   'Nové vlákno · nejprve nastavte backend.';
@@ -399,7 +406,9 @@ function fillBinding(binding){
 async function loadChat(){
  try{
   const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
-  renderChat([...result.threads].reverse().find(item=>item.status==='active') || null);
+  const active=[...result.threads].reverse().filter(item=>item.status==='active');
+  renderChat(active.find(item=>item.project_id===activeProject?.id) ||
+             active.find(item=>item.project_id===null) || null);
  }catch(error){chatStatus.textContent=error.message;renderChat(null);}
 }
 chatForm.addEventListener('submit',async event=>{
@@ -419,7 +428,7 @@ draft.addEventListener('input',()=>{
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
  selectMainTab(mainTabs[1]);
- if(!chatBinding){chatStatus.textContent='Nejprve uložte nastavení backendu.';return;}
+ if(!chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení backendu.';return;}
  if(!pendingChatRequest){pendingChatRequest={project_id:activeProject.id,expected_head:activeProject.head,
   thread_id:activeThread?.thread_id || crypto.randomUUID(),turn_id:crypto.randomUUID(),
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
@@ -427,14 +436,47 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString()};}
- const submit=document.querySelector('#chat-submit');submit.disabled=true;chatStatus.textContent='Odesílám…';
+ const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
+ const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
  try{
   const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
   renderChat(result.thread);fillBinding(result.target);pendingChatRequest=null;draft.value='';draft.focus();
- }catch(error){await loadChat();chatStatus.textContent=error.message;}
- finally{submit.disabled=!activeProject || !draft.value.trim();
+  chatOperationStatus.textContent='Odpověď je připravena.';
+ }catch(error){await loadChat();chatOperationStatus.textContent=error.message;}
+ finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
 });
+async function assignActiveThread(){
+ if(!activeProject || !activeThread)throw new Error('Nejprve vytvořte chatové vlákno.');
+ if(activeThread.project_id===activeProject.id)return activeThread;
+ const assigned=await projectRequest('/v1/chat/assign',{project_id:activeProject.id,
+  thread_id:activeThread.thread_id,expected_revision:activeThread.revision});
+ renderChat(assigned);return assigned;
+}
+async function runChatRecord(button,action){
+ button.disabled=true;chatOperationStatus.textContent='Připravuji projektový záznam…';
+ try{
+  const thread=await assignActiveThread();
+  if(action==='snapshot'){
+   await projectRequest('/v1/chat/snapshot',{operation_id:crypto.randomUUID(),project_id:activeProject.id,
+    thread_id:thread.thread_id,expected_thread_revision:thread.revision,expected_head:activeProject.head,
+    snapshot_id:crypto.randomUUID(),mode:'full',title:'Záznam brainstormingu',created_at:new Date().toISOString(),
+    base_snapshot_id:null,base_snapshot_sha256:null});
+  }else{
+   const answer=[...thread.messages].reverse().find(item=>item.role==='assistant');
+   if(!answer)throw new Error('Vlákno zatím nemá odpověď asistenta.');
+   await projectRequest('/v1/chat/output',{operation_id:crypto.randomUUID(),project_id:activeProject.id,
+    thread_id:thread.thread_id,expected_thread_revision:thread.revision,expected_head:activeProject.head,
+    artifact_id:crypto.randomUUID(),title:'Výstup z brainstormingu',body:answer.content,
+    created_at:new Date().toISOString(),message_ids:[answer.message_id],snapshot_id:null,snapshot_sha256:null});
+  }
+  chatOperationStatus.textContent=action==='snapshot'?'Otisk byl uložen do projektu.':'Výstup byl uložen jako editovatelný dokument.';
+  await openRegisteredProject(activeProject.id);selectMainTab(mainTabs[1]);
+ }catch(error){chatOperationStatus.textContent=error.message;}
+ finally{button.disabled=false;}
+}
+document.querySelector('#chat-save-snapshot').addEventListener('click',event=>runChatRecord(event.currentTarget,'snapshot'));
+document.querySelector('#chat-save-output').addEventListener('click',event=>runChatRecord(event.currentTarget,'output'));
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
 });
@@ -448,7 +490,8 @@ class DesktopHandler(Handler):
     assets = ASSETS
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
-        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send'}
+        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
+        '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
@@ -464,6 +507,14 @@ class DesktopHandler(Handler):
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
                     'content', 'privacy', 'created_at'}:
                 return self.reply(200, self.server.chat_service.send(**request))
+            if self.path == '/v1/chat/assign' and isinstance(request, dict) and set(request) == {
+                    'project_id', 'thread_id', 'expected_revision'}:
+                return self.reply(200, self.server.chat_service.assign(**request))
+            if self.path in {'/v1/chat/snapshot', '/v1/chat/output'} and isinstance(request, dict):
+                payload = dict(request); operation_id = payload.pop('operation_id', None)
+                if self.path == '/v1/chat/snapshot':
+                    return self.reply(200, self.server.chat_service.publish_snapshot(payload, operation_id))
+                return self.reply(200, self.server.chat_service.publish_output(payload, operation_id))
             if self.path == '/v1/projects' and request == {}:
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:

@@ -8,6 +8,7 @@ import stat
 from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
+from spikes.chat_records import ChatRecords
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection)
@@ -69,6 +70,17 @@ class ChatService:
         rows = threads.list(node_id, user_id)
         return {'binding': binding, 'threads': rows}
 
+    def assign(self, **request):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
+
+    def publish_snapshot(self, request, operation_id):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish(
+            request, operation_id)
+
+    def publish_output(self, request, operation_id):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish_output(
+            request, operation_id)
+
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,
              content, privacy, created_at):
@@ -123,7 +135,8 @@ class ChatService:
                 'Chat thread changed during context preparation')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
-        threads.bind_run(turn_id=turn_id, node_id=node_id, user_id=user_id, run_id=run_id)
+        threads.bind_run(turn_id=turn_id, node_id=node_id, user_id=user_id, run_id=run_id,
+                         manifest_id=manifest_id)
         try:
             adapter.prepare(handoff, binding)
             response = adapter.dispatch(handoff, binding)

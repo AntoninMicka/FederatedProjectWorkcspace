@@ -5,6 +5,26 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CHAT-01 — Lokálně perzistentní živé konverzace — 2026-09-18
+
+Dávka uzavřena po začlenění PR #29 jako commit `5dec3a8` v `develop`; feature
+větev `feature/f-m2-chat-01-local-threads` dodala node-local vícekolový chat,
+Context Manifest napojení a bezpečný Ollama dispatch. Dosažená úroveň je PoC
+validated; projektové otisky a artefakty pokračují ve F-M2-CHAT-02.
+
+- [x] [completed] **F-M2-CHAT-01-A — Thread/Message kontrakt a crash boundaries (designed).** ADR 0008 odděluje vlákno, neměnné zprávy, draft, turn a backendový run včetně retence a obnovy bez duplicitního dispatch.
+- [x] [completed] **F-M2-CHAT-01-B — Lokální thread store a recovery (implemented).** Striktní SQLite v1 store používá vlastnictví node/user, transakční pořadí, hashované zprávy, turn/run vazby a explicitní terminal states.
+- [x] [completed] **F-M2-CHAT-01-C — Context/adapter napojení a desktop UI (PoC validated).** Každý běh váže přesný HEAD, thread/revizi, seřazené message ID/role/bajty, privacy a přesný backend bez fallbacku; desktop stav po restartu znovu načte.
+- [x] [completed] **F-M2-CHAT-01-AH-01 — Odolnost studeného startu.** Backend čeká 180 sekund a desktop 210 sekund; `unknown` se automaticky neopakuje. Živý minimální běh `gemma4` odpověděl přes loopback za 7,74 s.
+- [x] [completed] **F-M2-CHAT-01-AH-02 — Čitelný Ollama prompt.** Manifestovaný JSON/Base64 se deterministicky převádí na UTF-8 transcript rolí; request digest jej dál váže k manifestu.
+- [x] [completed] **F-M2-CHAT-01-AH-03 — Čisté nové vlákno.** UI může začít nový kontext bez odstranění starší lokální historie.
+
+Ověření finálního obsahu: cílených 22 testů OK se dvěma opt-in skipy; celá
+sada 245 testů OK a 22 podmíněných skipů; `py_compile` a `git diff --check`
+prošly. Samostatný reálný Qt/WebEngine test otevření projektu a restartu prošel.
+Skutečný LAN/TLS Ollama endpoint nebyl ověřen. Gate M1 zůstává otevřený kvůli
+odloženému `M1-07-C`; Gate M2 vyžaduje F-M2-CHAT-02.
+
 ## F-M1-UI-01 — Přepnutí do chatu až při odeslání — 2026-09-18
 
 Dávka uzavřena po začlenění PR #28 jako commit `a6dfbf6` v `develop`; feature větev `feature/f-m1-ui-01-prompt-submit-tab` oddělila editaci promptu od jeho odeslání.

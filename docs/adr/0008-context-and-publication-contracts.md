@@ -146,6 +146,84 @@ bajty a sestaví čitelný transcript `User`/`Assistant`; interní JSON a Base64
 nepředává modelu jako uživatelský text. Odvozený request zůstává spolu s hashem
 manifestu součástí durable request digestu.
 
+## Projektové přiřazení, otisk a odvozený Markdown — F-M2-CHAT-02
+
+Explicitní přiřazení živého vlákna k projektu je node-local pracovní vazba,
+nikoli automatická publikace historie. Thread store je její autorita a v nové
+verzi schématu uchová nejvýše jedno `project_id` spolu s revizí přiřazení.
+Přiřazení vyžaduje aktuálně registrovaný a čitelný projekt, stejného vlastníka
+vlákna a explicitní uživatelskou akci. Změna projektu zvýší revizi vlákna;
+nepřenáší starší projektové artefakty ani nemaže již publikované otisky. Po
+restartu se vazba znovu ověří proti registraci projektu. Cizí, odstraněný nebo
+nově nedostupný projekt se zobrazí jako stale vazba a nesmí dodat kontext ani
+umožnit publikaci.
+
+Projektový otisk je nový artefakt `kind: snapshot`, `provenance: snapshot` se
+standardním sidecarem a verzovaným souborem `snapshot.md`. Nepřidává neznámá
+pole do metadata v1/v2. Markdown obsahuje čitelný transcript a jeden omezený,
+kanonický JSON záznam `fpw-chat-snapshot-v1`, z něhož je transcript
+deterministicky odvozen a při čtení znovu ověřen. Záznam nese:
+
+- snapshot/artifact, project, thread ID a přesnou thread revizi,
+- druh `full` nebo `delta`, seřazené message ID/sequence/role, přesné UTF-8
+  bajty, SHA-256, privacy, autora a čas,
+- pro příslušné turny turn ID, run ID, assistant message ID a manifest ID,
+- nejpřísnější privacy všech zahrnutých zpráv a SHA-256 kanonického záznamu,
+- u `delta` navíc artifact ID a hash kanonického záznamu základu, základní a
+  výslednou thread revizi a navazující rozsah sequence.
+
+`full` je samostatně čitelný a obsahuje všechny zvolené zprávy od počátku
+vlákna do jedné potvrzené revize. `delta` obsahuje pouze souvislé nové zprávy po
+revizi kompletního nebo delta základu. Před přípravou journalu se základ načte z
+aktuálního validovaného projektového HEAD, ověří se jeho druh, project/thread ID,
+kanonický hash a přesné pokračování sequence. Chybějící, změněný, cizí nebo
+nesouvislý základ operaci odmítne; delta se nikdy nepovýší na full. Otisk je po
+publikaci obsahově neměnný. Nový výběr či oprava vytváří nové UUID; běžné
+anotace mohou vzniknout jen novou verzí metadat bez změny kanonického záznamu.
+
+Samostatný výstup úkolu je `kind: document` a `provenance: llm-generated` nebo
+`llm-transformed`. Jeho editovatelný Markdown před vlastním tělem nese omezenou
+provenance obálku `fpw-chat-output-v1`: source thread/revision, přesná message a
+turn/run/manifest ID, případný snapshot artifact ID/hash a privacy vstupů.
+Projektová metadata používají vztah `derived-from` na existující snapshot,
+pokud je snapshot součástí stejné nebo starší validované projektové verze.
+Editace dokumentu zachová tuto původní obálku; změna zdrojového výběru je nový
+odvozený výstup, nikoli přepsání historie chatu. Výstup dědí nejpřísnější
+privacy zahrnutých zpráv a vstupů; oslabení vyžaduje samostatnou autorizovanou
+reklasifikaci mimo tuto dávku.
+
+Publikace reuse/adaptuje jedinou Workspace operaci z ADR 0003. Request předem
+fixuje operation ID, expected HEAD, thread ID/revizi, výběr, výsledné UUID/cesty
+a přesné cílové bajty. Pod writer lockem se znovu ověří projektový HEAD,
+vlastník, přiřazení a nezměněná revize/výběr; celý kandidátní strom a přechod se
+validují před uložením journalu. Pád před CAS nepublikuje částečný otisk či
+dokument. Po CAS recovery rozpozná stejný commit, dokončí index/receipt a
+nevytvoří druhé UUID ani commit. Git commit a node-local thread DB nejsou jedna
+transakce: publikovaný snapshot je neměnný záznam zvolené revize, nikoli příslib,
+že živé vlákno zůstalo beze změny. Credentials, backend binding, provider
+session token a úplný soukromý Context Manifest se nepublikují.
+
+Reuse rozhodnutí: adaptovat `ChatThreads`, `Artifacts`, striktní metadata a
+`Workspace`/Journal/Index. Nová databáze, content-addressed store, Markdown
+parser nebo externí komponenta nejsou potřeba; posouzené obecné Git utility
+nenahrazují koordinovaný Workspace lifecycle této publikační cesty.
+
+Implementace F-M2-CHAT-02-B v `spikes/chat_records.py` tento kontrakt realizuje
+pro přiřazení a full/delta snapshoty. `ChatThreads` migruje přesné schéma v1 na
+v2 v jedné SQLite transakci, ukládá `project_id`, revizi přiřazení a manifest ID
+turnu; samotná DB se do projektu nekopíruje. `ChatRecords` před založením
+journalu ověří registrovaný projekt, expected HEAD, vlastníka, přiřazení a
+thread revizi. Delta navíc čte a validuje kanonický záznam základu z aktuálního
+HEAD. Snapshot a jeho privacy jsou po publikaci neměnné přechodovým validátorem;
+opakování stejného operation ID používá běžný Workspace receipt/recovery.
+F-M2-CHAT-02-C doplňuje editovatelný `fpw-chat-output-v1`. Jeho omezená
+kanonická obálka nese thread revizi, vybrané message ID, odpovídající
+turn/run/manifest vazby, privacy a volitelný snapshot ID/hash; běžný Markdown
+za obálkou zůstává editovatelný. Přechodový validátor odmítne odstranění nebo
+změnu původní obálky. Autentizované desktopové API/UI provádí explicitní
+přiřazení, full snapshot a uložení poslední odpovědi, poté načte nový projektový
+HEAD. Průběžný stav LLM požadavku je u promptu, nikoli ve scrollující historii.
+
 ## Větve a publikace při změně HEAD
 
 Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.

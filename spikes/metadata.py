@@ -278,18 +278,36 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
         require(len(paths) == 1, 'Unsupported source layout')
         return files[paths[0]]
 
+    def output_provenance(data):
+        marker = b'<!-- fpw-chat-output-v1\n'
+        if marker not in data:
+            return None
+        require(data.count(marker) == 1, 'Duplicate chat output provenance')
+        tail = data.split(marker, 1)[1]
+        require(b'\n-->\n' in tail, 'Unclosed chat output provenance')
+        return tail.split(b'\n-->\n', 1)[0]
+
     for id_, before in base.items():
         after = candidate.get(id_)
-        if before['kind'] != 'source':
+        if (before['kind'] == 'document'
+                and before['provenance'] in {'llm-generated', 'llm-transformed'}):
+            before_record = output_provenance(content(base_files, before))
+            if before_record is not None:
+                require(after is not None and after['kind'] == 'document',
+                        'Chat output removal is unsupported')
+                require(output_provenance(content(candidate_files, after)) == before_record,
+                        'Chat output provenance changed')
+        if before['kind'] not in {'source', 'snapshot'}:
             continue
-        require(after is not None, 'Source removal is unsupported')
+        label = before['kind'].capitalize()
+        require(after is not None, f'{label} removal is unsupported')
         require(all(before.get(key) == after.get(key) for key in immutable),
-                'Immutable source metadata changed')
+                f'Immutable {before["kind"]} metadata changed')
         require(content(base_files, before) == content(candidate_files, after),
-                'Immutable source content changed')
-        if before['schema_version'] == 2:
+                f'Immutable {before["kind"]} content changed')
+        if before['kind'] == 'source' and before['schema_version'] == 2:
             require(after['schema_version'] == 2 and before['import'] == after.get('import'),
                     'Immutable source import provenance changed')
         require(allow_privacy_relaxation or privacy[after['privacy']] >= privacy[before['privacy']],
-                'Source privacy relaxation requires explicit authorization')
+                f'{label} privacy relaxation requires explicit authorization')
     return candidate
