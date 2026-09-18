@@ -10,12 +10,18 @@ import sys
 import unittest
 
 from spikes.desktop import request_policy
-from spikes.desktop_ui import DesktopHandler
+from spikes.desktop_ui import DesktopHandler, JS
 from spikes.local_api import running_api
 from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_prompt_switches_to_chat_only_when_submitted(self):
+        input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
+        submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',event=>{", 1)[1].split('});', 1)[0]
+        self.assertNotIn('selectMainTab', input_handler)
+        self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
+
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'
         self.assertEqual(request_policy(origin + '/', '', 'GET', origin), 'allow')

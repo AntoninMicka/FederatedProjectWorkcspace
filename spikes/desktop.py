@@ -347,11 +347,13 @@ def main():
                   previewTab.click();
                   const draft=document.querySelector('#chat-draft');draft.value='Local draft';
                   draft.dispatchEvent(new Event('input',{bubbles:true}));
-                  if(document.querySelector('#chat-panel').hidden || document.querySelector('#chat-submit').disabled)return null;
+                  if(document.querySelector('#preview-panel').hidden || !document.querySelector('#chat-panel').hidden ||
+                     document.querySelector('#chat-submit').disabled)return null;
                   if(!window.promptSubmitChecked){
                     const before=document.querySelector('#count').textContent;
                     draft.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
-                    if(document.querySelector('#chat-messages').lastElementChild?.textContent!=='Local draft' || draft.value ||
+                    if(document.querySelector('#chat-panel').hidden ||
+                       document.querySelector('#chat-messages').lastElementChild?.textContent!=='Local draft' || draft.value ||
                        document.querySelector('#count').textContent!==before)return null;
                     window.promptSubmitChecked=true;draft.value='Local draft';draft.dispatchEvent(new Event('input'));
                   }
