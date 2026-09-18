@@ -808,15 +808,15 @@ Aktualizace 2026-09-17: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 
 ## Milestone M2 – Local AI
 
-- [ ] Ollama backend.
-- [ ] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti. LAN endpoint nesmí být označen jako `same-node` ani dostat `local-only` data; před implementací doplnit v ADR 0008 explicitní síťovou trust boundary, ověření identity/cíle a transportní policy.
+- [x] Ollama backend — lokální PoC adapteru váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; živá služba a produkční provoz zůstávají neověřené.
+- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — lokální PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. Skutečný LAN/TLS endpoint nebyl ověřen.
 - [ ] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu.
 - [ ] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty.
 - [ ] Summarizer.
 - [ ] Extractor.
 - [ ] Auto-description.
 - [ ] Tagging.
-- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; backend adapter a durable run record zůstávají navazující práce.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány v lokálním PoC, obecná backendová integrace zůstává další práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 

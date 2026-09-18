@@ -73,6 +73,11 @@ class ContextBuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'local-only'):
             self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
                 authority=self.authority, target=cloud, ad_hoc_inputs=(local,))
+        private_network = dataclasses.replace(self.target, boundary='private-network',
+                                              target_id='10.0.0.2')
+        with self.assertRaisesRegex(ValidationError, 'local-only'):
+            self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+                authority=self.authority, target=private_network, ad_hoc_inputs=(local,))
         # A changed target is rejected; authorize never chooses an alternate target itself.
         prepared = self.prepare()
         with self.assertRaisesRegex(ValidationError, 'target changed'):

@@ -10,7 +10,7 @@ Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové
 
 ## F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu
 
-- Stav: [ ] [in progress]; cílová úroveň PoC validated.
+- Stav: [ ] [in progress]; implementace a lokální PoC ověření dokončeny 2026-09-18, dávka čeká na vytvoření a sloučení PR.
 - Původ: Ollama a execution boundaries z roadmapy a [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
 - Skutečná větev: `feature/f-m2-ollama-01-locality`, založená z `develop` (`ab2a5ea`, PR #26 začleněn); jediný budoucí PR do `develop`.
 - Výstup: Ollama adapter a lokální binding, které prokazatelně odliší proces na stejném uzlu od privátního LAN endpointu a vážou skutečný cíl/model do Context Manifest handoffu.
@@ -19,11 +19,12 @@ Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové
 
 - [x] [completed] **F-M2-OLLAMA-01-A — Execution boundary a binding kontrakt (implemented, 2026-09-17).** ADR 0008 a striktní node-local kontrakt rozlišují `same-node` číselný loopback od `private-network` číselné privátní HTTPS adresy s připnutým certifikátem a stabilní identitou; DNS, credentials v bindingu a neznámá pole se odmítají.
 - [x] [completed] **F-M2-OLLAMA-01-B — Ollama adapter a bezpečný dispatch (implemented, 2026-09-18).** Adapter přijímá pouze autorizovaný handoff s přesným run ID/Target, znovu váže binding a request digest, před privátním HTTPS požadavkem ověří cert pin, nepovoluje redirect ani fallback a vede node-local SQLite run journal. `dispatching` se potvrdí před sítí; ztracená odpověď je `unknown` bez automatického retry, známé HTTP/response odmítnutí je durable `failed`.
-- [ ] [in progress] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření (cílová úroveň: PoC validated).** Pokrýt same-node/LAN, DNS změnu, redirect, nedostupnost, změnu modelu/cíle, local-only a restart konfigurace; aktualizovat dokumentaci/reuse a spustit cílenou i celou sadu.
+- [x] [completed] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření (PoC validated, 2026-09-18).** Atomicky uložený node-local binding a durable run journal přežijí restart; testy pokrývají same-node/LAN, odmítnutí DNS a redirectu, kontrolu TLS pinu před requestem, nedostupnost a `unknown` bez retry, změnu modelu/cíle, zákaz `local-only` na LAN i opětovné načtení úspěšného běhu bez dalšího odeslání. Cíleně prošlo 14 testů; celá sada prošla 230 testy (22 přeskočeno). Živá Ollama ani skutečný LAN/TLS endpoint nebyly v této dávce ověřeny.
 
 ### Recovery hranice
 
 - Binding/configurace je node-local stav mimo projektový Git a nesmí obsahovat přihlašovací tajemství.
+- Binding se publikuje atomickým nahrazením po `fsync` souboru a adresáře; po restartu se znovu striktně validuje vlastník, oprávnění, velikost a celý kontrakt.
 - Adapter před síťovým pokusem potřebuje durable run record s přechodem `dispatching`; jeho návrh a implementace jsou součástí této dávky jen v rozsahu nutném pro bezpečný Ollama dispatch.
 - Po ztrátě odpovědi se výsledek označí `unknown`; automatický retry nesmí zopakovat potenciálně nákladný nebo stavově významný běh.
 

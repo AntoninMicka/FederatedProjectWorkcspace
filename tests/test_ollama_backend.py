@@ -4,12 +4,13 @@ import hashlib
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.context_builder import DispatchHandoff
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseError,
-                                   OllamaRuns, UnknownRun)
+                                   OllamaBindings, OllamaRuns, UnknownRun)
 
 
 class OllamaBindingTests(unittest.TestCase):
@@ -48,6 +49,17 @@ class OllamaBindingTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises((ValidationError, ValueError)):
                 OllamaBinding.parse(self.binding(**changes))
 
+    def test_binding_survives_restart_and_unsafe_file_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / 'state'; state.mkdir(mode=0o700)
+            store = OllamaBindings(state)
+            expected = OllamaBinding.parse(self.binding())
+            store.save(expected)
+            self.assertEqual(OllamaBindings(state).load(), expected)
+            store.path.chmod(0o644)
+            with self.assertRaisesRegex(ValidationError, 'Unsafe'):
+                OllamaBindings(state).load()
+
 
 class OllamaAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -71,6 +83,9 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'succeeded')
         self.assertEqual(hashlib.sha256(self.handoff.payload).hexdigest(),
                          hashlib.sha256(b'{"context":"exact"}').hexdigest())
+        restarted = OllamaAdapter(OllamaRuns(self.state),
+                                  lambda binding, request: self.fail('must not resend'))
+        self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
 
     def test_lost_response_becomes_unknown_without_automatic_retry(self):
         calls = []
@@ -108,3 +123,42 @@ class OllamaAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(OllamaResponseError, 'Invalid Ollama response'):
             adapter.dispatch(self.handoff, self.binding)
         self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'failed')
+
+    def test_http_transport_forbids_redirect(self):
+        events = []
+        class Response:
+            status = 302
+        class Connection:
+            def __init__(self, *args, **kwargs): pass
+            def connect(self): events.append('connect')
+            def request(self, *args, **kwargs): events.append('request')
+            def getresponse(self): return Response()
+            def close(self): events.append('close')
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            with self.assertRaisesRegex(OllamaResponseError, 'redirect'):
+                OllamaAdapter._http_transport(self.binding, b'{}')
+        self.assertEqual(events, ['connect', 'request', 'close'])
+
+    def test_private_tls_pin_is_checked_before_request(self):
+        certificate = b'test certificate'; events = []
+        peer = str(uuid4())
+        binding = OllamaBinding.parse(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='revision-1', adapter='ollama', boundary='private-network',
+            endpoint='https://10.0.0.2:11434', model='gemma3', target_id=peer,
+            tls_cert_sha256=hashlib.sha256(certificate).hexdigest()))
+        class Socket:
+            def getpeercert(self, binary_form=False):
+                events.append('pin'); return certificate
+        class Response:
+            status = 200
+            def read(self, limit): return b'{"model":"gemma3","response":"ok"}'
+        class Connection:
+            def __init__(self, *args, **kwargs): self.sock = Socket()
+            def connect(self): events.append('connect')
+            def request(self, *args, **kwargs): events.append('request')
+            def getresponse(self): return Response()
+            def close(self): events.append('close')
+        with patch('spikes.ollama_backend.http.client.HTTPSConnection', Connection):
+            result = OllamaAdapter._http_transport(binding, b'{}')
+        self.assertEqual(result['response'], 'ok')
+        self.assertEqual(events, ['connect', 'pin', 'request', 'close'])

@@ -80,6 +80,66 @@ class OllamaBinding:
         return Target(self.binding_id, self.revision, self.boundary,
                       self.target_id, self.model)
 
+    def serialize(self):
+        value = dict(schema_version=1, binding_id=self.binding_id, revision=self.revision,
+                     adapter='ollama', boundary=self.boundary, endpoint=self.endpoint,
+                     model=self.model, target_id=self.target_id)
+        if self.tls_cert_sha256:
+            value['tls_cert_sha256'] = self.tls_cert_sha256
+        return value
+
+
+class OllamaBindings:
+    """Atomic node-local binding configuration outside project Git."""
+    def __init__(self, state_dir):
+        self.root = Path(state_dir).absolute()
+        info = self.root.stat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+                and stat.S_IMODE(info.st_mode) == 0o700,
+                'Binding state directory requires owned mode 0700')
+        self.path = self.root / 'ollama-binding.json'
+
+    def save(self, binding):
+        require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
+        raw = (json.dumps(binding.serialize(), ensure_ascii=False, sort_keys=True,
+                          separators=(',', ':')) + '\n').encode()
+        temporary = self.root / ('.ollama-binding-' + binding.binding_id + '.tmp')
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        fd = os.open(temporary, flags, 0o600)
+        try:
+            with os.fdopen(fd, 'wb', closefd=False) as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.close(fd); fd = -1
+            os.replace(temporary, self.path)
+            directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        finally:
+            if fd >= 0:
+                os.close(fd)
+            if temporary.exists():
+                temporary.unlink()
+
+    def load(self):
+        flags = os.O_RDONLY | os.O_NOFOLLOW
+        fd = os.open(self.path, flags)
+        try:
+            info = os.fstat(fd)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_nlink == 1 and not info.st_mode & 0o077,
+                    'Unsafe Ollama binding file')
+            raw = os.read(fd, 64 * 1024 + 1)
+        finally:
+            os.close(fd)
+        require(len(raw) <= 64 * 1024, 'Ollama binding exceeds 64 KiB')
+        try:
+            value = json.loads(raw)
+        except (UnicodeError, ValueError) as exc:
+            raise ValueError('Invalid Ollama binding JSON') from exc
+        return OllamaBinding.parse(value)
+
 
 class OllamaRuns:
     """Authoritative local state for an Ollama dispatch; never stored in project Git."""

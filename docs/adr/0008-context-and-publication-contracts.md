@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. Nejde o implementovaný LLM adapter, úplné RBAC, trvalý run record ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -31,7 +31,10 @@ připnutý SHA-256 certifikátu a stabilní ID cílového uzlu/služby. DNS se p
 boundary nepoužívá. Redirect je zakázán a změna adresy, pinu, modelu či identity
 je změnou bindingu vyžadující nový Context Manifest. `local-only` smí pouze na
 `same-node`; důvěryhodná LAN není výjimka. Binding je node-local mimo projektový
-Git a nesmí obsahovat credentials. Adapter nemá implicitní LAN/cloud fallback.
+Git a nesmí obsahovat credentials. Jeho soubor se publikuje atomickým nahrazením
+po `fsync` dat i adresáře; při každém načtení se kontroluje vlastník, režim,
+velikost a celý kontrakt, takže restart nepřebírá nevalidovaný cíl. Adapter nemá
+implicitní LAN/cloud fallback.
 Ollama dispatch přijímá pouze autorizovaný Context Builder handoff nesoucí run ID
 a přesný Target. Node-local SQLite journal potvrdí stav `dispatching` před prvním
 síťovým bajtem; timeout či ztracená odpověď přejdou do `unknown` a stejný run se
