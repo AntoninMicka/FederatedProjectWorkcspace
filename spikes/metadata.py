@@ -278,8 +278,25 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
         require(len(paths) == 1, 'Unsupported source layout')
         return files[paths[0]]
 
+    def output_provenance(data):
+        marker = b'<!-- fpw-chat-output-v1\n'
+        if marker not in data:
+            return None
+        require(data.count(marker) == 1, 'Duplicate chat output provenance')
+        tail = data.split(marker, 1)[1]
+        require(b'\n-->\n' in tail, 'Unclosed chat output provenance')
+        return tail.split(b'\n-->\n', 1)[0]
+
     for id_, before in base.items():
         after = candidate.get(id_)
+        if (before['kind'] == 'document'
+                and before['provenance'] in {'llm-generated', 'llm-transformed'}):
+            before_record = output_provenance(content(base_files, before))
+            if before_record is not None:
+                require(after is not None and after['kind'] == 'document',
+                        'Chat output removal is unsupported')
+                require(output_provenance(content(candidate_files, after)) == before_record,
+                        'Chat output provenance changed')
         if before['kind'] not in {'source', 'snapshot'}:
             continue
         label = before['kind'].capitalize()

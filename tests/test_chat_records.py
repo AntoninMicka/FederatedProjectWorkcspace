@@ -109,6 +109,42 @@ class ChatRecordTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'Immutable snapshot content'):
             validate_transition(files, changed)
 
+    def test_editable_output_keeps_exact_thread_run_manifest_provenance(self):
+        thread = self.threads.get(self.thread_id, self.node_id, self.user_id)
+        answer = thread['messages'][-1]
+        request = {'project_id': self.project_id, 'thread_id': self.thread_id,
+                   'expected_thread_revision': thread['revision'],
+                   'expected_head': self.git.head(), 'artifact_id': str(uuid4()),
+                   'title': 'Výstup', 'body': answer['content'], 'created_at': NOW,
+                   'message_ids': [answer['message_id']],
+                   'snapshot_id': None, 'snapshot_sha256': None}
+        operation = str(uuid4())
+        def crash(stage):
+            if stage == 'prepared':
+                raise RuntimeError(stage)
+        with self.assertRaisesRegex(RuntimeError, 'prepared'):
+            self.records.publish_output(request, operation, checkpoint=crash)
+        receipt = ChatRecords(self.node, Projects(self.node),
+                              state_dir=self.chat_state).publish_output(request, operation)
+        files = self.git.snapshot(receipt['commit_id']); entities = validate_snapshot(files)
+        meta = entities[request['artifact_id']]
+        self.assertEqual((meta['kind'], meta['provenance'], meta['privacy']),
+                         ('document', 'llm-generated', 'confidential'))
+        raw = files[f'artifacts/{request["artifact_id"]}/content.md']
+        self.assertIn(b'fpw-chat-output-v1', raw)
+        self.assertIn(thread['turns'][0]['manifest_id'].encode(), raw)
+        changed = dict(files); changed[f'artifacts/{request["artifact_id"]}/content.md'] = b'Edited\n'
+        with self.assertRaisesRegex(ValidationError, 'provenance changed'):
+            validate_transition(files, changed)
+        workspace = self.records.projects.workspace(self.project_id)
+        workspace.index.path.unlink()
+        reopened = Projects(self.node).open(self.project_id)
+        self.assertEqual(reopened['commit_id'], receipt['commit_id'])
+
+        stale = dict(request, artifact_id=str(uuid4()), expected_head='0' * 40)
+        with self.assertRaisesRegex(ValidationError, 'changed'):
+            self.records.publish_output(stale, str(uuid4()))
+
     def test_assignment_and_revision_are_required(self):
         other = str(uuid4())
         self.threads.create(thread_id=other, node_id=self.node_id, user_id=self.user_id,

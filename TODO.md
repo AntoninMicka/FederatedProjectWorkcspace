@@ -20,10 +20,14 @@ Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové
 
 - [x] [completed] **F-M2-CHAT-02-A — Kontrakt přiřazení, full/delta otisku a odvozeného výstupu (designed, 2026-09-18).** ADR 0008 definuje node-local projektovou vazbu, `fpw-chat-snapshot-v1` v čitelném Markdownu, samostatný full a fail-closed delta záznam s kanonickým hashem základu, `fpw-chat-output-v1`, nejpřísnější privacy a standardní expected-HEAD/Journal/CAS/index recovery. Reuse review volí stávající ChatThreads/metadata/Artifacts/Workspace a odmítá novou storage i paralelní Git lifecycle.
 - [x] [completed] **F-M2-CHAT-02-B — Projektové záznamy a recovery (implemented, 2026-09-18).** `ChatThreads` migruje v1→v2 a trvale váže vlákno na registrovaný projekt i turn na Context Manifest; `ChatRecords` publikuje neměnné full/delta `fpw-chat-snapshot-v1` přes expected HEAD a standardní Workspace journal/CAS/index. Delta ověřuje existenci, project/thread ID, kanonický hash a souvislou sequence základu před journalem; retry po pádu vrací jediný commit/receipt. Cíleně ověřeno 12 testy úložiště a záznamů, návaznost 4 testy orchestrace; celá sada `251 OK, 22 skipped`.
-- [ ] [planned] **F-M2-CHAT-02-C — Markdown výstup, desktop UI a akceptace (cílová úroveň: PoC validated).** Uložit uživatelem vybraný výsledek jako editovatelný Markdown artefakt s provenance/privacy, doplnit UI a otestovat restart, stale HEAD, retry, pády a obnovu indexu.
+- [x] [completed] **F-M2-CHAT-02-C — Markdown výstup, desktop UI a akceptace (PoC validated, 2026-09-18).** `fpw-chat-output-v1` ukládá vybranou odpověď jako editovatelný dokument s thread/message/turn/run/manifest provenance, nejpřísnější privacy a volitelným vztahem na snapshot; další editace nesmí odstranit ani změnit původní obálku. Autentizované desktopové API a UI nabízí explicitní přiřazení, full otisk a uložení poslední odpovědi; po zápisu obnoví projektový HEAD. Stav „Odesílám/Model přemýšlí“ je přímo pod promptem a nezmizí při scrollování historie. Ověřeno restartem služby, stale HEAD, pádem po journal prepare, idempotentním retry, rebuildem indexu, cílenými API/UI testy a celou sadou `253 OK, 22 skipped`; reálný Qt/WebEngine smoke zůstal přeskočen podle opt-in podmínky testu.
 
 ### Povinné recovery hranice
 
 - Node-local thread store zůstává autoritou živého vlákna; Git záznam je explicitní projektová reprezentace, nikoli synchronizovaná kopie provozního SQLite.
 - Před commitem drží přesný kandidát a request digest Workspace journal; po posunu refu lze index obnovit z validovaného HEAD bez opakované publikace.
 - Delta se publikuje pouze proti existujícímu základu se shodným ID/hash; jinak operace končí před journalem/commitem.
+
+### K předání do backlogu
+
+- [ ] [planned] **F-UX-SETTINGS-01 — Centralizovaná stránka nastavení (cílová úroveň: designed → implemented).** Původ: uživatelský požadavek 2026-09-18. Navrhnout společné místo pro aplikační a backendová nastavení a následně do něj přesunout současné inline nastavení Ollama; zachovat node-local uložení, privacy hranice, validaci a bezpečný návrat při chybě. Neprovádět jako vedlejší zásah do F-M2-CHAT-02.

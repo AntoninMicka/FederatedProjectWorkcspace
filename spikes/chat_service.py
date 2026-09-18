@@ -8,6 +8,7 @@ import stat
 from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
+from spikes.chat_records import ChatRecords
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection)
@@ -68,6 +69,17 @@ class ChatService:
             binding = None
         rows = threads.list(node_id, user_id)
         return {'binding': binding, 'threads': rows}
+
+    def assign(self, **request):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
+
+    def publish_snapshot(self, request, operation_id):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish(
+            request, operation_id)
+
+    def publish_output(self, request, operation_id):
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish_output(
+            request, operation_id)
 
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,

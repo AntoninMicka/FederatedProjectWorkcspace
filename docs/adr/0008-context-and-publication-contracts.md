@@ -216,8 +216,13 @@ journalu ověří registrovaný projekt, expected HEAD, vlastníka, přiřazení
 thread revizi. Delta navíc čte a validuje kanonický záznam základu z aktuálního
 HEAD. Snapshot a jeho privacy jsou po publikaci neměnné přechodovým validátorem;
 opakování stejného operation ID používá běžný Workspace receipt/recovery.
-Editovatelný `fpw-chat-output-v1` a jeho desktopové ovládání zůstávají úkolem
-F-M2-CHAT-02-C.
+F-M2-CHAT-02-C doplňuje editovatelný `fpw-chat-output-v1`. Jeho omezená
+kanonická obálka nese thread revizi, vybrané message ID, odpovídající
+turn/run/manifest vazby, privacy a volitelný snapshot ID/hash; běžný Markdown
+za obálkou zůstává editovatelný. Přechodový validátor odmítne odstranění nebo
+změnu původní obálky. Autentizované desktopové API/UI provádí explicitní
+přiřazení, full snapshot a uložení poslední odpovědi, poté načte nový projektový
+HEAD. Průběžný stav LLM požadavku je u promptu, nikoli ve scrollující historii.
 
 ## Větve a publikace při změně HEAD
 

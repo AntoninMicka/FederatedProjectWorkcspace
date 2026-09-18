@@ -151,7 +151,23 @@ class ChatServiceTests(unittest.TestCase):
             response = driver.request(server, path='/v1/chat/send', body=request)
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
-            self.assertEqual(json.loads(body)['thread']['messages'][-1]['role'], 'assistant')
+            thread = json.loads(body)['thread']
+            self.assertEqual(thread['messages'][-1]['role'], 'assistant')
+            assignment = json.dumps({'project_id': ENTITY, 'thread_id': thread['thread_id'],
+                                     'expected_revision': thread['revision']}).encode()
+            response = driver.request(server, path='/v1/chat/assign', body=assignment)
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            assigned = json.loads(body)
+            snapshot = {'operation_id': str(uuid4()), 'project_id': ENTITY,
+                        'thread_id': assigned['thread_id'],
+                        'expected_thread_revision': assigned['revision'],
+                        'expected_head': self.git.head(), 'snapshot_id': str(uuid4()),
+                        'mode': 'full', 'title': 'Snapshot', 'created_at': NOW,
+                        'base_snapshot_id': None, 'base_snapshot_sha256': None}
+            response = driver.request(server, path='/v1/chat/snapshot',
+                                      body=json.dumps(snapshot).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
             driver.rejected(server, path='/v1/chat/status', body=b'{}',
                             headers={'Authorization': None})
 

@@ -17,6 +17,7 @@ from spikes.project_creation import ProjectCreation
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 MARKER = '<!-- fpw-chat-snapshot-v1\n'
 END = '\n-->\n'
+OUTPUT_MARKER = '<!-- fpw-chat-output-v1\n'
 
 
 def _canonical(value):
@@ -266,6 +267,101 @@ class ChatRecords:
                        prefix + 'metadata.json': (json.dumps(meta, ensure_ascii=False,
                            sort_keys=True, indent=2) + '\n').encode('utf-8')}
             return changes, 'Local workspace author', author + '@local.invalid', 'Publish chat snapshot'
+
+        return workspace.transact(operation_id, intent, prepare,
+                                  expected_head=request['expected_head'], checkpoint=checkpoint)
+
+    def publish_output(self, request, operation_id, *, checkpoint=lambda stage: None):
+        required = {'project_id', 'thread_id', 'expected_thread_revision', 'expected_head',
+                    'artifact_id', 'title', 'body', 'created_at', 'message_ids',
+                    'snapshot_id', 'snapshot_sha256'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid chat output request')
+        for key in ('project_id', 'thread_id', 'artifact_id'):
+            uuid(request[key])
+        uuid(operation_id); timestamp(request['created_at'])
+        require(type(request['expected_thread_revision']) is int
+                and request['expected_thread_revision'] >= 0, 'Invalid thread revision')
+        require(isinstance(request['expected_head'], str)
+                and re.fullmatch(r'[0-9a-f]{40,64}', request['expected_head']),
+                'Invalid expected project commit')
+        require(isinstance(request['message_ids'], list) and request['message_ids']
+                and len(request['message_ids']) == len(set(request['message_ids'])),
+                'Output messages must be a non-empty unique list')
+        for value in request['message_ids']:
+            uuid(value)
+        require(isinstance(request['title'], str) and request['title'].strip() == request['title']
+                and 0 < len(request['title']) <= 200
+                and not any(c in request['title'] for c in '\0\r\n'), 'Invalid output title')
+        require(isinstance(request['body'], str) and request['body'].strip()
+                and '\0' not in request['body'], 'Invalid output body')
+        if request['snapshot_id'] is None:
+            require(request['snapshot_sha256'] is None, 'Snapshot digest requires snapshot ID')
+        else:
+            uuid(request['snapshot_id'])
+            require(isinstance(request['snapshot_sha256'], str)
+                    and re.fullmatch(r'[0-9a-f]{64}', request['snapshot_sha256']),
+                    'Invalid output snapshot digest')
+        workspace = self.projects.workspace(request['project_id'], blocking=False)
+        node_id, user_id = self._identity()
+        intent = dict(request, action='publish-chat-output', author_id=user_id)
+
+        def prepare(ws):
+            head = ws.git.head()
+            require(head == request['expected_head'], 'Project changed before output publication')
+            committed_project(ws.git, head, request['project_id'])
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            require(request['artifact_id'] not in entities, 'Artifact ID already exists')
+            thread = self._threads().get(request['thread_id'], node_id, user_id)
+            require(thread['project_id'] == request['project_id'],
+                    'Chat thread is not assigned to this project')
+            require(thread['revision'] == request['expected_thread_revision'],
+                    'Chat thread changed before output publication')
+            by_id = {item['message_id']: item for item in thread['messages']}
+            require(all(value in by_id for value in request['message_ids']),
+                    'Output message is unavailable')
+            chosen = [item for item in thread['messages']
+                      if item['message_id'] in request['message_ids']]
+            require([item['message_id'] for item in chosen] == request['message_ids'],
+                    'Output messages must use thread order')
+            require(any(item['role'] == 'assistant' for item in chosen),
+                    'Output must include an assistant message')
+            message_ids = set(request['message_ids'])
+            turns = [item for item in thread['turns']
+                     if item['user_message_id'] in message_ids
+                     or item['assistant_message_id'] in message_ids]
+            snapshot = None; relations = []
+            if request['snapshot_id'] is not None:
+                snapshot_id = request['snapshot_id']; meta = entities.get(snapshot_id)
+                require(meta is not None and meta['kind'] == 'snapshot' and 'file' in meta,
+                        'Output snapshot is missing')
+                record, digest = parse_snapshot(files[f'artifacts/{snapshot_id}/{meta["file"]}'])
+                require(record['snapshot_id'] == snapshot_id
+                        and record['project_id'] == request['project_id']
+                        and record['thread_id'] == request['thread_id']
+                        and digest == request['snapshot_sha256'],
+                        'Output snapshot provenance mismatch')
+                snapshot = {'snapshot_id': snapshot_id, 'record_sha256': digest}
+                relations = [{'type': 'derived-from', 'target_id': snapshot_id}]
+            privacy = max((item['privacy'] for item in chosen), key=PRIVACY_ORDER.__getitem__)
+            provenance = {'schema': 'fpw-chat-output-v1',
+                          'project_id': request['project_id'], 'thread_id': request['thread_id'],
+                          'thread_revision': thread['revision'],
+                          'message_ids': request['message_ids'], 'turns': turns,
+                          'snapshot': snapshot, 'privacy': privacy}
+            content = (OUTPUT_MARKER + _canonical(provenance).decode('utf-8') + END
+                       + '\n' + request['body'].rstrip() + '\n').encode('utf-8')
+            require(len(content) <= MAX_FILE, 'Chat output exceeds artifact limit')
+            meta = {'schema_version': 1, 'id': request['artifact_id'],
+                    'title': request['title'], 'kind': 'document',
+                    'created_at': request['created_at'], 'author_id': user_id,
+                    'privacy': privacy, 'provenance': 'llm-generated',
+                    'file': 'content.md', 'relations': relations}
+            prefix = f'artifacts/{request["artifact_id"]}/'
+            changes = {prefix + 'content.md': content,
+                       prefix + 'metadata.json': (json.dumps(meta, ensure_ascii=False,
+                           sort_keys=True, indent=2) + '\n').encode('utf-8')}
+            return changes, 'Local workspace author', user_id + '@local.invalid', 'Publish chat output'
 
         return workspace.transact(operation_id, intent, prepare,
                                   expected_head=request['expected_head'], checkpoint=checkpoint)
