@@ -55,6 +55,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
+<button id="chat-new-thread" type="button">Nové vlákno</button>
 <details id="chat-backend-settings"><summary>Nastavení Ollama backendu</summary>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
@@ -380,6 +381,13 @@ function renderChat(thread){
   message.append(detail);chatMessages.append(message);
  }
 }
+document.querySelector('#chat-new-thread').addEventListener('click',()=>{
+ pendingChatRequest=null;renderChat(null);draft.value='';
+ document.querySelector('#chat-submit').disabled=true;
+ chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
+  'Nové vlákno · nejprve nastavte backend.';
+ draft.focus();
+});
 function fillBinding(binding){
  chatBinding=binding;const fields=chatForm.elements;
  if(binding){fields.boundary.value=binding.boundary;fields.endpoint.value=binding.endpoint;

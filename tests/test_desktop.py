@@ -28,6 +28,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
         self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
         self.assertIn("activeThread=null;pendingChatRequest=null", JS)
+        self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
+        self.assertIn("pendingChatRequest=null;renderChat(null)", JS)
 
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'

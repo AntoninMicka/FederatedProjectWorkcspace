@@ -167,6 +167,8 @@ První odpověď po načtení většího modelu může trvat déle. Adapter ček
 generate až 180 sekund a desktopový požadavek 210 sekund, aby klient neukončil
 spojení dříve než backend. Timeout po zahájení dispatch zůstává stavem `unknown`;
 aplikace jej kvůli riziku duplicitního běhu automaticky neopakuje.
+Tlačítko **Nové vlákno** začne čistý kontext bez odstranění předchozí lokální
+historie; hodí se také po chybné nebo neurčité odpovědi.
 
 Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.
 

@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
+import base64
 import hashlib
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -86,6 +88,25 @@ class OllamaAdapterTests(unittest.TestCase):
         restarted = OllamaAdapter(OllamaRuns(self.state),
                                   lambda binding, request: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
+
+    def test_conversation_payload_is_rendered_as_roles_not_base64_json(self):
+        first, second = str(uuid4()), str(uuid4())
+        payload = json.dumps(dict(schema_version=1, inputs=[
+            dict(input_id=first, content_b64=base64.b64encode('ahoj'.encode()).decode()),
+            dict(input_id=second, content_b64=base64.b64encode(
+                'co je dnes za den?'.encode()).decode())], conversation=[
+                    dict(message_id=first, role='user'),
+                    dict(message_id=second, role='user')])).encode()
+        handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'd' * 64,
+                                  self.binding.target(), payload)
+        captured = []
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': 'gemma3', 'response': 'answer'})[1])
+        adapter.dispatch(handoff, self.binding)
+        self.assertEqual(captured[0]['prompt'],
+                         'User:\nahoj\n\nUser:\nco je dnes za den?\n\nAssistant:\n')
+        self.assertNotIn('content_b64', captured[0]['prompt'])
 
     def test_lost_response_becomes_unknown_without_automatic_retry(self):
         calls = []

@@ -3,6 +3,7 @@
 """Strict node-local Ollama binding contract; transport is added separately."""
 from dataclasses import dataclass
 from contextlib import closing
+import base64
 import hashlib
 import http.client
 import ipaddress
@@ -184,12 +185,42 @@ class OllamaAdapter:
         self.transport = transport or self._http_transport
 
     @staticmethod
+    def _prompt(payload):
+        try:
+            value = json.loads(payload)
+        except (UnicodeError, ValueError):
+            return payload.decode('utf-8')
+        conversation = value.get('conversation') if isinstance(value, dict) else None
+        if conversation is None:
+            return payload.decode('utf-8')
+        inputs = value.get('inputs')
+        require(isinstance(inputs, list) and isinstance(conversation, list)
+                and len(inputs) == len(conversation) and bool(inputs),
+                'Invalid conversation payload for Ollama')
+        transcript = []
+        for source, message in zip(inputs, conversation):
+            require(isinstance(source, dict) and isinstance(message, dict)
+                    and set(source) == {'input_id', 'content_b64'}
+                    and set(message) == {'message_id', 'role'}
+                    and source['input_id'] == message['message_id']
+                    and message['role'] in {'user', 'assistant'},
+                    'Invalid conversation payload for Ollama')
+            try:
+                content = base64.b64decode(source['content_b64'], validate=True).decode('utf-8')
+            except (TypeError, ValueError, UnicodeError) as exc:
+                raise ValueError('Ollama conversation message is not valid UTF-8') from exc
+            transcript.append(('User' if message['role'] == 'user' else 'Assistant')
+                              + ':\n' + content)
+        transcript.append('Assistant:\n')
+        return '\n\n'.join(transcript)
+
+    @staticmethod
     def _request(handoff, binding):
         from spikes.context_builder import DispatchHandoff
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
         require(handoff.target == binding.target(), 'Ollama binding differs from authorized target')
-        request = json.dumps(dict(model=binding.model, prompt=handoff.payload.decode('utf-8'),
+        request = json.dumps(dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                                   stream=False), sort_keys=True,
                              separators=(',', ':')).encode()
         digest = hashlib.sha256(handoff.manifest_sha256.encode() + b'\0' + request).hexdigest()

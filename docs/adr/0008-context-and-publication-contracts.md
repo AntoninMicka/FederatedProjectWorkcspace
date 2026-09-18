@@ -141,6 +141,10 @@ message ID, následně se revize před autorizací znovu ověří. Desktop uklá
 node-local Ollama binding a zobrazuje lokálně trvalé vlákno. UI nepřidává
 projektové artefakty, neprovádí automatický retry neurčitého běhu a nepoužívá
 náhradní cíl.
+Ollama adapter z konverzačního payloadu deterministicky dekóduje přesné UTF-8
+bajty a sestaví čitelný transcript `User`/`Assistant`; interní JSON a Base64
+nepředává modelu jako uživatelský text. Odvozený request zůstává spolu s hashem
+manifestu součástí durable request digestu.
 
 ## Větve a publikace při změně HEAD
 
