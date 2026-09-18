@@ -5,6 +5,24 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy — 2026-09-18
+
+Dávka uzavřena po začlenění PR #30 jako commit `db4917e` v `develop`; feature
+větev `feature/f-m2-chat-02-project-records` dodala explicitní projektové
+přiřazení živého vlákna, neměnné full/delta otisky a editovatelné odvozené
+Markdown výstupy. Dosažená úroveň je lokální PoC validated; Gate M2 pokračuje
+summarizerem a dalšími lokálními AI schopnostmi.
+
+- [x] [completed] **F-M2-CHAT-02-A — Kontrakt přiřazení, full/delta otisku a odvozeného výstupu (designed).** ADR 0008 vymezuje node-local projektovou vazbu, kanonické `fpw-chat-snapshot-v1`/`fpw-chat-output-v1`, nejpřísnější privacy a standardní expected-HEAD/Journal/CAS/index recovery.
+- [x] [completed] **F-M2-CHAT-02-B — Projektové záznamy a recovery (implemented).** SQLite v1→v2 migrace váže projekt a Context Manifest; full/delta publikace validuje základ, thread revizi a souvislou sequence a používá jediný Workspace commit/receipt.
+- [x] [completed] **F-M2-CHAT-02-C — Markdown výstup, desktop UI a akceptace (PoC validated).** Autentizované UI ukládá otisk nebo poslední odpověď s thread/message/turn/run/manifest provenance; průběžný stav LLM je trvale viditelný u promptu a editace výstupu zachovává provenance obálku.
+
+Ověření finálního obsahu: celá sada 253 testů OK a 22 podmíněných skipů;
+`py_compile` a `git diff --check` prošly. Ověřeny byly stale HEAD, pád po journal
+prepare, idempotentní retry, restart/rebuild indexu a autentizované API/UI
+kontrakty. Reálný Qt/WebEngine smoke této poslední změny zůstal podle opt-in
+podmínky přeskočen. Gate M1 nadále čeká na odložený `M1-07-C`.
+
 ## F-M2-CHAT-01 — Lokálně perzistentní živé konverzace — 2026-09-18
 
 Dávka uzavřena po začlenění PR #29 jako commit `5dec3a8` v `develop`; feature
