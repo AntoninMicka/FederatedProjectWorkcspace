@@ -280,16 +280,17 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
 
     for id_, before in base.items():
         after = candidate.get(id_)
-        if before['kind'] != 'source':
+        if before['kind'] not in {'source', 'snapshot'}:
             continue
-        require(after is not None, 'Source removal is unsupported')
+        label = before['kind'].capitalize()
+        require(after is not None, f'{label} removal is unsupported')
         require(all(before.get(key) == after.get(key) for key in immutable),
-                'Immutable source metadata changed')
+                f'Immutable {before["kind"]} metadata changed')
         require(content(base_files, before) == content(candidate_files, after),
-                'Immutable source content changed')
-        if before['schema_version'] == 2:
+                f'Immutable {before["kind"]} content changed')
+        if before['kind'] == 'source' and before['schema_version'] == 2:
             require(after['schema_version'] == 2 and before['import'] == after.get('import'),
                     'Immutable source import provenance changed')
         require(allow_privacy_relaxation or privacy[after['privacy']] >= privacy[before['privacy']],
-                'Source privacy relaxation requires explicit authorization')
+                f'{label} privacy relaxation requires explicit authorization')
     return candidate

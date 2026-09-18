@@ -208,6 +208,17 @@ Reuse rozhodnutí: adaptovat `ChatThreads`, `Artifacts`, striktní metadata a
 parser nebo externí komponenta nejsou potřeba; posouzené obecné Git utility
 nenahrazují koordinovaný Workspace lifecycle této publikační cesty.
 
+Implementace F-M2-CHAT-02-B v `spikes/chat_records.py` tento kontrakt realizuje
+pro přiřazení a full/delta snapshoty. `ChatThreads` migruje přesné schéma v1 na
+v2 v jedné SQLite transakci, ukládá `project_id`, revizi přiřazení a manifest ID
+turnu; samotná DB se do projektu nekopíruje. `ChatRecords` před založením
+journalu ověří registrovaný projekt, expected HEAD, vlastníka, přiřazení a
+thread revizi. Delta navíc čte a validuje kanonický záznam základu z aktuálního
+HEAD. Snapshot a jeho privacy jsou po publikaci neměnné přechodovým validátorem;
+opakování stejného operation ID používá běžný Workspace receipt/recovery.
+Editovatelný `fpw-chat-output-v1` a jeho desktopové ovládání zůstávají úkolem
+F-M2-CHAT-02-C.
+
 ## Větve a publikace při změně HEAD
 
 Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.
