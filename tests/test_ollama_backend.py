@@ -1,10 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
+import hashlib
+from pathlib import Path
+import tempfile
 import unittest
 from uuid import uuid4
 
+from spikes.context_builder import DispatchHandoff
 from spikes.metadata import ValidationError
-from spikes.ollama_backend import OllamaBinding
+from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseError,
+                                   OllamaRuns, UnknownRun)
 
 
 class OllamaBindingTests(unittest.TestCase):
@@ -42,3 +47,64 @@ class OllamaBindingTests(unittest.TestCase):
                          'target_id': str(uuid4())}):
             with self.subTest(changes=changes), self.assertRaises((ValidationError, ValueError)):
                 OllamaBinding.parse(self.binding(**changes))
+
+
+class OllamaAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        self.state = Path(self.temp.name) / 'state'; self.state.mkdir(mode=0o700)
+        self.binding = OllamaBinding.parse(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='revision-1', adapter='ollama', boundary='same-node',
+            endpoint='http://127.0.0.1:11434', model='gemma3', target_id='local-process'))
+        self.handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'b' * 64,
+                                       self.binding.target(), b'{"context":"exact"}')
+
+    def test_success_is_durable_and_retry_does_not_send_again(self):
+        calls = []
+        def transport(binding, request):
+            calls.append((binding, request))
+            return {'model': 'gemma3', 'response': 'answer', 'done': True}
+        adapter = OllamaAdapter(OllamaRuns(self.state), transport)
+        first = adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(adapter.dispatch(self.handoff, self.binding), first)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'succeeded')
+        self.assertEqual(hashlib.sha256(self.handoff.payload).hexdigest(),
+                         hashlib.sha256(b'{"context":"exact"}').hexdigest())
+
+    def test_lost_response_becomes_unknown_without_automatic_retry(self):
+        calls = []
+        def transport(binding, request):
+            calls.append(request)
+            raise TimeoutError('lost response')
+        adapter = OllamaAdapter(OllamaRuns(self.state), transport)
+        with self.assertRaisesRegex(UnknownRun, 'outcome is unknown'):
+            adapter.dispatch(self.handoff, self.binding)
+        with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+            adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'unknown')
+
+    def test_known_failure_and_binding_change_fail_closed(self):
+        def rejected(binding, request):
+            raise OllamaResponseError('redirect forbidden')
+        adapter = OllamaAdapter(OllamaRuns(self.state), rejected)
+        with self.assertRaises(OllamaResponseError):
+            adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'failed')
+        with self.assertRaises(OllamaResponseError):
+            adapter.dispatch(self.handoff, self.binding)
+        changed = OllamaBinding.parse(dict(schema_version=1, binding_id=self.binding.binding_id,
+            revision='revision-2', adapter='ollama', boundary='same-node',
+            endpoint='http://127.0.0.1:11434', model='gemma3', target_id='local-process'))
+        other = DispatchHandoff(str(uuid4()), str(uuid4()), 'c' * 64,
+                                self.binding.target(), b'{}')
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            OllamaAdapter(OllamaRuns(self.state), rejected).dispatch(other, changed)
+
+    def test_invalid_response_is_a_durable_known_failure(self):
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+                                lambda binding, request: {'model': 'other', 'response': 7})
+        with self.assertRaisesRegex(OllamaResponseError, 'Invalid Ollama response'):
+            adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'failed')

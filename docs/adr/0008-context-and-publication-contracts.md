@@ -32,6 +32,13 @@ boundary nepoužívá. Redirect je zakázán a změna adresy, pinu, modelu či i
 je změnou bindingu vyžadující nový Context Manifest. `local-only` smí pouze na
 `same-node`; důvěryhodná LAN není výjimka. Binding je node-local mimo projektový
 Git a nesmí obsahovat credentials. Adapter nemá implicitní LAN/cloud fallback.
+Ollama dispatch přijímá pouze autorizovaný Context Builder handoff nesoucí run ID
+a přesný Target. Node-local SQLite journal potvrdí stav `dispatching` před prvním
+síťovým bajtem; timeout či ztracená odpověď přejdou do `unknown` a stejný run se
+automaticky neopakuje. Známé HTTP/redirect/response odmítnutí je `failed` a také
+vyžaduje nový explicitní run. U `private-network` se TLS spojení naváže a pin
+certifikátu ověří ještě před odesláním requestu. Úspěšná odpověď je durable a
+opakované načtení stejného run ID ji vrátí bez dalšího volání.
 
 Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Obnovování/cache a provider API zůstávají M3-UB-01.
 

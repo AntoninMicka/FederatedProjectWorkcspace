@@ -89,8 +89,10 @@ class PreparedContext:
 
 @dataclass(frozen=True)
 class DispatchHandoff:
+    run_id: str
     manifest_id: str
     manifest_sha256: str
+    target: Target
     payload: bytes
 
 
@@ -213,5 +215,6 @@ class ContextBuilder:
                         'local-only requires same-node execution')
             require(self.workspace.git.head() == manifest['project_commit'],
                     'Project changed during dispatch authorization')
-            return DispatchHandoff(manifest['manifest_id'], _digest(prepared.manifest_bytes),
+            return DispatchHandoff(manifest['run_id'], manifest['manifest_id'],
+                                   _digest(prepared.manifest_bytes), target,
                                    prepared.payload)

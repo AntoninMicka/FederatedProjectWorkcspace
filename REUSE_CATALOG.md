@@ -68,8 +68,9 @@ F-M2-OLLAMA-01 **adaptuje** Context Builder `Target` a validační primitiva;
 endpoint parsing používá pouze Python stdlib `urllib.parse` a `ipaddress`.
 PoC nezavádí discovery knihovnu ani obecný HTTP framework: číselné adresy a
 explicitní TLS pin jsou záměrná ochrana před DNS rebindingem. Transport musí
-zakázat redirect a ověřit skutečný socketový cíl; tato část následuje v aktivní
-dávce.
+zakázat redirect a ověřit skutečný socketový cíl. Adapter používá stdlib
+`http.client`, `ssl` a autoritativní lokální SQLite run journal; nevytváří další
+projektové úložiště ani implicitní retry/fallback vrstvu.
 
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 

@@ -18,8 +18,8 @@ Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové
 - Akceptace: `same-node` a LAN nelze zaměnit konfigurací, DNS rebindingem ani HTTP redirectem; LAN má vlastní explicitní boundary, identitu cíle a transportní policy; `local-only` se na LAN neposílá; neexistuje implicitní LAN/cloud fallback; testy pokrývají nedostupnost, změnu cíle a restart.
 
 - [x] [completed] **F-M2-OLLAMA-01-A — Execution boundary a binding kontrakt (implemented, 2026-09-17).** ADR 0008 a striktní node-local kontrakt rozlišují `same-node` číselný loopback od `private-network` číselné privátní HTTPS adresy s připnutým certifikátem a stabilní identitou; DNS, credentials v bindingu a neznámá pole se odmítají.
-- [ ] [in progress] **F-M2-OLLAMA-01-B — Ollama adapter a bezpečný dispatch (cílová úroveň: implemented).** Přijmout pouze autorizovaný Context Builder handoff, zakázat redirect/fallback a před odesláním ověřit skutečný socketový cíl a binding.
-- [ ] [planned] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření (cílová úroveň: PoC validated).** Pokrýt same-node/LAN, DNS změnu, redirect, nedostupnost, změnu modelu/cíle, local-only a restart konfigurace; aktualizovat dokumentaci/reuse a spustit cílenou i celou sadu.
+- [x] [completed] **F-M2-OLLAMA-01-B — Ollama adapter a bezpečný dispatch (implemented, 2026-09-18).** Adapter přijímá pouze autorizovaný handoff s přesným run ID/Target, znovu váže binding a request digest, před privátním HTTPS požadavkem ověří cert pin, nepovoluje redirect ani fallback a vede node-local SQLite run journal. `dispatching` se potvrdí před sítí; ztracená odpověď je `unknown` bez automatického retry, známé HTTP/response odmítnutí je durable `failed`.
+- [ ] [in progress] **F-M2-OLLAMA-01-C — Restart, chybové scénáře a ověření (cílová úroveň: PoC validated).** Pokrýt same-node/LAN, DNS změnu, redirect, nedostupnost, změnu modelu/cíle, local-only a restart konfigurace; aktualizovat dokumentaci/reuse a spustit cílenou i celou sadu.
 
 ### Recovery hranice
 
