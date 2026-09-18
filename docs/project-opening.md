@@ -146,7 +146,22 @@ Po spuštění ověřte otevření, název, commit a „První poznámka“. Zav
 
 V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Podrobnosti**. U zdroje schema v2 jsou zde samostatně „Importováno do projektu“ a případný „Doložený čas vzniku zdroje“, který může být starší; dále aktér importu, SHA-256 původních bajtů, importér a všechny doložené volitelné údaje. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
 
-Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní zachová právě otevřený náhled nebo záložku; teprve Enter nebo **Přidat zadání** přepne na **Chat** a vloží text do lokálního přehledu zadání. Shift+Enter vytvoří nový řádek. Nic se neodesílá, protože LLM backend zatím není zapojený. Přepnutí záložek zachová rozepsaný text i náhled; změna nebo opětovné otevření projektu je vymaže. Tlačítko **Zpět na seznam projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo. Úvodní obrazovka se v otevřeném projektu nezobrazuje. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní zachová právě
+otevřený náhled nebo záložku; teprve Enter nebo **Odeslat** přepne na **Chat**.
+Shift+Enter vytvoří nový řádek. V chatu nejprve rozbalte **Nastavení Ollama
+backendu**. Pro Ollamu na stejném počítači ponechte hranici „Stejný počítač“ a
+endpoint `http://127.0.0.1:11434`, zadejte přesný název modelu a nastavení
+uložte. Privátní síť vyžaduje číselnou privátní HTTPS adresu, UUID cíle a
+SHA-256 certifikátu; `local-only` obsah do ní odeslat nelze.
+
+Potvrzené zprávy a stavy běhů zůstávají v chráněném lokálním stavu uzlu mimo
+projektový Git a po restartu se znovu načtou. Každý běh explicitně manifestuje
+dosavadní zprávy vlákna a aktuální projektový commit. Změna projektu před
+odesláním, změna cíle nebo neznámý výsledek se odmítne bez tichého fallbacku či
+automatického opakování. Rozepsaný draft trvalý není. Tlačítko **Zpět na seznam
+projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo.
+Samotné vlákno zatím není projektový artefakt ani není trvale přiřazené projektu.
+Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
 
 Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.
 

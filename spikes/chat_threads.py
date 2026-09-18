@@ -318,6 +318,34 @@ class ChatThreads:
                                           'created_at', 'supersedes_id'),
                                          item[:3] + (text,) + item[4:])))
             require(row[6] == len(messages), 'Invalid stored chat sequence counter')
+            turns = []
+            for item in db.execute('SELECT turn_id,user_message_id,run_id,assistant_message_id,'
+                                   'state,error FROM turns WHERE thread_id=? ORDER BY rowid',
+                                   (thread_id,)):
+                for value in item[:2]:
+                    uuid(value)
+                if item[2] is not None:
+                    uuid(item[2])
+                if item[3] is not None:
+                    uuid(item[3])
+                require(item[4] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
+                        'Invalid stored chat turn')
+                turns.append(dict(zip(('turn_id', 'user_message_id', 'run_id',
+                                       'assistant_message_id', 'state', 'error'), item)))
             return dict(thread_id=thread_id, node_id=row[0], user_id=row[1], status=row[2],
                         classification=row[3], created_at=row[4], revision=row[5],
-                        messages=messages)
+                        messages=messages, turns=turns)
+
+    def list(self, node_id, user_id):
+        uuid(node_id); uuid(user_id)
+        with self.connect() as db:
+            rows = db.execute('SELECT thread_id,created_at,revision,status FROM threads '
+                              'WHERE node_id=? AND user_id=? ORDER BY created_at,thread_id',
+                              (node_id, user_id)).fetchall()
+        result = []
+        for thread_id, created_at, revision, status in rows:
+            thread = self.get(thread_id, node_id, user_id)
+            require(thread['created_at'] == created_at and thread['revision'] == revision
+                    and thread['status'] == status, 'Chat thread changed during listing')
+            result.append(thread)
+        return result

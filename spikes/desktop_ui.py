@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 
 from spikes.local_api import Handler
+from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -53,12 +54,20 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
-<p>Asistent zatím není připojený a neodpovídá. Zadání zůstávají jen v tomto okně a po jeho zavření se ztratí.</p>
+<p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
+<details id="chat-backend-settings"><summary>Nastavení Ollama backendu</summary>
+<form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
+<label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
+<label>Model <input name="model" placeholder="gemma3" required></label>
+<label>ID cíle <input name="target_id" value="local-process" required></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
+<button type="submit">Uložit backend</button></form></details>
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
+<label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
-<button id="chat-submit" type="submit" disabled>Přidat zadání</button></div>
-<small>Jen v tomto okně · Enter přidá zadání, Shift+Enter nový řádek · Asistent zatím neodpovídá</small></form>
+<button id="chat-submit" type="submit" disabled>Odeslat</button></div>
+<small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
 </div></main><script src="/app.js"></script></body></html>'''
@@ -103,6 +112,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -194,7 +204,9 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
+ activeThread=null;pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
+ document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#project-home').hidden=false;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
@@ -226,6 +238,7 @@ async function openRegisteredProject(projectId){
   document.querySelector('#project-commit').textContent=result.commit_id;
   projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+  await loadChat();
   selectSidebarTab(sidebarTabs[1]);
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Zatím tu nejsou žádné podklady. První dokument vytvoříte tlačítkem Dokumenty v horní liště.';
@@ -354,16 +367,65 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));
 });
 const draft=document.querySelector('#chat-draft');
+const chatStatus=document.querySelector('#chat-backend-status');
+const chatMessages=document.querySelector('#chat-messages');
+const chatForm=document.querySelector('#chat-backend-form');
+let activeThread=null,chatBinding=null,pendingChatRequest=null;
+function renderChat(thread){
+ activeThread=thread || null;chatMessages.replaceChildren();
+ for(const item of thread?.messages || []){
+  const message=document.createElement('div');message.className='chat-message '+item.role;
+  message.textContent=item.content;
+  const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
+  message.append(detail);chatMessages.append(message);
+ }
+}
+function fillBinding(binding){
+ chatBinding=binding;const fields=chatForm.elements;
+ if(binding){fields.boundary.value=binding.boundary;fields.endpoint.value=binding.endpoint;
+  fields.model.value=binding.model;fields.target_id.value=binding.target_id;
+  fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
+  chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
+ }else chatStatus.textContent='Backend zatím není nastaven. Otevřete nastavení níže.';
+}
+async function loadChat(){
+ try{
+  const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+  renderChat([...result.threads].reverse().find(item=>item.status==='active') || null);
+ }catch(error){chatStatus.textContent=error.message;renderChat(null);}
+}
+chatForm.addEventListener('submit',async event=>{
+ event.preventDefault();const fields=chatForm.elements;
+ const boundary=fields.boundary.value;
+ const binding={schema_version:1,binding_id:chatBinding?.binding_id || crypto.randomUUID(),
+  revision:crypto.randomUUID(),adapter:'ollama',boundary,endpoint:fields.endpoint.value.trim(),
+  model:fields.model.value.trim(),target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim()};
+ if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
+ chatStatus.textContent='Ukládám backend…';
+ try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);}
+ catch(error){chatStatus.textContent=error.message;}
+});
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
 });
-document.querySelector('#chat-composer').addEventListener('submit',event=>{
+document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
  selectMainTab(mainTabs[1]);
- const message=document.createElement('div');message.className='chat-message';message.textContent=draft.value.trim();
- document.querySelector('#chat-messages').append(message);
- draft.value='';document.querySelector('#chat-submit').disabled=true;draft.focus();
- document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;
+ if(!chatBinding){chatStatus.textContent='Nejprve uložte nastavení backendu.';return;}
+ if(!pendingChatRequest){pendingChatRequest={project_id:activeProject.id,expected_head:activeProject.head,
+  thread_id:activeThread?.thread_id || crypto.randomUUID(),turn_id:crypto.randomUUID(),
+  message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+  assistant_message_id:crypto.randomUUID(),
+  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
+  created_at:new Date().toISOString()};}
+ const submit=document.querySelector('#chat-submit');submit.disabled=true;chatStatus.textContent='Odesílám…';
+ try{
+  const result=await projectRequest('/v1/chat/send',pendingChatRequest);
+  renderChat(result.thread);fillBinding(result.target);pendingChatRequest=null;draft.value='';draft.focus();
+ }catch(error){await loadChat();chatStatus.textContent=error.message;}
+ finally{submit.disabled=!activeProject || !draft.value.trim();
+  document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
 });
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
@@ -376,13 +438,24 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
-    post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open', '/v1/artifacts/preview'}
+    max_body = 64 * 1024
+    post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
+        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path == '/v1/chat/status' and request == {}:
+                return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/chat/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure(request))
+            if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
+                    'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
+                    'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
+                    'content', 'privacy', 'created_at'}:
+                return self.reply(200, self.server.chat_service.send(**request))
             if self.path == '/v1/projects' and request == {}:
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
@@ -394,11 +467,19 @@ class DesktopHandler(Handler):
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))
             return self.send_error(400)
+        except UnknownRun:
+            return self.reply(409, {'error': 'Výsledek běhu není známý. Vlákno bylo zachováno; '
+                                   'zkontrolujte stav před novým odesláním.'})
+        except OllamaResponseError:
+            return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            if self.path.startswith('/v1/chat/'):
+                return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
+                                       'projekt, výběr kontextu a lokální stav.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

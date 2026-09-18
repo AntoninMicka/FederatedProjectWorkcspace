@@ -24,6 +24,7 @@ MAX_BODY = 4096
 class Handler(BaseHTTPRequestHandler):
     # One request per connection; never accept pipelined mutations.
     protocol_version = 'HTTP/1.0'
+    max_body = MAX_BODY
 
     def setup(self):
         self.request.settimeout(1)
@@ -86,7 +87,7 @@ class Handler(BaseHTTPRequestHandler):
         length = self.single('Content-Length')
         if length is None or not length.isascii() or not length.isdecimal():
             return self.send_error(400)
-        if len(length) > 4 or not 0 < int(length) <= MAX_BODY:
+        if len(length) > len(str(self.max_body)) or not 0 < int(length) <= self.max_body:
             return self.send_error(413)
         try:
             body = self.rfile.read(int(length))

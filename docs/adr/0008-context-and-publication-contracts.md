@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01-B implementuje node-local thread store a recovery. Nejde o úplné RBAC, obecnou backendovou integraci, hotové chat UI ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01 propojuje node-local thread store, Context Manifest, Ollama adapter a desktopové UI. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -130,13 +130,17 @@ Provozní limit nebo nedostatek místa musí odmítnout nový zápis, nikoli ti�
 odstraňovat starší kontext. Projektový snapshot či odvozený artefakt a jeho
 retence patří do F-M2-CHAT-02 a běžného Workspace lifecycle.
 
-Implementace F-M2-CHAT-01-B v `spikes/chat_threads.py` používá samostatný SQLite
+Implementace F-M2-CHAT-01 v `spikes/chat_threads.py` používá samostatný SQLite
 soubor s vlastněným režimem 0600 ve vlastněném stavovém adresáři 0700,
 `foreign_keys=ON`, `synchronous=FULL` a `BEGIN IMMEDIATE` pro serializované
 přechody. Při otevření kontroluje přesnou sadu tabulek/sloupců a verzi schématu;
 neznámý, neúplný, symlinkovaný nebo příliš otevřený stav odmítne. Jde o
-backendově neutrální storage/recovery vrstvu; Context Manifest, dispatch a UI
-napojení zůstávají F-M2-CHAT-01-C.
+backendově neutrální storage/recovery vrstvu. `spikes/chat_service.py` váže nový
+turn na explicitně seřazený výběr zpráv; manifest nese thread ID, revizi a
+message ID, následně se revize před autorizací znovu ověří. Desktop ukládá
+node-local Ollama binding a zobrazuje lokálně trvalé vlákno. UI nepřidává
+projektové artefakty, neprovádí automatický retry neurčitého běhu a nepoužívá
+náhradní cíl.
 
 ## Větve a publikace při změně HEAD
 

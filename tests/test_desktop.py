@@ -18,9 +18,16 @@ from tests import test_local_api
 class DesktopTests(unittest.TestCase):
     def test_prompt_switches_to_chat_only_when_submitted(self):
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
-        submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',event=>{", 1)[1].split('});', 1)[0]
+        submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
         self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
+
+    def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
+        self.assertIn("projectRequest('/v1/chat/status',{})", JS)
+        self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+        self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest)", JS)
+        self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
+        self.assertIn("activeThread=null;pendingChatRequest=null", JS)
 
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'
