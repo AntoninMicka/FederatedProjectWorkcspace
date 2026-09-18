@@ -3,24 +3,27 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M1-UI-01: Přepnutí do chatu až při odeslání
+# TODO — F-M2-CHAT-01: Lokálně perzistentní živé konverzace
 
-Milník M1; malá samostatná UI feature po začlenění F-M2-OLLAMA-01. Jedna dávka, jedna feature větev, jeden PR do `develop`.
+Milník M2; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci M1-07. Jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M1-UI-01 — Přepnutí do chatu až při odeslání
+## F-M2-CHAT-01 — Lokálně perzistentní živé konverzace
 
-- Stav: [ ] [in progress]; implementace a lokální PoC ověření dokončeny 2026-09-18, dávka čeká na commit a PR.
-- Původ: uživatelský požadavek 2026-09-18 změnit automatické přepnutí při psaní.
-- Skutečná větev: `feature/f-m1-ui-01-prompt-submit-tab`, založená z `develop` (`d1fc6f4`, PR #27 začleněn); jediný budoucí PR do `develop`.
-- Výstup: editace promptu zachová aktivní náhled nebo chat; do chatu přepne až platné odeslání Enterem nebo tlačítkem.
-- Mimo rozsah: perzistentní chat, volání LLM/backendu, změna lifecycle draftu a klávesové konvence Shift+Enter.
-- Akceptace: psaní v náhledu nepřepne záložku, neprázdný prompt povolí odeslání, Enter/tlačítko přepne do chatu a vloží zprávu, Shift+Enter pouze vloží řádek; dokumentace a testy odpovídají chování.
+- Stav: [ ] [in progress]; cílová úroveň PoC validated.
+- Původ: uživatelské doplnění plánu 2026-09-15; volitelný orchestrator chat a LLM run records z ADR 0008.
+- Skutečná větev: `feature/f-m2-chat-01-local-threads`, založená z `develop` (`a6dfbf6`, PR #28 začleněn); jediný budoucí PR do `develop`.
+- Výstup: backendově nezávislé vícekolové vlákno, lokální trvalé uložení a bezpečné navázání po restartu; samostatný chat má výchozí klasifikaci `brainstorming`.
+- Mimo rozsah: projektová publikace, full/delta otisky, federovaná synchronizace vláken a automatické provádění navržených akcí.
+- Závislosti: F-M2-CONTEXT-01 a F-M2-OLLAMA-01 jsou začleněné v `develop`; vlákno, backendové run records a projektový index zůstávají oddělené.
+- Akceptace: po pádu je rozlišen poslední potvrzený obsah od draftu a `unknown` běhu; navázání explicitně manifestuje vybrané zprávy; změna backendu/modelu/boundary je viditelná a nevyvolá tichý fallback. Testy pokrývají restart v každém trvalém přechodu, poškozený stav, souběh a oddělení uživatelů i projektových kontextů.
 
-- [x] [completed] **F-M1-UI-01-A — Oddělit editaci a odeslání promptu (implemented, 2026-09-18).** `input` pouze aktualizuje dostupnost tlačítka; změnu hlavní záložky provede až validní `submit`.
-- [x] [completed] **F-M1-UI-01-B — Regresní ověření a dokumentace (PoC validated, 2026-09-18).** Unit kontrakt a skutečný Qt/WebEngine smoke ověřují zachování náhledu při psaní a přepnutí až po Enteru; cílených 5 testů prošlo. Celá sada prošla 231 testy (22 přeskočeno); uživatelský návod a ADR 0019 odpovídají změněnému chování.
+- [x] [completed] **F-M2-CHAT-01-A — Thread/Message kontrakt, retence a crash boundaries (designed, 2026-09-18).** ADR 0008 odděluje autoritativní node-local vlákno, neměnné zprávy, UI draft, turn a backendový run; určuje pořadí, privacy, manifest výběr, explicitní retenci a obnovu před/po dispatchi bez duplicitního odeslání.
+- [ ] [planned] **F-M2-CHAT-01-B — Lokální thread store a recovery (cílová úroveň: implemented).** Implementovat striktní SQLite schéma, vlastnictví, append-only zprávy, turn/run vazbu, serializaci, restart a recovery včetně poškozeného stavu a souběhu.
+- [ ] [planned] **F-M2-CHAT-01-C — Context/adapter napojení a desktop UI (cílová úroveň: PoC validated).** Napojit explicitní výběr zpráv přes Context Manifest na povolený backend, zobrazit stavy turnu bez fallbacku, ověřit desktop/restart a spustit cílenou i celou sadu.
 
-### Hranice
+### Recovery hranice
 
-- Zpráva i draft zůstávají pouze v paměti stránky; tato dávka nepřidává persistentní operaci ani nové recovery hranice.
-- F-M2-CHAT-01 zůstává následující samostatnou feature dávkou.
+- Uživatelská zpráva a připravený turn se potvrdí v thread store před vytvořením backendového runu; bez run recordu nebyl dispatch zahájen.
+- Run ID se k turnu připne před dispatch; po restartu se jeho durable stav načte z backendového run store. `dispatching`/`unknown` se automaticky neopakuje.
+- Assistant zpráva a dokončení turnu se zapíší jednou transakcí až z durable úspěšného výsledku; opakovaná reconciliation nesmí vytvořit druhou zprávu.

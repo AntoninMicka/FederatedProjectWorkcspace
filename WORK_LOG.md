@@ -5,6 +5,15 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-UI-01 — Přepnutí do chatu až při odeslání — 2026-09-18
+
+Dávka uzavřena po začlenění PR #28 jako commit `a6dfbf6` v `develop`; feature větev `feature/f-m1-ui-01-prompt-submit-tab` oddělila editaci promptu od jeho odeslání.
+
+- [x] [completed] **F-M1-UI-01-A — Oddělit editaci a odeslání promptu.** Psaní pouze mění dostupnost odesílacího tlačítka a zachová aktivní náhled či chat; validní submit Enterem nebo tlačítkem teprve přepne do chatu.
+- [x] [completed] **F-M1-UI-01-B — Regresní ověření a dokumentace.** Unit kontrakt, skutečný Qt/WebEngine smoke, uživatelský návod a ADR 0019 byly aktualizovány.
+
+Ověření: cílených 5 testů OK včetně skutečného Qt/WebEngine; celá sada 231 testů OK a 22 podmíněných skipů. `py_compile` a `git diff --check` prošly. Zprávy i draft nadále zůstávají jen v paměti stránky; perzistence patří do F-M2-CHAT-01.
+
 ## F-M2-OLLAMA-01 — Důvěryhodná lokalita Ollama backendu — 2026-09-18
 
 Dávka uzavřena po začlenění PR #27 jako commit `d1fc6f4` v `develop`; feature větev `feature/f-m2-ollama-01-locality` dodala lokální PoC Ollama adapteru, striktního node-local bindingu a durable run journalu. Gate M2 tím není uzavřen.
