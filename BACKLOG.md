@@ -13,9 +13,11 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01 a F-M2-CHAT-01/02 jsou po PR #26–#30 uzavřeny ve WORK_LOG. Aktivní F-M2-SUMMARY-01 drží [TODO](TODO.md). Uživatel výslovně odložil cílový reboot M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M2-EXTRACT-01 — Lokální strukturovaná extrakce (cílová úroveň: PoC validated).** Po F-M2-SUMMARY-01 použít stejný Context Manifest a backendovou execution boundary pro uživatelem vyžádanou extrakci do předem zvoleného podporovaného schématu. Návrh modelu nesmí obejít striktní validátor; preview nic nezapisuje a potvrzená publikace používá Workspace recovery. Akceptace: přesný výběr vstupů, neplatný/neočekávaný JSON, chybějící povinná pole, source reference, nejpřísnější privacy, stale HEAD, unknown běh, retry a pád před/po publikaci.
+F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02 a
+F-M2-SUMMARY-01 jsou po PR #26–#31 uzavřeny ve WORK_LOG. Aktivní
+F-M2-EXTRACT-01 drží [TODO](TODO.md). Uživatel výslovně odložil cílový reboot
+M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně
+nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 - [ ] [planned] **F-M2-META-AI-01 — Návrhy popisu a štítků (cílová úroveň: PoC validated).** Navázat na summarizer/extractor a nabídnout auto-description a tagging jako oddělené, uživatelem potvrzované návrhy metadat. Model nesmí přímo měnit autoritativní metadata ani snížit privacy. Akceptace: náhled rozdílu, zachování ručních hodnot, opakovaný návrh, prázdný/nevhodný štítek, limity, stale HEAD a jediný obnovitelný metadata commit po potvrzení.
 

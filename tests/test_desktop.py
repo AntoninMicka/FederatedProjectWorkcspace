@@ -52,6 +52,19 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("item.textContent=heading?heading[2]:line", JS)
         self.assertNotIn('summaryPreviewElement.innerHTML', JS)
 
+    def test_extraction_ui_uses_closed_schema_safe_preview_and_confirmation(self):
+        from spikes.desktop_ui import HTML
+        self.assertIn('id="extraction-tab"', HTML)
+        self.assertIn('value="facts|facts-v1"', HTML)
+        self.assertIn('value="action-items|action-items-v1"', HTML)
+        self.assertIn('id="extraction-kind"', HTML)
+        self.assertIn("projectRequest('/v1/extraction/preview',pendingExtractionRequest,210000)", JS)
+        self.assertIn("projectRequest('/v1/extraction/publish',pendingExtractionPublish)", JS)
+        self.assertIn("extractionPreviewElement.textContent=JSON.stringify", JS)
+        self.assertIn("selection={kind:'messages'", JS)
+        self.assertNotIn('extractionPreviewElement.innerHTML', JS)
+        self.assertIn("result.format==='json'", JS)
+
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'
         self.assertEqual(request_policy(origin + '/', '', 'GET', origin), 'allow')

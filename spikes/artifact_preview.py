@@ -32,6 +32,15 @@ def preview(item, page=1):
                 result.update(format='markdown', text=text)
         except UnicodeError:
             result['message'] = 'Markdown není platný UTF-8.'
+    elif suffix == '.json':
+        try:
+            text = raw.decode('utf-8')
+            if text.count('\n') > 2000:
+                result['message'] = 'JSON přesahuje limit náhledu 2000 řádků.'
+            else:
+                result.update(format='json', text=text)
+        except UnicodeError:
+            result['message'] = 'JSON není platný UTF-8.'
     elif (suffix == '.png' and raw.startswith(b'\x89PNG\r\n\x1a\n')) or (suffix in {'.jpg', '.jpeg'} and raw.startswith(b'\xff\xd8\xff')):
         mime = 'image/png' if suffix == '.png' else 'image/jpeg'
         result.update(format='image', image='data:' + mime + ';base64,' + base64.b64encode(raw).decode())
@@ -47,6 +56,6 @@ def preview(item, page=1):
         except (OSError, subprocess.TimeoutExpired, ValueError):
             result['message'] = 'Stránku PDF nelze zobrazit. Ověřte číslo stránky, soubor a instalaci poppler-utils.'
     else:
-        result['message'] = 'Náhled podporuje Markdown, PNG, JPEG a PDF.'
+        result['message'] = 'Náhled podporuje Markdown, JSON, PNG, JPEG a PDF.'
     result.pop('sidecar', None)
     return result
