@@ -19,6 +19,9 @@ from spikes.context_builder import Target
 from spikes.metadata import require, uuid
 
 
+OLLAMA_GENERATE_TIMEOUT = 180
+
+
 class UnknownRun(RuntimeError):
     pass
 
@@ -249,11 +252,13 @@ class OllamaAdapter:
     def _http_transport(binding, request):
         parsed = urlsplit(binding.endpoint)
         if binding.boundary == 'same-node':
-            connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=30)
+            connection = http.client.HTTPConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT)
         else:
             context = ssl._create_unverified_context()
-            connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=30,
-                                                       context=context)
+            connection = http.client.HTTPSConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT,
+                context=context)
         try:
             connection.connect()
             if binding.tls_cert_sha256:

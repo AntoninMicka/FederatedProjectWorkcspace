@@ -25,7 +25,7 @@ class DesktopTests(unittest.TestCase):
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
-        self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest)", JS)
+        self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
         self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
         self.assertIn("activeThread=null;pendingChatRequest=null", JS)
 

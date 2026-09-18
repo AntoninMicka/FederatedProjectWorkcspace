@@ -129,7 +129,7 @@ class OllamaAdapterTests(unittest.TestCase):
         class Response:
             status = 302
         class Connection:
-            def __init__(self, *args, **kwargs): pass
+            def __init__(self, *args, **kwargs): events.append(('timeout', kwargs['timeout']))
             def connect(self): events.append('connect')
             def request(self, *args, **kwargs): events.append('request')
             def getresponse(self): return Response()
@@ -137,7 +137,7 @@ class OllamaAdapterTests(unittest.TestCase):
         with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
             with self.assertRaisesRegex(OllamaResponseError, 'redirect'):
                 OllamaAdapter._http_transport(self.binding, b'{}')
-        self.assertEqual(events, ['connect', 'request', 'close'])
+        self.assertEqual(events, [('timeout', 180), 'connect', 'request', 'close'])
 
     def test_private_tls_pin_is_checked_before_request(self):
         certificate = b'test certificate'; events = []
@@ -153,7 +153,8 @@ class OllamaAdapterTests(unittest.TestCase):
             status = 200
             def read(self, limit): return b'{"model":"gemma3","response":"ok"}'
         class Connection:
-            def __init__(self, *args, **kwargs): self.sock = Socket()
+            def __init__(self, *args, **kwargs):
+                self.sock = Socket(); events.append(('timeout', kwargs['timeout']))
             def connect(self): events.append('connect')
             def request(self, *args, **kwargs): events.append('request')
             def getresponse(self): return Response()
@@ -161,4 +162,4 @@ class OllamaAdapterTests(unittest.TestCase):
         with patch('spikes.ollama_backend.http.client.HTTPSConnection', Connection):
             result = OllamaAdapter._http_transport(binding, b'{}')
         self.assertEqual(result['response'], 'ok')
-        self.assertEqual(events, ['connect', 'pin', 'request', 'close'])
+        self.assertEqual(events, [('timeout', 180), 'connect', 'pin', 'request', 'close'])

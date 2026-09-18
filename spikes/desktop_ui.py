@@ -217,9 +217,9 @@ function clearProject(){
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-commit').textContent='';
 }
-async function projectRequest(path,body){
+async function projectRequest(path,body,timeout=60000){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
-  body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
+  body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
  const result=await response.json();
  if(!response.ok) throw new Error(result.error || 'Požadavek byl odmítnut.');
  return result;
@@ -421,7 +421,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   created_at:new Date().toISOString()};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatStatus.textContent='Odesílám…';
  try{
-  const result=await projectRequest('/v1/chat/send',pendingChatRequest);
+  const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
   renderChat(result.thread);fillBinding(result.target);pendingChatRequest=null;draft.value='';draft.focus();
  }catch(error){await loadChat();chatStatus.textContent=error.message;}
  finally{submit.disabled=!activeProject || !draft.value.trim();
