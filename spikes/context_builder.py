@@ -104,6 +104,25 @@ class ConversationSelection:
 
 
 @dataclass(frozen=True)
+class TaskInstruction:
+    role_id: str
+    role_revision: str
+    instruction: str
+    focus_input_id: str | None = None
+
+    def validate(self):
+        _text(self.role_id, 'task role')
+        _text(self.role_revision, 'task role revision')
+        require(isinstance(self.instruction, str) and bool(self.instruction.strip())
+                and '\0' not in self.instruction
+                and len(self.instruction.encode('utf-8')) <= 16 * 1024,
+                'Invalid or oversized task instruction')
+        if self.focus_input_id is not None:
+            uuid(self.focus_input_id)
+        return self
+
+
+@dataclass(frozen=True)
 class PreparedContext:
     manifest: MappingProxyType
     manifest_bytes: bytes
@@ -126,7 +145,7 @@ class ContextBuilder:
         self.project_id = project_id
 
     def prepare(self, *, manifest_id, run_id, authority, target, project_inputs=(),
-                ad_hoc_inputs=(), omitted=(), conversation=None):
+                ad_hoc_inputs=(), omitted=(), conversation=None, task=None):
         uuid(manifest_id); uuid(run_id)
         authority.validate(); target.validate()
         require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple),
@@ -134,12 +153,15 @@ class ContextBuilder:
         require(isinstance(omitted, tuple), 'Omissions must be an immutable tuple')
         if conversation is not None:
             conversation.validate()
+        if task is not None:
+            require(isinstance(task, TaskInstruction), 'Invalid task instruction')
+            task.validate()
         with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
-                                        project_inputs, ad_hoc_inputs, omitted, conversation)
+                                        project_inputs, ad_hoc_inputs, omitted, conversation, task)
 
     def _prepare_locked(self, db, manifest_id, run_id, authority, target,
-                        project_inputs, ad_hoc_inputs, omitted, conversation):
+                        project_inputs, ad_hoc_inputs, omitted, conversation, task):
         if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
         self.workspace._branch()
@@ -195,11 +217,25 @@ class ContextBuilder:
                 or target.boundary == 'same-node', 'local-only requires same-node execution')
         payload_value = dict(schema_version=1, inputs=parts)
         if conversation is not None:
-            require(conversation.message_ids == tuple(row['input_id'] for row in records),
+            expected_records = (records[:-1] if task is not None
+                                and task.focus_input_id is not None else records)
+            require(conversation.message_ids == tuple(
+                row['input_id'] for row in expected_records),
                     'Conversation selection must match included input order')
             payload_value['conversation'] = [dict(message_id=message_id, role=role)
                 for message_id, role in zip(conversation.message_ids,
                                             conversation.message_roles)]
+        if task is not None:
+            if task.focus_input_id is not None:
+                require(records[-1]['input_id'] == task.focus_input_id
+                        and sum(row['input_id'] == task.focus_input_id for row in records) == 1,
+                        'Task focus must be the final included input')
+                require(len(records) == (len(conversation.message_ids) if conversation else
+                                         len(project_inputs)) + 1,
+                        'Task focus must be the only additional input')
+            payload_value['task'] = dict(role_id=task.role_id,
+                role_revision=task.role_revision, instruction=task.instruction,
+                focus_input_id=task.focus_input_id)
         payload = _canonical(payload_value)
         manifest = dict(schema_version=1, manifest_id=manifest_id, run_id=run_id,
                         project_id=self.project_id, project_commit=head,
@@ -216,6 +252,11 @@ class ContextBuilder:
                 messages=[dict(message_id=message_id, role=role)
                           for message_id, role in zip(conversation.message_ids,
                                                      conversation.message_roles)])
+        if task is not None:
+            manifest['task'] = dict(role_id=task.role_id,
+                role_revision=task.role_revision,
+                instruction_sha256=_digest(task.instruction.encode('utf-8')),
+                focus_input_id=task.focus_input_id)
         manifest_bytes = _canonical(manifest)
         require(self.workspace.git.head() == head, 'Project changed during context preparation')
         return PreparedContext(MappingProxyType(manifest), manifest_bytes, payload)

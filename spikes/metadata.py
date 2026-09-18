@@ -279,13 +279,17 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
         return files[paths[0]]
 
     def output_provenance(data):
-        marker = b'<!-- fpw-chat-output-v1\n'
-        if marker not in data:
+        markers = [marker for marker in
+                   (b'<!-- fpw-chat-output-v1\n', b'<!-- fpw-summary-v1\n')
+                   if marker in data]
+        if not markers:
             return None
-        require(data.count(marker) == 1, 'Duplicate chat output provenance')
+        require(len(markers) == 1, 'Multiple LLM provenance records')
+        marker = markers[0]
+        require(data.count(marker) == 1, 'Duplicate LLM output provenance')
         tail = data.split(marker, 1)[1]
-        require(b'\n-->\n' in tail, 'Unclosed chat output provenance')
-        return tail.split(b'\n-->\n', 1)[0]
+        require(b'\n-->\n' in tail, 'Unclosed LLM output provenance')
+        return marker + tail.split(b'\n-->\n', 1)[0]
 
     for id_, before in base.items():
         after = candidate.get(id_)
@@ -294,9 +298,9 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
             before_record = output_provenance(content(base_files, before))
             if before_record is not None:
                 require(after is not None and after['kind'] == 'document',
-                        'Chat output removal is unsupported')
+                        'LLM output removal is unsupported')
                 require(output_provenance(content(candidate_files, after)) == before_record,
-                        'Chat output provenance changed')
+                        'LLM output provenance changed')
         if before['kind'] not in {'source', 'snapshot'}:
             continue
         label = before['kind'].capitalize()

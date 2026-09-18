@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from spikes.artifacts import Artifacts
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder, ConversationSelection,
-                                    ProjectInput, Target)
+                                    ProjectInput, Target, TaskInstruction)
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
@@ -71,6 +71,24 @@ class ContextBuilderTests(unittest.TestCase):
                 ad_hoc_inputs=(AdHocInput(first, b'one', 'project'),
                                AdHocInput(second, b'two', 'project')),
                 conversation=dataclasses.replace(conversation, message_ids=(second, first)))
+
+    def test_task_instruction_and_focus_are_bound_without_changing_chat_contract(self):
+        focus = str(uuid4())
+        prepared = self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+            authority=self.authority, target=self.target,
+            project_inputs=(ProjectInput(self.artifact_id),),
+            ad_hoc_inputs=(AdHocInput(focus, b'Focus text', 'confidential'),),
+            task=TaskInstruction('summarizer', 'summarizer-v1', 'Summarize exactly.', focus))
+        payload = json.loads(prepared.payload)
+        self.assertEqual(payload['task']['instruction'], 'Summarize exactly.')
+        self.assertEqual(prepared.manifest['task']['focus_input_id'], focus)
+        self.assertNotIn('instruction', prepared.manifest['task'])
+        with self.assertRaisesRegex(ValidationError, 'final included input'):
+            self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+                authority=self.authority, target=self.target,
+                project_inputs=(ProjectInput(self.artifact_id),),
+                ad_hoc_inputs=(AdHocInput(focus, b'Focus text', 'project'),),
+                task=TaskInstruction('summarizer', 'summarizer-v1', 'Summarize.', str(uuid4())))
 
     def test_stale_head_authority_and_target_are_rejected(self):
         prepared = self.prepare()

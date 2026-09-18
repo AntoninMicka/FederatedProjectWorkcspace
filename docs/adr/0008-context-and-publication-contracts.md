@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01 propojuje node-local thread store, Context Manifest, Ollama adapter a desktopové UI. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -223,6 +223,95 @@ za obálkou zůstává editovatelný. Přechodový validátor odmítne odstraně
 změnu původní obálky. Autentizované desktopové API/UI provádí explicitní
 přiřazení, full snapshot a uložení poslední odpovědi, poté načte nový projektový
 HEAD. Průběžný stav LLM požadavku je u promptu, nikoli ve scrollující historii.
+
+## Lokální summarizer, náhled a potvrzená publikace — F-M2-SUMMARY-01
+
+První summarizer je explicitní jednorázový úkol, nikoli background indexace ani
+automatický metadata hook. Kanonický request `fpw-summary-request-v1` nese
+stabilní task/run/manifest ID, project ID a expected HEAD, verzi role
+`summarizer-v1`, přesný same-node cíl a volitelný uživatelský focus. Focus je
+samostatný UTF-8 vstup nejvýše 16 KiB s explicitní privacy a je zahrnutý v
+manifestu; není skrytou instrukcí mimo request. V1 přijímá právě
+jeden ze dvou druhů seřazeného výběru:
+
+- jeden až 64 projektových artifact ID z jediného validovaného HEAD, nebo
+- jedno vlastní živé vlákno s přesnou revizí a jedním až 64 seřazenými message
+  ID.
+
+Smíšený výběr projektových artefaktů a zpráv v jednom běhu v1 nepodporuje;
+nesmí být emulován skrytým přidáním vstupů. Aplikace sestaví čitelnou,
+verzovanou instrukci role a fixuje ji spolu s přesnými vstupními bajty v
+Context Manifestu. První implementace přijímá pouze binding s execution
+boundary `same-node`; nedostupnost lokálního backendu neaktivuje LAN ani cloud
+fallback. Oprávněné entity odvozuje z aktuální aplikační autority,
+nikoli z klientem deklarovaného seznamu. Platí existující limit kontextu 16 MiB;
+výstup musí být neprázdný UTF-8 Markdown nejvýše 1 MiB. Překročení limitu,
+nečitelný vstup nebo změna výběru vyžaduje nový task a manifest, nikoli tiché
+zkrácení. V1 nepoužívá embeddings, RAG ani automatickou volbu zdrojů.
+
+### Node-local task a síťový běh
+
+Backendově neutrální task journal je autorita pracovního requestu, přesného
+manifestu, náhledu a potvrzení publikace. Je node-local mimo projektový Git,
+má striktně verzované SQLite schéma, vlastněný soubor 0600 ve stavovém adresáři
+0700 a serializované přechody. Nejde o obnovitelný projektový index ani o kopii
+projektových dat. Ukládá request digest, přesné manifest a payload bytes/hash,
+privacy, stav, výstup/hash a případný fixovaný publikační request/receipt.
+Credentials, provider session tokeny a transportní hlavičky neukládá.
+
+Stavy jsou `prepared`, `run-bound`, `succeeded`, `failed`, `cancelled`,
+`unknown`, `publishing` a `published`. `cancelled` je bezpečné jen před
+dispatch nebo po doloženém potvrzení backendu, nikoli po pouhém požadavku na
+zrušení. Task vznikne trvale před vazbou na backendový run.
+Context Builder připraví a bezprostředně před odesláním znovu autorizuje přesný
+handoff. Existující `OllamaRuns` zůstává jedinou autoritou síťového účinku:
+`dispatching` či ztracená odpověď znamená `unknown` a žádný automatický retry.
+Pád po úspěchu backendu, ale před uložením preview se obnoví opětovným čtením
+stejného succeeded runu; nevznikne druhé volání. Validní odpověď se jako bounded
+preview uloží do task journalu a zobrazí se jako nedůvěryhodný Markdown bez
+aktivního HTML. Preview samo nemění Git, index ani metadata projektu.
+
+### Potvrzení a projektový artefakt
+
+Uživatel potvrzuje přesný preview SHA-256, cílové artifact UUID, title,
+operation ID a expected HEAD. Tím se task atomicky přepne do `publishing` a
+fixuje se request digest; před voláním Workspace se tasková SQL transakce
+uzavře, aby nevzniklo vzájemné držení zámků. Jiný publish request pro stejný
+task se odmítne. Workspace pod svým writer lockem znovu ověří expected HEAD,
+projekt, oprávnění, původní entity či thread/message revizi, manifest a preview
+hash. Poté publikuje `kind: document`, `provenance: llm-generated` se sidecarem
+a Markdownem obsahujícím omezenou kanonickou obálku `fpw-summary-v1`.
+
+Obálka nese task/run/manifest ID a hash, role ID/revizi, project commit,
+seřazené bezpečné source reference s ID/hash/privacy, binding/model/target,
+preview hash a výslednou privacy. Úplné vstupní bajty, celý soukromý manifest a
+credentials se do artefaktu nekopírují. Projektové vstupy dostanou vztah
+`summarizes`; message ID z node-local chatu zůstávají pouze v obálce. Privacy
+artefaktu je nejpřísnější privacy vstupů a focusu. Shrnutí ji samo nesnižuje.
+Pozdější běžná editace mění čitelnou část dokumentu v nové Git verzi, ale
+přechodový validátor zachová původní `fpw-summary-v1` obálku beze změny.
+
+Crash boundaries záměrně oddělují LLM a Git:
+
+1. před durable `run-bound` nevznikl síťový účinek; po něm se stav rekonciluje
+   podle `OllamaRuns`, nikoli opakováním volání,
+2. před Workspace journalem není projektový zápis připraven a task může zůstat
+   bezpečně `succeeded` nebo `publishing`,
+3. journal před CAS vlastní přesné výsledné bajty; pád před posunem refu nic
+   nepublikuje,
+4. po CAS Workspace recovery dokončí index/receipt bez druhého commitu a stejný
+   receipt následně idempotentně dokončí task jako `published`.
+
+Reuse/adapt rozhodnutí: rozšířit Context Builder o verzovaný task/role vstup,
+reuse jeho manifest a revalidaci, `OllamaBindings`/`OllamaAdapter`/`OllamaRuns`
+pro přesný lokální cíl a síťový lifecycle a Workspace/Artifacts/metadata pro
+jedinou projektovou publikační cestu. Task journal adaptuje striktní SQLite vzor
+`ChatThreads`, ale nesdílí jeho tabulky ani význam. Existující chatový output
+kontrakt lze adaptovat pro kanonickou obálku a její neměnnost. Obecné backendové
+utility ze soukromé inventury nepřinášejí potřebný manifest, autorizaci ani
+recovery a jejich licence nejsou pro přenos doložené; kód se nepřebírá. Nová
+vektorová databáze, message queue, parser, externí framework ani další
+projektové úložiště nejsou potřeba.
 
 ## Větve a publikace při změně HEAD
 

@@ -190,7 +190,49 @@ class OllamaAdapter:
             value = json.loads(payload)
         except (UnicodeError, ValueError):
             return payload.decode('utf-8')
+        task = value.get('task') if isinstance(value, dict) else None
         conversation = value.get('conversation') if isinstance(value, dict) else None
+        if task is not None:
+            inputs = value.get('inputs')
+            require(isinstance(inputs, list) and bool(inputs) and isinstance(task, dict)
+                    and set(task) == {'role_id', 'role_revision', 'instruction',
+                                      'focus_input_id'},
+                    'Invalid task payload for Ollama')
+            require(all(isinstance(task[key], str) and task[key] for key in
+                        ('role_id', 'role_revision', 'instruction')),
+                    'Invalid task payload for Ollama')
+            decoded = []
+            for source in inputs:
+                require(isinstance(source, dict)
+                        and set(source) == {'input_id', 'content_b64'},
+                        'Invalid task input for Ollama')
+                try:
+                    content = base64.b64decode(source['content_b64'], validate=True).decode('utf-8')
+                except (TypeError, ValueError, UnicodeError) as exc:
+                    raise ValueError('Ollama task input is not valid UTF-8') from exc
+                decoded.append((source['input_id'], content))
+            roles = {}
+            if conversation is not None:
+                require(isinstance(conversation, list), 'Invalid task conversation for Ollama')
+                roles = {item['message_id']: item['role'] for item in conversation
+                         if isinstance(item, dict) and set(item) == {'message_id', 'role'}
+                         and item['role'] in {'user', 'assistant'}}
+                require(len(roles) == len(conversation), 'Invalid task conversation for Ollama')
+                selected_ids = [input_id for input_id, _ in decoded
+                                if input_id != task['focus_input_id']]
+                require(selected_ids == [item['message_id'] for item in conversation],
+                        'Task conversation does not match input order')
+            sections = ['Instruction:\n' + task['instruction']]
+            for input_id, content in decoded:
+                if input_id == task['focus_input_id']:
+                    label = 'Focus'
+                elif input_id in roles:
+                    label = 'User message' if roles[input_id] == 'user' else 'Assistant message'
+                else:
+                    label = 'Source ' + input_id
+                sections.append(label + ':\n' + content)
+            sections.append('Summary:\n')
+            return '\n\n'.join(sections)
         if conversation is None:
             return payload.decode('utf-8')
         inputs = value.get('inputs')

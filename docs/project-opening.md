@@ -160,8 +160,19 @@ dosavadní zprávy vlákna a aktuální projektový commit. Změna projektu pře
 odesláním, změna cíle nebo neznámý výsledek se odmítne bez tichého fallbacku či
 automatického opakování. Rozepsaný draft trvalý není. Tlačítko **Zpět na seznam
 projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo.
-Samotné vlákno zatím není projektový artefakt ani není trvale přiřazené projektu.
-Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+Lokální vlákno samo není projektový artefakt; tlačítka pro otisk nebo poslední
+odpověď jej nejprve explicitně přiřadí projektu a uloží oddělený verzovaný
+záznam. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+
+Záložka **Souhrn** umožňuje explicitně vybrat jeden až 64 podkladů, případně
+všechny zprávy právě otevřeného chatu, a volitelně přidat zaměření s vlastní
+privacy. Souhrn používá pouze Ollama backend na stejném počítači. Nejprve vznikne
+node-local náhled, který projekt nemění. Až tlačítko **Uložit do projektu** po
+kontrole náhledu vytvoří Markdown dokument v novém Git commitu. Dokument dědí
+nejpřísnější privacy vstupů, obsahuje neměnnou omezenou provenance obálku a u
+projektových podkladů vztahy `summarizes`. Neurčitý LLM běh se automaticky
+neopakuje; ztracená odpověď během projektové publikace se obnoví přes stejný
+operation ID bez druhého dokumentu nebo commitu.
 
 První odpověď po načtení většího modelu může trvat déle. Adapter čeká na Ollama
 generate až 180 sekund a desktopový požadavek 210 sekund, aby klient neukončil

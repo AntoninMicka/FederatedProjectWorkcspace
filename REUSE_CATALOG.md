@@ -92,6 +92,17 @@ nebo content-addressed storage; editovatelný výstup zůstává běžný Markdo
 document. Obecné Git utility se nepřebírají, protože nenahrazují explicitní
 vlastněné cesty, expected HEAD, kandidátní validaci a recovery ADR 0003.
 
+F-M2-SUMMARY-01 **reuse/adaptuje** Context Builder a jeho dvoufázovou
+revalidaci, `OllamaBindings`/`OllamaAdapter`/`OllamaRuns`, Workspace a běžný
+Markdown document lifecycle. Backendově neutrální task/preview journal adaptuje
+striktní node-local SQLite vzor `ChatThreads`, ale zůstává samostatnou autoritou
+a nesdílí chatové tabulky ani projektový index. Kanonická provenance obálka a
+její transition ochrana adaptují `fpw-chat-output-v1`. Soukromá inventura byla
+zohledněna bez přenosu názvů či cest: obecné backendové utility nemají potřebný
+Context Manifest, aplikační autorizaci ani recovery a jejich licence nejsou pro
+převzetí doložené. Nová vektorová DB, RAG, message queue, externí parser či
+framework nejsou pro explicitní summarizer v1 potřebné.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

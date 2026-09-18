@@ -41,6 +41,17 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 
+    def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):
+        from spikes.desktop_ui import HTML
+        self.assertIn('id="summary-tab"', HTML)
+        self.assertIn('id="summary-artifact-list"', HTML)
+        self.assertIn("projectRequest('/v1/summary/preview',pendingSummaryRequest,210000)", JS)
+        self.assertIn("projectRequest('/v1/summary/publish',pendingSummaryPublish)", JS)
+        self.assertIn("selection={kind:'artifacts',artifact_ids:ids}", JS)
+        self.assertIn("selection={kind:'messages'", JS)
+        self.assertIn("item.textContent=heading?heading[2]:line", JS)
+        self.assertNotIn('summaryPreviewElement.innerHTML', JS)
+
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'
         self.assertEqual(request_policy(origin + '/', '', 'GET', origin), 'allow')
