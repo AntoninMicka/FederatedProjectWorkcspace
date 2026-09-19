@@ -11,6 +11,7 @@ from spikes.context_builder import DispatchHandoff
 from spikes.metadata import ValidationError
 from spikes.openai_backend import (OPENAI_ENDPOINT, OpenAIAdapter, OpenAIBinding,
                                    OpenAIBindings, OpenAICredentials,
+                                   OpenAIModelCatalog,
                                    OpenAIResponseError, OpenAIRuns,
                                    OpenAIUnknownRun)
 
@@ -67,6 +68,32 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertFalse(self.credentials.status(self.binding.credential_ref)['available'])
         with self.assertRaisesRegex(ValidationError, 'unavailable'):
             self.credentials.resolve(self.binding.credential_ref)
+
+    def test_model_catalog_is_filtered_bounded_cached_and_never_exposes_secret(self):
+        calls = []
+        def transport(binding, secret):
+            calls.append((binding.model, secret))
+            return {'object': 'list', 'data': [
+                {'id': 'text-embedding-3-large'}, {'id': 'gpt-5.6-luna'},
+                {'id': 'o3'}, {'id': 'dall-e-3'}, {'id': 'gpt-image-1'},
+                {'id': 'gpt-4o-realtime-preview'}, {'id': 'gpt-5.6-luna'}]}
+        catalog = OpenAIModelCatalog(self.state, self.credentials, transport)
+        value = catalog.refresh(self.binding)
+        self.assertEqual(value['models'], ['gpt-5.6-luna', 'o3'])
+        self.assertEqual(catalog.load(self.binding), value)
+        self.assertEqual(calls[0][0], self.binding.model)
+        self.assertNotIn(calls[0][1], catalog.path.read_text())
+        self.assertEqual(catalog.path.stat().st_mode & 0o777, 0o600)
+
+    def test_failed_model_refresh_preserves_previous_cache(self):
+        catalog = OpenAIModelCatalog(self.state, self.credentials,
+            lambda *_: {'object': 'list', 'data': [{'id': 'gpt-5.6-luna'}]})
+        previous = catalog.refresh(self.binding)
+        failing = OpenAIModelCatalog(self.state, self.credentials,
+            lambda *_: {'object': 'list', 'data': [{'missing': 'id'}]})
+        with self.assertRaisesRegex(ValidationError, 'model entry'):
+            failing.refresh(self.binding)
+        self.assertEqual(catalog.load(self.binding), previous)
 
     def test_success_is_durable_and_request_is_explicit(self):
         calls = []

@@ -16,7 +16,8 @@ from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
 from spikes.metadata import ValidationError, require, timestamp, uuid
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
-from spikes.openai_backend import OpenAIBinding, OpenAIBindings, OpenAICredentials
+from spikes.openai_backend import (OpenAIBinding, OpenAIBindings, OpenAICredentials,
+                                   OpenAIModelCatalog)
 from spikes.project_creation import ProjectCreation
 
 
@@ -77,9 +78,14 @@ class ChatService:
         try:
             binding = OpenAIBindings(root).load()
         except FileNotFoundError:
-            return {'binding': None, 'credential': None}
+            return {'binding': None, 'credential': None, 'model_catalog': None}
+        try:
+            catalog = OpenAIModelCatalog(root, OpenAICredentials(root)).load(binding)
+        except (FileNotFoundError, ValueError):
+            catalog = None
         return {'binding': binding.serialize(),
-                'credential': OpenAICredentials(root).status(binding.credential_ref)}
+                'credential': OpenAICredentials(root).status(binding.credential_ref),
+                'model_catalog': catalog}
 
     def configure_external(self, value):
         require(isinstance(value, dict), 'External backend request must be an object')
@@ -108,6 +114,12 @@ class ChatService:
         if previous is not None and previous.credential_ref != reference:
             credentials.delete(previous.credential_ref)
         return self.external_status()
+
+    def external_models(self, catalog_factory=OpenAIModelCatalog):
+        root = self._root()
+        binding = OpenAIBindings(root).load()
+        credentials = OpenAICredentials(root)
+        return catalog_factory(root, credentials).refresh(binding)
 
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)

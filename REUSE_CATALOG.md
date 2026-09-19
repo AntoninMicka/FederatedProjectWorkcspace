@@ -136,6 +136,10 @@ názvu modelu, převod chyb na prázdný výsledek a stahování libovolné URL 
 odmítají. První textový adapter se napíše nad společným interním kontraktem a
 aktuálním oficiálním [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create);
 obrazová capability zůstává oddělená podle [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate).
+Ze soukromého adapteru se později adaptoval pouze koncept explicitního načtení
+seznamu přes oficiální [Models API](https://developers.openai.com/api/reference/resources/models/methods/list):
+nová implementace je bounded, fail-closed, cachovaná mimo Git a neodvozuje
+capability pouze z názvu. Seznam je pomůcka UI a nemění binding bez potvrzení.
 Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
 

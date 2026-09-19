@@ -97,6 +97,17 @@ lokální cesta. Deployment může hodnotu dodat z prostředí nebo write-only U
 ale veřejný stav vrací pouze ID reference, existenci a čas poslední změny.
 Změna reference nebo hodnoty vytvoří novou revizi bindingu a zneplatní souhlas.
 
+UI může na explicitní požadavek uživatele načíst přes uloženou credential
+reference `GET https://api.openai.com/v1/models`. Provider vrací jen dostupnost
+a základní metadata, nikoli spolehlivé capability, proto se výsledek pouze
+konzervativně zužuje na kandidáty textového Responses adapteru a ruční modelové
+ID zůstává možné. Seznam je omezený, validovaný a atomicky cachovaný mimo Git se
+svou revizí credential a časem načtení; není součástí bindingu ani autorizace.
+Neúspěšné nebo přerušené načtení zachová poslední cache i potvrzený binding a
+nikdy automaticky nepřepne model. Cache je obnovitelná projekce vzdáleného
+seznamu: pád před atomickým přejmenováním ponechá starou verzi, po něm je nová
+verze úplná a nepotřebuje journal.
+
 Adapter sestaví kanonický UTF-8 JSON request pouze z autorizovaného handoffu.
 Povinně nastaví přesný `model`, `store: false`, `stream: false`,
 `truncation: "disabled"` a omezené `max_output_tokens`; `instructions`, `input`

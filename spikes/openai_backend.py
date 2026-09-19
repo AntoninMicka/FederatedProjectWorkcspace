@@ -3,6 +3,7 @@
 """Fail-closed OpenAI Responses adapter with node-local credentials and runs."""
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
@@ -23,8 +24,12 @@ from spikes.ollama_backend import BACKENDS, BackendRuns, OllamaAdapter
 OPENAI_ENDPOINT = 'https://api.openai.com/v1/responses'
 OPENAI_TIMEOUT = 180
 MAX_RESPONSE = 16 * 1024 * 1024
+MAX_MODEL_RESPONSE = 1024 * 1024
 _REFERENCE = re.compile(r'credential:[A-Za-z0-9][A-Za-z0-9._-]{0,127}')
 _MODEL_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}')
+_RESPONSES_MODEL = re.compile(r'(?:gpt-[A-Za-z0-9._-]+|o[134](?:-[A-Za-z0-9._-]+)?)')
+_NON_TEXT_MODEL_MARKERS = ('audio', 'image', 'realtime', 'search', 'transcribe',
+                           'tts', 'embedding', 'moderation')
 
 
 class OpenAIUnknownRun(BackendUnknown):
@@ -186,6 +191,94 @@ class OpenAICredentials:
                                  (reference,)).rowcount
             db.commit()
         return {'reference': reference, 'available': False, 'deleted': bool(changed)}
+
+
+class OpenAIModelCatalog:
+    """Bounded node-local projection of model IDs visible to one credential."""
+    def __init__(self, state_dir, credentials, transport=None):
+        require(isinstance(credentials, OpenAICredentials),
+                'OpenAI credential store is required')
+        self.root = _safe_root(state_dir)
+        self.path = self.root / 'openai-models.json'
+        self.credentials = credentials
+        self.transport = transport or self._http_transport
+
+    def refresh(self, binding):
+        require(isinstance(binding, OpenAIBinding), 'OpenAI binding is required')
+        secret, revision = self.credentials.resolve(binding.credential_ref)
+        require(revision == binding.credential_revision,
+                'OpenAI credential revision differs from binding')
+        models = self._parse(self.transport(binding, secret))
+        value = {'schema_version': 1, 'binding_id': binding.binding_id,
+                 'credential_revision': revision,
+                 'fetched_at': datetime.now(timezone.utc).isoformat(),
+                 'models': models}
+        raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
+        _atomic_replace(self.root, self.path, raw, '.openai-models-')
+        return value
+
+    def load(self, binding):
+        require(isinstance(binding, OpenAIBinding), 'OpenAI binding is required')
+        value = _read_json(self.path, 'OpenAI model catalog')
+        required = {'schema_version', 'binding_id', 'credential_revision',
+                    'fetched_at', 'models'}
+        require(isinstance(value, dict) and set(value) == required
+                and value['schema_version'] == 1
+                and value['binding_id'] == binding.binding_id
+                and value['credential_revision'] == binding.credential_revision,
+                'OpenAI model catalog does not match the current binding')
+        value['models'] = self._validate_models(value['models'])
+        require(isinstance(value['fetched_at'], str) and value['fetched_at'],
+                'Invalid OpenAI model catalog timestamp')
+        return value
+
+    @staticmethod
+    def _parse(value):
+        require(isinstance(value, dict) and value.get('object') == 'list'
+                and isinstance(value.get('data'), list)
+                and len(value['data']) <= 10000,
+                'Invalid OpenAI model list')
+        models = []
+        for item in value['data']:
+            require(isinstance(item, dict) and isinstance(item.get('id'), str),
+                    'Invalid OpenAI model entry')
+            model = item['id']
+            if (_MODEL_ID.fullmatch(model) and _RESPONSES_MODEL.fullmatch(model)
+                    and not any(marker in model.lower()
+                                for marker in _NON_TEXT_MODEL_MARKERS)):
+                models.append(model)
+        return OpenAIModelCatalog._validate_models(sorted(set(models)))
+
+    @staticmethod
+    def _validate_models(models):
+        require(isinstance(models, list) and len(models) <= 10000
+                and all(isinstance(model, str) and _MODEL_ID.fullmatch(model)
+                        for model in models)
+                and models == sorted(set(models)),
+                'Invalid OpenAI model catalog')
+        return models
+
+    @staticmethod
+    def _http_transport(binding, secret):
+        connection = http.client.HTTPSConnection('api.openai.com', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        try:
+            connection.request('GET', '/v1/models',
+                headers={'Authorization': 'Bearer ' + secret})
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise OpenAIResponseError('OpenAI model list redirect is forbidden')
+            if response.status < 200 or response.status >= 300:
+                raise OpenAIResponseError('OpenAI model list was rejected with HTTP '
+                                          + str(response.status))
+            raw = response.read(MAX_MODEL_RESPONSE + 1)
+            require(len(raw) <= MAX_MODEL_RESPONSE,
+                    'OpenAI model list exceeds 1 MiB')
+            return json.loads(raw)
+        except (UnicodeError, ValueError) as exc:
+            raise OpenAIResponseError('Invalid OpenAI model list JSON') from exc
+        finally:
+            connection.close()
 
 
 class OpenAIRuns(BackendRuns):
@@ -357,6 +450,26 @@ def _safe_root(state_dir):
 
 def _atomic_write(root, path, raw, prefix):
     temporary = root / (prefix + '.tmp')
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        with os.fdopen(fd, 'wb', closefd=False) as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        os.close(fd); fd = -1
+        os.replace(temporary, path)
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        if fd >= 0:
+            os.close(fd)
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_replace(root, path, raw, prefix):
+    temporary = root / (prefix + os.urandom(8).hex() + '.tmp')
     fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     try:
         with os.fdopen(fd, 'wb', closefd=False) as stream:

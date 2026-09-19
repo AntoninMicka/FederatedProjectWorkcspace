@@ -7,6 +7,7 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
+from spikes.openai_backend import OpenAIResponseError
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -63,7 +64,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <form id="external-backend-form">
 <label>Provider <input value="OpenAI Responses API" disabled></label>
 <label>Endpoint <input name="endpoint" value="https://api.openai.com/v1/responses" readonly></label>
-<label>Model <input name="model" placeholder="gpt-5.6-luna" value="gpt-5.6-luna" required></label>
+<label>Model <input name="model" list="external-models" placeholder="gpt-5.6-luna" value="gpt-5.6-luna" required></label>
+<datalist id="external-models"></datalist>
+<button id="external-load-models" type="button">Načíst dostupné modely</button>
 <label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -510,6 +513,10 @@ const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 let activeThread=null,chatBinding=null,pendingChatRequest=null;
+function fillExternalModels(catalog){
+ const list=document.querySelector('#external-models');list.replaceChildren();
+ for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
+}
 function renderChat(thread){
  activeThread=thread || null;chatMessages.replaceChildren();
  for(const item of thread?.messages || []){
@@ -543,6 +550,7 @@ function fillBinding(binding){
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
   const external=await projectRequest('/v1/external/status',{});
+  fillExternalModels(external.model_catalog);
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
    'Externí backend zatím není nastaven.';return true;}
@@ -584,6 +592,14 @@ document.querySelector('#external-backend-form').addEventListener('submit',async
   fields.secret.value='';settingsExternalStatus.textContent=
    `Externí backend ${result.binding.model} byl uložen; klíč server nevrátil.`;}
  catch(error){fields.secret.value='';settingsExternalStatus.textContent=error.message;}
+});
+document.querySelector('#external-load-models').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;settingsExternalStatus.textContent='Načítám dostupné modely…';
+ try{const result=await projectRequest('/v1/external/models',{});
+  fillExternalModels(result);
+  settingsExternalStatus.textContent=`Načteno ${result.models.length} kandidátů pro textový Responses backend · ${result.fetched_at}. Ruční ID zůstává povoleno.`;
+ }catch(error){settingsExternalStatus.textContent=error.message+' Uložené nastavení nebylo změněno.';}
+ finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
@@ -840,7 +856,7 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
-        '/v1/external/status', '/v1/external/configure',
+        '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -876,6 +892,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_status())
             if self.path == '/v1/external/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_external(request))
+            if self.path == '/v1/external/models' and request == {}:
+                return self.reply(200, self.server.chat_service.external_models())
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
@@ -907,6 +925,9 @@ class DesktopHandler(Handler):
                                    'zkontrolujte stav před novým odesláním.'})
         except OllamaResponseError:
             return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
+        except OpenAIResponseError:
+            return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
+                                   'Uložené nastavení nebylo změněno.'})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:

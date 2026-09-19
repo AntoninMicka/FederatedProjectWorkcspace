@@ -100,6 +100,19 @@ class ChatServiceTests(unittest.TestCase):
             state_dir=self.chat_state).external_status(), result)
         self.assertNotIn(secret, self.git.snapshot(self.git.head()).values())
 
+        class Catalog:
+            def __init__(self, root, credentials):
+                self.credentials = credentials
+            def refresh(self, binding):
+                _, revision = self.credentials.resolve(binding.credential_ref)
+                return {'schema_version': 1, 'binding_id': binding.binding_id,
+                        'credential_revision': revision, 'fetched_at': NOW,
+                        'models': ['gpt-5.6-luna']}
+        models = self.service.external_models(Catalog)
+        self.assertEqual(models['models'], ['gpt-5.6-luna'])
+        self.assertNotIn(secret, json.dumps(models))
+        self.assertIsNone(self.service.external_status()['model_catalog'])
+
     def test_chat_uses_common_unscoped_execution_contract(self):
         calls = []
         service = ChatService(self.node_path, Projects(self.node_path),
