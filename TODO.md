@@ -111,6 +111,12 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   fail-closed. Uživatel 2026-09-19 následně živě potvrdil celý tok přes preview
   a skutečný OpenAI dispatch; výsledná dočasná karta se správně zredukovala na
   neobsahový záznam `succeeded` s run ID a UI potvrdilo přijetí odpovědi.
+  Draft externího dotazu přežil restart a odpověď providera byla přijata, ale auditní
+  projekce původně nezobrazila její obsah. UI proto nově pod redukovaným provozním
+  záznamem vykreslí celou odpověď načtenou z autoritativního durable OpenAI runu;
+  odpověď se neduplikuje do `TaskOutcomes`, `ChatThreads` ani projektového Gitu.
+  Restartový test ověřuje obnovení odpovědi a celá sada po opravě prošla:
+  321 testů, 22 environmentálních skipů dne 2026-09-19.
 
 ## K předání do backlogu
 

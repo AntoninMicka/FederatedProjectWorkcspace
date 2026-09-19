@@ -613,6 +613,12 @@ function renderTaskOutcomes(){
     `Externista byl zavolán · stav ${outcome.state} · run ${outcome.run_id}`;card.append(detail);
   }
   chatMessages.append(card);
+  if(outcome.kind==='external-call' && typeof projection.external_answer==='string'){
+   const answer=document.createElement('div');answer.className='chat-message assistant';
+   answer.textContent=projection.external_answer;
+   const detail=document.createElement('small');detail.textContent=`Externí asistent · ${projection.privacy}`;
+   answer.append(detail);chatMessages.append(answer);
+  }
  }
 }
 async function cancelTaskProjection(taskId){

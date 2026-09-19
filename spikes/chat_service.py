@@ -356,7 +356,23 @@ class ChatService:
         uuid(project_id)
         if thread_id is not None: uuid(thread_id)
         node_id, user_id = self._identity()
-        return TaskOutcomes(self._root()).list(node_id, user_id, project_id, thread_id)
+        return [self._task_projection(item) for item in
+                TaskOutcomes(self._root()).list(node_id, user_id, project_id, thread_id)]
+
+    def _task_projection(self, projection):
+        """Attach display-only provider output without duplicating durable state."""
+        outcome = projection.get('outcome')
+        if (projection.get('state') != 'completed' or not isinstance(outcome, dict)
+                or outcome.get('kind') != 'external-call'):
+            return projection
+        run = OpenAIRuns(self._root()).get(outcome.get('run_id'))
+        require(run is not None and run.get('state') == 'succeeded'
+                and isinstance(run.get('response'), dict)
+                and isinstance(run['response'].get('response'), str),
+                'Completed external task has no durable provider response')
+        displayed = dict(projection)
+        displayed['external_answer'] = run['response']['response']
+        return displayed
 
     def task_cancel(self, request):
         require(isinstance(request, dict) and set(request) == {'task_id'},
@@ -705,7 +721,7 @@ class ChatService:
             require(row['result'].get('kind') == 'external-call'
                     and row['result'].get('approval_id') == request['approval_id'],
                     'Task outcome was completed differently')
-            return row['projection']
+            return self._task_projection(row['projection'])
         require(row['state'] == 'prepared'
                 and row['outcome']['kind'] == 'external-request',
                 'Task outcome is not an external request')
@@ -725,8 +741,9 @@ class ChatService:
                    'state': 'succeeded',
                    'provider_response_id': result.get('provider_response_id'),
                    'usage': result.get('usage')}
-        return store.finish(request['task_id'], node_id, user_id, 'completed',
-                            result=reduced)['projection']
+        projection = store.finish(request['task_id'], node_id, user_id, 'completed',
+                                  result=reduced)['projection']
+        return self._task_projection(projection)
 
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)

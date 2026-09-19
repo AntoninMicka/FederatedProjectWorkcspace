@@ -61,6 +61,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/tasks/external/preview'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/cancel'", JS)
+        self.assertIn("typeof projection.external_answer==='string'", JS)
+        self.assertIn('answer.textContent=projection.external_answer', JS)
         self.assertIn('id="task-artifact-list"', HTML)
         self.assertIn('id="advanced-external"', HTML)
         self.assertIn("body.textContent=outcome.content", JS)

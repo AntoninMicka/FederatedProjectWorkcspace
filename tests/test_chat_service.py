@@ -51,9 +51,15 @@ class FakeExternalAdapter:
         self.calls.append(('dispatch', handoff, binding))
         if self.error:
             raise self.error
-        return {'id': 'resp_external', 'model': binding.model,
-                'response': 'External answer',
-                'usage': {'input_tokens': 3, 'output_tokens': 2, 'total_tokens': 5}}
+        response = {'id': 'resp_external', 'model': binding.model,
+                    'response': 'External answer',
+                    'usage': {'input_tokens': 3, 'output_tokens': 2, 'total_tokens': 5}}
+        with self.runs.connect() as db:
+            db.execute('INSERT OR REPLACE INTO runs(run_id,request_digest,state,response) '
+                       'VALUES(?,?,?,?)', (handoff.run_id, 'fake-request', 'succeeded',
+                                           json.dumps(response)))
+            db.commit()
+        return response
 
 
 class FakeProposalAdapter:
@@ -291,10 +297,13 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(projection['outcome']['kind'], 'external-call')
         self.assertNotIn('query', projection['outcome'])
         self.assertNotIn('response', projection['outcome'])
+        self.assertEqual(projection['external_answer'], 'External answer')
         self.assertEqual(service.status()['threads'], [])
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
-        self.assertEqual(service.task_outcomes(project_id=ENTITY), [projection])
-        self.assertEqual(service.task_external_confirm({
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.task_outcomes(project_id=ENTITY), [projection])
+        self.assertEqual(restarted.task_external_confirm({
             'task_id': request['task_id'], 'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
             'privacy': preview['privacy']}), projection)
