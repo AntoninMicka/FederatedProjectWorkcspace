@@ -9,7 +9,7 @@ import subprocess
 import sys
 import unittest
 
-from spikes.desktop import request_policy
+from spikes.desktop import provider_key_url, request_policy
 from spikes.desktop_ui import DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from tests import test_local_api
@@ -27,6 +27,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
         self.assertIn('id="external-backend-form"', HTML)
         self.assertIn('type="password"', HTML)
+        self.assertIn('href="https://platform.openai.com/api-keys"', HTML)
         self.assertIn("projectRequest('/v1/external/status',{})", JS)
         self.assertIn("projectRequest('/v1/external/configure',binding)", JS)
         self.assertIn("fields.secret.value=''", JS)
@@ -126,6 +127,15 @@ class DesktopTests(unittest.TestCase):
         ]:
             with self.subTest(url=url, initiator=initiator):
                 self.assertEqual(request_policy(url, initiator, method, origin), 'block')
+
+    def test_provider_key_onboarding_uses_only_exact_system_browser_url(self):
+        approved = 'https://platform.openai.com/api-keys'
+        self.assertEqual(provider_key_url(approved), approved)
+        for url in ('https://platform.openai.com/api-keys?next=evil',
+                    'https://platform.openai.com.evil.example/api-keys',
+                    'https://evil.example/', 'http://platform.openai.com/api-keys'):
+            with self.subTest(url=url):
+                self.assertIsNone(provider_key_url(url))
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

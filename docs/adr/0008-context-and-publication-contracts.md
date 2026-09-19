@@ -140,6 +140,12 @@ samostatný durable run journal implementuje. Desktopová Nastavení zobrazují
 write-only konfiguraci a bezpečný stav bez secretu; projektový context preview,
 privacy souhlas a dosažitelný dispatch z UI zůstávají záměrně uzavřené do úkolu
 C. Implementace tedy sama o sobě nepovoluje odeslat projektová data providerovi.
+Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
+správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
+nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit
+zobrazený klíč. Programové vytváření service-account klíčů pomocí Admin API key
+je samostatná privilegovaná administrativní capability a není součástí tohoto
+uživatelského credential workflow.
 
 ### Kompatibilní migrace Ollamy
 
