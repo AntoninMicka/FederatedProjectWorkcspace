@@ -99,8 +99,8 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   vlákno, úspěšný průchod `artifact-draft` až po vytvoření artefaktu a načtení
   výsledku po reloadu. Reload současně potvrdil UX mezeru: bez voliče vláken UI
   skládá klasický chat a poslední task projekci do jednoho pohledu. Oddělení a
-  výběr drží prioritní `F-M2-CHAT-03`. V této dávce zbývá ověřit přímou odpověď
-  a externí návrh/volání; webové hledání přes SearXNG je samostatná navazující
+  výběr drží prioritní `F-M2-CHAT-03`. V této dávce zbývá ověřit přímou odpověď;
+  webové hledání přes SearXNG je samostatná navazující
   feature. Živý externí návrh následně obsahoval jinak přesný kontrakt, ale Gemma
   redundantně přidala `focus_id`; parser jej nyní odstraní pouze u přesného
   `external-request` tvaru, pokud se UUID shoduje s focus zprávou a je obsaženo
@@ -108,7 +108,9 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   `message_ids: null`; u jinak přesného externího tvaru normalizace doplní pouze
   prázdné `artifact_ids` a aktuální focus UUID. Neprázdné reference stále musí
   odpovídat explicitně vybraným vstupům a jiné pole či neshodné UUID zůstává
-  fail-closed. Opakované živé ověření preview je otevřené.
+  fail-closed. Uživatel 2026-09-19 následně živě potvrdil celý tok přes preview
+  a skutečný OpenAI dispatch; výsledná dočasná karta se správně zredukovala na
+  neobsahový záznam `succeeded` s run ID a UI potvrdilo přijetí odpovědi.
 
 ## K předání do backlogu
 
