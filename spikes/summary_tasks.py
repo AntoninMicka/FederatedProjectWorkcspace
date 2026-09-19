@@ -25,7 +25,8 @@ class SummaryTasks:
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
                 and stat.S_IMODE(info.st_mode) == 0o700,
                 'Summary state directory requires owned mode 0700')
-        require(filename in {'summary-tasks.sqlite', 'extraction-tasks.sqlite'},
+        require(filename in {'summary-tasks.sqlite', 'extraction-tasks.sqlite',
+                             'metadata-suggestion-tasks.sqlite'},
                 'Unsupported task store')
         self.path = self.root / filename
 

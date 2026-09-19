@@ -412,6 +412,14 @@ artefakty. Nová databáze, schema framework, tagovací knihovna, vektorová DB 
 externí klient nejsou potřeba. Soukromá inventura nenabízí komponentu s tímto
 Context Manifest, potvrzením a recovery kontraktem; žádný kód se nepřebírá.
 
+Implementace F-M2-META-AI-01-B používá `MetadataSuggestionService` nad
+společnou preview orchestrací, ale vlastní SQLite task store. Serverový hook
+přidává kanonický metadata snapshot jako ad-hoc vstup se stejnou privacy jako
+artefakt; klient určuje pouze jeho nové UUID, nikoli obsah. Striktní validátor
+ukládá až kanonický návrh a projekce preview vrací původní hodnoty a přesný diff
+bez projektového zápisu. Summary a extractor bez hooku zachovávají původní
+payload i chování.
+
 ## Větve a publikace při změně HEAD
 
 Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.

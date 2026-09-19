@@ -156,6 +156,10 @@ class SummaryService:
     def _validate_preview(cls, response, source_ids, request):
         return response
 
+    @classmethod
+    def _additional_inputs(cls, request, files, entities):
+        return ()
+
     @staticmethod
     def _handoff(task, binding):
         manifest = task['manifest']
@@ -226,6 +230,10 @@ class SummaryService:
                 conversation = ConversationSelection(thread['thread_id'], thread['revision'],
                     tuple(ids), tuple(item['role'] for item in selected))
                 readable = frozenset()
+            additional = self._additional_inputs(request, files, entities)
+            require(isinstance(additional, tuple), 'Additional inputs must be immutable')
+            ad_hoc_inputs += additional
+            privacy.extend(item.privacy for item in additional)
             focus_id = None
             if focus is not None:
                 focus_id = focus['input_id']
