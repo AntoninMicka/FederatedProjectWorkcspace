@@ -20,6 +20,13 @@ backendu a odkaz do této sekce. Přechod do nastavení si v paměti stránky uc
 návratový kontext; návrat obnoví seznam projektů nebo otevřený projekt a jeho
 aktivní panel, ale neobchází nové načtení stavů ze serveru.
 
+Stejná stránka obsahuje vstup do existující správy uživatelů a federace.
+Samotný administrační dialog, `/v1/administration`, role a potvrzovací workflow
+se nemění; odstraňuje se pouze samostatné plovoucí tlačítko mimo informační
+architekturu. Desktop používá svůj dosavadní lokální federation-admin kontrakt,
+zatímco web sekci zobrazí pouze přihlášenému `node-admin` nebo
+`federation-admin`. Skrytí vstupu nenahrazuje serverovou autorizaci.
+
 Nastavení je vlastnost uzlu, nikoli projektu. Nezapisuje se do projektového Gitu,
 nejde do projektového indexu ani federace a nesmí být vydáváno za projektové
 oprávnění. Credentials, privátní klíče a budoucí tajemství zůstávají mimo tento
@@ -46,8 +53,10 @@ fallback ani automatické testovací volání backendu.
 Adaptují se stávající DOM navigace a bezpečné `textContent` vykreslení,
 `ChatService`, `OllamaBinding` a `OllamaBindings`; nepřidává se router, knihovna
 komponent ani nová persistence. První verze pouze přesune existující binding a
-připraví strukturu pro další uzlová nastavení. Neřeší credentials, synchronizaci,
-více backendů, routerový autostart ani projektové nastavení.
+připraví strukturu pro další uzlová nastavení. Existující uživatelská a
+federační správa se pouze zpřístupní ze stejné stránky; její storage a recovery
+se nemění. Dávka neřeší nový credential lifecycle, synchronizaci, více backendů,
+routerový autostart ani projektové nastavení.
 
 Akceptace vyžaduje přístup bez projektu i z otevřeného projektu, právě jeden
 formulář, zachování hodnot po navigaci/restartu, odmítnutí neplatných hranic a

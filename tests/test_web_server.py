@@ -11,7 +11,7 @@ import tempfile
 import threading
 import unittest
 
-from spikes.web_server import make_server, secret, WEB_JS
+from spikes.web_server import make_server, secret, WEB_HTML, WEB_JS
 from spikes.projects import Projects
 from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
@@ -75,6 +75,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/../node.json')[0],404)
         self.assertNotIn('localStorage', WEB_JS)
         self.assertFalse(WEB_JS.endswith('loadProjects();\n'))
+        self.assertIn('id="node-administration-settings" class="settings-card" hidden', WEB_HTML)
+        self.assertIn("querySelector('#node-administration-settings').hidden=!admin", WEB_JS)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
         _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Restricted"}')

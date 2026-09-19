@@ -10,8 +10,10 @@ from spikes.administration import AccessDenied
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.project_creation import ProjectCreation
 
-ASSETS = {'/': ('text/html; charset=utf-8', HTML.replace('<body>', '<body class="desktop-management">' + ADMIN_HTML)),
-          '/app.css': ('text/css; charset=utf-8', CSS + ADMIN_CSS + '\nbody.desktop-management #administration-open{display:block}'),
+ASSETS = {'/': ('text/html; charset=utf-8', HTML.replace('<body>', '<body class="desktop-management">' + ADMIN_HTML).replace(
+              'id="node-administration-settings" class="settings-card" hidden',
+              'id="node-administration-settings" class="settings-card"')),
+          '/app.css': ('text/css; charset=utf-8', CSS + ADMIN_CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS + ADMIN_JS)}
 
 

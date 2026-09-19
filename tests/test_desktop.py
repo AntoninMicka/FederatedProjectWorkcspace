@@ -43,6 +43,8 @@ class DesktopTests(unittest.TestCase):
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
+        from spikes.desktop_management import ASSETS
+        desktop_html = ASSETS['/'][1]
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)
         self.assertIn('id="settings-view"', HTML)
         self.assertIn('id="open-settings"', HTML)
@@ -53,6 +55,10 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("const tab=document.getElementById(destination.tabId)", JS)
         self.assertIn("await loadBackendBinding()", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+        self.assertIn('id="node-administration-settings" class="settings-card"', desktop_html)
+        self.assertNotIn('id="node-administration-settings" class="settings-card" hidden', desktop_html)
+        settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
+        self.assertEqual(settings.count('id="administration-open"'), 1)
 
     def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):
         from spikes.desktop_ui import HTML

@@ -55,6 +55,11 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
 </section>
+<section id="node-administration-settings" class="settings-card" hidden aria-labelledby="node-administration-title">
+<h2 id="node-administration-title">Uživatelé a federace</h2>
+<p>Spravujte lokální účty, role, federované uzly a oboustranná mapování. Přístupové klíče se mezi uzly nepřenášejí.</p>
+<button id="administration-open" type="button">Otevřít správu uživatelů a federace</button>
+</section>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
 <div id="project-view" hidden>

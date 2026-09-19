@@ -58,7 +58,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;document.querySelector('#administration-open').hidden=!admin;
+  projectCreateForm.hidden=!admin;document.querySelector('#node-administration-settings').hidden=!admin;
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });

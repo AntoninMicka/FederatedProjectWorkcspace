@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 """Administration panel for the existing HTTPS UI."""
 
-ADMIN_HTML = '''<button id="administration-open" type="button">Uživatelé a federace</button>
-<dialog id="administration"><div class="admin-header"><h2>Správa uzlu</h2><button id="administration-close" type="button">Zavřít</button></div>
+ADMIN_HTML = '''<dialog id="administration"><div class="admin-header"><h2>Správa uzlu</h2><button id="administration-close" type="button">Zavřít</button></div>
 <p id="admin-status" role="status"></p><p id="admin-node"></p>
 <div class="admin-tabs" role="tablist" aria-label="Správa"><button id="admin-users-tab" type="button" role="tab" aria-selected="true" aria-controls="admin-users-panel">Uživatelé</button><button id="admin-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1">Federace</button></div>
 <section id="admin-users-panel" role="tabpanel" aria-labelledby="admin-users-tab"><h3>Lokální účty</h3><p>Přihlašujete se jen ke svému účtu na tomto uzlu. Hesla a přístupové klíče se mezi uzly nepřenášejí.</p><form id="admin-user-create"><label>Jméno <input name="name" required maxlength="200"></label>
@@ -20,8 +19,6 @@ ADMIN_HTML = '''<button id="administration-open" type="button">Uživatelé a fed
 <form id="admin-mapping-import"><label>Podepsané potvrzení nebo odvolání z druhého uzlu <textarea name="envelope" required maxlength="4096"></textarea></label><button>Ověřit a přijmout</button></form></section></dialog>'''
 
 ADMIN_CSS = '''
-#administration-open{display:none;position:fixed;bottom:12px;left:12px;z-index:4}
-body.authenticated #administration-open:not([hidden]){display:block}
 #administration{width:min(900px,92vw);max-height:85vh;overflow:auto;border:1px solid #adc0bf;border-radius:14px;padding:24px;background:#f5f8f7;color:#213632}
 #administration::backdrop{background:rgba(10,30,27,.55)}
 .admin-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
@@ -31,7 +28,7 @@ body.authenticated #administration-open:not([hidden]){display:block}
 .admin-table-wrap{overflow-x:auto}.admin-table{border-collapse:collapse;width:100%;text-align:left}.admin-table caption{text-align:left;font-weight:bold;margin:14px 0}.admin-table th,.admin-table td{padding:12px;border-bottom:1px solid #c9d5d2}
 #administration textarea{display:block;box-sizing:border-box;width:100%;min-height:90px;padding:8px}
 #admin-issued-key{width:100%;font-family:monospace}#admin-status{white-space:pre-wrap;position:sticky;top:0;z-index:8;padding:12px;background:#e7f0ec;color:#213632;border:1px solid #a9bfb5;border-radius:6px}#admin-status:empty{display:none}#admin-status[role=alert]{background:#fff0e9;color:#7a281a;border-color:#c98470}
-@media(max-width:600px){#administration{padding:14px}#administration-open{font-size:11px;bottom:6px}.admin-header h2{font-size:20px}}
+@media(max-width:600px){#administration{padding:14px}.admin-header h2{font-size:20px}}
 '''
 
 ADMIN_JS = '''
