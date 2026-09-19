@@ -16,6 +16,7 @@ from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
 from spikes.metadata import ValidationError, require, timestamp, uuid
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
+from spikes.openai_backend import OpenAIBinding, OpenAIBindings, OpenAICredentials
 from spikes.project_creation import ProjectCreation
 
 
@@ -70,6 +71,43 @@ class ChatService:
             binding = None
         rows = threads.list(node_id, user_id)
         return {'binding': binding, 'threads': rows}
+
+    def external_status(self):
+        root = self._root()
+        try:
+            binding = OpenAIBindings(root).load()
+        except FileNotFoundError:
+            return {'binding': None, 'credential': None}
+        return {'binding': binding.serialize(),
+                'credential': OpenAICredentials(root).status(binding.credential_ref)}
+
+    def configure_external(self, value):
+        require(isinstance(value, dict), 'External backend request must be an object')
+        fields = {'schema_version', 'binding_id', 'revision', 'adapter', 'boundary',
+                  'endpoint', 'model', 'target_id', 'max_output_tokens',
+                  'timeout_seconds', 'secret'}
+        require(set(value) == fields, 'Unknown or missing external backend field')
+        secret = value['secret']
+        root = self._root(); credentials = OpenAICredentials(root)
+        reference = 'credential:openai-' + str(uuid4())
+        credential = credentials.put(reference, secret)
+        candidate = dict(value); candidate.pop('secret')
+        candidate.update(credential_ref=reference,
+                         credential_revision=credential['revision'])
+        try:
+            binding = OpenAIBinding.parse(candidate)
+            bindings = OpenAIBindings(root)
+            try:
+                previous = bindings.load()
+            except FileNotFoundError:
+                previous = None
+            bindings.save(binding)
+        except Exception:
+            credentials.delete(reference)
+            raise
+        if previous is not None and previous.credential_ref != reference:
+            credentials.delete(previous.credential_ref)
+        return self.external_status()
 
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)

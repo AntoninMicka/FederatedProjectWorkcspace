@@ -83,6 +83,23 @@ class ChatServiceTests(unittest.TestCase):
             self.service.configure(dict(self.binding, adapter='unknown'))
         self.assertEqual(self.service.status()['binding'], before)
 
+    def test_external_backend_configuration_is_visible_without_returning_secret(self):
+        secret = 'sk-test-' + 'q' * 32
+        request = dict(schema_version=1, binding_id=str(uuid4()), revision='one',
+                       adapter='openai-responses', boundary='external-provider',
+                       endpoint='https://api.openai.com/v1/responses',
+                       model='gpt-5-2026-09-01', target_id='api.openai.com',
+                       max_output_tokens=4096, timeout_seconds=180, secret=secret)
+        result = self.service.configure_external(request)
+        encoded_result = json.dumps(result)
+        self.assertEqual(result['binding']['adapter'], 'openai-responses')
+        self.assertTrue(result['credential']['available'])
+        self.assertNotIn(secret, encoded_result)
+        self.assertNotIn('secret', encoded_result)
+        self.assertEqual(ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state).external_status(), result)
+        self.assertNotIn(secret, self.git.snapshot(self.git.head()).values())
+
     def test_chat_uses_common_unscoped_execution_contract(self):
         calls = []
         service = ChatService(self.node_path, Projects(self.node_path),

@@ -10,7 +10,7 @@ import sys
 import unittest
 
 from spikes.desktop import request_policy
-from spikes.desktop_ui import DesktopHandler, JS
+from spikes.desktop_ui import DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from tests import test_local_api
 
@@ -25,6 +25,11 @@ class DesktopTests(unittest.TestCase):
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+        self.assertIn('id="external-backend-form"', HTML)
+        self.assertIn('type="password"', HTML)
+        self.assertIn("projectRequest('/v1/external/status',{})", JS)
+        self.assertIn("projectRequest('/v1/external/configure',binding)", JS)
+        self.assertIn("fields.secret.value=''", JS)
         self.assertIn("administration.hidden=selected.id==='settings-backend-tab'", JS)
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)

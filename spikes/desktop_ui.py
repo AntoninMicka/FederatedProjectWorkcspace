@@ -58,6 +58,17 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
+<hr><h2>Externí textový backend</h2>
+<p id="settings-external-status" role="status" aria-live="polite">Načítám stav externího backendu…</p>
+<form id="external-backend-form">
+<label>Provider <input value="OpenAI Responses API" disabled></label>
+<label>Endpoint <input name="endpoint" value="https://api.openai.com/v1/responses" readonly></label>
+<label>Modelový snapshot <input name="model" placeholder="gpt-5-YYYY-MM-DD" required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
+<button type="submit">Uložit externí backend</button></form>
+<small>Klíč je write-only: po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
 </section>
 <div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
@@ -492,6 +503,7 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
 const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
+const settingsExternalStatus=document.querySelector('#settings-external-status');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
@@ -527,7 +539,11 @@ function fillBinding(binding){
  }
 }
 async function loadBackendBinding(){
- try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);return true;}
+ try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+  const external=await projectRequest('/v1/external/status',{});
+  settingsExternalStatus.textContent=external.binding ?
+   `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
+   'Externí backend zatím není nastaven.';return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
 async function loadChat(){
@@ -553,6 +569,19 @@ chatForm.addEventListener('submit',async event=>{
   settingsBackendStatus.textContent=reloaded ? message+' Poslední potvrzené nastavení bylo znovu načteno.' :
    message+' Aktuální stav nelze potvrdit; zkuste nastavení znovu otevřít.';
  }
+});
+document.querySelector('#external-backend-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.currentTarget,fields=form.elements;
+ const binding={schema_version:1,binding_id:crypto.randomUUID(),revision:crypto.randomUUID(),
+  adapter:'openai-responses',boundary:'external-provider',endpoint:fields.endpoint.value,
+  model:fields.model.value.trim(),target_id:'api.openai.com',
+  max_output_tokens:Number(fields.max_output_tokens.value),
+  timeout_seconds:Number(fields.timeout_seconds.value),secret:fields.secret.value};
+ settingsExternalStatus.textContent='Ukládám externí backend…';
+ try{const result=await projectRequest('/v1/external/configure',binding);
+  fields.secret.value='';settingsExternalStatus.textContent=
+   `Externí backend ${result.binding.model} byl uložen; klíč server nevrátil.`;}
+ catch(error){fields.secret.value='';settingsExternalStatus.textContent=error.message;}
 });
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
@@ -809,6 +838,7 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
+        '/v1/external/status', '/v1/external/configure',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -840,6 +870,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/external/status' and request == {}:
+                return self.reply(200, self.server.chat_service.external_status())
+            if self.path == '/v1/external/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_external(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
@@ -876,7 +910,7 @@ class DesktopHandler(Handler):
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-            if self.path.startswith(('/v1/chat/', '/v1/summary/', '/v1/extraction/',
+            if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
                                        'projekt, výběr kontextu a lokální stav.'})

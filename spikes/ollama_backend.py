@@ -159,14 +159,16 @@ class OllamaBindings:
         return OllamaBinding.parse(value)
 
 
-class OllamaRuns:
-    """Authoritative local state for an Ollama dispatch; never stored in project Git."""
-    def __init__(self, state_dir):
+class BackendRuns:
+    """Authoritative local backend dispatch state; never stored in project Git."""
+    def __init__(self, state_dir, filename):
         self.root = Path(state_dir).absolute()
         info = self.root.stat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
                 and stat.S_IMODE(info.st_mode) == 0o700, 'Run state directory requires owned mode 0700')
-        self.path = self.root / 'ollama-runs.sqlite'
+        require(isinstance(filename, str) and bool(re.fullmatch(r'[a-z0-9-]+\.sqlite', filename)),
+                'Invalid backend run journal name')
+        self.path = self.root / filename
 
     def connect(self):
         flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
@@ -237,6 +239,12 @@ class OllamaRuns:
                            (run_id, digest, 'prepared') + identity)
             db.commit()
         return self.get(run_id)
+
+
+class OllamaRuns(BackendRuns):
+    """Compatibility wrapper retaining the existing Ollama journal path."""
+    def __init__(self, state_dir):
+        super().__init__(state_dir, 'ollama-runs.sqlite')
 
 
 class OllamaAdapter:

@@ -135,6 +135,12 @@ libovolné providerové URL. Usage a billing zůstávají oddělené capability
 M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
 ani spolehlivý výpočet ceny.
 
+Úkol F-M3-EXTERNAL-01-B tento binding, credential lifecycle, textový adapter a
+samostatný durable run journal implementuje. Desktopová Nastavení zobrazují
+write-only konfiguraci a bezpečný stav bez secretu; projektový context preview,
+privacy souhlas a dosažitelný dispatch z UI zůstávají záměrně uzavřené do úkolu
+C. Implementace tedy sama o sobě nepovoluje odeslat projektová data providerovi.
+
 ### Kompatibilní migrace Ollamy
 
 Existující `ollama-binding.json` se schématem v1 zůstane kanonickým node-local
