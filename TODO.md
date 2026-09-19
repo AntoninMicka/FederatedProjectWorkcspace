@@ -72,7 +72,14 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   route/list/cancel, artifact publish a external preview/confirm/cancel.
   Ověření: úplná sada 319 testů, 22 environmentálních skipů dne
   2026-09-19; předchozí sandboxový běh selhal pouze na zakázaném socket bindu.
-- [ ] [planned] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační akceptace
-  (PoC validated).** Jedna hlavní akce, volba artefaktů, tři výsledné větve,
-  limity bez tichého oříznutí, pády/reload a úplná sada. Ruční externí preview
-  zůstane pouze pokročilou záložní akcí.
+- [ ] [in progress] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační
+  akceptace (implemented; živá akceptace otevřená).** Hlavní `Zpracovat`
+  používá jednotný task router, explicitní volbu projektových podkladů a
+  bezpečně vykresluje přímou odpověď, celý dočasný návrh artefaktu nebo
+  externí request. Potvrzení/zamítnutí mění projekci na odkaz či provozní
+  záznam; projektový reload obnoví poslední task vlákno i přesný rozpracovaný
+  externí preview. Staré ruční externí akce jsou sbalené jako pokročilé.
+  Dlouhý obsah se v kartě neořezá a všechen nedůvěryhodný text jde přes
+  `textContent`. Ověření: cílené lifecycle/UI testy, `node --check` a úplná
+  sada 319 testů, 22 environmentálních skipů dne 2026-09-19. Zbývá ruční
+  průchod skutečným desktopem přes všechny tři větve a reload.

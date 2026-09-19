@@ -322,8 +322,9 @@ class ChatService:
         routed['projection'] = durable['projection']
         return routed
 
-    def task_outcomes(self, *, project_id, thread_id):
-        uuid(project_id); uuid(thread_id)
+    def task_outcomes(self, *, project_id, thread_id=None):
+        uuid(project_id)
+        if thread_id is not None: uuid(thread_id)
         node_id, user_id = self._identity()
         return TaskOutcomes(self._root()).list(node_id, user_id, project_id, thread_id)
 
@@ -619,6 +620,8 @@ class ChatService:
         require(row['state'] == 'prepared'
                 and row['outcome']['kind'] == 'external-request',
                 'Task outcome is not an external request')
+        if row['result'] is not None:
+            return row['result']
         focus_id = row['request']['message_id']
         selected = [value for value in row['outcome']['message_ids'] if value != focus_id]
         require(focus_id in row['outcome']['message_ids'],
@@ -635,6 +638,8 @@ class ChatService:
             'created_at': row['created_at'], 'record_chat': False})
         preview['task_id'] = request['task_id']
         preview['purpose'] = row['outcome']['purpose']
+        TaskOutcomes(self._root()).bind_external_preview(
+            request['task_id'], node_id, user_id, preview)
         return preview
 
     def task_external_cancel(self, request):

@@ -225,6 +225,13 @@ class ChatServiceTests(unittest.TestCase):
                            'manifest_id': str(uuid4()),
                            'assistant_message_id': str(uuid4())}
         preview = service.task_external_preview(preview_request)
+        restored = service.task_outcomes(project_id=ENTITY,
+                                         thread_id=request['thread_id'])[0]
+        self.assertEqual(restored['prompt']['content'], request['content'])
+        self.assertEqual(restored['external_preview'], preview)
+        replay_request = dict(preview_request, approval_id=str(uuid4()),
+                              run_id=str(uuid4()), manifest_id=str(uuid4()))
+        self.assertEqual(service.task_external_preview(replay_request), preview)
         projection = service.task_external_confirm({
             'task_id': request['task_id'], 'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
@@ -234,6 +241,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertNotIn('response', projection['outcome'])
         self.assertEqual(service.status()['threads'], [])
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        self.assertEqual(service.task_outcomes(project_id=ENTITY), [projection])
         self.assertEqual(service.task_external_confirm({
             'task_id': request['task_id'], 'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
@@ -607,6 +615,11 @@ class ChatServiceTests(unittest.TestCase):
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body)['binding']['model'], 'gemma3')
+            response = driver.request(server, path='/v1/tasks/list',
+                                      body=json.dumps({'project_id': ENTITY}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body), {'outcomes': []})
             request = json.dumps(self.request()).encode()
             response = driver.request(server, path='/v1/chat/send', body=request)
             head, body = response.split(b'\r\n\r\n', 1)

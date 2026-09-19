@@ -78,9 +78,14 @@ class TaskOutcomes:
         request, outcome = json.loads(row[4]), json.loads(row[5])
         result = None if row[12] is None else json.loads(row[12])
         projection = {'task_id': task_id, 'project_id': row[2], 'thread_id': row[3],
-                      'privacy': row[6], 'created_at': row[10], 'state': row[11]}
+                      'privacy': row[6], 'created_at': row[10], 'state': row[11],
+                      'prompt': {'message_id': request['message_id'],
+                                 'content': request['content'],
+                                 'privacy': request['privacy']}}
         if row[11] == 'prepared':
             projection.update(temporary=True, outcome=outcome)
+            if result is not None:
+                projection['external_preview'] = result
         elif row[11] == 'completed':
             projection.update(temporary=False, outcome=result)
         else:
@@ -102,14 +107,18 @@ class TaskOutcomes:
         require(row[11] in STATES, 'Invalid task outcome state')
         return self._projection(task_id, row)
 
-    def list(self, node_id, user_id, project_id, thread_id):
-        for value in (node_id, user_id, project_id, thread_id): uuid(value)
+    def list(self, node_id, user_id, project_id, thread_id=None):
+        for value in (node_id, user_id, project_id): uuid(value)
+        if thread_id is not None:
+            uuid(thread_id)
         with self.connect() as db:
-            rows = db.execute('SELECT task_id,node_id,user_id,project_id,thread_id,request,'
-                              'outcome,privacy,project_commit,run_id,manifest_id,created_at,state,'
-                              'result FROM outcomes WHERE node_id=? AND user_id=? AND project_id=? '
-                              'AND thread_id=? ORDER BY created_at,task_id',
-                              (node_id, user_id, project_id, thread_id)).fetchall()
+            query = ('SELECT task_id,node_id,user_id,project_id,thread_id,request,'
+                     'outcome,privacy,project_commit,run_id,manifest_id,created_at,state,'
+                     'result FROM outcomes WHERE node_id=? AND user_id=? AND project_id=?')
+            values = [node_id, user_id, project_id]
+            if thread_id is not None:
+                query += ' AND thread_id=?'; values.append(thread_id)
+            rows = db.execute(query + ' ORDER BY created_at,task_id', values).fetchall()
         return [self._projection(row[0], row[1:])['projection'] for row in rows]
 
     def finish(self, task_id, node_id, user_id, state, *, result=None):
@@ -131,5 +140,28 @@ class TaskOutcomes:
                                  "WHERE task_id=? AND state='prepared'",
                                  (state, encoded, task_id))
             require(changed.rowcount == 1, 'Task outcome changed while completing')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
+    def bind_external_preview(self, task_id, node_id, user_id, preview):
+        current = self.get(task_id, node_id, user_id)
+        require(current['state'] == 'prepared'
+                and current['outcome']['kind'] == 'external-request'
+                and isinstance(preview, dict)
+                and preview.get('task_id') == task_id
+                and isinstance(preview.get('preview_sha256'), str),
+                'Invalid task external preview')
+        if current['result'] is not None:
+            require(current['result'] == preview,
+                    'Task already belongs to a different external preview')
+            return current
+        encoded = _canonical(preview)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute('UPDATE outcomes SET result=? '
+                                 "WHERE task_id=? AND state='prepared' AND result IS NULL",
+                                 (encoded, task_id))
+            require(changed.rowcount == 1,
+                    'Task external preview changed while binding')
             db.commit()
         return self.get(task_id, node_id, user_id)
