@@ -178,6 +178,27 @@ class ChatServiceTests(unittest.TestCase):
                 transport=lambda *_: self.fail('must not resend')))
         self.assertEqual(restarted.task_route(request), result)
 
+    def test_external_task_normalizes_only_matching_redundant_focus_id(self):
+        request = self.route_request()
+        value = {'schema_version': 1, 'kind': 'external-request',
+                 'purpose': 'Oponentura', 'query': 'Oponuj tvrzení',
+                 'message_ids': [request['message_id']], 'artifact_ids': [],
+                 'focus_id': request['message_id']}
+        def service_for(response):
+            return ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(response)}))
+        routed = service_for(value).task_route(request)
+        self.assertEqual(routed['outcome'], {key: item for key, item in value.items()
+                                             if key != 'focus_id'})
+
+        bad = self.route_request()
+        bad_value = dict(value, message_ids=[bad['message_id']],
+                         focus_id=str(uuid4()))
+        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+            service_for(bad_value).task_route(bad)
+
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',

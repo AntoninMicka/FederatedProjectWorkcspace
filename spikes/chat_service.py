@@ -308,7 +308,19 @@ class ChatService:
         adapter.prepare(handoff, binding, role, 'json')
         response = adapter.dispatch(handoff, binding, role, 'json')
         try:
-            outcome = AITaskOutcome.parse(json.loads(response['response']))
+            value = json.loads(response['response'])
+            external = {'schema_version', 'kind', 'purpose', 'query',
+                        'message_ids', 'artifact_ids'}
+            # Some small local models repeat the required focus UUID in one
+            # redundant field. Normalize only that exact, verifiable shape;
+            # the domain outcome remains closed and provider/tool fields fail.
+            if (isinstance(value, dict) and value.get('kind') == 'external-request'
+                    and set(value) == external | {'focus_id'}
+                    and value.get('focus_id') == request['message_id']
+                    and isinstance(value.get('message_ids'), list)
+                    and request['message_id'] in value['message_ids']):
+                value = dict(value); value.pop('focus_id')
+            outcome = AITaskOutcome.parse(value)
         except (KeyError, TypeError, ValueError) as exc:
             raise ValidationError('Ollama returned invalid task outcome') from exc
         if outcome.kind == 'external-request':
