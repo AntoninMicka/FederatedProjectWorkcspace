@@ -41,6 +41,19 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 
+    def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
+        from spikes.desktop_ui import HTML
+        self.assertEqual(HTML.count('id="chat-backend-form"'), 1)
+        self.assertIn('id="settings-view"', HTML)
+        self.assertIn('id="open-settings"', HTML)
+        self.assertIn('id="chat-open-settings"', HTML)
+        self.assertNotIn('id="chat-backend-settings"', HTML)
+        self.assertIn("settingsReturn={project:!!activeProject,tabId:", JS)
+        self.assertIn("document.querySelector('#project-home').hidden=true", JS)
+        self.assertIn("const tab=document.getElementById(destination.tabId)", JS)
+        self.assertIn("await loadBackendBinding()", JS)
+        self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+
     def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):
         from spikes.desktop_ui import HTML
         self.assertIn('id="summary-tab"', HTML)
