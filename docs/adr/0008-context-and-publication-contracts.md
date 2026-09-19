@@ -172,6 +172,24 @@ do nového manifestu a autoritativního preview z úkolu C; hash návrhu se zám
 nestává oprávněním ani částí externího approval, protože oprávnění váže až přesné
 výsledné vstupy a provider request. Durable Ollama run lze po restartu bezpečně
 přečíst bez dalšího síťového volání; `unknown` se automaticky neopakuje.
+
+Navazující úprava flow rozšiřuje tento úzce externí návrh na jednotné lokální
+zpracování. Uživatel odešle jedno zadání, explicitně zvolené zprávy a volitelné
+doplňující projektové artefakty. Ollama vrátí přes striktní diskriminovaný
+kontrakt právě jeden z výsledků: `direct-answer`, `artifact-draft` nebo
+`external-request`. Přímá odpověď se může dokončit jako běžný lokální chatový
+turn. Návrh artefaktu obsahuje pouze podporovaný typ, název a tělo a před zápisem
+se zobrazí jako preview; vlastní Git zápis provede až existující potvrzená
+recovery-safe operace. Externí varianta obsahuje účel, hotový dotaz a explicitní
+ID zdrojů, ale žádný provider, credential ani oprávnění. Aplikace z ní znovu
+sestaví Context Manifest a autoritativní externí preview.
+
+Privacy výsledku je nejméně nejsilnější privacy ze všech skutečně použitých
+zpráv a artefaktů. Změna HEAD, výběru nebo obsahu ruší navazující preview.
+Neznámá varianta, pole, typ artefaktu nebo ID selže uzavřeně. Ollama tedy smí
+rozhodnout pouze o tvaru navrženého výsledku, nikdy o provedení zápisu nebo
+externího dispatch. Přímé ruční externí preview může zůstat pokročilou záložní
+akcí, nikoli paralelním výchozím workflow.
 Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
 správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
 nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit

@@ -831,6 +831,11 @@ strukturované volání přes Ollamu. Lokální automatizované ověření je ho
 živá integrační akceptace Ollama → potvrzený OpenAI request zůstává otevřená,
 proto Gate M3 zatím není uzavřený.
 
+Plánovaná úprava `F-M3-EXTERNAL-01-E` sjednotí uživatelský vstup: Ollama nad
+explicitně vybranými zprávami a doplňujícími artefakty vrátí buď přímou odpověď,
+návrh artefaktu, nebo připravený dotaz pro externí model. Návrhové větve nadále
+vyžadují aplikační preview a lidské potvrzení; model sám nezapisuje ani neodesílá.
+
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje textový OpenAI
   Responses adapter, přesné preview, potvrzený dispatch a striktní návrh výběru
