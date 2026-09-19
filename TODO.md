@@ -86,7 +86,12 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   akceptaci bylo zjištěno, že opožděný `loadChat()` nebo chybová obnova mohou po
   volbě nového vlákna obnovit staré ID a odeslat jeho zprávy. UI nyní invaliduje
   starší načtení a při chybě dohledává durable výsledek pouze podle přesného ID
-  právě odesílaného tasku/vlákna; ruční regresní ověření zůstává otevřené.
+  právě odesílaného tasku/vlákna. Další živý pokus prokázal čisté nové vlákno,
+  ale Gemma požadavek na dokument pouze zopakovala jako `direct-answer`;
+  routerová instrukce nyní explicitně rozlišuje dokumentový návrh, požadavek na
+  aktuální/externí hledání a přímou odpověď a zakazuje vydat parafrázi zadání za
+  výsledek. Chyby `/v1/tasks/*` už nejsou nesprávně hlášeny jako chyba otevření
+  projektu. Ruční regresní ověření obou oprav zůstává otevřené.
 
 ## K předání do backlogu
 

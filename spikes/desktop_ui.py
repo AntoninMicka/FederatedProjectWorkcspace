@@ -1207,7 +1207,7 @@ class DesktopHandler(Handler):
             if self.path == '/v1/external/propose':
                 return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
                                        'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})
-            if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/summary/', '/v1/extraction/',
+            if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
                                        'projekt, výběr kontextu a lokální stav.'})

@@ -42,6 +42,7 @@ class DesktopTests(unittest.TestCase):
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
                       Path('spikes/desktop_ui.py').read_text())
+        self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)
         self.assertIn("projectRequest('/v1/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/external/cancel'", JS)
