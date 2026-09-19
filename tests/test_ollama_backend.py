@@ -4,12 +4,15 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.context_builder import DispatchHandoff
+from spikes.backend_contract import (BackendCapabilities, BackendRegistry, ROLES,
+                                     RoleDefinition)
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseError,
                                    OllamaBindings, OllamaRuns, UnknownRun)
@@ -62,6 +65,22 @@ class OllamaBindingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationError, 'Unsafe'):
                 OllamaBindings(state).load()
 
+    def test_backend_registry_capabilities_and_roles_fail_closed(self):
+        registry = BackendRegistry(); registry.register('ollama', OllamaBinding.parse)
+        binding = registry.parse_binding(self.binding())
+        binding.capabilities().require('generate-text', 'json')
+        role = ROLES.resolve('extractor', 'extractor-v1')
+        self.assertEqual((role.operation, role.output_format), ('generate-text', 'json'))
+        with self.assertRaisesRegex(ValidationError, 'Unsupported backend adapter'):
+            registry.parse_binding(dict(self.binding(), adapter='unknown'))
+        with self.assertRaisesRegex(ValidationError, 'Unsupported role'):
+            ROLES.resolve('extractor', 'extractor-v2')
+        with self.assertRaisesRegex(ValidationError, 'Unknown or empty'):
+            BackendCapabilities(1, 'bad', frozenset({'embeddings'}),
+                                frozenset({'text'})).validate()
+        with self.assertRaisesRegex(ValidationError, 'Unknown role capability'):
+            RoleDefinition(1, 'bad', 'v1', 'browse', 'text').validate()
+
 
 class OllamaAdapterTests(unittest.TestCase):
     def setUp(self):
@@ -88,6 +107,65 @@ class OllamaAdapterTests(unittest.TestCase):
         restarted = OllamaAdapter(OllamaRuns(self.state),
                                   lambda binding, request: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
+
+    def test_new_run_records_backend_execution_identity(self):
+        role = ROLES.resolve('extractor', 'extractor-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+                                {'model': binding.model, 'response': '{}'})
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(row['adapter_id'], 'ollama')
+        self.assertEqual(row['binding_id'], self.binding.binding_id)
+        self.assertEqual(row['binding_revision'], self.binding.revision)
+        self.assertEqual(row['capability_revision'], 'ollama-generate-v1')
+        self.assertEqual((row['operation'], row['output_format']),
+                         ('generate-text', 'json'))
+        self.assertEqual((row['role_id'], row['role_revision']),
+                         ('extractor', 'extractor-v1'))
+        self.assertEqual(row['manifest_sha256'], self.handoff.manifest_sha256)
+
+    def test_legacy_prepared_run_migrates_in_place_and_remains_idempotent(self):
+        request = json.dumps(dict(model=self.binding.model,
+            prompt=OllamaAdapter._prompt(self.handoff.payload), stream=False),
+            sort_keys=True, separators=(',', ':')).encode()
+        legacy_digest = hashlib.sha256(self.handoff.manifest_sha256.encode()
+                                       + b'\0' + request).hexdigest()
+        path = self.state / 'ollama-runs.sqlite'
+        with sqlite3.connect(path) as db:
+            db.execute('CREATE TABLE runs (run_id TEXT PRIMARY KEY, request_digest TEXT NOT NULL, '
+                       'state TEXT NOT NULL, response TEXT, error TEXT)')
+            db.execute('INSERT INTO runs(run_id,request_digest,state) VALUES (?,?,?)',
+                       (self.handoff.run_id, legacy_digest, 'prepared'))
+        path.chmod(0o600)
+        calls = []
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, raw:
+            (calls.append(raw), {'model': binding.model, 'response': 'ok'})[1])
+        self.assertEqual(adapter.dispatch(self.handoff, self.binding)['response'], 'ok')
+        self.assertEqual(adapter.dispatch(self.handoff, self.binding)['response'], 'ok')
+        self.assertEqual(len(calls), 1)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['adapter_id']), ('succeeded', 'ollama'))
+        self.assertNotEqual(row['request_digest'], legacy_digest)
+
+    def test_legacy_unknown_run_is_not_migrated_or_retried(self):
+        request = json.dumps(dict(model=self.binding.model,
+            prompt=OllamaAdapter._prompt(self.handoff.payload), stream=False),
+            sort_keys=True, separators=(',', ':')).encode()
+        legacy_digest = hashlib.sha256(self.handoff.manifest_sha256.encode()
+                                       + b'\0' + request).hexdigest()
+        path = self.state / 'ollama-runs.sqlite'
+        with sqlite3.connect(path) as db:
+            db.execute('CREATE TABLE runs (run_id TEXT PRIMARY KEY, request_digest TEXT NOT NULL, '
+                       'state TEXT NOT NULL, response TEXT, error TEXT)')
+            db.execute('INSERT INTO runs(run_id,request_digest,state) VALUES (?,?,?)',
+                       (self.handoff.run_id, legacy_digest, 'unknown'))
+        path.chmod(0o600)
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+                                lambda binding, raw: self.fail('must not retry'))
+        with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+            adapter.dispatch(self.handoff, self.binding)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertIsNone(row['adapter_id'])
 
     def test_conversation_payload_is_rendered_as_roles_not_base64_json(self):
         first, second = str(uuid4()), str(uuid4())

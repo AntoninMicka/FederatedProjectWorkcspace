@@ -16,6 +16,9 @@ import ssl
 import stat
 from urllib.parse import urlsplit
 
+from spikes.backend_contract import (BackendCapabilities, BackendExecution,
+                                     BackendRegistry, BackendResponseError,
+                                     BackendUnknown, ROLES)
 from spikes.context_builder import Target
 from spikes.metadata import require, uuid
 
@@ -23,11 +26,11 @@ from spikes.metadata import require, uuid
 OLLAMA_GENERATE_TIMEOUT = 180
 
 
-class UnknownRun(RuntimeError):
+class UnknownRun(BackendUnknown):
     pass
 
 
-class OllamaResponseError(RuntimeError):
+class OllamaResponseError(BackendResponseError):
     pass
 
 
@@ -40,6 +43,8 @@ class OllamaBinding:
     model: str
     target_id: str
     tls_cert_sha256: str | None = None
+
+    adapter_id = 'ollama'
 
     @classmethod
     def parse(cls, value):
@@ -91,6 +96,15 @@ class OllamaBinding:
         if self.tls_cert_sha256:
             value['tls_cert_sha256'] = self.tls_cert_sha256
         return value
+
+    def capabilities(self):
+        return BackendCapabilities(1, 'ollama-generate-v1',
+                                   frozenset({'generate-text'}),
+                                   frozenset({'text', 'json'})).validate()
+
+
+BACKENDS = BackendRegistry()
+BACKENDS.register('ollama', OllamaBinding.parse)
 
 
 class OllamaBindings:
@@ -165,17 +179,64 @@ class OllamaRuns:
         db.execute('CREATE TABLE IF NOT EXISTS runs ('
                    'run_id TEXT PRIMARY KEY, request_digest TEXT NOT NULL, state TEXT NOT NULL, '
                    'response TEXT, error TEXT)')
+        columns = {row[1] for row in db.execute('PRAGMA table_info(runs)')}
+        additions = {
+            'adapter_id': 'TEXT', 'binding_id': 'TEXT', 'binding_revision': 'TEXT',
+            'capability_revision': 'TEXT', 'operation': 'TEXT', 'output_format': 'TEXT',
+            'role_id': 'TEXT', 'role_revision': 'TEXT', 'manifest_sha256': 'TEXT'}
+        for name, kind in additions.items():
+            if name not in columns:
+                db.execute(f'ALTER TABLE runs ADD COLUMN {name} {kind}')
         db.commit()
         return closing(db)
 
     def get(self, run_id):
         uuid(run_id)
         with self.connect() as db:
-            row = db.execute('SELECT request_digest,state,response,error FROM runs WHERE run_id=?',
+            row = db.execute('SELECT request_digest,state,response,error,adapter_id,binding_id,'
+                             'binding_revision,capability_revision,operation,output_format,'
+                             'role_id,role_revision,manifest_sha256 FROM runs WHERE run_id=?',
                              (run_id,)).fetchone()
             return None if row is None else dict(request_digest=row[0], state=row[1],
                                                   response=json.loads(row[2]) if row[2] else None,
-                                                  error=row[3])
+                                                  error=row[3], adapter_id=row[4], binding_id=row[5],
+                                                  binding_revision=row[6], capability_revision=row[7],
+                                                  operation=row[8], output_format=row[9],
+                                                  role_id=row[10], role_revision=row[11],
+                                                  manifest_sha256=row[12])
+
+    def prepare(self, run_id, digest, legacy_digest, execution, manifest_sha256):
+        execution.validate()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT request_digest,state,adapter_id,binding_id,'
+                             'binding_revision,capability_revision,operation,output_format,'
+                             'role_id,role_revision,manifest_sha256 FROM runs WHERE run_id=?',
+                             (run_id,)).fetchone()
+            identity = (execution.adapter_id, execution.binding_id,
+                        execution.binding_revision, execution.capability_revision,
+                        execution.operation, execution.output_format,
+                        execution.role_id or None, execution.role_revision or None,
+                        manifest_sha256)
+            if row:
+                if row[2] is None:
+                    require(row[0] == legacy_digest, 'Run ID belongs to a different legacy request')
+                    if row[1] == 'prepared':
+                        db.execute('UPDATE runs SET request_digest=?,adapter_id=?,binding_id=?,binding_revision=?,'
+                                   'capability_revision=?,operation=?,output_format=?,role_id=?,'
+                                   'role_revision=?,manifest_sha256=? WHERE run_id=? AND '
+                                   'state=? AND adapter_id IS NULL',
+                                   (digest,) + identity + (run_id, 'prepared'))
+                else:
+                    require(row[0] == digest and tuple(row[2:]) == identity,
+                            'Run ID belongs to a different backend execution')
+            else:
+                db.execute('INSERT INTO runs(run_id,request_digest,state,adapter_id,binding_id,'
+                           'binding_revision,capability_revision,operation,output_format,role_id,'
+                           'role_revision,manifest_sha256) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                           (run_id, digest, 'prepared') + identity)
+            db.commit()
+        return self.get(run_id)
 
 
 class OllamaAdapter:
@@ -257,7 +318,23 @@ class OllamaAdapter:
         return '\n\n'.join(transcript)
 
     @staticmethod
-    def _request(handoff, binding):
+    def _execution(binding, role=None, output_format='text'):
+        capabilities = binding.capabilities()
+        if role is not None:
+            role = ROLES.resolve(role.role_id, role.revision)
+            require(role.output_format == output_format,
+                    'Role output format differs from backend request')
+            operation = role.operation
+            role_id, role_revision = role.role_id, role.revision
+        else:
+            operation = 'generate-text'; role_id = role_revision = ''
+        capabilities.require(operation, output_format)
+        return BackendExecution(binding.adapter_id, binding.binding_id, binding.revision,
+                                capabilities.revision, operation, output_format,
+                                role_id, role_revision)
+
+    @staticmethod
+    def _request(handoff, binding, role=None, output_format='text'):
         from spikes.context_builder import DispatchHandoff
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
@@ -265,26 +342,23 @@ class OllamaAdapter:
         request = json.dumps(dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                                   stream=False), sort_keys=True,
                              separators=(',', ':')).encode()
-        digest = hashlib.sha256(handoff.manifest_sha256.encode() + b'\0' + request).hexdigest()
-        return request, digest
+        execution = OllamaAdapter._execution(binding, role, output_format)
+        base = handoff.manifest_sha256.encode() + b'\0' + request
+        legacy_digest = hashlib.sha256(base).hexdigest()
+        digest = hashlib.sha256(base + b'\0' + execution.canonical()).hexdigest()
+        return request, digest, legacy_digest, execution
 
-    def prepare(self, handoff, binding):
-        _, digest = self._request(handoff, binding)
-        with self.runs.connect() as db:
-            db.execute('BEGIN IMMEDIATE')
-            row = db.execute('SELECT request_digest,state,response,error FROM runs WHERE run_id=?',
-                             (handoff.run_id,)).fetchone()
-            if row:
-                require(row[0] == digest, 'Run ID belongs to a different Ollama request')
-            else:
-                db.execute('INSERT INTO runs(run_id,request_digest,state) VALUES (?,?,?)',
-                           (handoff.run_id, digest, 'prepared'))
-            db.commit()
-        return self.runs.get(handoff.run_id)
+    def prepare(self, handoff, binding, role=None, output_format='text'):
+        _, digest, legacy_digest, execution = self._request(
+            handoff, binding, role, output_format)
+        return self.runs.prepare(handoff.run_id, digest, legacy_digest, execution,
+                                 handoff.manifest_sha256)
 
-    def dispatch(self, handoff, binding):
-        request, digest = self._request(handoff, binding)
-        row = self.prepare(handoff, binding)
+    def dispatch(self, handoff, binding, role=None, output_format='text'):
+        request, digest, legacy_digest, execution = self._request(
+            handoff, binding, role, output_format)
+        row = self.runs.prepare(handoff.run_id, digest, legacy_digest, execution,
+                                handoff.manifest_sha256)
         if row['state'] == 'succeeded':
             return row['response']
         if row['state'] in {'dispatching', 'unknown'}:
