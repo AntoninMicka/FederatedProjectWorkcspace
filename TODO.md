@@ -5,22 +5,61 @@ SPDX-License-Identifier: MPL-2.0
 
 # TODO — F-M3-EXTERNAL-01: První externí provider a řízené volání
 
-Milník M3; jedna dávka, jedna feature větev, jeden PR do `develop`.
-[Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
+Milník M3; jedna dávka, větev `feature/f-m3-external-01-first-provider`, budoucí
+PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M3-EXTERNAL-01 — První externí provider, context preview a privacy filtr
+## Rozsah a hranice
 
-- Stav: [ ] [in progress]; aktivováno po začlenění PR #35 dne 2026-09-19.
-- Původ: roadmapa M3 a backlog `F-M3-EXTERNAL-01`; uživatelský požadavek znovu využít textové a případně obrazové providery z AI Production Studia a navrhnout řízené návrhy volání přes Ollamu.
-- Skutečná větev: `feature/f-m3-external-01-first-provider`, založená z `develop` (`eb828fe`); jediný budoucí PR do `develop`.
-- Výstup: jeden explicitně zvolený externí textový provider přes společný backend kontrakt, credential reference mimo Git, přesný context preview a lidsky potvrzený dispatch. Běžné zadání pro Ollamu může obsahovat explicitně vybrané doplňující artefakty a vrátí právě jeden uzavřený výsledek: přímou odpověď, návrh artefaktu nebo připravený dotaz pro externí model. Ollama nesmí sama zapisovat artefakt ani provést externí síťové volání.
-- Mimo rozsah: usage/billing (`M3-UB-01`), automatický routing nebo fallback, obecný agent/tool runtime, synchronizace credentialů, multi-role workflow a produkční obrazový pipeline. Obrazové capability se v této dávce pouze vyhodnotí a případná implementace přejde do `F-M3-MEDIA-01`.
-- Recovery: schválení váže přesný manifest, payload, provider/binding/model a credential reference; durable `dispatching` vznikne před sítí, ztracená odpověď je `unknown` bez automatického retry. Credential hodnota se neukládá do manifestu, run evidence, logu ani Gitu.
-- Akceptace: `local-only` je odmítnuto před preview/dispatch; project/confidential vyžadují explicitní policy a lidské potvrzení přesných bajtů a cíle; stale HEAD, změna targetu/modelu/credential reference/policy nebo návrhu Ollamy zneplatní schválení; provider nemůže doplnit skrytý kontext; timeout/lost response se neopakuje a lokální Ollama dál funguje bez externí konfigurace.
+- Stav dávky: [ ] [in progress]; aktivováno po PR #35 dne 2026-09-19.
+- Výstup: první externí textový provider, write-only credential, přesný preview a
+  potvrzený dispatch; jednotné zadání Ollamě vrací přímou odpověď, návrh
+  artefaktu, nebo připravený externí dotaz.
+- Recovery: approval váže přesný manifest, payload, binding/model a credential
+  reference. Durable `dispatching` vzniká před sítí; ztracená odpověď je
+  `unknown` bez retry. Ollama sama nezapisuje do Gitu ani nevolá providera.
+- Mimo rozsah: usage/billing `M3-UB-01`, obrazový pipeline `F-M3-MEDIA-01`,
+  automatický routing/fallback, obecný agent runtime a synchronizace credentialů.
 
-- [x] [completed] **F-M3-EXTERNAL-01-A — Reuse, provider a tool-call kontrakt (cílová úroveň: designed).** Soukromé textové/obrazové adaptéry byly posouzeny pouze jako zdroj konceptů; bez doložené licence se kód nepřebírá a automatický provider pool, dynamický odhad capability, polykání chyb ani obecné URL downloady se nereusují. [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání) volí první textový `openai-responses` adapter, opaque node-local credential reference, přesný request/response a durable recovery kontrakt. `ExternalCallProposal` z Ollamy je pouze striktní nedůvěryhodný návrh; aplikace znovu autorizuje, vytvoří manifest/preview a vyžádá samostatné lidské potvrzení. Obrázky přecházejí do `F-M3-MEDIA-01`, usage/billing zůstává `M3-UB-01`. Ověření: oficiální Responses/Images API dokumentace, kontrola reuse hranice a dokumentační diff dne 2026-09-19; živé API dosud nevoláno.
-- [x] [completed] **F-M3-EXTERNAL-01-B — Credential reference a externí textový adapter (cílová úroveň: implemented).** `OpenAIBinding` fixuje oficiální Responses endpoint, boundary, explicitní modelové ID, limity a revizi opaque credential reference. Node-local write-only credential store ani API/status/DOM nevracejí secret; nové uložení vytvoří novou reference a bezpečně zneplatní starý binding. `OpenAIAdapter` připravuje deterministický `store=false`, netruncovaný text/JSON request, odmítá redirect, tool call, změnu modelu i nečekanou response obálku a používá samostatný durable run journal se stavem `unknown` bez retry. Nastavení zobrazuje samostatný formulář externího provideru a přesný allowlistovaný odkaz pro vytvoření/správu klíče otevřený v systémovém prohlížeči; workspace nepřebírá webovou session ani Admin API key. Následná oprava přijímá oficiální nedatovaná ID jako `gpt-5.6-luna` místo vymyšleného snapshotu; skutečně ohlášený model se stále kontroluje proti schválenému bindingu. V této fázi zůstal projektový dispatch záměrně nedostupný až do navazujícího úkolu C. Ověření opravy: 10 cílených testů a úplná sada `python3 -m unittest discover -s tests -v` dne 2026-09-19 — 300 testů, 22 environmentálních skipů. Živý ani placený API request nebyl proveden.
-- [x] [completed] **F-M3-EXTERNAL-01-B1 — Načtení modelového katalogu (cílová úroveň: implemented; ad-hoc požadavek uživatele).** Explicitní tlačítko načte přes uloženou credential reference omezený a validovaný seznam kandidátů pro textový Responses adapter, atomicky jej cachuje mimo Git s časem a revizí credential a nabídne přes bezpečný `datalist`; cache se po restartu načte pouze pro přesně odpovídající binding a credential revizi, ruční ID zůstává možné. Seznam sám nemění binding, nevrací secret a chyba zachová poslední cache i uložené nastavení. Koncept načtení byl adaptován ze soukromého AI Production Studia bez kopie kódu; jmenné capability heuristiky, automatický výběr a provider pool byly odmítnuty. Ověření: 12 cílených testů; úplná sada `python3 -m unittest discover -s tests -v` dne 2026-09-19 — 302 testů, 22 environmentálních skipů. Živý OpenAI request nebyl proveden.
-- [x] [completed] **F-M3-EXTERNAL-01-C — Context preview, privacy policy a potvrzený dispatch (cílová úroveň: PoC validated).** Ručně vyžádaný externí tok nejprve durable uloží a v UI zobrazí přesné zprávy, nejsilnější privacy, projektový commit, provider/endpoint/model, velikost payloadu a skutečné Responses request body bez credential. `local-only` selže před preview; `project` a `confidential` vyžadují samostatný checkbox a potvrzení hashe. Confirm znovu ověřuje HEAD, vlastníka a revizi vlákna, policy, binding/model/credential revizi, manifest, payload i request bajty; cancel nevytvoří turn. Oddělený approval journal obnoví restart a pád po přípravě chatového turnu, úspěšný opakovaný confirm neodesílá znovu a `unknown` zůstává terminální bez retry. Ověření: 24 cílených testů; úplná sada `python3 -m unittest discover -s tests -v` dne 2026-09-19 — 306 testů, 22 environmentálních skipů. Živý ani placený OpenAI dispatch nebyl proveden; ten zůstává ruční akceptací uživatele.
-- [ ] [in progress] **F-M3-EXTERNAL-01-D — Ollama návrh externího volání a integrační akceptace (cílová úroveň: PoC validated).** Implementováno: lokální role `external-call-planner` smí vrátit pouze přesně validovanou `ExternalCallProposal` v1 s účelem, rolí `creator`, capability `generate-text`, formátem `text` a seřazeným výběrem zpráv. Aplikace znovu ověří dostupné zprávy a povinnou novou uživatelskou zprávu; UI dovolí člověku výběr upravit nebo návrh zahodit a teprve poté sestaví nový manifest a nezávislé externí preview. Návrh sám neuděluje oprávnění, není součástí approval autority a nikdy automaticky nespouští provider. Durable Ollama run umožňuje bezpečný replay po restartu služby; timeout zůstává `unknown` bez fallbacku či opakování. První živý pokus odhalil chybějící UUID v promptu plánovače; oprava je doplnila. Následné dva potvrzené OpenAI requesty podle durable lokální evidence obdržely dokončenou provider odpověď, ale příliš úzký parser odmítl obálku s doplňujícím `reasoning` itemem. Parser nyní přijímá libovolné pořadí neaktivních `reasoning` položek a právě jednu textovou `message`, reasoning nezpřístupní a nadále odmítá tool cally, neznámé aktivní položky i více výsledných zpráv; chyba dispatch má vlastní bezpečnou UI hlášku. Dosavadní dvě volání mohou být účtovaná a neopakují se automaticky. Testy pokrývají striktní schéma a neznámá pole/akce/role, prompt-injection boundary, nedostupnou Ollamu, `local-only`, restart-safe replay a celý mockovaný tok Ollama → preview → potvrzený OpenAI dispatch. Ověření po opravě: 13 cílených testů a úplná sada `python3 -m unittest discover -s tests -v` dne 2026-09-19 — 311 testů, 22 environmentálních skipů. Zbývá jeden nový ručně potvrzený živý průchod; jeho případné náklady musí uživatel znovu výslovně potvrdit.
-- [ ] [planned] **F-M3-EXTERNAL-01-E — Jednotné lokální zadání a tři typy výstupu (cílová úroveň: PoC validated; změna flow požadovaná uživatelem).** Nahradit samostatné primární akce `Odeslat` / `Navrhnout přes Ollamu` jedním zpracováním přes Ollamu. Zadání smí nést explicitně vybrané zprávy a doplňující projektové artefakty v jednom Context Manifestu. Striktní diskriminovaný výstup dovolí právě jednu variantu: `direct-answer` (uložená odpověď ve vlákně), `artifact-draft` (název, typ a potenciálně dlouhý obsah), nebo `external-request` (účel, potenciálně dlouhý hotový dotaz a explicitní zdroje). Návrhové varianty se v chatu před rozhodnutím zobrazí celé jako jasně označené dočasné zprávy bez umělého zkrácení, ale s bezpečnými limity zdrojů a velikosti. Po potvrzení se dočasná zpráva atomicky nahradí kompaktní trvalou reprezentací: u artefaktu odkazem na potvrzeně vytvořený projektový artefakt, u externí varianty pouze záznamem, že proběhlo externí volání, s neobsahovým provozním ID a stavem. Přesný plný obsah zůstane v durable preview/run evidenci pro recovery a audit, nikoli duplicitně ve vlákně; zamítnutý návrh z běžného chatu zmizí. Zápis do Gitu i externí dispatch nastanou až po lidském potvrzení. Neznámá varianta či pole jsou chyba; modelový text nikdy není oprávnění k zápisu ani síťové akci. Přímé ruční externí preview může zůstat jako pokročilá záložní akce, ne jako rovnocenný hlavní tok. Ověřit dlouhé výstupy a limity, dočasnou/plnou a potvrzenou/redukovanou projekci, atomickou náhradu po pádu, reload/restart, privacy ze všech zpráv i artefaktů, stale HEAD, změnu výběru, zamítnutí obou návrhových větví a celý lokální i externí průchod.
+## Dokončené části dávky
+
+- [x] [completed] **F-M3-EXTERNAL-01-A — Reuse a kontrakt (designed).** ADR 0008
+  volí `openai-responses`, opaque node-local credential a nedůvěryhodný návrh
+  Ollamy; soukromý kód bez doložené licence nebyl převzat.
+- [x] [completed] **F-M3-EXTERNAL-01-B — Credential a textový adapter
+  (implemented).** Přesný `store=false` request, striktní response parser,
+  durable run journal, `unknown` bez retry a bezpečné nastavení bez vracení
+  secretu. Úplná sada po opravě modelových ID: 300 testů, 22 skipů.
+- [x] [completed] **F-M3-EXTERNAL-01-B1 — Modelový katalog (implemented).**
+  Explicitní omezené načtení, cache vázaná na binding/credential revizi a ruční
+  modelové ID. Úplná sada: 302 testů, 22 skipů.
+- [x] [completed] **F-M3-EXTERNAL-01-C — Preview, privacy a potvrzený dispatch
+  (PoC validated).** `local-only` fail-closed; ostatní privacy vyžadují potvrzení
+  přesného hashe. Recovery po restartu/pádu neodesílá podruhé. Úplná sada:
+  306 testů, 22 skipů.
+- [x] [completed] **F-M3-EXTERNAL-01-D — Ollama návrh a živá integrační
+  akceptace (PoC validated).** Striktní návrh, explicitní výběr, nový manifest a
+  samostatné potvrzení. První živé pokusy odhalily chybějící UUID v promptu a
+  `reasoning` položku Responses API; obě opravy jsou fail-closed a tool cally
+  zůstávají odmítnuté. Dva dřívější provider requesty mohou být účtované a
+  neopakují se. Uživatel 2026-09-19 potvrdil úspěšný celý průchod po opravě.
+  Ověření: 311 testů, 22 skipů, plus živá Ollama → OpenAI akceptace.
+
+## Aktivní část E — jednotné lokální zadání a tři typy výstupu
+
+- [x] [completed] **F-M3-EXTERNAL-01-E1 — Uzavřený outcome kontrakt
+  (implemented).** `AITaskOutcome` dovoluje pouze `direct-answer`,
+  `artifact-draft` nebo `external-request`; omezuje velikost, typ artefaktu a
+  UUID zdrojů, odmítá provider/credential/tool pole. Přidána provider-neutral
+  role `task-router-v1`. Ověření: vlastní testy a úplná sada 313 testů,
+  22 environmentálních skipů dne 2026-09-19.
+- [ ] [planned] **F-M3-EXTERNAL-01-E2 — Durable orchestrace a artefaktový kontext
+  (PoC validated).** Jeden Context Manifest pro explicitní zprávy, zadání a
+  doplňující artefakty; bezpečný replay po restartu a privacy maximum všech
+  skutečně použitých vstupů.
+- [ ] [planned] **F-M3-EXTERNAL-01-E3 — Dočasné dlouhé zprávy a potvrzení
+  (PoC validated).** Plné návrhy obnovitelné v chatu; artifact preview/publish,
+  external preview/confirm/cancel a atomická redukce na odkaz či provozní záznam.
+- [ ] [planned] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační akceptace
+  (PoC validated).** Jedna hlavní akce, volba artefaktů, tři výsledné větve,
+  limity bez tichého oříznutí, pády/reload a úplná sada. Ruční externí preview
+  zůstane pouze pokročilou záložní akcí.
