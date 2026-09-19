@@ -127,6 +127,18 @@ identitu bindingu ani durable `unknown` recovery. Existující Ollama kód se
 adaptuje za provider-neutral rozhraní bez kopie transportu a bez automatického
 fallbacku. Rozhodnutí a kompatibilní migrace: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#provider-neutral-aplikační-kontrakt-v1).
 
+F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
+soukromá inventura obsahuje obecné backendové capability, textový a obrazový
+adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context
+Manifest, explicitní privacy autorizaci, přesný target a durable `unknown`
+recovery. Automatický výběr prvního dostupného backendu, odhad capabilities z
+názvu modelu, převod chyb na prázdný výsledek a stahování libovolné URL se
+odmítají. První textový adapter se napíše nad společným interním kontraktem a
+aktuálním oficiálním [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create);
+obrazová capability zůstává oddělená podle [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate).
+Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
+Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
