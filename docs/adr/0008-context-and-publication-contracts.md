@@ -313,6 +313,56 @@ recovery a jejich licence nejsou pro přenos doložené; kód se nepřebírá. N
 vektorová databáze, message queue, parser, externí framework ani další
 projektové úložiště nejsou potřeba.
 
+## Lokální strukturovaná extrakce — F-M2-EXTRACT-01
+
+Extractor je explicitní jednorázový úkol nad stejnou autorizační a recovery
+hranicí jako summarizer. Kanonický `fpw-extraction-request-v1` nese stabilní
+task/run/manifest ID, project ID a expected HEAD, `extractor-v1`, přesný
+same-node binding, právě jeden artifact nebo thread/message výběr a předem
+zvolené `schema_id`/`schema_revision`. V1 nepřijímá uživatelské JSON Schema,
+automaticky nevolí schéma ani zdroje a nepoužívá RAG. Volitelný focus zůstává
+samostatným manifestovaným vstupem nejvýše 16 KiB s vlastní privacy.
+
+Podporovaný katalog v1 je záměrně uzavřený:
+
+- `facts` / `facts-v1`: přesný objekt `{"schema":"facts-v1","items":[...]}`;
+  každá položka má právě `statement` a `source_ids`,
+- `action-items` / `action-items-v1`: přesný objekt
+  `{"schema":"action-items-v1","items":[...]}`; každá položka má právě
+  `title`, `details` a `source_ids`.
+
+`items` obsahuje 0 až 128 objektů. Texty jsou neprázdné, bez NUL, `title`
+nejvýše 200 bajtů UTF-8 a ostatní textové pole nejvýše 4096 bajtů. Každý
+`source_ids` je neprázdný seřazený unikátní seznam UUID z explicitně vybraných
+zdrojů; focus ID není zdrojová reference. Parser přijímá právě jeden UTF-8 JSON
+objekt nejvýše 1 MiB, odmítá Markdown fence, trailing data, duplicitní klíče,
+neznámá pole, špatný schema tag, chybějící pole a nečíselné konstanty. Teprve
+po této validaci uloží task journal kanonické JSON bajty a jejich SHA-256 jako
+preview; původní provider response zůstává dohledatelná pouze v odděleném
+`OllamaRuns`. Nevalidní známá odpověď je `failed`, nikoli preview k potvrzení.
+
+Potvrzení váže task ID, preview hash, artifact ID, title, operation ID a
+expected HEAD. Workspace znovu ověří původní zdroje či přesnou thread revizi,
+manifest, schema revision a nejpřísnější privacy. Publikuje neměnný
+`kind: source`, `provenance: llm-generated`, soubor `extraction.json` jako
+kanonický objekt `fpw-extraction-v1` s omezenou provenance (task/run/manifest a
+hash, role/schema, project commit, bezpečné source ID/hash/privacy, přesný cíl,
+preview hash/privacy) a validovanými daty. Projektové vstupy dostanou vztah
+`derived-from`; message ID zůstanou pouze v obálce. Celý výstup je neměnný pod
+stejným UUID stejně jako jiné source artefakty; oprava nebo jiné schéma znamená
+nový task a nové UUID.
+
+Task journal adaptuje schéma a přechody `SummaryTasks`, ale extractor má vlastní
+store a význam, aby se role, validátor a publikace nemohly zaměnit. Reuse
+ContextBuilderu, Ollama binding/run lifecycle, Workspace a omezeného JSON
+parseru/UUID primitiv z `metadata.py` je přímý; summarizer orchestrace se
+adaptuje společnými malými helpery pouze tam, kde nezamlží odlišnou validaci.
+Soukromě inventarizovaný jednoduchý Ollama klient ani externí schema framework
+neřeší manifest, oprávnění, přesný recovery lifecycle či omezený katalog; kód
+se nepřebírá a nová runtime závislost nevzniká. Crash boundaries jsou stejné:
+`unknown` síťový účinek se neopakuje, preview nemění Git a stejný publish
+request po pádu před/po CAS pouze dokončí Workspace receipt a task.
+
 ## Větve a publikace při změně HEAD
 
 Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.

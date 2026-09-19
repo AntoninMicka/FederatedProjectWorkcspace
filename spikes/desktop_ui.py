@@ -46,7 +46,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
 <button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
 <button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
-<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button></div>
+<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
+<button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button></div>
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
@@ -82,7 +83,24 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="summary-preview" aria-label="Náhled souhrnu"></div>
 <div id="summary-publish-controls" hidden><label for="summary-title">Název dokumentu</label>
 <input id="summary-title" maxlength="200" value="Souhrn projektu">
-<button id="summary-publish" type="button">Uložit do projektu</button></div></div></div>
+<button id="summary-publish" type="button">Uložit do projektu</button></div></div>
+<div id="extraction-panel" role="tabpanel" aria-labelledby="extraction-tab" hidden><h2>Strukturovaná extrakce</h2>
+<p>Vyberte podklady a uzavřené schéma. Náhled se uloží až po potvrzení.</p>
+<label>Schéma <select id="extraction-schema"><option value="facts|facts-v1">Fakta</option>
+<option value="action-items|action-items-v1">Akční položky</option></select></label>
+<label>Zdroj <select id="extraction-kind"><option value="artifacts">Vybrané podklady</option>
+<option value="messages">Aktuální chat</option></select></label>
+<fieldset id="extraction-artifacts"><legend>Podklady</legend><div id="extraction-artifact-list"></div></fieldset>
+<label for="extraction-focus">Zaměření (volitelné)</label><textarea id="extraction-focus" rows="2" maxlength="16384"></textarea>
+<label for="extraction-focus-privacy">Soukromí zaměření</label><select id="extraction-focus-privacy">
+<option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option>
+<option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
+<button id="extraction-generate" type="button">Vytvořit náhled</button>
+<p id="extraction-status" role="status" aria-live="polite"></p>
+<pre id="extraction-preview" aria-label="Náhled extrakce"></pre>
+<div id="extraction-publish-controls" hidden><label for="extraction-title">Název zdroje</label>
+<input id="extraction-title" maxlength="200" value="Strukturovaná extrakce">
+<button id="extraction-publish" type="button">Uložit do projektu</button></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
@@ -134,7 +152,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
-#summary-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select{padding:9px;max-width:100%}#summary-focus{width:100%;resize:vertical}#summary-artifacts{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label{font-weight:400}#summary-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#summary-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
+#summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -192,6 +210,7 @@ function renderSidebarArtifacts(items){
  row.append(title,id);sidebarArtifacts.append(row);
  }
  renderSummarySources();
+ renderExtractionSources();
 }
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
@@ -229,7 +248,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
- currentArtifacts=[];clearSummary();
+ currentArtifacts=[];clearSummary();clearExtraction();
  activeThread=null;pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
@@ -378,6 +397,9 @@ async function openPreview(id,page=1){
   }
   document.querySelector('#preview-details').hidden=false;
   if(result.format==='markdown')renderMarkdown(result.text);
+  else if(result.format==='json'){
+   const pre=document.createElement('pre');pre.textContent=result.text;previewContent.append(pre);
+  }
   else if(result.format==='image' || result.format==='pdf'){
    const image=document.createElement('img');image.alt=result.metadata.title;
    image.addEventListener('error',()=>{if(request===previewRequest)previewStatus.textContent='Obrázek se nepodařilo zobrazit.';});
@@ -579,6 +601,60 @@ document.querySelector('#summary-publish').addEventListener('click',async event=
  }catch(error){summaryStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+let extractionPreview=null,pendingExtractionRequest=null,pendingExtractionPublish=null;
+const extractionStatus=document.querySelector('#extraction-status');
+const extractionPreviewElement=document.querySelector('#extraction-preview');
+function clearExtraction(){
+ extractionPreview=null;pendingExtractionRequest=null;pendingExtractionPublish=null;
+ if(extractionPreviewElement)extractionPreviewElement.textContent='';
+ const controls=document.querySelector('#extraction-publish-controls');if(controls)controls.hidden=true;
+ if(extractionStatus)extractionStatus.textContent='';
+}
+function renderExtractionSources(){
+ const list=document.querySelector('#extraction-artifact-list');if(!list)return;list.replaceChildren();
+ for(const item of currentArtifacts){const label=document.createElement('label');const input=document.createElement('input');
+  input.type='checkbox';input.value=item.id;label.append(input,document.createTextNode(' '+item.title));list.append(label);}
+}
+document.querySelector('#extraction-kind').addEventListener('change',event=>{
+ document.querySelector('#extraction-artifacts').hidden=event.target.value!=='artifacts';clearExtraction();
+});
+document.querySelector('#extraction-generate').addEventListener('click',async event=>{
+ if(!activeProject || !chatBinding){extractionStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
+ try{
+  const kind=document.querySelector('#extraction-kind').value;let selection;
+  if(kind==='artifacts'){
+   const ids=[...document.querySelectorAll('#extraction-artifact-list input:checked')].map(item=>item.value);
+   if(!ids.length)throw new Error('Vyberte alespoň jeden podklad.');
+   selection={kind:'artifacts',artifact_ids:ids};
+  }else{const thread=await assignActiveThread();if(!thread.messages.length)throw new Error('Aktuální chat nemá zprávy.');
+   selection={kind:'messages',thread_id:thread.thread_id,thread_revision:thread.revision,
+    message_ids:thread.messages.map(item=>item.message_id)};}
+  const [schemaId,schemaRevision]=document.querySelector('#extraction-schema').value.split('|');
+  const focusText=document.querySelector('#extraction-focus').value.trim();
+  if(!pendingExtractionRequest)pendingExtractionRequest={schema:'fpw-extraction-request-v1',task_id:crypto.randomUUID(),
+   run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,
+   role_id:'extractor',role_revision:'extractor-v1',target:chatBinding,schema_id:schemaId,
+   schema_revision:schemaRevision,selection,focus:focusText?
+   {input_id:crypto.randomUUID(),content:focusText,privacy:document.querySelector('#extraction-focus-privacy').value}:null};
+  event.currentTarget.disabled=true;extractionStatus.textContent='Připravuji extrakci…';
+  const result=await projectRequest('/v1/extraction/preview',pendingExtractionRequest,210000);
+  extractionPreview=result;pendingExtractionRequest=null;pendingExtractionPublish=null;
+  extractionPreviewElement.textContent=JSON.stringify(JSON.parse(result.response),null,2);
+  document.querySelector('#extraction-publish-controls').hidden=false;
+  extractionStatus.textContent=`Náhled je připraven · soukromí: ${result.privacy}.`;
+ }catch(error){extractionStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#extraction-publish').addEventListener('click',async event=>{
+ if(!extractionPreview || !activeProject)return;
+ try{const title=document.querySelector('#extraction-title').value.trim();if(!title)throw new Error('Zadejte název extrakce.');
+  if(!pendingExtractionPublish)pendingExtractionPublish={task_id:extractionPreview.task_id,
+   preview_sha256:extractionPreview.response_sha256,project_id:activeProject.id,expected_head:activeProject.head,
+   artifact_id:crypto.randomUUID(),title,created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
+  event.currentTarget.disabled=true;extractionStatus.textContent='Ukládám extrakci do projektu…';
+  await projectRequest('/v1/extraction/publish',pendingExtractionPublish);const projectId=activeProject.id;
+  extractionStatus.textContent='Extrakce byla uložena do projektu.';await openRegisteredProject(projectId);
+ }catch(error){extractionStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
 loadProjects();
 """
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
@@ -591,13 +667,20 @@ class DesktopHandler(Handler):
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
-        '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish'}
+        '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
+        '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path == '/v1/extraction/status' and request == {}:
+                return self.reply(200, self.server.extraction_service.status())
+            if self.path == '/v1/extraction/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.extraction_service.preview(request))
+            if self.path == '/v1/extraction/publish' and isinstance(request, dict):
+                return self.reply(200, self.server.extraction_service.publish(request))
             if self.path == '/v1/summary/status' and request == {}:
                 return self.reply(200, self.server.summary_service.status())
             if self.path == '/v1/summary/preview' and isinstance(request, dict):
@@ -642,7 +725,7 @@ class DesktopHandler(Handler):
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-            if self.path.startswith(('/v1/chat/', '/v1/summary/')):
+            if self.path.startswith(('/v1/chat/', '/v1/summary/', '/v1/extraction/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
                                        'projekt, výběr kontextu a lokální stav.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.

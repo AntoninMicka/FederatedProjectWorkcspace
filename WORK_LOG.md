@@ -5,6 +5,24 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-SUMMARY-01 — Lokální projektové souhrny — 2026-09-18
+
+Dávka uzavřena po začlenění PR #31 jako commit `3059dbb` v `develop`; feature
+větev `feature/f-m2-summary-01-local-summaries` dodala explicitní lokální
+summarizaci, trvalý náhled a potvrzenou projektovou publikaci. Dosažená úroveň
+je lokální PoC validated; skutečný Qt/WebEngine smoke a živý Ollama model
+zůstaly podmíněné prostředím.
+
+- [x] [completed] **F-M2-SUMMARY-01-A — Kontrakt souhrnu a reuse review (designed).** ADR 0008 vymezuje `fpw-summary-request-v1`, role `summarizer-v1`, výhradní artifact nebo message selection, limity, nejpřísnější privacy a oddělení LLM běhu od projektové publikace.
+- [x] [completed] **F-M2-SUMMARY-01-B — Lokální summarizer a bezpečný náhled (implemented).** Context Manifest váže čitelnou instrukci, přesné vstupy/focus/cíl; same-node Ollama a node-local task journal obnoví úspěšný běh bez druhého transportu a automaticky neopakují `unknown`.
+- [x] [completed] **F-M2-SUMMARY-01-C — Potvrzená publikace, desktop UI a akceptace (PoC validated).** Autentizované UI/API nabízí výběr, bezpečný náhled a potvrzení; Workspace publikuje jediný Markdown dokument s neměnnou `fpw-summary-v1` provenance, nejpřísnější privacy a vztahy `summarizes`.
+
+Ověření finálního obsahu: `py_compile`, `node --check`, cílené
+backend/API/UI/metadata testy a kompletní sada 264 testů OK, 22 podmíněných
+skipů. Testy pokryly stale/unknown, restart, absenci Git zápisu při preview,
+idempotentní retry a pády před i po posunu refu i po dokončení Workspace.
+Gate M1 nadále čeká na odložený `M1-07-C`.
+
 ## F-M2-CHAT-02 — Projektová vlákna, otisky a Markdown výstupy — 2026-09-18
 
 Dávka uzavřena po začlenění PR #30 jako commit `db4917e` v `develop`; feature

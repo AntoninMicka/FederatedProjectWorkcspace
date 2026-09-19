@@ -174,6 +174,15 @@ projektových podkladů vztahy `summarizes`. Neurčitý LLM běh se automaticky
 neopakuje; ztracená odpověď během projektové publikace se obnoví přes stejný
 operation ID bez druhého dokumentu nebo commitu.
 
+Záložka **Extrakce** pracuje obdobně, ale uživatel předem volí jedno z uzavřených
+schémat `facts-v1` nebo `action-items-v1` a explicitní projektové podklady.
+Modelový výstup musí být striktní JSON se source reference pouze na tento výběr;
+neznámá pole, chybějící hodnoty, Markdown obálka nebo cizí zdroj se odmítnou.
+Bezpečně vykreslený node-local náhled projekt nemění. Potvrzením vznikne neměnný
+JSON artefakt druhu `source` s provenance `llm-generated`, zděděnou nejpřísnější
+privacy a vztahy `derived-from`. Publikace znovu kontroluje HEAD i původní bajty
+zdrojů a stejné task/operation ID obnoví přerušený zápis bez duplicity.
+
 První odpověď po načtení většího modelu může trvat déle. Adapter čeká na Ollama
 generate až 180 sekund a desktopový požadavek 210 sekund, aby klient neukončil
 spojení dříve než backend. Timeout po zahájení dispatch zůstává stavem `unknown`;

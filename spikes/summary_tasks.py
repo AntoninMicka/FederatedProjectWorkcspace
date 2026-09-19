@@ -19,13 +19,15 @@ MAX_OUTPUT = 1024 * 1024
 
 
 class SummaryTasks:
-    def __init__(self, state_dir):
+    def __init__(self, state_dir, filename='summary-tasks.sqlite'):
         self.root = Path(state_dir).absolute()
         info = self.root.stat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
                 and stat.S_IMODE(info.st_mode) == 0o700,
                 'Summary state directory requires owned mode 0700')
-        self.path = self.root / 'summary-tasks.sqlite'
+        require(filename in {'summary-tasks.sqlite', 'extraction-tasks.sqlite'},
+                'Unsupported task store')
+        self.path = self.root / filename
 
     def connect(self):
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)

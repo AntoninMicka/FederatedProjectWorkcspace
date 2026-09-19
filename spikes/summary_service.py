@@ -32,6 +32,13 @@ def _canonical(value):
 
 
 class SummaryService:
+    request_schema = 'fpw-summary-request-v1'
+    role_id = 'summarizer'
+    role_revision = 'summarizer-v1'
+    policy_revision = 'desktop-summary-v1'
+    session_prefix = 'summary:'
+    task_filename = 'summary-tasks.sqlite'
+
     def __init__(self, node_path, projects, *, state_dir=None, chat_state_dir=None,
                  adapter_factory=None):
         self.node_path = Path(node_path).absolute()
@@ -60,7 +67,7 @@ class SummaryService:
         root = self._root()
         runs = OllamaRuns(root)
         adapter = self.adapter_factory(runs) if self.adapter_factory else OllamaAdapter(runs)
-        return SummaryTasks(root), OllamaBindings(root), adapter
+        return SummaryTasks(root, self.task_filename), OllamaBindings(root), adapter
 
     def configure(self, value):
         binding = OllamaBinding.parse(value)
@@ -86,15 +93,16 @@ class SummaryService:
                 publish=task['publish'], receipt=task['receipt']))
         return {'binding': binding, 'tasks': rows}
 
-    @staticmethod
-    def _request(request):
+    @classmethod
+    def _request(cls, request):
         require(isinstance(request, dict) and set(request) == {
             'schema', 'task_id', 'run_id', 'manifest_id', 'project_id',
-            'expected_head', 'role_id', 'role_revision', 'target', 'selection', 'focus'},
+            'expected_head', 'role_id', 'role_revision', 'target', 'selection', 'focus'}
+                | cls._extra_request_fields(),
             'Invalid summary request')
-        require(request['schema'] == 'fpw-summary-request-v1', 'Unsupported summary request')
-        require(request['role_id'] == 'summarizer'
-                and request['role_revision'] == 'summarizer-v1',
+        require(request['schema'] == cls.request_schema, 'Unsupported summary request')
+        require(request['role_id'] == cls.role_id
+                and request['role_revision'] == cls.role_revision,
                 'Unsupported summary role')
         for key in ('task_id', 'run_id', 'manifest_id', 'project_id'):
             uuid(request[key])
@@ -129,7 +137,24 @@ class SummaryService:
                     and '\0' not in focus['content']
                     and len(focus['content'].encode()) <= 16 * 1024,
                     'Invalid or oversized summary focus')
+        cls._validate_extra_request(request)
         return selection, ids, focus
+
+    @classmethod
+    def _extra_request_fields(cls):
+        return set()
+
+    @classmethod
+    def _validate_extra_request(cls, request):
+        return None
+
+    @classmethod
+    def _instruction(cls, request):
+        return SUMMARY_INSTRUCTION
+
+    @classmethod
+    def _validate_preview(cls, response, source_ids, request):
+        return response
 
     @staticmethod
     def _handoff(task, binding):
@@ -206,14 +231,14 @@ class SummaryService:
                 focus_id = focus['input_id']
                 ad_hoc_inputs += (AdHocInput(focus_id, focus['content'].encode(), focus['privacy']),)
                 privacy.append(focus['privacy'])
-            authority = Authority('summary:' + request['task_id'], user_id, node_id,
-                                  'desktop-summary-v1', readable)
+            authority = Authority(self.session_prefix + request['task_id'], user_id, node_id,
+                                  self.policy_revision, readable)
             builder = ContextBuilder(workspace, request['project_id'])
             prepared = builder.prepare(manifest_id=request['manifest_id'], run_id=request['run_id'],
                 authority=authority, target=binding.target(), project_inputs=project_inputs,
                 ad_hoc_inputs=ad_hoc_inputs, conversation=conversation,
                 task=TaskInstruction(request['role_id'], request['role_revision'],
-                                     SUMMARY_INSTRUCTION, focus_id))
+                                     self._instruction(request), focus_id))
             if conversation is not None:
                 current = ChatThreads(self.chat_state_dir).get(selection['thread_id'], node_id, user_id)
                 require(current['revision'] == selection['thread_revision'],
@@ -231,7 +256,8 @@ class SummaryService:
             adapter.prepare(handoff, binding)
             response = adapter.dispatch(handoff, binding)
             checkpoint('response-received')
-            task = tasks.succeed(request['task_id'], node_id, user_id, response['response'])
+            preview = self._validate_preview(response['response'], ids, request)
+            task = tasks.succeed(request['task_id'], node_id, user_id, preview)
             checkpoint('succeeded')
             return self._result(request['task_id'], task)
         except UnknownRun as exc:

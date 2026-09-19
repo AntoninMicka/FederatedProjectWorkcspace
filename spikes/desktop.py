@@ -16,6 +16,7 @@ from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
+from spikes.extraction_service import ExtractionService
 
 
 def request_policy(url, initiator, method, origin):
@@ -108,6 +109,9 @@ def main():
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
         server.summary_service = SummaryService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir,
+            chat_state_dir=server.chat_service.state_dir)
+        server.extraction_service = ExtractionService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
         profile = QWebEngineProfile(app)  # unnamed => off the record
