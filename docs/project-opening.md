@@ -183,6 +183,16 @@ JSON artefakt druhu `source` s provenance `llm-generated`, zděděnou nejpřísn
 privacy a vztahy `derived-from`. Publikace znovu kontroluje HEAD i původní bajty
 zdrojů a stejné task/operation ID obnoví přerušený zápis bez duplicity.
 
+Záložka **Metadata** vytvoří pro jeden explicitně vybraný artefakt lokální návrh
+popisu a nových štítků. Náhled ukáže původní i navržený popis; jeho použití je
+samostatná volba. Každý nový štítek se potvrzuje zvlášť a přidává se ke
+stávajícím hodnotám — návrh je automaticky nemaže ani nepřejmenovává. Bez
+alespoň jedné vybrané změny nelze nic uložit. Model nemění název, typ, privacy
+ani provenance artefaktu. Před potvrzeným commitem se znovu ověří projektový
+HEAD, původní metadata i obsah; zastaralý návrh proto nepřepíše mezitím
+provedenou ruční změnu. Přerušený zápis lze zopakovat se stejnou operací bez
+druhého metadata commitu.
+
 První odpověď po načtení většího modelu může trvat déle. Adapter čeká na Ollama
 generate až 180 sekund a desktopový požadavek 210 sekund, aby klient neukončil
 spojení dříve než backend. Timeout po zahájení dispatch zůstává stavem `unknown`;

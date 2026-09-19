@@ -814,8 +814,8 @@ Aktualizace 2026-09-18: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [x] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty — F-M2-CHAT-02, PR #30.
 - [x] Summarizer — F-M2-SUMMARY-01 lokálně PoC validated a začleněn PR #31: explicitní artifact/message výběr, same-node preview, potvrzená recovery-safe publikace a desktopové API/UI.
 - [x] Extractor — F-M2-EXTRACT-01 lokálně PoC validated: uzavřený schema kontrakt, lokální validovaný preview a potvrzená recovery-safe publikace s provenance a desktopovým API/UI; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
-- [ ] Auto-description — F-M2-META-AI-01 v realizaci; kontrakt explicitního lokálního návrhu a potvrzení je designed v ADR 0008.
-- [ ] Tagging — součást F-M2-META-AI-01; v1 navrhuje pouze potvrzené aditivní štítky bez automatického mazání.
+- [x] Auto-description — F-M2-META-AI-01 lokálně PoC validated: durable same-node návrh, bezpečný diff a potvrzený recovery-safe metadata commit; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
+- [x] Tagging — F-M2-META-AI-01 lokálně PoC validated; v1 ukládá pouze jednotlivě potvrzené aditivní štítky bez automatického mazání.
 - [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány v lokálním PoC, obecná backendová integrace zůstává další práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
