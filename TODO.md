@@ -72,8 +72,8 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   route/list/cancel, artifact publish a external preview/confirm/cancel.
   Ověření: úplná sada 319 testů, 22 environmentálních skipů dne
   2026-09-19; předchozí sandboxový běh selhal pouze na zakázaném socket bindu.
-- [ ] [in progress] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační
-  akceptace (implemented; živá akceptace otevřená).** Hlavní `Zpracovat`
+- [x] [completed] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační
+  akceptace (PoC validated).** Hlavní `Zpracovat`
   používá jednotný task router, explicitní volbu projektových podkladů a
   bezpečně vykresluje přímou odpověď, celý dočasný návrh artefaktu nebo
   externí request. Potvrzení/zamítnutí mění projekci na odkaz či provozní
@@ -81,8 +81,7 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   externí preview. Staré ruční externí akce jsou sbalené jako pokročilé.
   Dlouhý obsah se v kartě neořezá a všechen nedůvěryhodný text jde přes
   `textContent`. Ověření: cílené lifecycle/UI testy, `node --check` a úplná
-  sada 319 testů, 22 environmentálních skipů dne 2026-09-19. Zbývá ruční
-  průchod skutečným desktopem přes všechny tři větve a reload. Při živé
+  sada 319 testů, 22 environmentálních skipů dne 2026-09-19. Při živé
   akceptaci bylo zjištěno, že opožděný `loadChat()` nebo chybová obnova mohou po
   volbě nového vlákna obnovit staré ID a odeslat jeho zprávy. UI nyní invaliduje
   starší načtení a při chybě dohledává durable výsledek pouze podle přesného ID
@@ -99,9 +98,9 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   vlákno, úspěšný průchod `artifact-draft` až po vytvoření artefaktu a načtení
   výsledku po reloadu. Reload současně potvrdil UX mezeru: bez voliče vláken UI
   skládá klasický chat a poslední task projekci do jednoho pohledu. Oddělení a
-  výběr drží prioritní `F-M2-CHAT-03`. V této dávce zbývá ověřit přímou odpověď;
-  webové hledání přes SearXNG je samostatná navazující
-  feature. Živý externí návrh následně obsahoval jinak přesný kontrakt, ale Gemma
+  výběr drží prioritní `F-M2-CHAT-03`. Webové hledání přes SearXNG je
+  samostatná navazující feature. Živý externí návrh následně obsahoval jinak
+  přesný kontrakt, ale Gemma
   redundantně přidala `focus_id`; parser jej nyní odstraní pouze u přesného
   `external-request` tvaru, pokud se UUID shoduje s focus zprávou a je obsaženo
   v `message_ids`. Další živé pokusy vrátily chybějící `artifact_ids` a
@@ -119,7 +118,10 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   321 testů, 22 environmentálních skipů dne 2026-09-19. Uživatel následně
   živě potvrdil zobrazení přijaté externí odpovědi a funkční OpenAI volání;
   občasná nestabilita Ollamy je oddělený požadavek na robustnost, nikoli chyba
-  potvrzeného externího dispatch toku.
+  potvrzeného externího dispatch toku. Poslední živý pokus potvrdil také přímou
+  odpověď Ollamy v jednotném UI. Její obsahová kvalita byla slabá, ale transport,
+  uzavřený `direct-answer` kontrakt a zobrazení fungovaly; kvalita modelu se proto
+  nevydává za chybu orchestrace. Všechny tři větve jsou živě ověřené.
 
 ## K předání do backlogu
 
