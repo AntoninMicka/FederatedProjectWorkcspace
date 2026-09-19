@@ -17,6 +17,7 @@ from spikes.project_creation import ProjectCreation, default_node_path
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
+from spikes.metadata_suggestion_service import MetadataSuggestionService
 
 
 def request_policy(url, initiator, method, origin):
@@ -112,6 +113,9 @@ def main():
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
         server.extraction_service = ExtractionService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir,
+            chat_state_dir=server.chat_service.state_dir)
+        server.metadata_suggestion_service = MetadataSuggestionService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
         profile = QWebEngineProfile(app)  # unnamed => off the record

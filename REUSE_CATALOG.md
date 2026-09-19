@@ -103,6 +103,14 @@ Context Manifest, aplikační autorizaci ani recovery a jejich licence nejsou pr
 převzetí doložené. Nová vektorová DB, RAG, message queue, externí parser či
 framework nejsou pro explicitní summarizer v1 potřebné.
 
+F-M2-META-AI-01 **reuse/adaptuje** Context Builder, same-node Ollama lifecycle,
+striktní JSON/metadata validaci, oddělený task/preview vzor extractoru a jediný
+Workspace/Journal/Index metadata commit. Editorový `Artifacts.save` je zdroj
+ověřeného metadata patch vzoru, ale nepoužije se přímo, protože vyžaduje
+Markdown body a nepokrývá source artefakty ani vazbu na potvrzený AI preview.
+Nová databáze, tagovací knihovna, schema framework, RAG či externí klient nejsou
+pro explicitní návrh jednoho artefaktu potřeba.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

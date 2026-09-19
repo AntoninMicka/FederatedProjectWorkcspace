@@ -65,6 +65,17 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('extractionPreviewElement.innerHTML', JS)
         self.assertIn("result.format==='json'", JS)
 
+    def test_metadata_ui_uses_safe_diff_and_explicit_field_confirmation(self):
+        from spikes.desktop_ui import HTML
+        self.assertIn('id="metadata-tab"', HTML)
+        self.assertIn('id="metadata-artifact"', HTML)
+        self.assertIn("projectRequest('/v1/metadata-suggestions/preview',pendingMetadataRequest,210000)", JS)
+        self.assertIn("projectRequest('/v1/metadata-suggestions/publish',pendingMetadataPublish)", JS)
+        self.assertIn("description.checked=false", JS)
+        self.assertIn("querySelectorAll('#metadata-tag-list input:checked')", JS)
+        self.assertIn("textContent='Původní: '", JS)
+        self.assertNotIn('metadata-diff.innerHTML', JS)
+
     def test_credentials_are_restricted_to_exact_api_and_initiator(self):
         origin = 'http://127.0.0.1:1234'
         self.assertEqual(request_policy(origin + '/', '', 'GET', origin), 'allow')

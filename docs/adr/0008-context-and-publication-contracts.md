@@ -363,6 +363,63 @@ se nepřebírá a nová runtime závislost nevzniká. Crash boundaries jsou stej
 `unknown` síťový účinek se neopakuje, preview nemění Git a stejný publish
 request po pádu před/po CAS pouze dokončí Workspace receipt a task.
 
+## Lokální návrhy popisu a štítků — F-M2-META-AI-01
+
+Metadata advisor je explicitní jednorázový návrh pro právě jeden artefakt,
+nikoli background hook ani oprávnění modelu zapisovat do projektu. Kanonický
+`fpw-metadata-suggestion-request-v1` váže task/run/manifest ID, project ID,
+expected HEAD, jediné artifact ID, roli `metadata-advisor-v1` a přesný
+`same-node` binding. Server do Context Manifestu vloží přesné bajty obsahu a
+kanonický snapshot aktuálních polí `title`, `description`, `tags`, `kind`,
+`privacy` a `provenance`; jejich hash je součástí tasku. Model nedostane možnost
+navrhovat změnu title, privacy, provenance, druhu ani identity artefaktu. V1
+nevybírá artefakty automaticky, neprochází celý projekt a nepoužívá RAG.
+
+Odpověď je jediný striktní JSON objekt nejvýše 1 MiB s přesným tvarem
+`{"schema":"metadata-suggestions-v1","description":string|null,"tags":[]}`.
+Description je buď `null` (bez návrhu), nebo oříznutý neprázdný UTF-8 text bez
+NUL nejvýše 4096 bajtů. Tags obsahují nejvýše 16 oříznutých neprázdných UTF-8
+řetězců bez řídicích znaků, každý nejvýše 64 bajtů; duplicity podle Unicode
+`casefold` se odmítnou. Markdown fence, trailing data, duplicitní klíče,
+neznámá pole, neplatný schema tag a překročení limitu znamenají `failed`, ne
+náhled. Prázdný seznam je platný stav „žádné nové štítky“, nikoli pokyn smazat
+stávající hodnoty. Validovaný výstup se kanonizuje a uloží jako node-local
+preview oddělené od projektového Gitu.
+
+UI ukáže přesný původní a navržený popis a množiny existujících a nových
+štítků bezpečným textovým vykreslením. Popis se nikdy nepřepíše automaticky;
+uživatel jej musí samostatně zaškrtnout, zvlášť pokud již existuje ruční
+hodnota. U štítků uživatel vybírá podmnožinu nových návrhů, která se přidá ke
+stávajícím štítkům v jejich původním pořadí. V1 štítky automaticky
+neodstraňuje ani nepřejmenovává. Potvrzení musí vybrat alespoň jednu skutečnou
+změnu a nese task ID, preview SHA-256, project/artifact ID, expected HEAD,
+operation ID, boolean pro popis a přesný seznam vybraných navržených tagů.
+
+Workspace před journalem znovu ověří HEAD, celý původní metadata snapshot a
+hash obsahu. Zachová všechna jiná pole včetně privacy a provenance a připraví
+jedinou změnu stávajícího sidecaru nebo frontmatteru. Kandidátní strom projde
+standardní validací metadat; stejný operation ID po pádu obnoví stejný commit a
+receipt. Změněný HEAD či metadata vyžadují nový návrh, aby starý diff nepřepsal
+ruční práci. Task se fixuje do `publishing` před Workspace, po potvrzeném
+receiptu do `published`; síťový stav `unknown` se automaticky neopakuje.
+
+Reuse/adapt rozhodnutí: použít Context Builder, `OllamaBindings`/adapter/run
+lifecycle, striktní JSON/UUID primitiva a Workspace/Journal/Index; adaptovat
+oddělený task/preview vzor extractoru a metadata patch z `Artifacts.save` tak,
+aby fungoval pro validovaný artefakt bez změny obsahu. Přímé volání editoru se
+odmítá, protože vyžaduje Markdown body a neumí potvrzení AI preview pro source
+artefakty. Nová databáze, schema framework, tagovací knihovna, vektorová DB ani
+externí klient nejsou potřeba. Soukromá inventura nenabízí komponentu s tímto
+Context Manifest, potvrzením a recovery kontraktem; žádný kód se nepřebírá.
+
+Implementace F-M2-META-AI-01-B používá `MetadataSuggestionService` nad
+společnou preview orchestrací, ale vlastní SQLite task store. Serverový hook
+přidává kanonický metadata snapshot jako ad-hoc vstup se stejnou privacy jako
+artefakt; klient určuje pouze jeho nové UUID, nikoli obsah. Striktní validátor
+ukládá až kanonický návrh a projekce preview vrací původní hodnoty a přesný diff
+bez projektového zápisu. Summary a extractor bez hooku zachovávají původní
+payload i chování.
+
 ## Větve a publikace při změně HEAD
 
 Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.
