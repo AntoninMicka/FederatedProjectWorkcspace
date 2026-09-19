@@ -7,7 +7,7 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
-from spikes.openai_backend import OpenAIResponseError
+from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -146,8 +146,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
-<button id="chat-submit" type="submit" disabled>Odeslat</button></div>
+<button id="chat-submit" type="submit" disabled>Odeslat</button>
+<button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button></div>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<section id="external-preview" hidden aria-label="Náhled externího odeslání">
+<h3>Co bude odesláno externímu provideru</h3>
+<pre id="external-preview-content"></pre>
+<label><input id="external-privacy-confirm" type="checkbox"> Potvrzuji odeslání zobrazených dat a uvedené úrovně soukromí.</label>
+<button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
+<button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
+</section>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
@@ -194,6 +202,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
+#external-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
@@ -512,7 +521,7 @@ const settingsExternalStatus=document.querySelector('#settings-external-status')
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
-let activeThread=null,chatBinding=null,pendingChatRequest=null;
+let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null;
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
@@ -602,7 +611,54 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
- document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
+ const disabled=!activeProject || !draft.value.trim();
+ document.querySelector('#chat-submit').disabled=disabled;
+ document.querySelector('#external-preview-button').disabled=disabled;
+});
+document.querySelector('#external-preview-button').addEventListener('click',async event=>{
+ if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
+  expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
+  turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
+  manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  content:draft.value,privacy:document.querySelector('#chat-privacy').value,
+  created_at:new Date().toISOString()};
+ event.currentTarget.disabled=true;chatOperationStatus.textContent='Připravuji přesný externí náhled…';
+ try{const preview=await projectRequest('/v1/external/preview',request);
+  pendingExternalPreview={request,preview};
+  document.querySelector('#external-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#external-preview').hidden=false;
+  document.querySelector('#external-privacy-confirm').checked=false;
+  document.querySelector('#external-confirm').disabled=true;
+  chatOperationStatus.textContent='Externí požadavek ještě nebyl odeslán. Zkontrolujte náhled.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=!activeProject || !draft.value.trim();}
+});
+document.querySelector('#external-privacy-confirm').addEventListener('change',event=>{
+ document.querySelector('#external-confirm').disabled=!event.currentTarget.checked;
+});
+document.querySelector('#external-cancel').addEventListener('click',async()=>{
+ if(!pendingExternalPreview)return;
+ try{await projectRequest('/v1/external/cancel',
+   {approval_id:pendingExternalPreview.preview.approval_id});
+  pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
+  chatOperationStatus.textContent='Externí odeslání bylo zrušeno.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+});
+document.querySelector('#external-confirm').addEventListener('click',async event=>{
+ if(!pendingExternalPreview)return;event.currentTarget.disabled=true;
+ chatOperationStatus.textContent='Odesílám potvrzený požadavek do OpenAI…';
+ const preview=pendingExternalPreview.preview;
+ try{const result=await projectRequest('/v1/external/confirm',
+   {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
+    approved:true,privacy:preview.privacy},210000);
+  activeThread=result.thread;renderChat(result.thread);draft.value='';pendingExternalPreview=null;
+  document.querySelector('#external-preview').hidden=true;
+  document.querySelector('#chat-submit').disabled=true;
+  document.querySelector('#external-preview-button').disabled=true;
+  chatOperationStatus.textContent='Externí odpověď byla přijata.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
 });
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
@@ -857,6 +913,7 @@ class DesktopHandler(Handler):
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
+        '/v1/external/preview', '/v1/external/confirm', '/v1/external/cancel',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -894,6 +951,12 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.configure_external(request))
             if self.path == '/v1/external/models' and request == {}:
                 return self.reply(200, self.server.chat_service.external_models())
+            if self.path == '/v1/external/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_preview(request))
+            if self.path == '/v1/external/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_confirm(request))
+            if self.path == '/v1/external/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
@@ -923,6 +986,9 @@ class DesktopHandler(Handler):
         except UnknownRun:
             return self.reply(409, {'error': 'Výsledek běhu není známý. Vlákno bylo zachováno; '
                                    'zkontrolujte stav před novým odesláním.'})
+        except OpenAIUnknownRun:
+            return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
+                                   'automaticky neopakujte; stav byl zachován.'})
         except OllamaResponseError:
             return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
         except OpenAIResponseError:

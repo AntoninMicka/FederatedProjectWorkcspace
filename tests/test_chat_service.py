@@ -8,8 +8,10 @@ import unittest
 from uuid import uuid4
 
 from spikes.chat_service import ChatService
+from spikes.external_dispatch import ExternalDispatches
 from spikes.configuration import read_config
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
+from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.desktop_ui import DesktopHandler
@@ -34,6 +36,22 @@ class FakeAdapter:
         if self.error:
             raise self.error
         return {'model': binding.model, 'response': 'Assistant answer'}
+
+
+class FakeExternalAdapter:
+    def __init__(self, runs, credentials, calls, error=None):
+        self.runs, self.credentials, self.calls, self.error = runs, credentials, calls, error
+
+    def prepare(self, handoff, binding):
+        self.calls.append(('prepare', handoff, binding))
+
+    def dispatch(self, handoff, binding):
+        self.calls.append(('dispatch', handoff, binding))
+        if self.error:
+            raise self.error
+        return {'id': 'resp_external', 'model': binding.model,
+                'response': 'External answer',
+                'usage': {'input_tokens': 3, 'output_tokens': 2, 'total_tokens': 5}}
 
 
 class ChatServiceTests(unittest.TestCase):
@@ -72,6 +90,23 @@ class ChatServiceTests(unittest.TestCase):
                      content='First question', privacy='project', created_at=NOW)
         value.update(changes)
         return value
+
+    def external_request(self, **changes):
+        value = self.request()
+        value['approval_id'] = str(uuid4())
+        value.update(changes)
+        return value
+
+    def external_service(self, calls, error=None):
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, external_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls, error))
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-one', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'e' * 32))
+        return service
 
     def test_invalid_reconfiguration_preserves_confirmed_binding(self):
         before = self.service.status()['binding']
@@ -126,6 +161,105 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIsNone(row['role_id'])
         self.assertEqual(len(row['manifest_sha256']), 64)
         self.assertEqual(len(calls), 1)
+
+    def test_external_preview_restart_confirmation_and_idempotent_result(self):
+        calls = []; service = self.external_service(calls)
+        request = self.external_request(privacy='confidential')
+        preview = service.external_preview(request)
+        self.assertEqual(preview['privacy'], 'confidential')
+        self.assertEqual(preview['target']['model'], 'gpt-5.6-luna')
+        self.assertEqual(preview['inputs'][0]['content'], 'First question')
+        self.assertEqual(preview['provider_request']['store'], False)
+        self.assertEqual(calls, [])
+        self.assertEqual(service.status()['threads'], [])
+        encoded_preview = json.dumps(preview)
+        self.assertNotIn('sk-test-', encoded_preview)
+        self.assertNotIn('credential:', encoded_preview)
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, external_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        confirmation = {'approval_id': preview['approval_id'],
+                        'preview_sha256': preview['preview_sha256'],
+                        'approved': True, 'privacy': preview['privacy']}
+        result = restarted.external_confirm(confirmation)
+        self.assertEqual([item['content'] for item in result['thread']['messages']],
+                         ['First question', 'External answer'])
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        self.assertEqual(restarted.external_confirm(confirmation), result)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+
+    def test_external_preview_rejects_local_only_stale_change_and_bad_approval(self):
+        calls = []; service = self.external_service(calls)
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            service.external_preview(self.external_request(privacy='local-only'))
+        request = self.external_request(); preview = service.external_preview(request)
+        with self.assertRaisesRegex(ValueError, 'does not match'):
+            service.external_confirm({'approval_id': preview['approval_id'],
+                'preview_sha256': '0' * 64, 'approved': True,
+                'privacy': preview['privacy']})
+        self.assertEqual(calls, [])
+        service.external_cancel({'approval_id': preview['approval_id']})
+        with self.assertRaisesRegex(ValueError, 'closed'):
+            service.external_confirm({'approval_id': preview['approval_id'],
+                'preview_sha256': preview['preview_sha256'], 'approved': True,
+                'privacy': preview['privacy']})
+
+        stale = service.external_preview(self.external_request())
+        (self.root / 'note.txt').write_text('change')
+        self.git.run('add', 'note.txt'); self.git.commit('Change')
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            service.external_confirm({'approval_id': stale['approval_id'],
+                'preview_sha256': stale['preview_sha256'], 'approved': True,
+                'privacy': stale['privacy']})
+        self.assertEqual(calls, [])
+
+        changed = service.external_preview(self.external_request(expected_head=self.git.head()))
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-two', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-terra', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'n' * 32))
+        with self.assertRaisesRegex(ValueError, 'binding or credential changed'):
+            service.external_confirm({'approval_id': changed['approval_id'],
+                'preview_sha256': changed['preview_sha256'], 'approved': True,
+                'privacy': changed['privacy']})
+        self.assertEqual(calls, [])
+
+    def test_external_unknown_is_durable_and_never_automatically_retried(self):
+        calls = []; service = self.external_service(
+            calls, OpenAIUnknownRun('response may have been processed'))
+        preview = service.external_preview(self.external_request())
+        confirmation = {'approval_id': preview['approval_id'],
+                        'preview_sha256': preview['preview_sha256'],
+                        'approved': True, 'privacy': preview['privacy']}
+        with self.assertRaises(OpenAIUnknownRun):
+            service.external_confirm(confirmation)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        approval = ExternalDispatches(self.chat_state).get(
+            preview['approval_id'], self.node_id,
+            service._identity()[1])
+        self.assertEqual(approval['state'], 'unknown')
+        with self.assertRaises(OpenAIUnknownRun):
+            service.external_confirm(confirmation)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+
+    def test_external_confirmation_recovers_after_chat_turn_preparation(self):
+        from spikes.chat_threads import ChatThreads
+        calls = []; service = self.external_service(calls)
+        request = self.external_request(); preview = service.external_preview(request)
+        _, user_id = service._identity(); threads = ChatThreads(self.chat_state)
+        threads.create(thread_id=request['thread_id'], node_id=self.node_id, user_id=user_id,
+                       created_at=request['created_at'])
+        threads.prepare_turn(thread_id=request['thread_id'], node_id=self.node_id,
+            user_id=user_id, turn_id=request['turn_id'], message_id=request['message_id'],
+            content=request['content'], privacy=request['privacy'],
+            created_at=request['created_at'])
+        result = service.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
 
     def test_context_dispatch_and_restart_preserve_exact_messages_and_target(self):
         request = self.request()
@@ -221,6 +355,22 @@ class ChatServiceTests(unittest.TestCase):
                         'base_snapshot_id': None, 'base_snapshot_sha256': None}
             response = driver.request(server, path='/v1/chat/snapshot',
                                       body=json.dumps(snapshot).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            self.service.configure_external(dict(schema_version=1,
+                binding_id=str(uuid4()), revision='external-api', adapter='openai-responses',
+                boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+                model='gpt-5.6-luna', target_id='api.openai.com',
+                max_output_tokens=4096, timeout_seconds=180,
+                secret='sk-test-' + 'a' * 32))
+            external = self.external_request(expected_head=self.git.head())
+            response = driver.request(server, path='/v1/external/preview',
+                                      body=json.dumps(external).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            preview = json.loads(body)
+            self.assertNotIn('credential', json.dumps(preview))
+            response = driver.request(server, path='/v1/external/cancel', body=json.dumps(
+                {'approval_id': preview['approval_id']}).encode())
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
             driver.rejected(server, path='/v1/chat/status', body=b'{}',
                             headers={'Authorization': None})

@@ -149,11 +149,22 @@ libovolné providerové URL. Usage a billing zůstávají oddělené capability
 M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
 ani spolehlivý výpočet ceny.
 
-Úkol F-M3-EXTERNAL-01-B tento binding, credential lifecycle, textový adapter a
-samostatný durable run journal implementuje. Desktopová Nastavení zobrazují
-write-only konfiguraci a bezpečný stav bez secretu; projektový context preview,
-privacy souhlas a dosažitelný dispatch z UI zůstávají záměrně uzavřené do úkolu
-C. Implementace tedy sama o sobě nepovoluje odeslat projektová data providerovi.
+Úkol F-M3-EXTERNAL-01-B implementuje binding, credential lifecycle, textový
+adapter a samostatný durable run journal. Úkol C přidává oddělené durable preview
+a potvrzení: UI zobrazí přesné vstupy, odvozenou privacy, target/model a skutečné
+provider request body bez autorizační hlavičky. Potvrzení váže jejich hash a
+znovu kontroluje HEAD, vlastníka vlákna, policy, binding, model, credential
+revizi, manifest i request bajty. `local-only` se odmítne před preview;
+`project` a `confidential` vyžadují zaškrtnutí explicitního souhlasu. Zrušení
+nezakládá chatový turn. Preview, turn a provider run jsou oddělené persistentní
+vrstvy: před provider dispatch lze bezpečně zopakovat přípravu, po durable
+`dispatching` rozhoduje run journal a neznámý výsledek se neopakuje. Pád po
+úspěšném provider runu, ale před dokončením vlákna se obnoví z durable výsledku
+bez druhého síťového účinku.
+
+Desktopová Nastavení zobrazují write-only konfiguraci a bezpečný stav bez
+secretu. Samostatné návrhy externího volání generované Ollamou zůstávají až do
+úkolu D zakázané; úkol C dovoluje pouze ručně vyžádané preview a potvrzení.
 Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
 správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
 nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit

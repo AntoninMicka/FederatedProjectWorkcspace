@@ -834,8 +834,8 @@ strukturované volání přes Ollamu; Gate M3 tím zatím není uzavřený.
   OpenAI Responses adapter; implementace, preview a akceptace pokračují v B–D.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
-- [ ] Context preview.
-- [ ] Privacy filter.
+- [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
+- [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
 - [ ] Provenance.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
