@@ -116,9 +116,22 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   záznamem vykreslí celou odpověď načtenou z autoritativního durable OpenAI runu;
   odpověď se neduplikuje do `TaskOutcomes`, `ChatThreads` ani projektového Gitu.
   Restartový test ověřuje obnovení odpovědi a celá sada po opravě prošla:
-  321 testů, 22 environmentálních skipů dne 2026-09-19.
+  321 testů, 22 environmentálních skipů dne 2026-09-19. Uživatel následně
+  živě potvrdil zobrazení přijaté externí odpovědi a funkční OpenAI volání;
+  občasná nestabilita Ollamy je oddělený požadavek na robustnost, nikoli chyba
+  potvrzeného externího dispatch toku.
 
 ## K předání do backlogu
+
+- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu
+  (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout,
+  přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav;
+  zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez
+  ztráty zadání, výběru kontextu nebo již připraveného externího preview.
+  Automaticky neopakovat běh s neznámým výsledkem a neprovádět skrytý fallback na
+  jiný backend či CPU. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď,
+  chybný JSON, pád před/po durable přechodech, souběh a ověření, že chyba
+  lokálního routeru není vydána za chybu externího providera.
 
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
