@@ -24,7 +24,7 @@ OPENAI_ENDPOINT = 'https://api.openai.com/v1/responses'
 OPENAI_TIMEOUT = 180
 MAX_RESPONSE = 16 * 1024 * 1024
 _REFERENCE = re.compile(r'credential:[A-Za-z0-9][A-Za-z0-9._-]{0,127}')
-_MODEL_SNAPSHOT = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*-\d{4}-\d{2}-\d{2}')
+_MODEL_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]{0,127}')
 
 
 class OpenAIUnknownRun(BackendUnknown):
@@ -67,8 +67,8 @@ class OpenAIBinding:
             require(isinstance(value[key], str) and value[key].strip() == value[key]
                     and bool(value[key]) and not any(c in value[key] for c in '\0\r\n'),
                     f'Invalid OpenAI {key}')
-        require(bool(_MODEL_SNAPSHOT.fullmatch(value['model'])),
-                'OpenAI binding requires a dated model snapshot')
+        require(bool(_MODEL_ID.fullmatch(value['model'])),
+                'OpenAI binding requires a valid model ID')
         require(isinstance(value['credential_ref'], str)
                 and bool(_REFERENCE.fullmatch(value['credential_ref'])),
                 'OpenAI binding requires an opaque credential reference')

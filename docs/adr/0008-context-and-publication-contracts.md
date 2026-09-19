@@ -86,8 +86,11 @@ V1 nepřijímá vlastní `base_url`, proxy deklarovanou jako OpenAI, redirect an
 provider discovery. OpenAI-compatible služba je jiný adapter a binding, nikoli
 nepozorovaná změna cíle.
 
-Binding má boundary `external-provider`, přesný endpoint, připnutý modelový
-snapshot, limity vstupu/výstupu, timeout a opaque `credential_ref`. Reference je
+Binding má boundary `external-provider`, přesný endpoint, explicitní providerové
+modelové ID, limity vstupu/výstupu, timeout a opaque `credential_ref`. Pokud
+provider zveřejňuje datovaný snapshot, lze jej připnout; nedatované oficiální ID
+se nesmí nahrazovat vymyšleným datem a jeho pohyblivost musí být v UI přiznaná.
+Reference je
 náhodné stabilní ID mapované v node-local credential store; do Gitu, manifestu,
 DOM, logu ani run response se nesmí dostat hodnota secretu ani její čitelná
 lokální cesta. Deployment může hodnotu dodat z prostředí nebo write-only UI,
@@ -108,8 +111,8 @@ systémové ověření TLS pro přesný host. Odpověď přijme jen při úspě�
 stavu, povolené velikosti, dokončeném provider stavu a výhradně očekávaných
 message/text položkách; tool call nebo jiný aktivní výstup je chyba. Eviduje
 provider response ID, požadovaný i providerem hlášený model, dostupné token usage
-a hash odpovědi, nikdy secret. První binding musí používat konkrétní snapshot;
-neshoda hlášeného modelu je fail-closed. Timeout, přerušené spojení nebo pád po
+a hash odpovědi, nikdy secret. Neshoda hlášeného modelu s explicitním ID v
+bindingu je fail-closed. Timeout, přerušené spojení nebo pád po
 `dispatching` znamená `unknown` bez automatického retry. Známé odmítnutí před
 odesláním je `failed`; nový pokus je nový run a nové potvrzení.
 

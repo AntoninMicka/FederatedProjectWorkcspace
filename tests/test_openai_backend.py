@@ -22,7 +22,7 @@ class OpenAIBackendTests(unittest.TestCase):
         self.value = dict(schema_version=1, binding_id=str(uuid4()),
                           revision='revision-1', adapter='openai-responses',
                           boundary='external-provider', endpoint=OPENAI_ENDPOINT,
-                          model='gpt-5-2026-09-01', target_id='api.openai.com',
+                          model='gpt-5.6-luna', target_id='api.openai.com',
                           credential_ref='credential:openai-primary',
                           credential_revision=1,
                           max_output_tokens=2048, timeout_seconds=30)
@@ -44,10 +44,16 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertEqual(OpenAIBindings(self.state).load(), self.binding)
         self.assertNotIn('sk-test', store.path.read_text())
         for changes in ({'endpoint': 'https://proxy.example/v1/responses'},
-                        {'boundary': 'same-node'}, {'model': 'gpt-5'},
+                        {'boundary': 'same-node'}, {'model': 'gpt/invalid'},
                         {'secret': 'sk-leak'}):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
                 OpenAIBinding.parse(dict(self.value, **changes))
+
+    def test_current_official_model_ids_are_accepted_without_invented_dates(self):
+        for model in ('gpt-5.6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-6-astra'):
+            with self.subTest(model=model):
+                self.assertEqual(OpenAIBinding.parse(dict(self.value, model=model)).model,
+                                 model)
 
     def test_credential_status_is_write_only_and_revision_changes(self):
         status = self.credentials.status(self.binding.credential_ref)
@@ -105,7 +111,7 @@ class OpenAIBackendTests(unittest.TestCase):
 
     def test_tool_call_model_change_and_malformed_output_fail_durably(self):
         invalid = [
-            dict(self.response(), model='other-2026-09-01'),
+            dict(self.response(), model='other-model'),
             dict(self.response(), output=[{'type': 'function_call', 'name': 'send'}]),
             dict(self.response(), output=[]),
         ]

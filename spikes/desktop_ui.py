@@ -63,7 +63,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <form id="external-backend-form">
 <label>Provider <input value="OpenAI Responses API" disabled></label>
 <label>Endpoint <input name="endpoint" value="https://api.openai.com/v1/responses" readonly></label>
-<label>Modelový snapshot <input name="model" placeholder="gpt-5-YYYY-MM-DD" required></label>
+<label>Model <input name="model" placeholder="gpt-5.6-luna" value="gpt-5.6-luna" required></label>
 <label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>

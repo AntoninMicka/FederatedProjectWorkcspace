@@ -88,7 +88,7 @@ class ChatServiceTests(unittest.TestCase):
         request = dict(schema_version=1, binding_id=str(uuid4()), revision='one',
                        adapter='openai-responses', boundary='external-provider',
                        endpoint='https://api.openai.com/v1/responses',
-                       model='gpt-5-2026-09-01', target_id='api.openai.com',
+                       model='gpt-5.6-luna', target_id='api.openai.com',
                        max_output_tokens=4096, timeout_seconds=180, secret=secret)
         result = self.service.configure_external(request)
         encoded_result = json.dumps(result)
