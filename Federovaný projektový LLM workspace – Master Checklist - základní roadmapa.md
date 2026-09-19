@@ -816,20 +816,22 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [x] Extractor — F-M2-EXTRACT-01 lokálně PoC validated: uzavřený schema kontrakt, lokální validovaný preview a potvrzená recovery-safe publikace s provenance a desktopovým API/UI; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
 - [x] Auto-description — F-M2-META-AI-01 lokálně PoC validated: durable same-node návrh, bezpečný diff a potvrzený recovery-safe metadata commit; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
 - [x] Tagging — F-M2-META-AI-01 lokálně PoC validated; v1 ukládá pouze jednotlivě potvrzené aditivní štítky bez automatického mazání.
-- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány v lokálním PoC, obecná backendová integrace zůstává další práce.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány přes provider-neutral kontrakt F-M3-BACKEND-01. První externí provider zůstává další práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 
 ## Milestone M3 – External LLM
 
 Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
-#34. Aktivní dávka `F-M3-BACKEND-01` připravuje provider-neutral backend a role
-kontrakt; první externí provider ani Gate M3 tím zatím nejsou implementované.
+#34. Dávka `F-M3-BACKEND-01` lokálně PoC validuje provider-neutral backend,
+explicitní capabilities, role a durable execution identitu nad současnou Ollamou;
+její PR do `develop` zatím není začleněný. První externí provider, context preview,
+privacy filtr ani Gate M3 tím nejsou implementované.
 
-- [ ] Backend abstraction.
+- [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [ ] První externí provider.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
-- [ ] Role.
+- [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [ ] Context preview.
 - [ ] Privacy filter.
 - [ ] Provenance.

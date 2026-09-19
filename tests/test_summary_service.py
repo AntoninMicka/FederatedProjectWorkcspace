@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from spikes.artifacts import Artifacts
 from spikes.chat_threads import ChatThreads
-from spikes.ollama_backend import OllamaAdapter, UnknownRun
+from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import Git
@@ -73,6 +73,9 @@ class SummaryServiceTests(unittest.TestCase):
         self.assertIn('Known fact.', prompt)
         self.assertIn('Focus:\nEmphasize confirmed facts.', prompt)
         self.assertNotIn('content_b64', prompt)
+        run = OllamaRuns(self.state).get(request['run_id'])
+        self.assertEqual((run['role_id'], run['role_revision'], run['output_format']),
+                         ('summarizer', 'summarizer-v1', 'text'))
 
         restarted = SummaryService(self.node, Projects(self.node), state_dir=self.state,
                                    adapter_factory=self.factory)
@@ -138,6 +141,8 @@ class SummaryServiceTests(unittest.TestCase):
                                                          'artifact_ids': []}))
         with self.assertRaisesRegex(ValueError, 'Project changed'):
             self.service.preview(self.request(expected_head='0' * 40))
+        with self.assertRaisesRegex(ValueError, 'Unsupported summary role'):
+            self.service.preview(self.request(role_revision='summarizer-v2'))
         lan = dict(self.binding, revision='two', boundary='private-network',
                    endpoint='https://10.0.0.2:11434', target_id=str(uuid4()),
                    tls_cert_sha256='a' * 64)

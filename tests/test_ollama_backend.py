@@ -164,8 +164,22 @@ class OllamaAdapterTests(unittest.TestCase):
                                 lambda binding, raw: self.fail('must not retry'))
         with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
             adapter.dispatch(self.handoff, self.binding)
+        restarted = OllamaAdapter(OllamaRuns(self.state),
+                                  lambda binding, raw: self.fail('must not retry after restart'))
+        with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+            restarted.dispatch(self.handoff, self.binding)
         row = adapter.runs.get(self.handoff.run_id)
         self.assertIsNone(row['adapter_id'])
+
+    def test_capability_change_after_prepare_is_rejected_without_dispatch(self):
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+                                lambda binding, raw: self.fail('must not dispatch'))
+        adapter.prepare(self.handoff, self.binding)
+        changed = BackendCapabilities(1, 'ollama-generate-v2',
+            frozenset({'generate-text'}), frozenset({'text', 'json'}))
+        with patch.object(OllamaBinding, 'capabilities', return_value=changed):
+            with self.assertRaisesRegex(ValidationError, 'different backend execution'):
+                adapter.dispatch(self.handoff, self.binding)
 
     def test_conversation_payload_is_rendered_as_roles_not_base64_json(self):
         first, second = str(uuid4()), str(uuid4())
