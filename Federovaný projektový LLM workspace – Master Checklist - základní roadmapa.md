@@ -822,6 +822,10 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 
 ## Milestone M3 – External LLM
 
+Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
+#34. Aktivní dávka `F-M3-BACKEND-01` připravuje provider-neutral backend a role
+kontrakt; první externí provider ani Gate M3 tím zatím nejsou implementované.
+
 - [ ] Backend abstraction.
 - [ ] První externí provider.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
