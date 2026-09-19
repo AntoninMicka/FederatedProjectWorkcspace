@@ -2,45 +2,46 @@
 # SPDX-License-Identifier: MPL-2.0
 """Administration panel for the existing HTTPS UI."""
 
-ADMIN_HTML = '''<dialog id="administration"><div class="admin-header"><h2>Správa uzlu</h2><button id="administration-close" type="button">Zavřít</button></div>
+ADMIN_HTML = '''<section id="administration" class="settings-card" hidden aria-label="Správa uzlu">
 <p id="admin-status" role="status"></p><p id="admin-node"></p>
-<div class="admin-tabs" role="tablist" aria-label="Správa"><button id="admin-users-tab" type="button" role="tab" aria-selected="true" aria-controls="admin-users-panel">Uživatelé</button><button id="admin-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1">Federace</button></div>
-<section id="admin-users-panel" role="tabpanel" aria-labelledby="admin-users-tab"><h3>Lokální účty</h3><p>Přihlašujete se jen ke svému účtu na tomto uzlu. Hesla a přístupové klíče se mezi uzly nepřenášejí.</p><form id="admin-user-create"><label>Jméno <input name="name" required maxlength="200"></label>
+<section id="admin-users-panel" role="tabpanel" aria-labelledby="settings-users-tab" hidden><h2>Lokální účty</h2><p>Přihlašujete se jen ke svému účtu na tomto uzlu. Hesla a přístupové klíče se mezi uzly nepřenášejí.</p><form id="admin-user-create"><label>Jméno <input name="name" required maxlength="200"></label>
 <label>Role na tomto uzlu <select name="role"><option value="member">Člen</option><option value="node-admin">Správce uzlu</option><option value="federation-admin">Správce federace</option></select></label>
 <button>Vytvořit uživatele</button></form><div class="admin-table-wrap"><table class="admin-table"><caption>Účty tohoto uzlu</caption><thead><tr><th scope="col">Uživatel a oprávnění</th></tr></thead><tbody id="admin-users"></tbody></table></div>
 <div id="admin-key-box" hidden><p>Nový přístupový klíč se zobrazí pouze teď. Předejte jej uživateli bezpečnou cestou.</p><input id="admin-issued-key" readonly aria-label="Nový přístupový klíč"><button id="admin-key-hide" type="button">Skrýt klíč</button></div></section>
-<section id="admin-federation" role="tabpanel" aria-labelledby="admin-federation-tab" hidden><h3>Federace</h3><p>Schválení eviduje důvěru v uzel. Mapování účtů vyžaduje podepsané potvrzení obou uzlů a neumožňuje přihlášení cizím klíčem.</p><p id="admin-signing-identity"></p>
+<section id="admin-federation" role="tabpanel" aria-labelledby="settings-federation-tab" hidden><h2>Federace</h2><p>Schválení eviduje důvěru v uzel. Mapování účtů vyžaduje podepsané potvrzení obou uzlů a neumožňuje přihlášení cizím klíčem.</p><p id="admin-signing-identity"></p>
 <form id="admin-peer-create"><label>Jméno uzlu <input name="name" required maxlength="200"></label>
 <label>Node UUID <input name="node_id" required></label><label>HTTPS adresa <input name="endpoint" type="url" required></label>
 <label>SHA-256 otisk veřejného klíče, ověřený mimo toto spojení <input name="fingerprint" required pattern="[a-fA-F0-9]{64}"></label><button>Přidat uzel ke schválení</button></form><div class="admin-table-wrap"><table class="admin-table"><caption>Federované uzly</caption><thead><tr><th scope="col">Uzel a důvěra</th></tr></thead><tbody id="admin-peers"></tbody></table></div>
 <h3>Mapování vlastních účtů</h3><form id="admin-mapping-create"><label>Místní účet <select name="local_user_id" required></select></label><label>Schválený uzel <select name="peer_node_id" required></select></label><label>UUID vlastního účtu na druhém uzlu <input name="peer_user_id" required></label><fieldset id="admin-mapping-projects"><legend>Rozsah projektů</legend></fieldset><button>Navrhnout mapování</button></form>
 <div class="admin-table-wrap"><table class="admin-table"><caption>Oboustranné mapování</caption><thead><tr><th scope="col">Účty, rozsah a potvrzení</th></tr></thead><tbody id="admin-mappings"></tbody></table></div>
 <label>Podepsané potvrzení nebo odvolání pro druhý uzel <textarea id="admin-mapping-export" readonly></textarea></label>
-<form id="admin-mapping-import"><label>Podepsané potvrzení nebo odvolání z druhého uzlu <textarea name="envelope" required maxlength="4096"></textarea></label><button>Ověřit a přijmout</button></form></section></dialog>'''
+<form id="admin-mapping-import"><label>Podepsané potvrzení nebo odvolání z druhého uzlu <textarea name="envelope" required maxlength="4096"></textarea></label><button>Ověřit a přijmout</button></form></section></section>'''
 
 ADMIN_CSS = '''
-#administration{width:min(900px,92vw);max-height:85vh;overflow:auto;border:1px solid #adc0bf;border-radius:14px;padding:24px;background:#f5f8f7;color:#213632}
-#administration::backdrop{background:rgba(10,30,27,.55)}
-.admin-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+#administration{color:#213632}
 #administration label{display:block;margin:12px 0}#administration input,#administration select{box-sizing:border-box;max-width:100%;padding:8px}
 .admin-entry{border-top:1px solid #c9d5d2;padding:16px 0}.admin-entry button{margin:6px}
-.admin-tabs{display:flex;gap:12px;margin:20px 0}.admin-tabs [aria-selected=true]{background:#244f46;color:white}
 .admin-table-wrap{overflow-x:auto}.admin-table{border-collapse:collapse;width:100%;text-align:left}.admin-table caption{text-align:left;font-weight:bold;margin:14px 0}.admin-table th,.admin-table td{padding:12px;border-bottom:1px solid #c9d5d2}
 #administration textarea{display:block;box-sizing:border-box;width:100%;min-height:90px;padding:8px}
 #admin-issued-key{width:100%;font-family:monospace}#admin-status{white-space:pre-wrap;position:sticky;top:0;z-index:8;padding:12px;background:#e7f0ec;color:#213632;border:1px solid #a9bfb5;border-radius:6px}#admin-status:empty{display:none}#admin-status[role=alert]{background:#fff0e9;color:#7a281a;border-color:#c98470}
-@media(max-width:600px){#administration{padding:14px}.admin-header h2{font-size:20px}}
+@media(max-width:600px){#administration{padding:14px}}
 '''
 
 ADMIN_JS = '''
 let administrationState=null;
-const adminDialog=document.querySelector('#administration');
+const adminPanel=document.querySelector('#administration');
 const adminStatus=document.querySelector('#admin-status');
 function showAdminStatus(message,error=false){adminStatus.textContent=message;adminStatus.setAttribute('role',error?'alert':'status');}
-adminDialog.addEventListener('invalid',event=>{event.preventDefault();showAdminStatus('Opravte pole: '+(event.target.closest('label')?.textContent.trim() || event.target.name)+'. '+event.target.validationMessage,true);event.target.setAttribute('aria-invalid','true');event.target.focus();},true);
-adminDialog.addEventListener('input',event=>event.target.removeAttribute('aria-invalid'));
+adminPanel.addEventListener('invalid',event=>{event.preventDefault();showAdminStatus('Opravte pole: '+(event.target.closest('label')?.textContent.trim() || event.target.name)+'. '+event.target.validationMessage,true);event.target.setAttribute('aria-invalid','true');event.target.focus();},true);
+adminPanel.addEventListener('input',event=>event.target.removeAttribute('aria-invalid'));
 let adminTab='users';
-function selectAdminTab(tab){if(tab==='federation'&&!administrationState?.federation_admin)return;adminTab=tab;for(const name of ['users','federation']){const button=document.querySelector('#admin-'+name+'-tab');const selected=name===tab;button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;}document.querySelector('#admin-users-panel').hidden=tab!=='users';document.querySelector('#admin-federation').hidden=tab!=='federation';}
-for(const name of ['users','federation']){const button=document.querySelector('#admin-'+name+'-tab');button.onclick=()=>selectAdminTab(name);button.onkeydown=event=>{if(['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){event.preventDefault();const target=event.key==='Home'?'users':event.key==='End'?'federation':name==='users'?'federation':'users';selectAdminTab(target);document.querySelector('#admin-'+adminTab+'-tab').focus();}};}
+function selectAdminTab(tab){if(tab==='federation'&&!administrationState?.federation_admin)return;adminTab=tab;adminPanel.hidden=false;selectSettingsTab(document.querySelector('#settings-'+tab+'-tab'));}
+async function openAdministration(tab){
+ hideIssuedKey();showAdminStatus('Načítám…');adminPanel.hidden=false;
+ try{administrationState=await adminRequest({action:'list'});renderAdministration();selectAdminTab(tab);showAdminStatus('');}
+ catch(error){selectSettingsTab(document.querySelector('#settings-'+tab+'-tab'));showAdminStatus(error.message || 'Správu se nepodařilo načíst.',true);}
+}
+for(const name of ['users','federation'])document.querySelector('#settings-'+name+'-tab').onclick=()=>openAdministration(name);
 function hideIssuedKey(){document.querySelector('#admin-issued-key').value='';document.querySelector('#admin-key-box').hidden=true;}
 function adminElement(tag,text){const element=document.createElement(tag);element.textContent=text;return element;}
 async function adminRequest(request){
@@ -58,7 +59,7 @@ async function adminChange(request){
 }
 function renderAdministration(){
  const state=administrationState;document.querySelector('#admin-node').textContent='Identita tohoto uzlu: '+state.node_id;
- document.querySelector('#admin-federation-tab').hidden=!state.federation_admin;
+ document.querySelector('#settings-federation-tab').hidden=!state.federation_admin;
  document.querySelector('#admin-user-create').hidden=state.deployment==='desktop';
  selectAdminTab(state.federation_admin?adminTab:'users');
  document.querySelector('#admin-signing-identity').textContent=state.mapping_identity?'Otisk klíče tohoto uzlu: '+state.mapping_identity.fingerprint:'';
@@ -80,9 +81,7 @@ function renderAdministration(){
  const mappings=document.querySelector('#admin-mappings');mappings.replaceChildren();for(const mapping of state.mappings || []){const tableRow=document.createElement('tr');const cell=document.createElement('td');tableRow.append(cell);cell.append(adminElement('p',mapping.spec.accounts.map(a=>a.node_id+' / '+a.user_id).join(' ↔ ')),adminElement('p','Projekty: '+mapping.spec.project_ids.map(id=>(state.projects || []).find(p=>p.id===id)?.title || id).join(', ')),adminElement('p',mapping.revocation?'Odvoláno':mapping.active?'Potvrzeno oběma stranami':'Čeká na oboustranné potvrzení ('+Object.keys(mapping.confirmations).length+'/2)'));if(!mapping.revocation){for(const [action,title] of [['confirm-mapping','Potvrdit za tento uzel a vydat soubor'],['revoke-mapping','Odvolat a vydat soubor']]){const button=adminElement('button',title);button.type='button';button.onclick=()=>adminChange({action,mapping_id:mapping.spec.id});cell.append(button);}}mappings.append(tableRow);}
  for(const [index,mapping] of (state.mappings || []).entries()){const saved=mapping.revocation || mapping.confirmations[state.node_id];if(saved){const button=adminElement('button','Zobrazit uložený podepsaný soubor');button.type='button';button.onclick=()=>{document.querySelector('#admin-mapping-export').value=JSON.stringify(saved);};mappings.children[index].firstChild.append(button);}}
 }
-document.querySelector('#administration-open').onclick=async()=>{hideIssuedKey();adminDialog.showModal();showAdminStatus('Načítám...');try{administrationState=await adminRequest({action:'list'});renderAdministration();showAdminStatus('');}catch(error){showAdminStatus(error.message || 'Správu se nepodařilo načíst.',true);}};
-document.querySelector('#administration-close').onclick=()=>adminDialog.close();
-adminDialog.addEventListener('close',()=>{hideIssuedKey();administrationState=null;document.querySelector('#admin-users').replaceChildren();document.querySelector('#admin-peers').replaceChildren();document.querySelector('#admin-mappings').replaceChildren();document.querySelector('#admin-mapping-export').value='';});
+document.addEventListener('settingsclosed',()=>{hideIssuedKey();administrationState=null;adminPanel.hidden=true;document.querySelector('#admin-users').replaceChildren();document.querySelector('#admin-peers').replaceChildren();document.querySelector('#admin-mappings').replaceChildren();document.querySelector('#admin-mapping-export').value='';});
 document.querySelector('#admin-key-hide').onclick=hideIssuedKey;
 document.querySelector('#admin-user-create').onsubmit=event=>{event.preventDefault();const fields=new FormData(event.target);adminChange({action:'create-user',name:fields.get('name'),node_role:fields.get('role')});};
 document.querySelector('#admin-peer-create').onsubmit=event=>{event.preventDefault();const fields=new FormData(event.target);adminChange({action:'add-peer',name:fields.get('name'),node_id:fields.get('node_id'),endpoint:fields.get('endpoint'),fingerprint:fields.get('fingerprint')});};

@@ -44,7 +44,11 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <header><span class="badge">Nastavení uzlu</span><span>Platí pro tento počítač</span></header>
 <div class="settings-heading"><div class="eyebrow">LOKÁLNÍ KONFIGURACE</div>
 <h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
-<section class="settings-card" aria-labelledby="settings-backend-title">
+<div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
+<button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
+<button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
+<section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
 <h2 id="settings-backend-title">Lokální AI backend</h2>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
@@ -55,11 +59,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
 </section>
-<section id="node-administration-settings" class="settings-card" hidden aria-labelledby="node-administration-title">
-<h2 id="node-administration-title">Uživatelé a federace</h2>
-<p>Spravujte lokální účty, role, federované uzly a oboustranná mapování. Přístupové klíče se mezi uzly nepřenášejí.</p>
-<button id="administration-open" type="button">Otevřít správu uživatelů a federace</button>
-</section>
+<div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
 <div id="project-view" hidden>
@@ -149,6 +149,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
+#settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
 .project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
@@ -374,16 +375,34 @@ for(const [index,tab] of mainTabs.entries()){
  });
 }
 let settingsReturn=null;
+const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
+function selectSettingsTab(selected){
+ for(const tab of settingsTabs){
+  const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
+  const panel=document.getElementById(tab.getAttribute('aria-controls'));if(panel)panel.hidden=!active;
+ }
+ const administration=document.getElementById('administration');if(administration)administration.hidden=selected.id==='settings-backend-tab';
+}
+for(const [index,tab] of settingsTabs.entries()){
+ tab.addEventListener('click',()=>selectSettingsTab(tab));
+ tab.addEventListener('keydown',event=>{
+  const visible=settingsTabs.filter(item=>!item.hidden);const current=visible.indexOf(tab);
+  const next={ArrowRight:(current+1)%visible.length,ArrowLeft:(current+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
+  if(next===undefined)return;event.preventDefault();visible[next].click();visible[next].focus();
+ });
+}
 async function openSettings(){
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
+ selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
  await loadBackendBinding();
 }
 async function closeSettings(){
  const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
+ document.dispatchEvent(new Event('settingsclosed'));
  if(destination?.project && activeProject){
   projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;
   const tab=document.getElementById(destination.tabId);if(tab)selectMainTab(tab);

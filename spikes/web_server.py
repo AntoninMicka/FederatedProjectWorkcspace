@@ -20,7 +20,7 @@ from spikes.projects import Projects
 from spikes.administration import Administration, AccessDenied, identifier
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 
-HTML = HTML.replace('<body>', '<body>' + ADMIN_HTML)
+HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
 CSS += ADMIN_CSS
 JS = JS.removesuffix('loadProjects();\n') + ADMIN_JS
 
@@ -58,7 +58,8 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;document.querySelector('#node-administration-settings').hidden=!admin;
+  projectCreateForm.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });

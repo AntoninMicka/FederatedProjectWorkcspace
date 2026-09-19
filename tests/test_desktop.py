@@ -25,6 +25,7 @@ class DesktopTests(unittest.TestCase):
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+        self.assertIn("administration.hidden=selected.id==='settings-backend-tab'", JS)
         self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
         self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
         self.assertIn("activeThread=null;pendingChatRequest=null", JS)
@@ -55,10 +56,13 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("const tab=document.getElementById(destination.tabId)", JS)
         self.assertIn("await loadBackendBinding()", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
-        self.assertIn('id="node-administration-settings" class="settings-card"', desktop_html)
-        self.assertNotIn('id="node-administration-settings" class="settings-card" hidden', desktop_html)
+        self.assertIn('id="settings-users-tab"', desktop_html)
+        self.assertIn('id="settings-federation-tab"', desktop_html)
+        self.assertNotIn('id="settings-users-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
         settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
-        self.assertEqual(settings.count('id="administration-open"'), 1)
+        self.assertIn('id="administration" class="settings-card"', settings)
+        self.assertNotIn('<dialog', settings)
+        self.assertNotIn('id="administration-open"', settings)
 
     def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):
         from spikes.desktop_ui import HTML

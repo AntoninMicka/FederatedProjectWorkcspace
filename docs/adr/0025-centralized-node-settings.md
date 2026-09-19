@@ -20,10 +20,11 @@ backendu a odkaz do této sekce. Přechod do nastavení si v paměti stránky uc
 návratový kontext; návrat obnoví seznam projektů nebo otevřený projekt a jeho
 aktivní panel, ale neobchází nové načtení stavů ze serveru.
 
-Stejná stránka obsahuje vstup do existující správy uživatelů a federace.
-Samotný administrační dialog, `/v1/administration`, role a potvrzovací workflow
-se nemění; odstraňuje se pouze samostatné plovoucí tlačítko mimo informační
-architekturu. Desktop používá svůj dosavadní lokální federation-admin kontrakt,
+Stejná stránka obsahuje rovnocenné záložky **AI backend**, **Uživatelé** a
+**Federace**. Existující administrační obsah se vykresluje přímo v hlavní ploše;
+nevzniká dialog, podokno ani samostatné plovoucí tlačítko. API
+`/v1/administration`, role a potvrzovací workflow se nemění. Desktop používá
+svůj dosavadní lokální federation-admin kontrakt,
 zatímco web sekci zobrazí pouze přihlášenému `node-admin` nebo
 `federation-admin`. Skrytí vstupu nenahrazuje serverovou autorizaci.
 
