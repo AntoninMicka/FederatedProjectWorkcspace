@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from uuid import uuid4
 
+from spikes.artifacts import Artifacts
 from spikes.chat_service import ChatService
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -138,6 +139,39 @@ class ChatServiceTests(unittest.TestCase):
                  'privacy', 'created_at')}
         value['proposal_id'] = str(uuid4()); value.update(changes)
         return value
+
+    def route_request(self, **changes):
+        base = self.request()
+        value = {key: base[key] for key in ('project_id', 'expected_head', 'thread_id',
+                 'message_id', 'run_id', 'manifest_id', 'selected_message_ids', 'content',
+                 'privacy', 'created_at')}
+        value.update(task_id=str(uuid4()), selected_artifact_ids=[])
+        value.update(changes)
+        return value
+
+    def test_routed_task_binds_artifact_privacy_and_replays_durable_outcome(self):
+        artifact_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=artifact_id,
+            base_head=self.git.head(), title='Project context', body='exact artifact', new=True),
+            str(uuid4()))
+        request = self.route_request(expected_head=self.git.head(),
+                                     selected_artifact_ids=[artifact_id], privacy='confidential')
+        outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'answer'}
+        calls = []
+        def transport(binding, raw):
+            calls.append(json.loads(raw))
+            return {'model': binding.model, 'response': json.dumps(outcome)}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport))
+        result = service.task_route(request)
+        self.assertEqual(result['outcome'], outcome)
+        self.assertEqual(result['privacy'], 'confidential')
+        self.assertIn('Source ' + artifact_id, calls[0]['prompt'])
+        self.assertIn('Focus ID ' + request['message_id'], calls[0]['prompt'])
+        restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda *_: self.fail('must not resend')))
+        self.assertEqual(restarted.task_route(request), result)
 
     def test_invalid_reconfiguration_preserves_confirmed_binding(self):
         before = self.service.status()['binding']

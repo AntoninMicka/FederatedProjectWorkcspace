@@ -52,10 +52,14 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   UUID zdrojů, odmítá provider/credential/tool pole. Přidána provider-neutral
   role `task-router-v1`. Ověření: vlastní testy a úplná sada 313 testů,
   22 environmentálních skipů dne 2026-09-19.
-- [ ] [planned] **F-M3-EXTERNAL-01-E2 — Durable orchestrace a artefaktový kontext
-  (PoC validated).** Jeden Context Manifest pro explicitní zprávy, zadání a
-  doplňující artefakty; bezpečný replay po restartu a privacy maximum všech
-  skutečně použitých vstupů.
+- [x] [completed] **F-M3-EXTERNAL-01-E2 — Durable orchestrace a artefaktový
+  kontext (PoC validated).** `task_route` sestaví jeden manifest z explicitních
+  artefaktů, seřazených zpráv a nového focus zadání, autorizuje jen vybraná UUID
+  a striktně validuje outcome i jeho zdrojová ID. Context Builder nově bezpečně
+  rozlišuje projektové vstupy od konverzace a focusu. Privacy výsledku je maximum
+  všech manifestových vstupů; stejný request po restartu načte durable Ollama
+  výsledek bez dalšího transportu. Ověření: cílené testy a úplná sada 315 testů,
+  22 environmentálních skipů dne 2026-09-19.
 - [ ] [planned] **F-M3-EXTERNAL-01-E3 — Dočasné dlouhé zprávy a potvrzení
   (PoC validated).** Plné návrhy obnovitelné v chatu; artifact preview/publish,
   external preview/confirm/cancel a atomická redukce na odkaz či provozní záznam.

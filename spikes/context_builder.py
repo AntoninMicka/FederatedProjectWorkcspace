@@ -217,8 +217,8 @@ class ContextBuilder:
                 or target.boundary == 'same-node', 'local-only requires same-node execution')
         payload_value = dict(schema_version=1, inputs=parts)
         if conversation is not None:
-            expected_records = (records[:-1] if task is not None
-                                and task.focus_input_id is not None else records)
+            end = -1 if task is not None and task.focus_input_id is not None else None
+            expected_records = records[len(project_inputs):end]
             require(conversation.message_ids == tuple(
                 row['input_id'] for row in expected_records),
                     'Conversation selection must match included input order')
@@ -230,8 +230,8 @@ class ContextBuilder:
                 require(records[-1]['input_id'] == task.focus_input_id
                         and sum(row['input_id'] == task.focus_input_id for row in records) == 1,
                         'Task focus must be the final included input')
-                require(len(records) == (len(conversation.message_ids) if conversation else
-                                         len(project_inputs)) + 1,
+                require(len(records) == len(project_inputs)
+                        + (len(conversation.message_ids) if conversation else 0) + 1,
                         'Task focus must be the only additional input')
             payload_value['task'] = dict(role_id=task.role_id,
                 role_revision=task.role_revision, instruction=task.instruction,

@@ -287,17 +287,17 @@ class OllamaAdapter:
                          if isinstance(item, dict) and set(item) == {'message_id', 'role'}
                          and item['role'] in {'user', 'assistant'}}
                 require(len(roles) == len(conversation), 'Invalid task conversation for Ollama')
-                selected_ids = [input_id for input_id, _ in decoded
-                                if input_id != task['focus_input_id']]
+                selected_ids = [input_id for input_id, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
             sections = ['Instruction:\n' + task['instruction']]
             for input_id, content in decoded:
                 if input_id == task['focus_input_id']:
-                    label = 'Focus'
+                    label = ('Focus ID ' + input_id if task['role_id'] == 'task-router'
+                             else 'Focus')
                 elif input_id in roles:
                     label = 'User message' if roles[input_id] == 'user' else 'Assistant message'
-                    if task['role_id'] == 'external-call-planner':
+                    if task['role_id'] in {'external-call-planner', 'task-router'}:
                         label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
