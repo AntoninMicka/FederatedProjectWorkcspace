@@ -96,9 +96,12 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   uvolní klientské operation ID pro nový vědomý pokus, zatímco `unknown` se dál
   automaticky neopakuje. Chyby `/v1/tasks/*` už nejsou nesprávně hlášeny jako
   chyba otevření projektu. Uživatel 2026-09-19 následně živě potvrdil čisté nové
-  vlákno a úspěšný průchod `artifact-draft` až po vytvoření artefaktu. Zbývá
-  ověřit přímou odpověď, externí návrh/volání a obnovu rozpracovaného výsledku po
-  reloadu; webové hledání přes SearXNG je samostatná navazující feature.
+  vlákno, úspěšný průchod `artifact-draft` až po vytvoření artefaktu a načtení
+  výsledku po reloadu. Reload současně potvrdil UX mezeru: bez voliče vláken UI
+  skládá klasický chat a poslední task projekci do jednoho pohledu. Oddělení a
+  výběr drží prioritní `F-M2-CHAT-03`. V této dávce zbývá ověřit přímou odpověď
+  a externí návrh/volání; webové hledání přes SearXNG je samostatná navazující
+  feature.
 
 ## K předání do backlogu
 
