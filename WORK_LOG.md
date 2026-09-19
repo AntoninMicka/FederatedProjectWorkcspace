@@ -5,6 +5,24 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-EXTRACT-01 — Lokální strukturovaná extrakce — 2026-09-19
+
+Dávka uzavřena po začlenění PR #32 jako commit `0f085e3` v `develop`; feature
+větev `feature/f-m2-extract-01-structured-extraction` dodala uzavřený katalog
+schémat, durable validovaný náhled a potvrzenou projektovou publikaci. Dosažená
+úroveň je lokální PoC validated; živý Ollama a skutečný Qt/WebEngine průchod
+zůstaly podmíněné prostředím.
+
+- [x] [completed] **F-M2-EXTRACT-01-A — Kontrakt schémat, validace a reuse review (designed).** ADR 0008 definuje `facts-v1` a `action-items-v1`, striktní pole, limity, source reference jen do explicitního výběru a neměnný `fpw-extraction-v1` source artefakt.
+- [x] [completed] **F-M2-EXTRACT-01-B — Lokální extractor a durable validovaný preview (implemented).** Same-node role `extractor-v1` používá Context Manifest a oddělený task store; nevalidní nebo neurčitý běh nelze vydávat ani automaticky opakovat.
+- [x] [completed] **F-M2-EXTRACT-01-C — Potvrzená publikace, desktop UI a akceptace (PoC validated).** Autentizované API/UI vybírá artefakty nebo zprávy, bezpečně vykresluje JSON a Workspace publikuje jediný source artefakt s provenance, privacy a `derived-from` vztahy.
+
+Ověření finálního obsahu: `py_compile`, `node --check`, cílené
+backend/API/UI/recovery testy a kompletní sada 274 testů OK, 22 podmíněných
+skipů. Testy pokryly invalidní JSON, stale/unknown, restart, idempotentní retry
+a pády před i po posunu refu i po dokončení Workspace. Gate M1 nadále čeká na
+odložený `M1-07-C`.
+
 ## F-M2-SUMMARY-01 — Lokální projektové souhrny — 2026-09-18
 
 Dávka uzavřena po začlenění PR #31 jako commit `3059dbb` v `develop`; feature
