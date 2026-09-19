@@ -184,6 +184,24 @@ recovery-safe operace. Externí varianta obsahuje účel, hotový dotaz a explic
 ID zdrojů, ale žádný provider, credential ani oprávnění. Aplikace z ní znovu
 sestaví Context Manifest a autoritativní externí preview.
 
+Výstupy AI nemusí být krátké. Pouze `direct-answer` je běžná trvalá chatová
+odpověď. Celý `artifact-draft` a `external-request` se před rozhodnutím promítnou
+do chatu jako jasně označené dočasné zprávy; UI je smí sbalit nebo rolovat, ale
+nesmí jejich obsah skrytě zkrátit. Vstupní a výstupní byte limity zůstávají
+explicitní ochranou zdrojů a překročení limitu je chyba, nikoli tiché oříznutí.
+Autoritativní plný obsah drží durable preview/run evidence mimo běžný chatový
+transkript, aby reload nebo restart obnovil stejný návrh.
+
+Po lidském potvrzení se dočasná projekce atomicky nahradí redukovanou trvalou
+zprávou. Pro artefakt obsahuje odkaz a stabilní ID potvrzeně vytvořeného
+projektového artefaktu, ne kopii jeho těla. Pro externí větev obsahuje pouze
+sdělení, že externí volání proběhlo, a bezpečné neobsahové provozní údaje jako
+run ID a stav; přesný dotaz ani provider request se do chatového vlákna znovu
+nekopírují. Zůstávají v oddělené approval/run evidenci pro recovery a audit.
+Zamítnutý návrh z běžné projekce vlákna zmizí, zatímco durable stav zaznamená
+zamítnutí. Náhrada musí být restart-safe: po pádu se nesmí současně zobrazit
+plná dočasná i redukovaná potvrzená varianta ani zopakovat Git či síťový účinek.
+
 Privacy výsledku je nejméně nejsilnější privacy ze všech skutečně použitých
 zpráv a artefaktů. Změna HEAD, výběru nebo obsahu ruší navazující preview.
 Neznámá varianta, pole, typ artefaktu nebo ID selže uzavřeně. Ollama tedy smí

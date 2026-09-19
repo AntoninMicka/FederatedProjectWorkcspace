@@ -835,6 +835,9 @@ Plánovaná úprava `F-M3-EXTERNAL-01-E` sjednotí uživatelský vstup: Ollama n
 explicitně vybranými zprávami a doplňujícími artefakty vrátí buď přímou odpověď,
 návrh artefaktu, nebo připravený dotaz pro externí model. Návrhové větve nadále
 vyžadují aplikační preview a lidské potvrzení; model sám nezapisuje ani neodesílá.
+Potenciálně dlouhý návrh se do rozhodnutí zobrazí celý jako dočasná chatová
+zpráva. Po potvrzení jej nahradí odkaz na vytvořený artefakt, respektive stručný
+záznam proběhlého externího volání; plný obsah zůstane v oddělené durable evidenci.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje textový OpenAI
