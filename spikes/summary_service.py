@@ -9,12 +9,13 @@ import re
 import stat
 
 from spikes.chat_threads import ChatThreads
+from spikes.backend_contract import (BackendResponseError, BackendUnknown, ROLES)
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
     ConversationSelection, DispatchHandoff, ProjectInput, TaskInstruction)
 from spikes.metadata import MAX_FILE, ValidationError, require, timestamp, uuid, validate_snapshot
-from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaBindings,
-                                   OllamaResponseError, OllamaRuns, UnknownRun)
+from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
+                                   OllamaRuns)
 from spikes.project_creation import ProjectCreation
 from spikes.summary_tasks import SummaryTasks
 
@@ -70,7 +71,7 @@ class SummaryService:
         return SummaryTasks(root, self.task_filename), OllamaBindings(root), adapter
 
     def configure(self, value):
-        binding = OllamaBinding.parse(value)
+        binding = BACKENDS.parse_binding(value)
         require(binding.boundary == 'same-node', 'Summary preview requires same-node Ollama')
         _, bindings, _ = self._stores()
         bindings.save(binding)
@@ -174,6 +175,7 @@ class SummaryService:
 
     def preview(self, request, *, checkpoint=lambda stage: None):
         selection, ids, focus = self._request(request)
+        role = ROLES.resolve(request['role_id'], request['role_revision'])
         node_id, user_id = self._identity()
         tasks, bindings, adapter = self._stores()
         binding = bindings.load()
@@ -261,16 +263,16 @@ class SummaryService:
             tasks.bind(request['task_id'], node_id, user_id)
             checkpoint('run-bound')
         try:
-            adapter.prepare(handoff, binding)
-            response = adapter.dispatch(handoff, binding)
+            adapter.prepare(handoff, binding, role, role.output_format)
+            response = adapter.dispatch(handoff, binding, role, role.output_format)
             checkpoint('response-received')
             preview = self._validate_preview(response['response'], ids, request)
             task = tasks.succeed(request['task_id'], node_id, user_id, preview)
             checkpoint('succeeded')
             return self._result(request['task_id'], task)
-        except UnknownRun as exc:
+        except BackendUnknown as exc:
             tasks.finish(request['task_id'], node_id, user_id, 'unknown', str(exc)); raise
-        except (OllamaResponseError, ValidationError) as exc:
+        except (BackendResponseError, ValidationError) as exc:
             tasks.finish(request['task_id'], node_id, user_id, 'failed', str(exc)); raise
 
     def publish(self, request, *, checkpoint=lambda stage: None):

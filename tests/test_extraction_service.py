@@ -11,7 +11,7 @@ from spikes.extraction_schemas import validate_preview
 from spikes.extraction_service import ExtractionService
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
-from spikes.ollama_backend import OllamaAdapter, UnknownRun
+from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import Git
@@ -68,6 +68,9 @@ class ExtractionServiceTests(unittest.TestCase):
             ensure_ascii=False, sort_keys=True, separators=(',', ':')))
         self.assertEqual(self.git.head(), head)
         self.assertIn('Return JSON only', self.calls[0]['prompt'])
+        run = OllamaRuns(self.state).get(request['run_id'])
+        self.assertEqual((run['role_id'], run['role_revision'], run['output_format']),
+                         ('extractor', 'extractor-v1', 'json'))
         restarted = ExtractionService(self.node, Projects(self.node),
             state_dir=self.state, adapter_factory=self.factory)
         self.assertEqual(restarted.preview(request)['response'], result['response'])

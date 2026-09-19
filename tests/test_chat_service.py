@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from spikes.chat_service import ChatService
 from spikes.configuration import read_config
-from spikes.ollama_backend import UnknownRun
+from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.desktop_ui import DesktopHandler
@@ -79,6 +79,23 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.service.configure(invalid)
         self.assertEqual(self.service.status()['binding'], before)
+        with self.assertRaisesRegex(ValueError, 'Unsupported backend adapter'):
+            self.service.configure(dict(self.binding, adapter='unknown'))
+        self.assertEqual(self.service.status()['binding'], before)
+
+    def test_chat_uses_common_unscoped_execution_contract(self):
+        calls = []
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw:
+                (calls.append(raw), {'model': binding.model, 'response': 'Answer'})[1]))
+        request = self.request(); service.send(**request)
+        row = OllamaRuns(self.chat_state).get(request['run_id'])
+        self.assertEqual((row['adapter_id'], row['operation'], row['output_format']),
+                         ('ollama', 'generate-text', 'text'))
+        self.assertIsNone(row['role_id'])
+        self.assertEqual(len(row['manifest_sha256']), 64)
+        self.assertEqual(len(calls), 1)
 
     def test_context_dispatch_and_restart_preserve_exact_messages_and_target(self):
         request = self.request()

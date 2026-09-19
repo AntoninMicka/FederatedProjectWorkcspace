@@ -5,6 +5,22 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-UX-SETTINGS-01 — Centralizovaná stránka nastavení — 2026-09-19
+
+Dávka uzavřena po začlenění PR #34 jako commit `f493a33` v `develop`; feature
+větev `feature/f-ux-settings-01-central-settings` dodala globální node-local
+nastavení s přímými záložkami AI backend, Uživatelé a Federace. Dosažená úroveň
+je lokální PoC validated; skutečný průchod nové stránky v Qt/WebEngine zůstal
+neověřený.
+
+- [x] [completed] **F-UX-SETTINGS-01-A — Informační architektura, hranice stavu a reuse review (designed).** ADR 0025 odděluje uzlové nastavení od projektových dat, Gitu, credentials a federace a zachovává jedinou autoritu `OllamaBindings`.
+- [x] [completed] **F-UX-SETTINGS-01-B — Stránka nastavení a přesun uzlových vstupů (implemented).** Globální stránka zachovává návratový kontext; jediný Ollama formulář a existující uživatelská/federační správa jsou v hlavní ploše bez dialogu, při zachování desktopového admin kontraktu a webového RBAC.
+- [x] [completed] **F-UX-SETTINGS-01-C — Regresní ověření a dokumentace (PoC validated).** Neplatná rekonfigurace zachová a znovu načte potvrzený binding; návod a statické UI/API/RBAC kontrakty byly aktualizovány.
+
+Ověření finálního obsahu: cílená sada 26 testů OK se 3 podmíněnými skipy;
+kompletní sada 284 testů OK a 22 podmíněných skipů; Python, JavaScript a
+`git diff --check` prošly. Gate M1 nadále čeká na `M1-07-C`.
+
 ## F-M2-META-AI-01 — Návrhy popisu a štítků — 2026-09-19
 
 Dávka uzavřena po začlenění PR #33 jako commit `e5b5d9d` v `develop`; feature

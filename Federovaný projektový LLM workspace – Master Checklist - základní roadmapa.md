@@ -816,16 +816,22 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [x] Extractor — F-M2-EXTRACT-01 lokálně PoC validated: uzavřený schema kontrakt, lokální validovaný preview a potvrzená recovery-safe publikace s provenance a desktopovým API/UI; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
 - [x] Auto-description — F-M2-META-AI-01 lokálně PoC validated: durable same-node návrh, bezpečný diff a potvrzený recovery-safe metadata commit; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
 - [x] Tagging — F-M2-META-AI-01 lokálně PoC validated; v1 ukládá pouze jednotlivě potvrzené aditivní štítky bez automatického mazání.
-- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány v lokálním PoC, obecná backendová integrace zůstává další práce.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány přes provider-neutral kontrakt F-M3-BACKEND-01. První externí provider zůstává další práce.
 
 **Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 
 ## Milestone M3 – External LLM
 
-- [ ] Backend abstraction.
+Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
+#34. Dávka `F-M3-BACKEND-01` lokálně PoC validuje provider-neutral backend,
+explicitní capabilities, role a durable execution identitu nad současnou Ollamou;
+její PR do `develop` zatím není začleněný. První externí provider, context preview,
+privacy filtr ani Gate M3 tím nejsou implementované.
+
+- [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [ ] První externí provider.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
-- [ ] Role.
+- [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [ ] Context preview.
 - [ ] Privacy filter.
 - [ ] Provenance.
@@ -1010,12 +1016,14 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 
 ## 22C. Disclosure Presenter
 
+- [ ] Přidat modul pro přípravu verzovaných prezentací: skládat deck z projektových artefaktů a médií, spravovat pořadí, šablonu, poznámky řečníka a kroky postupného odhalení a před spuštěním ověřit chybějící zdroje i přesné revize. Vytvořený deck a jeho bezpečný export nesmějí obsahovat privátní scénář, poznámky nebo skryté backupy, pokud je uživatel výslovně nezahrne do oprávněného výstupu.
 - [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
 - [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.
 - [ ] Backup ponechat volitelný: větev může pokračovat doplňující otázkou, ústní odpovědí, odložením tématu nebo návratem bez dalšího slidu. Odkazovat na existující obsah v konkrétní revizi; jeden backup smí sloužit více slidům a větvím bez kopií.
 - [ ] Ke každému slidu i backupu umožnit kontextové doplňující otázky, interní poznámky/zdroje a veřejné doplňky. Vedle nich držet globální knihovnu „Všechny backupy“ dostupnou odkudkoli, s hledáním podle tématu/otázky, filtrem citlivosti a označením již použité revize.
 - [ ] Kokpit nabídne pohledy „K tomuto slidu“, „Všechny backupy“ a „Odložené otázky“. Zobrazí aktuální otázku, připravenou reakci a nejbližší možnosti; celý strom zůstane rozbalitelný. Neočekávanou otázku lze stručně poznamenat nebo odložit bez editace celého scénáře.
 - [ ] Větev vybírá řečník ručně. Focus, výběr, privátní náhled a akce „Zobrazit publiku“ jsou rozdílné stavy; šipky, hledání ani volba možné odpovědi nesmějí promítat obsah nebo tvrdit, že odpověď skutečně zazněla. Klávesnicové ovládání a focus/selection model navrhnout podle [W3C APG Tree View](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/).
+- [ ] Ovládání prezentace abstrahovat na významové akce (`další/předchozí krok`, `privátní náhled`, `zobrazit publiku`, `backup`, `návrat`, `neutral/blackout`) a vedle klávesnice nabídnout volitelný gamepad adaptér s lokálním mapováním a testem tlačítek. Samotný vstup z gamepadu nesmí obejít autorizaci, disclosure potvrzení ani oddělení preview/audience; odpojení, ztráta focusu, opakování tlačítka nebo neznámý ovladač nesmějí automaticky posunout či odhalit obsah a vždy zůstává dostupné klávesnicové ovládání.
 - [ ] Akce „Doplňující otázka“ uloží přesný návratový bod včetně slidu, kroku postupného odhalení a rozehrané větve. Zachovat historii zanoření a samostatné akce „zpět o úroveň“, „návrat k přerušenému výkladu“ a „pokračovat hlavní prezentací“; předběhnutý pozdější slide pouze označit, ne automaticky přeskočit.
 - [ ] Základní deck připravovat jako zelený po kontrole obsahu. Každý backup má vlastní `green / orange / red`; změněná nebo nezkontrolovaná revize nesmí zdědit automatické schválení.
 - [ ] Kumulativní globální semafor: zelený slide +0, oranžový +0,5, červený +1 stupeň. Prahy a režim schůzky nastavit předem a evidovat jejich verzi.

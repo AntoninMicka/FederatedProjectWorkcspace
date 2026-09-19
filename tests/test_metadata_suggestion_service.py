@@ -12,7 +12,7 @@ from spikes.local_api import running_api
 from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.metadata_suggestions import validate_preview
 from spikes.metadata import validate_snapshot
-from spikes.ollama_backend import OllamaAdapter, UnknownRun
+from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.storage import Git
@@ -63,6 +63,9 @@ class MetadataSuggestionServiceTests(unittest.TestCase):
         self.assertEqual(result['diff']['tags']['suggested_additions'], ['Release'])
         task = self.service.status()['tasks'][0]
         self.assertEqual(len(task['response']), len(result['response']))
+        run = OllamaRuns(self.state).get(request['run_id'])
+        self.assertEqual((run['role_id'], run['role_revision'], run['output_format']),
+                         ('metadata-advisor', 'metadata-advisor-v1', 'json'))
         restarted = MetadataSuggestionService(self.node, Projects(self.node),
             state_dir=self.state, adapter_factory=self.factory)
         self.assertEqual(restarted.preview(request), result)

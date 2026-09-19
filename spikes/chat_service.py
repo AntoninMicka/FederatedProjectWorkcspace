@@ -9,12 +9,13 @@ from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
 from spikes.chat_records import ChatRecords
+from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection)
 from spikes.metadata import ValidationError, require, timestamp, uuid
-from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaBindings,
-                                   OllamaResponseError, OllamaRuns, UnknownRun)
+from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
+                                   OllamaRuns)
 from spikes.project_creation import ProjectCreation
 
 
@@ -55,7 +56,7 @@ class ChatService:
         return threads, OllamaBindings(root), adapter
 
     def configure(self, value):
-        binding = OllamaBinding.parse(value)
+        binding = BACKENDS.parse_binding(value)
         _, bindings, _ = self._stores()
         bindings.save(binding)
         return self.status()
@@ -140,11 +141,11 @@ class ChatService:
         try:
             adapter.prepare(handoff, binding)
             response = adapter.dispatch(handoff, binding)
-        except UnknownRun as exc:
+        except BackendUnknown as exc:
             threads.finish(turn_id=turn_id, node_id=node_id, user_id=user_id,
                            run_id=run_id, state='unknown', error=str(exc))
             raise
-        except OllamaResponseError as exc:
+        except BackendResponseError as exc:
             threads.finish(turn_id=turn_id, node_id=node_id, user_id=user_id,
                            run_id=run_id, state='failed', error=str(exc))
             raise
