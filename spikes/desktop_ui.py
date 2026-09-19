@@ -1050,8 +1050,11 @@ class DesktopHandler(Handler):
         except OllamaResponseError:
             return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
         except OpenAIResponseError:
-            return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
-                                   'Uložené nastavení nebylo změněno.'})
+            if self.path == '/v1/external/models':
+                return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
+                                       'Uložené nastavení nebylo změněno.'})
+            return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
+                                   'Běh byl ukončen bez automatického opakování.'})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:

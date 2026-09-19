@@ -40,6 +40,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/external/propose',request,210000)", JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
                       Path('spikes/desktop_ui.py').read_text())
+        self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
+                      Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)
         self.assertIn("projectRequest('/v1/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/external/cancel'", JS)

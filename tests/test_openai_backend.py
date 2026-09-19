@@ -117,6 +117,19 @@ class OpenAIBackendTests(unittest.TestCase):
                                   lambda *args: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
 
+    def test_reasoning_items_and_split_output_text_are_accepted_without_exposure(self):
+        response = self.response()
+        response['output'] = [
+            {'id': 'rs_test', 'type': 'reasoning', 'summary': []},
+            {'type': 'message', 'content': [
+                {'type': 'output_text', 'text': 'první '},
+                {'type': 'output_text', 'text': 'část'}]}]
+        adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+                                lambda *args: response)
+        result = adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(result['response'], 'první část')
+        self.assertNotIn('reasoning', json.dumps(result))
+
     def test_changed_credential_invalidates_prepared_run(self):
         adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
                                 lambda *args: self.fail('must not dispatch'))
@@ -140,6 +153,16 @@ class OpenAIBackendTests(unittest.TestCase):
         invalid = [
             dict(self.response(), model='other-model'),
             dict(self.response(), output=[{'type': 'function_call', 'name': 'send'}]),
+            dict(self.response(), output=[
+                {'type': 'reasoning', 'summary': []},
+                {'type': 'function_call', 'name': 'send'},
+                {'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 'answer'}]}]),
+            dict(self.response(), output=[
+                {'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 'one'}]},
+                {'type': 'message', 'content': [
+                    {'type': 'output_text', 'text': 'two'}]}]),
             dict(self.response(), output=[]),
         ]
         for index, response in enumerate(invalid):

@@ -370,6 +370,9 @@ class OpenAIAdapter:
         except (TimeoutError, OSError, http.client.HTTPException) as exc:
             self._finish(handoff.run_id, 'unknown', None, 'OpenAI response was lost')
             raise OpenAIUnknownRun('OpenAI request outcome is unknown; do not retry automatically') from exc
+        except ValueError as exc:
+            self._finish(handoff.run_id, 'failed', None, str(exc))
+            raise OpenAIResponseError(str(exc)) from exc
         except Exception as exc:
             self._finish(handoff.run_id, 'failed', None, str(exc))
             raise
@@ -394,20 +397,25 @@ class OpenAIAdapter:
         require(value['status'] == 'completed' and value['model'] == binding.model,
                 'OpenAI response did not complete with the requested model')
         output = value['output']
-        require(isinstance(output, list) and len(output) == 1,
-                'OpenAI response must contain one output message')
-        message = output[0]
+        require(isinstance(output, list) and bool(output),
+                'OpenAI response has no output items')
+        require(all(isinstance(item, dict) and item.get('type') in {'reasoning', 'message'}
+                    for item in output),
+                'OpenAI response contains an unsupported active output item')
+        messages = [item for item in output if item.get('type') == 'message']
+        require(len(messages) == 1,
+                'OpenAI response must contain exactly one output message')
+        message = messages[0]
         require(isinstance(message, dict) and message.get('type') == 'message'
                 and set(message) >= {'type', 'content'},
                 'OpenAI response contains an unsupported output item')
         content = message['content']
-        require(isinstance(content, list) and len(content) == 1
-                and isinstance(content[0], dict)
-                and content[0].get('type') == 'output_text'
-                and isinstance(content[0].get('text'), str),
+        require(isinstance(content, list) and bool(content)
+                and all(isinstance(item, dict) and item.get('type') == 'output_text'
+                        and isinstance(item.get('text'), str) for item in content),
                 'OpenAI response contains an unsupported content item')
         result = {'id': value['id'], 'model': value['model'],
-                  'response': content[0]['text']}
+                  'response': ''.join(item['text'] for item in content)}
         if isinstance(value.get('usage'), dict):
             usage = value['usage']
             allowed = {'input_tokens', 'output_tokens', 'total_tokens'}
