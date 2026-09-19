@@ -13,17 +13,19 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
 
-F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02 a
-F-M2-SUMMARY-01 a F-M2-EXTRACT-01 jsou po PR #26–#32 uzavřeny ve WORK_LOG.
-Aktivní F-M2-META-AI-01 drží [TODO](TODO.md). Uživatel výslovně odložil cílový reboot
-M1-07; otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně
-nezávislá práce pokračuje bez tvrzení, že je Gate uzavřený.
+F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
+F-M2-SUMMARY-01, F-M2-EXTRACT-01 a F-M2-META-AI-01 jsou po PR #26–#33
+uzavřeny ve WORK_LOG. Aktivní F-UX-SETTINGS-01 drží [TODO](TODO.md).
+Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
+práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-UX-SETTINGS-01 — Centralizovaná stránka nastavení (cílová úroveň: designed → implemented).** Původ: uživatelský požadavek 2026-09-18. Navrhnout společné místo pro aplikační a backendová nastavení a přesunout tam současné inline nastavení Ollama; zachovat node-local uložení, privacy hranice, validaci a bezpečný návrat při chybě. Neplést nastavení s projektovými daty ani credentials v Gitu.
+- [ ] [planned] **F-M3-BACKEND-01 — Provider-neutral backend a role kontrakt (cílová úroveň: designed → implemented).** Rozdělit současné Ollama-specific volání na backendovou capability/target/run abstrakci bez změny Context Manifestu, privacy autorizace a `unknown` recovery. Role zůstává oddělená od konkrétního modelu/provideru. Akceptace: Ollama používá nový kontrakt beze změny trust hranice, neznámá capability se odmítne, target/model změna invaliduje handoff a žádný provider nemůže obejít manifest ani aplikační autorizaci.
+- [ ] [planned] **F-M3-EXTERNAL-01 — První externí provider, context preview a privacy filtr (cílová úroveň: PoC validated).** Po F-M3-BACKEND-01 vybrat provider podle aktuálně ověřeného oficiálního API, zavést explicitní credential reference mimo Git a před odesláním zobrazit přesný context preview. Akceptace: `local-only` se neodešle, ostatní třídy projdou policy/RBAC, preview odpovídá odeslaným bajtům, stale HEAD a změna cíle se odmítnou a timeout/ztracená odpověď skončí bez automatického duplicitního volání.
+- [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
 ## Zjištěné mezery a navazující ověření
 
-- [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Uživatel ověření odložil do příštího plánovaného restartu routeru. Poté potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
+- [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
@@ -42,12 +44,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 - [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle ADR 0008: manifest přesných bajtů, revalidace před odesláním, zákaz implicitního fallbacku a recovery unknown běhů.
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
-
-### Navazující konverzační feature dávky
-
-Tyto dávky doplňují M2/M3, ale nemění pořadí tří nejbližších dávek výše. Před aktivací ověřit skutečné závislosti a aktualizovat ADR 0008; názvy větví jsou návrhy, větve ani PR nebyly vytvořeny.
-
-- [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 

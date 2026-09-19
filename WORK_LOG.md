@@ -5,6 +5,22 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-META-AI-01 — Návrhy popisu a štítků — 2026-09-19
+
+Dávka uzavřena po začlenění PR #33 jako commit `e5b5d9d` v `develop`; feature
+větev `feature/f-m2-meta-ai-01-metadata-suggestions` dodala potvrzované návrhy
+popisu a štítků pro explicitně vybraný artefakt. Dosažená úroveň je lokální
+PoC validated; živý Ollama a skutečný Qt/WebEngine průchod zůstaly neověřené.
+
+- [x] [completed] **F-M2-META-AI-01-A — Kontrakt návrhu, potvrzení a reuse review (designed).** ADR 0008 vymezuje bounded výstup, vazbu na obsah i původní metadata, samostatné potvrzení popisu a aditivních štítků a zákaz automatického mazání či změny privacy/provenance.
+- [x] [completed] **F-M2-META-AI-01-B — Durable lokální návrh a validovaný diff (implemented).** Same-node role `metadata-advisor-v1` používá serverem kanonizovaný snapshot, vlastní durable task store a striktní validaci; neurčitý běh se automaticky neopakuje.
+- [x] [completed] **F-M2-META-AI-01-C — Potvrzený metadata zápis, desktop UI a akceptace (PoC validated).** UI potvrzuje jednotlivá pole a Workspace znovu váže HEAD, metadata i obsah; retry a pády nevytvoří duplicitní commit.
+
+Ověření finálního obsahu: cílené backend/API/UI/recovery testy a kompletní sada
+282 testů OK, 22 podmíněných skipů. Testy pokryly prázdný výběr, nevalidní
+návrh, stale HEAD, restart/retry a pády před i po posunu refu i po dokončení
+Workspace. Gate M1 nadále čeká na `M1-07-C`.
+
 ## F-M2-EXTRACT-01 — Lokální strukturovaná extrakce — 2026-09-19
 
 Dávka uzavřena po začlenění PR #32 jako commit `0f085e3` v `develop`; feature

@@ -3,25 +3,21 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M2-META-AI-01: Návrhy popisu a štítků
+# TODO — F-UX-SETTINGS-01: Centralizovaná stránka nastavení
 
-Milník M2; jedna dávka, jedna feature větev, jeden PR do `develop`.
+Milník UX/M2; jedna dávka, jedna feature větev, jeden PR do `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
-## F-M2-META-AI-01 — Návrhy popisu a štítků
+## F-UX-SETTINGS-01 — Centralizovaná stránka nastavení
 
-- Stav: [x] [completed]; PoC validated 2026-09-19, čeká commit/push/PR a merge do `develop`.
-- Původ: roadmapa M2 „Auto-description“ a „Tagging“; navazuje na F-M2-SUMMARY-01 a F-M2-EXTRACT-01 začleněné PR #31 a #32.
-- Skutečná větev: `feature/f-m2-meta-ai-01-metadata-suggestions`, založená z `develop` (`0f085e3`); jediný budoucí PR do `develop`.
-- Výstup: lokální LLM navrhne pro jeden explicitně vybraný artefakt popis a štítky, zobrazí přesný rozdíl proti aktuálním metadatům a teprve po uživatelově volbě polí provede jediný obnovitelný metadata commit.
-- Mimo rozsah: background/index-wide generování, automatické přepisování metadat, změna title/privacy/provenance, externí provider, RAG/embeddings a automatická publikace.
-- Recovery: LLM task/preview a projektový metadata zápis jsou oddělené; `unknown` se neopakuje, potvrzení váže preview hash, původní HEAD i původní metadata a stejné task/operation ID nesmí vytvořit druhý návrh ani commit.
-- Akceptace: přesný artifact/HEAD/privacy/cíl v manifestu; striktní bounded návrh; diff se zachováním ručních hodnot; volitelné potvrzení popisu a štítků; prázdné/duplicitní/nevhodné štítky a limity; stale HEAD, restart/retry a pády před/po publikaci; bezpečné desktopové vykreslení.
+- Stav: [ ] [in progress]; návrhový kontrakt dokončen 2026-09-19.
+- Původ: uživatelský požadavek 2026-09-18 přesunout průběžně rostoucí nastavení z pracovních panelů na společnou stránku.
+- Skutečná větev: `feature/f-ux-settings-01-central-settings`, založená z `develop` (`e5b5d9d`); jediný budoucí PR do `develop`.
+- Výstup: stránka nastavení uzlu dostupná i bez otevřeného projektu; současný Ollama binding se přesune z chatu do sekce lokálního AI backendu a chat nabídne jen stav a odkaz do nastavení.
+- Mimo rozsah: nový konfigurační formát, synchronizace nastavení, credentials/vault, automatická změna routeru, další backendy a projektová nastavení.
+- Recovery: ukládání dál používá validaci a atomické nahrazení `OllamaBindings`; neplatný požadavek ponechá poslední platnou konfiguraci a UI nesmí tvrdit úspěch.
+- Akceptace: přístup bez projektu i z chatu; jediný editační formulář; zachování hodnot a bezpečnostních hranic; chybové stavy bez ztráty platné konfigurace; testy API/UI a aktualizovaný návod.
 
-- [x] [completed] **F-M2-META-AI-01-A — Kontrakt návrhu, potvrzení a reuse review (designed, 2026-09-19).** ADR 0008 uzavírá request a `metadata-suggestions-v1`, limity a casefold unikátnost, vazbu obsahu i původních metadat, samostatné potvrzení popisu a aditivních tagů, zákaz automatického mazání či změny privacy/provenance a oddělené síťové/task/Workspace crash boundaries. Reuse katalog adaptuje Context Builder, Ollama, extractor task preview, metadata validaci a Workspace; přímé použití editoru ani nová závislost nejsou vhodné.
-- [x] [completed] **F-M2-META-AI-01-B — Durable lokální návrh a validovaný diff (implemented, 2026-09-19).** Same-node role `metadata-advisor-v1` přidává serverem kanonizovaný metadata snapshot jako manifestovaný vstup se stejnou privacy, používá vlastní durable task store a striktně validuje `metadata-suggestions-v1`. Preview vrací původní hodnoty a přesný diff bez Git zápisu; restart neopakuje úspěšný dispatch a invalidní/`unknown` výsledek se nevydává jako návrh. Cílené backendové testy a kompletní sada 277 testů prošly, 22 podmíněných testů bylo přeskočeno; závěrečnou UI/publikační akceptaci dávky provede úkol C.
-- [x] [completed] **F-M2-META-AI-01-C — Potvrzený metadata zápis, desktop UI a akceptace (PoC validated, 2026-09-19).** Autentizované API/UI bezpečně zobrazuje původní a navržený popis, umožňuje samostatně potvrdit popis a jednotlivé nové štítky a odmítá prázdný výběr. Workspace znovu váže HEAD, metadata i obsah, zachovává title/privacy/provenance a obnovuje stejný receipt bez duplicitního commitu po pádu před refem, po refu i po dokončení Workspace. Cílené backend/API/UI testy a kompletní sada 282 testů prošly, 22 podmíněných testů bylo přeskočeno; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
-
-### Následující dávka po samostatném merge
-
-- `F-UX-SETTINGS-01` — centralizovaná stránka nastavení.
+- [x] [completed] **F-UX-SETTINGS-01-A — Informační architektura, hranice stavu a reuse review (designed, 2026-09-19).** ADR 0025 vymezuje samostatnou stránku uzlových nastavení, návratový kontext, jediný Ollama formulář, oddělení node-local stavu od projektu a credentials a zachování stávající serverové validace/atomického zápisu. Reuse review adaptuje existující DOM, autentizované API, `ChatService` a `OllamaBindings`; nová persistence ani knihovna nejsou potřeba.
+- [ ] [in progress] **F-UX-SETTINGS-01-B — Stránka nastavení a přesun Ollama formuláře (cílová úroveň: implemented).** Doplnit navigaci dostupnou bez projektu, přesunout formulář bez duplikace a v chatu zachovat stav backendu a odkaz s návratem do původního kontextu.
+- [ ] [planned] **F-UX-SETTINGS-01-C — Regresní ověření a dokumentace (cílová úroveň: PoC validated).** Ověřit načtení/uložení, chybný vstup, zachování platného bindingu, navigaci bez projektu i z projektu, bezpečné DOM vykreslení a aktualizovat uživatelský návod; spustit úplnou sadu.
