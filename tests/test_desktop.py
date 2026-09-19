@@ -43,6 +43,10 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
+        self.assertIn('error.status=response.status', JS)
+        self.assertIn('if(error.status===422)pendingChatRequest=null', JS)
+        self.assertIn('Ollama vrátila neplatný formát výsledku úlohy',
+                      Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)
         self.assertIn("projectRequest('/v1/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/external/cancel'", JS)

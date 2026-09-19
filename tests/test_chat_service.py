@@ -171,6 +171,8 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIn('Choose artifact-draft', calls[0]['prompt'])
         self.assertIn('asks to find or search', calls[0]['prompt'])
         self.assertIn('never copy or paraphrase the focus request as the answer', calls[0]['prompt'])
+        self.assertIn('Do not nest fields inside', calls[0]['prompt'])
+        self.assertIn('"artifact_kind":"document"', calls[0]['prompt'])
         restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
             adapter_factory=lambda runs: OllamaAdapter(runs,
                 transport=lambda *_: self.fail('must not resend')))

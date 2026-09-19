@@ -337,7 +337,8 @@ async function projectRequest(path,body,timeout=60000){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
  const result=await response.json();
- if(!response.ok) throw new Error(result.error || 'Požadavek byl odmítnut.');
+ if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
+  error.status=response.status;throw error;}
  return result;
 }
 let catalogRequest=0;
@@ -856,7 +857,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    const projection=recovered.outcomes.find(item=>item.task_id===failed.task_id);
    if(projection){replaceTaskProjection(projection);pendingChatRequest=null;}
   }catch(_recoveryError){}
-  chatOperationStatus.textContent=error.message;
+  if(error.status===422)pendingChatRequest=null;
+  chatOperationStatus.textContent=error.message+(error.status===422 ?
+   ' Zadání můžete po opravě zopakovat jako nový běh.' : '');
  }
  finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
@@ -1207,6 +1210,9 @@ class DesktopHandler(Handler):
             if self.path == '/v1/external/propose':
                 return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
                                        'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})
+            if self.path == '/v1/tasks/route':
+                return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
+                                       'Projekt ani předchozí vlákno nebyly změněny.'})
             if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '

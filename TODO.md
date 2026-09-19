@@ -90,8 +90,12 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   ale Gemma požadavek na dokument pouze zopakovala jako `direct-answer`;
   routerová instrukce nyní explicitně rozlišuje dokumentový návrh, požadavek na
   aktuální/externí hledání a přímou odpověď a zakazuje vydat parafrázi zadání za
-  výsledek. Chyby `/v1/tasks/*` už nejsou nesprávně hlášeny jako chyba otevření
-  projektu. Ruční regresní ověření obou oprav zůstává otevřené.
+  výsledek. Následující pokus zvolil správný `artifact-draft`, ale Gemma vložila
+  jeho pole do nepovoleného objektu `artifact`; instrukce proto nyní obsahuje
+  celé ploché JSON šablony a výslovný zákaz vnoření. Známá validační chyba 422
+  uvolní klientské operation ID pro nový vědomý pokus, zatímco `unknown` se dál
+  automaticky neopakuje. Chyby `/v1/tasks/*` už nejsou nesprávně hlášeny jako
+  chyba otevření projektu. Ruční regresní ověření oprav zůstává otevřené.
 
 ## K předání do backlogu
 
