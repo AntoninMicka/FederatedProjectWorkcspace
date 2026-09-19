@@ -104,8 +104,11 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   feature. Živý externí návrh následně obsahoval jinak přesný kontrakt, ale Gemma
   redundantně přidala `focus_id`; parser jej nyní odstraní pouze u přesného
   `external-request` tvaru, pokud se UUID shoduje s focus zprávou a je obsaženo
-  v `message_ids`. Jiné pole nebo neshodné UUID zůstává fail-closed; opakované
-  živé ověření preview je otevřené.
+  v `message_ids`. Další živé pokusy vrátily chybějící `artifact_ids` a
+  `message_ids: null`; u jinak přesného externího tvaru normalizace doplní pouze
+  prázdné `artifact_ids` a aktuální focus UUID. Neprázdné reference stále musí
+  odpovídat explicitně vybraným vstupům a jiné pole či neshodné UUID zůstává
+  fail-closed. Opakované živé ověření preview je otevřené.
 
 ## K předání do backlogu
 

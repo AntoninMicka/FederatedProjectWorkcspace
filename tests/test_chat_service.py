@@ -199,6 +199,32 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
             service_for(bad_value).task_route(bad)
 
+    def test_external_task_fills_only_missing_or_null_reference_lists(self):
+        def routed_for(request, value):
+            service = ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(value)}))
+            return service.task_route(request)['outcome']
+        for omitted in ('artifact_ids', 'message_ids'):
+            request = self.route_request()
+            value = {'schema_version': 1, 'kind': 'external-request',
+                     'purpose': 'Oponentura', 'query': 'Oponuj tvrzení',
+                     'message_ids': [request['message_id']], 'artifact_ids': []}
+            if omitted == 'artifact_ids':
+                value.pop(omitted)
+            else:
+                value[omitted] = None
+            outcome = routed_for(request, value)
+            self.assertEqual(outcome['message_ids'], [request['message_id']])
+            self.assertEqual(outcome['artifact_ids'], [])
+
+        bad = self.route_request()
+        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+            routed_for(bad, {'schema_version': 1, 'kind': 'external-request',
+                'purpose': 'X', 'query': 'Y', 'message_ids': None,
+                'artifact_ids': [], 'provider': 'forbidden'})
+
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',

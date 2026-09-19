@@ -311,6 +311,14 @@ class ChatService:
             value = json.loads(response['response'])
             external = {'schema_version', 'kind', 'purpose', 'query',
                         'message_ids', 'artifact_ids'}
+            if (isinstance(value, dict) and value.get('kind') == 'external-request'
+                    and set(value) <= external
+                    and {'schema_version', 'kind', 'purpose', 'query'} <= set(value)):
+                value = dict(value)
+                if value.get('message_ids') is None:
+                    value['message_ids'] = [request['message_id']]
+                if value.get('artifact_ids') is None:
+                    value['artifact_ids'] = []
             # Some small local models repeat the required focus UUID in one
             # redundant field. Normalize only that exact, verifiable shape;
             # the domain outcome remains closed and provider/tool fields fail.
