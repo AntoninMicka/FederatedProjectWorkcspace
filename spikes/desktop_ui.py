@@ -28,6 +28,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
 <h2>Podklady</h2><p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div></div>
+<button id="open-settings" class="global-nav" type="button">Nastavení</button>
 <div class="node-note">Na tomto počítači<br>Zkušební verze</div></aside>
 <main><div id="project-home">
 <header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
@@ -38,6 +39,28 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p class="home-help">Nový projekt vytvoříte tlačítkem v horní liště.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
+</div>
+<div id="settings-view" hidden>
+<header><span class="badge">Nastavení uzlu</span><span>Platí pro tento počítač</span></header>
+<div class="settings-heading"><div class="eyebrow">LOKÁLNÍ KONFIGURACE</div>
+<h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
+<div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
+<button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
+<button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
+<section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
+<h2 id="settings-backend-title">Lokální AI backend</h2>
+<p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
+<form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
+<label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
+<label>Model <input name="model" placeholder="gemma3" required></label>
+<label>ID cíle <input name="target_id" value="local-process" required></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
+<button type="submit">Uložit backend</button></form>
+<small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
+</section>
+<div id="administration-host"></div>
+<button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
 <div id="project-view" hidden>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
@@ -58,16 +81,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
+<button id="chat-open-settings" class="secondary-button" type="button">Otevřít nastavení backendu</button>
 <button id="chat-new-thread" type="button">Nové vlákno</button>
 <span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
 <button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
-<details id="chat-backend-settings"><summary>Nastavení Ollama backendu</summary>
-<form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
-<label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
-<label>Model <input name="model" placeholder="gemma3" required></label>
-<label>ID cíle <input name="target_id" value="local-process" required></label>
-<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
-<button type="submit">Uložit backend</button></form></details>
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
@@ -123,14 +140,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
-.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:32px}.node-note{font-size:11px;line-height:1.8;margin-top:auto;padding-top:28px;color:#9eb5c7}
+.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:32px}.global-nav{margin-top:auto;background:#176b60;text-align:left}.node-note{font-size:11px;line-height:1.8;padding-top:18px;color:#9eb5c7}
 main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
 .badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
 h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
 button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
 button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
-.home-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
+.home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
+.settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
+#settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
 .project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
@@ -161,7 +180,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}#chat-backend-settings{margin-bottom:14px}#chat-backend-form label{display:block;margin:8px 0}#chat-backend-form input,#chat-backend-form select,#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
@@ -187,6 +206,7 @@ const projectCards=document.querySelector('#project-cards');
 const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
+const settingsView=document.querySelector('#settings-view');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -266,6 +286,7 @@ function clearProject(){
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
  document.querySelector('#project-home').hidden=false;
+ settingsView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
@@ -353,6 +374,46 @@ for(const [index,tab] of mainTabs.entries()){
   event.preventDefault();selectMainTab(mainTabs[next]);mainTabs[next].focus();
  });
 }
+let settingsReturn=null;
+const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
+function selectSettingsTab(selected){
+ for(const tab of settingsTabs){
+  const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
+  const panel=document.getElementById(tab.getAttribute('aria-controls'));if(panel)panel.hidden=!active;
+ }
+ const administration=document.getElementById('administration');if(administration)administration.hidden=selected.id==='settings-backend-tab';
+}
+for(const [index,tab] of settingsTabs.entries()){
+ tab.addEventListener('click',()=>selectSettingsTab(tab));
+ tab.addEventListener('keydown',event=>{
+  const visible=settingsTabs.filter(item=>!item.hidden);const current=visible.indexOf(tab);
+  const next={ArrowRight:(current+1)%visible.length,ArrowLeft:(current+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
+  if(next===undefined)return;event.preventDefault();visible[next].click();visible[next].focus();
+ });
+}
+async function openSettings(){
+ const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
+ settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
+ selectSettingsTab(document.querySelector('#settings-backend-tab'));
+ document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
+ await loadBackendBinding();
+}
+async function closeSettings(){
+ const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
+ document.dispatchEvent(new Event('settingsclosed'));
+ if(destination?.project && activeProject){
+  projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;
+  const tab=document.getElementById(destination.tabId);if(tab)selectMainTab(tab);
+  await loadBackendBinding();
+ }else{
+  document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;
+ }
+}
+document.querySelector('#open-settings').addEventListener('click',openSettings);
+document.querySelector('#chat-open-settings').addEventListener('click',openSettings);
+document.querySelector('#settings-back').addEventListener('click',closeSettings);
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
@@ -430,6 +491,7 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
 });
 const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
+const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
@@ -458,7 +520,15 @@ function fillBinding(binding){
   fields.model.value=binding.model;fields.target_id.value=binding.target_id;
   fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
   chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
- }else chatStatus.textContent='Backend zatím není nastaven. Otevřete nastavení níže.';
+  settingsBackendStatus.textContent=`Nastaven backend ${binding.model} · ${binding.boundary}.`;
+ }else{
+  chatStatus.textContent='Backend zatím není nastaven.';
+  settingsBackendStatus.textContent='Backend zatím není nastaven.';
+ }
+}
+async function loadBackendBinding(){
+ try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);return true;}
+ catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
 async function loadChat(){
  try{
@@ -475,9 +545,14 @@ chatForm.addEventListener('submit',async event=>{
   revision:crypto.randomUUID(),adapter:'ollama',boundary,endpoint:fields.endpoint.value.trim(),
   model:fields.model.value.trim(),target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim()};
  if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
- chatStatus.textContent='Ukládám backend…';
- try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);}
- catch(error){chatStatus.textContent=error.message;}
+ settingsBackendStatus.textContent='Ukládám backend…';
+ try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);
+  settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
+ catch(error){
+  const message=error.message;const reloaded=await loadBackendBinding();
+  settingsBackendStatus.textContent=reloaded ? message+' Poslední potvrzené nastavení bylo znovu načteno.' :
+   message+' Aktuální stav nelze potvrdit; zkuste nastavení znovu otevřít.';
+ }
 });
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();

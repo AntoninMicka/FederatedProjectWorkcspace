@@ -111,6 +111,11 @@ Markdown body a nepokrývá source artefakty ani vazbu na potvrzený AI preview.
 Nová databáze, tagovací knihovna, schema framework, RAG či externí klient nejsou
 pro explicitní návrh jednoho artefaktu potřeba.
 
+F-UX-SETTINGS-01 **reuse/adaptuje** existující bezpečně vykreslovaný DOM,
+autentizované same-origin API, `ChatService.configure/status` a atomicky ukládaný
+node-local `OllamaBindings`. Formulář se přesune, nebude duplikován a nevznikne
+druhá autorita konfigurace, projektový zápis, databáze ani UI knihovna.
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

@@ -789,7 +789,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
-Aktualizace 2026-09-18: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený; cílová restartová akceptace `M1-07-C` je na rozhodnutí uživatele odložená v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace a projektové otisky jsou po PR #26–#30 začleněné; aktivní M2 práce pokračuje lokálním summarizerem F-M2-SUMMARY-01. Toto pořadí není tvrzením o splnění Gate M1.
+Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený, ale druhý skutečný restart po application-only aktualizaci opět naběhl bez kontejnerů; cílová akceptace a dodatečný návod k nastavení zůstávají pod `M1-07-C` v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce a návrhy metadat jsou po PR #26–#33 začleněné. Aktivní UX dávka centralizuje node-local nastavení bez tvrzení o splnění Gate M1.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -1054,7 +1054,7 @@ Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ do
 
 # 23. Periodický monitoring a analytický reporting
 
-**Stav: plánovaný rozsah navazující na M6; nejde o implementovaný scheduler, webový výzkum ani automatickou publikaci.** Reporting Framework je obecná schopnost workspace, zatímco Reporting Task je samostatná verzovaná definice tématu, zdrojů, periodicity, hodnoticích kritérií a výstupů. První referenční task je Humanoid Robotics Watch. Implementační dávky `MON-00` až `MON-06` drží [BACKLOG](BACKLOG.md).
+**Stav: plánovaný rozsah navazující na M6; nejde o implementovaný scheduler, webový výzkum ani automatickou publikaci.** Reporting Framework je obecná schopnost workspace, zatímco Reporting Task je samostatná verzovaná definice tématu, zdrojů, periodicity, hodnoticích kritérií a výstupů. První referenční task je Humanoid Robotics Watch; další doménové moduly mohou dodávat časové řady síťových měření, mapových vrstev nebo satelitních pozorování. Implementační dávky `MON-00` až `MON-07` drží [BACKLOG](BACKLOG.md).
 
 ## 23A. Události, zdroje a dlouhodobé příběhy
 
@@ -1093,7 +1093,15 @@ Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ do
 - [ ] Výstupy: Humanoid Robotics Weekly Notes, Monthly Report, kvartální Hospital Room case study a Annual Report se čtyřmi case studies Hotel/Hospital/Home/Office. Konkrétní názvy firem, schopnosti, ceny a predikce jsou data tasku v dané revizi, nikoli trvalá fakta roadmapy.
 - [ ] Dlouhodobé dotazy nad event/story registry musí umět doložit první výskyt a vývoj schopnosti, nasazení, ceny, autonomie, problémů a rozdílu mezi opakovaným provozem a demonstrací; odpověď odkazuje na přesné události a zdroje a přizná mezery v datech.
 
-## 23F. Gate rozšíření
+## 23F. Doménové observační moduly
+
+- [ ] Reporting Framework musí přijímat moduly přes verzovaný provider-neutral kontrakt `ObservationSource`, nikoli zabudovat API jednoho poskytovatele do tasku. Modul deklaruje capabilities, prostorový a časový rozsah, jednotky, limity, licenci, privacy, credential reference a způsob získání; tajemství ani providerový runtime stav nepatří do projektového Gitu.
+- [ ] Síťový modul může adaptovat samostatně vyvíjený RIPE Atlas Webcockpit pro dlouhodobé sledování dostupnosti, latence, tras a změn pozorovaných z explicitní množiny probes. Jednorázové aktivní měření je externí účinek vyžadující samostatné oprávnění, limity a durable run stav; veřejné výsledky nejsou automaticky důkazem příčiny ani stavu celé sítě.
+- [ ] Geospatial modul může připínat verzované mapové vrstvy, výřezy a odvozené geometrie s CRS, bbox/zoom, časem platnosti, licencí a hashem. Interaktivní mapa je projekce; autoritativní pozorování a použitá revize vrstvy musí zůstat reprodukovatelné i bez poskytovatele.
+- [ ] Earth-observation modul může sledovat časové řady satelitních snímků a odvozených produktů. Musí evidovat platformu/senzor, acquisition time oddělený od publication/import time, footprint, pásma/produkt, rozlišení, cloud/quality masku, zpracovatelskou úroveň a licenci. Změnová detekce je odvozené tvrzení s vlastní provenance a confidence, nikoli náhrada původního snímku.
+- [ ] Různé moduly lze spojit do jedné story pouze explicitní časoprostorovou vazbou a s přiznáním rozdílného pokrytí, rozlišení a nejistoty. Shoda na mapě nebo v čase sama neprokazuje kauzalitu; LLM smí korelaci pouze navrhnout k validaci.
+
+## 23G. Gate rozšíření
 
 | Rozsah | Návaznost | Podmínka použitelnosti |
 | --- | --- | --- |
@@ -1101,5 +1109,6 @@ Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ do
 | Sběr a evidence | M2–M4/M6; MON-02/MON-03 | Bezpečný source adapter, deduplikace se zachováním zdrojů, evidence/maturity review a reprodukovatelný story update. |
 | Scheduler a reporty | Po stabilním run recovery; MON-04/MON-05 | Idempotentní perioda, restart/souběh/missed run, draft versus vydání a report připnutý na přesné vstupy. |
 | Vizualizace a federace | Volitelně po M5/M6; MON-06 | Auditovatelná realistická case study a rozdělené provedení bez úniku privacy či implicitního fallbacku. |
+| Doménové observační moduly | Po MON-00 až MON-04; MON-07 | Alespoň síťový modul projde dvěma periodami se stabilní provenance; mapové a satelitní adaptéry zůstávají samostatné capabilities s licenčními, časovými a prostorovými metadaty. |
 
 **Gate periodického reportingu:** jeden obecný task a Humanoid Robotics Watch projdou alespoň dvěma po sobě jdoucími periodami; opakovaný či přerušený běh nevytvoří duplicitní vydání, zdrojové události a pozdní doplnění zůstanou dohledatelné, report lze reprodukovat z připnutých vstupů a žádné tvrzení ani vizualizace nejsou vydány jako ověřené bez odpovídající evidence a policy rozhodnutí.
