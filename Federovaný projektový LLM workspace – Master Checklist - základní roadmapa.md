@@ -599,6 +599,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
 - [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
+- [ ] Doplnit uživatelskou správu lokálních vláken a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů a obnovu `unknown` běhu; node-local SQLite zůstává autoritou pracovní historie a Git obsahuje jen explicitně publikovaný otisk nebo výstup.
 
 ---
 
@@ -852,6 +853,14 @@ záznam proběhlého externího volání; plný obsah zůstane v oddělené dura
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
 - [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
 - [ ] Provenance.
+- [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
+  adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
+  navrhnout samostatný výstup `web-search`, ale nevolá síť ani nástroj přímo;
+  aplikace před dispatch ověří privacy/policy a po návratu předá Ollamě pouze
+  přesný bounded výsledek přes Context Manifest. Evidovat dotaz, čas, URL,
+  titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
+  instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
+  timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 

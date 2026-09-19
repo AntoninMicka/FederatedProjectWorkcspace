@@ -83,3 +83,25 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   `textContent`. Ověření: cílené lifecycle/UI testy, `node --check` a úplná
   sada 319 testů, 22 environmentálních skipů dne 2026-09-19. Zbývá ruční
   průchod skutečným desktopem přes všechny tři větve a reload.
+
+## K předání do backlogu
+
+- [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
+  vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
+  cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
+  a nepřiřazených vláken, přiřazení/archivaci a zobrazení persistence. Ověřit
+  restart desktopu, více vláken jednoho projektu, oddělení projektů a uživatelů,
+  `unknown` běh a souběžnou změnu. Autoritou zůstává node-local
+  `chat-threads.sqlite` mimo Git a obnovitelný projektový index; projektové Git
+  artefakty vznikají jen explicitním full/delta otiskem nebo publikací výstupu.
+- [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
+  (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
+  používaný Open WebUI jako explicitní search capability. Task router smí
+  navrhnout `web-search`, ale síťové volání provede až aplikace po policy/privacy
+  kontrole; nejde o skrytý Ollama tool call ani o externí-modelový dispatch.
+  Výsledek uchová dotaz, čas hledání, URL, titulky, bounded úryvky a provenance,
+  následná odpověď Ollamy dostane jen přesný Context Manifest. Akceptace zahrne
+  nedostupnou službu, timeout, neplatný JSON, nedůvěryhodný obsah/URL, nulové a
+  duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
+  oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
+  nebudou odvozeny pouze z dockerového názvu `searxng`.
