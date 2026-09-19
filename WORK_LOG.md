@@ -5,6 +5,24 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-BACKEND-01 — Provider-neutral backend a role kontrakt — 2026-09-19
+
+Dávka uzavřena po začlenění PR #35 jako commit `eb828fe` v `develop`; feature
+větev `feature/f-m3-backend-01-provider-neutral` dodala provider-neutral runtime
+kontrakt, explicitní capabilities a role a rozšířenou durable run evidence při
+zachování stávajícího Ollama bindingu. Dosažená úroveň je lokální PoC validated;
+první externí provider, credentials, usage/billing a Gate M3 zůstaly mimo rozsah.
+
+- [x] [completed] **F-M3-BACKEND-01-A — Kontrakt backendu, capabilities, rolí a reuse review (designed).** ADR 0008 uzavírá binding, capabilities, role, adapter/run kontrakt, fail-closed registry a kompatibilní migraci.
+- [x] [completed] **F-M3-BACKEND-01-B — Společný adapter/run kontrakt a migrace Ollamy (implemented).** Společné runtime typy vážou adapter, binding, capability, roli, manifest a request digest; legacy `prepared` migruje pouze při shodě a `unknown` se neopakuje.
+- [x] [completed] **F-M3-BACKEND-01-C — Integrace služeb, negativní scénáře a dokumentace (PoC validated).** Chat, summarizer, extractor a metadata advisor procházejí společným kontraktem; neznámé adaptery/capabilities/role a změny cíle se odmítají fail-closed.
+
+Ověření finálního obsahu: cílených 22 testů OK; kompletní sada 290 testů OK a
+22 podmíněných skipů; `py_compile` a `git diff --check` prošly. První běh úplné
+sady v omezeném sandboxu selhal pouze na 24 zakázaných socketových operacích;
+opakování s povolenými lokálními sockety prošlo. Gate M1 nadále čeká na
+odložený `M1-07-C`.
+
 ## F-UX-SETTINGS-01 — Centralizovaná stránka nastavení — 2026-09-19
 
 Dávka uzavřena po začlenění PR #34 jako commit `f493a33` v `develop`; feature

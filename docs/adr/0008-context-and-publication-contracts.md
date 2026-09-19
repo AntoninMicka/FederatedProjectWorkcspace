@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. F-M3-BACKEND-01-A uzavírá provider-neutral aplikační kontrakt a kompatibilní migraci existující Ollamy; F-M3-BACKEND-01-B implementuje společné runtime typy, registry a rozšířenou run evidence při zachování Ollama bindingu a storage. Úplná integrační a negativní akceptace zůstává v úkolu C. Nejde o úplné RBAC, externího providera ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. F-M3-BACKEND-01 uzavírá provider-neutral aplikační kontrakt, kompatibilní migraci existující Ollamy a společné runtime typy. F-M3-EXTERNAL-01-A navazuje designed kontraktem prvního externího textového provideru a návrhu volání přes Ollamu; implementace, živé API ověření a úplná integrační akceptace zůstávají v úkolech B–D. Nejde o úplné RBAC, synchronizační službu, obrazový pipeline ani usage/billing integraci.
 
 ## Rozsah a návaznost
 
@@ -75,6 +75,158 @@ zůstávají oddělené. Validace strukturovaného JSON výstupu patří nadále
 jejímu uzavřenému schématu, zatímco adapter ověřuje transportní obálku, model,
 velikost a deklarovaný formát. Tím se obecný adapter nestává druhou autoritou
 artefaktů, tasků ani rolí.
+
+### První externí provider a řízený návrh volání
+
+F-M3-EXTERNAL-01 volí pro první implementaci adapter `openai-responses` a
+capability `generate-text` s výstupy `text` a `json`. Použije výhradně endpoint
+`POST https://api.openai.com/v1/responses` podle aktuálního oficiálního
+[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create).
+V1 nepřijímá vlastní `base_url`, proxy deklarovanou jako OpenAI, redirect ani
+provider discovery. OpenAI-compatible služba je jiný adapter a binding, nikoli
+nepozorovaná změna cíle.
+
+Binding má boundary `external-provider`, přesný endpoint, explicitní providerové
+modelové ID, limity vstupu/výstupu, timeout a opaque `credential_ref`. Pokud
+provider zveřejňuje datovaný snapshot, lze jej připnout; nedatované oficiální ID
+se nesmí nahrazovat vymyšleným datem a jeho pohyblivost musí být v UI přiznaná.
+Reference je
+náhodné stabilní ID mapované v node-local credential store; do Gitu, manifestu,
+DOM, logu ani run response se nesmí dostat hodnota secretu ani její čitelná
+lokální cesta. Deployment může hodnotu dodat z prostředí nebo write-only UI,
+ale veřejný stav vrací pouze ID reference, existenci a čas poslední změny.
+Změna reference nebo hodnoty vytvoří novou revizi bindingu a zneplatní souhlas.
+
+UI může na explicitní požadavek uživatele načíst přes uloženou credential
+reference `GET https://api.openai.com/v1/models`. Provider vrací jen dostupnost
+a základní metadata, nikoli spolehlivé capability, proto se výsledek pouze
+konzervativně zužuje na kandidáty textového Responses adapteru a ruční modelové
+ID zůstává možné. Seznam je omezený, validovaný a atomicky cachovaný mimo Git se
+svou revizí credential a časem načtení; není součástí bindingu ani autorizace.
+Neúspěšné nebo přerušené načtení zachová poslední cache i potvrzený binding a
+nikdy automaticky nepřepne model. Cache je obnovitelná projekce vzdáleného
+seznamu: pád před atomickým přejmenováním ponechá starou verzi, po něm je nová
+verze úplná a nepotřebuje journal.
+
+Adapter sestaví kanonický UTF-8 JSON request pouze z autorizovaného handoffu.
+Povinně nastaví přesný `model`, `store: false`, `stream: false`,
+`truncation: "disabled"` a omezené `max_output_tokens`; `instructions`, `input`
+a textový/JSON formát musí přesně odpovídat preview. V1 neposílá
+`previous_response_id`, providerovou conversation, vzdálené URL/soubory,
+built-in ani function tools, background request nebo další metadata. Překročení
+limitu se odmítne místo tichého ořezu. Digest zahrne celé request body i
+významné transportní parametry, ne autorizační hlavičku.
+
+Transport před sítí durable uloží `dispatching`, zakáže redirect a použije
+systémové ověření TLS pro přesný host. Odpověď přijme jen při úspěšném HTTP
+stavu, povolené velikosti, dokončeném provider stavu a výhradně očekávaných
+message/text položkách; tool call nebo jiný aktivní výstup je chyba. Eviduje
+provider response ID, požadovaný i providerem hlášený model, dostupné token usage
+a hash odpovědi, nikdy secret. Neshoda hlášeného modelu s explicitním ID v
+bindingu je fail-closed. Timeout, přerušené spojení nebo pád po
+`dispatching` znamená `unknown` bez automatického retry. Známé odmítnutí před
+odesláním je `failed`; nový pokus je nový run a nové potvrzení.
+
+Ollama nesmí tento adapter volat. Smí vrátit pouze striktní
+`ExternalCallProposal` v1 s `purpose`, podporovaným `role_id` a revizí,
+`capability`, výstupním formátem a seřazeným seznamem explicitních message/entity
+ID. Neobsahuje endpoint, credential reference, secret, volný název toolu,
+provider request ani oprávnění. Parser odmítne neznámou verzi, pole, akci,
+capability, roli či ID. Aplikační orchestrátor návrh považuje za nedůvěryhodný,
+znovu ověří session a práva, uživateli umožní výběr upravit a sám z allowlistu
+zvolí binding. Poté vytvoří nový Context Manifest, přesný provider request a
+preview. Teprve samostatné lidské potvrzení jejich hashů může autorizovat jeden
+dispatch; změna návrhu, zdroje, HEAD, policy, role, modelu, bindingu nebo
+credential reference potvrzení ruší. Text modelu ani providerem vrácený tool
+call proto nikdy není autoritou operace.
+
+Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
+[Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)
+má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;
+F-M3-MEDIA-01 musí před implementací uzavřít MIME, rozměry, byte limity,
+provenance a bezpečné přijetí bajtů. První verze nesmí převzít obecné stahování
+libovolné providerové URL. Usage a billing zůstávají oddělené capability
+M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
+ani spolehlivý výpočet ceny.
+
+Úkol F-M3-EXTERNAL-01-B implementuje binding, credential lifecycle, textový
+adapter a samostatný durable run journal. Úkol C přidává oddělené durable preview
+a potvrzení: UI zobrazí přesné vstupy, odvozenou privacy, target/model a skutečné
+provider request body bez autorizační hlavičky. Potvrzení váže jejich hash a
+znovu kontroluje HEAD, vlastníka vlákna, policy, binding, model, credential
+revizi, manifest i request bajty. `local-only` se odmítne před preview;
+`project` a `confidential` vyžadují zaškrtnutí explicitního souhlasu. Zrušení
+nezakládá chatový turn. Preview, turn a provider run jsou oddělené persistentní
+vrstvy: před provider dispatch lze bezpečně zopakovat přípravu, po durable
+`dispatching` rozhoduje run journal a neznámý výsledek se neopakuje. Pád po
+úspěšném provider runu, ale před dokončením vlákna se obnoví z durable výsledku
+bez druhého síťového účinku.
+
+Desktopová Nastavení zobrazují write-only konfiguraci a bezpečný stav bez
+secretu. Úkol D implementuje samostatný explicitně vyžádaný návrh přes lokální
+roli `external-call-planner`. Ollama dostane konverzaci jako nedůvěryhodná data,
+odpověď musí projít přesným parserem `ExternalCallProposal` a její message ID
+musí být seřazenou podmnožinou dostupných zpráv obsahující novou uživatelskou
+zprávu. Člověk může výběr upravit nebo návrh zahodit. Až upravený výběr vstupuje
+do nového manifestu a autoritativního preview z úkolu C; hash návrhu se záměrně
+nestává oprávněním ani částí externího approval, protože oprávnění váže až přesné
+výsledné vstupy a provider request. Durable Ollama run lze po restartu bezpečně
+přečíst bez dalšího síťového volání; `unknown` se automaticky neopakuje.
+
+Navazující úprava flow rozšiřuje tento úzce externí návrh na jednotné lokální
+zpracování. Uživatel odešle jedno zadání, explicitně zvolené zprávy a volitelné
+doplňující projektové artefakty. Ollama vrátí přes striktní diskriminovaný
+kontrakt právě jeden z výsledků: `direct-answer`, `artifact-draft` nebo
+`external-request`. Přímá odpověď se může dokončit jako běžný lokální chatový
+turn. Návrh artefaktu obsahuje pouze podporovaný typ, název a tělo a před zápisem
+se zobrazí jako preview; vlastní Git zápis provede až existující potvrzená
+recovery-safe operace. Externí varianta obsahuje účel, hotový dotaz a explicitní
+ID zdrojů, ale žádný provider, credential ani oprávnění. Aplikace z ní znovu
+sestaví Context Manifest a autoritativní externí preview.
+
+Výstupy AI nemusí být krátké. Pouze `direct-answer` je běžná trvalá chatová
+odpověď. Celý `artifact-draft` a `external-request` se před rozhodnutím promítnou
+do chatu jako jasně označené dočasné zprávy; UI je smí sbalit nebo rolovat, ale
+nesmí jejich obsah skrytě zkrátit. Vstupní a výstupní byte limity zůstávají
+explicitní ochranou zdrojů a překročení limitu je chyba, nikoli tiché oříznutí.
+Autoritativní plný obsah drží durable preview/run evidence mimo běžný chatový
+transkript, aby reload nebo restart obnovil stejný návrh.
+
+Po lidském potvrzení se dočasná projekce atomicky nahradí redukovanou trvalou
+zprávou. Pro artefakt obsahuje odkaz a stabilní ID potvrzeně vytvořeného
+projektového artefaktu, ne kopii jeho těla. Pro externí větev obsahuje pouze
+sdělení, že externí volání proběhlo, a bezpečné neobsahové provozní údaje jako
+run ID a stav; přesný dotaz ani provider request se do chatového vlákna znovu
+nekopírují. Zůstávají v oddělené approval/run evidenci pro recovery a audit.
+Zamítnutý návrh z běžné projekce vlákna zmizí, zatímco durable stav zaznamená
+zamítnutí. Náhrada musí být restart-safe: po pádu se nesmí současně zobrazit
+plná dočasná i redukovaná potvrzená varianta ani zopakovat Git či síťový účinek.
+
+Implementace E3 ukládá tyto projekce do node-local `TaskOutcomes`, svázané s
+uživatelem, uzlem, projektem, vláknem, přesným routed requestem, runem, manifestem
+a projektovým commitem. SQLite přechod `prepared` → `completed`/`cancelled` je
+jediným bodem viditelnosti redukované projekce. U artefaktu může pád po Git
+commitu a před tímto přechodem ponechat plný návrh; opakování stejného
+`operation_id` načte receipt existující Workspace operace a projekci dokončí bez
+druhého commitu. U externí větve může analogicky zůstat approval `prepared`;
+durable provider run vrátí výsledek bez druhého requestu a teprve potom se uloží
+redukovaný záznam. Nový sjednocený tok nezapisuje plný externí dotaz ani odpověď
+do běžného `ChatThreads`; auditní kopie zůstává pouze v oddělené approval/run
+evidenci. Starší ruční externí chat si své dosavadní transcriptové chování
+zachovává.
+
+Privacy výsledku je nejméně nejsilnější privacy ze všech skutečně použitých
+zpráv a artefaktů. Změna HEAD, výběru nebo obsahu ruší navazující preview.
+Neznámá varianta, pole, typ artefaktu nebo ID selže uzavřeně. Ollama tedy smí
+rozhodnout pouze o tvaru navrženého výsledku, nikdy o provedení zápisu nebo
+externího dispatch. Přímé ruční externí preview může zůstat pokročilou záložní
+akcí, nikoli paralelním výchozím workflow.
+Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
+správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
+nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit
+zobrazený klíč. Programové vytváření service-account klíčů pomocí Admin API key
+je samostatná privilegovaná administrativní capability a není součástí tohoto
+uživatelského credential workflow.
 
 ### Kompatibilní migrace Ollamy
 

@@ -20,6 +20,14 @@ from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
 
 
+PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
+
+
+def provider_key_url(url):
+    """Return an exact approved provider onboarding URL, never an arbitrary URL."""
+    return url if url in PROVIDER_KEY_URLS else None
+
+
 def request_policy(url, initiator, method, origin):
     """Fail closed before Qt can attach credentials or contact another origin."""
     parsed = urlsplit(url)
@@ -53,6 +61,7 @@ def main():
         parser.error('--screenshot requires --smoke')
     try:
         from PySide6.QtCore import QTimer, QUrl
+        from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow, QPushButton
         from spikes.desktop_editor import EditorDialog
         from spikes.artifacts import Artifacts
@@ -83,7 +92,12 @@ def main():
 
     class Page(QWebEnginePage):
         def acceptNavigationRequest(self, url, kind, main_frame):
-            return main_frame and url.toString() == server.origin + '/'
+            requested = url.toString()
+            external = provider_key_url(requested)
+            if main_frame and external:
+                QDesktopServices.openUrl(QUrl(external))
+                return False
+            return main_frame and requested == server.origin + '/'
 
         def createWindow(self, kind):
             return None

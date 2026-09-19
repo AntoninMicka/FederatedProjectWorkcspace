@@ -9,8 +9,8 @@ import subprocess
 import sys
 import unittest
 
-from spikes.desktop import request_policy
-from spikes.desktop_ui import DesktopHandler, JS
+from spikes.desktop import provider_key_url, request_policy
+from spikes.desktop_ui import DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from tests import test_local_api
 
@@ -25,14 +25,57 @@ class DesktopTests(unittest.TestCase):
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
+        self.assertIn('id="external-backend-form"', HTML)
+        self.assertIn('type="password"', HTML)
+        self.assertIn('href="https://platform.openai.com/api-keys"', HTML)
+        self.assertIn("projectRequest('/v1/external/status',{})", JS)
+        self.assertIn("projectRequest('/v1/external/configure',binding)", JS)
+        self.assertIn('id="external-load-models"', HTML)
+        self.assertIn('id="external-models"', HTML)
+        self.assertIn("projectRequest('/v1/external/models',{})", JS)
+        self.assertIn('id="external-preview-button"', HTML)
+        self.assertIn('id="external-propose-button"', HTML)
+        self.assertIn('id="external-proposal-messages"', HTML)
+        self.assertIn('id="external-privacy-confirm"', HTML)
+        self.assertIn("projectRequest('/v1/external/propose',request,210000)", JS)
+        self.assertIn('Ollama nevrátila platný návrh externího volání',
+                      Path('spikes/desktop_ui.py').read_text())
+        self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',
+                      Path('spikes/desktop_ui.py').read_text())
+        self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
+        self.assertIn('error.status=response.status', JS)
+        self.assertIn('if(error.status===422)pendingChatRequest=null', JS)
+        self.assertIn('Ollama vrátila neplatný formát výsledku úlohy',
+                      Path('spikes/desktop_ui.py').read_text())
+        self.assertIn("projectRequest('/v1/external/preview',request)", JS)
+        self.assertIn("projectRequest('/v1/external/confirm'", JS)
+        self.assertIn("projectRequest('/v1/external/cancel'", JS)
+        self.assertIn('preview_sha256:preview.preview_sha256', JS)
+        self.assertIn("fields.secret.value=''", JS)
         self.assertIn("administration.hidden=selected.id==='settings-backend-tab'", JS)
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
-        self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
-        self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
-        self.assertIn("activeThread=null;pendingChatRequest=null", JS)
+        self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
+        self.assertIn("projectRequest('/v1/tasks/list',{project_id:activeProject.id})", JS)
+        self.assertIn("projectRequest('/v1/tasks/artifact'", JS)
+        self.assertIn("projectRequest('/v1/tasks/external/preview'", JS)
+        self.assertIn("projectRequest('/v1/tasks/external/confirm'", JS)
+        self.assertIn("projectRequest('/v1/tasks/external/cancel'", JS)
+        self.assertIn("typeof projection.external_answer==='string'", JS)
+        self.assertIn('answer.textContent=projection.external_answer', JS)
+        self.assertIn('id="task-artifact-list"', HTML)
+        self.assertIn('id="advanced-external"', HTML)
+        self.assertIn("body.textContent=outcome.content", JS)
+        self.assertNotIn('innerHTML=outcome', JS)
+        self.assertIn("selected_message_ids:selectedMessages.map", JS)
+        self.assertIn("activeThread?.thread_id===threadId ? activeThread.messages : []", JS)
+        self.assertIn("querySelectorAll('#task-artifact-list input:checked')", JS)
+        self.assertIn("activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null", JS)
         self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
-        self.assertIn("pendingChatRequest=null;renderChat(null)", JS)
+        self.assertIn("++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID()", JS)
+        self.assertIn('if(selectionRevision!==chatSelectionRevision)return', JS)
+        self.assertIn("project_id:failed.project_id,thread_id:failed.thread_id", JS)
+        self.assertNotIn("}catch(error){await loadChat();chatOperationStatus.textContent=error.message;}", JS)
         self.assertIn("projectRequest('/v1/chat/assign'", JS)
         self.assertIn("projectRequest('/v1/chat/snapshot'", JS)
         self.assertIn("projectRequest('/v1/chat/output'", JS)
@@ -121,6 +164,15 @@ class DesktopTests(unittest.TestCase):
         ]:
             with self.subTest(url=url, initiator=initiator):
                 self.assertEqual(request_policy(url, initiator, method, origin), 'block')
+
+    def test_provider_key_onboarding_uses_only_exact_system_browser_url(self):
+        approved = 'https://platform.openai.com/api-keys'
+        self.assertEqual(provider_key_url(approved), approved)
+        for url in ('https://platform.openai.com/api-keys?next=evil',
+                    'https://platform.openai.com.evil.example/api-keys',
+                    'https://evil.example/', 'http://platform.openai.com/api-keys'):
+            with self.subTest(url=url):
+                self.assertIsNone(provider_key_url(url))
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

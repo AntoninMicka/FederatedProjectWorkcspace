@@ -7,6 +7,7 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
+from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -58,6 +59,20 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
+<hr><h2>Externí textový backend</h2>
+<p id="settings-external-status" role="status" aria-live="polite">Načítám stav externího backendu…</p>
+<form id="external-backend-form">
+<label>Provider <input value="OpenAI Responses API" disabled></label>
+<label>Endpoint <input name="endpoint" value="https://api.openai.com/v1/responses" readonly></label>
+<label>Model <input name="model" list="external-models" placeholder="gpt-5.6-luna" value="gpt-5.6-luna" required></label>
+<datalist id="external-models"></datalist>
+<button id="external-load-models" type="button">Načíst dostupné modely</button>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
+<p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
+<button type="submit">Uložit externí backend</button></form>
+<small>Správa klíče se otevře v systémovém prohlížeči; workspace nevidí přihlášení ani vytvořený klíč. Klíč sem potom vložíte jednou, po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
 </section>
 <div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
@@ -130,9 +145,27 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
+<details id="task-artifacts"><summary>Doplňující podklady</summary>
+<fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
-<button id="chat-submit" type="submit" disabled>Odeslat</button></div>
+<button id="chat-submit" type="submit" disabled>Zpracovat</button></div>
+<details id="advanced-external"><summary>Pokročilé ruční externí volání</summary>
+<button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
+<button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button>
+<section id="external-proposal" hidden aria-label="Návrh externího volání">
+<h3>Návrh Ollamy</h3><p id="external-proposal-purpose"></p>
+<fieldset><legend>Zprávy navržené k odeslání</legend><div id="external-proposal-messages"></div></fieldset>
+<button id="external-proposal-use" type="button">Připravit upravený externí náhled</button>
+<button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
+</section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<section id="external-preview" hidden aria-label="Náhled externího odeslání">
+<h3>Co bude odesláno externímu provideru</h3>
+<pre id="external-preview-content"></pre>
+<label><input id="external-privacy-confirm" type="checkbox"> Potvrzuji odeslání zobrazených dat a uvedené úrovně soukromí.</label>
+<button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
+<button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
+</section>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
@@ -149,6 +182,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
+.provider-link{color:#176b60;font-weight:600}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
@@ -178,6 +212,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
+#external-preview,#external-proposal{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
+#task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
@@ -243,6 +279,7 @@ function renderSidebarArtifacts(items){
  renderSummarySources();
  renderExtractionSources();
  renderMetadataSources();
+ renderTaskArtifactSources();
 }
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
@@ -281,7 +318,7 @@ function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearExtraction();clearMetadata();
- activeThread=null;pendingChatRequest=null;
+ activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
@@ -300,7 +337,8 @@ async function projectRequest(path,body,timeout=60000){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
   body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
  const result=await response.json();
- if(!response.ok) throw new Error(result.error || 'Požadavek byl odmítnut.');
+ if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
+  error.status=response.status;throw error;}
  return result;
 }
 let catalogRequest=0;
@@ -492,10 +530,16 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
 const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
+const settingsExternalStatus=document.querySelector('#settings-external-status');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
-let activeThread=null,chatBinding=null,pendingChatRequest=null;
+let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+function fillExternalModels(catalog){
+ const list=document.querySelector('#external-models');list.replaceChildren();
+ for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
+}
 function renderChat(thread){
  activeThread=thread || null;chatMessages.replaceChildren();
  for(const item of thread?.messages || []){
@@ -504,10 +548,101 @@ function renderChat(thread){
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
   message.append(detail);chatMessages.append(message);
  }
+ renderTaskOutcomes();
  document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
 }
+function renderTaskArtifactSources(){
+ const list=document.querySelector('#task-artifact-list');if(!list)return;list.replaceChildren();
+ for(const item of currentArtifacts){
+  const label=document.createElement('label'),check=document.createElement('input');
+  check.type='checkbox';check.value=item.id;
+  label.append(check,document.createTextNode(` ${item.title}`));list.append(label);
+ }
+ if(!currentArtifacts.length)list.textContent='Projekt zatím nemá podklady.';
+}
+function replaceTaskProjection(projection){
+ const index=taskOutcomes.findIndex(item=>item.task_id===projection.task_id);
+ if(index<0)taskOutcomes.push(projection);else taskOutcomes[index]=projection;
+ activeTaskThreadId=projection.thread_id;renderChat(activeThread);
+}
+function taskButton(label,handler,secondary=false){
+ const button=document.createElement('button');button.type='button';button.textContent=label;
+ if(secondary)button.className='secondary-button';button.addEventListener('click',handler);return button;
+}
+function renderTaskOutcomes(){
+ for(const projection of taskOutcomes){
+  const prompt=document.createElement('div');prompt.className='chat-message user';
+  prompt.textContent=projection.prompt.content;
+  const promptDetail=document.createElement('small');promptDetail.textContent=`Vy · ${projection.prompt.privacy}`;
+  prompt.append(promptDetail);chatMessages.append(prompt);
+  if(projection.state==='cancelled')continue;
+  const outcome=projection.outcome;if(!outcome)continue;
+  if(outcome.kind==='direct-answer'){
+   const answer=document.createElement('div');answer.className='chat-message assistant';answer.textContent=outcome.content;
+   const detail=document.createElement('small');detail.textContent=`Asistent · ${projection.privacy}`;
+   answer.append(detail);chatMessages.append(answer);continue;
+  }
+  const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
+  const heading=document.createElement('h3');
+  heading.textContent=outcome.kind==='artifact-draft'?'Návrh artefaktu':
+   outcome.kind==='artifact-link'?'Vytvořený artefakt':'Externí volání';card.append(heading);
+  if(outcome.kind==='artifact-draft'){
+   const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
+   const body=document.createElement('pre');body.textContent=outcome.content;card.append(body);
+   const actions=document.createElement('div');actions.className='task-actions';
+   actions.append(taskButton('Uložit do projektu',async event=>{
+    event.currentTarget.disabled=true;chatOperationStatus.textContent='Ukládám potvrzený artefakt…';
+    try{const projectId=activeProject.id;await projectRequest('/v1/tasks/artifact',{
+      task_id:projection.task_id,artifact_id:crypto.randomUUID(),operation_id:crypto.randomUUID()});
+     await openRegisteredProject(projectId);selectMainTab(mainTabs[1]);
+     chatOperationStatus.textContent='Artefakt byl uložen a návrh nahrazen odkazem.';
+    }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
+   }),taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='external-request'){
+   const purpose=document.createElement('p');purpose.textContent=outcome.purpose;card.append(purpose);
+   const query=document.createElement('pre');query.textContent=outcome.query;card.append(query);
+   const actions=document.createElement('div');actions.className='task-actions';
+   actions.append(taskButton('Zkontrolovat externí odeslání',()=>prepareTaskExternal(projection)),
+                  taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='artifact-link'){
+   const link=document.createElement('button');link.type='button';link.className='artifact-link';
+   link.textContent=`${outcome.title} → ${outcome.artifact_id}`;
+   link.addEventListener('click',()=>openPreview(outcome.artifact_id));card.append(link);
+  }else{
+   const detail=document.createElement('small');detail.textContent=
+    `Externista byl zavolán · stav ${outcome.state} · run ${outcome.run_id}`;card.append(detail);
+  }
+  chatMessages.append(card);
+  if(outcome.kind==='external-call' && typeof projection.external_answer==='string'){
+   const answer=document.createElement('div');answer.className='chat-message assistant';
+   answer.textContent=projection.external_answer;
+   const detail=document.createElement('small');detail.textContent=`Externí asistent · ${projection.privacy}`;
+   answer.append(detail);chatMessages.append(answer);
+  }
+ }
+}
+async function cancelTaskProjection(taskId){
+ try{replaceTaskProjection(await projectRequest('/v1/tasks/cancel',{task_id:taskId}));
+  chatOperationStatus.textContent='Návrh byl zahozen.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
+async function prepareTaskExternal(projection){
+ chatOperationStatus.textContent='Připravuji přesný externí náhled…';
+ const request={task_id:projection.task_id,approval_id:crypto.randomUUID(),turn_id:crypto.randomUUID(),
+  run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID()};
+ try{const preview=projection.external_preview ||
+   await projectRequest('/v1/tasks/external/preview',request);
+  pendingExternalPreview={task:true,taskId:projection.task_id,request,preview};
+  document.querySelector('#external-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#external-preview').hidden=false;
+  document.querySelector('#external-privacy-confirm').checked=false;
+  document.querySelector('#external-confirm').disabled=true;
+  chatOperationStatus.textContent='Externí požadavek je jen náhled. Zkontrolujte jej a potvrďte.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
- pendingChatRequest=null;renderChat(null);draft.value='';
+ ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
+ taskOutcomes=[];renderChat(null);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
  chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
@@ -527,16 +662,27 @@ function fillBinding(binding){
  }
 }
 async function loadBackendBinding(){
- try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);return true;}
+ try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+  const external=await projectRequest('/v1/external/status',{});
+  fillExternalModels(external.model_catalog);
+  settingsExternalStatus.textContent=external.binding ?
+   `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
+   'Externí backend zatím není nastaven.';return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
 async function loadChat(){
+ const selectionRevision=chatSelectionRevision;
  try{
   const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
   const active=[...result.threads].reverse().filter(item=>item.status==='active');
-  renderChat(active.find(item=>item.project_id===activeProject?.id) ||
-             active.find(item=>item.project_id===null) || null);
- }catch(error){chatStatus.textContent=error.message;renderChat(null);}
+  const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
+  if(selectionRevision!==chatSelectionRevision)return;
+  activeThread=active.find(item=>item.project_id===activeProject?.id) ||
+               active.find(item=>item.project_id===null) || null;
+  activeTaskThreadId=tasks.outcomes.at(-1)?.thread_id || activeThread?.thread_id || null;
+  taskOutcomes=tasks.outcomes.filter(item=>item.thread_id===activeTaskThreadId);
+  renderChat(activeThread);
+ }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const fields=chatForm.elements;
@@ -554,27 +700,173 @@ chatForm.addEventListener('submit',async event=>{
    message+' Aktuální stav nelze potvrdit; zkuste nastavení znovu otevřít.';
  }
 });
+document.querySelector('#external-backend-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.currentTarget,fields=form.elements;
+ const binding={schema_version:1,binding_id:crypto.randomUUID(),revision:crypto.randomUUID(),
+  adapter:'openai-responses',boundary:'external-provider',endpoint:fields.endpoint.value,
+  model:fields.model.value.trim(),target_id:'api.openai.com',
+  max_output_tokens:Number(fields.max_output_tokens.value),
+  timeout_seconds:Number(fields.timeout_seconds.value),secret:fields.secret.value};
+ settingsExternalStatus.textContent='Ukládám externí backend…';
+ try{const result=await projectRequest('/v1/external/configure',binding);
+  fields.secret.value='';settingsExternalStatus.textContent=
+   `Externí backend ${result.binding.model} byl uložen; klíč server nevrátil.`;}
+ catch(error){fields.secret.value='';settingsExternalStatus.textContent=error.message;}
+});
+document.querySelector('#external-load-models').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;settingsExternalStatus.textContent='Načítám dostupné modely…';
+ try{const result=await projectRequest('/v1/external/models',{});
+  fillExternalModels(result);
+  settingsExternalStatus.textContent=`Načteno ${result.models.length} kandidátů pro textový Responses backend · ${result.fetched_at}. Ruční ID zůstává povoleno.`;
+ }catch(error){settingsExternalStatus.textContent=error.message+' Uložené nastavení nebylo změněno.';}
+ finally{event.currentTarget.disabled=false;}
+});
 draft.addEventListener('input',()=>{
- document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();
+ const disabled=!activeProject || !draft.value.trim();
+ document.querySelector('#chat-submit').disabled=disabled;
+ document.querySelector('#external-propose-button').disabled=disabled;
+ document.querySelector('#external-preview-button').disabled=disabled;
+});
+async function showExternalPreview(request){
+ chatOperationStatus.textContent='Připravuji přesný externí náhled…';
+ try{const preview=await projectRequest('/v1/external/preview',request);
+  pendingExternalPreview={request,preview};
+  document.querySelector('#external-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#external-preview').hidden=false;
+  document.querySelector('#external-privacy-confirm').checked=false;
+  document.querySelector('#external-confirm').disabled=true;
+  chatOperationStatus.textContent='Externí požadavek ještě nebyl odeslán. Zkontrolujte náhled.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
+document.querySelector('#external-preview-button').addEventListener('click',async event=>{
+ if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
+  expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
+  turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
+  manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  content:draft.value,privacy:document.querySelector('#chat-privacy').value,
+  created_at:new Date().toISOString()};
+ event.currentTarget.disabled=true;await showExternalPreview(request);
+ event.currentTarget.disabled=!activeProject || !draft.value.trim();
+});
+document.querySelector('#external-propose-button').addEventListener('click',async event=>{
+ if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ const request={proposal_id:crypto.randomUUID(),project_id:activeProject.id,
+  expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
+  message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  content:draft.value,privacy:document.querySelector('#chat-privacy').value,
+  created_at:new Date().toISOString()};
+ event.currentTarget.disabled=true;chatOperationStatus.textContent='Ollama připravuje návrh externího volání…';
+ try{const result=await projectRequest('/v1/external/propose',request,210000);
+  pendingExternalProposal={request,result};
+  document.querySelector('#external-proposal-purpose').textContent=result.proposal.purpose;
+  const list=document.querySelector('#external-proposal-messages');list.replaceChildren();
+  for(const messageId of result.source.available_message_ids){
+   const prior=(activeThread?.messages || []).find(item=>item.message_id===messageId);
+   const label=document.createElement('label'),check=document.createElement('input');
+   check.type='checkbox';check.value=messageId;
+   check.checked=result.proposal.message_ids.includes(messageId);
+   if(messageId===request.message_id){check.checked=true;check.disabled=true;}
+   label.append(check,document.createTextNode(' '+(prior?.content || request.content)));list.append(label);
+  }
+  document.querySelector('#external-proposal').hidden=false;
+  chatOperationStatus.textContent='Ollama pouze navrhla výběr. Zkontrolujte nebo upravte jej.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=!activeProject || !draft.value.trim();}
+});
+document.querySelector('#external-proposal-use').addEventListener('click',async()=>{
+ if(!pendingExternalProposal)return;
+ const {request}=pendingExternalProposal;
+ const selected=[...document.querySelectorAll('#external-proposal-messages input:checked')]
+  .map(item=>item.value).filter(value=>value!==request.message_id);
+ const external={approval_id:crypto.randomUUID(),project_id:request.project_id,
+  expected_head:request.expected_head,thread_id:request.thread_id,
+  turn_id:crypto.randomUUID(),message_id:request.message_id,run_id:crypto.randomUUID(),
+  manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+  selected_message_ids:selected,content:request.content,privacy:request.privacy,
+  created_at:request.created_at};
+ document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
+});
+document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
+ pendingExternalProposal=null;document.querySelector('#external-proposal').hidden=true;
+ chatOperationStatus.textContent='Návrh Ollamy byl zahozen; nic nebylo odesláno externě.';
+});
+document.querySelector('#external-privacy-confirm').addEventListener('change',event=>{
+ document.querySelector('#external-confirm').disabled=!event.currentTarget.checked;
+});
+document.querySelector('#external-cancel').addEventListener('click',async()=>{
+ if(!pendingExternalPreview)return;
+ try{if(pendingExternalPreview.task){
+    const result=await projectRequest('/v1/tasks/external/cancel',{
+     task_id:pendingExternalPreview.taskId,
+     approval_id:pendingExternalPreview.preview.approval_id});
+    replaceTaskProjection(result.projection);
+   }else await projectRequest('/v1/external/cancel',
+    {approval_id:pendingExternalPreview.preview.approval_id});
+  pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
+  chatOperationStatus.textContent='Externí odeslání bylo zrušeno.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+});
+document.querySelector('#external-confirm').addEventListener('click',async event=>{
+ if(!pendingExternalPreview)return;event.currentTarget.disabled=true;
+ chatOperationStatus.textContent='Odesílám potvrzený požadavek do OpenAI…';
+ const preview=pendingExternalPreview.preview;
+ try{if(pendingExternalPreview.task){
+    const projection=await projectRequest('/v1/tasks/external/confirm',{
+     task_id:pendingExternalPreview.taskId,approval_id:preview.approval_id,
+     preview_sha256:preview.preview_sha256,approved:true,privacy:preview.privacy},210000);
+    replaceTaskProjection(projection);
+   }else{
+    const result=await projectRequest('/v1/external/confirm',
+     {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
+      approved:true,privacy:preview.privacy},210000);
+    activeThread=result.thread;renderChat(result.thread);draft.value='';
+   }
+  pendingExternalPreview=null;
+  document.querySelector('#external-preview').hidden=true;
+  document.querySelector('#chat-submit').disabled=true;
+  document.querySelector('#external-propose-button').disabled=true;
+  document.querySelector('#external-preview-button').disabled=true;
+  chatOperationStatus.textContent='Externí odpověď byla přijata.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
 });
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
  selectMainTab(mainTabs[1]);
  if(!chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení backendu.';return;}
- if(!pendingChatRequest){pendingChatRequest={project_id:activeProject.id,expected_head:activeProject.head,
-  thread_id:activeThread?.thread_id || crypto.randomUUID(),turn_id:crypto.randomUUID(),
+ if(!pendingChatRequest){
+  const threadId=activeTaskThreadId || activeThread?.thread_id || crypto.randomUUID();
+  const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
+  pendingChatRequest={task_id:crypto.randomUUID(),
+  project_id:activeProject.id,expected_head:activeProject.head,
+  thread_id:threadId,
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
-  assistant_message_id:crypto.randomUUID(),
-  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  selected_message_ids:selectedMessages.map(item=>item.message_id),
+  selected_artifact_ids:[...document.querySelectorAll('#task-artifact-list input:checked')]
+   .map(item=>item.value),
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString()};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
  try{
-  const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
-  renderChat(result.thread);fillBinding(result.target);pendingChatRequest=null;draft.value='';draft.focus();
-  chatOperationStatus.textContent='Odpověď je připravena.';
- }catch(error){await loadChat();chatOperationStatus.textContent=error.message;}
+  const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
+  replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
+  chatOperationStatus.textContent=result.projection.temporary ?
+   'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
+ }catch(error){
+  const failed=pendingChatRequest;
+  try{
+   const recovered=await projectRequest('/v1/tasks/list',{
+    project_id:failed.project_id,thread_id:failed.thread_id});
+   const projection=recovered.outcomes.find(item=>item.task_id===failed.task_id);
+   if(projection){replaceTaskProjection(projection);pendingChatRequest=null;}
+  }catch(_recoveryError){}
+  if(error.status===422)pendingChatRequest=null;
+  chatOperationStatus.textContent=error.message+(error.status===422 ?
+   ' Zadání můžete po opravě zopakovat jako nový běh.' : '');
+ }
  finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
 });
@@ -809,6 +1101,12 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
+        '/v1/external/status', '/v1/external/configure', '/v1/external/models',
+        '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
+        '/v1/external/cancel',
+        '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
+        '/v1/tasks/artifact', '/v1/tasks/external/preview',
+        '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -840,6 +1138,36 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/external/status' and request == {}:
+                return self.reply(200, self.server.chat_service.external_status())
+            if self.path == '/v1/external/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_external(request))
+            if self.path == '/v1/external/models' and request == {}:
+                return self.reply(200, self.server.chat_service.external_models())
+            if self.path == '/v1/external/propose' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_propose(request))
+            if self.path == '/v1/external/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_preview(request))
+            if self.path == '/v1/external/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_confirm(request))
+            if self.path == '/v1/external/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_cancel(request))
+            if self.path == '/v1/tasks/route' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_route(request))
+            if (self.path == '/v1/tasks/list' and isinstance(request, dict)
+                    and set(request) in ({'project_id'}, {'project_id', 'thread_id'})):
+                return self.reply(200, {'outcomes': self.server.chat_service.task_outcomes(
+                    project_id=request['project_id'], thread_id=request.get('thread_id'))})
+            if self.path == '/v1/tasks/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_cancel(request))
+            if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_publish_artifact(request))
+            if self.path == '/v1/tasks/external/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_preview(request))
+            if self.path == '/v1/tasks/external/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_confirm(request))
+            if self.path == '/v1/tasks/external/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
@@ -869,14 +1197,29 @@ class DesktopHandler(Handler):
         except UnknownRun:
             return self.reply(409, {'error': 'Výsledek běhu není známý. Vlákno bylo zachováno; '
                                    'zkontrolujte stav před novým odesláním.'})
+        except OpenAIUnknownRun:
+            return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
+                                   'automaticky neopakujte; stav byl zachován.'})
         except OllamaResponseError:
             return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
+        except OpenAIResponseError:
+            if self.path == '/v1/external/models':
+                return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
+                                       'Uložené nastavení nebylo změněno.'})
+            return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
+                                   'Běh byl ukončen bez automatického opakování.'})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
-            if self.path.startswith(('/v1/chat/', '/v1/summary/', '/v1/extraction/',
+            if self.path == '/v1/external/propose':
+                return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
+                                       'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})
+            if self.path == '/v1/tasks/route':
+                return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
+                                       'Projekt ani předchozí vlákno nebyly změněny.'})
+            if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
                                        'projekt, výběr kontextu a lokální stav.'})

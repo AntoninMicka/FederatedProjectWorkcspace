@@ -159,14 +159,16 @@ class OllamaBindings:
         return OllamaBinding.parse(value)
 
 
-class OllamaRuns:
-    """Authoritative local state for an Ollama dispatch; never stored in project Git."""
-    def __init__(self, state_dir):
+class BackendRuns:
+    """Authoritative local backend dispatch state; never stored in project Git."""
+    def __init__(self, state_dir, filename):
         self.root = Path(state_dir).absolute()
         info = self.root.stat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
                 and stat.S_IMODE(info.st_mode) == 0o700, 'Run state directory requires owned mode 0700')
-        self.path = self.root / 'ollama-runs.sqlite'
+        require(isinstance(filename, str) and bool(re.fullmatch(r'[a-z0-9-]+\.sqlite', filename)),
+                'Invalid backend run journal name')
+        self.path = self.root / filename
 
     def connect(self):
         flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
@@ -239,6 +241,12 @@ class OllamaRuns:
         return self.get(run_id)
 
 
+class OllamaRuns(BackendRuns):
+    """Compatibility wrapper retaining the existing Ollama journal path."""
+    def __init__(self, state_dir):
+        super().__init__(state_dir, 'ollama-runs.sqlite')
+
+
 class OllamaAdapter:
     def __init__(self, runs, transport=None):
         require(isinstance(runs, OllamaRuns), 'Ollama run store is required')
@@ -279,16 +287,18 @@ class OllamaAdapter:
                          if isinstance(item, dict) and set(item) == {'message_id', 'role'}
                          and item['role'] in {'user', 'assistant'}}
                 require(len(roles) == len(conversation), 'Invalid task conversation for Ollama')
-                selected_ids = [input_id for input_id, _ in decoded
-                                if input_id != task['focus_input_id']]
+                selected_ids = [input_id for input_id, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
             sections = ['Instruction:\n' + task['instruction']]
             for input_id, content in decoded:
                 if input_id == task['focus_input_id']:
-                    label = 'Focus'
+                    label = ('Focus ID ' + input_id if task['role_id'] == 'task-router'
+                             else 'Focus')
                 elif input_id in roles:
                     label = 'User message' if roles[input_id] == 'user' else 'Assistant message'
+                    if task['role_id'] in {'external-call-planner', 'task-router'}:
+                        label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
                 sections.append(label + ':\n' + content)
@@ -339,8 +349,11 @@ class OllamaAdapter:
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
         require(handoff.target == binding.target(), 'Ollama binding differs from authorized target')
-        request = json.dumps(dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
-                                  stream=False), sort_keys=True,
+        body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
+                    stream=False)
+        if output_format == 'json':
+            body['format'] = 'json'
+        request = json.dumps(body, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format)
         base = handoff.manifest_sha256.encode() + b'\0' + request

@@ -599,6 +599,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
 - [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
+- [ ] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Potvrzené smazání koordinovaně odstraní všechny podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy bez osiřelých dat; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií a UI je před smazáním výslovně uvede. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů, souběh i restart na každé hranici; „úplné“ není příslib forenzního přepsání média.
 
 ---
 
@@ -803,6 +804,13 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování a indexu drží WORK_LOG, odstranění [TODO](TODO.md).
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
+- [ ] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
+  odregistrování, odstranění obnovitelného lokálního stavu, přesun repozitáře do
+  koše a definitivní výmaz. Preview musí zahrnout projektová i chatová data,
+  credentials, sdílené reference, pending operace a známé federované kopie;
+  operace přes registraci/filesystem/Git/SQLite má durable journal a idempotentní
+  recovery. Lokální smazání nesmí předstírat výmaz dříve publikovaných,
+  sdílených nebo vzdálených revizí.
 
 **Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
 
@@ -823,18 +831,43 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 ## Milestone M3 – External LLM
 
 Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
-#34. Dávka `F-M3-BACKEND-01` lokálně PoC validuje provider-neutral backend,
-explicitní capabilities, role a durable execution identitu nad současnou Ollamou;
-její PR do `develop` zatím není začleněný. První externí provider, context preview,
-privacy filtr ani Gate M3 tím nejsou implementované.
+#34. Dávka `F-M3-BACKEND-01` byla začleněna PR #35 a lokálně PoC validuje
+provider-neutral backend, explicitní capabilities, role a durable execution
+identitu nad současnou Ollamou. Aktivní `F-M3-EXTERNAL-01` implementuje první
+externí textový provider, context preview, privacy filtr a pouze návrhové
+strukturované volání přes Ollamu. Lokální automatizované ověření je hotové
+a uživatel 2026-09-19 potvrdil živý průchod Ollama → potvrzený OpenAI
+request. Sjednocený tok E má implementovaný backend, durable redukci i UI;
+zbývá živá integrační akceptace tří výsledných větví a reloadu, proto
+Gate M3 zatím není uzavřený.
+
+Rozpracovaná úprava `F-M3-EXTERNAL-01-E` sjednocuje uživatelský vstup: Ollama nad
+explicitně vybranými zprávami a doplňujícími artefakty vrátí buď přímou odpověď,
+návrh artefaktu, nebo připravený dotaz pro externí model. Návrhové větve nadále
+vyžadují aplikační preview a lidské potvrzení; model sám nezapisuje ani neodesílá.
+Potenciálně dlouhý návrh se do rozhodnutí zobrazí celý jako dočasná chatová
+zpráva. Po potvrzení jej nahradí odkaz na vytvořený artefakt, respektive stručný
+záznam proběhlého externího volání; plný obsah zůstane v oddělené durable evidenci.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
-- [ ] První externí provider.
+- [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje a živě
+  ověřuje textový OpenAI Responses adapter, přesné preview, potvrzený dispatch a
+  striktní návrh výběru přes Ollamu. E1–E3 doplňuje uzavřený outcome,
+  artefaktový kontext a durable dočasné/redukované projekce. E4 UI je
+  implementované; zbývá živá integrační akceptace sjednoceného toku.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
-- [ ] Context preview.
-- [ ] Privacy filter.
+- [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
+- [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
 - [ ] Provenance.
+- [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
+  adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
+  navrhnout samostatný výstup `web-search`, ale nevolá síť ani nástroj přímo;
+  aplikace před dispatch ověří privacy/policy a po návratu předá Ollamě pouze
+  přesný bounded výsledek přes Context Manifest. Evidovat dotaz, čas, URL,
+  titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
+  instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
+  timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 

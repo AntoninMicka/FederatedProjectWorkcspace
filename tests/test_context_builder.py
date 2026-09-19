@@ -90,6 +90,20 @@ class ContextBuilderTests(unittest.TestCase):
                 ad_hoc_inputs=(AdHocInput(focus, b'Focus text', 'project'),),
                 task=TaskInstruction('summarizer', 'summarizer-v1', 'Summarize.', str(uuid4())))
 
+    def test_task_can_combine_project_sources_conversation_and_focus(self):
+        message_id, focus = str(uuid4()), str(uuid4())
+        prepared = self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
+            authority=self.authority, target=self.target,
+            project_inputs=(ProjectInput(self.artifact_id),),
+            ad_hoc_inputs=(AdHocInput(message_id, b'prior', 'project'),
+                           AdHocInput(focus, b'new task', 'confidential')),
+            conversation=ConversationSelection(str(uuid4()), 3, (message_id,), ('user',)),
+            task=TaskInstruction('task-router', 'task-router-v1', 'Route.', focus))
+        payload = json.loads(prepared.payload)
+        self.assertEqual([item['input_id'] for item in payload['inputs']],
+                         [self.artifact_id, message_id, focus])
+        self.assertEqual(payload['conversation'], [dict(message_id=message_id, role='user')])
+
     def test_stale_head_authority_and_target_are_rejected(self):
         prepared = self.prepare()
         changed = dataclasses.replace(self.authority, policy_revision='policy-2')
