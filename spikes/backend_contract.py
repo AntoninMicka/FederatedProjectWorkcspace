@@ -83,6 +83,9 @@ class RoleRegistry:
 
 
 ROLES = RoleRegistry((
+    RoleDefinition(1, 'creator', 'creator-v1', 'generate-text', 'text'),
+    RoleDefinition(1, 'external-call-planner', 'external-call-planner-v1',
+                   'generate-text', 'json'),
     RoleDefinition(1, 'summarizer', 'summarizer-v1', 'generate-text', 'text'),
     RoleDefinition(1, 'extractor', 'extractor-v1', 'generate-text', 'json'),
     RoleDefinition(1, 'metadata-advisor', 'metadata-advisor-v1', 'generate-text', 'json'),

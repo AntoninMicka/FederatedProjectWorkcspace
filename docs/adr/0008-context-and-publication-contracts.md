@@ -163,8 +163,15 @@ vrstvy: před provider dispatch lze bezpečně zopakovat přípravu, po durable
 bez druhého síťového účinku.
 
 Desktopová Nastavení zobrazují write-only konfiguraci a bezpečný stav bez
-secretu. Samostatné návrhy externího volání generované Ollamou zůstávají až do
-úkolu D zakázané; úkol C dovoluje pouze ručně vyžádané preview a potvrzení.
+secretu. Úkol D implementuje samostatný explicitně vyžádaný návrh přes lokální
+roli `external-call-planner`. Ollama dostane konverzaci jako nedůvěryhodná data,
+odpověď musí projít přesným parserem `ExternalCallProposal` a její message ID
+musí být seřazenou podmnožinou dostupných zpráv obsahující novou uživatelskou
+zprávu. Člověk může výběr upravit nebo návrh zahodit. Až upravený výběr vstupuje
+do nového manifestu a autoritativního preview z úkolu C; hash návrhu se záměrně
+nestává oprávněním ani částí externího approval, protože oprávnění váže až přesné
+výsledné vstupy a provider request. Durable Ollama run lze po restartu bezpečně
+přečíst bez dalšího síťového volání; `unknown` se automaticky neopakuje.
 Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
 správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
 nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit

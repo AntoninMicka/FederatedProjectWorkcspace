@@ -297,6 +297,8 @@ class OllamaAdapter:
                     label = 'Focus'
                 elif input_id in roles:
                     label = 'User message' if roles[input_id] == 'user' else 'Assistant message'
+                    if task['role_id'] == 'external-call-planner':
+                        label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
                 sections.append(label + ':\n' + content)
@@ -347,8 +349,11 @@ class OllamaAdapter:
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
         require(handoff.target == binding.target(), 'Ollama binding differs from authorized target')
-        request = json.dumps(dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
-                                  stream=False), sort_keys=True,
+        body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
+                    stream=False)
+        if output_format == 'json':
+            body['format'] = 'json'
+        request = json.dumps(body, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format)
         base = handoff.manifest_sha256.encode() + b'\0' + request

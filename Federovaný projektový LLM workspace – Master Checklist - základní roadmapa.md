@@ -825,13 +825,16 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
 #34. Dávka `F-M3-BACKEND-01` byla začleněna PR #35 a lokálně PoC validuje
 provider-neutral backend, explicitní capabilities, role a durable execution
-identitu nad současnou Ollamou. Aktivní `F-M3-EXTERNAL-01` připravuje první
+identitu nad současnou Ollamou. Aktivní `F-M3-EXTERNAL-01` implementuje první
 externí textový provider, context preview, privacy filtr a pouze návrhové
-strukturované volání přes Ollamu; Gate M3 tím zatím není uzavřený.
+strukturované volání přes Ollamu. Lokální automatizované ověření je hotové;
+živá integrační akceptace Ollama → potvrzený OpenAI request zůstává otevřená,
+proto Gate M3 zatím není uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
-- [ ] První externí provider — designed kontrakt F-M3-EXTERNAL-01-A volí textový
-  OpenAI Responses adapter; implementace, preview a akceptace pokračují v B–D.
+- [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje textový OpenAI
+  Responses adapter, přesné preview, potvrzený dispatch a striktní návrh výběru
+  přes Ollamu; chybí živá integrační akceptace skutečného provider requestu.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

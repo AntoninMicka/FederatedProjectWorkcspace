@@ -147,8 +147,15 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
 <button id="chat-submit" type="submit" disabled>Odeslat</button>
+<button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
 <button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button></div>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<section id="external-proposal" hidden aria-label="Návrh externího volání">
+<h3>Návrh Ollamy</h3><p id="external-proposal-purpose"></p>
+<fieldset><legend>Zprávy navržené k odeslání</legend><div id="external-proposal-messages"></div></fieldset>
+<button id="external-proposal-use" type="button">Připravit upravený externí náhled</button>
+<button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
+</section>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -202,7 +209,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
-#external-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}
+#external-preview,#external-proposal{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
@@ -521,7 +528,7 @@ const settingsExternalStatus=document.querySelector('#settings-external-status')
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
-let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null;
+let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
@@ -613,8 +620,20 @@ document.querySelector('#external-load-models').addEventListener('click',async e
 draft.addEventListener('input',()=>{
  const disabled=!activeProject || !draft.value.trim();
  document.querySelector('#chat-submit').disabled=disabled;
+ document.querySelector('#external-propose-button').disabled=disabled;
  document.querySelector('#external-preview-button').disabled=disabled;
 });
+async function showExternalPreview(request){
+ chatOperationStatus.textContent='Připravuji přesný externí náhled…';
+ try{const preview=await projectRequest('/v1/external/preview',request);
+  pendingExternalPreview={request,preview};
+  document.querySelector('#external-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#external-preview').hidden=false;
+  document.querySelector('#external-privacy-confirm').checked=false;
+  document.querySelector('#external-confirm').disabled=true;
+  chatOperationStatus.textContent='Externí požadavek ještě nebyl odeslán. Zkontrolujte náhled.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
  if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
@@ -624,16 +643,51 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString()};
- event.currentTarget.disabled=true;chatOperationStatus.textContent='Připravuji přesný externí náhled…';
- try{const preview=await projectRequest('/v1/external/preview',request);
-  pendingExternalPreview={request,preview};
-  document.querySelector('#external-preview-content').textContent=JSON.stringify(preview,null,2);
-  document.querySelector('#external-preview').hidden=false;
-  document.querySelector('#external-privacy-confirm').checked=false;
-  document.querySelector('#external-confirm').disabled=true;
-  chatOperationStatus.textContent='Externí požadavek ještě nebyl odeslán. Zkontrolujte náhled.';
+ event.currentTarget.disabled=true;await showExternalPreview(request);
+ event.currentTarget.disabled=!activeProject || !draft.value.trim();
+});
+document.querySelector('#external-propose-button').addEventListener('click',async event=>{
+ if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ const request={proposal_id:crypto.randomUUID(),project_id:activeProject.id,
+  expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
+  message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+  selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+  content:draft.value,privacy:document.querySelector('#chat-privacy').value,
+  created_at:new Date().toISOString()};
+ event.currentTarget.disabled=true;chatOperationStatus.textContent='Ollama připravuje návrh externího volání…';
+ try{const result=await projectRequest('/v1/external/propose',request,210000);
+  pendingExternalProposal={request,result};
+  document.querySelector('#external-proposal-purpose').textContent=result.proposal.purpose;
+  const list=document.querySelector('#external-proposal-messages');list.replaceChildren();
+  for(const messageId of result.source.available_message_ids){
+   const prior=(activeThread?.messages || []).find(item=>item.message_id===messageId);
+   const label=document.createElement('label'),check=document.createElement('input');
+   check.type='checkbox';check.value=messageId;
+   check.checked=result.proposal.message_ids.includes(messageId);
+   if(messageId===request.message_id){check.checked=true;check.disabled=true;}
+   label.append(check,document.createTextNode(' '+(prior?.content || request.content)));list.append(label);
+  }
+  document.querySelector('#external-proposal').hidden=false;
+  chatOperationStatus.textContent='Ollama pouze navrhla výběr. Zkontrolujte nebo upravte jej.';
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=!activeProject || !draft.value.trim();}
+});
+document.querySelector('#external-proposal-use').addEventListener('click',async()=>{
+ if(!pendingExternalProposal)return;
+ const {request}=pendingExternalProposal;
+ const selected=[...document.querySelectorAll('#external-proposal-messages input:checked')]
+  .map(item=>item.value).filter(value=>value!==request.message_id);
+ const external={approval_id:crypto.randomUUID(),project_id:request.project_id,
+  expected_head:request.expected_head,thread_id:request.thread_id,
+  turn_id:crypto.randomUUID(),message_id:request.message_id,run_id:crypto.randomUUID(),
+  manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+  selected_message_ids:selected,content:request.content,privacy:request.privacy,
+  created_at:request.created_at};
+ document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
+});
+document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
+ pendingExternalProposal=null;document.querySelector('#external-proposal').hidden=true;
+ chatOperationStatus.textContent='Návrh Ollamy byl zahozen; nic nebylo odesláno externě.';
 });
 document.querySelector('#external-privacy-confirm').addEventListener('change',event=>{
  document.querySelector('#external-confirm').disabled=!event.currentTarget.checked;
@@ -656,6 +710,7 @@ document.querySelector('#external-confirm').addEventListener('click',async event
   activeThread=result.thread;renderChat(result.thread);draft.value='';pendingExternalPreview=null;
   document.querySelector('#external-preview').hidden=true;
   document.querySelector('#chat-submit').disabled=true;
+  document.querySelector('#external-propose-button').disabled=true;
   document.querySelector('#external-preview-button').disabled=true;
   chatOperationStatus.textContent='Externí odpověď byla přijata.';
  }catch(error){chatOperationStatus.textContent=error.message;}
@@ -913,7 +968,8 @@ class DesktopHandler(Handler):
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
-        '/v1/external/preview', '/v1/external/confirm', '/v1/external/cancel',
+        '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
+        '/v1/external/cancel',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -951,6 +1007,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.configure_external(request))
             if self.path == '/v1/external/models' and request == {}:
                 return self.reply(200, self.server.chat_service.external_models())
+            if self.path == '/v1/external/propose' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_propose(request))
             if self.path == '/v1/external/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_preview(request))
             if self.path == '/v1/external/confirm' and isinstance(request, dict):
@@ -999,6 +1057,9 @@ class DesktopHandler(Handler):
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            if self.path == '/v1/external/propose':
+                return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
+                                       'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})
             if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
                 return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
