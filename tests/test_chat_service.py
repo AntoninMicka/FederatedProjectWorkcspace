@@ -173,6 +173,111 @@ class ChatServiceTests(unittest.TestCase):
                 transport=lambda *_: self.fail('must not resend')))
         self.assertEqual(restarted.task_route(request), result)
 
+    def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
+        request = self.route_request(privacy='confidential')
+        outcome = {'schema_version': 1, 'kind': 'artifact-draft',
+                   'artifact_kind': 'document', 'title': 'Long proposal',
+                   'content': 'Full generated body\n' * 1000}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw:
+                    {'model': binding.model, 'response': json.dumps(outcome)}))
+        routed = service.task_route(request)
+        self.assertTrue(routed['projection']['temporary'])
+        self.assertEqual(routed['projection']['outcome']['content'], outcome['content'])
+        self.assertEqual(service.task_outcomes(project_id=ENTITY,
+            thread_id=request['thread_id']), [routed['projection']])
+
+        artifact_id, operation_id = str(uuid4()), str(uuid4())
+        projection = service.task_publish_artifact({'task_id': request['task_id'],
+            'artifact_id': artifact_id, 'operation_id': operation_id})
+        self.assertFalse(projection['temporary'])
+        self.assertEqual(projection['outcome']['kind'], 'artifact-link')
+        self.assertNotIn('content', projection['outcome'])
+        metadata = Artifacts(self.node_path).open(ENTITY)['documents'][0]['metadata']
+        self.assertEqual(metadata['privacy'], 'confidential')
+        self.assertEqual(metadata['provenance'], 'llm-generated')
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.task_publish_artifact({'task_id': request['task_id'],
+            'artifact_id': artifact_id, 'operation_id': operation_id}), projection)
+
+    def test_external_outcome_confirms_without_persisting_full_chat_projection(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'external-request',
+                   'purpose': 'Fresh research', 'query': 'Full private provider query',
+                   'message_ids': [request['message_id']], 'artifact_ids': []}
+        calls = []
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=lambda binding, raw:
+                {'model': binding.model, 'response': json.dumps(outcome)}),
+            external_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-one', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'x' * 32))
+        service.task_route(request)
+        preview_request = {'task_id': request['task_id'], 'approval_id': str(uuid4()),
+                           'turn_id': str(uuid4()), 'run_id': str(uuid4()),
+                           'manifest_id': str(uuid4()),
+                           'assistant_message_id': str(uuid4())}
+        preview = service.task_external_preview(preview_request)
+        projection = service.task_external_confirm({
+            'task_id': request['task_id'], 'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        self.assertEqual(projection['outcome']['kind'], 'external-call')
+        self.assertNotIn('query', projection['outcome'])
+        self.assertNotIn('response', projection['outcome'])
+        self.assertEqual(service.status()['threads'], [])
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        self.assertEqual(service.task_external_confirm({
+            'task_id': request['task_id'], 'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}), projection)
+
+    def test_rejected_task_outcome_removes_temporary_projection(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'artifact-draft',
+                   'artifact_kind': 'document', 'title': 'Discard me', 'content': 'draft'}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw:
+                    {'model': binding.model, 'response': json.dumps(outcome)}))
+        service.task_route(request)
+        projection = service.task_cancel({'task_id': request['task_id']})
+        self.assertEqual(projection['state'], 'cancelled')
+        self.assertFalse(projection['temporary'])
+        self.assertIsNone(projection['outcome'])
+
+    def test_external_task_cancel_recovers_after_approval_was_already_cancelled(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'external-request', 'purpose': 'Research',
+                   'query': 'Prepared query', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw:
+                    {'model': binding.model, 'response': json.dumps(outcome)}))
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-one', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'z' * 32))
+        service.task_route(request)
+        preview = service.task_external_preview({
+            'task_id': request['task_id'], 'approval_id': str(uuid4()),
+            'turn_id': str(uuid4()), 'run_id': str(uuid4()),
+            'manifest_id': str(uuid4()), 'assistant_message_id': str(uuid4())})
+        service.external_cancel({'approval_id': preview['approval_id']})
+        result = service.task_external_cancel({'task_id': request['task_id'],
+                                               'approval_id': preview['approval_id']})
+        self.assertEqual(result['external']['state'], 'cancelled')
+        self.assertEqual(result['projection']['state'], 'cancelled')
+
     def test_invalid_reconfiguration_preserves_confirmed_binding(self):
         before = self.service.status()['binding']
         invalid = dict(self.binding, revision='two', endpoint='http://localhost:11434')

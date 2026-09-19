@@ -970,6 +970,9 @@ class DesktopHandler(Handler):
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
+        '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
+        '/v1/tasks/artifact', '/v1/tasks/external/preview',
+        '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
@@ -1015,6 +1018,22 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_confirm(request))
             if self.path == '/v1/external/cancel' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_cancel(request))
+            if self.path == '/v1/tasks/route' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_route(request))
+            if (self.path == '/v1/tasks/list' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'thread_id'}):
+                return self.reply(200, {'outcomes': self.server.chat_service.task_outcomes(
+                    project_id=request['project_id'], thread_id=request['thread_id'])})
+            if self.path == '/v1/tasks/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_cancel(request))
+            if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_publish_artifact(request))
+            if self.path == '/v1/tasks/external/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_preview(request))
+            if self.path == '/v1/tasks/external/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_confirm(request))
+            if self.path == '/v1/tasks/external/cancel' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {

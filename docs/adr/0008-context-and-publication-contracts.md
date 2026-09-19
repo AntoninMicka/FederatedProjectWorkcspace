@@ -202,6 +202,19 @@ Zamítnutý návrh z běžné projekce vlákna zmizí, zatímco durable stav zaz
 zamítnutí. Náhrada musí být restart-safe: po pádu se nesmí současně zobrazit
 plná dočasná i redukovaná potvrzená varianta ani zopakovat Git či síťový účinek.
 
+Implementace E3 ukládá tyto projekce do node-local `TaskOutcomes`, svázané s
+uživatelem, uzlem, projektem, vláknem, přesným routed requestem, runem, manifestem
+a projektovým commitem. SQLite přechod `prepared` → `completed`/`cancelled` je
+jediným bodem viditelnosti redukované projekce. U artefaktu může pád po Git
+commitu a před tímto přechodem ponechat plný návrh; opakování stejného
+`operation_id` načte receipt existující Workspace operace a projekci dokončí bez
+druhého commitu. U externí větve může analogicky zůstat approval `prepared`;
+durable provider run vrátí výsledek bez druhého requestu a teprve potom se uloží
+redukovaný záznam. Nový sjednocený tok nezapisuje plný externí dotaz ani odpověď
+do běžného `ChatThreads`; auditní kopie zůstává pouze v oddělené approval/run
+evidenci. Starší ruční externí chat si své dosavadní transcriptové chování
+zachovává.
+
 Privacy výsledku je nejméně nejsilnější privacy ze všech skutečně použitých
 zpráv a artefaktů. Změna HEAD, výběru nebo obsahu ruší navazující preview.
 Neznámá varianta, pole, typ artefaktu nebo ID selže uzavřeně. Ollama tedy smí

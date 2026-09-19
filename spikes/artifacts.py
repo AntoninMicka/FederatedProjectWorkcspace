@@ -85,10 +85,17 @@ class Artifacts:
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
 
-    def save(self, request, operation_id, *, checkpoint=lambda stage: None):
+    def save(self, request, operation_id, *, checkpoint=lambda stage: None,
+             privacy='project', provenance='user'):
         required = {'project_id', 'artifact_id', 'base_head', 'title', 'body', 'new'}
-        require(isinstance(request, dict) and required <= request.keys() <= required | {'metadata', 'filename'},
+        require(isinstance(request, dict) and required <= request.keys() <= required | {
+                'metadata', 'filename'},
                 'Invalid editor request')
+        require(privacy in
+                {'public', 'project', 'confidential', 'local-only'}, 'Invalid document privacy')
+        require(provenance in
+                {'user', 'external', 'llm-generated', 'llm-transformed'},
+                'Invalid document provenance')
         if 'filename' in request:
             filename = request['filename']
             require(len(safe_path(filename)) == 1 and filename.endswith('.md')
@@ -126,9 +133,12 @@ class Artifacts:
                 prefix = f'artifacts/{id_}/'
                 meta = dict(schema_version=1, id=id_, title=request['title'], kind='document',
                             created_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
-                            author_id=author, privacy='project', provenance='user', file='content.md')
+                            author_id=author, privacy=privacy,
+                            provenance=provenance, file='content.md')
                 path, sidecar = prefix + 'content.md', prefix + 'metadata.json'
             else:
+                require(privacy == 'project' and provenance == 'user',
+                        'Document privacy and provenance are immutable in the editor')
                 doc = document(files, entities, id_)
                 meta, path, sidecar = dict(doc['metadata']), doc['path'], doc['sidecar']
                 meta['title'] = request['title']

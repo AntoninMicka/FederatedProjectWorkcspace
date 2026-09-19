@@ -827,11 +827,12 @@ Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna P
 provider-neutral backend, explicitní capabilities, role a durable execution
 identitu nad současnou Ollamou. Aktivní `F-M3-EXTERNAL-01` implementuje první
 externí textový provider, context preview, privacy filtr a pouze návrhové
-strukturované volání přes Ollamu. Lokální automatizované ověření je hotové;
-živá integrační akceptace Ollama → potvrzený OpenAI request zůstává otevřená,
-proto Gate M3 zatím není uzavřený.
+strukturované volání přes Ollamu. Lokální automatizované ověření je hotové
+a uživatel 2026-09-19 potvrdil živý průchod Ollama → potvrzený OpenAI
+request. Sjednocený tok E má implementovaný backend a durable redukci; zbývá
+jeho UI a integrační akceptace, proto Gate M3 zatím není uzavřený.
 
-Plánovaná úprava `F-M3-EXTERNAL-01-E` sjednotí uživatelský vstup: Ollama nad
+Rozpracovaná úprava `F-M3-EXTERNAL-01-E` sjednocuje uživatelský vstup: Ollama nad
 explicitně vybranými zprávami a doplňujícími artefakty vrátí buď přímou odpověď,
 návrh artefaktu, nebo připravený dotaz pro externí model. Návrhové větve nadále
 vyžadují aplikační preview a lidské potvrzení; model sám nezapisuje ani neodesílá.
@@ -840,9 +841,11 @@ zpráva. Po potvrzení jej nahradí odkaz na vytvořený artefakt, respektive st
 záznam proběhlého externího volání; plný obsah zůstane v oddělené durable evidenci.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
-- [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje textový OpenAI
-  Responses adapter, přesné preview, potvrzený dispatch a striktní návrh výběru
-  přes Ollamu; chybí živá integrační akceptace skutečného provider requestu.
+- [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje a živě
+  ověřuje textový OpenAI Responses adapter, přesné preview, potvrzený dispatch a
+  striktní návrh výběru přes Ollamu. E1–E3 doplňuje uzavřený outcome,
+  artefaktový kontext a durable dočasné/redukované projekce; zbývá E4 UI a
+  integrační akceptace sjednoceného toku.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

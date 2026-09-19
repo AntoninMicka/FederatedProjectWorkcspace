@@ -60,9 +60,18 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   všech manifestových vstupů; stejný request po restartu načte durable Ollama
   výsledek bez dalšího transportu. Ověření: cílené testy a úplná sada 315 testů,
   22 environmentálních skipů dne 2026-09-19.
-- [ ] [planned] **F-M3-EXTERNAL-01-E3 — Dočasné dlouhé zprávy a potvrzení
-  (PoC validated).** Plné návrhy obnovitelné v chatu; artifact preview/publish,
-  external preview/confirm/cancel a atomická redukce na odkaz či provozní záznam.
+- [x] [completed] **F-M3-EXTERNAL-01-E3 — Dočasné dlouhé zprávy a potvrzení
+  (PoC validated).** Node-local `TaskOutcomes` obnoví po reloadu celý návrh a
+  promítá jej jako dočasný, dokud jej uživatel nepotvrdí nebo nezamítne.
+  Artifact potvrzení používá idempotentní Workspace operaci, zachová nejsilnější
+  privacy a provenance `llm-generated`, poté obsah nahradí stabilním odkazem.
+  Externí potvrzení znovu sestaví manifest i z vybraných artefaktů, používá
+  existující exact approval/durable run a sjednocený tok redukuje na neobsahový
+  provozní záznam bez zápisu plného requestu/response do `ChatThreads`.
+  Crash hranice a retry jsou popsány v ADR 0008; backendové endpointy pokrývají
+  route/list/cancel, artifact publish a external preview/confirm/cancel.
+  Ověření: úplná sada 319 testů, 22 environmentálních skipů dne
+  2026-09-19; předchozí sandboxový běh selhal pouze na zakázaném socket bindu.
 - [ ] [planned] **F-M3-EXTERNAL-01-E4 — Jednotné UI a integrační akceptace
   (PoC validated).** Jedna hlavní akce, volba artefaktů, tři výsledné větve,
   limity bez tichého oříznutí, pády/reload a úplná sada. Ruční externí preview

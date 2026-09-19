@@ -19,6 +19,7 @@ from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
                                     PreparedContext, ProjectInput, TaskInstruction)
 from spikes.ai_outcome import AITaskOutcome
+from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.metadata import ValidationError, require, timestamp, uuid
@@ -29,6 +30,7 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
                                    OpenAIResponseError, OpenAIRuns,
                                    OpenAIUnknownRun)
 from spikes.project_creation import ProjectCreation
+from spikes.task_outcomes import TaskOutcomes
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
@@ -307,18 +309,71 @@ class ChatService:
                     'External outcome selected unavailable or unordered inputs')
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
-        return {'task_id': request['task_id'], 'outcome': outcome.serialize(),
+        routed = {'task_id': request['task_id'], 'outcome': outcome.serialize(),
                 'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
                 'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
                 'model': binding.model, 'boundary': binding.boundary}
+        durable = TaskOutcomes(root).prepare(node_id=node_id, user_id=user_id,
+                                             request=request, routed=routed)
+        if outcome.kind == 'direct-answer' and durable['state'] == 'prepared':
+            durable = TaskOutcomes(root).finish(request['task_id'], node_id, user_id,
+                'completed', result={'schema_version': 1, 'kind': 'direct-answer',
+                                     'content': outcome.content})
+        routed['projection'] = durable['projection']
+        return routed
+
+    def task_outcomes(self, *, project_id, thread_id):
+        uuid(project_id); uuid(thread_id)
+        node_id, user_id = self._identity()
+        return TaskOutcomes(self._root()).list(node_id, user_id, project_id, thread_id)
+
+    def task_cancel(self, request):
+        require(isinstance(request, dict) and set(request) == {'task_id'},
+                'Invalid task cancellation')
+        node_id, user_id = self._identity()
+        row = TaskOutcomes(self._root()).finish(request['task_id'], node_id, user_id,
+                                                 'cancelled')
+        return row['projection']
+
+    def task_publish_artifact(self, request):
+        required = {'task_id', 'artifact_id', 'operation_id'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid task artifact confirmation')
+        for key in required: uuid(request[key])
+        node_id, user_id = self._identity(); store = TaskOutcomes(self._root())
+        row = store.get(request['task_id'], node_id, user_id)
+        if row['state'] == 'completed':
+            require(row['result'].get('kind') == 'artifact-link'
+                    and row['result'].get('artifact_id') == request['artifact_id'],
+                    'Task outcome was completed differently')
+            return row['projection']
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'artifact-draft',
+                'Task outcome is not an artifact draft')
+        receipt = Artifacts(self.node_path).save({
+            'project_id': row['project_id'], 'artifact_id': request['artifact_id'],
+            'base_head': row['project_commit'], 'title': row['outcome']['title'],
+            'body': row['outcome']['content'], 'new': True}, request['operation_id'],
+            privacy=row['privacy'], provenance='llm-generated')
+        result = {'schema_version': 1, 'kind': 'artifact-link',
+                  'artifact_id': request['artifact_id'],
+                  'title': row['outcome']['title'],
+                  'project_commit': receipt['commit_id']}
+        return store.finish(request['task_id'], node_id, user_id, 'completed',
+                            result=result)['projection']
 
     @staticmethod
     def _external_fields(request):
         required = {'approval_id', 'project_id', 'expected_head', 'thread_id', 'turn_id',
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
-        require(isinstance(request, dict) and set(request) == required,
+        optional = {'selected_artifact_ids', 'record_chat'}
+        require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
+        request = dict(request)
+        request.setdefault('selected_artifact_ids', [])
+        request.setdefault('record_chat', True)
+        require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
         for key in ('approval_id', 'project_id', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id'):
             uuid(request[key])
@@ -332,6 +387,11 @@ class ChatService:
         require(isinstance(selected, list) and len(selected) == len(set(selected)),
                 'Selected message IDs must be a unique list')
         for value in selected:
+            uuid(value)
+        artifacts = request['selected_artifact_ids']
+        require(isinstance(artifacts, list) and len(artifacts) == len(set(artifacts)),
+                'Selected artifact IDs must be a unique list')
+        for value in artifacts:
             uuid(value)
         require(request['message_id'] not in selected,
                 'New message cannot already be selected')
@@ -364,12 +424,15 @@ class ChatService:
                 'local-only data cannot be sent to an external provider')
         binding = OpenAIBindings(root).load()
         authority = Authority('external-approval:' + request['approval_id'], user_id, node_id,
-                              'external-chat-v1', frozenset())
+                              'external-chat-v1', frozenset(request['selected_artifact_ids']))
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode(), item['privacy'])
                        for item in selected)
         prepared = ContextBuilder(workspace, request['project_id']).prepare(
             manifest_id=request['manifest_id'], run_id=request['run_id'], authority=authority,
-            target=binding.target(), ad_hoc_inputs=inputs,
+            target=binding.target(),
+            project_inputs=tuple(ProjectInput(value)
+                                 for value in request['selected_artifact_ids']),
+            ad_hoc_inputs=inputs,
             conversation=ConversationSelection(request['thread_id'],
                 0 if thread is None else thread['revision'],
                 tuple(item['message_id'] for item in selected),
@@ -377,8 +440,10 @@ class ChatService:
         handoff = DispatchHandoff(request['run_id'], request['manifest_id'],
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
         provider_request, _, _ = OpenAIAdapter._request(handoff, binding)
-        strongest = max((item['privacy'] for item in selected),
+        strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
+        require(strongest != 'local-only',
+                'local-only data cannot be sent to an external provider')
         binding_bytes = json.dumps(binding.serialize(), sort_keys=True,
                                    separators=(',', ':')).encode()
         binding_sha256 = hashlib.sha256(binding_bytes).hexdigest()
@@ -396,9 +461,10 @@ class ChatService:
                 'target': {'provider': 'OpenAI', 'endpoint': binding.endpoint,
                            'boundary': binding.boundary, 'model': binding.model},
                 'privacy': strongest, 'payload_size': len(prepared.payload),
-                'inputs': [{'message_id': part['input_id'],
+                'inputs': [{'input_id': part['input_id'],
+                            'source': prepared.manifest['inputs'][index]['source'],
                             'content': base64.b64decode(part['content_b64']).decode('utf-8'),
-                            'privacy': selected[index]['privacy']}
+                            'privacy': prepared.manifest['inputs'][index]['privacy']}
                            for index, part in enumerate(payload['inputs'])],
                 'provider_request': json.loads(provider_request)}
 
@@ -446,6 +512,27 @@ class ChatService:
         current_request, _, _ = OpenAIAdapter._request(handoff, binding)
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
+        adapter = (self.external_adapter_factory(OpenAIRuns(root), OpenAICredentials(root))
+                   if self.external_adapter_factory else
+                   OpenAIAdapter(OpenAIRuns(root), OpenAICredentials(root)))
+        if not original['record_chat']:
+            try:
+                adapter.prepare(handoff, binding)
+                response = adapter.dispatch(handoff, binding)
+            except BackendUnknown as exc:
+                store.finish(original['approval_id'], node_id, user_id,
+                             'unknown', error=str(exc))
+                raise
+            except (BackendResponseError, ValidationError) as exc:
+                store.finish(original['approval_id'], node_id, user_id,
+                             'failed', error=str(exc))
+                raise
+            result = {'target': binding.serialize(), 'run_id': original['run_id'],
+                      'provider_response_id': response.get('id'),
+                      'usage': response.get('usage')}
+            store.finish(original['approval_id'], node_id, user_id,
+                         'succeeded', result=result)
+            return result
         threads = ChatThreads(root)
         rows = {row['thread_id']: row for row in threads.list(node_id, user_id)}
         thread = rows.get(original['thread_id'])
@@ -498,9 +585,6 @@ class ChatService:
                 created_at=original['created_at'])
         threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
-        adapter = (self.external_adapter_factory(OpenAIRuns(root), OpenAICredentials(root))
-                   if self.external_adapter_factory else
-                   OpenAIAdapter(OpenAIRuns(root), OpenAICredentials(root)))
         try:
             adapter.prepare(handoff, binding)
             response = adapter.dispatch(handoff, binding)
@@ -523,6 +607,91 @@ class ChatService:
                   'provider_response_id': response.get('id'), 'usage': response.get('usage')}
         store.finish(original['approval_id'], node_id, user_id, 'succeeded', result=result)
         return result
+
+    def task_external_preview(self, request):
+        required = {'task_id', 'approval_id', 'turn_id', 'run_id', 'manifest_id',
+                    'assistant_message_id'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid task external preview request')
+        for value in request.values(): uuid(value)
+        node_id, user_id = self._identity()
+        row = TaskOutcomes(self._root()).get(request['task_id'], node_id, user_id)
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'external-request',
+                'Task outcome is not an external request')
+        focus_id = row['request']['message_id']
+        selected = [value for value in row['outcome']['message_ids'] if value != focus_id]
+        require(focus_id in row['outcome']['message_ids'],
+                'External request does not include the routed task')
+        preview = self.external_preview({
+            'approval_id': request['approval_id'], 'project_id': row['project_id'],
+            'expected_head': row['project_commit'], 'thread_id': row['thread_id'],
+            'turn_id': request['turn_id'], 'message_id': focus_id,
+            'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
+            'assistant_message_id': request['assistant_message_id'],
+            'selected_message_ids': selected,
+            'selected_artifact_ids': row['outcome']['artifact_ids'],
+            'content': row['outcome']['query'], 'privacy': row['privacy'],
+            'created_at': row['created_at'], 'record_chat': False})
+        preview['task_id'] = request['task_id']
+        preview['purpose'] = row['outcome']['purpose']
+        return preview
+
+    def task_external_cancel(self, request):
+        require(isinstance(request, dict) and set(request) == {'task_id', 'approval_id'},
+                'Invalid task external cancellation')
+        node_id, user_id = self._identity()
+        row = TaskOutcomes(self._root()).get(request['task_id'], node_id, user_id)
+        approval = ExternalDispatches(self._root()).get(
+            request['approval_id'], node_id, user_id)
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'external-request'
+                and approval['state'] in {'prepared', 'cancelled'}
+                and approval['request'].get('record_chat') is False
+                and approval['request']['project_id'] == row['project_id']
+                and approval['request']['thread_id'] == row['thread_id']
+                and approval['request']['message_id'] == row['request']['message_id']
+                and approval['request']['content'] == row['outcome']['query']
+                and approval['request']['selected_artifact_ids'] == row['outcome']['artifact_ids'],
+                'External preview does not belong to this task outcome')
+        external = (self.external_cancel({'approval_id': request['approval_id']})
+                    if approval['state'] == 'prepared' else
+                    {'approval_id': request['approval_id'], 'state': 'cancelled'})
+        projection = self.task_cancel({'task_id': request['task_id']})
+        return {'external': external, 'projection': projection}
+
+    def task_external_confirm(self, request):
+        required = {'task_id', 'approval_id', 'preview_sha256', 'approved', 'privacy'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid task external confirmation')
+        node_id, user_id = self._identity(); store = TaskOutcomes(self._root())
+        row = store.get(request['task_id'], node_id, user_id)
+        if row['state'] == 'completed':
+            require(row['result'].get('kind') == 'external-call'
+                    and row['result'].get('approval_id') == request['approval_id'],
+                    'Task outcome was completed differently')
+            return row['projection']
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'external-request',
+                'Task outcome is not an external request')
+        approval = ExternalDispatches(self._root()).get(
+            request['approval_id'], node_id, user_id)
+        require(approval['request'].get('record_chat') is False
+                and approval['request']['project_id'] == row['project_id']
+                and approval['request']['thread_id'] == row['thread_id']
+                and approval['request']['message_id'] == row['request']['message_id']
+                and approval['request']['content'] == row['outcome']['query']
+                and approval['request']['selected_artifact_ids'] == row['outcome']['artifact_ids'],
+                'External preview does not belong to this task outcome')
+        result = self.external_confirm({key: request[key] for key in
+            ('approval_id', 'preview_sha256', 'approved', 'privacy')})
+        reduced = {'schema_version': 1, 'kind': 'external-call',
+                   'approval_id': request['approval_id'], 'run_id': result['run_id'],
+                   'state': 'succeeded',
+                   'provider_response_id': result.get('provider_response_id'),
+                   'usage': result.get('usage')}
+        return store.finish(request['task_id'], node_id, user_id, 'completed',
+                            result=reduced)['projection']
 
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
