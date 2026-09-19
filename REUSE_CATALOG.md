@@ -116,6 +116,17 @@ autentizované same-origin API, `ChatService.configure/status` a atomicky uklád
 node-local `OllamaBindings`. Formulář se přesune, nebude duplikován a nevznikne
 druhá autorita konfigurace, projektový zápis, databáze ani UI knihovna.
 
+F-M3-BACKEND-01-A **reuse/adaptuje** `ContextBuilder.Target` a
+`DispatchHandoff`, striktní `OllamaBinding`, právě-jednou hranici
+`OllamaAdapter`/`OllamaRuns` a existující role služeb. Společný kontrakt bude
+malé interní Python rozhraní a registr, ne nový framework, SDK, routing service
+ani storage. Soukromá inventura byla znovu posouzena: dostupné obecné backendové
+abstrakce mohou posloužit jen jako srovnání tvaru capabilities; nepřebírají se,
+protože nedokládají Context Manifest, aplikační privacy autorizaci, přesnou
+identitu bindingu ani durable `unknown` recovery. Existující Ollama kód se
+adaptuje za provider-neutral rozhraní bez kopie transportu a bez automatického
+fallbacku. Rozhodnutí a kompatibilní migrace: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#provider-neutral-aplikační-kontrakt-v1).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

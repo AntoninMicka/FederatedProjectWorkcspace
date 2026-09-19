@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. Nejde o úplné RBAC, obecnou backendovou integraci ani synchronizační službu.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. F-M3-BACKEND-01-A uzavírá provider-neutral aplikační kontrakt a kompatibilní migraci existující Ollamy; implementace tohoto rozhraní zůstává v navazujících úkolech B/C. Nejde o úplné RBAC, externího providera ani synchronizační službu.
 
 ## Rozsah a návaznost
 
@@ -44,6 +44,64 @@ certifikátu ověří ještě před odesláním requestu. Úspěšná odpověď 
 opakované načtení stejného run ID ji vrátí bez dalšího volání.
 
 Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Obnovování/cache a provider API zůstávají M3-UB-01.
+
+### Provider-neutral aplikační kontrakt v1
+
+F-M3-BACKEND-01 zachová `ContextBuilder`, `Target` a `DispatchHandoff` jako
+provider-neutral bezpečnostní hranici. Nad nimi zavede následující malé interní
+kontrakty; nejde o nové projektové entity ani o provider discovery:
+
+| Kontrakt | Povinný význam a validace |
+| --- | --- |
+| `BackendBinding` | Striktně verzovaná node-local konfigurace s `binding_id`, `revision`, `adapter_id`, boundary, přesným endpointem/cílem a modelem. Providerová pole validuje parser konkrétního adapteru. Z bindingu vzniká dosavadní `Target`; jeho identita, boundary ani model se nesmějí po autorizaci změnit. |
+| `BackendCapabilities` | Neměnný, striktně verzovaný výsledek průniku capabilities deklarovaných adapterem a ověřených pro konkrétní revizi bindingu. V1 zná pouze `generate-text` a výstupní formáty `text` a `json`; neznámá capability, formát, schema verze nebo neověřená podpora se odmítne. Usage a billing zůstávají samostatná pozdější rozšíření, nikoli implicitní součást generování. |
+| `RoleDefinition` | Neměnná registrace `role_id` a `revision`, instrukce, požadovaných capabilities, výstupního formátu a privacy omezení. V1 registruje dosavadní task role `summarizer`, `extractor` a `metadata-advisor`; role z requestu musí přesně odpovídat podporované revizi služby. `brainstorming` zůstává klasifikací vlákna, nikoli rolí. Role nevybírá adapter, neuděluje oprávnění a sama nemění execution boundary. |
+| `BackendAdapter` | Adapter má stabilní `adapter_id`; validuje/normalizuje vlastní binding, deklaruje capabilities a z autorizovaného handoffu deterministicky připraví finální provider request. `prepare` trvale sváže run ID s adapterem, binding/target revizí, capability/role revizí, manifest hashem a digestem skutečného requestu; `dispatch` provede nejvýše jeden povolený externí účinek a vrátí normalizovanou odpověď. |
+| `BackendRunStore` | Jediná node-local autorita stavu backendového běhu mimo projektový Git. Zachová stavy a právě-jednou hranici níže; klíč runu nesmí být sdílen jiným adapterem, bindingem, rolí, capability sadou, manifestem nebo request digestem. |
+
+Aplikační služba nejprve načte binding přes společný registr adapterů, pro
+role-based task vyžádá konkrétní roli a pro každý běh požadované capabilities a
+až potom sestaví Context Manifest. Běžný chat bez task role vyžaduje přímo
+`generate-text`; jeho klasifikace vlákna se do role nepřevádí. Registr
+odmítne neznámý `adapter_id`, roli, revizi, capability i nejednoznačný binding;
+nezkouší jiný adapter, model ani endpoint. Bezprostředně před dispatch znovu
+načte stejnou revizi bindingu a ověří `Target`, capabilities, roli, autorizovaný
+handoff a provider request digest. Providerový transport nikdy nedostane
+Workspace, credentials jiného adapteru ani možnost sám doplnit kontext.
+
+Chat, souhrn, extrakce a návrh metadat budou používat stejný orchestrátor
+`prepare/dispatch/status`; jejich vlastní task journal a publikační recovery
+zůstávají oddělené. Validace strukturovaného JSON výstupu patří nadále službě a
+jejímu uzavřenému schématu, zatímco adapter ověřuje transportní obálku, model,
+velikost a deklarovaný formát. Tím se obecný adapter nestává druhou autoritou
+artefaktů, tasků ani rolí.
+
+### Kompatibilní migrace Ollamy
+
+Existující `ollama-binding.json` se schématem v1 zůstane kanonickým node-local
+vstupem a nebude se při načtení automaticky přepisovat. Kompatibilní parser jej
+normalizuje jako `BackendBinding(adapter_id="ollama")`; jeho `binding_id`,
+`revision`, endpoint, model, target ID, TLS pin i význam `same-node` a
+`private-network` zůstávají beze změny. Změna kterékoliv z těchto hodnot nadále
+vyžaduje novou revizi a nový Context Manifest. První implementace nepřidává
+další binding ani automatický výběr mezi backendy.
+
+Současný `ollama-runs.sqlite` zůstane autoritativním run storem. Případná
+schema migrace je lokální, transakční a doplňuje provider-neutral identitu;
+nepřejmenovává run ID ani nepřepisuje request digest, odpověď nebo stav.
+Dokončený historický běh je pouze čitelný jako legacy Ollama evidence.
+`dispatching` a `unknown` zůstávají `unknown` a nikdy se automaticky neopakují.
+Legacy `prepared` lze dokončit jen tehdy, pokud se z původního handoffu a
+nezměněného Ollama bindingu znovu odvodí shodný request digest; jinak se odmítne
+a uživatel musí založit nový run. Selhání migrace ponechá původní databázi
+čitelnou předchozí implementací a nesmí částečně publikovat novou konfiguraci.
+
+Context Manifest v této dávce nemění schéma: přesný `binding_id`, jeho revize,
+boundary, target a model už dnes vážou autorizovaný obsah k cíli. Identita
+adapteru, capability a role se doplní do provider-neutral run evidence a digestu
+requestu. Změna manifestu bude nutná teprve pro přenosný BackendDefinition,
+externí provider nebo jiný nový údaj ovlivňující autorizaci; taková změna musí
+mít vlastní verzi a migrační rozhodnutí.
 
 ## Context Manifest a odeslání
 
