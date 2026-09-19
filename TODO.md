@@ -82,7 +82,11 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   Dlouhý obsah se v kartě neořezá a všechen nedůvěryhodný text jde přes
   `textContent`. Ověření: cílené lifecycle/UI testy, `node --check` a úplná
   sada 319 testů, 22 environmentálních skipů dne 2026-09-19. Zbývá ruční
-  průchod skutečným desktopem přes všechny tři větve a reload.
+  průchod skutečným desktopem přes všechny tři větve a reload. Při živé
+  akceptaci bylo zjištěno, že opožděný `loadChat()` nebo chybová obnova mohou po
+  volbě nového vlákna obnovit staré ID a odeslat jeho zprávy. UI nyní invaliduje
+  starší načtení a při chybě dohledává durable výsledek pouze podle přesného ID
+  právě odesílaného tasku/vlákna; ruční regresní ověření zůstává otevřené.
 
 ## K předání do backlogu
 

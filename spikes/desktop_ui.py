@@ -534,7 +534,7 @@ const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
-let activeTaskThreadId=null,taskOutcomes=[];
+let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
@@ -634,7 +634,8 @@ async function prepareTaskExternal(projection){
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
- pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();taskOutcomes=[];renderChat(null);draft.value='';
+ ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
+ taskOutcomes=[];renderChat(null);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
  chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
@@ -663,16 +664,18 @@ async function loadBackendBinding(){
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
 async function loadChat(){
+ const selectionRevision=chatSelectionRevision;
  try{
   const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
   const active=[...result.threads].reverse().filter(item=>item.status==='active');
+  const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
+  if(selectionRevision!==chatSelectionRevision)return;
   activeThread=active.find(item=>item.project_id===activeProject?.id) ||
                active.find(item=>item.project_id===null) || null;
-  const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
   activeTaskThreadId=tasks.outcomes.at(-1)?.thread_id || activeThread?.thread_id || null;
   taskOutcomes=tasks.outcomes.filter(item=>item.thread_id===activeTaskThreadId);
   renderChat(activeThread);
- }catch(error){chatStatus.textContent=error.message;renderChat(null);}
+ }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const fields=chatForm.elements;
@@ -845,7 +848,16 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
- }catch(error){await loadChat();chatOperationStatus.textContent=error.message;}
+ }catch(error){
+  const failed=pendingChatRequest;
+  try{
+   const recovered=await projectRequest('/v1/tasks/list',{
+    project_id:failed.project_id,thread_id:failed.thread_id});
+   const projection=recovered.outcomes.find(item=>item.task_id===failed.task_id);
+   if(projection){replaceTaskProjection(projection);pendingChatRequest=null;}
+  }catch(_recoveryError){}
+  chatOperationStatus.textContent=error.message;
+ }
  finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
 });
