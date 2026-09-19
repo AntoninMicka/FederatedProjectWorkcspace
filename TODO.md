@@ -89,11 +89,19 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
   cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
-  a nepřiřazených vláken, přiřazení/archivaci a zobrazení persistence. Ověřit
-  restart desktopu, více vláken jednoho projektu, oddělení projektů a uživatelů,
-  `unknown` běh a souběžnou změnu. Autoritou zůstává node-local
-  `chat-threads.sqlite` mimo Git a obnovitelný projektový index; projektové Git
-  artefakty vznikají jen explicitním full/delta otiskem nebo publikací výstupu.
+  a nepřiřazených vláken, přiřazení/archivaci, zobrazení persistence a úplné
+  smazání lokálního vlákna. Mazání musí nejprve ukázat rozsah, vyžádat potvrzení,
+  odmítnout aktivní či `unknown` běh a koordinovaně odstranit zprávy, turns,
+  task outcomes, preview/approval a navázané lokální run záznamy bez osiřelých
+  dat; pád mezi více SQLite stores musí mít durable recovery a idempotentní
+  dokončení. Publikované Git otisky a artefakty se nemažou skrytě, ale preview
+  je předem uvede jako zachované historické výstupy. „Úplné“ znamená úplné z
+  podporovaného aplikačního stavu, nikoli garantovaný forenzní výmaz z média.
+  Ověřit restart desktopu, více vláken jednoho projektu, oddělení projektů a
+  uživatelů, souběžnou změnu i smazání před/po jednotlivých crash boundaries.
+  Autoritou pracovní historie zůstává node-local `chat-threads.sqlite` mimo Git
+  a obnovitelný projektový index; projektové Git artefakty vznikají jen
+  explicitním full/delta otiskem nebo publikací výstupu.
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
   používaný Open WebUI jako explicitní search capability. Task router smí
@@ -105,3 +113,13 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
   oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
   nebudou odvozeny pouze z dockerového názvu `searxng`.
+- [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
+  (cílová úroveň: designed → PoC validated; pozdější priorita).** Oddělit pouhé
+  odregistrování, odstranění lokálního odvozeného stavu, přesun repozitáře do
+  obnovitelného koše a definitivní výmaz. Před každou variantou zobrazit přesné
+  cesty a dopady na chatová vlákna, sdílené/cross-project reference, credentials,
+  pending operace a federované kopie; projekt s aktivní operací, nevyřešeným
+  přenosem nebo neznámým externím účinkem se nesmí tiše odstranit. Více
+  persistentních vrstev vyžaduje journal, idempotentní recovery a samostatné
+  potvrzení definitivního výmazu; odstranění lokální kopie není tvrzení, že
+  zmizely vzdálené či dříve sdílené revize.

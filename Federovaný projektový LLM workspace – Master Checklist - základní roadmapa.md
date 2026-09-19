@@ -599,7 +599,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
 - [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
-- [ ] Doplnit uživatelskou správu lokálních vláken a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů a obnovu `unknown` běhu; node-local SQLite zůstává autoritou pracovní historie a Git obsahuje jen explicitně publikovaný otisk nebo výstup.
+- [ ] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Potvrzené smazání koordinovaně odstraní všechny podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy bez osiřelých dat; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií a UI je před smazáním výslovně uvede. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů, souběh i restart na každé hranici; „úplné“ není příslib forenzního přepsání média.
 
 ---
 
@@ -804,6 +804,13 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování a indexu drží WORK_LOG, odstranění [TODO](TODO.md).
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
+- [ ] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
+  odregistrování, odstranění obnovitelného lokálního stavu, přesun repozitáře do
+  koše a definitivní výmaz. Preview musí zahrnout projektová i chatová data,
+  credentials, sdílené reference, pending operace a známé federované kopie;
+  operace přes registraci/filesystem/Git/SQLite má durable journal a idempotentní
+  recovery. Lokální smazání nesmí předstírat výmaz dříve publikovaných,
+  sdílených nebo vzdálených revizí.
 
 **Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
 
