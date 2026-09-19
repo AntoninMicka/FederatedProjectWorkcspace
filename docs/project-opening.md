@@ -148,11 +148,22 @@ V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavn
 
 Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní zachová právě
 otevřený náhled nebo záložku; teprve Enter nebo **Odeslat** přepne na **Chat**.
-Shift+Enter vytvoří nový řádek. V chatu nejprve rozbalte **Nastavení Ollama
-backendu**. Pro Ollamu na stejném počítači ponechte hranici „Stejný počítač“ a
-endpoint `http://127.0.0.1:11434`, zadejte přesný název modelu a nastavení
-uložte. Privátní síť vyžaduje číselnou privátní HTTPS adresu, UUID cíle a
-SHA-256 certifikátu; `local-only` obsah do ní odeslat nelze.
+Shift+Enter vytvoří nový řádek. Globální tlačítko **Nastavení** je dostupné i bez
+otevřeného projektu. Stránka má rovnocenné záložky **AI backend**,
+**Uživatelé** a **Federace**; obsah se zobrazuje přímo v hlavní ploše. Web ukáže
+administrační záložky jen příslušné přihlášené roli. Pro Ollamu na stejném
+počítači zvolte v **AI backendu** hranici „Stejný počítač“, ponechte endpoint
+`http://127.0.0.1:11434`, zadejte přesný název modelu a nastavení uložte. Chat
+zobrazuje stav a odkaz zpět do této záložky. Privátní síť vyžaduje číselnou
+privátní HTTPS adresu, UUID cíle a SHA-256 certifikátu; `local-only` obsah do ní
+odeslat nelze. Neplatné nastavení server odmítne a UI znovu načte poslední
+potvrzený binding.
+
+Záložka **Uživatelé** spravuje lokální účty a role, záložka **Federace** peery,
+důvěru a oboustranná mapování. Přístupové klíče a privátní podpisové klíče
+zůstávají mimo projektový Git; samotné skrytí záložky nenahrazuje serverovou
+autorizaci. Návrat z nastavení obnoví předchozí seznam projektů nebo otevřený
+projekt a jeho aktivní pracovní záložku.
 
 Potvrzené zprávy a stavy běhů zůstávají v chráněném lokálním stavu uzlu mimo
 projektový Git a po restartu se znovu načtou. Každý běh explicitně manifestuje

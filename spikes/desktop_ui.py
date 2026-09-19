@@ -527,8 +527,8 @@ function fillBinding(binding){
  }
 }
 async function loadBackendBinding(){
- try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);}
- catch(error){settingsBackendStatus.textContent=error.message;}
+ try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);return true;}
+ catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
 async function loadChat(){
  try{
@@ -548,7 +548,11 @@ chatForm.addEventListener('submit',async event=>{
  settingsBackendStatus.textContent='Ukládám backend…';
  try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);
   settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
- catch(error){settingsBackendStatus.textContent=error.message;}
+ catch(error){
+  const message=error.message;const reloaded=await loadBackendBinding();
+  settingsBackendStatus.textContent=reloaded ? message+' Poslední potvrzené nastavení bylo znovu načteno.' :
+   message+' Aktuální stav nelze potvrdit; zkuste nastavení znovu otevřít.';
+ }
 });
 draft.addEventListener('input',()=>{
  document.querySelector('#chat-submit').disabled=!activeProject || !draft.value.trim();

@@ -26,6 +26,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)
         self.assertIn("administration.hidden=selected.id==='settings-backend-tab'", JS)
+        self.assertIn("const reloaded=await loadBackendBinding()", JS)
+        self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
         self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
         self.assertIn("selected_message_ids:(activeThread?.messages || []).map", JS)
         self.assertIn("activeThread=null;pendingChatRequest=null", JS)

@@ -73,6 +73,13 @@ class ChatServiceTests(unittest.TestCase):
         value.update(changes)
         return value
 
+    def test_invalid_reconfiguration_preserves_confirmed_binding(self):
+        before = self.service.status()['binding']
+        invalid = dict(self.binding, revision='two', endpoint='http://localhost:11434')
+        with self.assertRaises(ValueError):
+            self.service.configure(invalid)
+        self.assertEqual(self.service.status()['binding'], before)
+
     def test_context_dispatch_and_restart_preserve_exact_messages_and_target(self):
         request = self.request()
         result = self.service.send(**request)
