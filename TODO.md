@@ -95,7 +95,10 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   celé ploché JSON šablony a výslovný zákaz vnoření. Známá validační chyba 422
   uvolní klientské operation ID pro nový vědomý pokus, zatímco `unknown` se dál
   automaticky neopakuje. Chyby `/v1/tasks/*` už nejsou nesprávně hlášeny jako
-  chyba otevření projektu. Ruční regresní ověření oprav zůstává otevřené.
+  chyba otevření projektu. Uživatel 2026-09-19 následně živě potvrdil čisté nové
+  vlákno a úspěšný průchod `artifact-draft` až po vytvoření artefaktu. Zbývá
+  ověřit přímou odpověď, externí návrh/volání a obnovu rozpracovaného výsledku po
+  reloadu; webové hledání přes SearXNG je samostatná navazující feature.
 
 ## K předání do backlogu
 
