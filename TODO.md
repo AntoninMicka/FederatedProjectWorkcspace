@@ -61,6 +61,9 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
   dostane až validovanou finální odpověď. Chybná událost skončí jako `failed`,
   timeout, přerušení nebo zavření klienta jako `unknown`, bez částečné
   asistentovy zprávy. Webový endpoint zachovává administrátorskou RBAC hranici.
+  Příprava runu používá stejnou hodnotu `stream` jako následný dispatch; tím se
+  odstranila kolize request digestu, která dříve uzavřela lokální stream bez
+  terminální odpovědi ještě před voláním providera.
   Cílených 67 OpenAI/chat/desktop/web testů prošlo se 3 Qt skipy, JavaScript
   prošel `node --check`; úplná sada 352 testů prošla s 22 skipy.
 - [ ] [planned] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace

@@ -335,11 +335,12 @@ class OpenAIAdapter:
                                 + str(binding.credential_revision).encode()).hexdigest()
         return request, digest, execution
 
-    def prepare(self, handoff, binding, role=None, output_format='text'):
+    def prepare(self, handoff, binding, role=None, output_format='text', stream=False):
         _, credential_revision = self.credentials.resolve(binding.credential_ref)
         require(credential_revision == binding.credential_revision,
                 'OpenAI credential revision differs from binding')
-        _, digest, execution = self._request(handoff, binding, role, output_format)
+        _, digest, execution = self._request(
+            handoff, binding, role, output_format, stream=stream)
         return self.runs.prepare(handoff.run_id, digest, digest, execution,
                                  handoff.manifest_sha256)
 

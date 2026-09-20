@@ -138,6 +138,8 @@ class OpenAIBackendTests(unittest.TestCase):
             return self.response()
         adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
             stream_transport=stream)
+        prepared = adapter.prepare(self.handoff, self.binding, stream=True)
+        self.assertEqual(prepared['state'], 'prepared')
         result = adapter.dispatch_stream(self.handoff, self.binding, deltas.append)
         self.assertEqual((deltas, result['response']), (['odpo', 'ved'], 'odpoved'))
         self.assertTrue(calls[0][0]['stream'])

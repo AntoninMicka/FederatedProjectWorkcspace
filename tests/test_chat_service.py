@@ -30,7 +30,7 @@ class FakeAdapter:
     def __init__(self, runs, calls, error=None):
         self.runs, self.calls, self.error = runs, calls, error
 
-    def prepare(self, handoff, binding):
+    def prepare(self, handoff, binding, stream=False):
         self.calls.append(('prepare', handoff, binding))
 
     def dispatch(self, handoff, binding):
@@ -44,7 +44,7 @@ class FakeExternalAdapter:
     def __init__(self, runs, credentials, calls, error=None):
         self.runs, self.credentials, self.calls, self.error = runs, credentials, calls, error
 
-    def prepare(self, handoff, binding):
+    def prepare(self, handoff, binding, stream=False):
         self.calls.append(('prepare', handoff, binding))
 
     def dispatch(self, handoff, binding):

@@ -727,7 +727,7 @@ class ChatService:
         threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
-            adapter.prepare(handoff, binding)
+            adapter.prepare(handoff, binding, stream=original['stream'])
             response = (adapter.dispatch_stream(handoff, binding,
                                                 on_delta or (lambda _delta: None))
                         if original['stream'] else adapter.dispatch(handoff, binding))
