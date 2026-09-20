@@ -83,6 +83,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="chat-run-adapter"', HTML)
         self.assertIn('id="chat-run-model"', HTML)
         self.assertIn('id="backend-metrics" hidden', HTML)
+        self.assertIn('id="backend-metrics-indicator" hidden', HTML)
         self.assertIn("projectRequest('/v1/backend-metrics/status',{})", JS)
         self.assertIn("projectRequest('/v1/backend-metrics/configure'", JS)
         self.assertIn("projectRequest('/v1/backend-metrics/refresh'", JS)
@@ -106,6 +107,8 @@ class DesktopTests(unittest.TestCase):
         desktop_html = ASSETS['/'][1]
         self.assertIn('id="backend-metrics"', desktop_html)
         self.assertNotIn('id="backend-metrics" hidden', desktop_html)
+        self.assertNotIn('id="backend-metrics-indicator" hidden', desktop_html)
+        self.assertIn('#backend-metrics-indicator{position:fixed', ASSETS['/app.css'][1])
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)
         self.assertIn('id="settings-view"', HTML)
         self.assertIn('id="open-settings"', HTML)

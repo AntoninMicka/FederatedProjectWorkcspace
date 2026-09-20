@@ -180,7 +180,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
-</div></main><script src="/app.js"></script></body></html>'''
+</div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+</main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
@@ -194,6 +195,10 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
 .provider-link{color:#176b60;font-weight:600}
+#backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
+ background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
+ padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
@@ -543,6 +548,7 @@ const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
+const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
@@ -698,7 +704,8 @@ function renderBackendMetrics(result){
  const report=document.querySelector('#backend-metrics-report');
  if(!result?.report){backendMetricsStatus.textContent=result?.credential?.available ?
   'Administrátorský klíč je uložen; přehled zatím nebyl načten.' :
-  'Administrátorský klíč není uložen.';report.hidden=true;return;}
+  'Administrátorský klíč není uložen.';report.hidden=true;
+  backendMetricsIndicator.textContent='OpenAI přehled: nenačten';return;}
  const metricStates={unauthorized:'Administrátorský klíč byl odmítnut (HTTP 401).',
   forbidden:'Klíč nemá oprávnění k účetnímu přehledu (HTTP 403).',
   'rate-limited':'OpenAI dočasně omezilo načítání přehledu (HTTP 429).',
@@ -708,6 +715,13 @@ function renderBackendMetrics(result){
   `Zobrazuji poslední platný přehled; obnova selhala: ${metricStates[result.report.refresh_error] || result.report.refresh_error}.` :
   (metricStates[result.report.status] || `Přehled má stav ${result.report.status}.`);
  report.textContent=JSON.stringify(result.report,null,2);report.hidden=false;
+ const metrics=(result.report.reports || []).flatMap(item=>item.metrics || []);
+ const tokens=metrics.filter(item=>item.unit==='tokens').reduce((sum,item)=>sum+item.value,0);
+ const costs=metrics.filter(item=>item.name==='cost')
+  .map(item=>`${item.value} ${String(item.currency || '').toUpperCase()}`);
+ const parts=[...costs,tokens ? `${tokens} tokenů` : ''].filter(Boolean);
+ backendMetricsIndicator.textContent=`OpenAI · ${result.report.status}`+(parts.length ? ` · ${parts.join(' · ')}` : '');
+ backendMetricsIndicator.title=`Poslední načtení: ${result.report.fetched_at}`;
 }
 async function loadBackendMetrics(){
  try{renderBackendMetrics(await projectRequest('/v1/backend-metrics/status',{}));}

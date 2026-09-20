@@ -12,6 +12,7 @@ from spikes.project_creation import ProjectCreation
 
 ASSETS = {'/': ('text/html; charset=utf-8', HTML.replace(
               'id="backend-metrics" hidden', 'id="backend-metrics"').replace(
+              'id="backend-metrics-indicator" hidden', 'id="backend-metrics-indicator"').replace(
               '<div id="administration-host"></div>', ADMIN_HTML).replace(
               'id="settings-users-tab" type="button"', 'id="settings-users-tab" type="button" data-desktop="true"').replace(
               'id="settings-federation-tab" type="button"', 'id="settings-federation-tab" type="button" data-desktop="true"').replace(
