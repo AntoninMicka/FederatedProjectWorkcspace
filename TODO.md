@@ -38,10 +38,15 @@ budoucí PR do `develop`.
   běhu; OpenAI Responses usage zůstává run evidence a organization usage/costs
   používají samostatný admin credential. Provider project se bez ověřeného
   mapování nevydává za workspace a chyba přehledu nemění routing ani run.
-- [ ] [planned] **M3-UB-01-B — Načítání, cache, autorizace a UI
-  (implemented).** Implementovat pouze doložené provider větve, bezpečnou
-  node-local cache a indikaci bez směšování run/workspace/account údajů.
-  Nepodporovaný provider zůstane explicitně bez capability.
+- [x] [completed] **M3-UB-01-B — Načítání, cache, autorizace a UI
+  (implemented).** Providerem hlášené Ollama/OpenAI run usage se normalizuje
+  bez druhého run journalu. Nativní správa používá oddělený write-only OpenAI
+  admin credential, bounded stránkování oficiálních usage/costs endpointů a
+  atomickou node-local SQLite cache; chyba vrací `stale`, `forbidden` nebo
+  `unavailable`, nikoli falešnou nulu. Account přehled není dostupný z běžného
+  chatového handleru a UI jej nezaměňuje za workspace údaje. Cílených 70 testů
+  prošlo se 2 Qt skipy, úplná sada 344 testů s 22 skipy a skutečný
+  Qt/WebEngine smoke prošly; živý OpenAI Admin API refresh nebyl proveden.
 - [ ] [planned] **M3-UB-01-C — Regrese, dokumentace a akceptace
   (implemented).** Ověřit obě capabilities, pouze usage a žádnou podporu; nulu
   proti chybějícímu údaji, oprávnění, timeout, rate limit, stale cache, restart
