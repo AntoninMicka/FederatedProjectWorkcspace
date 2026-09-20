@@ -17,25 +17,16 @@ F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
 F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
-po PR #37 uzavřen ve WORK_LOG. Aktivní F-M3-CHAT-MODES-01 drží [TODO](TODO.md).
+po PR #37 a F-M3-CHAT-MODES-01 po PR #40 uzavřen ve WORK_LOG. Aktivní
+M3-UB-01 drží [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 - [ ] [planned] **F-M3-MEDIA-01 — Externí obrazové capability (cílová úroveň: designed → PoC validated).** Po textovém provideru a podle capability/licenčního review oddělit `text-to-image` a případně `image-to-text` od textového dispatch. Akceptace: přesné model/capability/input MIME a hash, limity velikosti a rozměrů, bezpečný preview, privacy a potvrzení před odesláním, durable nejednoznačný výsledek, bounded download bez následování nedůvěryhodného URL a explicitní publikace obrázku jako artefaktu s provenance. Ollama může navrhnout obrazovou akci, ale nesmí ji sama spustit; providerem vrácené URL ani metadata nejsou důvěryhodné. Usage/billing zůstává M3-UB-01.
 - [ ] [planned] **F-M4-WORKFLOW-01 — Artifact-based creator/opponent handoff (cílová úroveň: designed → PoC validated).** Po provider-neutral backendu a prvním externím provideru zavést první dvourolový workflow, v němž creator vydá explicitní artefakt a opponent dostane pouze schválený artefaktový výběr, nikoli implicitně celou creator konverzaci. Akceptace: stabilní workflow/step/run ID, role a backend volené odděleně, Context Manifest pro každý krok, lidské potvrzení před předáním a publikací, stale/unknown/retry bez duplicitního síťového účinku, privacy odvozenin a auditovatelný výsledek i při různých backendech.
+- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout, přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav; zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez ztráty zadání, výběru kontextu nebo již připraveného externího preview. Automaticky neopakovat běh s neznámým výsledkem ani neprovádět skrytý fallback. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď, chybný JSON, pád před/po durable přechodech, souběh a oddělení chyby lokálního routeru od chyby externího providera.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu
-  (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout,
-  přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav;
-  zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez
-  ztráty zadání, výběru kontextu nebo již připraveného externího preview.
-  Automaticky neopakovat běh s neznámým výsledkem a neprovádět skrytý fallback na
-  jiný backend či CPU. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď,
-  chybný JSON, pád před/po durable přechodech, souběh a ověření, že chyba
-  lokálního routeru není vydána za chybu externího providera.
 
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
