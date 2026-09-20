@@ -257,7 +257,22 @@ Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;
 F-M3-MEDIA-01 musí před implementací uzavřít MIME, rozměry, byte limity,
 provenance a bezpečné přijetí bajtů. První verze nesmí převzít obecné stahování
-libovolné providerové URL. Usage a billing zůstávají oddělené capability
+libovolné providerové URL.
+
+Stejnou capability může poskytovat samostatný ComfyUI adapter podle jeho
+oficiálního [serverového API](https://docs.comfy.org/development/comfyui-server/comms_routes)
+a referenčního [API příkladu](https://github.com/Comfy-Org/ComfyUI/blob/master/script_examples/basic_api_example.py).
+ComfyUI není fallback za externí provider a blízkost v LAN sama neuděluje
+důvěru. Binding určuje explicitní endpoint a execution boundary; dispatch smí
+použít pouze verzovanou správcem schválenou workflow šablonu a allowlisted
+parametry. LLM nesmí dodat ani spustit workflow JSON, měnit node class ani
+vybírat custom node. Run evidence váže workflow hash/revizi, parametry,
+`prompt_id`, endpoint a přesné výstupy z historie. Bajty se přijmou jen z
+konkrétní výstupní identity vrácené pro tento run, s bounded limity a bez
+obecného následování URL. Custom nodes a samotný ComfyUI proces jsou samostatná
+provozní a supply-chain hranice mimo automatickou správu workspace.
+
+Usage a billing zůstávají oddělené capability
 M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
 ani spolehlivý výpočet ceny.
 

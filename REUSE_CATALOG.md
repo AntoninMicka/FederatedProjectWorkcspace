@@ -143,6 +143,16 @@ capability pouze z názvu. Seznam je pomůcka UI a nemění binding bez potvrzen
 Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
 
+F-M3-MEDIA-01-A **adaptuje protokol, nikoli implementaci ComfyUI**: vedle
+OpenAI Images bude `generate-image` poskytovat samostatný ComfyUI adapter nad
+oficiálním serverovým API. Reuse se omezuje na dokumentované request/history/
+output rozhraní; workspace nepřebírá serverový kód, custom nodes, UI ani správu
+modelů. Lokálně nalezený checkout nebyl ověřen jako vlastní licencovaný zdroj a
+není podkladem pro kopírování. Libovolný LLM-generovaný workflow, automatický
+fallback a obecné stahování URL se odmítají; použijí se jen verzované allowlisted
+šablony, explicitní binding a bounded výstupy svázané s konkrétním runem.
+Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
