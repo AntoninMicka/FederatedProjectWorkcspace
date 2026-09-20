@@ -8,5 +8,9 @@ __pycache__/
 # Soukromá lokální inventura zdrojových repozitářů
 /REUSE_CATALOG.private.md
 
+# Volitelné externě verzované moduly; jejich vlastní roadmapy a Git historie
+# nepatří do tohoto repozitáře.
+/modules.local/
+
 # Locally built release archives
 /dist/

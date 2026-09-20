@@ -23,7 +23,7 @@ class CreationDialog(QDialog):
         self.title.setMaxLength(200)
         self.root = QLineEdit(str(Path(default_parent) / 'novy-projekt'))
         form.addRow('Název projektu', self.title)
-        form.addRow('Nová složka projektu', self.root)
+        form.addRow('Složka projektu', self.root)
         layout.addLayout(form)
         browse = QPushButton('Vybrat nadřazenou složku…')
         def choose():
@@ -32,10 +32,17 @@ class CreationDialog(QDialog):
                 self.root.setText(str(Path(folder) / (Path(self.root.text()).name or 'novy-projekt')))
         browse.clicked.connect(choose)
         layout.addWidget(browse)
+        choose_root = QPushButton('Vybrat existující prázdnou složku projektu…')
+        def choose_existing_root():
+            folder = QFileDialog.getExistingDirectory(self, 'Prázdná složka projektu', self.root.text())
+            if folder:
+                self.root.setText(folder)
+        choose_root.clicked.connect(choose_existing_root)
+        layout.addWidget(choose_root)
         self.remember = QCheckBox('Použít tuto nadřazenou složku jako výchozí')
         self.remember.setChecked(True)
         layout.addWidget(self.remember)
-        layout.addWidget(QLabel('Cílová složka ještě nesmí existovat. Lokální stav bude uložen vedle ní.'))
+        layout.addWidget(QLabel('Cílová složka může být nová nebo existující prázdná. Lokální stav bude uložen vedle ní.'))
         self.error = QLabel()
         self.error.setWordWrap(True)
         layout.addWidget(self.error)
@@ -49,7 +56,7 @@ class CreationDialog(QDialog):
 
     def validate(self):
         if not self.title.text().strip() or not Path(self.root.text()).is_absolute():
-            self.error.setText('Vyplňte název a absolutní cestu nové složky.')
+            self.error.setText('Vyplňte název a absolutní cestu složky projektu.')
             return
         self.accept()
 
@@ -66,6 +73,8 @@ class CreationWorker(QThread):
         try:
             self.succeeded.emit(self.action())
         except CreationConflict as exc:
+            self.failed.emit(str(exc))
+        except ValueError as exc:
             self.failed.emit(str(exc))
         except Exception:
             self.failed.emit('Operaci nelze dokončit. Ověřte cestu, práva a dostupné místo. '

@@ -11,6 +11,19 @@ Jeden uzel je samostatný backend s lokálními daty. Desktop spouští stejný 
 
 Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Jádro pro M1 používá Python dle [ADR 0013](docs/adr/0013-m1-stack.md); doménové služby jsou nezávislé na HTTP adaptéru. Produkční serverový framework se bude vybírat proti konkrétním požadavkům V-10/M1. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
 
+Současné moduly zůstávají v hlavní roadmapě. Jen nově výslovně vytipovaný
+externě verzovaný modul má vlastní roadmapu a implementační autoritu mimo tento
+repozitář: jeho pracovní adresář nebo symlink leží v ignorovaném
+`modules.local/`. Hlavní roadmapa ani jednotné API nepřebírají jeho doslovný
+popis funkčnosti; evidují pouze ověřenou generalizaci nutnou pro společný
+kontrakt a dokumentaci. Modul se připojuje přes verzované capability API, nikoli
+přímým přístupem k projektovému Gitu, indexu, journalům nebo credentials.
+Kontrakt zahrnuje identitu/verzi modulu, capabilities, vstupní a výstupní
+schémata, oprávnění, privacy/execution boundary, limity, idempotenci a stavy
+včetně `unknown`, provenance a kompatibilitu. Nejde tím o automatické načítání
+cizího kódu či převzetí jeho roadmapy. Podrobnosti:
+[ADR 0026](docs/adr/0026-module-unified-api.md).
+
 Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal PySide6 a nativní předání tokenu jsou ověřeny v ADR 0010; volbu stacku uzavírá ADR 0013. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
 
 ## Data a zápis

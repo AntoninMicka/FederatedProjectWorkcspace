@@ -633,6 +633,38 @@ Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RB
 
 ---
 
+# 11C. Externě verzované moduly a jednotné API
+
+**Stav: planned / designed, neimplementováno.** Dosavadní moduly a jejich
+požadavky zůstávají v této hlavní roadmapě. Pouze nově výslovně vytipovaný modul
+může mít samostatný repozitář a roadmapu; jeho pracovní kopie nebo symlink leží
+v lokální, Gitem ignorované složce `modules.local/`. Hlavní plán jej neobsahuje
+jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
+
+- [ ] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
+  odkaz na jeho vlastní roadmapu, deklarované capability, závislosti a stav
+  kompatibility s jednotným API. Text společné dokumentace musí být zobecněním
+  potřebným pro API, ne doslovným přepisem modulové specifikace.
+- [ ] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
+  schéma, chyby a limity, oprávnění, privacy/execution boundary, idempotenci,
+  `unknown` externí účinek a provenance. Modul nepřistupuje přímo k projektovému
+  Gitu, indexu, journalu ani credentials; mutace používají autorizované
+  aplikační služby a Workspace lifecycle.
+- [ ] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
+  symlinky nebo samostatně verzované checkouty, ale jejich obsah, Git historie,
+  credentials, build výstupy a roadmapy nejsou součástí tohoto repozitáře ani
+  distribučního balíku. Symlink není důkaz kompatibility, oprávnění ani trusted
+  execution boundary a nesmí se sledovat při balení, importu či automatickém
+  načítání kódu.
+- [ ] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
+  licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
+  chování jádra ani spustit fallback.
+
+Podrobný návrhový kontrakt drží [ADR 0026](docs/adr/0026-module-unified-api.md);
+implementační rozpad drží `MOD-01` v BACKLOG.
+
+---
+
 # 12. Webové UI
 
 ## MVP obrazovky
@@ -918,6 +950,8 @@ není vydáván za celý uzavřený.
 - [ ] Převod roadmapy na projektové entity a export TODO/task balíčků.
 - [ ] Provider-neutral předání implementačního úkolu coding agentovi a import ověřitelného výsledku.
 - [ ] Rozšíření pro Microsoft Visual Studio Code/VSCodium a volitelné coding-agent adaptéry včetně Codexu, bez převzetí autority nad plánem a akceptací.
+- [ ] Verzionované jednotné API pro nově vytipované externě verzované moduly,
+  při zachování dosavadních modulů v hlavní roadmapě.
 
 **Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine. Umí také převést schválený plán na dohledatelné projektové úkoly a bezpečně předat implementaci coding agentovi, aniž by jeho report automaticky měnil autoritativní stav nebo obcházel lidskou akceptaci.
 

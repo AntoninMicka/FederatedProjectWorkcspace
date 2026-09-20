@@ -3,56 +3,37 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M1-PROJECT-LOCATION-01: Umístění projektů a webový import
+# TODO — F-M1-PROJECT-ROOT-01: Vytvoření v existující prázdné složce
 
-Milník M1; jedna dávka, větev `feature/f-m1-project-location-web-import`, budoucí
+Milník M1; jedna dávka, větev `feature/f-m1-project-existing-root`, budoucí
 PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; implementace a lokální akceptace jsou hotové,
-  dávka čeká na uživatelem řízený commit/push/PR/merge. Aktivováno po začlenění
-  PR #36 dne 2026-09-20 na přímý požadavek uživatele.
-- Původ: opravit desktopové vytvoření projektu mimo domácí složku a zapamatovat
-  výchozí rodičovskou složku; zpřístupnit registraci existujícího projektu a
-  opravu jeho cesty; doplnit import souborů ve webové variantě.
-- Výstup: node-local `projects_root`, nativní volby pro registraci a opravu
-  umístění včetně pouhého odebrání registrace chybějícího rootu a
-  autentizovaný bounded web upload, který reuse stávající immutable source
-  import a Workspace transaction.
-- Recovery: vytvoření/registrace zachovávají uzlový journal. Oprava cesty nejprve
-  pod uzlovým zámkem ověří stejné project UUID, Git HEAD, filesystem a absenci
-  pending projektové operace; journal owner a node registraci mění obnovitelně
-  přes stejný operation receipt. Web retry váže stejné UUID, bajty, hash a
-  operation ID; projektový zápis obnovuje Workspace.
-- Mimo rozsah: přesun autoritativního projektového Git repozitáře aplikací,
-  přesun lokálního stavu mezi filesystemy, import celého projektu přes browser,
-  `local-only` data přes síť a odstranění projektu.
+- Stav dávky: [ ] [in progress]; aktivováno 2026-09-20 na přímý uživatelský
+  report, že vytvoření do existujícího kořene nefunguje.
+- Původ: F-M1-PROJECT-LOCATION-01 vytvořil/uložil rodičovskou složku, ale
+  odmítal i prázdný adresář již zvolený jako cílový kořen.
+- Výstup: desktop a `ProjectCreation.create()` přijmou novou nebo existující
+  prázdnou vlastněnou složku bez symlinků; obsah ani existující Git projekt se
+  nepřepisují.
+- Recovery: journal ukládá inode existujícího cíle. Staging se s prázdným cílem
+  atomicky vymění; po pádu se pokračuje jen při shodě inode/obsahu, jiný cíl se
+  zachová jako konflikt. Stav, Git commit a node registrace nadále používají
+  existující receipt a hranice ADR 0015.
+- Mimo rozsah: převzetí neprázdného adresáře, import existujícího Git projektu
+  (řeší `register`), přesun repozitáře/stavu nebo odstranění projektu.
 
 ## Aktivní části dávky
 
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-A — Reuse a crash kontrakt
-  (designed).** Adaptovány `ProjectCreation.register`, uzlový operation journal,
-  `Projects`, `Sources` a Workspace; nový framework ani storage nevzniká.
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-B — Výchozí složka, registrace a
-  oprava umístění (implemented).** Desktop ukládá potvrzený rodič do node-local
-  konfigurace, dovoluje výběr mimo home, načte existující validní Git projekt a
-  opraví přesunutou registraci. Cross-filesystem přesun stavu se bezpečně odmítá.
-  Pokud původní root doslova chybí, lze odebrat pouze jeho node registraci;
-  lokální stav ani projektová data se nemažou.
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-C — Webový import zdrojů
-  (implemented).** Web přijímá Markdown/PNG/JPEG/PDF do 16 MiB, zachová přesné
-  bajty a SHA-256, vyžaduje write roli a odmítá `local-only`; retry nevytvoří
-  druhý commit.
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-D — Regrese, dokumentace a
-  akceptace (PoC validated).** Rozšířená cílená sada prošla 63 testy se 4
-  podmíněnými skipy. Finální úplná sada prošla: 328 testů, 22 podmíněných skipů.
-  Tři nové testy ověřují nedestruktivní odregistrování a recovery před
-  i po atomické publikaci node konfigurace.
-  Samostatně prošel skutečný Qt/WebEngine smoke vytvoření/restartu desktopu a
-  webového login/catalog/logout. Python kompilace, syntaxe výsledného webového
-  JavaScriptu a `git diff --check` prošly. Skutečný browser file-picker průchod
-  nebyl automatizován; HTTPS importní endpoint, přesné bajty nad 64 KiB, RBAC,
-  privacy a idempotentní retry ověřují integrační testy. Reálný externí disk s
-  odlišným filesystemem není podporovaná oprava cesty bez samostatně navrženého
-  přesunu lokálního stavu.
+- [x] [completed] **F-M1-PROJECT-ROOT-01-A — Kontrakt a recovery (designed,
+  implemented).** Reuse `ProjectCreation`, jeho node-local journal, `renameat2`
+  a stávající receipt. Existující prázdný cíl je identifikován inode/dev;
+  nepřibývá nový storage ani framework.
+- [x] [completed] **F-M1-PROJECT-ROOT-01-B — Služba a desktopový vstup
+  (implemented).** Vytvoření přijímá prázdný vlastněný root; UI jej správně
+  popisuje. Obsah, symlink, jiný inode nebo neprázdný cíl se odmítne bez zápisu.
+- [x] [completed] **F-M1-PROJECT-ROOT-01-C — Úplná regrese a předání
+  (PoC validated).** Cílené `tests.test_project_creation`: 22 OK, 2 podmíněné
+  Qt/WebEngine skipy. Úplná `unittest discover -s tests -q` prošla v povoleném
+  lokálním prostředí; `git diff --check` a finální kontrola dokumentace prošly.

@@ -267,7 +267,7 @@ ProjectCreation(sys.argv[1]).create('První projekt', sys.argv[2], sys.argv[3],
         self.check_created(receipt)
 
     def test_existing_targets_and_duplicate_registered_root_are_preserved(self):
-        self.root.mkdir()
+        self.root.mkdir(mode=0o700)
         sentinel = self.root / 'keep'; sentinel.write_bytes(b'existing')
         with self.assertRaises(CreationConflict): self.create()
         self.assertEqual(sentinel.read_bytes(), b'existing')
@@ -280,6 +280,51 @@ ProjectCreation(sys.argv[1]).create('První projekt', sys.argv[2], sys.argv[3],
         with self.assertRaises(ValueError): self.create()
         self.assertEqual(self.node.read_bytes(), original)
         self.assertFalse(self.root.exists())
+
+    def test_existing_root_with_unsafe_permissions_reports_actionable_error(self):
+        self.root.mkdir(mode=0o700)
+        self.root.chmod(0o770)
+        with self.assertRaisesRegex(CreationConflict, 'Directory must not be writable by other users'):
+            self.create()
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_create_adopts_empty_existing_root_and_recovers(self):
+        self.root.mkdir(mode=0o700)
+        before = self.root.stat().st_ino
+        receipt = self.create()
+        self.check_created(receipt)
+        self.assertNotEqual(self.root.stat().st_ino, before)
+
+        root = self.base / 'interrupted-existing-root'
+        root.mkdir(mode=0o700)
+        operation = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.service.create('Přerušený projekt', root, operation,
+                checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                if stage == 'ready' else None)
+        recovered = self.service.recover()
+        self.assertEqual(recovered, self.service.create('Přerušený projekt', root, operation))
+        self.assertEqual(Git(root).run('rev-list', '--count', 'HEAD').stdout.strip(), '1')
+
+        root = self.base / 'published-existing-root'
+        root.mkdir(mode=0o700)
+        operation = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.service.create('Publikovaný projekt', root, operation,
+                checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                if stage == 'root-published' else None)
+        recovered = self.service.recover()
+        self.assertEqual(recovered, self.service.create('Publikovaný projekt', root, operation))
+        self.assertEqual(Git(root).run('rev-list', '--count', 'HEAD').stdout.strip(), '1')
+
+    def test_existing_empty_root_changed_during_recovery_is_preserved(self):
+        self.root.mkdir(mode=0o700)
+        self.interrupt('prepared')
+        sentinel = self.root / 'foreign'; sentinel.write_bytes(b'keep')
+        with self.assertRaises(CreationConflict):
+            self.service.recover()
+        self.assertEqual(sentinel.read_bytes(), b'keep')
+        self.assertFalse((self.root / '.git').exists())
 
     def test_foreign_empty_target_is_not_replaced_during_publication(self):
         self.interrupt('ready')
