@@ -15,11 +15,13 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-modes`, budoucí PR do `deve
   PR #39 (`4bd45b8`).
 - Původ: uživatel požaduje režim `orchestration` pouze s lokálním `same-node`
   LLM a explicitním artefaktovým kontextem; režim `brainstorming` s volbou
-  policy-povoleného backendu/modelu bez artefaktového kontextu. Návrat do
+  policy-povoleného backendu/modelu s explicitně připraveným textovým kontextem,
+  ale bez artefaktového kontextu. Návrat do
   orchestrace ukončí brainstormingové vlákno a založí nové bez jeho kontextu.
 - Výstup: verzovaný turn/thread kontrakt a desktopové ovládání režimu/modelu;
   lokální orchestrace pro přípravu kontextu/dat, filtraci a návrhy artefaktů;
-  brainstormingový běh bez přímých či odvozených artifact inputs.
+  brainstormingový běh s explicitně připraveným textovým kontextem, ale bez
+  přímých či odvozených artifact inputs.
 - Recovery: změna režimu nesmí proběhnout s aktivním nebo `unknown` během.
   Ukončení brainstormu a archivace původního vlákna spolu se založením nového
   orchestration vlákna musí být obnovitelné a idempotentní; žádná zpráva,

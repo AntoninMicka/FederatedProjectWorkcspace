@@ -348,9 +348,10 @@ lokální model; může přes Context Builder získat explicitně vybrané proje
 artefakty pro přípravu kontextu, dat pro další zpracování, kompilaci návrhu
 artefaktu a filtraci. Model pouze navrhuje akce; jejich provedení zůstává v
 deterministickém aplikačním orchestrátoru. Brainstorming dovoluje zvolit pro
-každý nový běh libovolný jinak povolený binding a model, ale jeho Context
-Manifest nesmí obsahovat projektový artefakt, jeho bajty ani automaticky
-odvozený artifact context.
+každý nový běh libovolný jinak povolený binding a model a smí obsahovat
+explicitně připravený textový/chatový kontext. Jeho Context Manifest však nesmí
+obsahovat projektový artefakt, jeho bajty ani automaticky odvozený artifact
+context.
 
 Přechod `orchestration` → `brainstorming` vytváří nový manifest a znovu
 vyhodnotí explicitně vybrané zprávy vůči cíli; historie ani artefaktový obsah
