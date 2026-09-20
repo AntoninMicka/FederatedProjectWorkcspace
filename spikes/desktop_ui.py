@@ -699,9 +699,14 @@ function renderBackendMetrics(result){
  if(!result?.report){backendMetricsStatus.textContent=result?.credential?.available ?
   'Administrátorský klíč je uložen; přehled zatím nebyl načten.' :
   'Administrátorský klíč není uložen.';report.hidden=true;return;}
+ const metricStates={unauthorized:'Administrátorský klíč byl odmítnut (HTTP 401).',
+  forbidden:'Klíč nemá oprávnění k účetnímu přehledu (HTTP 403).',
+  'rate-limited':'OpenAI dočasně omezilo načítání přehledu (HTTP 429).',
+  unavailable:'Účetní přehled je dočasně nedostupný.'};
  backendMetricsStatus.textContent=result.report.status==='available' ?
-  `Přehled aktualizován ${result.report.fetched_at}.` :
-  `Přehled má stav ${result.report.status}; zobrazená data mohou být zastaralá.`;
+  `Přehled aktualizován ${result.report.fetched_at}.` : result.report.status==='stale' ?
+  `Zobrazuji poslední platný přehled; obnova selhala: ${metricStates[result.report.refresh_error] || result.report.refresh_error}.` :
+  (metricStates[result.report.status] || `Přehled má stav ${result.report.status}.`);
  report.textContent=JSON.stringify(result.report,null,2);report.hidden=false;
 }
 async function loadBackendMetrics(){

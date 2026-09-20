@@ -56,8 +56,9 @@ nikoli další capability. Neznámá
 capability nebo nedoložený provider zůstane `unsupported`.
 
 Normalizovaný `BackendMetricReport` v1 obsahuje právě jeden `kind` (`usage`
-nebo `billing`), `status` (`available`, `unsupported`, `forbidden`,
-`unavailable`, `stale`), `scope` (`run`, `provider-project`, `account`), zdrojový
+nebo `billing`), `status` (`available`, `unsupported`, `unauthorized`,
+`forbidden`, `rate-limited`, `unavailable`, `stale`), `scope` (`run`,
+`provider-project`, `account`), zdrojový
 adapter/binding a provider, čas zjištění a explicitní začátek/konec období.
 Každá metrika má stabilní provider-neutral název, nezápornou číselnou hodnotu a
 jednotku; billing navíc ISO-4217 měnu. `actual` znamená providerem hlášenou
@@ -98,9 +99,10 @@ aplikační oprávnění `backend-accounting:read`; role `generate` ani projekto
 projektový Git společně s hashem přesného provider requestu, binding/admin
 credential revizí, obdobím, stránkováním a `fetched_at`. Publikace celé odpovědi
 je atomická až po validaci všech stránek; částečný refresh předchozí úspěch
-nepřepíše. Timeout, rate limit, HTTP/JSON chyba nebo restart během GET zachová
-poslední validní report jako `stale`, případně vrátí `unavailable`, pokud žádný
-není. Protože jde o read-only GET bez aplikačního vedlejšího účinku, opakování
+nepřepíše. HTTP 401 je `unauthorized`, 403 `forbidden` a 429 `rate-limited`;
+timeout, jiná HTTP/JSON chyba nebo restart je `unavailable`. Pokud existuje
+poslední validní report, vrátí se jako `stale` s odděleným důvodem selhání
+obnovy. Protože jde o read-only GET bez aplikačního vedlejšího účinku, opakování
 refresh není `unknown` dispatch; nikdy však nemění run journal, routing ani cost
 policy. Retence a přesné TTL budou parametry implementace M3-UB-01-B, nikoli
 providerem nezdůvodněná konstanta v kontraktu.

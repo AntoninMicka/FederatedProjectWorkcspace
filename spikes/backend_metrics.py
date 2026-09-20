@@ -73,8 +73,10 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
 
 
 class MetricTransportError(RuntimeError):
-    def __init__(self, message, *, forbidden=False):
-        super().__init__(message); self.forbidden = forbidden
+    def __init__(self, message, *, kind='unavailable'):
+        require(kind in {'unauthorized', 'forbidden', 'rate-limited', 'unavailable'},
+                'Invalid backend metric error kind')
+        super().__init__(message); self.kind = kind
 
 
 class MetricCache:
@@ -181,9 +183,9 @@ class OpenAIAccountMetrics:
         except MetricTransportError as exc:
             cached = self.cache.load('openai-account')
             if cached is not None:
-                return dict(cached, status='forbidden' if exc.forbidden else 'stale')
+                return dict(cached, status='stale', refresh_error=exc.kind)
             return {'schema_version': 1,
-                    'status': 'forbidden' if exc.forbidden else 'unavailable',
+                    'status': exc.kind,
                     'scope': 'account', 'adapter_id': 'openai-responses',
                     'period_start': start_time, 'period_end': end_time,
                     'fetched_at': _now(), 'reports': []}
@@ -247,8 +249,15 @@ class OpenAIAccountMetrics:
             connection.request('GET', path, headers={'Authorization': 'Bearer ' + secret,
                                                       'Accept': 'application/json'})
             response = connection.getresponse()
-            if response.status in {401, 403}:
-                raise MetricTransportError('OpenAI account metrics forbidden', forbidden=True)
+            if response.status == 401:
+                raise MetricTransportError('OpenAI admin credential was rejected',
+                                           kind='unauthorized')
+            if response.status == 403:
+                raise MetricTransportError('OpenAI admin credential lacks permission',
+                                           kind='forbidden')
+            if response.status == 429:
+                raise MetricTransportError('OpenAI account metrics rate limited',
+                                           kind='rate-limited')
             if response.status < 200 or response.status >= 300:
                 raise MetricTransportError('OpenAI account metrics unavailable')
             raw = response.read(MAX_REPORT_RESPONSE + 1)

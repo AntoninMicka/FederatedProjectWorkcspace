@@ -42,10 +42,11 @@ budoucí PR do `develop`.
   (implemented).** Providerem hlášené Ollama/OpenAI run usage se normalizuje
   bez druhého run journalu. Nativní správa používá oddělený write-only OpenAI
   admin credential, bounded stránkování oficiálních usage/costs endpointů a
-  atomickou node-local SQLite cache; chyba vrací `stale`, `forbidden` nebo
-  `unavailable`, nikoli falešnou nulu. Account přehled není dostupný z běžného
-  chatového handleru a UI jej nezaměňuje za workspace údaje. Cílených 70 testů
-  prošlo se 2 Qt skipy, úplná sada 344 testů s 22 skipy a skutečný
+  atomickou node-local SQLite cache; 401/403/429 se rozlišují jako
+  `unauthorized`/`forbidden`/`rate-limited`, ostatní chyba jako `unavailable`
+  a platná cache jako `stale` s důvodem, nikdy jako falešná nula. Account přehled není dostupný z běžného
+  chatového handleru a UI jej nezaměňuje za workspace údaje. Posledních cílených
+  56 testů prošlo se 2 Qt skipy, úplná sada 346 testů s 22 skipy a skutečný
   Qt/WebEngine smoke prošly; živý OpenAI Admin API refresh nebyl proveden.
 - [ ] [planned] **M3-UB-01-C — Regrese, dokumentace a akceptace
   (implemented).** Ověřit obě capabilities, pouze usage a žádnou podporu; nulu

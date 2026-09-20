@@ -3,6 +3,7 @@
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from spikes.backend_metrics import MetricTransportError, OpenAIAccountMetrics, run_usage
@@ -57,13 +58,44 @@ class BackendMetricTests(unittest.TestCase):
         self.assertEqual(good.refresh(100, 200)['status'], 'available')
         stale = OpenAIAccountMetrics(self.root, lambda *_:
             (_ for _ in ()).throw(MetricTransportError('timeout')))
-        self.assertEqual(stale.refresh(100, 200)['status'], 'stale')
+        stale_report = stale.refresh(100, 200)
+        self.assertEqual((stale_report['status'], stale_report['refresh_error']),
+                         ('stale', 'unavailable'))
 
         other = Path(self.temp.name) / 'other'; other.mkdir(mode=0o700)
         failing = OpenAIAccountMetrics(other, lambda *_:
-            (_ for _ in ()).throw(MetricTransportError('forbidden', forbidden=True)))
+            (_ for _ in ()).throw(MetricTransportError('forbidden', kind='forbidden')))
         failing.configure('sk-admin-' + 'y' * 32)
         self.assertEqual(failing.refresh(100, 200)['status'], 'forbidden')
+
+    def test_authentication_and_rate_limit_failures_are_distinct(self):
+        for kind in ('unauthorized', 'forbidden', 'rate-limited', 'unavailable'):
+            with self.subTest(kind=kind):
+                root = Path(self.temp.name) / kind; root.mkdir(mode=0o700)
+                metrics = OpenAIAccountMetrics(root, lambda *_args, value=kind:
+                    (_ for _ in ()).throw(MetricTransportError(value, kind=value)))
+                metrics.configure('sk-admin-' + 'x' * 32)
+                self.assertEqual(metrics.refresh(100, 200)['status'], kind)
+
+    def test_http_statuses_map_without_exposing_response_body(self):
+        class Response:
+            def __init__(self, status): self.status = status
+            def read(self, _limit): return b'secret provider detail'
+        class Connection:
+            def __init__(self, status): self.status = status
+            def request(self, *_args, **_kwargs): pass
+            def getresponse(self): return Response(self.status)
+            def close(self): pass
+        for status, kind in ((401, 'unauthorized'), (403, 'forbidden'),
+                             (429, 'rate-limited'), (500, 'unavailable')):
+            with self.subTest(status=status), patch(
+                    'spikes.backend_metrics.http.client.HTTPSConnection',
+                    return_value=Connection(status)):
+                with self.assertRaises(MetricTransportError) as raised:
+                    OpenAIAccountMetrics._http('/v1/organization/costs',
+                                               'sk-admin-' + 'x' * 32)
+                self.assertEqual(raised.exception.kind, kind)
+                self.assertNotIn('secret provider detail', str(raised.exception))
 
     def test_period_and_pagination_are_bounded(self):
         metrics = OpenAIAccountMetrics(self.root, lambda *_: {'data': [], 'has_more': False})
