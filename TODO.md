@@ -11,7 +11,9 @@ budoucí PR do `develop`.
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; aktivována do TODO 2026-09-20 po začlenění
+- Stav dávky: [ ] [in progress]; implementace a lokální akceptace jsou dokončené,
+  dávka čeká na commit, PR a začlenění do `develop`. Aktivována do TODO
+  2026-09-20 po začlenění
   F-M3-CHAT-MODES-01 jako PR #40 (`c8358d5`). Větev
   `feature/m3-ub-01-usage-billing` vznikla z `develop` na `cae87bc`.
 - Původ: sekce 7C roadmapy a M3 požadují volitelný přehled usage a billing pro
@@ -51,11 +53,16 @@ budoucí PR do `develop`.
   2 Qt skipy, úplná sada 346 testů s 22 skipy a skutečný webový Qt/WebEngine
   smoke včetně viditelnosti indikátoru; živý OpenAI Admin API refresh nebyl
   proveden.
-- [ ] [in progress] **M3-UB-01-C — Regrese, dokumentace a akceptace
-  (implemented).** Ověřit obě capabilities, pouze usage a žádnou podporu; nulu
-  proti chybějícímu údaji, oprávnění, timeout, rate limit, stale cache, restart
-  a to, že výpadek přehledu nemění routing ani běh modelu. Provést úplnou sadu,
-  relevantní UI smoke a aktualizovat uživatelskou dokumentaci.
+- [x] [completed] **M3-UB-01-C — Regrese, dokumentace a akceptace
+  (PoC validated).** Testy rozlišují obě account capabilities, run-only usage a
+  chybějící providerovou metriku, skutečnou nulu od `unsupported`, oprávnění,
+  timeout, rate limit, stale cache i načtení cache po restartu. Integrační
+  regrese dokládá, že nedostupný účetní přehled nemění binding ani neblokuje
+  dokončení chatového běhu. Sedm cílených akceptačních testů a úplná sada 347
+  testů prošly s 22 environmentálními skipy; skutečný webový Qt/WebEngine smoke
+  indikátoru prošel před poslední test-only změnou. Uživatelská dokumentace
+  pokrývá desktop, web, oprávnění a hranice údajů. Živý OpenAI Admin API refresh
+  zůstává neprovedený, takže výsledek není production-ready provider acceptance.
 
 ## K předání do backlogu
 

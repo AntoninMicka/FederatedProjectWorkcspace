@@ -55,7 +55,11 @@ class BackendMetricTests(unittest.TestCase):
         good = OpenAIAccountMetrics(self.root, lambda *_:
             {'data': [{'results': []}], 'has_more': False})
         good.configure('sk-admin-' + 'x' * 32)
-        self.assertEqual(good.refresh(100, 200)['status'], 'available')
+        current = good.refresh(100, 200)
+        self.assertEqual(current['status'], 'available')
+        restarted = OpenAIAccountMetrics(self.root, lambda *_:
+            (_ for _ in ()).throw(AssertionError('status must not contact provider')))
+        self.assertEqual(restarted.status()['report'], current)
         stale = OpenAIAccountMetrics(self.root, lambda *_:
             (_ for _ in ()).throw(MetricTransportError('timeout')))
         stale_report = stale.refresh(100, 200)
@@ -96,6 +100,15 @@ class BackendMetricTests(unittest.TestCase):
                                                'sk-admin-' + 'x' * 32)
                 self.assertEqual(raised.exception.kind, kind)
                 self.assertNotIn('secret provider detail', str(raised.exception))
+
+        class TimeoutConnection(Connection):
+            def request(self, *_args, **_kwargs): raise TimeoutError('provider timed out')
+        with patch('spikes.backend_metrics.http.client.HTTPSConnection',
+                   return_value=TimeoutConnection(200)):
+            with self.assertRaises(MetricTransportError) as raised:
+                OpenAIAccountMetrics._http('/v1/organization/costs',
+                                           'sk-admin-' + 'x' * 32)
+        self.assertEqual(raised.exception.kind, 'unavailable')
 
     def test_period_and_pagination_are_bounded(self):
         metrics = OpenAIAccountMetrics(self.root, lambda *_: {'data': [], 'has_more': False})

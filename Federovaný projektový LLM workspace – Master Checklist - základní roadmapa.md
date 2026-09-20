@@ -448,13 +448,13 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 
 ## 7C. Usage & billing — volitelná indikace
 
-- [ ] U backendů, kde to dává smysl a lze údaje získat podporovaným rozhraním, zobrazovat spotřebu a billing podle dostupných capabilities; podporu usage a billing rozlišovat samostatně.
-- [ ] Usage může zahrnovat vstupní/výstupní tokeny, počet požadavků nebo jiné backendem poskytované jednotky; billing náklady za období, zbývající kredit či čerpání kvóty, pokud jsou dostupné.
-- [ ] Rozlišovat spotřebu konkrétního běhu/workspace od souhrnu poskytovatele za účet nebo organizaci. U hodnot uvádět rozsah, období, jednotku/měnu, zdroj a čas poslední aktualizace; souhrn účtu nevydávat za spotřebu projektu.
-- [ ] Oddělit poskytovatelem hlášené náklady od odhadu podle ceníku; odhad jasně označit a uvést použitý ceník/verzi. Lokální backend ani chybějící billing údaj automaticky neznamenají nulové náklady.
-- [ ] V UI odlišit nepodporováno, chybějící oprávnění, dočasně nedostupné a zastaralé údaje od skutečné nuly. Výpadek načítání přehledu sám o sobě neblokuje použití backendu ani nemění routing či existující cost policy.
-- [ ] Účetní souhrny zobrazovat pouze oprávněným uživatelům; oprávnění používat backend samo nedává přístup k billingu celého účtu. Případné další credentials držet lokálně mimo projektový Git; účetní data automaticky nesynchronizovat s projektem.
-- [ ] Přehled zpřístupnit v detailu backendu a stručnou indikaci při jeho výběru; dostupné usage konkrétního běhu také u výsledku. Jde o přehled, nikoli správu plateb nebo změny předplatného.
+- [x] U backendů, kde to dává smysl a lze údaje získat podporovaným rozhraním, zobrazovat spotřebu a billing podle dostupných capabilities; podporu usage a billing rozlišovat samostatně — M3-UB-01 lokálně PoC validated, živý OpenAI Admin API refresh neověřen.
+- [x] Usage může zahrnovat vstupní/výstupní tokeny, počet požadavků nebo jiné backendem poskytované jednotky; billing náklady za období, zbývající kredit či čerpání kvóty, pokud jsou dostupné.
+- [x] Rozlišovat spotřebu konkrétního běhu/workspace od souhrnu poskytovatele za účet nebo organizaci. U hodnot uvádět rozsah, období, jednotku/měnu, zdroj a čas poslední aktualizace; souhrn účtu nevydávat za spotřebu projektu.
+- [x] Oddělit poskytovatelem hlášené náklady od odhadu podle ceníku; odhad jasně označit a uvést použitý ceník/verzi. Lokální backend ani chybějící billing údaj automaticky neznamenají nulové náklady.
+- [x] V UI odlišit nepodporováno, chybějící oprávnění, dočasně nedostupné a zastaralé údaje od skutečné nuly. Výpadek načítání přehledu sám o sobě neblokuje použití backendu ani nemění routing či existující cost policy.
+- [x] Účetní souhrny zobrazovat pouze oprávněným uživatelům; oprávnění používat backend samo nedává přístup k billingu celého účtu. Případné další credentials držet lokálně mimo projektový Git; účetní data automaticky nesynchronizovat s projektem.
+- [x] Přehled zpřístupnit v detailu backendu a stručnou indikaci při jeho výběru; dostupné usage konkrétního běhu také u výsledku. Jde o přehled, nikoli správu plateb nebo změny předplatného.
 
 ---
 
@@ -884,15 +884,16 @@ implementuje první externí textový provider, context preview, privacy filtr a
 striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, publikaci
 artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
 zobrazení externí odpovědi. F-M3-CHAT-MODES-01 je po PR #40 začleněn a odděluje
-lokální orchestrace od brainstormingu s per-run modelem. Usage/billing, obrazové capability, webové hledání
-a obecný workflow zůstávají samostatné navazující schopnosti; Gate M3 proto
+lokální orchestrace od brainstormingu s per-run modelem. M3-UB-01 implementuje
+a lokálně PoC validuje usage/billing; obrazové capability, webové hledání a
+obecný workflow zůstávají samostatné navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
   OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
   artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
-- [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — aktivní dávka M3-UB-01.
+- [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
 - [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
