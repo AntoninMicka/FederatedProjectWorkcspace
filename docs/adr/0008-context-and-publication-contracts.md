@@ -43,7 +43,67 @@ vyžaduje nový explicitní run. U `private-network` se TLS spojení naváže a 
 certifikátu ověří ještě před odesláním requestu. Úspěšná odpověď je durable a
 opakované načtení stejného run ID ji vrátí bez dalšího volání.
 
-Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Obnovování/cache a provider API zůstávají M3-UB-01.
+Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Provider review a kontrakt uzavírá M3-UB-01-A; implementace obnovování a cache zůstává M3-UB-01-B.
+
+### Usage a billing kontrakt v1
+
+M3-UB-01-A odděluje provozní evidence jednoho běhu od vzdáleného účetního
+přehledu. Nejde o další operace `BackendCapabilities` pro generování: jejich
+přidání by mylně dovolilo odvodit účetní právo z práva spouštět model. Samostatný
+`BackendTelemetryCapabilities` váže na přesnou revizi adapteru a bindingu dvě
+nezávislé volitelné capability `usage` a `billing`; scope je vlastnost reportu,
+nikoli další capability. Neznámá
+capability nebo nedoložený provider zůstane `unsupported`.
+
+Normalizovaný `BackendMetricReport` v1 obsahuje právě jeden `kind` (`usage`
+nebo `billing`), `status` (`available`, `unsupported`, `forbidden`,
+`unavailable`, `stale`), `scope` (`run`, `provider-project`, `account`), zdrojový
+adapter/binding a provider, čas zjištění a explicitní začátek/konec období.
+Každá metrika má stabilní provider-neutral název, nezápornou číselnou hodnotu a
+jednotku; billing navíc ISO-4217 měnu. `actual` znamená providerem hlášenou
+hodnotu. Případný budoucí `estimated` údaj musí nést vlastní ceník a jeho revizi
+a nesmí se sčítat s `actual`. Prázdný seznam metrik je platná dostupná nula jen
+tehdy, když provider úspěšně odpověděl pro přesné období; chyba, chybějící pole
+nebo chybějící oprávnění nulu nevytváří.
+
+V1 podporuje tyto zdroje:
+
+- Ollama [`POST /api/generate`](https://docs.ollama.com/api/generate) vrací
+  `prompt_eval_count`, `eval_count` a doby v
+  nanosekundách. Adapter je může normalizovat jen jako `run` usage uložené spolu
+  s úspěšnou odpovědí. Ollama zde nemá doložené account usage ani billing API;
+  `billing` je proto explicitně `unsupported`, nikoli nula.
+- OpenAI Responses již vrací token usage jednoho dokončeného běhu; zůstává
+  součástí durable run evidence. Oficiální organization
+  [`GET /organization/usage/completions`](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage)
+  poskytuje agregované tokeny a počet požadavků a oddělené
+  [`GET /organization/costs`](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage)
+  providerem hlášené náklady. Obě administrativní cesty používají
+  [OpenAI Admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys),
+  který může vytvořit a použít pouze vlastník organizace. Generační credential
+  se na admin credential automaticky nepovýší ani z něj účetní capability
+  neodhadne.
+
+OpenAI organization údaje smějí mít pouze `provider-project` nebo `account`
+scope. Provider project ID není workspace/project UUID; mapování bez samostatné
+ověřené konfigurace je zakázané. V1 proto nezobrazuje organization agregát jako
+spotřebu workspace a nepočítá cenu jednotlivého runu z veřejného ceníku.
+
+Admin credential má samostatnou opaque referenci, revizi a write-only
+node-local uložení mimo Git. Čtení account reportu vyžaduje explicitní
+aplikační oprávnění `backend-accounting:read`; role `generate` ani projektové
+čtení nestačí. UI nesmí vracet report ani poslední cache neoprávněnému uživateli.
+
+Úspěšný vzdálený účetní report se ukládá do bounded node-local cache mimo
+projektový Git společně s hashem přesného provider requestu, binding/admin
+credential revizí, obdobím, stránkováním a `fetched_at`. Publikace celé odpovědi
+je atomická až po validaci všech stránek; částečný refresh předchozí úspěch
+nepřepíše. Timeout, rate limit, HTTP/JSON chyba nebo restart během GET zachová
+poslední validní report jako `stale`, případně vrátí `unavailable`, pokud žádný
+není. Protože jde o read-only GET bez aplikačního vedlejšího účinku, opakování
+refresh není `unknown` dispatch; nikdy však nemění run journal, routing ani cost
+policy. Retence a přesné TTL budou parametry implementace M3-UB-01-B, nikoli
+providerem nezdůvodněná konstanta v kontraktu.
 
 ### Provider-neutral aplikační kontrakt v1
 

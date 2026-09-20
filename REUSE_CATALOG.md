@@ -143,6 +143,17 @@ capability pouze z názvu. Seznam je pomůcka UI a nemění binding bez potvrzen
 Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
 
+M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
+`OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
+transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
+druhý run journal. Account usage/costs jsou samostatné read-only OpenAI Admin
+API adaptéry s odděleným credentialem a cache. Soukromá inventura nedokládá
+hotovou usage/billing implementaci ani licenci k převzetí, proto z ní nebude
+kopírován kód a obecný backend pool se odmítá: účetní oprávnění ani dostupnost
+se nesmí odvozovat z routingu. Ollama account billing a odhad ceny podle názvu
+modelu jsou bez podporovaného zdroje `unsupported`. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#usage-a-billing-kontrakt-v1).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
