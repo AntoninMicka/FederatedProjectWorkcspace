@@ -599,6 +599,18 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
 - [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
+- [ ] Režimy chatu budou `orchestration` a `brainstorming` — F-M3-CHAT-MODES-01.
+  Orchestrace používá výhradně lokální `same-node` LLM a explicitní artefaktový
+  kontext pro přípravu kontextu/dat, kompilaci návrhu artefaktu a filtraci;
+  LLM pouze navrhuje, deterministický orchestrátor vykonává autorizované akce.
+  Brainstorming dovoluje pro každý běh vybrat libovolný policy-povolený model,
+  ale nesmí přijmout projektové artefakty ani jejich automaticky odvozený
+  context. Přepnutí `orchestration` → `brainstorming` vždy znovu sestaví
+  manifest a nepřenáší historii ani artefakty implicitně. Návrat
+  `brainstorming` → `orchestration` vyžaduje ukončit a lokálně archivovat
+  brainstormingové vlákno; případný Git otisk je samostatné potvrzení. Poté
+  vznikne nové prázdné orchestration vlákno bez kontextu ukončeného vlákna.
+  Každý budoucí vstup se znovu autorizuje a uloží do vlastního Context Manifestu.
 - [ ] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Potvrzené smazání koordinovaně odstraní všechny podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy bez osiřelých dat; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií a UI je před smazáním výslovně uvede. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů, souběh i restart na každé hranici; „úplné“ není příslib forenzního přepsání média.
 
 ---

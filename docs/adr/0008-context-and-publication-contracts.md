@@ -340,6 +340,29 @@ Provozní limit nebo nedostatek místa musí odmítnout nový zápis, nikoli ti�
 odstraňovat starší kontext. Projektový snapshot či odvozený artefakt a jeho
 retence patří do F-M2-CHAT-02 a běžného Workspace lifecycle.
 
+### Režimy konverzace a přechody — plánovaný F-M3-CHAT-MODES-01
+
+Chat rozlišuje dva účely, které nejsou task rolemi: `orchestration` a
+`brainstorming`. Orchestrace používá výhradně binding s boundary `same-node` a
+lokální model; může přes Context Builder získat explicitně vybrané projektové
+artefakty pro přípravu kontextu, dat pro další zpracování, kompilaci návrhu
+artefaktu a filtraci. Model pouze navrhuje akce; jejich provedení zůstává v
+deterministickém aplikačním orchestrátoru. Brainstorming dovoluje zvolit pro
+každý nový běh libovolný jinak povolený binding a model, ale jeho Context
+Manifest nesmí obsahovat projektový artefakt, jeho bajty ani automaticky
+odvozený artifact context.
+
+Přechod `orchestration` → `brainstorming` vytváří nový manifest a znovu
+vyhodnotí explicitně vybrané zprávy vůči cíli; historie ani artefaktový obsah
+se nepřenášejí automaticky. `local-only` ani jiný vstup zakázaný vybraným cílem
+se nepředá. Přechod `brainstorming` → `orchestration` není povolen uvnitř
+vlákna: uživatel nejdříve vlákno vědomě ukončí a lokálně archivuje; jeho
+projektový otisk vznikne jen samostatným výslovným potvrzením. Aplikace pak
+založí nové prázdné orchestration vlákno bez vybraných zpráv, artefaktů nebo
+jiného kontextu z ukončeného brainstormu. Každý budoucí explicitní vstup se
+znovu autorizuje a zachytí vlastním manifestem. Přechod proto není
+reklasifikací starých zpráv ani mechanismem pro obcházení privacy policy.
+
 Implementace F-M2-CHAT-01 v `spikes/chat_threads.py` používá samostatný SQLite
 soubor s vlastněným režimem 0600 ve vlastněném stavovém adresáři 0700,
 `foreign_keys=ON`, `synchronous=FULL` a `BEGIN IMMEDIATE` pro serializované
