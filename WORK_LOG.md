@@ -5,6 +5,24 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-PROJECT-LOCATION-01 — Umístění projektů a webový import — 2026-09-20
+
+Dávka uzavřena po začlenění PR #37 jako commit `de4e627` v `develop`; feature
+větev `feature/f-m1-project-location-web-import` dodala zapamatování výchozího
+rodiče mimo home, registraci existujícího Git projektu, opravu cesty a omezený
+webový import zdrojů. Dosažená úroveň je PoC validated. Pozdější oprava
+F-M1-PROJECT-ROOT-01 řeší samostatně přijetí již existujícího prázdného rootu.
+
+- [x] [completed] **F-M1-PROJECT-LOCATION-01-A–B — Umístění a registrace
+  (PoC validated).** Node-local `projects_root`, register/relocate a omezené
+  odregistrování ztraceného rootu zachovávají journal, stav a Git data.
+- [x] [completed] **F-M1-PROJECT-LOCATION-01-C–D — Webový import a akceptace
+  (PoC validated).** Autentizovaný bounded upload reuse immutable source import,
+  odmítá `local-only` a retry nevytváří druhý commit.
+
+Ověření před merge: úplná sada 328 testů OK, 22 podmíněných skipů; skutečný
+Qt/WebEngine smoke vytvoření/restartu a web login/catalog/logout prošly.
+
 ## F-M3-EXTERNAL-01 — První externí provider a řízené volání — 2026-09-20
 
 Dávka uzavřena po začlenění PR #36 jako commit `494670e` v `develop`; feature

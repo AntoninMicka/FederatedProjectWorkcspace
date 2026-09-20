@@ -83,6 +83,18 @@ def rename_new(source, target):
         sync_dir(source.parent)
 
 
+def rename_exchange(source, target):
+    """Atomically exchange two owned directories without replacing either one."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    rename = libc.renameat2
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(-100, os.fsencode(source), -100, os.fsencode(target), 2):
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    sync_dir(target.parent)
+
+
 def sync_tree(root):
     for parent, dirs, files in os.walk(root, topdown=False, followlinks=False):
         for name in files:
@@ -242,7 +254,11 @@ class ProjectCreation:
                 return self._finish(db, record, deadline, checkpoint)
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušené vytvoření projektu.')
-            check(not os.path.lexists(root), 'Cílová složka už existuje. Vyberte novou složku.')
+            existing_root = os.path.lexists(root)
+            if existing_root:
+                directory(root)
+                check(not list(root.iterdir()),
+                      'Existující cílová složka musí být prázdná.')
             before, node = self._node()
             node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
             if remember_parent:
@@ -269,7 +285,9 @@ class ProjectCreation:
             record = dict(operation_id=operation_id, title=title, root=str(root), state=str(state),
                           stage=str(stage), stage_identity=identity(stage), meta=meta,
                           before=before.decode() if before is not None else None, after=after.decode(),
-                          type='create', remember_parent=remember_parent, ready=False, receipt=None)
+                          type='create', remember_parent=remember_parent, ready=False, receipt=None,
+                          existing_root=existing_root,
+                          target_identity=identity(root) if existing_root else None)
             self._save(db, record)
             checkpoint('prepared')
             return self._finish(db, record, deadline, checkpoint)
@@ -440,7 +458,13 @@ class ProjectCreation:
         check(before in (None if record['before'] is None else record['before'].encode(), record['after'].encode()),
               'Konfigurace uzlu se mezitím změnila. Cizí změny byly zachovány.')
         if not record['ready']:
-            check(not os.path.lexists(root) and not os.path.lexists(state), 'Cíl přerušené operace je obsazený.')
+            if record.get('existing_root'):
+                check(os.path.lexists(root) and identity(root) == record['target_identity']
+                      and not list(root.iterdir()),
+                      'Existující cílová složka se mezitím změnila.')
+            else:
+                check(not os.path.lexists(root), 'Cíl přerušené operace je obsazený.')
+            check(not os.path.lexists(state), 'Cílový lokální stav je obsazený.')
             check({p.name for p in stage.iterdir()} <= {'repo', 'state'}, 'Pracovní složka má cizí soubory.')
             # Before ready, these are solely unpublished disposable files owned by the recorded staging inode.
             if (stage / 'repo').exists():
@@ -471,8 +495,16 @@ class ProjectCreation:
                                        ('state', state, record['state_identity'])]:
             source = stage / name
             if os.path.lexists(source):
-                check(identity(source) == expected, 'Pracovní data operace se změnila.')
-                rename_new(source, target)
+                if name == 'repo' and record.get('existing_root'):
+                    if identity(target) != expected:
+                        check(identity(source) == expected
+                              and identity(target) == record['target_identity']
+                              and not list(target.iterdir()),
+                              'Existující cílová složka se mezitím změnila.')
+                        rename_exchange(source, target)
+                else:
+                    check(identity(source) == expected, 'Pracovní data operace se změnila.')
+                    rename_new(source, target)
             check(identity(target) == expected, 'Cílovou složku nahradila jiná data.')
             boundary('root-published' if name == 'repo' else 'state-published')
         git = Git(root, deadline=deadline)
@@ -490,6 +522,11 @@ class ProjectCreation:
         self._save(db, record, done=True)
         # Receipt is authoritative even if optional staging cleanup is interrupted.
         try:
+            if record.get('existing_root'):
+                displaced = stage / 'repo'
+                if displaced.exists() and identity(displaced) == record['target_identity']:
+                    check(not list(displaced.iterdir()), 'Původní cílová složka se mezitím změnila.')
+                    displaced.rmdir()
             stage.rmdir()
             sync_dir(stage.parent)
         except OSError:
