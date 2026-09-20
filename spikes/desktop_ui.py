@@ -73,6 +73,13 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
 <small>Správa klíče se otevře v systémovém prohlížeči; workspace nevidí přihlášení ani vytvořený klíč. Klíč sem potom vložíte jednou, po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
+<section id="backend-metrics" hidden><hr><h2>Spotřeba a náklady OpenAI</h2>
+<p id="backend-metrics-status" role="status">Účetní přehled zatím nebyl načten.</p>
+<form id="backend-metrics-form"><label>OpenAI Admin API klíč
+<input name="secret" type="password" autocomplete="new-password" maxlength="4096"></label>
+<button type="submit">Uložit administrátorský klíč</button>
+<button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
+<pre id="backend-metrics-report" hidden></pre></section>
 </section>
 <div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
@@ -101,6 +108,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
 <button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
+<p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
 <label>Zdroj <select id="summary-kind"><option value="artifacts">Vybrané podklady</option>
@@ -172,7 +180,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
-</div></main><script src="/app.js"></script></body></html>'''
+</div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+</main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
@@ -186,6 +195,10 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
 .provider-link{color:#176b60;font-weight:600}
+#backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
+ background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
+ padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
+ white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
@@ -534,9 +547,12 @@ const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsExternalStatus=document.querySelector('#settings-external-status');
+const backendMetricsStatus=document.querySelector('#backend-metrics-status');
+const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
+const chatRunUsage=document.querySelector('#chat-run-usage');
 let activeThread=null,chatBinding=null,externalBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function fillExternalModels(catalog){
@@ -553,6 +569,12 @@ function renderChat(thread){
  }
  renderTaskOutcomes();
  document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
+}
+function renderRunUsage(report){
+ if(!report || report.status!=='available'){chatRunUsage.hidden=true;return;}
+ chatRunUsage.textContent='Spotřeba běhu: '+report.metrics
+  .map(item=>`${item.name} ${item.value} ${item.unit}`).join(' · ');
+ chatRunUsage.hidden=false;
 }
 function renderTaskArtifactSources(){
  const list=document.querySelector('#task-artifact-list');if(!list)return;list.replaceChildren();
@@ -673,9 +695,53 @@ async function loadBackendBinding(){
   fillExternalModels(external.model_catalog);
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
-   'Externí backend zatím není nastaven.';return true;}
+   'Externí backend zatím není nastaven.';
+  if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
+  return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
+function renderBackendMetrics(result){
+ const report=document.querySelector('#backend-metrics-report');
+ if(!result?.report){backendMetricsStatus.textContent=result?.credential?.available ?
+  'Administrátorský klíč je uložen; přehled zatím nebyl načten.' :
+  'Administrátorský klíč není uložen.';report.hidden=true;
+  backendMetricsIndicator.textContent='OpenAI přehled: nenačten';return;}
+ const metricStates={unauthorized:'Administrátorský klíč byl odmítnut (HTTP 401).',
+  forbidden:'Klíč nemá oprávnění k účetnímu přehledu (HTTP 403).',
+  'rate-limited':'OpenAI dočasně omezilo načítání přehledu (HTTP 429).',
+  unavailable:'Účetní přehled je dočasně nedostupný.'};
+ backendMetricsStatus.textContent=result.report.status==='available' ?
+  `Přehled aktualizován ${result.report.fetched_at}.` : result.report.status==='stale' ?
+  `Zobrazuji poslední platný přehled; obnova selhala: ${metricStates[result.report.refresh_error] || result.report.refresh_error}.` :
+  (metricStates[result.report.status] || `Přehled má stav ${result.report.status}.`);
+ report.textContent=JSON.stringify(result.report,null,2);report.hidden=false;
+ const metrics=(result.report.reports || []).flatMap(item=>item.metrics || []);
+ const tokens=metrics.filter(item=>item.unit==='tokens').reduce((sum,item)=>sum+item.value,0);
+ const costs=metrics.filter(item=>item.name==='cost')
+  .map(item=>`${item.value} ${String(item.currency || '').toUpperCase()}`);
+ const parts=[...costs,tokens ? `${tokens} tokenů` : ''].filter(Boolean);
+ backendMetricsIndicator.textContent=`OpenAI · ${result.report.status}`+(parts.length ? ` · ${parts.join(' · ')}` : '');
+ backendMetricsIndicator.title=`Poslední načtení: ${result.report.fetched_at}`;
+}
+async function loadBackendMetrics(){
+ try{renderBackendMetrics(await projectRequest('/v1/backend-metrics/status',{}));}
+ catch(error){backendMetricsStatus.textContent=error.message;}
+}
+document.querySelector('#backend-metrics-form').addEventListener('submit',async event=>{
+ event.preventDefault();const secret=event.currentTarget.elements.secret;
+ try{backendMetricsStatus.textContent='Ukládám administrátorský klíč…';
+  const result=await projectRequest('/v1/backend-metrics/configure',{secret:secret.value});
+  secret.value='';renderBackendMetrics(result);
+ }catch(error){secret.value='';backendMetricsStatus.textContent=error.message;}
+});
+document.querySelector('#backend-metrics-refresh').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;backendMetricsStatus.textContent='Načítám účetní přehled…';
+ const end=Math.floor(Date.now()/1000),start=end-30*86400;
+ try{const report=await projectRequest('/v1/backend-metrics/refresh',{start_time:start,end_time:end},210000);
+  renderBackendMetrics({credential:{available:true},report});
+ }catch(error){backendMetricsStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
 function refreshChatModeControls(){
  const mode=document.querySelector('#chat-mode').value;
  const adapter=document.querySelector('#chat-run-adapter');
@@ -859,7 +925,7 @@ document.querySelector('#external-confirm').addEventListener('click',async event
     const result=await projectRequest('/v1/external/confirm',
      {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
       approved:true,privacy:preview.privacy},210000);
-    activeThread=result.thread;renderChat(result.thread);draft.value='';
+    activeThread=result.thread;renderChat(result.thread);renderRunUsage(result.usage_report);draft.value='';
    }
   pendingExternalPreview=null;
   document.querySelector('#external-preview').hidden=true;
@@ -907,7 +973,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   try{
    const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);pendingChatRequest=null;draft.value='';draft.focus();
+   renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
    chatOperationStatus.textContent='Odpověď je připravena.';
   }catch(error){
    if(error.status===422)pendingChatRequest=null;

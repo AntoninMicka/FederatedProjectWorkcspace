@@ -181,6 +181,20 @@ privátní HTTPS adresu, UUID cíle a SHA-256 certifikátu; `local-only` obsah d
 odeslat nelze. Neplatné nastavení server odmítne a UI znovu načte poslední
 potvrzený binding.
 
+V nativním nastavení uzlu může správce samostatně uložit OpenAI Admin API klíč
+a načíst přehled usage a nákladů za posledních 30 dní. Tento klíč není generační
+API klíč, server jej nevrací a účetní údaje zůstávají v node-local cache mimo
+projektový Git. Přehled vždy označuje account scope, období, čas načtení,
+jednotky a měnu; providerový účet ani project ID se nevydávají za workspace.
+Chyba nebo rate limit zachová poslední platný přehled jako zastaralý a neovlivní
+chat ani routing. Ollama zobrazuje jen usage konkrétního dokončeného běhu;
+chybějící billing není nulový náklad.
+
+Stejný stručný indikátor je po přihlášení dostupný také ve webové variantě, ale
+pouze uživatelům s rolí `node-admin` nebo `federation-admin`. Server ověřuje
+oprávnění u každého status/configure/refresh requestu; skrytí indikátoru v UI
+není bezpečnostní hranice. Běžný člen ani projektová role účetní cache neobdrží.
+
 V composeru zvolte režim. **Orchestrace** vždy použije uloženou Ollamu na
 stejném počítači; model zde nelze přepsat a lze explicitně zaškrtnout projektové
 podklady. **Brainstorming** dovolí pro konkrétní běh zadat model lokální Ollamy

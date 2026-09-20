@@ -129,9 +129,11 @@ class OpenAIBindings:
 
 class OpenAICredentials:
     """Write-only node-local secret values addressed by opaque references."""
-    def __init__(self, state_dir):
+    def __init__(self, state_dir, filename='openai-credentials.sqlite'):
         self.root = _safe_root(state_dir)
-        self.path = self.root / 'openai-credentials.sqlite'
+        require(filename in {'openai-credentials.sqlite', 'openai-admin-credentials.sqlite'},
+                'Invalid OpenAI credential store')
+        self.path = self.root / filename
 
     def connect(self):
         flags = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW

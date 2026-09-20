@@ -15,6 +15,7 @@ from http.server import HTTPServer
 from uuid import uuid4
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
+from spikes.chat_service import ChatService
 from spikes.project_creation import CreationConflict, ProjectCreation
 from spikes.projects import Projects
 from spikes.administration import Administration, AccessDenied, identifier
@@ -72,6 +73,8 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
   projectCreateForm.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
+  document.querySelector('#backend-metrics').hidden=!admin;
+  document.querySelector('#backend-metrics-indicator').hidden=!admin;
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
@@ -149,7 +152,8 @@ def secret(path):
 class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session',
-                                               '/v1/sources/import'}
+                                               '/v1/sources/import', '/v1/backend-metrics/status',
+                                               '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh'}
 
     def do_POST(self):
         from spikes.federation_probe import PATH, reply_probe
@@ -239,6 +243,20 @@ class WebHandler(DesktopHandler):
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Změnu nelze uložit. Ověřte údaje a dostupnost úložiště uzlu.'})
+        if self.path.startswith('/v1/backend-metrics/'):
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            try:
+                if self.path == '/v1/backend-metrics/status' and request == {}:
+                    return self.reply(200, self.server.chat_service.account_metrics_status())
+                if self.path == '/v1/backend-metrics/configure' and isinstance(request, dict):
+                    return self.reply(200, self.server.chat_service.configure_account_metrics(request))
+                if self.path == '/v1/backend-metrics/refresh' and isinstance(request, dict):
+                    return self.reply(200, self.server.chat_service.refresh_account_metrics(request))
+                return self.send_error(400)
+            except (ValueError, OSError, sqlite3.Error):
+                return self.reply(422, {'error': 'Účetní přehled nelze načíst nebo uložit. '
+                                       'Ověřte administrátorský klíč a lokální stav.'})
         if self.path in {'/v1/projects/open', '/v1/artifacts/preview'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
                 return self.send_error(403)
@@ -300,6 +318,7 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.token, server.counter = token, 0
     server.projects = Projects(node, network=True)
     server.node = node
+    server.chat_service = ChatService(node, server.projects)
     server.administration = Administration(node)
     return server
 

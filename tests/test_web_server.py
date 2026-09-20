@@ -82,6 +82,8 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
+        self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
+        self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
         _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Restricted"}')
@@ -98,6 +100,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(json.loads(self.request(headers=headers)[1])['projects'], [])
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/projects/create', body='{"title":"Denied"}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
@@ -228,7 +231,7 @@ def poll():
  global ticks
  ticks+=1
  if ticks>150: app.exit(1);return
- view.page().runJavaScript("document.querySelector('#login-form') ? (document.body.classList.contains('authenticated') ? (document.querySelector('#project-status').textContent==='Zatím nemáte žádný projekt.'?'loaded':'waiting') : 'ready') : 'waiting'",result)
+ view.page().runJavaScript("document.querySelector('#login-form') ? (document.body.classList.contains('authenticated') ? (document.querySelector('#project-status').textContent==='Zatím nemáte žádný projekt.' && !document.querySelector('#backend-metrics-indicator').hidden?'loaded':'waiting') : 'ready') : 'waiting'",result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)
 view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show()
 sys.exit(app.exec())

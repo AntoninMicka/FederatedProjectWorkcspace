@@ -15,6 +15,7 @@ from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
+from spikes.backend_metrics import OpenAIAccountMetrics, run_usage
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
@@ -135,6 +136,19 @@ class ChatService:
         binding = OpenAIBindings(root).load()
         credentials = OpenAICredentials(root)
         return catalog_factory(root, credentials).refresh(binding)
+
+    def account_metrics_status(self):
+        return OpenAIAccountMetrics(self._root()).status()
+
+    def configure_account_metrics(self, request):
+        require(isinstance(request, dict) and set(request) == {'secret'},
+                'Unknown account metric configuration field')
+        return OpenAIAccountMetrics(self._root()).configure(request['secret'])
+
+    def refresh_account_metrics(self, request, metrics_factory=OpenAIAccountMetrics):
+        require(isinstance(request, dict) and set(request) == {'start_time', 'end_time'},
+                'Unknown account metric refresh field')
+        return metrics_factory(self._root()).refresh(request['start_time'], request['end_time'])
 
     @staticmethod
     def _proposal_fields(request):
@@ -604,7 +618,9 @@ class ChatService:
                 raise
             result = {'target': binding.serialize(), 'run_id': original['run_id'],
                       'provider_response_id': response.get('id'),
-                      'usage': response.get('usage')}
+                      'usage': response.get('usage'),
+                      'usage_report': run_usage('openai-responses', binding.binding_id,
+                                                original['run_id'], response)}
             store.finish(original['approval_id'], node_id, user_id,
                          'succeeded', result=result)
             return result
@@ -634,7 +650,9 @@ class ChatService:
                               original['turn_id'], node_id, user_id),
                           'target': binding.serialize(),
                           'provider_response_id': response.get('id'),
-                          'usage': response.get('usage')}
+                          'usage': response.get('usage'),
+                          'usage_report': run_usage('openai-responses', binding.binding_id,
+                                                    original['run_id'], response)}
                 store.finish(original['approval_id'], node_id, user_id,
                              'succeeded', result=result)
                 return result
@@ -679,7 +697,9 @@ class ChatService:
             raise
         result = {'thread': threads.get(original['thread_id'], node_id, user_id),
                   'turn': completed, 'target': binding.serialize(),
-                  'provider_response_id': response.get('id'), 'usage': response.get('usage')}
+                  'provider_response_id': response.get('id'), 'usage': response.get('usage'),
+                  'usage_report': run_usage('openai-responses', binding.binding_id,
+                                            original['run_id'], response)}
         store.finish(original['approval_id'], node_id, user_id, 'succeeded', result=result)
         return result
 
@@ -768,7 +788,8 @@ class ChatService:
                    'approval_id': request['approval_id'], 'run_id': result['run_id'],
                    'state': 'succeeded',
                    'provider_response_id': result.get('provider_response_id'),
-                   'usage': result.get('usage')}
+                   'usage': result.get('usage'),
+                   'usage_report': result.get('usage_report')}
         projection = store.finish(request['task_id'], node_id, user_id, 'completed',
                                   result=reduced)['projection']
         return self._task_projection(projection)
@@ -882,4 +903,5 @@ class ChatService:
                                      content=response['response'], privacy=output_privacy,
                                      created_at=now())
         return {'thread': threads.get(thread_id, node_id, user_id), 'turn': completed,
-                'target': binding.serialize()}
+                'target': binding.serialize(),
+                'usage_report': run_usage('ollama', binding.binding_id, run_id, response)}

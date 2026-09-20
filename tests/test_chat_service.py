@@ -111,6 +111,24 @@ class ChatServiceTests(unittest.TestCase):
         value.update(changes)
         return value
 
+    def test_account_metric_failure_does_not_change_routing_or_chat_run(self):
+        class UnavailableMetrics:
+            def __init__(self, _root): pass
+            def refresh(self, start_time, end_time):
+                return {'status': 'unavailable', 'period_start': start_time,
+                        'period_end': end_time, 'reports': []}
+
+        binding_before = self.service.status()['binding']
+        report = self.service.refresh_account_metrics(
+            {'start_time': 100, 'end_time': 200}, metrics_factory=UnavailableMetrics)
+        result = self.service.send(**self.request())
+
+        self.assertEqual(report['status'], 'unavailable')
+        self.assertEqual(self.service.status()['binding'], binding_before)
+        self.assertEqual(result['turn']['state'], 'completed')
+        self.assertEqual(result['target']['binding_id'], binding_before['binding_id'])
+        self.assertEqual(result['usage_report']['status'], 'unsupported')
+
     def external_request(self, **changes):
         value = self.request()
         value['approval_id'] = str(uuid4())
