@@ -116,6 +116,21 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
+- [ ] [planned] **MOD-01 — Kontrakt externě verzovaných modulů a jednotného API
+  (cílová úroveň: designed → PoC validated).** Dosavadní moduly zůstávají v
+  hlavní roadmapě; jen nově výslovně vybraný modul může být samostatně verzovaný
+  mimo tento repozitář. Jeho lokální checkout nebo symlink leží v ignorovaném
+  `modules.local/`; vlastní roadmapa, Git historie, credentials a build výstupy
+  se sem nekopírují ani nebalí. Definovat verzovanou identitu, capability,
+  vstupní/výstupní schémata, chyby/limity, oprávnění, privacy/boundary,
+  idempotenci, `unknown`, provenance a kompatibilitu s jednotným API. Hlavní
+  dokumentace smí převzít pouze nezbytnou generalizaci kontraktu, ne doslovný
+  popis funkčnosti modulu. Akceptace: symlink i samostatný checkout nejsou
+  automaticky spuštěny ani zahrnuty do balíku; modul nemá přímý přístup ke Gitu,
+  indexu, journalu ani credentials; nekompatibilní, nedostupná či neautorizovaná
+  capability fail-closed a nezmění jádro ani fallback. Před implementací
+  provést reuse, licenční a bezpečnostní review podle ADR 0026.
+
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
