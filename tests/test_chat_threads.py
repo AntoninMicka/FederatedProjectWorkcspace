@@ -103,6 +103,40 @@ class ChatThreadTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'archived'):
             self.store.prepare_turn(**self.prepare())
 
+    def test_brainstorm_to_orchestration_archives_without_context(self):
+        new_thread = str(uuid4())
+        started = self.store.start_orchestration(
+            source_thread_id=self.thread_id, thread_id=new_thread, node_id=self.node_id,
+            user_id=self.user_id, created_at='2026-09-20T12:00:00Z')
+        self.assertEqual((started['classification'], started['status'], started['messages']),
+                         ('orchestration', 'active', []))
+        source = self.store.get(self.thread_id, self.node_id, self.user_id)
+        self.assertEqual(source['status'], 'archived')
+        self.assertEqual(self.store.start_orchestration(
+            source_thread_id=self.thread_id, thread_id=new_thread, node_id=self.node_id,
+            user_id=self.user_id, created_at='2026-09-20T12:00:00Z'), started)
+        with self.assertRaisesRegex(ValidationError, 'Only a brainstorming'):
+            self.store.start_orchestration(source_thread_id=new_thread, thread_id=str(uuid4()),
+                                           node_id=self.node_id, user_id=self.user_id,
+                                           created_at='2026-09-20T12:00:01Z')
+
+    def test_brainstorm_to_orchestration_refuses_active_or_unknown_turn(self):
+        request = self.prepare(); self.store.prepare_turn(**request)
+        with self.assertRaisesRegex(ValidationError, 'active or unknown'):
+            self.store.start_orchestration(source_thread_id=self.thread_id,
+                thread_id=str(uuid4()), node_id=self.node_id, user_id=self.user_id,
+                created_at='2026-09-20T12:00:00Z')
+        self.store.bind_run(turn_id=request['turn_id'], node_id=self.node_id,
+                            user_id=self.user_id, run_id=str(uuid4()))
+        self.store.finish(turn_id=request['turn_id'], node_id=self.node_id,
+                          user_id=self.user_id, run_id=self.store.get_turn(
+                              request['turn_id'], self.node_id, self.user_id)['run_id'],
+                          state='unknown', error='lost')
+        with self.assertRaisesRegex(ValidationError, 'active or unknown'):
+            self.store.start_orchestration(source_thread_id=self.thread_id,
+                thread_id=str(uuid4()), node_id=self.node_id, user_id=self.user_id,
+                created_at='2026-09-20T12:00:01Z')
+
     def test_owner_validation_input_limits_and_corruption_fail_closed(self):
         other = str(uuid4())
         with self.assertRaisesRegex(ValidationError, 'owner'):
@@ -133,7 +167,7 @@ class ChatThreadTests(unittest.TestCase):
             ChatThreads(self.state).connect()
         self.store.path.chmod(0o600)
         with sqlite3.connect(self.store.path) as db:
-            db.execute('UPDATE schema_info SET version=3')
+            db.execute('UPDATE schema_info SET version=4')
         with self.assertRaisesRegex(ValidationError, 'version'):
             ChatThreads(self.state).connect()
 
@@ -182,7 +216,7 @@ class ChatThreadTests(unittest.TestCase):
                                  manifest_id=manifest_id)
         self.assertEqual(turn['manifest_id'], manifest_id)
         with sqlite3.connect(self.store.path) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (2,))
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (3,))
 
 
 if __name__ == '__main__':
