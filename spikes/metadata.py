@@ -94,16 +94,17 @@ def pairs(items):
     return result
 
 
-def bounded(data):
-    require(isinstance(data, bytes) and len(data) <= MAX_METADATA, 'Metadata exceeds 64 KiB')
+def bounded(data, maximum=MAX_METADATA):
+    message = 'Metadata exceeds 64 KiB' if maximum == MAX_METADATA else 'Input exceeds allowed size'
+    require(isinstance(data, bytes) and len(data) <= maximum, message)
     try:
         return data.decode('utf-8')
     except UnicodeError as exc:
         raise ValidationError('Metadata must be UTF-8') from exc
 
 
-def parse_json(data):
-    text = bounded(data)
+def parse_json(data, maximum=MAX_METADATA):
+    text = bounded(data, maximum)
     # Limit nesting before the recursive JSON decoder, ignoring quoted brackets.
     depth, quoted, escape = 0, False, False
     for char in text:

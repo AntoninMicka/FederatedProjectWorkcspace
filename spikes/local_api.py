@@ -93,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
             body = self.rfile.read(int(length))
             if len(body) != int(length):
                 return self.send_error(400)
-            request = parse_json(body)
+            request = parse_json(body, self.max_body)
         except (ValidationError, UnicodeError, ValueError):
             return self.send_error(400)
         self.dispatch(request)

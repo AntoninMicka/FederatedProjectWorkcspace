@@ -2,12 +2,19 @@
 SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
-# Nativní import původních zdrojů
+# Import původních zdrojů
 
 Otevřete projekt a v desktopové liště zvolte **Importovat zdroj…**. Vyberte
 Markdown (.md), PNG, JPEG nebo PDF do 16 MiB, vyplňte název/popisek/štítky a
 privacy. Před potvrzením nevzniká artefakt. Potvrzení ukáže původní basename,
 privacy a SHA-256 vybraných bajtů. Úplná lokální cesta se do metadat nepřenáší.
+
+Ve webové variantě otevřete projekt a rozbalte **Importovat zdroj do projektu**.
+Browser odešle přes autentizované HTTPS přesné bajty, basename, SHA-256 a
+vyplněná metadata; server znovu ověří typ, hash i limit 16 MiB. Import smí
+provést editor, project-admin nebo správce uzlu. Reader/reviewer se odmítne.
+Síťový import nenabízí `local-only`, protože takový obsah nesmí vstoupit přes
+webovou hranici a následně by znepřístupnil projekt v network režimu.
 
 Původní soubor se nepozmění a jeho bajty se importují bez překódování, stripování
 frontmatter či normalizace konců řádků. Vždy vznikne nový UUID adresář obsahující
@@ -51,8 +58,10 @@ stávajícím textovým/raster workflow. Náhled má nezávislý limit 4 MiB.
 
 Adaptace Sources→Artifacts→Workspace zachovává writer lock, expected HEAD,
 operation ID/digest/receipt a journal z ADR 0003/0016. Nezavádí nový projektový
-index, importní DB ani mutující renderer/web endpoint. Obsah a sidecar se
-validují jako výsledný snapshot ještě před přípravou journalu.
+index ani importní DB. Web má jediný bounded import endpoint bez přístupu k
+serverovým cestám; klient při retry drží stejné UUID, bajty, hash a operation
+ID. Obsah a sidecar se validují jako výsledný snapshot ještě před přípravou
+journalu.
 
 Před commitem je rozpracovaný soubor/metadatová dvojice řízena journalem;
 native načtení projektu ji může dokončit. Po commitu je Git autorita a index

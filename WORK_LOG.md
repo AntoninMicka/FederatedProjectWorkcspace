@@ -5,6 +5,29 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-EXTERNAL-01 — První externí provider a řízené volání — 2026-09-20
+
+Dávka uzavřena po začlenění PR #36 jako commit `494670e` v `develop`; feature
+větev `feature/f-m3-external-01-first-provider` dodala OpenAI Responses adapter,
+přesný potvrzovaný dispatch a jednotné lokální zadání s přímou odpovědí,
+artefaktovým návrhem nebo externím requestem. Dosažená úroveň je PoC validated;
+usage/billing, obrazové capability, automatický routing a webové hledání zůstaly
+mimo rozsah.
+
+- [x] [completed] **F-M3-EXTERNAL-01-A–C — Kontrakt, credential, adapter,
+  preview a privacy (PoC validated).** Durable `dispatching`/`unknown`, `store=false`,
+  modelový katalog, exact approval a zákaz `local-only` byly ověřeny bez skrytého
+  retry nebo fallbacku.
+- [x] [completed] **F-M3-EXTERNAL-01-D–E — Ollama návrh a jednotné UI (PoC
+  validated).** Striktní outcome dovoluje pouze direct answer, artifact draft
+  nebo external request; potvrzené výstupy mají oddělenou durable evidenci a
+  explicitní Workspace publikaci.
+
+Ověření finálního obsahu před merge: kompletní sada 321 testů OK a 22
+podmíněných skipů; uživatel živě potvrdil všechny tři větve, restart návrhu,
+potvrzený OpenAI dispatch i obnovené zobrazení odpovědi. Nestabilita Ollamy a
+správa více vláken byly předány jako samostatné navazující požadavky.
+
 ## F-M3-BACKEND-01 — Provider-neutral backend a role kontrakt — 2026-09-19
 
 Dávka uzavřena po začlenění PR #35 jako commit `eb828fe` v `develop`; feature

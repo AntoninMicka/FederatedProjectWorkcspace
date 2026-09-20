@@ -16,7 +16,8 @@ Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením kaž
 F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
 F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG. Aktivní
-F-M3-EXTERNAL-01 drží [TODO](TODO.md).
+F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. Aktivní
+F-M1-PROJECT-LOCATION-01 drží [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -26,6 +27,56 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
+- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu
+  (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout,
+  přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav;
+  zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez
+  ztráty zadání, výběru kontextu nebo již připraveného externího preview.
+  Automaticky neopakovat běh s neznámým výsledkem a neprovádět skrytý fallback na
+  jiný backend či CPU. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď,
+  chybný JSON, pád před/po durable přechodech, souběh a ověření, že chyba
+  lokálního routeru není vydána za chybu externího providera.
+
+- [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
+  vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
+  cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
+  a nepřiřazených vláken, přiřazení/archivaci, zobrazení persistence a úplné
+  smazání lokálního vlákna. Mazání musí nejprve ukázat rozsah, vyžádat potvrzení,
+  odmítnout aktivní či `unknown` běh a koordinovaně odstranit zprávy, turns,
+  task outcomes, preview/approval a navázané lokální run záznamy bez osiřelých
+  dat; pád mezi více SQLite stores musí mít durable recovery a idempotentní
+  dokončení. Publikované Git otisky a artefakty se nemažou skrytě, ale preview
+  je předem uvede jako zachované historické výstupy. „Úplné“ znamená úplné z
+  podporovaného aplikačního stavu, nikoli garantovaný forenzní výmaz z média.
+  Ověřit restart desktopu, více vláken jednoho projektu, oddělení projektů a
+  uživatelů, souběžnou změnu i smazání před/po jednotlivých crash boundaries.
+  Autoritou pracovní historie zůstává node-local `chat-threads.sqlite` mimo Git
+  a obnovitelný projektový index; projektové Git artefakty vznikají jen
+  explicitním full/delta otiskem nebo publikací výstupu.
+
+- [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
+  (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
+  používaný Open WebUI jako explicitní search capability. Task router smí
+  navrhnout `web-search`, ale síťové volání provede až aplikace po policy/privacy
+  kontrole; nejde o skrytý Ollama tool call ani o externí-modelový dispatch.
+  Výsledek uchová dotaz, čas hledání, URL, titulky, bounded úryvky a provenance,
+  následná odpověď Ollamy dostane jen přesný Context Manifest. Akceptace zahrne
+  nedostupnou službu, timeout, neplatný JSON, nedůvěryhodný obsah/URL, nulové a
+  duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
+  oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
+  nebudou odvozeny pouze z dockerového názvu `searxng`.
+
+- [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
+  (cílová úroveň: designed → PoC validated; pozdější priorita).** Oddělit pouhé
+  odregistrování, odstranění lokálního odvozeného stavu, přesun repozitáře do
+  obnovitelného koše a definitivní výmaz. Před každou variantou zobrazit přesné
+  cesty a dopady na chatová vlákna, sdílené/cross-project reference, credentials,
+  pending operace a federované kopie; projekt s aktivní operací, nevyřešeným
+  přenosem nebo neznámým externím účinkem se nesmí tiše odstranit. Více
+  persistentních vrstev vyžaduje journal, idempotentní recovery a samostatné
+  potvrzení definitivního výmazu; odstranění lokální kopie není tvrzení, že
+  zmizely vzdálené či dříve sdílené revize.
+
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
@@ -33,7 +84,7 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
 - [ ] [planned] **V-07 — Provozní životní cyklus operation receipts (cílová úroveň: implemented).** Před produkčním balením určit retenci dokončených záznamů a bezpečný úklid osiřelých staging adresářů/commit objektů po pádu uvnitř přípravy kandidáta. Pending journal a kandidátní commit se nesmějí odstranit. Doplnit testy přerušení Git podprocesů a postup řešení jejich zbylých lock souborů; současné checkpointy leží mezi voláními. Zahrnout uzlové creation receipts a osiřelé staging složky M1-02; konfliktní pending vytvoření potřebuje explicitní bezpečné zrušení/řešení, které zatím nemá UI.
-- [ ] [planned] **V-08 — Zbývající lifecycle konfigurace (cílová úroveň: implemented).** Ověření při otevření je M1-01; vytvoření nového projektu, stabilní lokální author/node/project ID a obnovitelná registrace jsou M1-02 dle ADR 0015. Zbývá registrace již existujícího projektu s jeho původním stavem, změny/migrace konfigurací a vazba identity na credential úložiště. Projektové změny dále vést přes Workspace; index artefaktů není autoritou projektové konfigurace.
+- [ ] [planned] **V-08-ID — Zbývající lifecycle identity/configurace (cílová úroveň: implemented).** Ověření při otevření je M1-01; vytvoření, registrace existujícího projektu a oprava jeho cesty jsou pokryté M1-02/F-M1-PROJECT-LOCATION-01. Zbývá migrace budoucích verzí konfigurace a vazba lokální identity na credential lifecycle. Projektové změny dále vést přes Workspace; index artefaktů není autoritou projektové konfigurace.
 - [ ] [planned] **V-09 — Produkční Git transport a credentials (cílová úroveň: PoC validated).** Nad výchozím Git CLI ověřit TLS certifikáty, SSH host keys, zvolený credential store/helper, odmítnutí odvolaných credentials, timeout/cancel a restart přenosu. Loopback HTTP Basic test M0-03 ověřuje správné/chybné credentials, nikoli bezpečný internetový transport nebo federované RBAC. Vazba na V-06, cílové balení a M5.
 - [ ] **[planned] R-01 — Posoudit zdrojové komponenty pro reuse (cílová úroveň: designed).** Před převzetím ověřit původ/licenci souborů, úplné závislosti, testy a kompatibilitu. Lokální inventura a její zbývající rozsah patří výhradně do volitelného soukromého katalogu; veřejné kandidáty evidovat v REUSE_CATALOG až po ověření veřejné dostupnosti.
 

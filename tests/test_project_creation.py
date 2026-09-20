@@ -141,6 +141,33 @@ class CreationTests(unittest.TestCase):
         with self.assertRaises(CreationConflict):
             self.service.create('Changed request', self.root, self.operation)
 
+    def test_saved_default_parent_and_recoverable_location_repair(self):
+        receipt = self.service.create('První projekt', self.root, self.operation, remember_parent=True)
+        self.assertEqual(ProjectCreation(self.node).default_projects_root(), self.base)
+        moved = self.base / 'Moved project'
+        self.root.rename(moved)
+        relocation = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.service.relocate(receipt['id'], moved, relocation,
+                checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                if stage == 'state-rebound' else None)
+        binding = parse_node(read_config(self.node), location=self.node)['projects'][0]
+        self.assertEqual(binding['root'], str(self.root))
+        repaired = ProjectCreation(self.node).recover()
+        self.assertEqual(repaired['id'], receipt['id'])
+        self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'][0]['root'], str(moved))
+        self.assertEqual(Projects(self.node).open(receipt['id'])['commit_id'], receipt['commit_id'])
+        self.assertEqual(self.service.relocate(receipt['id'], moved, relocation), repaired)
+
+    def test_location_repair_rejects_other_project(self):
+        receipt = self.create()
+        other = self.base / 'other-project'
+        self._existing_git_project(other)
+        other.chmod(0o700)
+        with self.assertRaises(CreationConflict):
+            self.service.relocate(receipt['id'], other, str(uuid4()))
+        self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'][0]['root'], str(self.root))
+
     def test_crash_at_every_boundary_resumes_without_duplicate_commit(self):
         for stage in STAGES:
             with self.subTest(stage=stage), tempfile.TemporaryDirectory(dir=self.base) as case:
