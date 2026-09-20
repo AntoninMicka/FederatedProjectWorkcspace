@@ -44,11 +44,14 @@ budoucí PR do `develop`.
   admin credential, bounded stránkování oficiálních usage/costs endpointů a
   atomickou node-local SQLite cache; 401/403/429 se rozlišují jako
   `unauthorized`/`forbidden`/`rate-limited`, ostatní chyba jako `unavailable`
-  a platná cache jako `stale` s důvodem, nikdy jako falešná nula. Account přehled není dostupný z běžného
-  chatového handleru a UI jej nezaměňuje za workspace údaje. Posledních cílených
-  56 testů prošlo se 2 Qt skipy, úplná sada 346 testů s 22 skipy a skutečný
-  Qt/WebEngine smoke prošly; živý OpenAI Admin API refresh nebyl proveden.
-- [ ] [planned] **M3-UB-01-C — Regrese, dokumentace a akceptace
+  a platná cache jako `stale` s důvodem, nikdy jako falešná nula. Account přehled
+  není dostupný z běžného chatového handleru a desktopová i webová varianta jej
+  zpřístupňují pouze node/federation administrátorům; UI jej nezaměňuje za
+  workspace údaje. Po webovém rozšíření prošlo 14 cílených web/desktop testů se
+  2 Qt skipy, úplná sada 346 testů s 22 skipy a skutečný webový Qt/WebEngine
+  smoke včetně viditelnosti indikátoru; živý OpenAI Admin API refresh nebyl
+  proveden.
+- [ ] [in progress] **M3-UB-01-C — Regrese, dokumentace a akceptace
   (implemented).** Ověřit obě capabilities, pouze usage a žádnou podporu; nulu
   proti chybějícímu údaji, oprávnění, timeout, rate limit, stale cache, restart
   a to, že výpadek přehledu nemění routing ani běh modelu. Provést úplnou sadu,

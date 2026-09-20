@@ -190,6 +190,11 @@ Chyba nebo rate limit zachová poslední platný přehled jako zastaralý a neov
 chat ani routing. Ollama zobrazuje jen usage konkrétního dokončeného běhu;
 chybějící billing není nulový náklad.
 
+Stejný stručný indikátor je po přihlášení dostupný také ve webové variantě, ale
+pouze uživatelům s rolí `node-admin` nebo `federation-admin`. Server ověřuje
+oprávnění u každého status/configure/refresh requestu; skrytí indikátoru v UI
+není bezpečnostní hranice. Běžný člen ani projektová role účetní cache neobdrží.
+
 V composeru zvolte režim. **Orchestrace** vždy použije uloženou Ollamu na
 stejném počítači; model zde nelze přepsat a lze explicitně zaškrtnout projektové
 podklady. **Brainstorming** dovolí pro konkrétní běh zadat model lokální Ollamy
