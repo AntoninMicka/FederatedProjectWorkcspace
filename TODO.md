@@ -3,81 +3,60 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — M3-UB-01: Usage & billing backendů
+# TODO — F-M3-CHAT-DIRECT-01: Přímý brainstormingový dispatch
 
-Milník M3; jedna dávka, plánovaná větev `feature/m3-ub-01-usage-billing`,
-budoucí PR do `develop`.
+Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
+`develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; implementace a lokální akceptace jsou dokončené,
-  dávka čeká na commit, PR a začlenění do `develop`. Aktivována do TODO
-  2026-09-20 po začlenění
-  F-M3-CHAT-MODES-01 jako PR #40 (`c8358d5`). Větev
-  `feature/m3-ub-01-usage-billing` vznikla z `develop` na `cae87bc`.
-- Původ: sekce 7C roadmapy a M3 požadují volitelný přehled usage a billing pro
-  backendy, které tyto údaje skutečně poskytují. Dostupnost konkrétních provider
-  API a potřebných oprávnění musí být před implementací ověřena.
-- Výstup: provider-neutral kontrakt samostatných capabilities `usage` a
-  `billing`, načítání podporovaných údajů a UI indikace jejich rozsahu, období,
-  jednotek či měny, stáří a původu.
-- Hranice: odlišit údaje jednoho běhu, workspace a celého provider účtu;
-  skutečnou hodnotu od odhadu; nulu od chybějící hodnoty. Účetní souhrn nesmí
-  být zpřístupněn běžnému uživateli backendu jen proto, že může spouštět model.
-- Recovery: před implementací určit obnovování a cache mimo projektový Git.
-  Timeout, rate limit, odmítnuté oprávnění nebo zastaralý přehled nesmějí změnit
-  routing, cost policy ani stav samotného LLM běhu.
-- Mimo rozsah: platby, změny tarifu či limitů, automatický výběr backendu podle
-  ceny, nové provider capability, obrazové modely a creator/opponent workflow.
+- Stav dávky: [ ] [in progress]; aktivována 2026-09-20 po začlenění M3-UB-01
+  jako PR #42 (`43fc8e3`). Větev `feature/f-m3-chat-direct-01` vznikla z tohoto
+  commitu v `develop`.
+- Původ: uživatelský požadavek 2026-09-20, aby brainstorming odesílal požadavek
+  přímo, historie nadále ukázala skutečně odeslaný request a providerem
+  podporovaná odpověď se zobrazovala streamovaně.
+- Výstup: přímý externí brainstormingový dispatch po aplikační autorizaci a
+  privacy kontrole, bezpečně zobrazitelná historie přesného provider requestu a
+  volitelné streamované UI se stejným durable finálním výsledkem jako
+  ne-streamovaný adapter.
+- Hranice: brainstorming nepřijímá projektové artefakty ani externě neposílá
+  `local-only`; režim/model zůstávají per-run. Historie nesmí vracet credential,
+  autorizační hlavičky ani neveřejný interní stav adapteru. Streaming není
+  autoritou výsledku a provider bez této capability používá celou odpověď.
+- Recovery: `dispatching` musí být durable před prvním síťovým účinkem. Ztráta
+  spojení po jeho zahájení zůstává `unknown`, nikdy automatický retry ani skrytý
+  fallback. Textové delty jsou dočasné; teprve validovaná finální odpověď se
+  uloží do vlákna a run evidence.
+- Mimo rozsah: orchestration chat, projektový kontext v brainstormingu,
+  creator/opponent workflow, obrazové capability, změna provider billing nebo
+  obecná správa a mazání vláken.
 
 ## Aktivní části dávky
 
-- [x] [completed] **M3-UB-01-A — Provider a oprávnění review, kontrakt a reuse
-  (designed).** ADR 0008 odděluje capability `usage` a `billing`, normalizuje
-  jejich scope/status/období/jednotky a vymezuje
-  atomickou node-local cache. Ollama podporuje jen providerem hlášené metriky
-  běhu; OpenAI Responses usage zůstává run evidence a organization usage/costs
-  používají samostatný admin credential. Provider project se bez ověřeného
-  mapování nevydává za workspace a chyba přehledu nemění routing ani run.
-- [x] [completed] **M3-UB-01-B — Načítání, cache, autorizace a UI
-  (implemented).** Providerem hlášené Ollama/OpenAI run usage se normalizuje
-  bez druhého run journalu. Nativní správa používá oddělený write-only OpenAI
-  admin credential, bounded stránkování oficiálních usage/costs endpointů a
-  atomickou node-local SQLite cache; 401/403/429 se rozlišují jako
-  `unauthorized`/`forbidden`/`rate-limited`, ostatní chyba jako `unavailable`
-  a platná cache jako `stale` s důvodem, nikdy jako falešná nula. Account přehled
-  není dostupný z běžného chatového handleru a desktopová i webová varianta jej
-  zpřístupňují pouze node/federation administrátorům; UI jej nezaměňuje za
-  workspace údaje. Po webovém rozšíření prošlo 14 cílených web/desktop testů se
-  2 Qt skipy, úplná sada 346 testů s 22 skipy a skutečný webový Qt/WebEngine
-  smoke včetně viditelnosti indikátoru; živý OpenAI Admin API refresh nebyl
-  proveden.
-- [x] [completed] **M3-UB-01-C — Regrese, dokumentace a akceptace
-  (PoC validated).** Testy rozlišují obě account capabilities, run-only usage a
-  chybějící providerovou metriku, skutečnou nulu od `unsupported`, oprávnění,
-  timeout, rate limit, stale cache i načtení cache po restartu. Integrační
-  regrese dokládá, že nedostupný účetní přehled nemění binding ani neblokuje
-  dokončení chatového běhu. Sedm cílených akceptačních testů a úplná sada 347
-  testů prošly s 22 environmentálními skipy; skutečný webový Qt/WebEngine smoke
-  indikátoru prošel před poslední test-only změnou. Uživatelská dokumentace
-  pokrývá desktop, web, oprávnění a hranice údajů. Živý OpenAI Admin API refresh
-  zůstává neprovedený, takže výsledek není production-ready provider acceptance.
-
-## K předání do backlogu
-
-- [ ] [planned] **F-M3-CHAT-DIRECT-01 — Přímý brainstormingový dispatch,
-  historie requestu a streaming (cílová úroveň: PoC validated).** Nový
-  uživatelský požadavek 2026-09-20 mění externí brainstormingový chat z
-  povinného preview/confirm pro každý tah na přímý dispatch po aplikační
-  kontrole oprávnění, privacy, Context Manifestu a přesného bindingu/modelu.
-  Historie musí u každého běhu nabídnout bezpečně zobrazitelný přesný odeslaný
-  provider request bez credentialu a autorizačních hlaviček; nejde již o
-  předběžné potvrzení. Pokud adapter a provider deklarují streamování, UI
-  průběžně zobrazuje nedůvěryhodné textové delty, ale autoritativní je až
-  validovaná durable finální odpověď. Přerušení po zahájení sítě zůstává
-  `unknown` bez automatického retry a bez skrytého fallbacku; provider bez
-  stream capability používá dosavadní celou odpověď. Brainstorming nadále
-  nepřijímá projektové artefakty ani `local-only` data pro externí model.
-  Implementace vyžaduje samostatnou feature větev a změnu ADR 0008; nesmí se
-  přimíchat do M3-UB-01.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-A — Kontrakt, provider review a reuse
+  (designed).** ADR 0008 vymezuje přímý dispatch výhradně pro explicitní
+  brainstormingový tah po serverové autorizaci, přesný request record bez
+  secrets, SSE capability a durable hranici před sítí. Delty jsou ephemerální,
+  finální `response.completed` musí projít dosavadní validací a ztráta streamu
+  po `dispatching` zůstává `unknown` bez retry. Dosavadní adapter, run journal,
+  Context Manifest, mode policy a vlastnictví vlákna se adaptují; preview store
+  zůstává pro task workflow a historické záznamy. Oficiální Responses streaming
+  guide byl ověřen 2026-09-20; cizí kód ani nový framework se nepřebírá.
+- [ ] [in progress] **F-M3-CHAT-DIRECT-01-B — Přímý dispatch a historie requestu
+  (implemented).** Po serverové kontrole identity, bindingu/modelu, manifestu a
+  privacy odeslat externí brainstorming bez samostatného potvrzovacího kroku.
+  Uložit přesný sanitizovaný provider request svázaný s run ID a zpřístupnit jej
+  vlastníkovi vlákna; retry ani restart nesmějí vytvořit druhý síťový účinek.
+- [ ] [planned] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
+  (implemented).** Přidat capability-gated transport a UI průběžných textových
+  delt pro desktop i web. Nevalidní událost, timeout, přerušení, zavření klienta
+  a provider bez streamování musí skončit definovaným durable stavem bez
+  částečné asistentovy zprávy vydávané za finální odpověď.
+- [ ] [planned] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Ověřit RBAC/privacy, přesný request bez secrets, běžnou i
+  streamovanou odpověď, pořadí a UTF-8 delt, reconnect/restart, stale binding,
+  timeout, malformed stream, lost response `unknown`, vědomý nový pokus a
+  desktop/web UI. Spustit úplnou sadu a relevantní skutečný UI/provider smoke;
+  neprovedené živé ověření ponechat výslovně otevřené.

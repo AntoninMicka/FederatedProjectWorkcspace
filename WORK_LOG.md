@@ -5,6 +5,34 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## M3-UB-01 — Usage & billing backendů — 2026-09-20
+
+Dávka uzavřena po začlenění PR #42 jako commit `43fc8e3` v `develop`; feature
+větev `feature/m3-ub-01-usage-billing` dodala providerem hlášené run usage,
+oprávněný OpenAI account usage/costs přehled a stručnou indikaci v desktopové i
+webové variantě. Dosažená úroveň je PoC validated; živý OpenAI Admin API refresh
+nebyl proveden a nejde o production-ready provider acceptance.
+
+- [x] [completed] **M3-UB-01-A — Provider a oprávnění review, kontrakt a reuse
+  (designed).** ADR 0008 odděluje `usage` a `billing`, run/account scope,
+  skutečnou hodnotu od chybějící a atomickou node-local cache mimo projektový
+  Git. Ollama má pouze doložené run metriky; OpenAI account report používá
+  samostatný write-only admin credential.
+- [x] [completed] **M3-UB-01-B — Načítání, cache, autorizace a UI
+  (implemented).** OpenAI stránkování je bounded, 401/403/429 a nedostupnost se
+  rozlišují, poslední platná cache může být `stale` a výpadek nemění routing ani
+  LLM běh. Account report zpřístupňují desktop a web pouze node/federation
+  administrátorům; běžný chatový handler jej nevydává.
+- [x] [completed] **M3-UB-01-C — Regrese, dokumentace a akceptace
+  (PoC validated).** Regrese pokrývají nulu/unsupported, oprávnění, timeout,
+  rate limit, stale cache, restart a nezávislost chatového dispatch; uživatelská
+  dokumentace popisuje scope, stáří, jednotky, měnu a oprávnění.
+
+Ověření finálního obsahu: sedm cílených akceptačních testů a úplná sada 347
+testů prošly s 22 environmentálními skipy; skutečný webový Qt/WebEngine smoke
+indikátoru prošel před poslední test-only změnou. JavaScript syntaxe a
+`git diff --check` prošly. Živý OpenAI Admin API refresh zůstal neověřený.
+
 ## F-M3-CHAT-MODES-01 — Lokální orchestrace a brainstormingové režimy — 2026-09-20
 
 Dávka uzavřena po začlenění PR #40 jako commit `c8358d5` v `develop`; feature

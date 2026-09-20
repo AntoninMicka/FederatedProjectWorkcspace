@@ -5,7 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0008 — Backend, Role, Context Manifest a publikace
 
-Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC ve F-M2-CONTEXT-01. F-M2-OLLAMA-01 navazuje lokálním PoC Ollama adapteru a trvalého run recordu; F-M2-CHAT-01/02 propojují node-local thread store, Context Manifest, Ollama adapter, projektové záznamy a desktopové UI. F-M2-SUMMARY-01 implementuje a lokálně PoC validuje níže popsaný summarizer, bezpečný náhled a potvrzenou publikaci; skutečný Qt/WebEngine smoke a živý model zůstávají podmíněné prostředím. F-M3-BACKEND-01 uzavírá provider-neutral aplikační kontrakt, kompatibilní migraci existující Ollamy a společné runtime typy. F-M3-EXTERNAL-01-A navazuje designed kontraktem prvního externího textového provideru a návrhu volání přes Ollamu; implementace, živé API ověření a úplná integrační akceptace zůstávají v úkolech B–D. Nejde o úplné RBAC, synchronizační službu, obrazový pipeline ani usage/billing integraci.
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty
+a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC
+ve F-M2-CONTEXT-01. Navazující dávky lokálně PoC validovaly Ollama adapter,
+vlákna a jejich projektové výstupy, task služby, provider-neutral runtime, první
+externí textový provider i usage/billing. F-M3-CHAT-DIRECT-01 zde navrhuje
+přímý externí brainstorming a streaming; jeho implementace a živá akceptace
+zůstávají otevřené. Nejde o úplné RBAC, synchronizační službu ani obrazový
+pipeline.
 
 ## Rozsah a návaznost
 
@@ -171,9 +178,11 @@ seznamu: pád před atomickým přejmenováním ponechá starou verzi, po něm j
 verze úplná a nepotřebuje journal.
 
 Adapter sestaví kanonický UTF-8 JSON request pouze z autorizovaného handoffu.
-Povinně nastaví přesný `model`, `store: false`, `stream: false`,
+Povinně nastaví přesný `model`, `store: false`,
 `truncation: "disabled"` a omezené `max_output_tokens`; `instructions`, `input`
-a textový/JSON formát musí přesně odpovídat preview. V1 neposílá
+a textový/JSON formát musí přesně odpovídat autorizovanému request recordu.
+Task workflow a legacy preview cesta nastavují `stream: false`; výjimku pro
+přímý brainstormingový textový běh definuje F-M3-CHAT-DIRECT-01 níže. V1 neposílá
 `previous_response_id`, providerovou conversation, vzdálené URL/soubory,
 built-in ani function tools, background request nebo další metadata. Překročení
 limitu se odmítne místo tichého ořezu. Digest zahrne celé request body i
@@ -197,10 +206,51 @@ provider request ani oprávnění. Parser odmítne neznámou verzi, pole, akci,
 capability, roli či ID. Aplikační orchestrátor návrh považuje za nedůvěryhodný,
 znovu ověří session a práva, uživateli umožní výběr upravit a sám z allowlistu
 zvolí binding. Poté vytvoří nový Context Manifest, přesný provider request a
-preview. Teprve samostatné lidské potvrzení jejich hashů může autorizovat jeden
-dispatch; změna návrhu, zdroje, HEAD, policy, role, modelu, bindingu nebo
-credential reference potvrzení ruší. Text modelu ani providerem vrácený tool
-call proto nikdy není autoritou operace.
+preview. U task workflow teprve samostatné lidské potvrzení jejich hashů může
+autorizovat jeden dispatch; změna návrhu, zdroje, HEAD, policy, role, modelu,
+bindingu nebo credential reference potvrzení ruší. Přímý brainstorming je
+úzce vymezená výjimka popsaná níže, nikoli oslabení potvrzení tasku či
+publikace. Text modelu ani providerem vrácený tool call proto nikdy není
+autoritou operace.
+
+### Přímý brainstorming, request record a streaming — F-M3-CHAT-DIRECT-01
+
+Explicitní uživatelské odeslání textového tahu ve vlákně klasifikovaném jako
+`brainstorming` samo autorizuje právě jeden dispatch po opětovné serverové
+kontrole vlastníka vlákna, vybraných message ID, Context Manifestu, privacy,
+bindingu, modelu a credential revision. Samostatné externí preview/confirm se
+pro tento tah nevyžaduje. Výjimka se nevztahuje na task role, projektové
+artefakty, publikaci, návrh externího volání z Ollamy ani jiný režim;
+`local-only` se nadále odmítne před sítí a brainstormingový manifest musí mít
+prázdný seznam projektových vstupů.
+
+Před přechodem runu do `dispatching` se durable uloží kanonický provider request
+record svázaný s run ID, manifest hashem, execution identitou a request digestem.
+Record obsahuje přesné odesílané JSON body včetně `stream`, ale nikdy
+`Authorization`, secret ani jiné transportní hlavičky. Vlastník vlákna jej může
+zobrazit z historie po stejném autorizačním rozhodnutí jako zprávy vlákna.
+Starší preview/approval záznamy se nemigrují ani nemažou; zůstávají historickou
+evidencí původního workflow a nový přímý tah dostane nové run ID.
+
+Streaming je capability konkrétní revize adapteru, nikoli vlastnost odhadovaná
+z názvu modelu. První adapter používá HTTP SSE z Responses API s `stream: true`
+podle oficiálního [streaming guide](https://developers.openai.com/api/docs/guides/streaming-responses).
+UI smí průběžně zobrazit pouze pořadově zpracované `response.output_text.delta`;
+neznámé budoucí event typy se neinterpretují jako text. Limity platí pro počet
+eventů, velikost jednoho eventu i celkový sestavený výstup. `response.completed`
+musí dodat finální response objekt, který projde stejnou validací ID, modelu,
+stavu, output položek, textu a usage jako ne-streamovaná odpověď; sestavené
+delty se s finálním textem musí shodovat. Refusal, tool call, chyba, neúplný
+výsledek, neplatné SSE/UTF-8, překročení limitu nebo neshoda jsou známé selhání
+jen tehdy, pokud je lze doložit bez nejistoty síťového účinku.
+
+Delty jsou ephemerální prezentační stav a samy nevytvářejí assistant message ani
+durable úspěch. `dispatching` se zapíše před otevřením sítě; timeout, zavření
+klienta, pád procesu nebo ztráta streamu po tomto bodě ponechá run `unknown`,
+pokud adapter nemá validovanou finální response. Automatický reconnect, retry,
+fallback ani převod částečného textu na výsledek nejsou dovoleny. Provider bez
+deklarované streaming capability použije dosavadní bounded celou odpověď se
+stejným request/run/history kontraktem.
 
 Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)

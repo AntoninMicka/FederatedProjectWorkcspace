@@ -613,6 +613,12 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   brainstormingové vlákno; případný Git otisk je samostatné potvrzení. Poté
   vznikne nové prázdné orchestration vlákno bez kontextu ukončeného vlákna.
   Každý budoucí vstup se znovu autorizuje a uloží do vlastního Context Manifestu.
+- [ ] Přímý externí brainstormingový dispatch, historie přesného sanitizovaného
+  provider requestu a capability-gated streamované zobrazení —
+  F-M3-CHAT-DIRECT-01. Přímé odeslání neruší aplikační RBAC/privacy kontrolu ani
+  Context Manifest; projektové artefakty a `local-only` zůstávají zakázané.
+  Streamované delty nejsou durable finální odpověď a přerušený síťový účinek se
+  nesmí automaticky opakovat.
 - [ ] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Potvrzené smazání koordinovaně odstraní všechny podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy bez osiřelých dat; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií a UI je před smazáním výslovně uvede. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů, souběh i restart na každé hranici; „úplné“ není příslib forenzního přepsání média.
 
 ---
@@ -885,8 +891,10 @@ striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, pub
 artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
 zobrazení externí odpovědi. F-M3-CHAT-MODES-01 je po PR #40 začleněn a odděluje
 lokální orchestrace od brainstormingu s per-run modelem. M3-UB-01 implementuje
-a lokálně PoC validuje usage/billing; obrazové capability, webové hledání a
-obecný workflow zůstávají samostatné navazující schopnosti. Gate M3 proto
+a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 nyní mění externí
+brainstorming na přímý dispatch s dohledatelným requestem a volitelným
+streamováním; obrazové capability, webové hledání a obecný workflow zůstávají
+samostatné navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
@@ -897,6 +905,10 @@ není vydáván za celý uzavřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
 - [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
+- [ ] Přímý brainstormingový dispatch, historie requestu a streamované
+  zobrazení — aktivní dávka F-M3-CHAT-DIRECT-01; výjimka z dosavadního
+  preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
+  autorizaci a privacy kontrole.
 - [ ] Provenance.
 - [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
