@@ -289,13 +289,14 @@ class OpenAIRuns(BackendRuns):
 
 
 class OpenAIAdapter:
-    def __init__(self, runs, credentials, transport=None):
+    def __init__(self, runs, credentials, transport=None, stream_transport=None):
         require(isinstance(runs, OpenAIRuns), 'OpenAI run store is required')
         require(isinstance(credentials, OpenAICredentials),
                 'OpenAI credential store is required')
         self.runs = runs
         self.credentials = credentials
         self.transport = transport or self._http_transport
+        self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
     def _execution(binding, role=None, output_format='text'):
@@ -314,13 +315,14 @@ class OpenAIAdapter:
                                 role_id, role_revision)
 
     @staticmethod
-    def _request(handoff, binding, role=None, output_format='text'):
+    def _request(handoff, binding, role=None, output_format='text', stream=False):
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OpenAIBinding),
                 'Authorized handoff and OpenAI binding are required')
         require(handoff.target == binding.target(),
                 'OpenAI binding differs from authorized target')
+        require(type(stream) is bool, 'Invalid OpenAI streaming choice')
         body = dict(model=binding.model, input=OllamaAdapter._prompt(handoff.payload),
-                    store=False, stream=False, truncation='disabled',
+                    store=False, stream=stream, truncation='disabled',
                     max_output_tokens=binding.max_output_tokens)
         if output_format == 'json':
             body['text'] = {'format': {'type': 'json_object'}}
@@ -342,7 +344,15 @@ class OpenAIAdapter:
                                  handoff.manifest_sha256)
 
     def dispatch(self, handoff, binding, role=None, output_format='text'):
-        request, digest, execution = self._request(handoff, binding, role, output_format)
+        return self._dispatch(handoff, binding, role, output_format, False, None)
+
+    def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text'):
+        require(callable(on_delta), 'OpenAI stream delta callback is required')
+        return self._dispatch(handoff, binding, role, output_format, True, on_delta)
+
+    def _dispatch(self, handoff, binding, role, output_format, stream, on_delta):
+        request, digest, execution = self._request(
+            handoff, binding, role, output_format, stream=stream)
         row = self.runs.prepare(handoff.run_id, digest, digest, execution,
                                 handoff.manifest_sha256)
         if row['state'] == 'succeeded':
@@ -367,7 +377,8 @@ class OpenAIAdapter:
             require(changed.rowcount == 1, 'OpenAI run state changed before dispatch')
             db.commit()
         try:
-            response = self.transport(binding, request, secret)
+            response = (self.stream_transport(binding, request, secret, on_delta)
+                        if stream else self.transport(binding, request, secret))
             normalized = self._response(response, binding)
         except (TimeoutError, OSError, http.client.HTTPException) as exc:
             self._finish(handoff.run_id, 'unknown', None, 'OpenAI response was lost')
@@ -445,6 +456,64 @@ class OpenAIAdapter:
             return json.loads(raw)
         except (UnicodeError, ValueError) as exc:
             raise OpenAIResponseError('Invalid OpenAI response JSON') from exc
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _http_stream_transport(binding, request, secret, on_delta):
+        connection = http.client.HTTPSConnection('api.openai.com', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        try:
+            connection.request('POST', '/v1/responses', body=request,
+                headers={'Authorization': 'Bearer ' + secret,
+                         'Content-Type': 'application/json', 'Accept': 'text/event-stream'})
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise OpenAIResponseError('OpenAI redirect is forbidden')
+            if response.status < 200 or response.status >= 300:
+                raise OpenAIResponseError('OpenAI request was rejected with HTTP '
+                                          + str(response.status))
+            total = 0; data = []; deltas = []; completed = None; sequence = -1
+            while True:
+                raw = response.readline(MAX_RESPONSE + 1)
+                if not raw:
+                    break
+                total += len(raw)
+                require(total <= MAX_RESPONSE, 'OpenAI stream exceeds 16 MiB')
+                require(len(raw) <= MAX_RESPONSE and raw.endswith(b'\n'),
+                        'Invalid OpenAI SSE line')
+                line = raw.rstrip(b'\r\n')
+                if line.startswith(b'data:'):
+                    data.append(line[5:].lstrip())
+                elif not line:
+                    if not data:
+                        continue
+                    event = json.loads(b'\n'.join(data)); data = []
+                    require(isinstance(event, dict) and isinstance(event.get('type'), str),
+                            'Invalid OpenAI SSE event')
+                    current = event.get('sequence_number')
+                    if current is not None:
+                        require(type(current) is int and current > sequence,
+                                'Invalid OpenAI SSE sequence')
+                        sequence = current
+                    if event['type'] == 'response.output_text.delta':
+                        delta = event.get('delta')
+                        require(isinstance(delta, str), 'Invalid OpenAI text delta')
+                        deltas.append(delta); on_delta(delta)
+                    elif event['type'] == 'response.completed':
+                        require(completed is None and isinstance(event.get('response'), dict),
+                                'Invalid OpenAI completed event')
+                        completed = event['response']
+                    elif event['type'] in {'response.failed', 'error'}:
+                        raise OpenAIResponseError('OpenAI stream reported failure')
+            if data or completed is None:
+                raise ConnectionError('OpenAI stream ended before completion')
+            normalized = OpenAIAdapter._response(completed, binding)
+            require(''.join(deltas) == normalized['response'],
+                    'OpenAI stream deltas differ from final response')
+            return completed
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise OpenAIResponseError('Invalid OpenAI SSE JSON') from exc
         finally:
             connection.close()
 

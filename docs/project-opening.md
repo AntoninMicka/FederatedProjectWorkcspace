@@ -204,7 +204,11 @@ textový kontext. Odeslání externího brainstormingového tahu po serverové
 kontrole proběhne přímo; u odpovědi lze i po restartu rozbalit přesné odeslané
 JSON body bez credentialu a autorizačních hlaviček. Pokročilý ruční externí
 náhled a task workflow si své samostatné potvrzení ponechávají. `local-only` se
-externě neodešle. Ve webové variantě je přímý externí chat do zavedení oddělené
+externě neodešle. Pokud backend ohlásí podporu streamování, desktop i web
+zobrazují textové delty průběžně. Rozpracovaný text je pouze dočasný; do historie
+se uloží až validovaná finální odpověď. Přerušení proto nezanechá částečnou
+asistentovu zprávu a backend bez této schopnosti použije běžnou celou odpověď.
+Ve webové variantě je přímý externí chat do zavedení oddělené
 identity chat store omezen na administrátora uzlu. Přepnutí z brainstormingu do
 orchestrace archivuje původní vlákno a založí nové prázdné vlákno. Aktivní nebo
 neurčitý běh přechod zastaví; historie ani model se do nové orchestrace

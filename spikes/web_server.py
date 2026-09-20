@@ -257,7 +257,8 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error):
                 return self.reply(422, {'error': 'Účetní přehled nelze načíst nebo uložit. '
                                        'Ověřte administrátorský klíč a lokální stav.'})
-        if self.path in {'/v1/external/send', '/v1/external/request'}:
+        if self.path in {'/v1/external/send', '/v1/external/send-stream',
+                         '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
             # expose that history through a different web account identity.
             if not self.server.administration.is_admin(self.actor):

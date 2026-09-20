@@ -54,11 +54,15 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
   Web endpoint je do oddělení identity chat store od procesní desktop identity
   fail-closed omezený na administrátora; běžný webový člen dostane 403.
   Cílených 53 chat/OpenAI/UI/HTTPS testů prošlo se 2 Qt skipy.
-- [ ] [in progress] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
-  (implemented).** Přidat capability-gated transport a UI průběžných textových
-  delt pro desktop i web. Nevalidní událost, timeout, přerušení, zavření klienta
-  a provider bez streamování musí skončit definovaným durable stavem bez
-  částečné asistentovy zprávy vydávané za finální odpověď.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
+  (implemented).** Capability-gated Responses SSE transport a desktopové i
+  webové UI zobrazují textové delty průběžně; provider bez deklarované podpory
+  zachovává ne-streamovaný fallback. Dílčí text je pouze dočasný a durable chat
+  dostane až validovanou finální odpověď. Chybná událost skončí jako `failed`,
+  timeout, přerušení nebo zavření klienta jako `unknown`, bez částečné
+  asistentovy zprávy. Webový endpoint zachovává administrátorskou RBAC hranici.
+  Cílených 67 OpenAI/chat/desktop/web testů prošlo se 3 Qt skipy, JavaScript
+  prošel `node --check`; úplná sada 352 testů prošla s 22 skipy.
 - [ ] [planned] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
   (PoC validated).** Ověřit RBAC/privacy, přesný request bez secrets, běžnou i
   streamovanou odpověď, pořadí a UTF-8 delt, reconnect/restart, stale binding,

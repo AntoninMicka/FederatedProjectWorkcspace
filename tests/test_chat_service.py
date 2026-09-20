@@ -61,6 +61,10 @@ class FakeExternalAdapter:
             db.commit()
         return response
 
+    def dispatch_stream(self, handoff, binding, on_delta):
+        on_delta('External '); on_delta('answer')
+        return self.dispatch(handoff, binding)
+
 
 class FakeProposalAdapter:
     def __init__(self, runs, calls, response):
@@ -721,6 +725,15 @@ class ChatServiceTests(unittest.TestCase):
                        (str(uuid4()), request['run_id'])); db.commit()
         with self.assertRaisesRegex(ValueError, 'unavailable'):
             service.external_request({'run_id': request['run_id']})
+
+    def test_direct_external_stream_emits_deltas_but_persists_only_final_message(self):
+        calls = []; service = self.external_service(calls); deltas = []
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-sol'})
+        result = service.external_send_stream(request, deltas.append)
+        self.assertEqual(deltas, ['External ', 'answer'])
+        self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+        self.assertTrue(result['request_record']['provider_request']['stream'])
 
     def test_service_starts_fresh_orchestration_after_brainstorm(self):
         brainstorm = self.request(run_choice={
