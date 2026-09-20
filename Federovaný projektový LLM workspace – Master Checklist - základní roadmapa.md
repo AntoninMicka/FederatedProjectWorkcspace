@@ -599,7 +599,8 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
 - [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
-- [ ] Režimy chatu budou `orchestration` a `brainstorming` — F-M3-CHAT-MODES-01.
+- [x] Režimy chatu jsou `orchestration` a `brainstorming` — F-M3-CHAT-MODES-01,
+  PR #40.
   Orchestrace používá výhradně lokální `same-node` LLM a explicitní artefaktový
   kontext pro přípravu kontextu/dat, kompilaci návrhu artefaktu a filtraci;
   LLM pouze navrhuje, deterministický orchestrátor vykonává autorizované akce.
@@ -882,7 +883,8 @@ identitu nad současnou Ollamou. `F-M3-EXTERNAL-01` je po PR #36 začleněn:
 implementuje první externí textový provider, context preview, privacy filtr a
 striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, publikaci
 artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
-zobrazení externí odpovědi. Usage/billing, obrazové capability, webové hledání
+zobrazení externí odpovědi. F-M3-CHAT-MODES-01 je po PR #40 začleněn a odděluje
+lokální orchestrace od brainstormingu s per-run modelem. Usage/billing, obrazové capability, webové hledání
 a obecný workflow zůstávají samostatné navazující schopnosti; Gate M3 proto
 není vydáván za celý uzavřený.
 
@@ -890,7 +892,7 @@ není vydáván za celý uzavřený.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
   OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
   artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
-- [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
+- [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — aktivní dávka M3-UB-01.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
 - [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.

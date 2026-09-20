@@ -5,6 +5,31 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-CHAT-MODES-01 — Lokální orchestrace a brainstormingové režimy — 2026-09-20
+
+Dávka uzavřena po začlenění PR #40 jako commit `c8358d5` v `develop`; feature
+větev `feature/f-m3-chat-modes` dodala per-run volbu režimu a modelu, oddělené
+hranice kontextu a obnovitelný návrat z brainstormingu do nové orchestrace.
+Dosažená úroveň je PoC validated. Obecná správa a úplné aplikační smazání
+vláken, creator/opponent workflow, usage/billing a další provider capability
+zůstávají samostatnými dávkami.
+
+- [x] [completed] **F-M3-CHAT-MODES-01-A — Kontrakt, reuse a crash hranice
+  (designed).** `ChatThreads` v3 a `ChatRunChoice` vážou klasifikaci vlákna,
+  per-run model a oddělené textové/projektové vstupy; odvozený binding nemění
+  globální konfiguraci.
+- [x] [completed] **F-M3-CHAT-MODES-01-B — Režimy, modelový výběr a UI
+  (implemented).** Orchestrace vynucuje nakonfigurovaný same-node model a
+  explicitní artefakty. Brainstorming přijímá jen explicitní text a zprávy,
+  volí Ollama/OpenAI model pro běh a externí dispatch vede přes preview a
+  potvrzení. Návrat archivuje brainstorming a atomicky zakládá prázdnou
+  orchestrace bez implicitního přenosu kontextu.
+- [x] [completed] **F-M3-CHAT-MODES-01-C — Regrese, dokumentace a akceptace
+  (PoC validated).** Cílených 52 testů prošlo se 2 podmíněnými Qt skipy;
+  úplná sada 340 testů prošla s 22 skipy. Samostatný skutečný Qt/WebEngine
+  smoke, JavaScript syntaxe, Python kompilace a `git diff --check` prošly.
+  Živý externí provider nebyl v této dávce znovu volán.
+
 ## F-M1-PROJECT-LOCATION-01 — Umístění projektů a webový import — 2026-09-20
 
 Dávka uzavřena po začlenění PR #37 jako commit `de4e627` v `develop`; feature
