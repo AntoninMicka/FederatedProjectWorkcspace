@@ -167,8 +167,11 @@ F-M1-PROJECT-LOCATION-01 **reuse/adaptuje** `ProjectCreation.register`, jeho
 uzlový operation journal, validaci `Projects` a immutable `Sources` →
 `Workspace` import. Oprava cesty přidává recovery mezi ownerem existujícího
 projektového journalu a atomickou node registrací; nekopíruje Git data ani stav
-mezi filesystemy. Webový upload je jediný bounded endpoint nad stejným importním
-kontraktem, ne obecný filesystemový most, nová databáze nebo další framework.
+mezi filesystemy. Odebrání doslova chybějícího rootu reuse stejný uzlový
+journal a mění pouze registraci; stav ani data nemaže a nenahrazuje pozdější
+bezpečné odstranění projektu. Webový upload je jediný bounded endpoint nad
+stejným importním kontraktem, ne obecný filesystemový most, nová databáze nebo
+další framework.
 
 M1-03 **adaptuje** Workspace transakce o stabilní ID/digest požadavku, Projects o sdílený autorizovaný přístup a nativní Qt widgets o Markdown editor/checklist panel. **Reuse** Git/Index, metadatových validátorů a lokálního autora z ProjectCreation. Hlavní TODO používá rezervované UUIDv5 uvnitř existujícího schématu; nová storage ani cizí editor nejsou potřeba. [ADR 0016](docs/adr/0016-markdown-editor.md).
 

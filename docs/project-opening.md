@@ -38,6 +38,13 @@ jako existující stav. Oprava nepřesouvá data; přesun na jiný disk vyžaduj
 samostatně navržený bezpečný přesun stavu a tato verze jej odmítne. Přerušenou
 opravu dokončí stejná volba pro obnovu uzlové operace.
 
+Jestliže původní kořen skutečně zmizel, stejný dialog nabídne také
+**Odebrat pouze ze seznamu**. Volba atomicky odstraní jen registraci v tomto
+uzlu. Nemaže lokální stav, chaty, credentials ani případnou kopii Git
+repozitáře v jiném umístění. Pokud se data později najdou, lze projekt
+znovu načíst nebo jeho cestu opravit; nejde o bezpečné odstranění celého
+projektu.
+
 ## Jiný uzel a již registrované projekty
 
 Explicitní konfiguraci lze vybrat z checkoutu:

@@ -17,8 +17,9 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   výchozí rodičovskou složku; zpřístupnit registraci existujícího projektu a
   opravu jeho cesty; doplnit import souborů ve webové variantě.
 - Výstup: node-local `projects_root`, nativní volby pro registraci a opravu
-  umístění a autentizovaný bounded web upload, který reuse stávající immutable
-  source import a Workspace transaction.
+  umístění včetně pouhého odebrání registrace chybějícího rootu a
+  autentizovaný bounded web upload, který reuse stávající immutable source
+  import a Workspace transaction.
 - Recovery: vytvoření/registrace zachovávají uzlový journal. Oprava cesty nejprve
   pod uzlovým zámkem ověří stejné project UUID, Git HEAD, filesystem a absenci
   pending projektové operace; journal owner a node registraci mění obnovitelně
@@ -37,13 +38,17 @@ PR do `develop`. [Roadmapa](<Federovaný projektový LLM workspace – Master Ch
   oprava umístění (implemented).** Desktop ukládá potvrzený rodič do node-local
   konfigurace, dovoluje výběr mimo home, načte existující validní Git projekt a
   opraví přesunutou registraci. Cross-filesystem přesun stavu se bezpečně odmítá.
+  Pokud původní root doslova chybí, lze odebrat pouze jeho node registraci;
+  lokální stav ani projektová data se nemažou.
 - [x] [completed] **F-M1-PROJECT-LOCATION-01-C — Webový import zdrojů
   (implemented).** Web přijímá Markdown/PNG/JPEG/PDF do 16 MiB, zachová přesné
   bajty a SHA-256, vyžaduje write roli a odmítá `local-only`; retry nevytvoří
   druhý commit.
 - [x] [completed] **F-M1-PROJECT-LOCATION-01-D — Regrese, dokumentace a
   akceptace (PoC validated).** Rozšířená cílená sada prošla 63 testy se 4
-  podmíněnými skipy. Finální úplná sada prošla: 325 testů, 22 podmíněných skipů.
+  podmíněnými skipy. Finální úplná sada prošla: 328 testů, 22 podmíněných skipů.
+  Tři nové testy ověřují nedestruktivní odregistrování a recovery před
+  i po atomické publikaci node konfigurace.
   Samostatně prošel skutečný Qt/WebEngine smoke vytvoření/restartu desktopu a
   webového login/catalog/logout. Python kompilace, syntaxe výsledného webového
   JavaScriptu a `git diff --check` prošly. Skutečný browser file-picker průchod

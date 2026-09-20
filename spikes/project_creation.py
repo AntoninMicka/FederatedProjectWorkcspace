@@ -40,6 +40,15 @@ def encoded(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
 
 
+def missing(path):
+    """Distinguish an absent path from permission and other filesystem failures."""
+    try:
+        Path(path).lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return True
+    return False
+
+
 def default_node_path():
     base = os.environ.get('XDG_STATE_HOME')
     if not base or not Path(base).is_absolute():
@@ -358,6 +367,50 @@ class ProjectCreation:
             checkpoint('prepared')
             return self._finish(db, record, deadline, checkpoint)
 
+    def registration_root_missing(self, project_id):
+        """Report only literal disappearance; invalid or inaccessible roots stay registered."""
+        uuid(project_id)
+        _, node = self._node()
+        check(node is not None, 'Uzel zatím nemá registraci projektů.')
+        binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
+        check(binding is not None, 'Projekt není registrovaný.')
+        return missing(binding['root'])
+
+    def unregister_missing(self, project_id, operation_id, *, checkpoint=lambda stage: None):
+        """Remove only a missing-root registration; preserve all filesystem state."""
+        uuid(project_id)
+        uuid(operation_id)
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type') == 'unregister-missing'
+                      and record['project_id'] == project_id,
+                      'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušenou operaci projektu.')
+            before, node = self._node()
+            check(node is not None, 'Uzel zatím nemá registraci projektů.')
+            binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
+            check(binding is not None, 'Projekt není registrovaný.')
+            check(missing(binding['root']),
+                  'Projektové umístění stále existuje; odebrání je dostupné pouze pro ztracený kořen.')
+            updated = dict(node, projects=[item for item in node['projects']
+                                           if item['project_id'] != project_id])
+            after = encoded(updated)
+            parse_node(after, location=self.node_path)
+            record = dict(operation_id=operation_id, project_id=project_id,
+                          root=binding['root'], state=binding['state_dir'],
+                          before=before.decode(), after=after.decode(),
+                          type='unregister-missing', receipt=None)
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
     def recover(self, *, checkpoint=lambda stage: None):
         if not self.database.exists():
             return None
@@ -376,6 +429,8 @@ class ProjectCreation:
             return self._finish_register(db, record, deadline, boundary)
         if record.get('type') == 'relocate':
             return self._finish_relocate(db, record, deadline, boundary)
+        if record.get('type') == 'unregister-missing':
+            return self._finish_unregister_missing(db, record, boundary)
 
         root, state, stage = (Path(record[k]) for k in ('root', 'state', 'stage'))
         directory(root.parent)
@@ -505,6 +560,23 @@ class ProjectCreation:
         boundary('node-published')
         record['receipt'] = dict(operation_id=record['operation_id'], id=record['project_id'],
                                  title=record['title'], commit_id=record['commit_id'])
+        self._save(db, record, done=True)
+        boundary('completed')
+        return record['receipt']
+
+    def _finish_unregister_missing(self, db, record, boundary):
+        before, _ = self._node()
+        after = record['after'].encode()
+        if before != after:
+            check(before == record['before'].encode(),
+                  'Konfigurace uzlu se mezitím změnila; nebyla přepsána.')
+            check(missing(record['root']),
+                  'Projektové umístění se znovu objevilo; registrace nebyla odebrána.')
+        # State, Git data elsewhere, chat stores and credentials are deliberately untouched.
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=record['project_id'],
+                                 unregistered=True, state_preserved=record['state'])
         self._save(db, record, done=True)
         boundary('completed')
         return record['receipt']

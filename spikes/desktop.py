@@ -61,7 +61,7 @@ def main():
     if args.screenshot and not args.smoke:
         parser.error('--screenshot requires --smoke')
     try:
-        from PySide6.QtCore import QTimer, QUrl
+        from PySide6.QtCore import Qt, QTimer, QUrl
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
@@ -196,6 +196,22 @@ def main():
             if not accepted:
                 return
             project_id = rows[labels.index(label)]['id']
+            if controller.service.registration_root_missing(project_id):
+                choice = QMessageBox(window)
+                choice.setWindowTitle('Chybějící projekt')
+                choice.setTextFormat(Qt.TextFormat.PlainText)
+                choice.setText('Původní umístění tohoto projektu na disku neexistuje.\n\n'
+                               'Můžete vybrat nové umístění stejného projektu, nebo odebrat pouze jeho '
+                               'registraci ze seznamu. Lokální stav a případná data jinde se nemažou.')
+                repair = choice.addButton('Vybrat nové umístění', QMessageBox.ButtonRole.AcceptRole)
+                remove = choice.addButton('Odebrat pouze ze seznamu', QMessageBox.ButtonRole.DestructiveRole)
+                choice.addButton(QMessageBox.StandardButton.Cancel)
+                choice.exec()
+                if choice.clickedButton() is remove:
+                    controller.start(lambda: controller.service.unregister_missing(project_id, str(uuid4())))
+                    return
+                if choice.clickedButton() is not repair:
+                    return
             folder = QFileDialog.getExistingDirectory(window, 'Vyberte nové umístění stejného projektu',
                                                        str(controller.service.default_projects_root()))
             if folder:

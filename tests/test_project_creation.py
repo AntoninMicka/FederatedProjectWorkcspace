@@ -168,6 +168,63 @@ class CreationTests(unittest.TestCase):
             self.service.relocate(receipt['id'], other, str(uuid4()))
         self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'][0]['root'], str(self.root))
 
+    def test_missing_project_can_be_unregistered_without_deleting_state(self):
+        receipt = self.create()
+        binding = parse_node(read_config(self.node), location=self.node)['projects'][0]
+        state = Path(binding['state_dir'])
+        self.assertFalse(self.service.registration_root_missing(receipt['id']))
+        with self.assertRaises(CreationConflict):
+            self.service.unregister_missing(receipt['id'], str(uuid4()))
+        moved = self.base / 'project-preserved-elsewhere'
+        self.root.rename(moved)
+        self.assertTrue(self.service.registration_root_missing(receipt['id']))
+        operation = str(uuid4())
+        result = self.service.unregister_missing(receipt['id'], operation)
+        self.assertTrue(result['unregistered'])
+        self.assertEqual(result['state_preserved'], str(state))
+        self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'], [])
+        self.assertTrue(state.is_dir())
+        self.assertEqual(Git(moved).head(), receipt['commit_id'])
+        self.assertEqual(self.service.unregister_missing(receipt['id'], operation), result)
+
+    def test_unregistration_recovery_finishes_after_node_publication(self):
+        receipt = self.create()
+        binding = parse_node(read_config(self.node), location=self.node)['projects'][0]
+        state = Path(binding['state_dir'])
+        moved = self.base / 'temporarily-moved-project'
+        self.root.rename(moved)
+        operation = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.service.unregister_missing(receipt['id'], operation,
+                checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                if stage == 'node-published' else None)
+        self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'], [])
+        moved.rename(self.root)
+        recovered = ProjectCreation(self.node).recover()
+        self.assertTrue(recovered['unregistered'])
+        self.assertEqual(recovered['state_preserved'], str(state))
+        self.assertEqual(parse_node(read_config(self.node), location=self.node)['projects'], [])
+        self.assertTrue(state.is_dir())
+        self.assertEqual(Git(self.root).head(), receipt['commit_id'])
+        self.assertEqual(self.service.unregister_missing(receipt['id'], operation), recovered)
+
+    def test_unregistration_stops_if_root_returns_before_publication(self):
+        receipt = self.create()
+        moved = self.base / 'temporarily-moved-project'
+        self.root.rename(moved)
+        operation = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.service.unregister_missing(receipt['id'], operation,
+                checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                if stage == 'prepared' else None)
+        moved.rename(self.root)
+        with self.assertRaises(CreationConflict):
+            ProjectCreation(self.node).recover()
+        binding = parse_node(read_config(self.node), location=self.node)['projects'][0]
+        self.assertEqual(binding['project_id'], receipt['id'])
+        self.assertEqual(binding['root'], str(self.root))
+        self.assertEqual(Git(self.root).head(), receipt['commit_id'])
+
     def test_crash_at_every_boundary_resumes_without_duplicate_commit(self):
         for stage in STAGES:
             with self.subTest(stage=stage), tempfile.TemporaryDirectory(dir=self.base) as case:

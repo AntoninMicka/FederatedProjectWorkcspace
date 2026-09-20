@@ -75,7 +75,9 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   přenosem nebo neznámým externím účinkem se nesmí tiše odstranit. Více
   persistentních vrstev vyžaduje journal, idempotentní recovery a samostatné
   potvrzení definitivního výmazu; odstranění lokální kopie není tvrzení, že
-  zmizely vzdálené či dříve sdílené revize.
+  zmizely vzdálené či dříve sdílené revize. Omezené odregistrování
+  doslova chybějícího rootu dodané ve F-M1-PROJECT-LOCATION-01 nemaže stav
+  ani data a tuto samostatnou feature neuzavírá.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 

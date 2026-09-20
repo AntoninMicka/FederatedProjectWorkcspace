@@ -29,6 +29,14 @@ Pád mezi nimi obnoví stejná operation ID a dokončí pouze chybějící krok.
 projekt, změněný HEAD, jiný owner stavu nebo jiný filesystem se odmítne bez
 přepsání dat.
 
+Pokud registrovaný root doslova neexistuje, lze jako omezenou opravu odebrat
+pouze jeho node registraci. Uzlový journal uloží původní a cílové bajty
+konfigurace a atomicky publikuje konfiguraci bez dané vazby. Lokální stav,
+Git data nalezená později, chaty ani credentials se nemažou. Objeví-li se root
+znovu před publikací, operace se zastaví; po `node-published` recovery pouze
+dokončí receipt již zveřejněného odebrání. Jde o jednokrokovou opravu
+registrace, nikoli o lifecycle bezpečného odstranění projektu.
+
 ## Crash boundaries před implementací
 
 | Hranice | Recovery |
