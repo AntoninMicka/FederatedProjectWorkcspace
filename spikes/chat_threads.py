@@ -59,7 +59,7 @@ class ChatThreads:
                 require(tables == {'schema_info', 'threads', 'messages', 'turns'},
                         'Unknown or incomplete chat schema')
                 row = db.execute('SELECT version FROM schema_info').fetchall()
-                require(row in ([(1,)], [(2,)]), 'Unsupported chat schema version')
+                require(row in ([(1,)], [(2,)], [(3,)]), 'Unsupported chat schema version')
                 self._validate_columns(db, version=row[0][0])
                 if row == [(1,)]:
                     db.execute('ALTER TABLE threads ADD COLUMN project_id TEXT')
@@ -67,6 +67,23 @@ class ChatThreads:
                     db.execute('ALTER TABLE turns ADD COLUMN manifest_id TEXT')
                     db.execute('UPDATE schema_info SET version=2')
                     self._validate_columns(db, version=2)
+                if row in ([(1,)], [(2,)]):
+                    db.executescript('''
+                        PRAGMA foreign_keys=OFF;
+                        CREATE TABLE threads_v3(
+                            thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
+                            classification TEXT NOT NULL CHECK(classification IN ('brainstorming','orchestration')),
+                            status TEXT NOT NULL CHECK(status IN ('active','archived')),
+                            created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
+                            next_sequence INTEGER NOT NULL CHECK(next_sequence>=0),
+                            project_id TEXT, assignment_revision INTEGER NOT NULL CHECK(assignment_revision>=0));
+                        INSERT INTO threads_v3 SELECT * FROM threads;
+                        DROP TABLE threads;
+                        ALTER TABLE threads_v3 RENAME TO threads;
+                        UPDATE schema_info SET version=3;
+                        PRAGMA foreign_keys=ON;
+                    ''')
+                    self._validate_columns(db, version=3)
             db.commit()
             return closing(db)
         except Exception:
@@ -77,10 +94,10 @@ class ChatThreads:
     def _create(db):
         db.executescript('''
             CREATE TABLE schema_info(version INTEGER NOT NULL);
-            INSERT INTO schema_info VALUES(2);
+            INSERT INTO schema_info VALUES(3);
             CREATE TABLE threads(
                 thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
-                classification TEXT NOT NULL CHECK(classification='brainstorming'),
+                classification TEXT NOT NULL CHECK(classification IN ('brainstorming','orchestration')),
                 status TEXT NOT NULL CHECK(status IN ('active','archived')),
                 created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
                 next_sequence INTEGER NOT NULL CHECK(next_sequence>=0),
@@ -103,17 +120,17 @@ class ChatThreads:
         ''')
 
     @staticmethod
-    def _validate_columns(db, *, version=2):
+    def _validate_columns(db, *, version=3):
         expected = {
             'schema_info': ['version'],
             'threads': ['thread_id', 'node_id', 'user_id', 'classification', 'status',
                         'created_at', 'revision', 'next_sequence'] +
-                       (['project_id', 'assignment_revision'] if version == 2 else []),
+                       (['project_id', 'assignment_revision'] if version >= 2 else []),
             'messages': ['message_id', 'thread_id', 'sequence', 'role', 'content',
                          'content_sha256', 'privacy', 'author_id', 'created_at', 'supersedes_id'],
             'turns': ['turn_id', 'thread_id', 'user_message_id', 'run_id',
                       'assistant_message_id', 'state', 'error'] +
-                     (['manifest_id'] if version == 2 else []),
+                     (['manifest_id'] if version >= 2 else []),
         }
         for table, columns in expected.items():
             actual = [row[1] for row in db.execute(f'PRAGMA table_info({table})')]
@@ -128,7 +145,7 @@ class ChatThreads:
                          (thread_id,)).fetchone()
         require(row is not None and row[0] == node_id and row[1] == user_id,
                 'Chat thread is unavailable to this owner')
-        require(row[2] in {'active', 'archived'} and row[3] == 'brainstorming',
+        require(row[2] in {'active', 'archived'} and row[3] in {'brainstorming', 'orchestration'},
                 'Invalid stored chat thread')
         timestamp(row[4])
         require(type(row[5]) is int and row[5] >= 0 and type(row[6]) is int and row[6] >= 0,
@@ -144,7 +161,7 @@ class ChatThreads:
         for value in (thread_id, node_id, user_id):
             uuid(value)
         timestamp(created_at)
-        require(classification == 'brainstorming', 'Unsupported chat classification')
+        require(classification in {'brainstorming', 'orchestration'}, 'Unsupported chat classification')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT node_id,user_id,classification,created_at FROM threads '
@@ -155,6 +172,36 @@ class ChatThreads:
             else:
                 db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, classification, 'active',
+                            created_at, 0, 0, None, 0))
+            db.commit()
+        return self.get(thread_id, node_id, user_id)
+
+    def start_orchestration(self, *, source_thread_id, thread_id, node_id, user_id,
+                            created_at):
+        """Atomically close a brainstorm and create a context-free local thread."""
+        for value in (source_thread_id, thread_id, node_id, user_id):
+            uuid(value)
+        require(source_thread_id != thread_id, 'New orchestration thread must have a new ID')
+        timestamp(created_at)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            existing = db.execute('SELECT node_id,user_id,classification,status,created_at FROM threads '
+                                  'WHERE thread_id=?', (thread_id,)).fetchone()
+            expected = (node_id, user_id, 'orchestration', 'active', created_at)
+            if existing:
+                require(existing == expected, 'Thread ID belongs to a different request')
+            else:
+                source = self._owner(db, source_thread_id, node_id, user_id, active=True)
+                require(source[3] == 'brainstorming',
+                        'Only a brainstorming thread can start orchestration')
+                blocked = db.execute("SELECT 1 FROM turns WHERE thread_id=? AND state IN "
+                                     "('prepared','run-bound','unknown') LIMIT 1",
+                                     (source_thread_id,)).fetchone()
+                require(blocked is None, 'Brainstorming thread has an active or unknown turn')
+                db.execute("UPDATE threads SET status='archived',revision=revision+1 WHERE thread_id=?",
+                           (source_thread_id,))
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
+                           (thread_id, node_id, user_id, 'orchestration', 'active',
                             created_at, 0, 0, None, 0))
             db.commit()
         return self.get(thread_id, node_id, user_id)

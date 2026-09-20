@@ -8,20 +8,32 @@ SPDX-License-Identifier: MPL-2.0
 ## F-M1-PROJECT-LOCATION-01 — Umístění projektů a webový import — 2026-09-20
 
 Dávka uzavřena po začlenění PR #37 jako commit `de4e627` v `develop`; feature
-větev `feature/f-m1-project-location-web-import` dodala zapamatování výchozího
-rodiče mimo home, registraci existujícího Git projektu, opravu cesty a omezený
-webový import zdrojů. Dosažená úroveň je PoC validated. Pozdější oprava
-F-M1-PROJECT-ROOT-01 řeší samostatně přijetí již existujícího prázdného rootu.
+větev `feature/f-m1-project-location-web-import` dodala node-local výchozí
+složku, registraci existujícího Git projektu, obnovitelnou opravu umístění a
+bounded webový import zdrojů. Následné bezpečné odregistrování doslova
+chybějícího rootu odstraňuje pouze node registraci, nikoli Git data nebo lokální
+stav. Dosažená úroveň je PoC validated; bezpečné odstranění celého projektu,
+přesun stavu mezi filesystemy a browserový import celého projektu zůstávají mimo
+rozsah.
 
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-A–B — Umístění a registrace
-  (PoC validated).** Node-local `projects_root`, register/relocate a omezené
-  odregistrování ztraceného rootu zachovávají journal, stav a Git data.
-- [x] [completed] **F-M1-PROJECT-LOCATION-01-C–D — Webový import a akceptace
-  (PoC validated).** Autentizovaný bounded upload reuse immutable source import,
-  odmítá `local-only` a retry nevytváří druhý commit.
+- [x] [completed] **F-M1-PROJECT-LOCATION-01-A–B — Kontrakt, výchozí složka,
+  registrace a oprava cesty (implemented).** Uzlový journal a atomická publikace
+  zachovávají state owner, UUID, HEAD a filesystem boundary; cizí projekt,
+  pending operace i cross-filesystem přesun se odmítají.
+- [x] [completed] **F-M1-PROJECT-LOCATION-01-C — Webový import zdrojů
+  (implemented).** Autentizovaný upload Markdown/PNG/JPEG/PDF do 16 MiB zachová
+  přesné bajty/SHA-256, vyžaduje write roli, odmítá `local-only` a retry nevytváří
+  další commit.
+- [x] [completed] **F-M1-PROJECT-LOCATION-01-D — Regrese, dokumentace a
+  akceptace (PoC validated).** Odebrání ztraceného rootu je idempotentní a
+  recovery bezpečně rozlišuje stav před a po atomickém zveřejnění registrace.
 
-Ověření před merge: úplná sada 328 testů OK, 22 podmíněných skipů; skutečný
-Qt/WebEngine smoke vytvoření/restartu a web login/catalog/logout prošly.
+Ověření finálního obsahu: kompletní sada 328 testů OK, 22 podmíněných skipů;
+skutečný Qt/WebEngine smoke vytvoření/restartu desktopu a webový
+login/catalog/logout prošly. Python kompilace, syntaxe výsledného JavaScriptu a
+`git diff --check` prošly. Browserový file-picker nebyl samostatně automatizován;
+integrační testy ověřují HTTPS importní endpoint, bajty nad 64 KiB, RBAC,
+privacy a idempotentní retry. Gate M1 nadále čeká na `M1-07-C`.
 
 ## F-M3-EXTERNAL-01 — První externí provider a řízené volání — 2026-09-20
 

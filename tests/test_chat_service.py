@@ -184,6 +184,28 @@ class ChatServiceTests(unittest.TestCase):
                 transport=lambda *_: self.fail('must not resend')))
         self.assertEqual(restarted.task_route(request), result)
 
+    def test_routed_modes_enforce_artifact_boundary_and_local_model_choice(self):
+        artifact_id = str(uuid4())
+        request = self.route_request(selected_artifact_ids=[artifact_id], run_choice={
+            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
+        with self.assertRaisesRegex(ValueError, 'artifact'):
+            self.service.task_route(request)
+        self.assertEqual(self.calls, [])
+
+        outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'idea'}
+        service = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(outcome)}))
+        request = self.route_request(run_choice={
+            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
+        routed = service.task_route(request)
+        self.assertEqual(routed['model'], 'qwen3')
+        self.assertEqual(service.status()['binding']['model'], 'gemma3')
+        thread = next(row for row in service.status()['threads']
+                      if row['thread_id'] == request['thread_id'])
+        self.assertEqual(thread['classification'], 'brainstorming')
+
     def test_external_task_normalizes_only_matching_redundant_focus_id(self):
         request = self.route_request()
         value = {'schema_version': 1, 'kind': 'external-request',
@@ -505,10 +527,12 @@ class ChatServiceTests(unittest.TestCase):
 
     def test_external_preview_restart_confirmation_and_idempotent_result(self):
         calls = []; service = self.external_service(calls)
-        request = self.external_request(privacy='confidential')
+        request = self.external_request(privacy='confidential', run_choice={
+            'mode': 'brainstorming', 'adapter': 'openai-responses',
+            'model': 'gpt-5.6-sol'})
         preview = service.external_preview(request)
         self.assertEqual(preview['privacy'], 'confidential')
-        self.assertEqual(preview['target']['model'], 'gpt-5.6-luna')
+        self.assertEqual(preview['target']['model'], 'gpt-5.6-sol')
         self.assertEqual(preview['inputs'][0]['content'], 'First question')
         self.assertEqual(preview['provider_request']['store'], False)
         self.assertEqual(calls, [])
@@ -526,6 +550,7 @@ class ChatServiceTests(unittest.TestCase):
         result = restarted.external_confirm(confirmation)
         self.assertEqual([item['content'] for item in result['thread']['messages']],
                          ['First question', 'External answer'])
+        self.assertEqual(result['target']['model'], 'gpt-5.6-sol')
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
         self.assertEqual(restarted.external_confirm(confirmation), result)
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
@@ -623,6 +648,44 @@ class ChatServiceTests(unittest.TestCase):
         rows = restarted.status()['threads']
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['messages'][1]['content'], 'Assistant answer')
+
+    def test_explicit_modes_bind_thread_and_per_run_local_model(self):
+        brainstorming = self.request(run_choice={
+            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
+        result = self.service.send(**brainstorming)
+        self.assertEqual(result['thread']['classification'], 'brainstorming')
+        self.assertEqual(result['target']['model'], 'qwen3')
+        self.assertEqual(self.service.status()['binding']['model'], 'gemma3')
+        with self.assertRaisesRegex(ValueError, 'cannot change'):
+            self.service.send(**self.request(thread_id=brainstorming['thread_id'],
+                created_at='2026-09-18T14:00:02Z', run_choice={
+                    'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+
+        orchestration = self.request(created_at='2026-09-18T14:00:03Z', run_choice={
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None})
+        result = self.service.send(**orchestration)
+        self.assertEqual(result['thread']['classification'], 'orchestration')
+        self.assertEqual(result['target']['model'], 'gemma3')
+
+    def test_direct_send_cannot_bypass_external_confirmation(self):
+        request = self.request(run_choice={'mode': 'brainstorming',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-sol'})
+        with self.assertRaisesRegex(ValueError, 'preview and confirmation'):
+            self.service.send(**request)
+        self.assertEqual(self.service.status()['threads'], [])
+
+    def test_service_starts_fresh_orchestration_after_brainstorm(self):
+        brainstorm = self.request(run_choice={
+            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'gemma3'})
+        result = self.service.send(**brainstorm)
+        new_thread = str(uuid4())
+        started = self.service.start_orchestration(source_thread_id=brainstorm['thread_id'],
+            thread_id=new_thread, created_at='2026-09-18T14:00:03Z')
+        self.assertEqual((started['thread_id'], started['classification'], started['messages']),
+                         (new_thread, 'orchestration', []))
+        archived = next(item for item in self.service.status()['threads']
+                        if item['thread_id'] == result['thread']['thread_id'])
+        self.assertEqual(archived['status'], 'archived')
 
     def test_followup_requires_explicit_ordered_selection(self):
         first = self.request(); result = self.service.send(**first)

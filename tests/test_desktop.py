@@ -79,6 +79,15 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/chat/assign'", JS)
         self.assertIn("projectRequest('/v1/chat/snapshot'", JS)
         self.assertIn("projectRequest('/v1/chat/output'", JS)
+        self.assertIn('id="chat-mode"', HTML)
+        self.assertIn('id="chat-run-adapter"', HTML)
+        self.assertIn('id="chat-run-model"', HTML)
+        self.assertIn("projectRequest('/v1/chat/orchestration'", JS)
+        self.assertIn("mode==='brainstorming' && adapter==='openai-responses'", JS)
+        self.assertIn("mode==='brainstorming' && adapter==='ollama'", JS)
+        self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
+        self.assertIn('selected_artifact_ids:[]', JS)
+        self.assertIn('run_choice:runChoice', JS)
 
     def test_chat_progress_stays_with_prompt(self):
         from spikes.desktop_ui import HTML

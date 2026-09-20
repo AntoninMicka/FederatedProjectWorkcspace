@@ -181,6 +181,17 @@ privátní HTTPS adresu, UUID cíle a SHA-256 certifikátu; `local-only` obsah d
 odeslat nelze. Neplatné nastavení server odmítne a UI znovu načte poslední
 potvrzený binding.
 
+V composeru zvolte režim. **Orchestrace** vždy použije uloženou Ollamu na
+stejném počítači; model zde nelze přepsat a lze explicitně zaškrtnout projektové
+podklady. **Brainstorming** dovolí pro konkrétní běh zadat model lokální Ollamy
+nebo nakonfigurovaného OpenAI backendu, ale podklady projektu skryje a do
+manifestu je nepřijme. Text zadání a vědomě vybrané zprávy jsou jeho explicitní
+textový kontext. Externí brainstorming vždy nejprve ukáže přesný náhled a
+vyžádá potvrzení; `local-only` se externě neodešle. Přepnutí z brainstormingu do
+orchestrace archivuje původní vlákno a založí nové prázdné vlákno. Aktivní nebo
+neurčitý běh přechod zastaví; historie ani model se do nové orchestrace
+nepřenášejí.
+
 Záložka **Uživatelé** spravuje lokální účty a role, záložka **Federace** peery,
 důvěru a oboustranná mapování. Přístupové klíče a privátní podpisové klíče
 zůstávají mimo projektový Git; samotné skrytí záložky nenahrazuje serverovou

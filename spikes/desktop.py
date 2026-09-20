@@ -434,6 +434,16 @@ def main():
                        document.querySelector('#count').textContent!==before)return null;
                     window.promptSubmitChecked=true;
                   }
+                  if(!window.chatModesChecked){
+                    const mode=document.querySelector('#chat-mode'),adapter=document.querySelector('#chat-run-adapter');
+                    const artifacts=document.querySelector('#task-artifacts');
+                    if(mode.value!=='orchestration' || !adapter.disabled || artifacts.hidden)return null;
+                    mode.value='brainstorming';mode.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(adapter.disabled || !artifacts.hidden)return null;
+                    mode.value='orchestration';mode.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(!adapter.disabled || artifacts.hidden)return null;
+                    window.chatModesChecked=true;
+                  }
                   const composer=document.querySelector('#chat-composer');
                   if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));

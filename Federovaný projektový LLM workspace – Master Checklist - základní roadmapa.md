@@ -604,8 +604,9 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   kontext pro přípravu kontextu/dat, kompilaci návrhu artefaktu a filtraci;
   LLM pouze navrhuje, deterministický orchestrátor vykonává autorizované akce.
   Brainstorming dovoluje pro každý běh vybrat libovolný policy-povolený model,
-  ale nesmí přijmout projektové artefakty ani jejich automaticky odvozený
-  context. Přepnutí `orchestration` → `brainstorming` vždy znovu sestaví
+  ale může přijmout explicitně připravený textový/chatový kontext; nesmí přijmout
+  projektové artefakty ani jejich automaticky odvozený context. Přepnutí
+  `orchestration` → `brainstorming` vždy znovu sestaví
   manifest a nepřenáší historii ani artefakty implicitně. Návrat
   `brainstorming` → `orchestration` vyžaduje ukončit a lokálně archivovat
   brainstormingové vlákno; případný Git otisk je samostatné potvrzení. Poté

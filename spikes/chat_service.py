@@ -12,6 +12,7 @@ from types import MappingProxyType
 from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
+from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
 from spikes.configuration import parse_node, read_config
@@ -239,7 +240,7 @@ class ChatService:
         required = {'task_id', 'project_id', 'expected_head', 'thread_id', 'message_id',
                     'run_id', 'manifest_id', 'selected_message_ids',
                     'selected_artifact_ids', 'content', 'privacy', 'created_at'}
-        require(isinstance(request, dict) and set(request) == required,
+        require(isinstance(request, dict) and set(request) in (required, required | {'run_choice'}),
                 'Unknown or missing task route field')
         for key in ('task_id', 'project_id', 'thread_id', 'message_id', 'run_id',
                     'manifest_id'):
@@ -273,7 +274,21 @@ class ChatService:
         require(ordered == request['selected_message_ids'],
                 'Selected messages must use thread order')
         prior = [messages[value] for value in ordered]
-        binding = bindings.load()
+        configured = bindings.load()
+        choice = ChatRunChoice.parse(request.get('run_choice', {
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+        require(choice.adapter_id == 'ollama',
+                'External brainstorming requires preview and confirmation')
+        binding = choice.resolve(ollama=configured)
+        choice.validate_context(
+            project_input_ids=tuple(request['selected_artifact_ids']),
+            text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
+        if thread is None and 'run_choice' in request:
+            thread = threads.create(thread_id=request['thread_id'], node_id=node_id,
+                user_id=user_id, created_at=request['created_at'], classification=choice.mode)
+        if thread is not None and 'run_choice' in request:
+            require(thread['classification'] == choice.mode,
+                    'Chat mode cannot change inside an existing thread')
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
             'task-router-v1', frozenset(request['selected_artifact_ids']))
         instruction = ('Return only one JSON object matching exactly one of these flat templates: '
@@ -414,13 +429,20 @@ class ChatService:
         required = {'approval_id', 'project_id', 'expected_head', 'thread_id', 'turn_id',
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
-        optional = {'selected_artifact_ids', 'record_chat'}
+        optional = {'selected_artifact_ids', 'record_chat', 'run_choice'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
         request.setdefault('selected_artifact_ids', [])
         request.setdefault('record_chat', True)
         require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
+        if 'run_choice' in request:
+            choice = ChatRunChoice.parse(request['run_choice'])
+            require(choice.mode == 'brainstorming' and choice.adapter_id == 'openai-responses',
+                    'External chat requires an OpenAI brainstorming choice')
+            choice.validate_context(project_input_ids=tuple(request['selected_artifact_ids']),
+                                    text_input_ids=tuple(request['selected_message_ids'])
+                                        + (request['message_id'],))
         for key in ('approval_id', 'project_id', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id'):
             uuid(request[key])
@@ -469,7 +491,10 @@ class ChatService:
              'privacy': request['privacy'], 'role': 'user'}]
         require(not any(item['privacy'] == 'local-only' for item in selected),
                 'local-only data cannot be sent to an external provider')
-        binding = OpenAIBindings(root).load()
+        base_binding = OpenAIBindings(root).load()
+        binding = (ChatRunChoice.parse(request['run_choice']).resolve(
+            ollama=OllamaBindings(root).load(), openai=base_binding)
+            if 'run_choice' in request else base_binding)
         authority = Authority('external-approval:' + request['approval_id'], user_id, node_id,
                               'external-chat-v1', frozenset(request['selected_artifact_ids']))
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode(), item['privacy'])
@@ -543,7 +568,10 @@ class ChatService:
                 'External preview approval does not match')
         original = self._external_fields(approval['request'])
         workspace = self.projects.workspace(original['project_id'], blocking=False)
-        binding = OpenAIBindings(root).load()
+        base_binding = OpenAIBindings(root).load()
+        binding = (ChatRunChoice.parse(original['run_choice']).resolve(
+            ollama=OllamaBindings(root).load(), openai=base_binding)
+            if 'run_choice' in original else base_binding)
         current_binding_sha256 = hashlib.sha256(json.dumps(binding.serialize(),
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         require(current_binding_sha256 == approval['binding_sha256'],
@@ -748,6 +776,16 @@ class ChatService:
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
 
+    def start_orchestration(self, *, source_thread_id, thread_id, created_at):
+        uuid(thread_id); timestamp(created_at)
+        node_id, user_id = self._identity(); threads = ChatThreads(self._root())
+        if source_thread_id is None:
+            return threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
+                                  created_at=created_at, classification='orchestration')
+        uuid(source_thread_id)
+        return threads.start_orchestration(source_thread_id=source_thread_id,
+            thread_id=thread_id, node_id=node_id, user_id=user_id, created_at=created_at)
+
     def publish_snapshot(self, request, operation_id):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish(
             request, operation_id)
@@ -758,7 +796,7 @@ class ChatService:
 
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,
-             content, privacy, created_at):
+             content, privacy, created_at, run_choice=None):
         for value in (project_id, thread_id, turn_id, message_id, run_id,
                       manifest_id, assistant_message_id):
             uuid(value)
@@ -775,10 +813,20 @@ class ChatService:
         require(workspace.git.head() == expected_head, 'Project changed before chat dispatch')
         node_id, user_id = self._identity()
         threads, bindings, adapter = self._stores()
+        configured = bindings.load()
+        choice = (ChatRunChoice.parse(run_choice) if run_choice is not None else
+                  ChatRunChoice.parse({'mode': 'brainstorming', 'adapter': 'ollama',
+                                       'model': configured.model}))
+        require(choice.adapter_id == 'ollama',
+                'External brainstorming requires preview and confirmation')
+        binding = choice.resolve(ollama=configured)
         owned = {row['thread_id'] for row in threads.list(node_id, user_id)}
         if thread_id not in owned:
             threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
-                           created_at=created_at)
+                           created_at=created_at, classification=choice.mode)
+        stored = threads.get(thread_id, node_id, user_id)
+        require(stored['classification'] == choice.mode,
+                'Chat mode cannot change inside an existing thread')
         threads.prepare_turn(thread_id=thread_id, node_id=node_id, user_id=user_id,
                              turn_id=turn_id, message_id=message_id, content=content,
                              privacy=privacy, created_at=created_at)
@@ -790,8 +838,8 @@ class ChatService:
                    if item['message_id'] in selected_message_ids]
         require(ordered == selected_message_ids, 'Selected messages must use thread order')
         selected = [messages[value] for value in selected_message_ids] + [messages[message_id]]
-
-        binding = bindings.load()
+        choice.validate_context(project_input_ids=(),
+                                text_input_ids=tuple(item['message_id'] for item in selected))
         authority = Authority(self.session_id, user_id, node_id, 'desktop-chat-v1', frozenset())
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode('utf-8'),
                                   item['privacy']) for item in selected)
