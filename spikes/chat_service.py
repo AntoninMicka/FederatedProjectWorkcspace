@@ -86,22 +86,32 @@ class ChatService:
             binding = bindings.load().serialize()
         except FileNotFoundError:
             binding = None
-        rows = threads.list(node_id, user_id)
+        rows = [self._with_external_history(row, node_id, user_id)
+                for row in threads.list(node_id, user_id)]
         return {'binding': binding, 'threads': rows}
+
+    def _with_external_history(self, thread, node_id, user_id):
+        store = ExternalDispatches(self._root())
+        for turn in thread.get('turns', []):
+            run_id = turn.get('run_id')
+            turn['external_request_available'] = bool(
+                run_id and store.has_run(run_id, node_id, user_id))
+        return thread
 
     def external_status(self):
         root = self._root()
         try:
             binding = OpenAIBindings(root).load()
         except FileNotFoundError:
-            return {'binding': None, 'credential': None, 'model_catalog': None}
+            return {'binding': None, 'credential': None, 'model_catalog': None,
+                    'capabilities': {'streaming': True}}
         try:
             catalog = OpenAIModelCatalog(root, OpenAICredentials(root)).load(binding)
         except (FileNotFoundError, ValueError):
             catalog = None
         return {'binding': binding.serialize(),
                 'credential': OpenAICredentials(root).status(binding.credential_ref),
-                'model_catalog': catalog}
+                'model_catalog': catalog, 'capabilities': {'streaming': True}}
 
     def configure_external(self, value):
         require(isinstance(value, dict), 'External backend request must be an object')
@@ -443,13 +453,15 @@ class ChatService:
         required = {'approval_id', 'project_id', 'expected_head', 'thread_id', 'turn_id',
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
-        optional = {'selected_artifact_ids', 'record_chat', 'run_choice'}
+        optional = {'selected_artifact_ids', 'record_chat', 'run_choice', 'stream'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
         request.setdefault('selected_artifact_ids', [])
         request.setdefault('record_chat', True)
+        request.setdefault('stream', False)
         require(type(request['record_chat']) is bool, 'Invalid external chat recording mode')
+        require(type(request['stream']) is bool, 'Invalid external streaming mode')
         if 'run_choice' in request:
             choice = ChatRunChoice.parse(request['run_choice'])
             require(choice.mode == 'brainstorming' and choice.adapter_id == 'openai-responses',
@@ -525,7 +537,8 @@ class ChatService:
                 tuple(item['role'] for item in selected)))
         handoff = DispatchHandoff(request['run_id'], request['manifest_id'],
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
-        provider_request, _, _ = OpenAIAdapter._request(handoff, binding)
+        provider_request, _, _ = OpenAIAdapter._request(
+            handoff, binding, stream=request['stream'])
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         require(strongest != 'local-only',
@@ -562,7 +575,41 @@ class ChatService:
             request['approval_id'], node_id, user_id, 'cancelled')
         return {'approval_id': result['approval_id'], 'state': result['state']}
 
-    def external_confirm(self, request):
+    def external_send(self, request):
+        return self._external_send(request, None)
+
+    def external_send_stream(self, request, on_delta):
+        request = dict(request, stream=True)
+        return self._external_send(request, on_delta)
+
+    def _external_send(self, request, on_delta):
+        request = self._external_fields(request)
+        node_id, user_id = self._identity()
+        stored = ExternalDispatches(self._root()).find(
+            request['approval_id'], node_id, user_id)
+        if stored is None:
+            preview = self.external_preview(request)
+        else:
+            require(stored['request'] == request,
+                    'Approval ID belongs to a different direct request')
+            preview = {'approval_id': stored['approval_id'],
+                       'preview_sha256': stored['preview_sha256'],
+                       'privacy': stored['privacy']}
+        result = self.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}, on_delta=on_delta)
+        result['thread'] = self._with_external_history(result['thread'], node_id, user_id)
+        result['request_record'] = self.external_request({'run_id': request['run_id']})
+        return result
+
+    def external_request(self, request):
+        require(isinstance(request, dict) and set(request) == {'run_id'},
+                'Invalid external request history query')
+        node_id, user_id = self._identity()
+        return ExternalDispatches(self._root()).request_for_run(
+            request['run_id'], node_id, user_id)
+
+    def external_confirm(self, request, on_delta=None):
         required = {'approval_id', 'preview_sha256', 'approved', 'privacy'}
         require(isinstance(request, dict) and set(request) == required
                 and request['approved'] is True,
@@ -598,7 +645,8 @@ class ChatService:
         builder = ContextBuilder(workspace, original['project_id'])
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
-        current_request, _, _ = OpenAIAdapter._request(handoff, binding)
+        current_request, _, _ = OpenAIAdapter._request(
+            handoff, binding, stream=original['stream'])
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
         adapter = (self.external_adapter_factory(OpenAIRuns(root), OpenAICredentials(root))
@@ -679,8 +727,10 @@ class ChatService:
         threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
-            adapter.prepare(handoff, binding)
-            response = adapter.dispatch(handoff, binding)
+            adapter.prepare(handoff, binding, stream=original['stream'])
+            response = (adapter.dispatch_stream(handoff, binding,
+                                                on_delta or (lambda _delta: None))
+                        if original['stream'] else adapter.dispatch(handoff, binding))
             completed = threads.complete(turn_id=original['turn_id'], node_id=node_id,
                 user_id=user_id, run_id=original['run_id'],
                 message_id=original['assistant_message_id'], content=response['response'],

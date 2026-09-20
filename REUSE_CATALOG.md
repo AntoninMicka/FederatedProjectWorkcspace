@@ -154,6 +154,18 @@ se nesmí odvozovat z routingu. Ollama account billing a odhad ceny podle názvu
 modelu jsou bez podporovaného zdroje `unsupported`. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#usage-a-billing-kontrakt-v1).
 
+F-M3-CHAT-DIRECT-01-A **adaptuje** existující `OpenAIAdapter`, `OpenAIRuns`,
+Context Manifest, mode policy a vlastnictví chatového vlákna. Nevytváří druhý
+provider adapter ani druhý run journal. Pro streamovaný transport používá
+stdlib HTTPS a bounded parser server-sent events podle aktuálního oficiálního
+[OpenAI streaming guide](https://developers.openai.com/api/docs/guides/streaming-responses);
+SDK ani obecný SSE/websocket framework není pro první PoC potřeba. Dosavadní
+external preview store zůstává pouze pro task workflow a historické záznamy;
+neadaptuje se jako skryté potvrzení přímého brainstormingu. Soukromá inventura
+nedokládá kompatibilní streaming/recovery kontrakt ani licenci k převzetí, proto
+se z ní nekopíruje kód. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#přímý-brainstorming-request-record-a-streaming--f-m3-chat-direct-01).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

@@ -200,8 +200,16 @@ stejném počítači; model zde nelze přepsat a lze explicitně zaškrtnout pro
 podklady. **Brainstorming** dovolí pro konkrétní běh zadat model lokální Ollamy
 nebo nakonfigurovaného OpenAI backendu, ale podklady projektu skryje a do
 manifestu je nepřijme. Text zadání a vědomě vybrané zprávy jsou jeho explicitní
-textový kontext. Externí brainstorming vždy nejprve ukáže přesný náhled a
-vyžádá potvrzení; `local-only` se externě neodešle. Přepnutí z brainstormingu do
+textový kontext. Odeslání externího brainstormingového tahu po serverové
+kontrole proběhne přímo; u odpovědi lze i po restartu rozbalit přesné odeslané
+JSON body bez credentialu a autorizačních hlaviček. Pokročilý ruční externí
+náhled a task workflow si své samostatné potvrzení ponechávají. `local-only` se
+externě neodešle. Pokud backend ohlásí podporu streamování, desktop i web
+zobrazují textové delty průběžně. Rozpracovaný text je pouze dočasný; do historie
+se uloží až validovaná finální odpověď. Přerušení proto nezanechá částečnou
+asistentovu zprávu a backend bez této schopnosti použije běžnou celou odpověď.
+Ve webové variantě je přímý externí chat do zavedení oddělené
+identity chat store omezen na administrátora uzlu. Přepnutí z brainstormingu do
 orchestrace archivuje původní vlákno a založí nové prázdné vlákno. Aktivní nebo
 neurčitý běh přechod zastaví; historie ani model se do nové orchestrace
 nepřenášejí.

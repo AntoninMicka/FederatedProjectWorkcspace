@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """Static same-origin UI; project data arrives through authenticated reads."""
+import json
 import sqlite3
 import subprocess
 
@@ -170,6 +171,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
+<div id="chat-stream" class="chat-message assistant" aria-live="polite" hidden></div>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -552,9 +554,25 @@ const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
+const chatStream=document.querySelector('#chat-stream');
 const chatRunUsage=document.querySelector('#chat-run-usage');
-let activeThread=null,chatBinding=null,externalBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeThread=null,chatBinding=null,externalBinding=null,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+async function externalStreamRequest(request,onDelta){
+ const response=await fetch('/v1/external/send-stream',{method:'POST',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
+ if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
+ const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
+ while(true){const part=await reader.read();buffer+=decoder.decode(part.value || new Uint8Array(),{stream:!part.done});
+  let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
+   if(!line)continue;const event=JSON.parse(line);
+   if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
+   else if(event.type==='result')result=event.result;
+   else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
+   else throw new Error('Neplatná událost streamu.');}
+  if(part.done)break;}
+ if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
+}
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
@@ -566,6 +584,21 @@ function renderChat(thread){
   message.textContent=item.content;
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
   message.append(detail);chatMessages.append(message);
+  const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
+  if(turn?.external_request_available){
+   const requestButton=document.createElement('button');requestButton.type='button';
+   requestButton.className='secondary-button';requestButton.textContent='Zobrazit odeslaný request';
+   requestButton.addEventListener('click',async()=>{
+    requestButton.disabled=true;
+    try{const record=await projectRequest('/v1/external/request',{run_id:turn.run_id});
+     let pre=message.querySelector('.external-request-record');
+     if(!pre){pre=document.createElement('pre');pre.className='external-request-record';message.append(pre);}
+     pre.textContent=JSON.stringify(record.provider_request,null,2);
+    }catch(error){chatOperationStatus.textContent=error.message;}
+    finally{requestButton.disabled=false;}
+   });
+   message.append(requestButton);
+  }
  }
  renderTaskOutcomes();
  document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
@@ -691,6 +724,7 @@ async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
+  externalStreaming=external.capabilities?.streaming===true;
   refreshChatModeControls();
   fillExternalModels(external.model_catalog);
   settingsExternalStatus.textContent=external.binding ?
@@ -947,7 +981,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(mode==='brainstorming' && adapter==='openai-responses'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
-  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
+  if(!pendingChatRequest)pendingChatRequest={approval_id:crypto.randomUUID(),project_id:activeProject.id,
    expected_head:activeProject.head,thread_id:activeThread?.thread_id || activeTaskThreadId || crypto.randomUUID(),
    turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
    manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
@@ -955,7 +989,20 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    selected_artifact_ids:[],content:draft.value.trim(),
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
    run_choice:runChoice};
-  await showExternalPreview(request);return;
+  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+  chatOperationStatus.textContent='Odesílám do OpenAI…';
+  chatStream.textContent='';chatStream.hidden=!externalStreaming;
+  try{const result=externalStreaming ?
+   await externalStreamRequest(pendingChatRequest,delta=>{chatStream.textContent+=delta;}) :
+   await projectRequest('/v1/external/send',pendingChatRequest,210000);
+   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
+   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent='Externí odpověď byla přijata.';
+  }catch(error){
+   if([409,422,502].includes(error.status))pendingChatRequest=null;
+   chatOperationStatus.textContent=error.message;
+  }finally{chatStream.hidden=true;submit.disabled=!activeProject || !draft.value.trim();}
+  return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
   if(!pendingChatRequest){
@@ -1250,7 +1297,8 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/orchestration',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
-        '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
+        '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
+        '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
         '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
         '/v1/tasks/artifact', '/v1/tasks/external/preview',
@@ -1294,6 +1342,35 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_models())
             if self.path == '/v1/external/propose' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_propose(request))
+            if self.path == '/v1/external/send' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_send(request))
+            if self.path == '/v1/external/send-stream' and isinstance(request, dict):
+                self.close_connection = True
+                self.send_response_only(200)
+                self.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                def emit(value):
+                    self.wfile.write(json.dumps(value, ensure_ascii=False,
+                        separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
+                def emit_error(status, message):
+                    try: emit({'type': 'error', 'status': status, 'error': message})
+                    except OSError: pass
+                try:
+                    result = self.server.chat_service.external_send_stream(
+                        request, lambda delta: emit({'type': 'delta', 'delta': delta}))
+                    emit({'type': 'result', 'result': result})
+                except OpenAIUnknownRun:
+                    emit_error(409, 'Výsledek externího běhu není známý; požadavek automaticky neopakujte.')
+                except OpenAIResponseError:
+                    emit_error(502, 'Externí LLM odpověď nebylo možné bezpečně přijmout.')
+                except (ValueError, OSError, sqlite3.Error):
+                    emit_error(422, 'Streamovaný chat požadavek nelze provést.')
+                return
+            if self.path == '/v1/external/request' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_request(request))
             if self.path == '/v1/external/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_preview(request))
             if self.path == '/v1/external/confirm' and isinstance(request, dict):

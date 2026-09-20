@@ -130,6 +130,60 @@ class OpenAIBackendTests(unittest.TestCase):
         self.assertEqual(result['response'], 'první část')
         self.assertNotIn('reasoning', json.dumps(result))
 
+    def test_streaming_uses_distinct_request_and_durable_final_response(self):
+        calls = []; deltas = []
+        def stream(binding, request, secret, on_delta):
+            calls.append((json.loads(request), secret))
+            on_delta('odpo'); on_delta('ved')
+            return self.response()
+        adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+            stream_transport=stream)
+        prepared = adapter.prepare(self.handoff, self.binding, stream=True)
+        self.assertEqual(prepared['state'], 'prepared')
+        result = adapter.dispatch_stream(self.handoff, self.binding, deltas.append)
+        self.assertEqual((deltas, result['response']), (['odpo', 'ved'], 'odpoved'))
+        self.assertTrue(calls[0][0]['stream'])
+        self.assertNotIn(calls[0][1], json.dumps(calls[0][0]))
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'succeeded')
+        self.assertEqual(adapter.dispatch_stream(
+            self.handoff, self.binding, lambda _: self.fail('must not emit')), result)
+
+    def test_sse_transport_validates_deltas_and_final_response(self):
+        response = self.response()
+        events = [
+            {'type': 'response.output_text.delta', 'sequence_number': 1, 'delta': 'odpo'},
+            {'type': 'response.output_text.delta', 'sequence_number': 2, 'delta': 'ved'},
+            {'type': 'response.completed', 'sequence_number': 3, 'response': response}]
+        lines = iter([part for event in events for part in
+            [b'data: ' + json.dumps(event).encode() + b'\n', b'\n']])
+        class Response:
+            status = 200
+            def readline(self, _limit): return next(lines, b'')
+        class Connection:
+            def __init__(self, *args, **kwargs): pass
+            def request(self, *_args, **_kwargs): pass
+            def getresponse(self): return Response()
+            def close(self): pass
+        deltas = []
+        with patch('spikes.openai_backend.http.client.HTTPSConnection', Connection):
+            result = OpenAIAdapter._http_stream_transport(
+                self.binding, b'{}', 'sk-secret-value', deltas.append)
+        self.assertEqual((deltas, result), (['odpo', 'ved'], response))
+
+    def test_interrupted_stream_is_unknown_and_partial_text_is_not_a_response(self):
+        deltas = []
+        def interrupted(_binding, _request, _secret, on_delta):
+            on_delta('částečný text')
+            raise TimeoutError('stream interrupted')
+        adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+                                stream_transport=interrupted)
+        with self.assertRaises(OpenAIUnknownRun):
+            adapter.dispatch_stream(self.handoff, self.binding, deltas.append)
+        run = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(deltas, ['částečný text'])
+        self.assertEqual(run['state'], 'unknown')
+        self.assertIsNone(run['response'])
+
     def test_changed_credential_invalidates_prepared_run(self):
         adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
                                 lambda *args: self.fail('must not dispatch'))

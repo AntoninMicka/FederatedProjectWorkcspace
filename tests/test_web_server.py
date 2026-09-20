@@ -86,6 +86,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
+        from uuid import uuid4
         _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Restricted"}')
         project = json.loads(data)['id']
         def admin(request):
@@ -101,12 +102,15 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/external/request',
+            body=json.dumps({'run_id':str(uuid4())}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/external/send-stream',
+            body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/projects/create', body='{"title":"Denied"}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
-        from uuid import uuid4
         view = Projects(self.root/'node.json').open(project)
         source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')
         self.assertEqual(self.request(path='/v1/sources/import', body=json.dumps({
