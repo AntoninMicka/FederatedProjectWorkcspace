@@ -281,6 +281,13 @@ ProjectCreation(sys.argv[1]).create('První projekt', sys.argv[2], sys.argv[3],
         self.assertEqual(self.node.read_bytes(), original)
         self.assertFalse(self.root.exists())
 
+    def test_existing_root_with_unsafe_permissions_reports_actionable_error(self):
+        self.root.mkdir(mode=0o700)
+        self.root.chmod(0o770)
+        with self.assertRaisesRegex(CreationConflict, 'Directory must not be writable by other users'):
+            self.create()
+        self.assertEqual(list(self.root.iterdir()), [])
+
     def test_create_adopts_empty_existing_root_and_recovers(self):
         self.root.mkdir(mode=0o700)
         before = self.root.stat().st_ino

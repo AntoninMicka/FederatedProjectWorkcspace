@@ -32,6 +32,13 @@ class CreationDialog(QDialog):
                 self.root.setText(str(Path(folder) / (Path(self.root.text()).name or 'novy-projekt')))
         browse.clicked.connect(choose)
         layout.addWidget(browse)
+        choose_root = QPushButton('Vybrat existující prázdnou složku projektu…')
+        def choose_existing_root():
+            folder = QFileDialog.getExistingDirectory(self, 'Prázdná složka projektu', self.root.text())
+            if folder:
+                self.root.setText(folder)
+        choose_root.clicked.connect(choose_existing_root)
+        layout.addWidget(choose_root)
         self.remember = QCheckBox('Použít tuto nadřazenou složku jako výchozí')
         self.remember.setChecked(True)
         layout.addWidget(self.remember)
@@ -66,6 +73,8 @@ class CreationWorker(QThread):
         try:
             self.succeeded.emit(self.action())
         except CreationConflict as exc:
+            self.failed.emit(str(exc))
+        except ValueError as exc:
             self.failed.emit(str(exc))
         except Exception:
             self.failed.emit('Operaci nelze dokončit. Ověřte cestu, práva a dostupné místo. '

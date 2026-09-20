@@ -240,7 +240,10 @@ class ProjectCreation:
               and not any(ord(c) < 32 for c in title), 'Zadejte název projektu (nejvýše 200 znaků).')
         root = Path(root)
         check(root.is_absolute() and root == local_path(str(root)), 'Zadejte absolutní cestu bez symlinků.')
-        directory(root.parent)
+        try:
+            directory(root.parent)
+        except ValueError as exc:
+            raise CreationConflict(str(exc)) from exc
         deadline = time.monotonic() + self.timeout
         with self._locked() as db:
             row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
@@ -256,7 +259,10 @@ class ProjectCreation:
                   'Nejprve dokončete přerušené vytvoření projektu.')
             existing_root = os.path.lexists(root)
             if existing_root:
-                directory(root)
+                try:
+                    directory(root)
+                except ValueError as exc:
+                    raise CreationConflict(str(exc)) from exc
                 check(not list(root.iterdir()),
                       'Existující cílová složka musí být prázdná.')
             before, node = self._node()
