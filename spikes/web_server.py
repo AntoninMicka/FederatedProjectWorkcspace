@@ -19,6 +19,8 @@ from spikes.project_creation import CreationConflict, ProjectCreation
 from spikes.projects import Projects
 from spikes.administration import Administration, AccessDenied, identifier
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
+from spikes.metadata import MAX_FILE
+from spikes.source_import import Sources
 
 HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
 CSS += ADMIN_CSS
@@ -40,6 +42,16 @@ WEB_HTML = WEB_HTML.replace(
     '<button id="create-project-btn">Vytvořit projekt</button></div>'
     '<p id="create-project-status" role="status"> </p></form>'
     '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>')
+WEB_HTML = WEB_HTML.replace(
+    '<button id="back-projects" class="back-button">',
+    '''<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
+<form id="web-source-import-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
+<label>Název <input name="title" maxlength="200" required></label>
+<label>Popis <textarea name="description" rows="3"></textarea></label>
+<label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
+<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>
+<button id="back-projects" class="back-button">''')
 # A separate asset preserves the desktop/native authentication contract.
 WEB_JS = '''let accessKey='';
 const originalFetch=window.fetch.bind(window);
@@ -86,6 +98,24 @@ projectCreateForm.addEventListener('submit',async(event)=>{
 window.addEventListener('pagehide',()=>{accessKey='';});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 document.querySelector('#logout').addEventListener('click',()=>{accessKey='';location.reload();});
+const webImportForm=document.querySelector('#web-source-import-form');
+let webImportAttempt=null;
+function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
+webImportForm.addEventListener('submit',async event=>{
+ event.preventDefault();const status=document.querySelector('#web-source-import-status');const fields=new FormData(webImportForm);
+ const file=fields.get('file');if(!activeProject || !(file instanceof File) || !file.size){status.textContent='Vyberte otevřený projekt a soubor.';return;}
+ if(file.size>16777216){status.textContent='Soubor přesahuje limit 16 MiB.';return;}
+ const button=webImportForm.querySelector('button');button.disabled=true;status.textContent='Importuji…';
+ try{const signature=JSON.stringify([activeProject.id,activeProject.head,file.name,file.size,file.lastModified,fields.get('title'),fields.get('description'),fields.get('tags'),fields.get('privacy')]);
+   if(!webImportAttempt || webImportAttempt.signature!==signature){const raw=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',raw);const source={project_id:activeProject.id,artifact_id:crypto.randomUUID(),base_head:activeProject.head,
+   filename:file.name,title:String(fields.get('title')||'').trim(),description:String(fields.get('description')||''),
+   tags:String(fields.get('tags')||'').split(/\\r?\\n/).map(v=>v.trim()).filter(Boolean),privacy:String(fields.get('privacy')),
+   created_at:new Date().toISOString(),content:bytesBase64(raw),sha256:[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join(''),
+   source_url:null,source_author:null,source_created_at:null,source_revision:null};webImportAttempt={signature,request:{operation_id:crypto.randomUUID(),source}};}
+   const result=await projectRequest('/v1/sources/import',webImportAttempt.request,120000);
+   status.textContent='Zdroj byl importován.';webImportAttempt=null;webImportForm.reset();await openRegisteredProject(result.id);
+ }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
+});
 ''' + JS.removesuffix('loadProjects();\n').replace(
     'createTodo.hidden=!!todo;', 'createTodo.hidden=true;').replace(
     'Založte seznam a mějte úkoly projektu po ruce.', 'Projekt zatím nemá hlavní seznam úkolů.').replace(
@@ -93,7 +123,7 @@ document.querySelector('#logout').addEventListener('click',()=>{accessKey='';loc
 WEB_CSS = CSS + '''body:not(.authenticated)>aside,body:not(.authenticated)>main{display:none}
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}#create-main-todo,#todo-help{display:none!important}
-.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
+.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}#web-source-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#web-source-import label{display:block;margin:9px 0}#web-source-import input,#web-source-import textarea,#web-source-import select{max-width:100%;padding:8px}#web-source-import textarea{width:100%}
 @media(max-width:600px){.project-create-row{flex-direction:column}#new-project-title{width:100%;box-sizing:border-box}}'''
 ASSETS = {'/': ('text/html; charset=utf-8', WEB_HTML),
           '/app.css': ('text/css; charset=utf-8', WEB_CSS),
@@ -117,7 +147,9 @@ def secret(path):
 
 
 class WebHandler(DesktopHandler):
-    post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session'}
+    max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
+    post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session',
+                                               '/v1/sources/import'}
 
     def do_POST(self):
         from spikes.federation_probe import PATH, reply_probe
@@ -151,7 +183,29 @@ class WebHandler(DesktopHandler):
         self.server.origin = 'https://' + self.server.authority
 
     def _default_projects_root(self):
-        return Path(self.server.node).parent / 'projects'
+        return (ProjectCreation(self.server.node).configured_projects_root()
+                or Path(self.server.node).parent / 'projects')
+
+    def _can_write(self, project_id):
+        if self.server.administration.is_admin(self.actor):
+            return True
+        return bool(self.actor and self.actor.get('memberships', {}).get(project_id) in {'editor', 'project-admin'})
+
+    def _import_source(self, request):
+        try:
+            if not isinstance(request, dict) or set(request) != {'operation_id', 'source'}:
+                return self.send_error(400)
+            source = request['source']
+            if not isinstance(source, dict) or not self._can_write(source.get('project_id')):
+                return self.send_error(403)
+            if source.get('privacy') not in {'public', 'project', 'confidential'}:
+                return self.reply(422, {'error': 'Webový import nepovoluje local-only obsah.'})
+            author = self.actor.get('id') or ProjectCreation(self.server.node).author_id()
+            receipt = Sources(self.server.node).import_source(source, request['operation_id'],
+                author_id=author, importer_name='workspace-web-import')
+            self.reply(200, {'id': source['project_id'], 'commit_id': receipt['commit_id']})
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+            self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def _create_project(self, request):
         if not isinstance(request, dict) or not {'title'} <= set(request) <= {'title', 'operation_id'} or not isinstance(request['title'], str):
@@ -192,6 +246,8 @@ class WebHandler(DesktopHandler):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
             return self._create_project(request)
+        if self.path == '/v1/sources/import':
+            return self._import_source(request)
         return super().dispatch(request)
 
     def do_GET(self):

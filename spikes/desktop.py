@@ -8,6 +8,7 @@ import os
 import signal
 import sys
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
 from spikes.administration import Administration
@@ -60,9 +61,10 @@ def main():
     if args.screenshot and not args.smoke:
         parser.error('--screenshot requires --smoke')
     try:
-        from PySide6.QtCore import QTimer, QUrl
+        from PySide6.QtCore import Qt, QTimer, QUrl
         from PySide6.QtGui import QDesktopServices
-        from PySide6.QtWidgets import QApplication, QMessageBox, QMainWindow, QPushButton
+        from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
+                                       QFileDialog, QInputDialog)
         from spikes.desktop_editor import EditorDialog
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
@@ -167,8 +169,55 @@ def main():
                 print('desktop creation failed: ' + message, file=sys.stderr, flush=True)
                 app.exit(5)
             else:
-                QMessageBox.warning(window, 'Projekt nebyl vytvořen', message)
+                QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
+        project_toolbar = controller.toolbar
+        register_button = QPushButton('Načíst projekt z umístění…')
+        def register_project():
+            if controller.busy:
+                return
+            folder = QFileDialog.getExistingDirectory(window, 'Vyberte kořen existujícího projektu',
+                                                       str(controller.service.default_projects_root()))
+            if folder:
+                controller.start(lambda: controller.service.register(folder, str(uuid4())))
+        register_button.clicked.connect(register_project)
+        project_toolbar.addWidget(register_button)
+        relocate_button = QPushButton('Opravit umístění projektu…')
+        def relocate_project():
+            if controller.busy:
+                return
+            rows = server.projects.catalog()
+            if not rows:
+                QMessageBox.information(window, 'Umístění projektu', 'Uzel nemá žádný registrovaný projekt.')
+                return
+            labels = [row['title'] + ' — ' + row['id'] for row in rows]
+            label, accepted = QInputDialog.getItem(window, 'Umístění projektu',
+                                                   'Registrovaný projekt', labels, 0, False)
+            if not accepted:
+                return
+            project_id = rows[labels.index(label)]['id']
+            if controller.service.registration_root_missing(project_id):
+                choice = QMessageBox(window)
+                choice.setWindowTitle('Chybějící projekt')
+                choice.setTextFormat(Qt.TextFormat.PlainText)
+                choice.setText('Původní umístění tohoto projektu na disku neexistuje.\n\n'
+                               'Můžete vybrat nové umístění stejného projektu, nebo odebrat pouze jeho '
+                               'registraci ze seznamu. Lokální stav a případná data jinde se nemažou.')
+                repair = choice.addButton('Vybrat nové umístění', QMessageBox.ButtonRole.AcceptRole)
+                remove = choice.addButton('Odebrat pouze ze seznamu', QMessageBox.ButtonRole.DestructiveRole)
+                choice.addButton(QMessageBox.StandardButton.Cancel)
+                choice.exec()
+                if choice.clickedButton() is remove:
+                    controller.start(lambda: controller.service.unregister_missing(project_id, str(uuid4())))
+                    return
+                if choice.clickedButton() is not repair:
+                    return
+            folder = QFileDialog.getExistingDirectory(window, 'Vyberte nové umístění stejného projektu',
+                                                       str(controller.service.default_projects_root()))
+            if folder:
+                controller.start(lambda: controller.service.relocate(project_id, folder, str(uuid4())))
+        relocate_button.clicked.connect(relocate_project)
+        project_toolbar.addWidget(relocate_button)
         editor_toolbar = window.addToolBar('Dokumenty')
         deploy_button = QPushButton('Nasadit LXC uzel…')
         def deploy_node():

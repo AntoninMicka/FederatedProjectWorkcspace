@@ -13,15 +13,37 @@ Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu na
 
 ## Vytvoření nového projektu
 
-Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
+Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a práva. Volba **Použít tuto nadřazenou složku jako výchozí** uloží rodiče do lokální konfigurace uzlu a použije jej při příštím dialogu i pro webové vytvoření. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
 
 Cílová složka ještě nesmí existovat, ani prázdná. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte tlačítkem **Dokumenty…**.
 
 Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
 
-V průběhu vytváření je další vytvoření a běžné zavření okna dočasně zakázané; po dokončení lze okno zavřít. Při násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví. Po chybě je dostupné také **Dokončit přerušené vytvoření**. Pokud se mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu; nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky `.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
+V průběhu vytváření je další vytvoření a běžné zavření okna dočasně zakázané; po dokončení lze okno zavřít. Při násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví. Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu; nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky `.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
 
 Kontrakt, idempotence a hranice recovery: [ADR 0015](adr/0015-project-creation.md). Jde o lokální Linux PoC, nikoli produkční správu identit nebo úplné recovery po výpadku napájení.
+
+## Načtení existujícího projektu a oprava cesty
+
+Tlačítko **Načíst projekt z umístění…** zaregistruje existující kořen běžného
+Git repozitáře. Musí obsahovat platný `project.json` v aktuálním commitu i
+shodnou pracovní kopii; aplikace projekt nekopíruje a jeho historii nemění.
+Vedle něj vytvoří nový soukromý lokální stav. Duplicitní project UUID se odmítne.
+
+Pokud jste již registrovaný repozitář přesunuli mimo aplikaci, zvolte
+**Opravit umístění projektu…**, vyberte registraci ze seznamu (dostupný i
+nedostupný projekt) a potom nový kořen stejného projektu. Aplikace ověří UUID a HEAD a
+zachová původní journal/index. Nový kořen proto musí být na stejném filesystemu
+jako existující stav. Oprava nepřesouvá data; přesun na jiný disk vyžaduje
+samostatně navržený bezpečný přesun stavu a tato verze jej odmítne. Přerušenou
+opravu dokončí stejná volba pro obnovu uzlové operace.
+
+Jestliže původní kořen skutečně zmizel, stejný dialog nabídne také
+**Odebrat pouze ze seznamu**. Volba atomicky odstraní jen registraci v tomto
+uzlu. Nemaže lokální stav, chaty, credentials ani případnou kopii Git
+repozitáře v jiném umístění. Pokud se data později najdou, lze projekt
+znovu načíst nebo jeho cestu opravit; nejde o bezpečné odstranění celého
+projektu.
 
 ## Jiný uzel a již registrované projekty
 
@@ -229,6 +251,8 @@ historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git hi
 
 ## Import původních zdrojů
 
-Desktopová lišta nabízí **Importovat zdroj…** pro otevřený projekt.
+Desktopová lišta nabízí **Importovat zdroj…** pro otevřený projekt. Webová
+varianta má po otevření projektu rozbalovací **Importovat zdroj do projektu**;
+zápis vyžaduje roli editor/project-admin nebo správce uzlu.
 [Podporované soubory, zachování bajtů, privacy a recovery](native-source-import.md).
 Po úspěchu se zdroj objeví v Podkladech; nativní editor jeho obsah nemění.

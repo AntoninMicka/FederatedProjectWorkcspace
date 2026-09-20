@@ -15,6 +15,8 @@ from spikes.web_server import make_server, secret, WEB_HTML, WEB_JS
 from spikes.projects import Projects
 from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
+from spikes.source_import import Sources, request_from_bytes
+from spikes.configuration import parse_node, read_config
 
 
 class WebTests(unittest.TestCase):
@@ -101,6 +103,11 @@ class WebTests(unittest.TestCase):
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
+        from uuid import uuid4
+        view = Projects(self.root/'node.json').open(project)
+        source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')
+        self.assertEqual(self.request(path='/v1/sources/import', body=json.dumps({
+            'operation_id': str(uuid4()), 'source': source}), headers=headers)[0], 403)
         code, data, _ = admin({'action':'rotate-key', 'expected_commit':state['commit_id'], 'user_id':user['id']})
         self.assertEqual(code, 200); state=json.loads(data)
         self.assertEqual(self.request(headers=headers)[0],401)
@@ -119,6 +126,37 @@ class WebTests(unittest.TestCase):
         self.assertEqual(first[0],200);self.assertEqual(second[0],200)
         self.assertEqual(json.loads(first[1]),json.loads(second[1]))
         self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
+
+    def test_web_import_preserves_bytes_and_retries_one_operation(self):
+        from uuid import uuid4
+        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Web import"}')
+        project = json.loads(data)
+        raw = b'# Evidence\n' + b'x' * 70000
+        source = request_from_bytes(project['id'], project['commit_id'], 'evidence.md', raw,
+                                    'Evidence', '', ['web'], 'project')
+        body = json.dumps({'operation_id': str(uuid4()), 'source': source})
+        first = self.request(path='/v1/sources/import', body=body)
+        second = self.request(path='/v1/sources/import', body=body)
+        self.assertEqual(first[0], 200); self.assertEqual(second[0], 200)
+        self.assertEqual(json.loads(first[1]), json.loads(second[1]))
+        opened = Sources(self.root/'node.json').open(project['id'])
+        self.assertEqual(len(opened['sources']), 1)
+        project_root = Path(parse_node(read_config(self.root/'node.json'),
+                                       location=self.root/'node.json')['projects'][0]['root'])
+        imported = json.loads((project_root/'artifacts'/source['artifact_id']/'metadata.json').read_text())
+        self.assertEqual(imported['import']['importer']['name'], 'workspace-web-import')
+        self.assertEqual((project_root/'artifacts'/source['artifact_id']/'evidence.md').read_bytes(), raw)
+
+    def test_web_import_rejects_local_only(self):
+        from uuid import uuid4
+        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Privacy"}')
+        project = json.loads(data)
+        source = request_from_bytes(project['id'], project['commit_id'], 'private.md', b'private',
+                                    'Private', '', [], 'local-only')
+        code, _, _ = self.request(path='/v1/sources/import', body=json.dumps({
+            'operation_id': str(uuid4()), 'source': source}))
+        self.assertEqual(code, 422)
+        self.assertEqual(Sources(self.root/'node.json').open(project['id'])['sources'], [])
 
     def test_router_entry_redirects_to_live_https_and_rejects_bad_certificate(self):
         import ipaddress

@@ -58,9 +58,18 @@ def read_source(path):
 def request_from_file(project_id, base_head, path, title, description, tags, privacy, *,
                       source_url=None, source_author=None, source_created_at=None, source_revision=None,
                       supersedes=None):
-    raw = read_source(path)
+    return request_from_bytes(project_id, base_head, Path(path).name, read_source(path), title,
+                              description, tags, privacy, source_url=source_url,
+                              source_author=source_author, source_created_at=source_created_at,
+                              source_revision=source_revision, supersedes=supersedes)
+
+
+def request_from_bytes(project_id, base_head, filename, raw, title, description, tags, privacy, *,
+                       source_url=None, source_author=None, source_created_at=None,
+                       source_revision=None, supersedes=None):
+    content_type(filename, raw)
     request = dict(project_id=project_id, artifact_id=str(uuid4()), base_head=base_head,
-                   filename=Path(path).name, title=title, description=description, tags=tags, privacy=privacy,
+                   filename=filename, title=title, description=description, tags=tags, privacy=privacy,
                    created_at=datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                    content=base64.b64encode(raw).decode(), sha256=hashlib.sha256(raw).hexdigest(),
                    source_url=source_url, source_author=source_author,
@@ -94,7 +103,8 @@ class Sources(Artifacts):
                     matches.append(id_)
             return sorted(matches)
 
-    def import_source(self, request, operation_id, *, checkpoint=lambda stage: None):
+    def import_source(self, request, operation_id, *, author_id=None,
+                      importer_name='workspace-native-import', checkpoint=lambda stage: None):
         fields = {'project_id', 'artifact_id', 'base_head', 'filename', 'title', 'description',
                   'tags', 'privacy', 'created_at', 'content', 'sha256', 'source_url',
                   'source_author', 'source_created_at', 'source_revision'}
@@ -109,10 +119,13 @@ class Sources(Artifacts):
         require(isinstance(request['title'], str) and 0 < len(request['title'].strip()) <= 200
                 and not any(c in request['title'] for c in '\r\n\0'), 'Vyplňte název zdroje do 200 znaků.')
         ws = self.workspace(request['project_id'])
-        author = ProjectCreation(self.node_path).author_id()
+        author = author_id or ProjectCreation(self.node_path).author_id()
+        uuid(author)
+        require(isinstance(importer_name, str) and importer_name in
+                {'workspace-native-import', 'workspace-web-import'}, 'Invalid importer')
         imported = dict(imported_at=request['created_at'], imported_by=author,
                         content_sha256=request['sha256'],
-                        importer={'name': 'workspace-native-import', 'version': '2'})
+                        importer={'name': importer_name, 'version': '2'})
         for key in ('source_author', 'source_created_at', 'source_revision'):
             if request[key] is not None:
                 imported[key] = request[key]

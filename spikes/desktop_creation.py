@@ -7,13 +7,13 @@ from uuid import uuid4
 
 from PySide6.QtCore import QThread, Signal, QTimer
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFileDialog, QFormLayout,
-                               QLineEdit, QPushButton, QLabel, QVBoxLayout)
+                               QLineEdit, QPushButton, QLabel, QVBoxLayout, QCheckBox)
 
 from spikes.project_creation import CreationConflict
 
 
 class CreationDialog(QDialog):
-    def __init__(self, parent):
+    def __init__(self, parent, default_parent):
         super().__init__(parent)
         self.setWindowTitle('Nový projekt')
         self.resize(600, 240)
@@ -21,17 +21,20 @@ class CreationDialog(QDialog):
         form = QFormLayout()
         self.title = QLineEdit()
         self.title.setMaxLength(200)
-        self.root = QLineEdit(str(Path.home() / 'novy-projekt'))
+        self.root = QLineEdit(str(Path(default_parent) / 'novy-projekt'))
         form.addRow('Název projektu', self.title)
         form.addRow('Nová složka projektu', self.root)
         layout.addLayout(form)
         browse = QPushButton('Vybrat nadřazenou složku…')
         def choose():
-            folder = QFileDialog.getExistingDirectory(self, 'Nadřazená složka', str(Path.home()))
+            folder = QFileDialog.getExistingDirectory(self, 'Nadřazená složka', str(default_parent))
             if folder:
                 self.root.setText(str(Path(folder) / (Path(self.root.text()).name or 'novy-projekt')))
         browse.clicked.connect(choose)
         layout.addWidget(browse)
+        self.remember = QCheckBox('Použít tuto nadřazenou složku jako výchozí')
+        self.remember.setChecked(True)
+        layout.addWidget(self.remember)
         layout.addWidget(QLabel('Cílová složka ještě nesmí existovat. Lokální stav bude uložen vedle ní.'))
         self.error = QLabel()
         self.error.setWordWrap(True)
@@ -77,9 +80,10 @@ class CreationController:
         self.busy = False
         self.smoke = None
         toolbar = window.addToolBar('Projekty')
+        self.toolbar = toolbar
         toolbar.setMovable(False)
         self.button = QPushButton('Nový projekt…')
-        self.resume = QPushButton('Dokončit přerušené vytvoření')
+        self.resume = QPushButton('Dokončit přerušenou operaci projektu')
         self.resume.setVisible(False)
         self.status = QLabel('')
         toolbar.addWidget(self.button)
@@ -91,7 +95,7 @@ class CreationController:
     def dialog(self):
         if self.busy:
             return
-        dialog = CreationDialog(self.window)
+        dialog = CreationDialog(self.window, self.service.default_projects_root())
         # Test-only input fills the real native widgets and submits their Save action.
         if self.smoke:
             title, root = self.smoke
@@ -100,11 +104,11 @@ class CreationController:
             dialog.root.setText(root)
             QTimer.singleShot(0, dialog.validate)
         accepted = dialog.exec() == QDialog.DialogCode.Accepted
-        title, root = dialog.title.text(), dialog.root.text()
+        title, root, remember = dialog.title.text(), dialog.root.text(), dialog.remember.isChecked()
         dialog.deleteLater()
         if accepted:
             operation_id = str(uuid4())
-            self.start(lambda: self.service.create(title, root, operation_id))
+            self.start(lambda: self.service.create(title, root, operation_id, remember_parent=remember))
 
     def recover(self):
         if not self.busy:
@@ -114,15 +118,15 @@ class CreationController:
         self.busy = True
         self.button.setEnabled(False)
         self.resume.setEnabled(False)
-        self.status.setText('  Připravuji projekt…')
+        self.status.setText('  Provádím operaci projektu…')
         worker = CreationWorker(action, self.window)
         self.workers.append(worker)
         def success(receipt):
-            self.status.setText('  Projekt připraven.' if receipt else '')
+            self.status.setText('  Operace projektu dokončena.' if receipt else '')
             self.resume.setVisible(False)
             self.succeeded(receipt)
         def failure(message):
-            self.status.setText('  Vytvoření nebylo dokončeno.')
+            self.status.setText('  Operace projektu nebyla dokončena.')
             self.resume.setVisible(True)
             self.failed(message)
         def finished():

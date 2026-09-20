@@ -790,7 +790,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
 
-Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený, ale druhý skutečný restart po application-only aktualizaci opět naběhl bez kontejnerů; cílová akceptace a dodatečný návod k nastavení zůstávají pod `M1-07-C` v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce a návrhy metadat jsou po PR #26–#33 začleněné. Aktivní UX dávka centralizuje node-local nastavení bez tvrzení o splnění Gate M1.
+Aktualizace 2026-09-20: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený, ale druhý skutečný restart po application-only aktualizaci opět naběhl bez kontejnerů; cílová akceptace a dodatečný návod k nastavení zůstávají pod `M1-07-C` v BACKLOG. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce, návrhy metadat, centralizovaná nastavení a externí provider jsou po PR #26–#36 začleněné. Aktivní F-M1-PROJECT-LOCATION-01 doplňuje umístění/registraci projektů a webový source import bez tvrzení o splnění Gate M1.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -833,28 +833,18 @@ Aktualizace 2026-09-19: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
 #34. Dávka `F-M3-BACKEND-01` byla začleněna PR #35 a lokálně PoC validuje
 provider-neutral backend, explicitní capabilities, role a durable execution
-identitu nad současnou Ollamou. Aktivní `F-M3-EXTERNAL-01` implementuje první
-externí textový provider, context preview, privacy filtr a pouze návrhové
-strukturované volání přes Ollamu. Lokální automatizované ověření je hotové
-a uživatel 2026-09-19 potvrdil živý průchod Ollama → potvrzený OpenAI
-request. Sjednocený tok E má implementovaný backend, durable redukci i UI;
-zbývá živá integrační akceptace tří výsledných větví a reloadu, proto
-Gate M3 zatím není uzavřený.
-
-Rozpracovaná úprava `F-M3-EXTERNAL-01-E` sjednocuje uživatelský vstup: Ollama nad
-explicitně vybranými zprávami a doplňujícími artefakty vrátí buď přímou odpověď,
-návrh artefaktu, nebo připravený dotaz pro externí model. Návrhové větve nadále
-vyžadují aplikační preview a lidské potvrzení; model sám nezapisuje ani neodesílá.
-Potenciálně dlouhý návrh se do rozhodnutí zobrazí celý jako dočasná chatová
-zpráva. Po potvrzení jej nahradí odkaz na vytvořený artefakt, respektive stručný
-záznam proběhlého externího volání; plný obsah zůstane v oddělené durable evidenci.
+identitu nad současnou Ollamou. `F-M3-EXTERNAL-01` je po PR #36 začleněn:
+implementuje první externí textový provider, context preview, privacy filtr a
+striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, publikaci
+artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
+zobrazení externí odpovědi. Usage/billing, obrazové capability, webové hledání
+a obecný workflow zůstávají samostatné navazující schopnosti; Gate M3 proto
+není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
-- [ ] První externí provider — F-M3-EXTERNAL-01 A–D implementuje a živě
-  ověřuje textový OpenAI Responses adapter, přesné preview, potvrzený dispatch a
-  striktní návrh výběru přes Ollamu. E1–E3 doplňuje uzavřený outcome,
-  artefaktový kontext a durable dočasné/redukované projekce. E4 UI je
-  implementované; zbývá živá integrační akceptace sjednoceného toku.
+- [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
+  OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
+  artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
 - [ ] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

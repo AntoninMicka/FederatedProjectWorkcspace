@@ -54,13 +54,15 @@ def overlap(first, second):
 
 def parse_node(data, *, location):
     meta = parse_json(data)
-    header(meta, {'name', 'projects'}, {'identity_credential_ref'})
+    header(meta, {'name', 'projects'}, {'identity_credential_ref', 'projects_root'})
     text(meta['name'])
     require(isinstance(meta['projects'], list), 'Projects must be a list')
     if 'identity_credential_ref' in meta:
         ref = meta['identity_credential_ref']
         require(isinstance(ref, str) and re.fullmatch(r'credential:[A-Za-z0-9][A-Za-z0-9._-]{0,127}', ref),
                 'Expected opaque credential reference, not secret material')
+    if 'projects_root' in meta:
+        local_path(meta['projects_root'])
     ids, paths, roots = set(), [], []
     for project in meta['projects']:
         fields(project, {'project_id', 'root', 'state_dir'})
