@@ -38,6 +38,18 @@ class ExternalDispatches:
                    'binding_sha256 TEXT NOT NULL,privacy TEXT NOT NULL,'
                    'created_at TEXT NOT NULL,state TEXT NOT NULL,'
                    'result TEXT,error TEXT)')
+        columns = {row[1] for row in db.execute('PRAGMA table_info(approvals)')}
+        if 'run_id' not in columns:
+            db.execute('ALTER TABLE approvals ADD COLUMN run_id TEXT')
+            rows = db.execute('SELECT approval_id,request FROM approvals').fetchall()
+            for approval_id, encoded in rows:
+                request = json.loads(encoded)
+                run_id = request.get('run_id') if isinstance(request, dict) else None
+                if isinstance(run_id, str):
+                    uuid(run_id)
+                    db.execute('UPDATE approvals SET run_id=? WHERE approval_id=?',
+                               (run_id, approval_id))
+        db.execute('CREATE INDEX IF NOT EXISTS approvals_run_id ON approvals(run_id)')
         db.commit()
         return closing(db)
 
@@ -54,6 +66,8 @@ class ExternalDispatches:
                 'Invalid external dispatch preview')
         encoded = json.dumps(request, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':'))
+        run_id = request.get('run_id')
+        uuid(run_id)
         values = (node_id, user_id, encoded, manifest, payload, provider_request,
                   preview_sha256, binding_sha256, privacy, created_at)
         with self.connect() as db:
@@ -62,11 +76,14 @@ class ExternalDispatches:
                              'preview_sha256,binding_sha256,privacy,created_at,state FROM approvals '
                              'WHERE approval_id=?', (approval_id,)).fetchone()
             if row:
-                require(row[:10] == values and row[10] == 'prepared',
-                        'Approval ID belongs to a different or closed preview')
+                require(row[:10] == values and row[10] in STATES,
+                        'Approval ID belongs to a different preview')
             else:
-                db.execute('INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL)',
-                           (approval_id,) + values + ('prepared',))
+                db.execute('INSERT INTO approvals(approval_id,node_id,user_id,request,manifest,'
+                           'payload,provider_request,preview_sha256,binding_sha256,privacy,'
+                           'created_at,state,result,error,run_id) '
+                           'VALUES(?,?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,?)',
+                           (approval_id,) + values + ('prepared', run_id))
             db.commit()
         return self.get(approval_id, node_id, user_id)
 
@@ -86,6 +103,46 @@ class ExternalDispatches:
                 'privacy': row[6], 'created_at': row[7], 'state': row[8],
                 'result': None if row[9] is None else json.loads(row[9]),
                 'error': row[10]}
+
+    def find(self, approval_id, node_id, user_id):
+        for value in (approval_id, node_id, user_id):
+            uuid(value)
+        with self.connect() as db:
+            row = db.execute('SELECT node_id,user_id FROM approvals WHERE approval_id=?',
+                             (approval_id,)).fetchone()
+        if row is None:
+            return None
+        require(row == (node_id, user_id), 'External preview is unavailable to this user')
+        return self.get(approval_id, node_id, user_id)
+
+    def request_for_run(self, run_id, node_id, user_id):
+        for value in (run_id, node_id, user_id):
+            uuid(value)
+        with self.connect() as db:
+            rows = db.execute('SELECT request,provider_request,created_at,state FROM approvals '
+                              'WHERE run_id=? AND node_id=? AND user_id=?',
+                              (run_id, node_id, user_id)).fetchall()
+        require(len(rows) == 1, 'External request record is unavailable to this user')
+        request = json.loads(rows[0][0])
+        require(request.get('record_chat', True) is True
+                and isinstance(request.get('run_choice'), dict)
+                and request['run_choice'].get('mode') == 'brainstorming',
+                'External request record is not a brainstorming chat run')
+        return {'run_id': run_id, 'created_at': rows[0][2], 'state': rows[0][3],
+                'provider_request': json.loads(rows[0][1])}
+
+    def has_run(self, run_id, node_id, user_id):
+        for value in (run_id, node_id, user_id):
+            uuid(value)
+        with self.connect() as db:
+            row = db.execute('SELECT request FROM approvals WHERE run_id=? AND node_id=? '
+                             'AND user_id=?', (run_id, node_id, user_id)).fetchone()
+        if row is None:
+            return False
+        request = json.loads(row[0])
+        return (request.get('record_chat', True) is True
+                and isinstance(request.get('run_choice'), dict)
+                and request['run_choice'].get('mode') == 'brainstorming')
 
     def finish(self, approval_id, node_id, user_id, state, *, result=None, error=None):
         require(state in {'cancelled', 'succeeded', 'failed', 'unknown'},

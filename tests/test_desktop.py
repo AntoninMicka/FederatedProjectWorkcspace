@@ -38,6 +38,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="external-proposal-messages"', HTML)
         self.assertIn('id="external-privacy-confirm"', HTML)
         self.assertIn("projectRequest('/v1/external/propose',request,210000)", JS)
+        self.assertIn("projectRequest('/v1/external/send',pendingChatRequest,210000)", JS)
+        self.assertIn("projectRequest('/v1/external/request',{run_id:turn.run_id})", JS)
+        self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn('Externí LLM odpověď nebylo možné bezpečně přijmout',

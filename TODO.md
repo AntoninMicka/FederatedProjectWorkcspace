@@ -44,12 +44,17 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
   Context Manifest, mode policy a vlastnictví vlákna se adaptují; preview store
   zůstává pro task workflow a historické záznamy. Oficiální Responses streaming
   guide byl ověřen 2026-09-20; cizí kód ani nový framework se nepřebírá.
-- [ ] [in progress] **F-M3-CHAT-DIRECT-01-B — Přímý dispatch a historie requestu
-  (implemented).** Po serverové kontrole identity, bindingu/modelu, manifestu a
-  privacy odeslat externí brainstorming bez samostatného potvrzovacího kroku.
-  Uložit přesný sanitizovaný provider request svázaný s run ID a zpřístupnit jej
-  vlastníkovi vlákna; retry ani restart nesmějí vytvořit druhý síťový účinek.
-- [ ] [planned] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
+- [x] [completed] **F-M3-CHAT-DIRECT-01-B — Přímý dispatch a historie requestu
+  (implemented).** Explicitní externí brainstorming používá nový přímý endpoint
+  nad stejným Context Manifestem, binding hashem, durable dispatch záznamem a
+  OpenAI run journalem jako dosavadní potvrzený tok. Request body bez hlaviček a
+  credentialu se váže na run ID a vlastník jej může rozbalit u odpovědi i po
+  restartu. Lookup před opětovnou přípravou zajišťuje idempotentní retry bez
+  druhého síťového účinku. Task a pokročilé preview/confirm zůstaly zachované.
+  Web endpoint je do oddělení identity chat store od procesní desktop identity
+  fail-closed omezený na administrátora; běžný webový člen dostane 403.
+  Cílených 53 chat/OpenAI/UI/HTTPS testů prošlo se 2 Qt skipy.
+- [ ] [in progress] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
   (implemented).** Přidat capability-gated transport a UI průběžných textových
   delt pro desktop i web. Nevalidní událost, timeout, přerušení, zavření klienta
   a provider bez streamování musí skončit definovaným durable stavem bez

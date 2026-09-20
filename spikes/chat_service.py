@@ -86,8 +86,17 @@ class ChatService:
             binding = bindings.load().serialize()
         except FileNotFoundError:
             binding = None
-        rows = threads.list(node_id, user_id)
+        rows = [self._with_external_history(row, node_id, user_id)
+                for row in threads.list(node_id, user_id)]
         return {'binding': binding, 'threads': rows}
+
+    def _with_external_history(self, thread, node_id, user_id):
+        store = ExternalDispatches(self._root())
+        for turn in thread.get('turns', []):
+            run_id = turn.get('run_id')
+            turn['external_request_available'] = bool(
+                run_id and store.has_run(run_id, node_id, user_id))
+        return thread
 
     def external_status(self):
         root = self._root()
@@ -561,6 +570,33 @@ class ChatService:
         result = ExternalDispatches(self._root()).finish(
             request['approval_id'], node_id, user_id, 'cancelled')
         return {'approval_id': result['approval_id'], 'state': result['state']}
+
+    def external_send(self, request):
+        request = self._external_fields(request)
+        node_id, user_id = self._identity()
+        stored = ExternalDispatches(self._root()).find(
+            request['approval_id'], node_id, user_id)
+        if stored is None:
+            preview = self.external_preview(request)
+        else:
+            require(stored['request'] == request,
+                    'Approval ID belongs to a different direct request')
+            preview = {'approval_id': stored['approval_id'],
+                       'preview_sha256': stored['preview_sha256'],
+                       'privacy': stored['privacy']}
+        result = self.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        result['thread'] = self._with_external_history(result['thread'], node_id, user_id)
+        result['request_record'] = self.external_request({'run_id': request['run_id']})
+        return result
+
+    def external_request(self, request):
+        require(isinstance(request, dict) and set(request) == {'run_id'},
+                'Invalid external request history query')
+        node_id, user_id = self._identity()
+        return ExternalDispatches(self._root()).request_for_run(
+            request['run_id'], node_id, user_id)
 
     def external_confirm(self, request):
         required = {'approval_id', 'preview_sha256', 'approved', 'privacy'}

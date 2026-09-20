@@ -566,6 +566,21 @@ function renderChat(thread){
   message.textContent=item.content;
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
   message.append(detail);chatMessages.append(message);
+  const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
+  if(turn?.external_request_available){
+   const requestButton=document.createElement('button');requestButton.type='button';
+   requestButton.className='secondary-button';requestButton.textContent='Zobrazit odeslaný request';
+   requestButton.addEventListener('click',async()=>{
+    requestButton.disabled=true;
+    try{const record=await projectRequest('/v1/external/request',{run_id:turn.run_id});
+     let pre=message.querySelector('.external-request-record');
+     if(!pre){pre=document.createElement('pre');pre.className='external-request-record';message.append(pre);}
+     pre.textContent=JSON.stringify(record.provider_request,null,2);
+    }catch(error){chatOperationStatus.textContent=error.message;}
+    finally{requestButton.disabled=false;}
+   });
+   message.append(requestButton);
+  }
  }
  renderTaskOutcomes();
  document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
@@ -947,7 +962,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(mode==='brainstorming' && adapter==='openai-responses'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
-  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
+  if(!pendingChatRequest)pendingChatRequest={approval_id:crypto.randomUUID(),project_id:activeProject.id,
    expected_head:activeProject.head,thread_id:activeThread?.thread_id || activeTaskThreadId || crypto.randomUUID(),
    turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
    manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
@@ -955,7 +970,17 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    selected_artifact_ids:[],content:draft.value.trim(),
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
    run_choice:runChoice};
-  await showExternalPreview(request);return;
+  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+  chatOperationStatus.textContent='Odesílám do OpenAI…';
+  try{const result=await projectRequest('/v1/external/send',pendingChatRequest,210000);
+   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
+   draft.value='';draft.focus();chatOperationStatus.textContent='Externí odpověď byla přijata.';
+  }catch(error){
+   if([409,422,502].includes(error.status))pendingChatRequest=null;
+   chatOperationStatus.textContent=error.message;
+  }finally{submit.disabled=!activeProject || !draft.value.trim();}
+  return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
   if(!pendingChatRequest){
@@ -1250,7 +1275,8 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/orchestration',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
-        '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
+        '/v1/external/propose', '/v1/external/send', '/v1/external/request',
+        '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
         '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
         '/v1/tasks/artifact', '/v1/tasks/external/preview',
@@ -1294,6 +1320,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_models())
             if self.path == '/v1/external/propose' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_propose(request))
+            if self.path == '/v1/external/send' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_send(request))
+            if self.path == '/v1/external/request' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.external_request(request))
             if self.path == '/v1/external/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_preview(request))
             if self.path == '/v1/external/confirm' and isinstance(request, dict):

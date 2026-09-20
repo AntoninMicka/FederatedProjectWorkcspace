@@ -685,12 +685,42 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(result['thread']['classification'], 'orchestration')
         self.assertEqual(result['target']['model'], 'gemma3')
 
-    def test_direct_send_cannot_bypass_external_confirmation(self):
+    def test_direct_external_brainstorm_is_idempotent_and_keeps_request_history(self):
+        calls = []
+        service = self.external_service(calls)
         request = self.request(run_choice={'mode': 'brainstorming',
             'adapter': 'openai-responses', 'model': 'gpt-5.6-sol'})
-        with self.assertRaisesRegex(ValueError, 'preview and confirmation'):
-            self.service.send(**request)
-        self.assertEqual(self.service.status()['threads'], [])
+        request['approval_id'] = str(uuid4())
+        first = service.external_send(request)
+        record = first['request_record']
+
+        self.assertEqual(first['turn']['state'], 'completed')
+        self.assertEqual(record, service.external_request({'run_id': request['run_id']}))
+        self.assertEqual(record['provider_request']['model'], 'gpt-5.6-sol')
+        self.assertFalse(record['provider_request']['stream'])
+        self.assertNotIn('secret', json.dumps(record))
+        self.assertEqual(len([call for call in calls if call[0] == 'dispatch']), 1)
+
+        restarted = self.external_service(calls)
+        self.assertEqual(restarted.external_send(request), first)
+        self.assertEqual(len([call for call in calls if call[0] == 'dispatch']), 1)
+
+    def test_external_request_history_rejects_foreign_user(self):
+        calls = []; service = self.external_service(calls)
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-sol'})
+        preview = service.external_preview(request)
+        service.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        self.assertEqual(service.external_request({'run_id': request['run_id']})['state'],
+                         'succeeded')
+
+        with ExternalDispatches(service._root()).connect() as db:
+            db.execute('UPDATE approvals SET user_id=? WHERE run_id=?',
+                       (str(uuid4()), request['run_id'])); db.commit()
+        with self.assertRaisesRegex(ValueError, 'unavailable'):
+            service.external_request({'run_id': request['run_id']})
 
     def test_service_starts_fresh_orchestration_after_brainstorm(self):
         brainstorm = self.request(run_choice={
