@@ -10,7 +10,8 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-modes`, budoucí PR do `deve
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; aktivováno 2026-09-20 na přímý požadavek
+- Stav dávky: [ ] [in progress]; implementace a lokální akceptace jsou hotové,
+  dávka čeká na uživatelem řízený commit/push/PR/merge. Aktivováno 2026-09-20 na přímý požadavek
   uživatele z `develop` po ověření, že F-M1-PROJECT-ROOT-01 je začleněn jako
   PR #39 (`4bd45b8`).
 - Původ: uživatel požaduje režim `orchestration` pouze s lokálním `same-node`
@@ -38,11 +39,16 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-modes`, budoucí PR do `deve
   ContextBuilder vymezují režim, per-run model, oddělené textové/projektové
   vstupy a atomický návrat do orchestrace. Odvozený binding nemění globální
   konfiguraci a recovery nesmí použít později změněný základní binding.
-- [ ] [in progress] **F-M3-CHAT-MODES-01-B — Režimy, modelový výběr a UI
-  (implemented).** Vynutit same-node orchestration, artifact-free brainstorming,
-  explicitní výběr modelu jen pro brainstorming a ukončení/archivaci před
-  založením nového orchestration vlákna.
-- [ ] [planned] **F-M3-CHAT-MODES-01-C — Regrese, dokumentace a akceptace
-  (PoC validated).** Ověřit privacy/boundary, stale/unknown/retry, restart na
-  persistentních hranicích, neexistenci implicitního kontextu i skutečný
-  Qt/WebEngine průchod.
+- [x] [completed] **F-M3-CHAT-MODES-01-B — Režimy, modelový výběr a UI
+  (implemented).** Orchestrace vynucuje nakonfigurovaný same-node model a
+  explicitní artefakty; brainstorming přijímá jen text/zprávy, volí per-run
+  Ollama/OpenAI model a externí běh vede přes preview/confirm. Návrat atomicky
+  archivuje brainstorming a zakládá prázdnou orchestrace bez přenosu kontextu.
+- [x] [completed] **F-M3-CHAT-MODES-01-C — Regrese, dokumentace a akceptace
+  (PoC validated).** Cílených 52 testů prošlo se 2 podmíněnými Qt skipy;
+  úplná sada 340 testů prošla s 22 skipy v povoleném lokálním prostředí. Samostatný skutečný
+  Qt/WebEngine smoke prošel a ověřil přepnutí obou režimů. JavaScript syntaxe,
+  Python kompilace a `git diff --check` prošly. Integrační testy pokrývají
+  privacy/boundary, zákaz artefaktů v brainstormingu, per-run lokální i OpenAI
+  model, preview/confirm, stale/unknown, restart a zákaz přímého externího
+  dispatch; živý externí provider nebyl v této dávce znovu volán.

@@ -144,6 +144,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <fieldset><legend>Navržené nové štítky</legend><div id="metadata-tag-list"></div></fieldset>
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
+<label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Orchestrace</option><option value="brainstorming">Brainstorming</option></select>
+<label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
+<label for="chat-run-model">Model běhu</label><input id="chat-run-model" maxlength="128" list="external-models">
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <details id="task-artifacts"><summary>Doplňující podklady</summary>
 <fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
@@ -534,7 +537,7 @@ const settingsExternalStatus=document.querySelector('#settings-external-status')
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
-let activeThread=null,chatBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeThread=null,chatBinding=null,externalBinding=null,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
@@ -660,16 +663,47 @@ function fillBinding(binding){
   chatStatus.textContent='Backend zatím není nastaven.';
   settingsBackendStatus.textContent='Backend zatím není nastaven.';
  }
+ refreshChatModeControls();
 }
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
   const external=await projectRequest('/v1/external/status',{});
+  externalBinding=external.binding;
+  refreshChatModeControls();
   fillExternalModels(external.model_catalog);
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
    'Externí backend zatím není nastaven.';return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
+function refreshChatModeControls(){
+ const mode=document.querySelector('#chat-mode').value;
+ const adapter=document.querySelector('#chat-run-adapter');
+ const model=document.querySelector('#chat-run-model');
+ const artifacts=document.querySelector('#task-artifacts');
+ if(mode==='orchestration'){
+  adapter.value='ollama';adapter.disabled=true;model.value=chatBinding?.model || '';model.disabled=true;
+  artifacts.hidden=false;
+ }else{
+  adapter.disabled=false;model.disabled=false;artifacts.hidden=true;
+  for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
+  if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
+ }
+}
+document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
+ document.querySelector('#chat-run-model').value=event.currentTarget.value==='openai-responses' ?
+  (externalBinding?.model || '') : (chatBinding?.model || '');
+});
+document.querySelector('#chat-mode').addEventListener('change',async event=>{
+ pendingChatRequest=null;const mode=event.currentTarget.value;
+ if(mode==='orchestration' && activeThread?.classification==='brainstorming'){
+  try{activeThread=await projectRequest('/v1/chat/orchestration',{
+    source_thread_id:activeThread.thread_id,thread_id:crypto.randomUUID(),created_at:new Date().toISOString()});
+   activeTaskThreadId=activeThread.thread_id;taskOutcomes=[];renderChat(activeThread);
+  }catch(error){event.currentTarget.value='brainstorming';chatOperationStatus.textContent=error.message;}
+ }else{activeThread=null;activeTaskThreadId=crypto.randomUUID();taskOutcomes=[];renderChat(null);}
+ refreshChatModeControls();
+});
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  try{
@@ -679,6 +713,9 @@ async function loadChat(){
   if(selectionRevision!==chatSelectionRevision)return;
   activeThread=active.find(item=>item.project_id===activeProject?.id) ||
                active.find(item=>item.project_id===null) || null;
+  if(activeThread){document.querySelector('#chat-mode').value=activeThread.classification;
+   document.querySelector('#chat-run-adapter').value='ollama';
+   document.querySelector('#chat-run-model').value=chatBinding?.model || '';refreshChatModeControls();}
   activeTaskThreadId=tasks.outcomes.at(-1)?.thread_id || activeThread?.thread_id || null;
   taskOutcomes=tasks.outcomes.filter(item=>item.thread_id===activeTaskThreadId);
   renderChat(activeThread);
@@ -836,6 +873,50 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
  selectMainTab(mainTabs[1]);
  if(!chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení backendu.';return;}
+ const mode=document.querySelector('#chat-mode').value;
+ const adapter=document.querySelector('#chat-run-adapter').value;
+ const model=document.querySelector('#chat-run-model').value.trim();
+ if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
+ const runChoice={mode,adapter,model:mode==='orchestration'?null:model};
+ if(mode==='brainstorming' && adapter==='openai-responses'){
+  if(document.querySelector('#chat-privacy').value==='local-only'){
+   chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
+  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
+   expected_head:activeProject.head,thread_id:activeThread?.thread_id || activeTaskThreadId || crypto.randomUUID(),
+   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
+   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+   selected_artifact_ids:[],content:draft.value.trim(),
+   privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
+   run_choice:runChoice};
+  await showExternalPreview(request);return;
+ }
+ if(mode==='brainstorming' && adapter==='ollama'){
+  if(!pendingChatRequest){
+   pendingChatRequest={project_id:activeProject.id,expected_head:activeProject.head,
+    thread_id:activeThread?.thread_id || activeTaskThreadId || crypto.randomUUID(),
+    turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
+    manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
+    selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
+    content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
+    created_at:new Date().toISOString(),run_choice:runChoice};
+  }
+  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+  chatOperationStatus.textContent='Odesílám…';
+  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
+  try{
+   const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
+   activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
+   renderChat(result.thread);pendingChatRequest=null;draft.value='';draft.focus();
+   chatOperationStatus.textContent='Odpověď je připravena.';
+  }catch(error){
+   if(error.status===422)pendingChatRequest=null;
+   chatOperationStatus.textContent=error.message+(error.status===422 ?
+    ' Zadání můžete po opravě zopakovat jako nový běh.' : '');
+  }finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
+   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
+  return;
+ }
  if(!pendingChatRequest){
   const threadId=activeTaskThreadId || activeThread?.thread_id || crypto.randomUUID();
   const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
@@ -847,7 +928,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   selected_artifact_ids:[...document.querySelectorAll('#task-artifact-list input:checked')]
    .map(item=>item.value),
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
-  created_at:new Date().toISOString()};}
+  created_at:new Date().toISOString(),run_choice:runChoice};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
  try{
@@ -1101,6 +1182,7 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
+        '/v1/chat/orchestration',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -1170,10 +1252,16 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
-            if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) == {
+            if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)
+                    and set(request) == {'source_thread_id', 'thread_id', 'created_at'}):
+                return self.reply(200, self.server.chat_service.start_orchestration(**request))
+            if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) in ({
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
-                    'content', 'privacy', 'created_at'}:
+                    'content', 'privacy', 'created_at'}, {
+                    'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
+                    'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
+                    'content', 'privacy', 'created_at', 'run_choice'}):
                 return self.reply(200, self.server.chat_service.send(**request))
             if self.path == '/v1/chat/assign' and isinstance(request, dict) and set(request) == {
                     'project_id', 'thread_id', 'expected_revision'}:
