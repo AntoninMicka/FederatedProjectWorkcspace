@@ -21,6 +21,21 @@ F-M1-PROJECT-LOCATION-01 drží [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
+- [ ] [planned] **F-M3-CHAT-MODES-01 — Lokální orchestrace a brainstormingové
+  režimy chatu (cílová úroveň: designed → PoC validated).** Zavést
+  `orchestration` pouze nad `same-node` lokálním LLM s explicitním artefaktovým
+  Context Manifestem pro přípravu kontextu/dat, návrhy artefaktů a filtraci.
+  `brainstorming` dovolí pro jednotlivý běh policy-povolený backend/model, ale
+  odmítne artefakty, jejich bajty i automaticky odvozený artifact context.
+  Přechod do brainstormu nesmí implicitně přenést historii ani artefakty;
+  `local-only` nesmí překročit boundary. Návrat do orchestrace ukončí a lokálně
+  archivuje brainstormingové vlákno, případný Git otisk vyžaduje samostatné
+  potvrzení, a založí nové prázdné orchestration vlákno bez jeho kontextu.
+  Akceptace: modelový přepínač v brainstormu, odmítnutí externího artefaktu a
+  `local-only`, explicitní manifest každého běhu, restart před/po archivaci,
+  unknown run, žádný automatický retry/fallback a žádná reklasifikace starých
+  zpráv. Na F-M2-CHAT-03 navazuje pouze pro UI životního cyklu vláken.
+
 - [ ] [planned] **M3-UB-01 — Usage & billing backendů (cílová úroveň: implemented).** Navázat na sekci 7C roadmapy a Backend adapter: u vybraných backendů ověřit podporovaná rozhraní a potřebná oprávnění pro usage a billing samostatně, doplnit načítání a UI indikaci. Rozlišit údaje běhu/workspace a celého účtu, skutečné hodnoty a odhady, období, jednotky/měnu a stáří. Před implementací určit kontrakt, obnovování/cache a přístup k účetním údajům; dostupnost konkrétních provider API je zatím neověřená. Akceptace: scénáře obě capabilities / pouze usage / žádná podpora, nula vs. chybějící údaj, odmítnuté oprávnění, timeout/rate limit a zastaralá data; účetní souhrn se nezpřístupní běžnému uživateli backendu a výpadek přehledu nezmění jeho routing ani cost policy. Priorita M0 se nemění.
 - [ ] [planned] **F-M3-MEDIA-01 — Externí obrazové capability (cílová úroveň: designed → PoC validated).** Po textovém provideru a podle capability/licenčního review oddělit `text-to-image` a případně `image-to-text` od textového dispatch. Akceptace: přesné model/capability/input MIME a hash, limity velikosti a rozměrů, bezpečný preview, privacy a potvrzení před odesláním, durable nejednoznačný výsledek, bounded download bez následování nedůvěryhodného URL a explicitní publikace obrázku jako artefaktu s provenance. Ollama může navrhnout obrazovou akci, ale nesmí ji sama spustit; providerem vrácené URL ani metadata nejsou důvěryhodné. Usage/billing zůstává M3-UB-01.
 - [ ] [planned] **F-M4-WORKFLOW-01 — Artifact-based creator/opponent handoff (cílová úroveň: designed → PoC validated).** Po provider-neutral backendu a prvním externím provideru zavést první dvourolový workflow, v němž creator vydá explicitní artefakt a opponent dostane pouze schválený artefaktový výběr, nikoli implicitně celou creator konverzaci. Akceptace: stabilní workflow/step/run ID, role a backend volené odděleně, Context Manifest pro každý krok, lidské potvrzení před předáním a publikací, stale/unknown/retry bez duplicitního síťového účinku, privacy odvozenin a auditovatelný výsledek i při různých backendech.
