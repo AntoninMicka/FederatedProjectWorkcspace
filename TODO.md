@@ -5,15 +5,17 @@ SPDX-License-Identifier: MPL-2.0
 
 # TODO — F-M3-CHAT-DIRECT-01: Přímý brainstormingový dispatch
 
-Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
-`develop`.
+Milník M3; implementace byla začleněna PR #43 (`32cf743`) do `develop` před
+uzavřením akceptace. Dokončení části D proto probíhá na navazující větvi
+`feature/f-m3-chat-direct-01-acceptance` s cílem `develop`.
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; aktivována 2026-09-20 po začlenění M3-UB-01
-  jako PR #42 (`43fc8e3`). Větev `feature/f-m3-chat-direct-01` vznikla z tohoto
-  commitu v `develop`.
+- Stav dávky: [x] [completed]; aktivována 2026-09-20 po začlenění M3-UB-01
+  jako PR #42 (`43fc8e3`). Implementační větev
+  `feature/f-m3-chat-direct-01` byla začleněna PR #43 (`32cf743`) ještě s
+  otevřenou částí D; navazující acceptance větev vznikla z tohoto merge commitu.
 - Původ: uživatelský požadavek 2026-09-20, aby brainstorming odesílal požadavek
   přímo, historie nadále ukázala skutečně odeslaný request a providerem
   podporovaná odpověď se zobrazovala streamovaně.
@@ -68,9 +70,21 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-direct-01`, budoucí PR do
   handleru včetně dříve chybějícího runtime importu.
   Cílených 68 OpenAI/chat/desktop/web testů prošlo se 3 Qt skipy, JavaScript
   prošel `node --check`; úplná sada 353 testů prošla s 22 skipy.
-- [ ] [planned] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
-  (PoC validated).** Ověřit RBAC/privacy, přesný request bez secrets, běžnou i
-  streamovanou odpověď, pořadí a UTF-8 delt, reconnect/restart, stale binding,
-  timeout, malformed stream, lost response `unknown`, vědomý nový pokus a
-  desktop/web UI. Spustit úplnou sadu a relevantní skutečný UI/provider smoke;
-  neprovedené živé ověření ponechat výslovně otevřené.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Automatické regrese pokrývají RBAC/privacy, přesný request
+  bez secrets, běžnou i streamovanou odpověď, pořadí skutečných UTF-8 delt,
+  restart/idempotenci, stale binding, timeout a přerušený běh jako `unknown`,
+  malformed stream jako `failed`, absenci částečné durable odpovědi a vědomý
+  nový run bez opakování původního síťového účinku. Uživatel 2026-09-20 živě
+  potvrdil desktopový OpenAI stream po opravě přípravy request digestu a NDJSON
+  serializace. Živý streamovaný webový smoke nebyl proveden; jeho endpoint,
+  administrátorská RBAC hranice a wire formát jsou ověřené integračně.
+  Závěrečných 69 cílených testů prošlo se 3 Qt skipy, výsledný JavaScript prošel
+  `node --check` a úplná sada 354 testů prošla s 22 environmentálními skipy.
+
+## Předání
+
+Funkce je implementovaná a PoC validovaná. PR #43 obsahuje implementaci;
+navazující acceptance diff doplňuje regresní testy a opravuje stavovou evidenci.
+Po jeho začlenění přesunout tuto dávku do WORK_LOG a aktivovat jedinou další
+dávku z BACKLOG podle pravidel předání.

@@ -613,7 +613,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   brainstormingové vlákno; případný Git otisk je samostatné potvrzení. Poté
   vznikne nové prázdné orchestration vlákno bez kontextu ukončeného vlákna.
   Každý budoucí vstup se znovu autorizuje a uloží do vlastního Context Manifestu.
-- [ ] Přímý externí brainstormingový dispatch, historie přesného sanitizovaného
+- [x] Přímý externí brainstormingový dispatch, historie přesného sanitizovaného
   provider requestu a capability-gated streamované zobrazení —
   F-M3-CHAT-DIRECT-01. Přímé odeslání neruší aplikační RBAC/privacy kontrolu ani
   Context Manifest; projektové artefakty a `local-only` zůstávají zakázané.
@@ -891,9 +891,11 @@ striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, pub
 artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
 zobrazení externí odpovědi. F-M3-CHAT-MODES-01 je po PR #40 začleněn a odděluje
 lokální orchestrace od brainstormingu s per-run modelem. M3-UB-01 implementuje
-a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 nyní mění externí
-brainstorming na přímý dispatch s dohledatelným requestem a volitelným
-streamováním; obrazové capability, webové hledání a obecný workflow zůstávají
+a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 je po PR #43 a
+navazující akceptaci PoC validovaný: externí brainstorming používá přímý
+dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
+OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
+capability, webové hledání a obecný workflow zůstávají
 samostatné navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
@@ -905,8 +907,9 @@ není vydáván za celý uzavřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
 - [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
-- [ ] Přímý brainstormingový dispatch, historie requestu a streamované
-  zobrazení — aktivní dávka F-M3-CHAT-DIRECT-01; výjimka z dosavadního
+- [x] Přímý brainstormingový dispatch, historie requestu a streamované
+  zobrazení — F-M3-CHAT-DIRECT-01 PoC validated po PR #43 a navazující
+  acceptance; výjimka z dosavadního
   preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
   autorizaci a privacy kontrole.
 - [ ] Provenance.

@@ -149,13 +149,13 @@ class OpenAIBackendTests(unittest.TestCase):
             self.handoff, self.binding, lambda _: self.fail('must not emit')), result)
 
     def test_sse_transport_validates_deltas_and_final_response(self):
-        response = self.response()
+        response = self.response('odpověď')
         events = [
             {'type': 'response.output_text.delta', 'sequence_number': 1, 'delta': 'odpo'},
-            {'type': 'response.output_text.delta', 'sequence_number': 2, 'delta': 'ved'},
+            {'type': 'response.output_text.delta', 'sequence_number': 2, 'delta': 'věď'},
             {'type': 'response.completed', 'sequence_number': 3, 'response': response}]
         lines = iter([part for event in events for part in
-            [b'data: ' + json.dumps(event).encode() + b'\n', b'\n']])
+            [b'data: ' + json.dumps(event, ensure_ascii=False).encode() + b'\n', b'\n']])
         class Response:
             status = 200
             def readline(self, _limit): return next(lines, b'')
@@ -168,7 +168,20 @@ class OpenAIBackendTests(unittest.TestCase):
         with patch('spikes.openai_backend.http.client.HTTPSConnection', Connection):
             result = OpenAIAdapter._http_stream_transport(
                 self.binding, b'{}', 'sk-secret-value', deltas.append)
-        self.assertEqual((deltas, result), (['odpo', 'ved'], response))
+        self.assertEqual((deltas, result), (['odpo', 'věď'], response))
+
+    def test_malformed_stream_fails_durably_without_partial_response(self):
+        def malformed(_binding, _request, _secret, on_delta):
+            on_delta('neúplná')
+            raise ValueError('Invalid OpenAI SSE sequence')
+        adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+                                stream_transport=malformed)
+        adapter.prepare(self.handoff, self.binding, stream=True)
+        with self.assertRaisesRegex(OpenAIResponseError, 'SSE sequence'):
+            adapter.dispatch_stream(self.handoff, self.binding, lambda _delta: None)
+        run = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(run['state'], 'failed')
+        self.assertIsNone(run['response'])
 
     def test_interrupted_stream_is_unknown_and_partial_text_is_not_a_response(self):
         deltas = []
@@ -202,6 +215,14 @@ class OpenAIBackendTests(unittest.TestCase):
         with self.assertRaisesRegex(OpenAIUnknownRun, 'automatic retry'):
             adapter.dispatch(self.handoff, self.binding)
         self.assertEqual(len(calls), 1)
+
+        replacement = DispatchHandoff(str(uuid4()), str(uuid4()), 'c' * 64,
+                                      self.binding.target(), b'new explicit attempt')
+        succeeded = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+                                  lambda *_args: self.response('nový výsledek'))
+        self.assertEqual(succeeded.dispatch(replacement, self.binding)['response'],
+                         'nový výsledek')
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'unknown')
 
     def test_tool_call_model_change_and_malformed_output_fail_durably(self):
         invalid = [
