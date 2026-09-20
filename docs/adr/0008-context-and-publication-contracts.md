@@ -353,6 +353,21 @@ explicitně připravený textový/chatový kontext. Jeho Context Manifest však 
 obsahovat projektový artefakt, jeho bajty ani automaticky odvozený artifact
 context.
 
+Výběr běhu je uzavřený objekt `{mode, adapter, model}`. Orchestrace přijímá jen
+adapter `ollama`, nepřijímá model z requestu a načte přesný nakonfigurovaný
+`same-node` binding. Brainstorming vyžaduje explicitní model a smí vybrat
+nakonfigurovaný Ollama nebo OpenAI Responses adapter. Základní binding se
+nemění: služba vytvoří pro běh odvozenou immutable revizi zahrnující hash
+vybraného modelu a zachová endpoint, target i credential revision. Manifest a
+backend run record proto vážou přesný model; změna základního bindingu před
+pozdějším potvrzením či recovery je konflikt, nikoli důvod použít nový model.
+
+Režimová policy přijímá oddělené seznamy projektových a textových vstupů.
+Brainstorming vyžaduje prázdný seznam projektových vstupů, ale dovoluje
+explicitně připravený text a vybrané zprávy jako `ad-hoc` vstupy. Orchestrace
+smí přijmout oba druhy. Každý běh vyžaduje alespoň jeden explicitní vstup;
+žádný režim nedoplňuje kontext automaticky.
+
 Přechod `orchestration` → `brainstorming` vytváří nový manifest a znovu
 vyhodnotí explicitně vybrané zprávy vůči cíli; historie ani artefaktový obsah
 se nepřenášejí automaticky. `local-only` ani jiný vstup zakázaný vybraným cílem

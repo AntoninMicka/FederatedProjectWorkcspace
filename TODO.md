@@ -33,11 +33,12 @@ Milník M3; jedna dávka, větev `feature/f-m3-chat-modes`, budoucí PR do `deve
 
 ## Aktivní části dávky
 
-- [ ] [in progress] **F-M3-CHAT-MODES-01-A — Kontrakt, reuse a crash hranice
-  (designed).** Prověřit `ChatThreads`, `ChatService`, backend bindings,
-  ContextBuilder a desktop UI; určit migraci thread/turn evidence, režimovou
-  policy a přesné recovery hranice bez nové autority úložiště.
-- [ ] [planned] **F-M3-CHAT-MODES-01-B — Režimy, modelový výběr a UI
+- [x] [completed] **F-M3-CHAT-MODES-01-A — Kontrakt, reuse a crash hranice
+  (designed).** `ChatThreads` v3, `ChatRunChoice`, stávající bindingy a
+  ContextBuilder vymezují režim, per-run model, oddělené textové/projektové
+  vstupy a atomický návrat do orchestrace. Odvozený binding nemění globální
+  konfiguraci a recovery nesmí použít později změněný základní binding.
+- [ ] [in progress] **F-M3-CHAT-MODES-01-B — Režimy, modelový výběr a UI
   (implemented).** Vynutit same-node orchestration, artifact-free brainstorming,
   explicitní výběr modelu jen pro brainstorming a ukončení/archivaci před
   založením nového orchestration vlákna.

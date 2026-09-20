@@ -15,8 +15,7 @@ Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením kaž
 
 F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
-F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG. Aktivní
-F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG.
+F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37 uzavřen ve WORK_LOG. Aktivní F-M3-CHAT-MODES-01 drží [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
