@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """Desktop assets/policy are mandatory; a real Qt smoke is explicitly opt-in."""
+import json
 import os
 from pathlib import Path
 import socket
@@ -16,6 +17,28 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
+        class Service:
+            def external_send_stream(self, request, on_delta):
+                self.request = request
+                on_delta('první '); on_delta('část')
+                return {'thread': {'messages': []}, 'state': 'succeeded'}
+
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            response = driver.request(server, path='/v1/external/send-stream',
+                                      body=b'{"run_id":"test-run"}')
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 200 ', head)
+        events = [json.loads(line) for line in body.splitlines()]
+        self.assertEqual(events, [
+            {'type': 'delta', 'delta': 'první '},
+            {'type': 'delta', 'delta': 'část'},
+            {'type': 'result', 'result': {
+                'thread': {'messages': []}, 'state': 'succeeded'}}])
+        self.assertEqual(server.chat_service.request, {'run_id': 'test-run'})
+
     def test_prompt_switches_to_chat_only_when_submitted(self):
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]

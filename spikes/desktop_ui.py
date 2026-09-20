@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 #
 """Static same-origin UI; project data arrives through authenticated reads."""
+import json
 import sqlite3
 import subprocess
 
