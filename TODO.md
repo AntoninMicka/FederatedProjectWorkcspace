@@ -52,14 +52,22 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   prompt/response limity, tři rozměry, PNG/IHDR/chunk validace, přesný request,
   privacy, provenance, samostatný BLOB run journal a Workspace crash boundaries.
   Reuse adaptuje interní kontrakty a oficiální protokoly; cizí kód se nekopíruje.
-- [ ] [in progress] **F-M3-MEDIA-01-B — Adapter, durable dispatch a bezpečné
+- [x] [completed] **F-M3-MEDIA-01-B — Adapter, durable dispatch a bezpečné
   přijetí výsledku (implemented).** Implementovat pouze capability schválené v
   části A, samostatné OpenAI/ComfyUI bindingy, přesný potvrzovaný request a
   bounded validaci výsledných bajtů.
   Providerová URL se v první verzi nepoužije, není-li v A navržena úzce omezená
   a doložená bezpečná varianta. Timeout, chyba, neplatná data a ztracená odpověď
-  musí mít jednoznačný durable stav bez skrytého retry nebo fallbacku.
-- [ ] [planned] **F-M3-MEDIA-01-C — UI a explicitní publikace artefaktu
+  musí mít jednoznačný durable stav bez skrytého retry nebo fallbacku. Hotovo:
+  samostatný media registr, OpenAI Images a ComfyUI binding/adapter, allowlisted
+  workflow substituce, přesná execution/request identita, mode-0600 SQLite BLOB
+  journal a striktní PNG/CRC/IHDR/rozměrová validace. OpenAI nepřijímá URL ani
+  seed, ComfyUI vyžaduje seed a kvalitu ponechává workflow; známá neplatná data
+  končí `failed`, nejistota po dispatchi `unknown` bez retry. Ověření 2026-09-21:
+  cíleně 8 testů OK; úplná sada 362 testů OK, 22 podmíněných smoke testů přeskočeno
+  (první sandboxový běh měl 27 očekávaných socket permission chyb, opakování s
+  povolenými lokálními sockety prošlo).
+- [ ] [in progress] **F-M3-MEDIA-01-C — UI a explicitní publikace artefaktu
   (implemented).** Přidat bezpečný preview vstupů i výsledku, privacy souhlas a
   oddělenou publikaci přes Workspace se zdrojovým hashem, provider/run identitou
   a provenance. Ollama může obrazovou akci jen navrhnout; uživatel ji musí
