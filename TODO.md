@@ -43,15 +43,16 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
 
 ## Aktivní části dávky
 
-- [ ] [in progress] **F-M3-MEDIA-01-A — Kontrakt, provider/licenční review a
-  reuse (designed).** Ověřit aktuální oficiální OpenAI Images a ComfyUI server
-  rozhraní a podporované capability. Rozhodnout, zda první verze zahrne pouze
-  `generate-image`, nebo také oddělené `image-to-text`; uzavřít přesné vstupy,
-  ComfyUI workflow template/revision a parametr allowlist, MIME, rozměry,
-  byte/event limity, request/response hash, provenance, privacy, preview,
-  publikaci a crash boundaries. Zaznamenat reuse/adapt/reject a případnou změnu
-  ADR bez kopírování neveřejné funkčnosti.
-- [ ] [planned] **F-M3-MEDIA-01-B — Adapter, durable dispatch a bezpečné
+- [x] [completed] **F-M3-MEDIA-01-A — Kontrakt, provider/licenční review a
+  reuse (designed).** ADR 0008 uzavírá v1 pouze jako `generate-image` s jedním
+  PNG výsledkem; `image-to-text`, editace/maska a multimodální chat jsou
+  odložené capability. OpenAI Images přijímá jen inline base64, ComfyUI používá
+  verzovanou allowlisted workflow šablonu a bounded `/prompt` → `/history` →
+  `/view` tok bez LLM workflow/custom nodes a bez fallbacku. Jsou fixované
+  prompt/response limity, tři rozměry, PNG/IHDR/chunk validace, přesný request,
+  privacy, provenance, samostatný BLOB run journal a Workspace crash boundaries.
+  Reuse adaptuje interní kontrakty a oficiální protokoly; cizí kód se nekopíruje.
+- [ ] [in progress] **F-M3-MEDIA-01-B — Adapter, durable dispatch a bezpečné
   přijetí výsledku (implemented).** Implementovat pouze capability schválené v
   části A, samostatné OpenAI/ComfyUI bindingy, přesný potvrzovaný request a
   bounded validaci výsledných bajtů.

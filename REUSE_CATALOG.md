@@ -147,10 +147,14 @@ F-M3-MEDIA-01-A **adaptuje protokol, nikoli implementaci ComfyUI**: vedle
 OpenAI Images bude `generate-image` poskytovat samostatný ComfyUI adapter nad
 oficiálním serverovým API. Reuse se omezuje na dokumentované request/history/
 output rozhraní; workspace nepřebírá serverový kód, custom nodes, UI ani správu
-modelů. Lokálně nalezený checkout nebyl ověřen jako vlastní licencovaný zdroj a
-není podkladem pro kopírování. Libovolný LLM-generovaný workflow, automatický
-fallback a obecné stahování URL se odmítají; použijí se jen verzované allowlisted
-šablony, explicitní binding a bounded výstupy svázané s konkrétním runem.
+modelů. Oficiální ComfyUI repozitář uvádí licenci
+[GPL-3.0](https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE); protože se
+implementuje nový stdlib klient pouze podle protokolu a nekopíruje se serverový
+kód ani příklady, nevzniká v této dávce nová vendored/runtime závislost.
+Lokálně nalezený checkout není podkladem pro kopírování. Libovolný
+LLM-generovaný workflow, automatický fallback a obecné stahování URL se
+odmítají; použijí se jen verzované allowlisted šablony, explicitní binding a
+bounded výstupy svázané s konkrétním runem.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
 
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
