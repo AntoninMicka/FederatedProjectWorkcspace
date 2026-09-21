@@ -72,7 +72,12 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   oddělenou publikaci přes Workspace se zdrojovým hashem, provider/run identitou
   a provenance. Ollama může obrazovou akci jen navrhnout; uživatel ji musí
   samostatně potvrdit. Desktop a oprávněný web musí zachovat stejné serverové
-  autorizační hranice.
+  autorizační hranice. Průběžně 2026-09-21: desktop i web sdílejí node-local
+  nastavení ComfyUI; administrace ukládá atomicky mode-0600 pouze validovaný
+  verzovaný API workflow, jeho hash, mapu allowlisted parametrů a explicitní
+  output node. Webovou změnu smí provést jen node admin; generování, preview,
+  potvrzení a publikace v této části ještě zbývají. Cíleně 22 testů OK
+  (2 podmíněné smoke přeskočeny), úplná sada 363 testů OK, 22 přeskočeno.
 - [ ] [planned] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
   (PoC validated).** Ověřit MIME/magic bytes, rozměry a limity, secrets,
   RBAC/privacy, přesný request, malformed/oversized výsledek, timeout,

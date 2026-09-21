@@ -209,6 +209,21 @@ class ComfyImageBinding:
                                    frozenset({'generate-image'}),
                                    frozenset({'image/png'})).validate()
 
+    def serialize(self):
+        value = {'schema_version': 1, 'binding_id': self.binding_id,
+                 'revision': self.revision, 'adapter': self.adapter_id,
+                 'boundary': self.boundary, 'endpoint': self.endpoint,
+                 'target_id': self.target_id,
+                 'workflow_revision': self.workflow_revision,
+                 'workflow_sha256': self.workflow_sha256,
+                 'workflow': deepcopy(self.workflow),
+                 'parameters': deepcopy(self.parameters),
+                 'output_node_id': self.output_node_id,
+                 'timeout_seconds': self.timeout_seconds}
+        if self.tls_cert_sha256:
+            value['tls_cert_sha256'] = self.tls_cert_sha256
+        return value
+
     def render(self, request):
         workflow = deepcopy(self.workflow)
         width, height = SIZES[request.size]
@@ -222,6 +237,50 @@ class ComfyImageBinding:
 MEDIA_BACKENDS = BackendRegistry()
 MEDIA_BACKENDS.register(OpenAIImageBinding.adapter_id, OpenAIImageBinding.parse)
 MEDIA_BACKENDS.register(ComfyImageBinding.adapter_id, ComfyImageBinding.parse)
+
+
+class ComfyBindings:
+    """Atomic node-local ComfyUI configuration outside project Git."""
+    def __init__(self, state_dir):
+        self.root = Path(state_dir).absolute(); info = self.root.stat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+                and stat.S_IMODE(info.st_mode) == 0o700,
+                'ComfyUI binding directory requires owned mode 0700')
+        self.path = self.root / 'comfyui-binding.json'
+
+    def save(self, binding):
+        require(isinstance(binding, ComfyImageBinding), 'Validated ComfyUI binding is required')
+        raw = (json.dumps(binding.serialize(), sort_keys=True,
+                          separators=(',', ':')) + '\n').encode()
+        require(len(raw) <= MAX_WORKFLOW + 64 * 1024, 'ComfyUI binding is too large')
+        temporary = self.root / ('.comfyui-binding-' + binding.binding_id + '.tmp')
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with os.fdopen(fd, 'wb', closefd=False) as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.close(fd); fd = -1
+            os.replace(temporary, self.path)
+            directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+            try: os.fsync(directory)
+            finally: os.close(directory)
+        finally:
+            if fd >= 0: os.close(fd)
+            if temporary.exists(): temporary.unlink()
+
+    def load(self):
+        fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            info = os.fstat(fd)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_nlink == 1 and not info.st_mode & 0o077,
+                    'Unsafe ComfyUI binding file')
+            raw = os.read(fd, MAX_WORKFLOW + 64 * 1024 + 1)
+        finally: os.close(fd)
+        require(len(raw) <= MAX_WORKFLOW + 64 * 1024, 'ComfyUI binding is too large')
+        try: value = json.loads(raw)
+        except (UnicodeError, ValueError) as exc:
+            raise ValueError('Invalid ComfyUI binding JSON') from exc
+        return ComfyImageBinding.parse(value)
 
 
 def validate_png(raw, expected_size):

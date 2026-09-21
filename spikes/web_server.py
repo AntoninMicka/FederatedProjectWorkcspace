@@ -22,6 +22,7 @@ from spikes.administration import Administration, AccessDenied, identifier
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
+from spikes.media_service import MediaService
 from spikes.publication_cms import PublicationCms
 
 HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
@@ -259,6 +260,8 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error):
                 return self.reply(422, {'error': 'Účetní přehled nelze načíst nebo uložit. '
                                        'Ověřte administrátorský klíč a lokální stav.'})
+        if self.path == '/v1/media/comfyui/configure' and not self.server.administration.is_admin(self.actor):
+            return self.send_error(403)
         if self.path in {'/v1/external/send', '/v1/external/send-stream',
                          '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
@@ -330,6 +333,7 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.projects = Projects(node, network=True)
     server.node = node
     server.chat_service = ChatService(node, server.projects)
+    server.media_service = MediaService(node, state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.administration = Administration(node)
     return server

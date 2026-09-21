@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import struct
+import stat
 import tempfile
 import unittest
 import uuid
@@ -13,7 +14,7 @@ import zlib
 
 from spikes.backend_contract import BackendCapabilities
 from spikes.media_backend import (ComfyImageAdapter, ComfyImageBinding,
-                                  ImageGenerationRequest, MediaResponseError,
+                                  ComfyBindings, ImageGenerationRequest, MediaResponseError,
                                   MediaRuns, MediaUnknownRun, OpenAIImageAdapter,
                                   OpenAIImageBinding, validate_png)
 from spikes.openai_backend import OpenAICredentials
@@ -169,6 +170,13 @@ class MediaBackendTests(unittest.TestCase):
             self.comfy_binding(parameters={})
         with self.assertRaises(ValueError):
             self.comfy_binding(endpoint='http://192.168.1.2:8188')
+
+    def test_comfy_binding_is_atomic_persistent_and_secret_free(self):
+        binding = self.comfy_binding()
+        store = ComfyBindings(self.root); store.save(binding)
+        self.assertEqual(store.load().serialize(), binding.serialize())
+        self.assertEqual(stat.S_IMODE(store.path.stat().st_mode), 0o600)
+        self.assertNotIn('credential', store.path.read_text())
 
 
 if __name__ == '__main__':

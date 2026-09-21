@@ -19,6 +19,7 @@ from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
+from spikes.media_service import MediaService
 from spikes.publication_cms import PublicationCms
 
 
@@ -126,6 +127,7 @@ def main():
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
+        server.media_service = MediaService(node_path, state_dir=server.chat_service.state_dir)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)

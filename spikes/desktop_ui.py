@@ -62,6 +62,20 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
+<hr><h2>Lokální obrazový backend ComfyUI</h2>
+<p id="settings-comfy-status" role="status">Načítám nastavení ComfyUI…</p>
+<form id="comfy-backend-form">
+<label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
+<label>Endpoint <input name="endpoint" value="http://127.0.0.1:8188" required></label>
+<label>ID cíle <input name="target_id" value="local-process" required></label>
+<label>Revize workflow <input name="workflow_revision" required></label>
+<label>API workflow JSON <textarea name="workflow" rows="8" required></textarea></label>
+<label>Mapa parametrů JSON <textarea name="parameters" rows="5" required>{"prompt":{"node_id":"1","input":"text"},"width":{"node_id":"2","input":"width"},"height":{"node_id":"2","input":"height"},"seed":{"node_id":"3","input":"seed"}}</textarea></label>
+<label>Výstupní node ID <input name="output_node_id" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
+<button type="submit">Uložit ComfyUI</button></form>
+<small>Uloží se pouze verzovaný API workflow. Při generování lze měnit jen prompt, rozměry a seed; custom workflow od LLM se nespouští.</small>
 <hr><h2>Externí textový backend</h2>
 <p id="settings-external-status" role="status" aria-live="polite">Načítám stav externího backendu…</p>
 <form id="external-backend-form">
@@ -880,6 +894,10 @@ async function loadBackendBinding(){
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
    'Externí backend zatím není nastaven.';
+  const media=await projectRequest('/v1/media/status',{}),comfy=media.comfyui;
+  document.querySelector('#settings-comfy-status').textContent=comfy ?
+   `ComfyUI ${comfy.workflow_revision} · ${comfy.boundary} · ${comfy.endpoint}` :
+   'ComfyUI zatím není nastaveno.';
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
   return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
@@ -917,6 +935,23 @@ document.querySelector('#backend-metrics-form').addEventListener('submit',async 
   const result=await projectRequest('/v1/backend-metrics/configure',{secret:secret.value});
   secret.value='';renderBackendMetrics(result);
  }catch(error){secret.value='';backendMetricsStatus.textContent=error.message;}
+});
+function stableJson(value){if(Array.isArray(value))return '['+value.map(stableJson).join(',')+']';
+ if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+stableJson(value[key])).join(',')+'}';
+ return JSON.stringify(value);}
+document.querySelector('#comfy-backend-form').addEventListener('submit',async event=>{
+ event.preventDefault();const fields=event.currentTarget.elements,status=document.querySelector('#settings-comfy-status');
+ try{const workflow=JSON.parse(fields.workflow.value),parameters=JSON.parse(fields.parameters.value);
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(stableJson(workflow)));
+  const boundary=fields.boundary.value,binding={schema_version:1,binding_id:crypto.randomUUID(),
+   revision:crypto.randomUUID(),adapter:'comfyui',boundary,endpoint:fields.endpoint.value.trim(),
+   target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim(),
+   workflow_revision:fields.workflow_revision.value.trim(),workflow_sha256:[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join(''),
+   workflow,parameters,output_node_id:fields.output_node_id.value.trim(),timeout_seconds:Number(fields.timeout_seconds.value)};
+  if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
+  status.textContent='Ukládám ComfyUI…';const result=await projectRequest('/v1/media/comfyui/configure',binding);
+  status.textContent=`ComfyUI ${result.binding.workflow_revision} bylo uloženo.`;
+ }catch(error){status.textContent=error.message;}
 });
 document.querySelector('#backend-metrics-refresh').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;backendMetricsStatus.textContent='Načítám účetní přehled…';
@@ -1442,7 +1477,7 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
-    max_body = 320 * 1024
+    max_body = 1152 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/orchestration',
@@ -1457,7 +1492,8 @@ class DesktopHandler(Handler):
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
-        '/v1/metadata-suggestions/publish',
+        '/v1/metadata-suggestions/publish', '/v1/media/status',
+        '/v1/media/comfyui/configure',
         '/v1/publication-cms/status', '/v1/publication-cms/configure',
         '/v1/publication-cms/preview', '/v1/publication-cms/generate',
         '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
@@ -1468,6 +1504,10 @@ class DesktopHandler(Handler):
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path == '/v1/media/status' and request == {}:
+                return self.reply(200, self.server.media_service.status())
+            if self.path == '/v1/media/comfyui/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.media_service.configure_comfy(request))
             if self.path == '/v1/publication-cms/status' and request == {}:
                 return self.reply(200, self.server.publication_cms.status())
             if self.path == '/v1/publication-cms/configure' and isinstance(request, dict):
