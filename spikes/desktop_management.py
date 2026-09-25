@@ -11,6 +11,7 @@ from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.project_creation import ProjectCreation
 
 ASSETS = {**BASE_ASSETS, '/': ('text/html; charset=utf-8', HTML.replace(
+              ' tabindex="-1" hidden>Profil', ' tabindex="-1">Profil').replace(
               'id="backend-metrics" hidden', 'id="backend-metrics"').replace(
               'id="backend-metrics-indicator" hidden', 'id="backend-metrics-indicator"').replace(
               '<div id="administration-host"></div>', ADMIN_HTML).replace(

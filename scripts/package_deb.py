@@ -60,7 +60,7 @@ def build(output, version='0.1.0~m0'):
             f'Version: {version}\n'
             f'Architecture: all\n'
             f'Maintainer: {maintainer}\n'
-            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), git, coreutils, poppler-utils, openssh-client, openssl\n'
+            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), python3-segno (>= 1.6.6), git, coreutils, poppler-utils, openssh-client, openssl\n'
             'Section: utils\n'
             'Priority: optional\n'
             'Homepage: https://github.com/AntoninMicka/FederatedProjectWorkcspace\n'

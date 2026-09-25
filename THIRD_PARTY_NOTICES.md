@@ -16,7 +16,7 @@ This baseline covers the Linux source archive and the `.deb` built by
 `scripts/package_desktop.py` and `scripts/package_deb.py`. Those builders package
 workspace sources and documentation, **not copies of the Python, PyYAML, Qt,
 PySide6, Shiboken, Git or Poppler runtimes**. A source installation may obtain
-PyYAML separately using pip; the `.deb` uses operating-system packages.
+PyYAML and Segno separately using pip; the `.deb` uses operating-system packages.
 
 These notices are not a complete runtime SBOM or a legal clearance of a release.
 Exact package versions, downstream patches, transitive dependencies and enabled
@@ -122,3 +122,12 @@ may be split by Qt module, architecture or provider. The workspace's copies of
 these notices and the included LGPL/GPL texts are installed beneath
 `/usr/share/doc/federated-workspace-poc/`, preserving the relative paths above.
 No endorsement by any third-party project is implied.
+
+## Segno 1.6.6
+
+The presenter imports Segno to generate contact QR codes locally. Segno is
+licensed under BSD-3-Clause; the application source archive and `.deb` do not
+bundle the library. Install it from requirements or the system `python3-segno`
+package. Upstream source and license: [Segno 1.6.6](https://github.com/heuer/segno/tree/1.6.6)
+and [LICENSE](https://github.com/heuer/segno/blob/1.6.6/LICENSE).
+The earlier reference runtime audit does not include this newly added dependency.

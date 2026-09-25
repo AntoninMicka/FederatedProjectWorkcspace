@@ -265,3 +265,32 @@ dávku z BACKLOG podle pravidel předání.
   Adaptace existujícího mapování bez změny persistence. Ověření 2026-09-26:
   6 cílených testů prošlo; úplná sada 380 testů, OK (23 skipů).
   `node --check` a `git diff --check` prošly; fyzický gamepad neověřen.
+
+- [x] [completed] **D-09 — Historie promítání a závěrečný kontaktní slide (implemented).**
+  Původ: požadavek uživatele 2026-09-26, upřesněný o kontakty v nastavení
+  aplikace/profilu uživatele. Pokračuje stejná presenter feature na
+  `feature/gamepad-demo-presenter`, cíl `develop`, PR nevytvořen.
+  Výstup/akceptace: zpětný krok smí promítnout spotřebovaný slide; celé
+  dočasné pořadí včetně backupů/návratů zůstává viditelné a zpětný průchod
+  je nepřepisuje. Automatický závěr má uprostřed „Prostor pro Vaše dotazy“
+  a vpravo dole kontakty a QR z lokálního uživatelského profilu.
+  Reuse/adapt: současný renderer/navigace, native fragment actions a SQLite;
+  QR přes Segno 1.6.6 (BSD-3-Clause), bez externí služby a kopírování kódu.
+  Profil desktopového OS uživatele je samostatná lokální SQLite databáze
+  vedle node.json, není projektový index ani journal. Jedna transakce ukládá
+  celý profil; pád před commitem zachová původní hodnotu, po commitu novou.
+  Dočasná sekvence a snímek profilu žijí v paměti relace; úprava profilu
+  nezmění běžící promítání. Žádná změna crash boundaries ADR 0003.
+  Ověření: 42 cílených testů, OK (3 opt-in skipy); úplná sada 388 testů,
+  OK (24 environmentálních/opt-in skipů). Spuštěno se Segno 1.6.6 a
+  volitelným nezávislým QR dekodérem z dočasné testovací instalace.
+  Procesní pády před commitem prvního i dalšího uložení profilu zachovaly
+  prázdnou/původní hodnotu; save/reopen nativního dialogu a snapshot relace
+  ověřeny. Samostatný Qt/WebEngine test prošel při 16:9 a 4:3: vycentrovaný
+  nadpis, kontakty vpravo dole, dekódovaný PNG. Screenshot při 1280 × 720
+  vizuálně zkontrolován a jeho QR nezávisle přečten včetně české diakritiky.
+  `node --check` pro oba assety, `bash -n run.sh` a `git diff --check` prošly.
+  Lokální ignorovaná .venv má deklarované závislosti a přístup k systémovému
+  Qt. Fyzický gamepad/projektor a instalace .deb na cílový OS neověřeny;
+  historický audit runtime nebyl rozšířen na novou knihovnu. Implemented PoC,
+  nikoli production-ready; širší dávka ani Disclosure Presenter MVP neuzavřeny.

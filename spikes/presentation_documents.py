@@ -141,7 +141,10 @@ def decode_deck(body):
 
 
 def public_content(slide):
-    return {key: copy.deepcopy(slide[key]) for key in ('title', 'bullets', 'background', 'foreground', 'wallpaper')}
+    content = {key: copy.deepcopy(slide[key]) for key in ('title', 'bullets', 'background', 'foreground', 'wallpaper')}
+    if slide.get('closing') is True:
+        content.update(closing=True, contacts=copy.deepcopy(slide['contacts']), qr=slide['qr'])
+    return content
 
 
 def project_deck(deck, revision):

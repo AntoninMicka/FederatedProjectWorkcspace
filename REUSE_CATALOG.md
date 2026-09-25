@@ -21,6 +21,7 @@ Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md
 | libgit2 / C++ | evaluate (PoC validated) | Ověřená alternativa, `spikes/libgit2/probe.cpp`, ADR 0005 | Runtime 1.9.1 dostupný; chybějící dev headers rozbaleny do /tmp. Produkční port Workspace, cílové balení a TLS/SSH neověřeny |
 | Python stdlib SQLite | adapt (M0/M1 PoC) | Obnovitelný relační projektový index (`spikes/storage.py`, ADR 0022) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); ověření metadat/vztahů ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15), zbývá produkční integrace, výkon a paměť na Turrisu |
 | PyYAML 6.0.3 | approved | Omezený frontmatter parser v M0 | Produkční release: doplnit evidence licenčních textů/notice pro všechny distribuované třetí strany; aktuálně je pro PyYAML 6.0.3 v M1 audit potvrzen jako MIT-approved (2026-09-10). |
+| Segno 1.6.6 | reuse (presenter PoC) | Lokální QR kontaktů, čistý Python bez dalších runtime závislostí; [veřejný upstream](https://github.com/heuer/segno), BSD-3-Clause, dostupnost a licence ověřeny 2026-09-26 | Cílové systémové balení; knihovna se nekopíruje do zdrojů projektu |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
 
 Nad rámec komponent najdeš evidenci compliance závislostí v [docs/legal/DEPENDENCIES.toml](docs/legal/DEPENDENCIES.toml).
@@ -37,7 +38,7 @@ M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je no
 
 ## Již používané vlastní komponenty
 
-Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; jediná deklarovaná pip závislost je PyYAML 6.0.3 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; deklarované pip závislosti jsou PyYAML 6.0.3 a Segno 1.6.6 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
 
 | Komponenta / zdroj | Rozhodnutí a důvod | Důkazy a omezení |
 | --- | --- | --- |

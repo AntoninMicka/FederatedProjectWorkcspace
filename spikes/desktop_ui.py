@@ -11,6 +11,7 @@ from pathlib import Path
 from spikes.local_api import Handler
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
+from spikes.presentation_closing import closing_slide
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.projects import Projects
@@ -93,6 +94,9 @@ def presentation_deck():
 def presentation_public_payload(server, request=None):
     """Return only the currently approved public presentation content."""
     deck = getattr(server, 'presentation_selected_deck', None) or presentation_deck()
+    session = getattr(server, 'presentation_session_deck', None)
+    if session is not None and session.get('revision') == deck.get('revision'):
+        deck = session
     state = getattr(server, 'presentation_public_state',
                     {'visible': False, 'blackout': True, 'slide': 0, 'content': None, 'ratio': '16:9'})
     if request and request.get('action') == 'show':
@@ -135,8 +139,12 @@ def presentation_public_payload(server, request=None):
     return {'visible': True, 'blackout': False, 'slide': state['slide'], 'ratio': state.get('ratio', '16:9'), 'content': state['content']}
 
 
-def presentation_status(server):
+def presentation_status(server, *, start=False):
     result = copy.deepcopy(getattr(server, 'presentation_selected_deck', None) or presentation_deck())
+    if start:
+        profile = getattr(server, 'user_profile', None)
+        result['slides'].append(closing_slide(profile.load() if profile else None, result.get('revision')))
+        server.presentation_session_deck = copy.deepcopy(result)
     state = getattr(server, 'presentation_public_state', {})
     result['ratio'] = state.get('ratio', '16:9')
     return result
@@ -192,6 +200,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
@@ -226,6 +235,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
 <pre id="backend-metrics-report" hidden></pre></section>
 </section>
+<section id="settings-profile-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-profile-tab" hidden>
+<h2>Uživatelský profil</h2><p>Jméno a kontakty pro závěrečný slide prezentace. Platí pro tohoto uživatele desktopu.</p>
+<button id="user-profile-open" type="button">Upravit profil…</button></section>
 <div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
@@ -568,26 +580,36 @@ function applyPresenterRatio(ratio){for(const preview of [presenterScreen,presen
 function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
 setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
 function createPresenterSequence(slides){
- const entries=slides.map((slide,mainIndex)=>({slide,mainIndex,kind:'main'}));
+ const entries=slides.map((slide,mainIndex)=>({slide,mainIndex,kind:slide.closing?'closing':'main',visited:false}));
  const shown=new Map();
- let position=0,preferred=null;
- const key=slide=>slide.id || slide;
+ let position=0,frontier=-1,preferred=null;
+ const key=slide=>slide?.id || slide;
  const count=slide=>shown.get(key(slide)) || 0;
  const remaining=slide=>slide.reveal==='step' && count(slide)<(slide.bullets?.length || 0);
  const available=slide=>!shown.has(key(slide)) || slide.repeat===true || remaining(slide);
+ const unfinished=()=>entries.some(e=>e.kind==='main' && (!shown.has(key(e.slide)) || remaining(e.slide)));
  return {
   entries, available, count,
   get position(){return position;},
   get current(){return entries[position];},
-  get returnEntry(){return this.current?.returnTo;},
+  get previous(){return entries.slice(0,position).reverse().find(e=>e.visited);},
+  get returnEntry(){return this.current?.returnPending?this.current.returnTo:undefined;},
   get next(){return preferred || this.returnEntry || this.planned;},
   get planned(){
-   if(this.current && shown.has(key(this.current.slide)) && remaining(this.current.slide))return this.current;
-   return entries.slice(position+1).find(e=>e.kind==='main' && available(e.slide)) ||
-    entries.slice(0,position).find(e=>e.kind==='main' && available(e.slide) && e.slide.repeat!==true);
+   if(this.current?.visited && remaining(this.current.slide))return this.current;
+   return entries.slice(frontier+1).find(e=>e.kind==='main' && available(e.slide)) ||
+    entries.find(e=>e.kind==='main' && remaining(e.slide)) ||
+    (!unfinished()?entries.find(e=>e.kind==='closing' && available(e.slide)):undefined);
   },
-  get choices(){return entries.filter(e=>e.kind==='main' && available(e.slide) && (e!==this.current || remaining(e.slide)));},
-  canShow(entry){return Boolean(entry && (entry===this.returnEntry || available(entry.slide)));},
+  get choices(){
+   const seen=new Set();
+   return entries.map(e=>key(e.slide)===key(this.current?.slide)?this.current:e).filter(e=>{
+    if(e.kind!=='main' || !available(e.slide) || (e===this.current && !remaining(e.slide)) || seen.has(key(e.slide)))return false;
+    seen.add(key(e.slide));return true;
+   });
+  },
+  canShow(entry,backward=false){return Boolean(entry && (backward?entry===this.previous:
+   (entry===this.returnEntry || (available(entry.slide) && (entry.kind!=='closing' || !unfinished())))));},
   rows(entry){return entry.slide.reveal==='step'?Math.min(count(entry.slide)+1,entry.slide.bullets?.length || 0):entry.slide.bullets?.length || 0;},
   visual(entry, upcoming=false){
    if(!entry)return undefined;
@@ -598,7 +620,7 @@ function createPresenterSequence(slides){
   },
   chooseBackup(slide){
    if(!this.current || !slide || !available(slide))return false;
-   preferred=key(slide)===key(this.current.slide)?this.current:{slide,mainIndex:this.current.mainIndex,kind:'backup',returnTo:this.current};
+   preferred=key(slide)===key(this.current.slide)?this.current:{slide,mainIndex:this.current.mainIndex,kind:'backup',returnTo:this.current,returnPending:true,visited:false};
    return true;
   },
   choosePlanned(){preferred=this.planned || null;},
@@ -612,17 +634,19 @@ function createPresenterSequence(slides){
    const index=choices.indexOf(this.next);
    preferred=choices[(index<0?(delta>0?0:choices.length-1):(index+delta+choices.length)%choices.length)];
   },
-  target(delta){return delta<0?this.returnEntry || entries.slice(0,position).reverse().find(e=>available(e.slide)):this.next;},
-  commit(entry){
-   if(!this.canShow(entry))return;
+  target(delta){return delta<0?this.previous:this.next;},
+  commit(entry,backward=false){
+   if(!this.canShow(entry,backward))return;
    const rows=this.rows(entry),returning=entry===this.returnEntry;
-   if(returning){delete this.current.returnTo;}
-   let index=entries.indexOf(entry);
-   if(index<0){entries.splice(position+1,0,entry);index=position+1;}
-   else if(!returning && entry!==this.current){
-    const current=this.current;entries.splice(index,1);index=entries.indexOf(current)+1;entries.splice(index,0,entry);
+   if(backward){position=entries.indexOf(entry);}
+   else if(entry===this.current && position===frontier){/* Reveal another row in place. */}
+   else {
+    const index=entries.indexOf(entry);
+    if(entry.visited)entry={...entry,returnPending:returning && entry.returnPending};
+    else if(index>=0)entries.splice(index,1);
+    entries.splice(frontier+1,0,entry);position=++frontier;
    }
-   position=index;preferred=null;shown.set(key(entry.slide),Math.max(1,rows));
+   entry.visited=true;preferred=null;shown.set(key(entry.slide),Math.max(1,rows));
   }
  };
 }
@@ -687,12 +711,13 @@ function renderPresenterSlide(){
 function renderPresenterDeck(){
  presenterDeckList.replaceChildren();
  presenterSequence.entries.forEach((entry,index)=>{
-  if(!presenterSequence.canShow(entry))return;
+  // Keep the full route visible; consumed entries are history, not new choices.
   const item=document.createElement('li');const button=document.createElement('button');button.type='button';
   button.textContent=`${String(index+1).padStart(2,'0')} ${entry.kind==='backup'?'Backup · ':''}${entry.slide.title}`;
   item.setAttribute('aria-current',String(index===presenterSequence.position));
   item.classList.toggle('presenter-live',index===presenterSequence.position);
-  item.classList.toggle('presenter-visited',index<presenterSequence.position);
+  item.classList.toggle('presenter-visited',entry.visited);
+  button.disabled=presenterNavigating || !presenterSequence.canShow(entry);
   button.addEventListener('click',()=>{if(presenterNavigating)return;presenterSequence.chooseEntry(entry);refreshPresenterNext();});
   item.append(button);presenterDeckList.append(item);
  });
@@ -705,13 +730,13 @@ function choosePresenterBackup(backup){
  setPresenterNextSelection(backup,'backup');
  refreshPresenterNext();renderPresenterDeck();
 }
-async function showPresenterEntry(entry){
- if(presenterNavigating || !presenterSequence.canShow(entry))return;
+async function showPresenterEntry(entry,backward=false){
+ if(presenterNavigating || !presenterSequence.canShow(entry,backward))return;
  let failure=null;
  presenterNavigating=true;presenterPrevButton.disabled=true;presenterNextButton.disabled=true;presenterNextPreview.disabled=true;
  try{
   await presentationControl(entry.slide.id?{action:'show',slide:entry.mainIndex,slide_id:entry.slide.id,deck_revision:entry.slide.deck_revision,rows:presenterSequence.rows(entry)}:{action:'show',slide:entry.mainIndex,content:{title:entry.slide.title,body:entry.slide.body}});
-  presenterSequence.commit(entry);presenterPrivateSelection=null;
+  presenterSequence.commit(entry,backward);presenterPrivateSelection=null;
   presenterBlackout=false;presenterView.classList.remove('presenter-blackout');
   presenterBlackoutButton.textContent='Zatemnit';presenterBlackoutState.textContent='Veřejný výstup aktivní';
   presenterLiveState.textContent='ŽIVĚ';
@@ -724,7 +749,7 @@ async function showPresenterEntry(entry){
   presenterNavigating=false;renderPresenterSlide();if(failure)presenterStatus.textContent=failure;
  }
 }
-function movePresenter(delta){return showPresenterEntry(presenterSequence.target(delta));}
+function movePresenter(delta){return showPresenterEntry(presenterSequence.target(delta),delta<0);}
 function returnPresenterMain(){
  return showPresenterEntry(presenterSequence.returnEntry);
 }
@@ -1025,7 +1050,7 @@ function selectSettingsTab(selected){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
   const panel=document.getElementById(tab.getAttribute('aria-controls'));if(panel)panel.hidden=!active;
  }
- const administration=document.getElementById('administration');if(administration)administration.hidden=selected.id==='settings-backend-tab';
+ const administration=document.getElementById('administration');if(administration)administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id);
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -1058,6 +1083,7 @@ async function closeSettings(){
 document.querySelector('#open-settings').addEventListener('click',openSettings);
 document.querySelector('#chat-open-settings').addEventListener('click',openSettings);
 document.querySelector('#settings-back').addEventListener('click',closeSettings);
+document.querySelector('#user-profile-open').addEventListener('click',()=>{location.hash='user-profile';});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
@@ -1917,7 +1943,10 @@ class DesktopHandler(Handler):
         if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, scan_gamepads())
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
-            return self.reply(200, presentation_status(self.server))
+            try:
+                return self.reply(200, presentation_status(self.server, start=request.get('action') == 'start'))
+            except (ValueError, OSError, sqlite3.Error, ImportError):
+                return self.reply(422, {'error': 'Prezentaci nelze připravit. Ověřte profil uživatele a instalaci Segno.'})
         if self.path == '/v1/presentation/control' and isinstance(request, dict):
             try:
                 return self.reply(200, presentation_public_payload(self.server, request))

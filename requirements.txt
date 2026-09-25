@@ -2,3 +2,4 @@
 # SPDX-License-Identifier: MPL-2.0
 
 PyYAML==6.0.3
+segno==1.6.6

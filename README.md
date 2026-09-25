@@ -22,10 +22,10 @@ V horní liště klikněte na **Nový projekt…**, zadejte název a novou nebo 
 Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 
 ```sh
-sudo apt-get install python3-pyside6.qtwebenginewidgets poppler-utils
+sudo apt-get install python3-pyside6.qtwebenginewidgets poppler-utils python3-segno
 ```
 
-Wrapper preferuje `.venv/bin/python`; pokud v něm Qt chybí, použije systémový `python3` pouze tehdy, pokud má WebEngine i požadovaný PyYAML 6.0.3. Jinak skončí s chybou. `./run.sh setup` připravuje storage závislosti, Qt neinstaluje. Desktop vyžaduje běžného uživatele a grafickou relaci; nespouštět přes sudo. Automatické vypínání Chromium sandboxu ani TLS kontrol není použito.
+Wrapper preferuje `.venv/bin/python`; pokud v něm Qt chybí, použije systémový `python3` pouze tehdy, pokud má WebEngine i požadovaný PyYAML 6.0.3; desktop dále vyžaduje Segno pro QR kontakty. Jinak skončí s chybou. `./run.sh setup` připravuje Python závislosti, Qt neinstaluje. Desktop vyžaduje běžného uživatele a grafickou relaci; nespouštět přes sudo. Automatické vypínání Chromium sandboxu ani TLS kontrol není použito.
 
 Grafické ověření (Python s dostupným Qt):
 
@@ -38,7 +38,7 @@ Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vla
 
 ## Spuštění storage experimentu
 
-Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wrapper [run.sh](run.sh):
+Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a závislosti z `requirements.txt` (PyYAML 6.0.3, Segno 1.6.6). Spouštěcí wrapper [run.sh](run.sh):
 
 ```sh
 ./run.sh setup                 # jednorázová příprava .venv a instalace závislostí
@@ -64,7 +64,7 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Pokud už je požadovaný PyYAML dostupný, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
+Pokud už jsou závislosti z `requirements.txt` dostupné, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
 
 Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada používá dočasné Unix sockety a porty na `127.0.0.1` pro [lokální API PoC](docs/adr/0006-local-api-transport.md); nepotřebuje internet. Sandbox musí povolit lokální bind, jinak jde o selhání testu. Cíleně: `python3 -m unittest tests.test_local_api -v`. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 
@@ -161,7 +161,7 @@ sudo apt install ./dist/federated-workspace-poc.deb
 federated-workspace-poc
 ```
 
-Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine a PyYAML 6.0.3. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI nabízí projekty, Markdown editor, checklisty a hlavní TODO; testovací čítač zůstává pro kontrolu spojení.
+Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine, PyYAML 6.0.3 a python3-segno >=1.6.6. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI nabízí projekty, Markdown editor, checklisty a hlavní TODO; testovací čítač zůstává pro kontrolu spojení.
 
 Aktualizační kanál je v této fázi explicitně **ruční**: nový release se instaluje opět přes nový `.deb` soubor a aktivní verzi pak řeší `apt install`/`dpkg`. `federated-workspace-poc` zatím nemá vlastní update feed ani auto-updater.
 

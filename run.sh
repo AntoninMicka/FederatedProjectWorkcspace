@@ -111,6 +111,10 @@ if [[ "$command_name" == desktop ]]; then
             exit 1
         fi
     fi
+    if ! "$python_bin" -c 'import segno' >/dev/null 2>&1; then
+        printf 'Chybí Segno pro QR kontakty. Nainstalujte requirements.txt do použitého Pythonu nebo systémový python3-segno.\n' >&2
+        exit 1
+    fi
     exec "$python_bin" -m spikes.desktop "${desktop_args[@]}"
 fi
 case "$command_name" in

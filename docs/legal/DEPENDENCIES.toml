@@ -172,3 +172,14 @@ license_evidence = "not_a_distributed_runtime_license_review"
 release_status = "not_runtime_release_gate_record_per_build"
 sources = ["scripts/package_deb.py", "spikes/libgit2/README.md"]
 bundled_by_current_desktop_builders = false
+
+[[components]]
+id = "segno"
+name = "Segno"
+version = "1.6.6 pip; system python3-segno >=1.6.6"
+integration = "python_import_os_or_separately_installed_pip"
+license_summary = "BSD-3-Clause"
+license_evidence = "upstream_license_and_1_6_6_wheel_metadata_verified"
+release_status = "new_presenter_dependency_not_in_reference_runtime_audit"
+sources = ["https://github.com/heuer/segno/blob/1.6.6/LICENSE", "requirements.txt"]
+bundled_by_current_desktop_builders = false

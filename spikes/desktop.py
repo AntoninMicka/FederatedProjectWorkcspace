@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import signal
+import sqlite3
 import sys
 from urllib.parse import urlsplit
 from uuid import uuid4
@@ -19,6 +20,7 @@ from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
+from spikes.user_profile import UserProfile
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
@@ -67,6 +69,7 @@ def main():
                                        QFileDialog, QInputDialog)
         from spikes.desktop_editor import EditorDialog
         from spikes.desktop_displays import PresenterDisplays
+        from spikes.desktop_user_profile import UserProfileDialog
         from spikes.desktop_presentation_editor import PresentationEditorDialog
         from spikes.presentation_documents import PresentationDocuments
         from spikes.artifacts import Artifacts
@@ -128,6 +131,7 @@ def main():
     node_path = args.node or default_node_path()
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
+        server.user_profile = UserProfile(node_path)
         server.chat_service = ChatService(node_path, server.projects)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
@@ -356,9 +360,17 @@ def main():
         presentation_editor_button = QPushButton('Prezentace…')
         presentation_editor_button.clicked.connect(edit_presentation)
         editor_toolbar.addWidget(presentation_editor_button)
+        def edit_user_profile():
+            try:
+                dialog = UserProfileDialog(server.user_profile, window)
+                dialog.exec()
+                dialog.deleteLater()
+            except (ValueError, OSError, sqlite3.Error):
+                QMessageBox.warning(window, 'Uživatelský profil', 'Profil nelze načíst. Ověřte lokální konfiguraci.')
         def native_action(url):
             actions = {
                 '/#presentation-editor': edit_presentation,
+                '/#user-profile': edit_user_profile,
                 '/#presenter-open': displays.open,
                 '/#presenter-displays': displays.configure,
                 '/#presenter-close': displays.stop,

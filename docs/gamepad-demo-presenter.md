@@ -198,15 +198,20 @@ prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
 Levá páčka nahoru/dolů vybírá další slide z dostupné hlavní linie. Náhled je
 soukromý; promítnutí potvrďte tlačítkem **A** (tlačítko 0 standardního gamepadu)
 nebo **Zobrazit další slide**. Levá páčka doprava promítne vybraný další slide,
-doleva předchozí dostupný slide (z backupu návratový slide). Pravá páčka mění
+doleva předchozí skutečně promítnutý slide v historii. Pravá páčka mění
 záložky a výběr backupu.
 Každé gesto vyžaduje návrat do neutrální polohy; držení tlačítka neopakuje akci.
 Šipka doprava a tlačítko **Další** promítnou právě vybranou možnost.
 
-Vybraný hlavní slide se přesune za aktuální pozici v dočasném pořadí.
-Přeskočené slidy zůstávají na později. Již dokončený slide se bez povoleného
-opakování nenabízí a nelze jej znovu promítnout ani navigací zpět; pravidlo
-platí také pro backupy. Výjimkou je návrat z backupu: výchozí další volba
+Celé dočasné pořadí zůstává viditelné: promítnutá historie včetně backupů
+a návratů i dosud nepromítnutá hlavní linie. Vybraný hlavní slide se při
+promítnutí přesune za konec potvrzené historie; přeskočené slidy zůstanou na
+později. Již dokončený slide se bez povoleného opakování nenabízí jako nová
+volba (v pořadí je vidět jako neaktivní položka); platí to i pro backupy.
+**Krok zpět je výjimka:** prochází skutečnou historii i přes dokončené slidy,
+bez přeuspořádání či smazání pořadí. Další nová projekce pokračuje na konci
+historie, dopředná nabídka nadále přeskakuje dokončené jednorázové slidy.
+Druhou výjimkou je návrat z backupu: výchozí další volba
 je slide, ze kterého byl backup otevřen, i když byl již dokončen.
 Výběrem jiného slidu lze tento návrat přeskočit.
 
@@ -220,3 +225,29 @@ neresetuje. Prázdný slide se dokončí prvním promítnutím.
 Počet odhalených řádků a navštívené slidy platí pro jednu relaci. Nové spuštění
 nebo reload je vynuluje; uložený deck se navigací nemění. Selhání potvrzení
 výstupu neposune místní postup; při ztracené odpovědi zkontrolujte veřejné okno.
+
+## 12. Profil a automatický závěrečný slide
+
+V desktopovém **Nastavení → Profil → Upravit profil…** vyplňte jméno,
+e-mail, telefon a web. Údaje patří lokálnímu uživateli desktopu; nejsou
+součástí projektové prezentace, registru uživatelů ani identity Git autora.
+Profil se ukládá vedle konfigurace uzlu do `node.profile.sqlite3` (pro jiný
+název konfiguračního souboru odpovídající `<název>.profile.sqlite3`).
+Zavření dialogu bez uložení původní profil nemění. Uložení je jedna SQLite
+transakce; po pádu před commitem zůstává původní profil, po commitu nový.
+
+Při každém spuštění se za hlavní linii přidá generický závěrečný slide:
+uprostřed **Prostor pro Vaše dotazy**, vpravo dole textové kontakty a QR.
+Závěr se nabízí po dokončení hlavních slidů včetně jejich postupných řádků;
+nepromítnuté volitelné backupy jej neblokují. Není to nový uložený slide decku.
+QR obsahuje přesně zobrazené jméno a kontakty jako text v UTF-8 a vzniká
+lokálně prostřednictvím Segno. Prázdná pole se vynechají; prázdný profil
+vytvoří pouze nadpis, bez vymyšlených kontaktů a bez QR.
+
+Relace používá kopii profilu z okamžiku spuštění. Změna profilu nemění právě
+promítaný ani připravený závěrečný slide; pro nové údaje spusťte prezentaci
+znovu. Kontakty se publiku zobrazí až výslovným promítnutím závěru.
+
+Generování QR vyžaduje `segno==1.6.6` z `requirements.txt`; při systémovém
+Pythonu použijte balíček `python3-segno` (>=1.6.6). Závislost doplňuje i
+instalační `.deb`; běžný start aplikace nic nestahuje.

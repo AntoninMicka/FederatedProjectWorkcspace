@@ -27,7 +27,7 @@ assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','C','B']);
 assert.equal(seq.next.slide,slides[1]);
 assert.equal(seq.available(slides[0]),false);
 seq.chooseEntry(seq.entries[0]);assert.equal(seq.next.slide,slides[1]);
-seq.commit(seq.next);assert.equal(seq.next,undefined);assert.equal(seq.target(-1),undefined);
+seq.commit(seq.next);assert.equal(seq.next,undefined);assert.equal(seq.target(-1).slide,slides[2]);
 assert.equal(createPresenterSequence(slides).available(slides[0]),true);
 assert.equal(createPresenterSequence([]).next,undefined);
 """)
@@ -42,7 +42,7 @@ seq.choosePlanned();assert.equal(seq.next.slide,slides[1]);
 seq.chooseBackup(backup);seq.commit(seq.next);
 assert.equal(seq.next,origin);assert.equal(seq.available(backup),false);
 assert.equal(seq.chooseBackup(backup),false);
-seq.commit(seq.next);assert.equal(seq.current,origin);assert.equal(seq.next.slide,slides[1]);
+seq.commit(seq.next);assert.equal(seq.current.slide,origin.slide);assert.equal(seq.next.slide,slides[1]);
 seq.commit(seq.next);assert.equal(seq.available(slides[1]),true);
 seq.chooseBackup(other);seq.commit(seq.next);seq.commit(seq.next);
 assert.equal(seq.current.slide,slides[1]);assert.equal(seq.available(other),false);
@@ -53,6 +53,50 @@ chain.chooseBackup(other);chain.commit(chain.next);
 assert.equal(chain.next.slide,backup);chain.commit(chain.next);
 assert.equal(chain.next.slide,slides[0]);chain.commit(chain.next);
 assert.equal(chain.next.slide,slides[1]);
+""")
+
+    def test_backward_history_preserves_order_and_closing_stays_last(self):
+        self.run_js("""
+const a={title:'A'},b={title:'B'},c={title:'C'},end={title:'Questions',closing:true};
+const seq=createPresenterSequence([a,b,c,end]);
+assert.equal(seq.canShow(seq.entries[3]),false);
+seq.commit(seq.current);seq.chooseMain(1);seq.commit(seq.next);
+const backup={title:'Backup'};seq.chooseBackup(backup);seq.commit(seq.next);seq.commit(seq.next);
+assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','C','Backup','C','B','Questions']);
+const route=seq.entries.slice();
+seq.commit(seq.target(-1),true);assert.equal(seq.current.slide,backup);
+seq.commit(seq.target(-1),true);assert.equal(seq.current.slide,c);
+seq.commit(seq.target(-1),true);assert.equal(seq.current.slide,a);
+assert.equal(seq.target(-1),undefined);assert.deepEqual(seq.entries,route);
+assert.equal(seq.available(a),false);assert.equal(seq.available(backup),false);
+assert.equal(seq.next.slide,b);seq.commit(seq.next);
+assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','C','Backup','C','B','Questions']);
+assert.equal(seq.next.slide,end);seq.commit(seq.next);assert.equal(seq.next,undefined);
+seq.commit(seq.target(-1),true);assert.equal(seq.current.slide,b);
+assert.equal(seq.entries.at(-1).slide,end);
+// Empty deck and partial step slide: history traversal never resets rows.
+assert.deepEqual(createPresenterSequence([]).choices,[]);
+const step={title:'Step',reveal:'step',bullets:['1','2','3']};
+const rows=createPresenterSequence([step,b,end]);rows.commit(rows.current);
+rows.chooseMain(1);rows.commit(rows.next);rows.commit(rows.target(-1),true);
+assert.equal(rows.count(step),2);assert.equal(rows.next.slide,step);
+rows.commit(rows.next);assert.equal(rows.next.slide,end);
+""")
+
+    def test_full_route_is_visible_but_consumed_slides_are_not_choices(self):
+        renderer = JS[JS.index('function renderPresenterDeck()'):JS.index('function choosePresenterBackup(')]
+        self.run_js("""
+const element=()=>({children:[],classList:{toggle(){}},setAttribute(){},addEventListener(){},append(item){this.children.push(item);},replaceChildren(){this.children=[];}});
+const presenterDeckList=element(),document={createElement:element};
+function refreshPresenterNext(){};
+presenterSequence=createPresenterSequence([{title:'A'},{title:'B'},{title:'C'}]);
+presenterSequence.commit(presenterSequence.current);presenterSequence.commit(presenterSequence.next);
+""" + renderer + """
+renderPresenterDeck();assert.equal(presenterDeckList.children.length,3);
+assert.equal(presenterDeckList.children[0].children[0].disabled,true);
+assert.equal(presenterDeckList.children[2].children[0].disabled,false);
+presenterSequence.commit(presenterSequence.target(-1),true);renderPresenterDeck();
+assert.equal(presenterDeckList.children.length,3);
 """)
 
     def test_progressive_rows_survive_detours_and_complete_without_replay(self):
@@ -157,7 +201,7 @@ async function presentationControl(payload){calls.push(payload);if(fail)throw ne
 (async()=>{
  const main=[{title:'A',body:'main',notes:'private'},{title:'B',body:'next'}];
  const backup={title:'Backup',body:'public',notes:'secret'};
- presenterSequence=createPresenterSequence(main);presenterSequence.chooseBackup(backup);
+ presenterSequence=createPresenterSequence(main);presenterSequence.commit(presenterSequence.current);presenterSequence.chooseBackup(backup);
  const first=movePresenter(1);await movePresenter(1);
  assert.equal(calls.length,1);assert.equal(presenterSequence.current.slide,main[0]);
  assert.deepEqual(calls[0].content,{title:'Backup',body:'public'});
@@ -171,9 +215,12 @@ async function presentationControl(payload){calls.push(payload);if(fail)throw ne
  assert.equal(presenterSequence.current.slide,main[0]);
  const next=movePresenter(1);release();await next;
  assert.equal(presenterSequence.current.slide,main[1]);
- await movePresenter(-1);assert.equal(calls.length,4);
- assert.equal(presenterSequence.current.slide,main[1]);
- assert.equal(presenterSequence.entries.length,3);
+ const route=presenterSequence.entries.slice();
+ fail=true;await movePresenter(-1);assert.equal(presenterSequence.current.slide,main[1]);
+ fail=false;const back=movePresenter(-1);release();await back;
+ assert.equal(calls.length,6);assert.equal(presenterSequence.current.slide,main[0]);
+ assert.deepEqual(presenterSequence.entries,route);
+ assert.equal(presenterSequence.entries.length,4);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
         self.run_js(harness + navigation + checks)

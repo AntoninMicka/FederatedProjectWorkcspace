@@ -273,7 +273,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/external/cancel'", JS)
         self.assertIn('preview_sha256:preview.preview_sha256', JS)
         self.assertIn("fields.secret.value=''", JS)
-        self.assertIn("administration.hidden=selected.id==='settings-backend-tab'", JS)
+        self.assertIn("administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id)", JS)
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
         self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
