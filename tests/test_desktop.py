@@ -88,6 +88,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presenter-backup-list"', HTML)
         self.assertIn('id="presenter-question-list"', HTML)
         self.assertIn('class="presenter-selection-preview"', HTML)
+        self.assertIn('#presenter-tab-status,#presenter-backup-status{display:none}', CSS)
         self.assertIn("document.querySelector('#presenter-backup-list').hidden", JS)
         self.assertIn('.presenter-selection-preview{flex:0 0 auto', CSS)
         self.assertIn("pad.axes[2]", JS)
