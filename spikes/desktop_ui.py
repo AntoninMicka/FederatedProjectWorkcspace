@@ -315,13 +315,13 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span>Schůzka <b id="presenter-meeting-time">00:00</b></span><span>Odbočka <b id="presenter-branch-time">00:00</b></span><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
 <p id="presenter-status" role="status">Presenter není spuštěný.</p>
 <div class="presenter-layout">
-<nav class="presenter-deck" aria-label="Hlavní prezentace"><h2>Hlavní deck</h2><ol id="presenter-deck-list"></ol><p id="presenter-return-anchor">Návrat: hlavní slide 01</p></nav>
+<nav class="presenter-deck" aria-label="Pořadí prezentace"><h2>Pořadí prezentace</h2><ol id="presenter-deck-list"></ol><p id="presenter-return-anchor">Návrat: hlavní slide 01</p></nav>
 <section class="presenter-audience" aria-label="Náhled veřejného výstupu"><div class="presenter-kicker">ZMENŠENÝ NÁHLED VEŘEJNÉHO VÝSTUPU</div>
 <div class="presenter-slide-preview" id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
-<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další hlavní</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
+<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
 <aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p><p id="presenter-tab-status">K slide · otázky a doplňky</p>
-<div id="presenter-tab-content"><section id="presenter-slide-list"><h3>Současný slide</h3><div id="presenter-preview"></div><h3>Backupy k aktuálnímu slidu</h3><p id="presenter-slide-backup-status" role="status"></p><ul id="presenter-slide-backups"></ul></section><section id="presenter-backup-list" hidden><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></section><section id="presenter-question-list" hidden><h3>Otázky / doplňky</h3><button id="presenter-question" type="button">Doplňující otázka</button><p id="presenter-question-status">Žádná aktivní odbočka.</p></section></div>
+<div id="presenter-tab-content"><section id="presenter-slide-list"><h3>Současný slide</h3><div id="presenter-preview"></div><h3>Další podle plánu</h3><button id="presenter-planned-slide" class="presenter-backup" type="button" disabled></button><h3>Backupy k aktuálnímu slidu</h3><p id="presenter-slide-backup-status" role="status"></p><ul id="presenter-slide-backups"></ul></section><section id="presenter-backup-list" hidden><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></section><section id="presenter-question-list" hidden><h3>Otázky / doplňky</h3><button id="presenter-question" type="button">Doplňující otázka</button><p id="presenter-question-status">Žádná aktivní odbočka.</p></section></div>
 </section><section class="presenter-next-selector"><h3 id="presenter-next-title">Další slide podle plánu</h3><div class="presenter-slide-widget"><div class="presenter-slide-preview" id="presenter-private-preview"></div><section class="presenter-notes"><h2>Poznámky k vybranému slidu</h2><p id="presenter-next-notes"></p></section></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-next-preview" type="button">Zobrazit další slide</button><button id="presenter-show-private" type="button" hidden disabled>Zobrazit publiku</button></section></aside>
 </div>
 <footer class="presenter-footer"><button id="presenter-return" type="button">Návrat na původní slide</button><span>Otázky: <strong id="presenter-question-count">0</strong></span><span>Odložené: <strong>0</strong></span><span id="presenter-blackout-state">Veřejný výstup aktivní</span></footer>
@@ -553,6 +553,57 @@ async function presentationControl(payload){
 function applyPresenterRatio(ratio){for(const preview of [presenterScreen,presenterPrivatePreview])preview.style.aspectRatio=ratio==='4:3'?'4 / 3':'16 / 9';}
 function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
 setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
+function createPresenterSequence(slides){
+ const entries=slides.map((slide,mainIndex)=>({slide,mainIndex,kind:'main'}));
+ let position=0,pending=null,preferred=null;
+ function removePending(){
+  const index=entries.indexOf(pending);
+  if(index>position)entries.splice(index,1);
+  pending=null;
+ }
+ return {
+  entries,
+  get position(){return position;},
+  get current(){return entries[position];},
+  get next(){return preferred || entries[position+1];},
+  get planned(){return entries.slice(position+1).find(entry=>entry.kind==='main');},
+  chooseBackup(slide){
+   if(!entries[position] || !slide)return;
+   removePending();preferred=null;
+   if(entries[position+1]?.slide===slide){preferred=entries[position+1];return;}
+   pending={slide,mainIndex:entries[position].mainIndex,kind:'backup'};
+   entries.splice(position+1,0,pending);preferred=pending;
+  },
+  choosePlanned(){removePending();preferred=this.planned || null;},
+  chooseEntry(entry){if(entries.includes(entry))preferred=entry;},
+  target(delta){return delta<0?entries[position-1]:this.next;},
+  commit(entry){
+   const index=entries.indexOf(entry);if(index<0)return;
+   position=index;preferred=null;if(entry===pending)pending=null;
+  }
+ };
+}
+let presenterSequence=createPresenterSequence([]);
+let presenterNavigating=false;
+function createPresenterGamepadInput(){
+ let identity=null,armed={left:false,x:false,y:false};
+ return (pad,active)=>{
+  if(!active || !pad){identity=null;armed={left:false,x:false,y:false};return [];}
+  const key=`${pad.index}:${pad.id}`;
+  if(identity!==key){identity=key;armed={left:false,x:false,y:false};}
+  const actions=[];
+  for(const [name,value,negative,positive] of [
+   ['left',pad.axes[0] ?? 0,'previous','next'],
+   ['x',pad.axes[2] ?? 0,'tabPrevious','tabNext'],
+   ['y',pad.axes[3] ?? 0,'itemPrevious','itemNext']
+  ]){
+   if(Math.abs(value)<0.35)armed[name]=true;
+   else if(Math.abs(value)>0.65 && armed[name]){armed[name]=false;actions.push(value>0?positive:negative);}
+  }
+  return actions;
+ };
+}
+const readPresenterGamepad=createPresenterGamepadInput();
 function renderPresenterContent(target,slide){
  target.replaceChildren();
  if(!slide){target.textContent='Žádný slide k zobrazení.';return;}
@@ -566,33 +617,74 @@ function renderPresenterWidget(preview,notes,slide){
 }
 let presenterSelectedBackup=null;
 function refreshPresenterNext(){
- if(presenterTabIndex===1)setPresenterNextSelection(presenterSelectedBackup,'backup');
- else setPresenterNextSelection(presenterSlides[presenterIndex+1],'main');
+ const next=presenterSequence.next;
+ setPresenterNextSelection(next?.slide,next?.kind || 'main');
+ const planned=presenterSequence.planned;
+ const button=document.querySelector('#presenter-planned-slide');
+ button.disabled=!planned || presenterNavigating;
+ button.textContent=planned?planned.slide.title:'Konec hlavní prezentace';
+ button.setAttribute('aria-pressed',String(Boolean(planned && next===planned)));
+ presenterNextButton.disabled=!next || presenterNavigating;
 }
 function setPresenterNextSelection(slide,kind='main'){
  presenterNextSelection=slide;presenterNextSelectionKind=kind;renderPresenterWidget(presenterPrivatePreview,document.querySelector('#presenter-next-notes'),slide);document.querySelector('#presenter-next-title').textContent=kind==='backup'?'Vybraný backup':'Další slide podle plánu';presenterNextPreview.textContent=kind==='backup'?'Zobrazit backup publiku':'Zobrazit další slide';presenterNextPreview.disabled=!slide;presenterNextPreview.dataset.kind=kind;
 }
 function renderPresenterSlide(){
- const slide=presenterSlides[presenterIndex];
+ const entry=presenterSequence.current;
+ presenterIndex=entry?.mainIndex ?? 0;
+ const slide=entry?.slide;
  renderPresenterWidget(presenterScreen,presenterNotes,slide);renderPresenterContent(presenterPreview,slide);
  presenterOutline.textContent=slide ? `Cíl: ${slide.title}. Veřejně potvrzený obsah zůstává oddělený od soukromé přípravy.` : 'Osnova se zobrazí po spuštění.';
  refreshPresenterNext();
  renderPresenterBackups();
- presenterCounter.textContent=`Slide ${presenterIndex+1} z ${presenterSlides.length}`;
- presenterPrevButton.disabled=presenterIndex===0;presenterNextButton.disabled=presenterIndex>=presenterSlides.length-1;
- presenterStatus.textContent=`Promítám slide ${presenterIndex+1} z ${presenterSlides.length}.`;
+ presenterCounter.textContent=`Pozice ${presenterSequence.position+1} z ${presenterSequence.entries.length}`;
+ presenterPrevButton.disabled=presenterSequence.position===0 || presenterNavigating;presenterNextButton.disabled=!presenterSequence.next || presenterNavigating;
+ presenterStatus.textContent=slide?`Promítám: ${slide.title}.`:'Prezentace je prázdná.';
  presenterReturnAnchor.textContent=`Návrat: slide ${String(presenterIndex+1).padStart(2,'0')} · hlavní linie`;
- for(const [index,item] of [...presenterDeckList.children].entries()){
-  item.setAttribute('aria-current',index===presenterIndex?'true':'false');
-  item.classList.toggle('presenter-live',index===presenterIndex);item.classList.toggle('presenter-visited',index<presenterIndex);
- }
+ renderPresenterDeck();
 }
 function renderPresenterDeck(){
  presenterDeckList.replaceChildren();
- presenterSlides.forEach((slide,index)=>{
-  const item=document.createElement('li');const button=document.createElement('button');button.type='button';button.textContent=`${String(index+1).padStart(2,'0')} ${slide.title}`;
-  button.addEventListener('click',()=>{presenterPrivateSelection=slide;renderPrivateSelection(slide,'Vybráno do soukromého náhledu. Veřejný slide se nezměnil.');});item.append(button);presenterDeckList.append(item);
+ presenterSequence.entries.forEach((entry,index)=>{
+  const item=document.createElement('li');const button=document.createElement('button');button.type='button';
+  button.textContent=`${String(index+1).padStart(2,'0')} ${entry.kind==='backup'?'Backup · ':''}${entry.slide.title}`;
+  item.setAttribute('aria-current',String(index===presenterSequence.position));
+  item.classList.toggle('presenter-live',index===presenterSequence.position);
+  item.classList.toggle('presenter-visited',index<presenterSequence.position);
+  button.addEventListener('click',()=>{if(presenterNavigating)return;presenterSequence.chooseEntry(entry);refreshPresenterNext();});
+  item.append(button);presenterDeckList.append(item);
  });
+}
+function choosePresenterBackup(backup){
+ if(presenterNavigating)return;
+ presenterSequence.chooseBackup(backup);
+ presenterSelectedBackup=backup;
+ renderPrivateSelection(backup,`Backup zařazen do dočasného pořadí za aktuální slide. Zatím nepromítnuto.`);
+ setPresenterNextSelection(backup,'backup');
+ refreshPresenterNext();renderPresenterDeck();
+}
+async function showPresenterEntry(entry){
+ if(presenterNavigating || !entry)return;
+ let failure=null;
+ presenterNavigating=true;presenterPrevButton.disabled=true;presenterNextButton.disabled=true;presenterNextPreview.disabled=true;
+ try{
+  await presentationControl({action:'show',slide:entry.mainIndex,content:{title:entry.slide.title,body:entry.slide.body}});
+  presenterSequence.commit(entry);presenterPrivateSelection=null;
+  presenterBlackout=false;presenterView.classList.remove('presenter-blackout');
+  presenterBlackoutButton.textContent='Zatemnit';presenterBlackoutState.textContent='Veřejný výstup aktivní';
+  presenterLiveState.textContent='ŽIVĚ';
+  if(entry.kind==='backup'){presenterExposureValue+=1;presenterExposure.textContent=`Expozice ${presenterExposureValue} · +1`;}
+  presenterPrivateStatus.textContent='Dočasné pořadí zůstává zachované pro listování tam i zpět.';
+ }catch(error){
+  failure=error.message;
+  presenterPrivateStatus.textContent='Zobrazení nebylo potvrzeno. Pozice zůstala zachovaná; ověřte veřejný výstup.';
+ }finally{
+  presenterNavigating=false;renderPresenterSlide();if(failure)presenterStatus.textContent=failure;
+ }
+}
+function movePresenter(delta){return showPresenterEntry(presenterSequence.target(delta));}
+function returnPresenterMain(){
+ return showPresenterEntry(presenterSequence.entries.find(entry=>entry.kind==='main' && entry.mainIndex===presenterIndex));
 }
 function renderPrivateSelection(slide,status){
  presenterPrivateSelection=slide;presenterPrivateStatus.textContent=status;presenterShowPrivate.disabled=!slide;
@@ -604,7 +696,7 @@ function createPresenterBackupItem(backup){
  const title=document.createElement('strong');title.textContent=backup.title;
  const body=document.createElement('span');body.textContent=backup.body;
  button.append(title,body);
- button.addEventListener('click',()=>{renderPrivateSelection(backup,`Backup je soukromě připravený. Dopad: +1 · návrat na slide ${presenterIndex+1}.`);presenterSelectedBackup=backup;setPresenterNextSelection(backup,'backup');});
+ button.addEventListener('click',()=>choosePresenterBackup(backup));
  item.append(button);return item;
 }
 function renderPresenterBackups(){
@@ -628,10 +720,10 @@ async function loadPresenter(){
  presenterStatus.textContent='Načítám presenter…';
  try{
   const result=await projectRequest('/v1/presentation/status',{action:'start'});
-  presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;presenterSelectedBackup=null;presenterPrivateSelection=null;selectPresenterTab(0);
+  presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;presenterSequence=createPresenterSequence(presenterSlides);presenterSelectedBackup=null;presenterPrivateSelection=null;selectPresenterTab(0);
   presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
     presenterExposureValue=0;presenterBlackout=false;presenterMeetingStarted=Date.now();presenterBranchStarted=0;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
-    applyPresenterRatio(result.ratio);renderPresenterSlide();renderPresenterDeck();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await presentationControl({action:'show',slide:0});
+    applyPresenterRatio(result.ratio);renderPresenterSlide();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await showPresenterEntry(presenterSequence.current);
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
 function openPresenter(){
@@ -641,49 +733,65 @@ function openPresenter(){
 function closePresenter(){document.body.classList.remove('presenter-active');presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
-presenterPrevButton.addEventListener('click',async()=>{presenterIndex=Math.max(0,presenterIndex-1);renderPresenterSlide();try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
-presenterNextButton.addEventListener('click',async()=>{presenterIndex=Math.min(presenterSlides.length-1,presenterIndex+1);renderPresenterSlide();try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
+presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
+presenterNextButton.addEventListener('click',()=>movePresenter(1));
 presenterFullscreenButton.addEventListener('click',async()=>{try{await presenterScreen.requestFullscreen();presenterScreen.focus();}catch(error){presenterStatus.textContent='Celou obrazovku se nepodařilo spustit.';}});
-presenterView.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'){presenterPrevButton.click();}if(event.key==='ArrowRight'){presenterNextButton.click();}});
-presenterShowPrivate.addEventListener('click',async()=>{if(!presenterPrivateSelection)return;renderPresenterWidget(presenterScreen,presenterNotes,presenterPrivateSelection);presenterExposureValue+=1;presenterExposure.textContent=`Expozice ${presenterExposureValue} · +1`;presenterLiveState.textContent='ŽIVĚ';presenterStatus.textContent=`Veřejně zobrazeno: ${presenterPrivateSelection.title}. Návrat na slide ${presenterIndex+1}.`;try{await presentationControl({action:'show',slide:presenterIndex,content:presenterPrivateSelection});}catch(error){presenterStatus.textContent=error.message;}});
-presenterReturnAnchor.addEventListener('click',async()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
-document.querySelector('#presenter-return').addEventListener('click',async()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
+presenterView.addEventListener('keydown',event=>{
+ if(event.repeat || event.target.closest('input,textarea,[contenteditable="true"],[role="tablist"]'))return;
+ if(event.key==='ArrowLeft'){event.preventDefault();movePresenter(-1);}
+ if(event.key==='ArrowRight'){event.preventDefault();movePresenter(1);}
+});
+presenterShowPrivate.addEventListener('click',()=>movePresenter(1));
+presenterReturnAnchor.addEventListener('click',returnPresenterMain);
+document.querySelector('#presenter-return').addEventListener('click',returnPresenterMain);
+document.querySelector('#presenter-planned-slide').addEventListener('click',()=>{
+ if(presenterNavigating)return;
+ presenterSequence.choosePlanned();presenterPrivateSelection=null;refreshPresenterNext();renderPresenterDeck();
+ presenterPrivateStatus.textContent='Vybrán plánovaný slide. Zatím nepromítnuto.';
+});
 presenterBlackoutButton.addEventListener('click',async()=>{presenterBlackout=!presenterBlackout;presenterView.classList.toggle('presenter-blackout',presenterBlackout);presenterBlackoutButton.textContent=presenterBlackout?'Zobrazit veřejný výstup':'Zatemnit';presenterBlackoutState.textContent=presenterBlackout?'Veřejný výstup zatemněn':'Veřejný výstup aktivní';try{await presentationControl({action:presenterBlackout?'blackout':'reveal'});}catch(error){presenterStatus.textContent=error.message;}});
 presenterQuestionButton.addEventListener('click',()=>{if(!presenterBranchStarted)presenterBranchStarted=Date.now();presenterQuestionCount.textContent=String(Number(presenterQuestionCount.textContent)+1);presenterQuestionStatus.textContent=`Odbočka uložena: slide ${presenterIndex+1}. Veřejný výstup zůstává beze změny.`;});
-presenterNextPreview.addEventListener('click',()=>{if(!presenterNextSelection)return;if(presenterNextSelectionKind!=='main'){presenterPrivateSelection=presenterNextSelection;presenterShowPrivate.disabled=false;presenterShowPrivate.click();}else presenterNextButton.click();});
+presenterNextPreview.addEventListener('click',()=>movePresenter(1));
 presenterBackupSearch.addEventListener('input',renderPresenterBackups);
 const presenterTabs=[...document.querySelectorAll('.presenter-tabs [role="tab"]')];
 let presenterTabIndex=0,presenterItemIndex=0;
 function presenterItems(){
- if(presenterTabIndex===0)return [...document.querySelector('#presenter-slide-backups').querySelectorAll('button')];
+ if(presenterTabIndex===0)return [document.querySelector('#presenter-planned-slide'),...document.querySelector('#presenter-slide-backups').querySelectorAll('button')].filter(button=>!button.disabled);
  if(presenterTabIndex===1)return [...presenterBackups.querySelectorAll('button')];
  if(presenterTabIndex===2)return [presenterQuestionButton];
  return [];
 }
-function updatePresenterItem(){
+function updatePresenterItem(select=false){
  const items=presenterItems();if(!items.length)return;presenterItemIndex=Math.max(0,Math.min(items.length-1,presenterItemIndex));
  for(const [index,item] of items.entries()){item.classList.toggle('presenter-gamepad-selected',index===presenterItemIndex);item.setAttribute('aria-current',index===presenterItemIndex?'true':'false');}
  items[presenterItemIndex].focus({preventScroll:true});
- if(presenterTabIndex===1)items[presenterItemIndex].click();
+ if(select && presenterTabIndex!==2)items[presenterItemIndex].click();
  presenterGamepadStatus.textContent=`Gamepad: ${presenterTabs[presenterTabIndex].textContent} · ${presenterItemIndex+1}/${items.length}`;
 }
 function selectPresenterTab(index){presenterTabIndex=(index+presenterTabs.length)%presenterTabs.length;presenterItemIndex=0;for(const [tabIndex,tab] of presenterTabs.entries())tab.setAttribute('aria-selected',String(tabIndex===presenterTabIndex));document.querySelector('#presenter-slide-list').hidden=presenterTabIndex!==0;document.querySelector('#presenter-backup-list').hidden=presenterTabIndex!==1;document.querySelector('#presenter-question-list').hidden=presenterTabIndex!==2;presenterTabStatus.textContent=presenterTabIndex===0?'K tomuto slidu · veřejný a následující slide':presenterTabIndex===1?'Všechny backupy · soukromá knihovna':'Otázky a odpovědi · strom odboček';refreshPresenterNext();updatePresenterItem();}
 for(const [index,tab] of presenterTabs.entries())tab.addEventListener('click',()=>selectPresenterTab(index));
-function movePresenterItem(delta){const items=presenterItems();if(!items.length)return;presenterItemIndex=(presenterItemIndex+delta+items.length)%items.length;updatePresenterItem();}
-let presenterGamepadAxes={x:false,y:false};
+function movePresenterItem(delta){const items=presenterItems();if(!items.length)return;presenterItemIndex=(presenterItemIndex+delta+items.length)%items.length;updatePresenterItem(true);}
 function pollPresenterGamepad(){
- const pad=navigator.getGamepads?.().find(item=>item);
- if(!pad){presenterGamepadStatus.textContent='Gamepad: čekám na připojení.';requestAnimationFrame(pollPresenterGamepad);return;}
- const x=pad.axes[2] ?? pad.axes[0] ?? 0;const y=pad.axes[3] ?? pad.axes[1] ?? 0;presenterGamepadStatus.textContent=`Gamepad: ${pad.id.slice(0,32)}`;
- if(Math.abs(x)<0.35)presenterGamepadAxes.x=false;if(Math.abs(y)<0.35)presenterGamepadAxes.y=false;
- if(x>0.65&&!presenterGamepadAxes.x){presenterGamepadAxes.x=true;selectPresenterTab(presenterTabIndex+1);}
- if(x<-0.65&&!presenterGamepadAxes.x){presenterGamepadAxes.x=true;selectPresenterTab(presenterTabIndex-1);}
- if(y>0.65&&!presenterGamepadAxes.y){presenterGamepadAxes.y=true;movePresenterItem(1);}
- if(y<-0.65&&!presenterGamepadAxes.y){presenterGamepadAxes.y=true;movePresenterItem(-1);}
+ const pad=Array.from(navigator.getGamepads?.() || []).find(item=>item);
+ const active=!presenterView.hidden && !document.hidden && document.hasFocus();
+ const actions=readPresenterGamepad(pad,active);
+ presenterGamepadStatus.textContent=pad?`Gamepad: ${pad.id.slice(0,32)} · levý: předchozí/další · pravý: výběr`:'Gamepad: čekám na připojení.';
+ // A navigation gesture uses the selection visible before this frame.
+ if(actions.includes('previous'))movePresenter(-1);
+ else if(actions.includes('next'))movePresenter(1);
+ else if(!presenterNavigating){
+  for(const action of actions){
+   if(action==='tabPrevious')selectPresenterTab(presenterTabIndex-1);
+   if(action==='tabNext')selectPresenterTab(presenterTabIndex+1);
+   if(action==='itemPrevious')movePresenterItem(-1);
+   if(action==='itemNext')movePresenterItem(1);
+  }
+ }
  requestAnimationFrame(pollPresenterGamepad);
 }
 addEventListener('gamepadconnected',()=>{presenterGamepadStatus.textContent='Gamepad: připojen.';updatePresenterItem();});
-addEventListener('gamepaddisconnected',()=>{presenterGamepadStatus.textContent='Gamepad: odpojen.';});
+addEventListener('blur',()=>readPresenterGamepad(null,false));
+addEventListener('gamepaddisconnected',()=>{readPresenterGamepad(null,false);presenterGamepadStatus.textContent='Gamepad: odpojen.';});
 requestAnimationFrame(pollPresenterGamepad);
 selectPresenterTab(0);
 """

@@ -133,3 +133,30 @@ dávku z BACKLOG podle pravidel předání.
   hledání, prázdný seznam a soukromý výběr. `node --check` prošel.
   Úplná sada: 358 testů, OK (22 environmentálních skipů).
   `git diff --check` prošel; živé Qt UI není ověřené.
+
+- [x] [completed] **D-04 — Dočasné pořadí a listování joystickem (implemented).**
+  Původ: požadavek uživatele 2026-09-25; existující větev
+  `feature/gamepad-demo-presenter`, cíl `develop`.
+  Výstup: v „K slidu“ volba plánovaného slidu nebo přiřazeného backupu;
+  výběr backupu jej vloží za aktuální pozici do dočasného seznamu prezentace.
+  Před prvním promítnutím lze tuto volbu nahradit jiným backupem nebo zrušit
+  volbou plánovaného slidu. Již promítnuté backupy zůstávají v pořadí při
+  procházení oběma směry; explicitní volba plánovaného slidu je může přeskočit,
+  ale nemaže je. Levá páčka: doprava další, doleva předchozí; pravá páčka:
+  vodorovně záložky, svisle výběr. Stejné pořadí používají tlačítka i šipky.
+  Reuse/adapt: dosavadní presenter renderer, `after_slide` a veřejný control
+  endpoint; nový lokální model pořadí nahrazuje přímé posouvání hlavního indexu.
+  Akceptace: zachované pořadí při návratu přes více backupů, konec decku,
+  změna dosud nepromítnuté volby, neutrální poloha před novým gestem,
+  ignorování skrytého/neaktivního presenteru a sériové potvrzování navigace.
+  Hranice/recovery: pořadí žije pouze v paměti rendereru po dobu jedné
+  prezentace; nové otevření/reload ho resetuje. Nezapisuje Git, index ani
+  journal, nejde o durable historii schůzky. Selhání control requestu nemění
+  potvrzenou pozici; UI upozorní na nepotvrzený výstup, bez automatického retry.
+  Cílených 20 testů prošlo se 2 Qt skipy: pořadí, změny volby, návraty,
+  oddělení os, neutral/hold, reconnect/focus a selhání/souběh control requestů.
+  Headless Chromium smoke se skutečným DOM, simulovaným gamepadem a mock
+  control transportem prošel: výběr bez promítnutí, zrušení volby, vložení,
+  průchod tam/zpět, držení páčky a ignorování skrytého presenteru.
+  Finální úplná sada: 361 testů, OK (22 environmentálních skipů).
+  `node --check` a `git diff --check` prošly; fyzický gamepad/živé Qt neověřeny.

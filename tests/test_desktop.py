@@ -25,35 +25,36 @@ class DesktopTests(unittest.TestCase):
         end = JS.index('function renderPresenterSlide()', start)
         harness = """
 const assert=require('node:assert/strict');
-const element=()=>({textContent:'',children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},dataset:{}});
+const element=()=>({textContent:'',children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},setAttribute(){},dataset:{}});
 const elements={};
 const document={createElement:element,querySelector(id){return elements[id]??=element();}};
-const presenterPrivatePreview=element(),presenterNextPreview=element();
+const presenterPrivatePreview=element(),presenterNextPreview=element(),presenterNextButton=element();
 let presenterNextSelection=null,presenterNextSelectionKind='main',presenterTabIndex=0,presenterIndex=0;
 const presenterSlides=[{title:'Current'}, {title:'Next',body:'Main body',notes:'Main notes'}];
 """
+        model = JS[JS.index('function createPresenterSequence('):
+                   JS.index('function renderPresenterContent(')]
         checks = """
+presenterSequence=createPresenterSequence(presenterSlides);
 refreshPresenterNext();
 assert.equal(presenterNextSelection,presenterSlides[1]);
 assert.equal(elements['#presenter-next-notes'].textContent,'Main notes');
-presenterTabIndex=1;refreshPresenterNext();
-assert.equal(presenterNextPreview.disabled,true);
 presenterSelectedBackup={title:'Backup',body:'Backup body',notes:'Backup notes'};
-refreshPresenterNext();
+presenterSequence.chooseBackup(presenterSelectedBackup);refreshPresenterNext();
 assert.equal(presenterNextSelectionKind,'backup');
 assert.equal(presenterPrivatePreview.children[0].textContent,'Backup');
 assert.equal(elements['#presenter-next-notes'].textContent,'Backup notes');
 presenterTabIndex=0;refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSelectedBackup);
+presenterSequence.choosePlanned();refreshPresenterNext();
 assert.equal(presenterNextSelection,presenterSlides[1]);
-presenterIndex=1;refreshPresenterNext();
+presenterSequence.commit(presenterSequence.next);refreshPresenterNext();
 assert.equal(presenterNextPreview.disabled,true);
 assert.equal(elements['#presenter-next-notes'].textContent,'Žádné poznámky.');
-presenterTabIndex=1;refreshPresenterNext();
-assert.equal(presenterNextSelection,presenterSelectedBackup);
 renderPresenterWidget(element(),elements['#presenter-next-notes'],{title:'No notes'});
 assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá poznámky.');
 """
-        subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
+        subprocess.run(['node', '-e', harness + model + JS[start:end] + checks], check=True)
 
     def test_presenter_only_lists_explicitly_assigned_backups(self):
         import shutil
@@ -70,7 +71,7 @@ const presenterBackups=element(),presenterBackupStatus=element(),presenterBackup
 const presenterSlides=[{title:'First'},{title:'Second'},{title:'No backups'}];
 let presenterIndex=0,presenterSelectedBackup=null,selected=null;
 function renderPrivateSelection(backup){selected=backup;}
-function setPresenterNextSelection(backup,kind){assert.equal(kind,'backup');selected=backup;}
+function choosePresenterBackup(backup){presenterSelectedBackup=backup;selected=backup;}
 const presenterBackupsData=[
  {title:'First backup',body:'A',after_slide:0},
  {title:'Second backup',body:'B',after_slide:1},
