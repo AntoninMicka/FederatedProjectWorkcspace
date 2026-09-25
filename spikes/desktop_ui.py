@@ -87,6 +87,31 @@ def presentation_deck():
     }
 
 
+def presentation_public_payload(server, request=None):
+    """Return only the currently approved public presentation content."""
+    deck = presentation_deck()
+    state = getattr(server, 'presentation_public_state',
+                    {'visible': False, 'blackout': True, 'slide': 0, 'content': None})
+    if request and request.get('action') == 'show':
+        index = request.get('slide', state['slide'])
+        if not isinstance(index, int) or not 0 <= index < len(deck['slides']):
+            index = 0
+        content = request.get('content')
+        if not isinstance(content, dict):
+            source = deck['slides'][index]
+            content = {'title': source['title'], 'body': source['body']}
+        state = {'visible': True, 'blackout': False, 'slide': index,
+                 'content': {'title': str(content.get('title', '')), 'body': str(content.get('body', ''))}}
+    elif request and request.get('action') == 'blackout':
+        state = dict(state, blackout=True)
+    elif request and request.get('action') == 'reveal':
+        state = dict(state, blackout=False, visible=True)
+    server.presentation_public_state = state
+    if not state['visible'] or state['blackout']:
+        return {'visible': False, 'blackout': True}
+    return {'visible': True, 'blackout': False, 'slide': state['slide'], 'content': state['content']}
+
+
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
@@ -489,6 +514,11 @@ let presenterExposureValue=0;
 let presenterBlackout=false;
 let presenterMeetingStarted=0;
 let presenterBranchStarted=0;
+async function presentationControl(payload){
+ const response=await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(4000)});
+ if(!response.ok)throw new Error('Veřejné okno nepřijalo změnu.');
+ return response.json();
+}
 function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
 setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
 function renderPresenterContent(target,slide){
@@ -544,7 +574,7 @@ async function loadPresenter(){
   presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;
   presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
     presenterExposureValue=0;presenterBlackout=false;presenterMeetingStarted=Date.now();presenterBranchStarted=0;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
-    renderPresenterSlide();renderPresenterDeck();renderPresenterBackups();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');
+    renderPresenterSlide();renderPresenterDeck();renderPresenterBackups();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await presentationControl({action:'show',slide:0});
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
 function openPresenter(){
@@ -554,14 +584,14 @@ function openPresenter(){
 function closePresenter(){presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
-presenterPrevButton.addEventListener('click',()=>{presenterIndex=Math.max(0,presenterIndex-1);renderPresenterSlide();});
-presenterNextButton.addEventListener('click',()=>{presenterIndex=Math.min(presenterSlides.length-1,presenterIndex+1);renderPresenterSlide();});
+presenterPrevButton.addEventListener('click',async()=>{presenterIndex=Math.max(0,presenterIndex-1);renderPresenterSlide();try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
+presenterNextButton.addEventListener('click',async()=>{presenterIndex=Math.min(presenterSlides.length-1,presenterIndex+1);renderPresenterSlide();try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
 presenterFullscreenButton.addEventListener('click',async()=>{try{await presenterScreen.requestFullscreen();presenterScreen.focus();}catch(error){presenterStatus.textContent='Celou obrazovku se nepodařilo spustit.';}});
 presenterView.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'){presenterPrevButton.click();}if(event.key==='ArrowRight'){presenterNextButton.click();}});
-presenterShowPrivate.addEventListener('click',()=>{if(!presenterPrivateSelection)return;renderPresenterContent(presenterScreen,presenterPrivateSelection);presenterExposureValue+=1;presenterExposure.textContent=`Expozice ${presenterExposureValue} · +1`;presenterLiveState.textContent='ŽIVĚ';presenterStatus.textContent=`Veřejně zobrazeno: ${presenterPrivateSelection.title}. Návrat na slide ${presenterIndex+1}.`;});
-presenterReturnAnchor.addEventListener('click',()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');});
-document.querySelector('#presenter-return').addEventListener('click',()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');});
-presenterBlackoutButton.addEventListener('click',()=>{presenterBlackout=!presenterBlackout;presenterView.classList.toggle('presenter-blackout',presenterBlackout);presenterBlackoutButton.textContent=presenterBlackout?'Zobrazit veřejný výstup':'Zatemnit';presenterBlackoutState.textContent=presenterBlackout?'Veřejný výstup zatemněn':'Veřejný výstup aktivní';});
+presenterShowPrivate.addEventListener('click',async()=>{if(!presenterPrivateSelection)return;renderPresenterContent(presenterScreen,presenterPrivateSelection);presenterExposureValue+=1;presenterExposure.textContent=`Expozice ${presenterExposureValue} · +1`;presenterLiveState.textContent='ŽIVĚ';presenterStatus.textContent=`Veřejně zobrazeno: ${presenterPrivateSelection.title}. Návrat na slide ${presenterIndex+1}.`;try{await presentationControl({action:'show',slide:presenterIndex,content:presenterPrivateSelection});}catch(error){presenterStatus.textContent=error.message;}});
+presenterReturnAnchor.addEventListener('click',async()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
+document.querySelector('#presenter-return').addEventListener('click',async()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');try{await presentationControl({action:'show',slide:presenterIndex});}catch(error){presenterStatus.textContent=error.message;}});
+presenterBlackoutButton.addEventListener('click',async()=>{presenterBlackout=!presenterBlackout;presenterView.classList.toggle('presenter-blackout',presenterBlackout);presenterBlackoutButton.textContent=presenterBlackout?'Zobrazit veřejný výstup':'Zatemnit';presenterBlackoutState.textContent=presenterBlackout?'Veřejný výstup zatemněn':'Veřejný výstup aktivní';try{await presentationControl({action:presenterBlackout?'blackout':'reveal'});}catch(error){presenterStatus.textContent=error.message;}});
 presenterQuestionButton.addEventListener('click',()=>{if(!presenterBranchStarted)presenterBranchStarted=Date.now();presenterQuestionCount.textContent=String(Number(presenterQuestionCount.textContent)+1);presenterQuestionStatus.textContent=`Odbočka uložena: slide ${presenterIndex+1}. Veřejný výstup zůstává beze změny.`;});
 presenterBackupSearch.addEventListener('input',renderPresenterBackups);
 for(const tab of document.querySelectorAll('.presenter-tabs [role="tab"]'))tab.addEventListener('click',()=>{for(const item of document.querySelectorAll('.presenter-tabs [role="tab"]'))item.setAttribute('aria-selected',String(item===tab));presenterTabStatus.textContent=tab.id==='presenter-slide-tab'?'K tomuto slidu · otázky a doplňky':tab.id==='presenter-backup-tab'?'Všechny backupy · soukromá knihovna':'Otázky a odpovědi · strom odboček';});
@@ -1597,7 +1627,15 @@ document.querySelector('#metadata-publish').addEventListener('click',async event
 });
 loadProjects();
 """
-ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
+PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Veřejné promítání</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}</style>
+<main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><script>
+const screen=document.querySelector('#screen');
+function render(result){screen.replaceChildren();if(!result.visible){const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}const title=document.createElement('h1');title.textContent=result.content.title;const body=document.createElement('p');body.textContent=result.content.body;screen.append(title,body);}
+async function poll(){try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}}
+poll();setInterval(poll,300);
+</script></html>'''
+ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/presentation-screen': ('text/html; charset=utf-8', PUBLIC_HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
 
 
@@ -1607,6 +1645,7 @@ class DesktopHandler(Handler):
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/orchestration', '/v1/gamepad/status', '/v1/presentation/status',
+        '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -1627,6 +1666,10 @@ class DesktopHandler(Handler):
             return self.reply(200, scan_gamepads())
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, presentation_deck())
+        if self.path == '/v1/presentation/control' and isinstance(request, dict):
+            return self.reply(200, presentation_public_payload(self.server, request))
+        if self.path == '/v1/presentation/public' and request == {}:
+            return self.reply(200, presentation_public_payload(self.server))
         projects = self.server.projects or Projects()
         try:
             if self.path == '/v1/metadata-suggestions/status' and request == {}:

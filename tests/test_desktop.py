@@ -53,7 +53,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="gamepad-list"', HTML)
 
     def test_presentation_ui_and_backend_are_exposed(self):
-        from spikes.desktop_ui import CSS, HTML, JS
+        from spikes.desktop_ui import ASSETS, CSS, HTML, JS, presentation_public_payload
+        from types import SimpleNamespace
         from spikes.desktop_ui import presentation_deck
         deck = presentation_deck()
         self.assertIn('id="presentation-start"', HTML)
@@ -101,6 +102,14 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('max-width:420px', CSS)
         self.assertLess(HTML.index('id="presenter-screen"'), HTML.index('id="presenter-notes"'))
         self.assertGreaterEqual(CSS.count('font-size:1.5em'), 2)
+        self.assertIn('/presentation-screen', ASSETS)
+        self.assertIn('/v1/presentation/control', JS)
+        public_server = SimpleNamespace()
+        self.assertFalse(presentation_public_payload(public_server)['visible'])
+        public_payload = presentation_public_payload(public_server, {'action': 'show', 'slide': 0})
+        self.assertTrue(public_payload['visible'])
+        self.assertNotIn('notes', public_payload['content'])
+        self.assertNotIn('backups', public_payload)
 
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)

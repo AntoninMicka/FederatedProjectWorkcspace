@@ -99,7 +99,7 @@ def main():
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
-            return main_frame and requested == server.origin + '/'
+            return main_frame and requested in {server.origin + '/', server.origin + '/presentation-screen'}
 
         def createWindow(self, kind):
             return None
@@ -149,6 +149,20 @@ def main():
         window.setCentralWidget(view)
         window.setWindowTitle('Projektový workspace · Zkušební verze')
         window.resize(1100, 800)
+        public_view = View()
+        public_page = Page(profile, public_view)
+        public_view.setPage(public_page)
+        public_window = QMainWindow()
+        public_window.setCentralWidget(public_view)
+        public_window.setWindowTitle('Veřejné promítání · Projektový workspace')
+        screens = app.screens()
+        if len(screens) > 1:
+            public_window.setGeometry(screens[1].availableGeometry())
+            public_window.showFullScreen()
+        else:
+            public_window.resize(800, 450)
+            public_window.show()
+        public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
             try:
@@ -158,6 +172,7 @@ def main():
             except Exception as exc:
                 QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
         app.aboutToQuit.connect(network_backend.stop)
+        app.aboutToQuit.connect(public_window.close)
         creation_result = {'receipt': None, 'loaded': False}
         def created(receipt):
             if receipt:
