@@ -54,6 +54,8 @@ class DesktopTests(unittest.TestCase):
 
     def test_presentation_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import HTML, JS
+        from spikes.desktop_ui import presentation_deck
+        deck = presentation_deck()
         self.assertIn('id="presentation-start"', HTML)
         self.assertIn('id="presentation-slide"', HTML)
         self.assertIn('/v1/presentation/status', JS)
@@ -70,6 +72,12 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('presenterBackupsData=[]', JS)
         self.assertIn("result.backups", JS)
         self.assertIn('Otevřít presenter', HTML)
+        self.assertIn('id="presenter-notes"', HTML)
+        self.assertIn('id="presenter-next-preview"', HTML)
+        self.assertEqual(len(deck['slides']), 5)
+        self.assertEqual(len(deck['backups']), 10)
+        self.assertTrue(all(slide.get('notes') for slide in deck['slides']))
+        self.assertEqual([sum(item['after_slide'] == index for item in deck['backups']) for index in range(5)], [2] * 5)
 
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)

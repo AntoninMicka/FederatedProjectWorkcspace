@@ -64,14 +64,23 @@ def presentation_deck():
     return {
         'active': True,
         'slides': [
-            {'title': 'Úvod', 'body': 'Demo: desktopová prezentace a promítání.'},
-            {'title': 'Problém', 'body': 'Potřebujeme jasnou, bezpečnou prezentaci bez rizika ztráty kontextu.'},
-            {'title': 'Řešení', 'body': 'Vytvoření jednoduchého decku s aktuálním slide a UI pro promítání v aplikaci.'},
-            {'title': 'Výhody', 'body': 'Snadné zobrazení, rychlá iterace a lehká integrace do desktopového workflow.'},
+            {'title': 'Úvod', 'body': 'Demo: desktopová prezentace a promítání.', 'notes': 'Přivítejte publikum a řekněte, že ukazujeme celý presenter workflow.'},
+            {'title': 'Problém', 'body': 'Potřebujeme jasnou, bezpečnou prezentaci bez rizika ztráty kontextu.', 'notes': 'Zdůrazněte rozdíl mezi tím, co vidí publikum, a tím, co potřebuje řečník.'},
+            {'title': 'Řešení', 'body': 'Presenter odděluje audience screen, speaker notes, další slide a backupy.', 'notes': 'Tady ukažte, že backup je připravený, ale automaticky nenaruší hlavní linii.'},
+            {'title': 'Výhody', 'body': 'Snadná navigace, rychlá iterace a bezpečné odbočky pro otázky publika.', 'notes': 'Předveďte šipky, náhled dalšího slidu a otevření backupu.'},
+            {'title': 'Další krok', 'body': 'Napojit deck na projektové artefakty, notes a verzovaný export.', 'notes': 'Uzavřete demo a pojmenujte, co už je funkční a co bude následovat.'},
         ],
         'backups': [
-            {'title': 'Technický detail', 'body': 'Lokální same-origin API odděluje data prezentace od řízení desktopového okna.', 'after_slide': 1},
-            {'title': 'Další krok', 'body': 'Další iterace může přidat skutečné projektové artefakty, notes a export decku.', 'after_slide': 3},
+            {'title': 'Úvod: kontext', 'body': 'Presenter je součástí desktopového workspace, ne samostatný export.', 'after_slide': 0},
+            {'title': 'Úvod: cíl', 'body': 'Dnes ověřujeme tok od přípravy decku až po promítání.', 'after_slide': 0},
+            {'title': 'Problém: publikum', 'body': 'Publikum nemá vidět poznámky, backupy ani rozhodovací scénář.', 'after_slide': 1},
+            {'title': 'Problém: řečník', 'body': 'Řečník potřebuje navigaci a připravenou odpověď na časté otázky.', 'after_slide': 1},
+            {'title': 'Řešení: API', 'body': 'Deck se načítá přes lokální same-origin endpoint desktopu.', 'after_slide': 2},
+            {'title': 'Řešení: stav', 'body': 'Aktuální pozice zůstává oddělená od obsahu backupu.', 'after_slide': 2},
+            {'title': 'Výhody: fullscreen', 'body': 'Audience screen lze přepnout do celé obrazovky bez speaker panelu.', 'after_slide': 3},
+            {'title': 'Výhody: otázky', 'body': 'Backupy slouží jako řízené odbočky při dotazech publika.', 'after_slide': 3},
+            {'title': 'Další krok: data', 'body': 'Slides mohou být odvozené z verzovaných projektových artefaktů.', 'after_slide': 4},
+            {'title': 'Další krok: export', 'body': 'Bezpečný export musí vyloučit notes a nepoužité backupy.', 'after_slide': 4},
         ],
         'current_slide': 0,
         'message': 'Prezentace je připravena k promítání.'
@@ -270,7 +279,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section class="presenter-audience" aria-label="Obrazovka pro publikum"><div class="presenter-kicker">PROMÍTÁNÍ PRO PUBLIKUM</div>
 <div id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button></div></section>
-<aside class="presenter-speaker" aria-label="Ovládání řečníka"><h2>Řečník</h2><p id="presenter-counter">Slide 0 z 0</p><div id="presenter-preview"></div>
+<aside class="presenter-speaker" aria-label="Ovládání řečníka"><h2>Řečník</h2><p id="presenter-counter">Slide 0 z 0</p><h3>Současný slide</h3><div id="presenter-preview"></div>
+<h3>Poznámky</h3><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p>
+<h3>Další slide</h3><div id="presenter-next-preview"><p>Další slide se zobrazí po spuštění.</p></div>
 <h3>Backupy</h3><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></aside>
 </div>
 </div>
@@ -336,7 +347,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
 .presenter-header h1{font-size:28px;color:#162638;margin:6px 0}.presenter-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;min-height:calc(100vh - 150px)}
 .presenter-audience{background:#10222f;border-radius:14px;padding:24px;display:flex;flex-direction:column;min-width:0}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8vw 5vw;color:#f6faf8;outline:none}.presenter-audience #presenter-screen:fullscreen{background:#10222f}
-.presenter-audience #presenter-screen h2{font-size:clamp(34px,6vw,78px);color:#79c9ac;margin:0 0 18px}.presenter-audience #presenter-screen p{font-size:clamp(20px,3vw,40px);line-height:1.45;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h3{border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p{margin:0;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
+.presenter-audience #presenter-screen h2{font-size:clamp(34px,6vw,78px);color:#79c9ac;margin:0 0 18px}.presenter-audience #presenter-screen p{font-size:clamp(20px,3vw,40px);line-height:1.45;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview,.presenter-speaker #presenter-next-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h2,.presenter-speaker #presenter-next-preview h2{font-size:17px;border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p,.presenter-speaker #presenter-next-preview p{margin:0;white-space:pre-wrap;font-size:13px}.presenter-speaker #presenter-notes{background:#fffaf0;border-left:3px solid #d6b36a;padding:10px 12px;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -438,6 +449,8 @@ const presentationOpenButton=document.querySelector('#presentation-open');
 const presenterView=document.querySelector('#presenter-view');
 const presenterScreen=document.querySelector('#presenter-screen');
 const presenterPreview=document.querySelector('#presenter-preview');
+const presenterNotes=document.querySelector('#presenter-notes');
+const presenterNextPreview=document.querySelector('#presenter-next-preview');
 const presenterStatus=document.querySelector('#presenter-status');
 const presenterCounter=document.querySelector('#presenter-counter');
 const presenterBackups=document.querySelector('#presenter-backups');
@@ -458,6 +471,8 @@ function renderPresenterContent(target,slide){
 function renderPresenterSlide(){
  const slide=presenterSlides[presenterIndex];
  renderPresenterContent(presenterScreen,slide);renderPresenterContent(presenterPreview,slide);
+ presenterNotes.textContent=slide?.notes || 'Tento slide nemá poznámky.';
+ renderPresenterContent(presenterNextPreview,presenterSlides[presenterIndex+1]);
  presenterCounter.textContent=`Slide ${presenterIndex+1} z ${presenterSlides.length}`;
  presenterPrevButton.disabled=presenterIndex===0;presenterNextButton.disabled=presenterIndex>=presenterSlides.length-1;
  presenterStatus.textContent=`Promítám slide ${presenterIndex+1} z ${presenterSlides.length}.`;
