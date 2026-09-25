@@ -98,6 +98,8 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual([sum(item['after_slide'] == index for item in deck['backups']) for index in range(5)], [2] * 5)
         self.assertIn('grid-template-columns:15% 25% minmax(0,1fr)', CSS)
         self.assertIn('aspect-ratio:16/9', CSS)
+        self.assertIn('max-width:420px', CSS)
+        self.assertLess(HTML.index('id="presenter-screen"'), HTML.index('id="presenter-notes"'))
         self.assertGreaterEqual(CSS.count('font-size:1.5em'), 2)
 
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
