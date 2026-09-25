@@ -160,3 +160,22 @@ dávku z BACKLOG podle pravidel předání.
   průchod tam/zpět, držení páčky a ignorování skrytého presenteru.
   Finální úplná sada: 361 testů, OK (22 environmentálních skipů).
   `node --check` a `git diff --check` prošly; fyzický gamepad/živé Qt neověřeny.
+
+- [x] [completed] **D-05 — Role displejů a veřejné okno (implemented).**
+  Původ: požadavek uživatele 2026-09-25, dokončení existujícího presenteru
+  na větvi `feature/gamepad-demo-presenter`, cíl `develop`.
+  Rozsah/akceptace: nabídka rolí při otevření a změnách displejů, číslované
+  identifikátory s navrhovanou rolí, odlišný displej pro řečníka a publikum,
+  nácvik bez promítání, opětovné nastavení a skrytí výstupu při zavření.
+  Reuse/adapt: existující Qt okna, veřejný renderer a nativní fragmentové
+  akce; nový kontroler pouze řídí jejich umístění a životní cyklus. Navazuje
+  na REUSE_CATALOG (Qt obal) a roadmapu 22C, nemění architekturu ADR 0007.
+  Recovery: role jsou pouze v paměti, žádné nové zápisy do Git/indexu/journalu.
+  Změna topologie skryje veřejné okno a vyžádá nové potvrzení; zrušení ponechá
+  výstup skrytý. Restart začíná bez promítání. Systémové zrcadlení se nemění.
+  Cílených 24 testů prošlo se 2 WebEngine skipy, včetně čtyř nových Qt testů
+  (offscreen; dva displeje a jejich odpojení simulované). Syntaxe JS ověřena.
+  Finální úplná sada: 365 testů, OK (22 environmentálních skipů).
+  Samostatný skutečný Qt/WebEngine smoke potvrdil fragmentovou událost bez
+  reloadu stránky. `git diff --check` prošel. Fyzické monitory/Wayland a celé
+  živé propojení presenteru se dvěma displeji neověřeny; nejde o production-ready.

@@ -727,15 +727,17 @@ async function loadPresenter(){
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
 function openPresenter(){
+ location.hash='presenter-open';
  document.body.classList.add('presenter-active');document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
 }
-function closePresenter(){document.body.classList.remove('presenter-active');presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
+function closePresenter(){location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
 presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
 presenterNextButton.addEventListener('click',()=>movePresenter(1));
-presenterFullscreenButton.addEventListener('click',async()=>{try{await presenterScreen.requestFullscreen();presenterScreen.focus();}catch(error){presenterStatus.textContent='Celou obrazovku se nepodařilo spustit.';}});
+presenterFullscreenButton.textContent='Displeje a role…';
+presenterFullscreenButton.addEventListener('click',()=>{location.hash='presenter-displays';});
 presenterView.addEventListener('keydown',event=>{
  if(event.repeat || event.target.closest('input,textarea,[contenteditable="true"],[role="tablist"]'))return;
  if(event.key==='ArrowLeft'){event.preventDefault();movePresenter(-1);}

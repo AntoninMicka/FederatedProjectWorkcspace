@@ -66,6 +66,7 @@ def main():
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
         from spikes.desktop_editor import EditorDialog
+        from spikes.desktop_displays import PresenterDisplays
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
@@ -117,6 +118,7 @@ def main():
                 event.ignore()
                 return
             view.closing = True
+            displays.stop()
             super().closeEvent(event)
 
     app = QApplication([sys.argv[0]])
@@ -155,13 +157,7 @@ def main():
         public_window = QMainWindow()
         public_window.setCentralWidget(public_view)
         public_window.setWindowTitle('Veřejné promítání · Projektový workspace')
-        screens = app.screens()
-        if len(screens) > 1:
-            public_window.setGeometry(screens[1].availableGeometry())
-            public_window.showFullScreen()
-        else:
-            public_window.resize(800, 450)
-            public_window.show()
+        displays = PresenterDisplays(app, window, public_window)
         public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
@@ -323,6 +319,16 @@ def main():
             button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
             editor_toolbar.addWidget(button)
         def native_action(url):
+            actions = {
+                '/#presenter-open': displays.open,
+                '/#presenter-displays': displays.configure,
+                '/#presenter-close': displays.stop,
+            }
+            action = actions.get(url.toString().removeprefix(server.origin))
+            if action and url.toString().startswith(server.origin + '/'):
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                action()
+                return
             # A same-document fragment never loads a route or exposes an HTTP writer.
             if url.toString() == server.origin + '/#create-main-todo':
                 page.runJavaScript("history.replaceState(null, '', '/');")
@@ -332,6 +338,7 @@ def main():
             creation_result['loaded'] = ok
             if ok and creation_result['receipt']:
                 page.runJavaScript('loadProjects(' + json.dumps(creation_result['receipt']['id']) + ')')
+        view.loadStarted.connect(displays.stop)
         view.loadFinished.connect(project_loaded)
         page.renderProcessTerminated.connect(lambda *_: None if view.closing else app.exit(1))
         timer = QTimer()

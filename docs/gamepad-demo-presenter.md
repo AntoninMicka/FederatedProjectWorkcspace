@@ -110,3 +110,23 @@ Toto je vhodné uvést jako "good engineering baseline, not final universal HID 
 ## 8. Shrnutí pro presenter
 
 "Tento patch není jen o gamepadu. Je to ukázka robustního přístupu k hardware input API: detekce zařízení, statické mapování z metadat, adaptivní layout a konverze do univerzálního UX event stream. To je přesně ten druh řešení, který se dá znovu použít i v jiném projektu."
+
+## 9. Displeje řečníka a diváků
+
+Po otevření presenteru se zobrazí nativní dialog **Displeje a role prezentace**.
+Vyberte displej pro řečníka (ovládání a soukromé poznámky) a jiný displej pro
+publikum (pouze schválený slide). Čísla odpovídají indikátorům na obrazovkách;
+indikátory ukazují navrhovanou roli, po čtyřech sekundách zmizí a lze je znovu
+zobrazit tlačítkem **Identifikovat displeje**. Změny platí až po **Použít role**.
+
+Výchozí volba je **Bez promítání**; hodí se i pro nácvik na jednom monitoru.
+Veřejné okno se otevře přes celou zvolenou obrazovku, řečníkovo okno se
+maximalizuje na jeho displeji. Nastavení lze znovu otevřít tlačítkem
+**Displeje a role…** v presenteru. Zrušení dialogu ponechá veřejné okno skryté.
+
+Připojení, odpojení nebo změna geometrie displejů během prezentace skryje
+veřejné okno a nabídne nové přiřazení. Zavření presenteru skryje promítání a
+obnoví původní geometrii hlavního okna. Role žijí jen po dobu běhu aplikace;
+restart vyžaduje nový výběr. Pro oddělené zobrazení nastavte v systému rozšířenou
+plochu: zrcadlení displejů aplikace nevypíná. Umístění oken může omezovat správce
+oken, zejména na Waylandu; fyzické zapojení je nutné před přednáškou vyzkoušet.
