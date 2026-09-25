@@ -109,8 +109,11 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </details>
 <details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
 <button id="presentation-start" type="button">Spustit prezentaci</button>
+<button id="presentation-prev" type="button" disabled aria-label="Předchozí slide">Předchozí</button>
+<button id="presentation-next" type="button" disabled aria-label="Další slide">Další</button>
+<button id="presentation-fullscreen" type="button" disabled>Celá obrazovka</button>
 <p id="presentation-status" role="status">Stav: prezentace není spuštěna.</p>
-<div id="presentation-slide" aria-live="polite">Zde se zobrazí aktuální slide.</div>
+<div id="presentation-slide" tabindex="0" aria-live="polite">Zde se zobrazí aktuální slide.</div>
 </details>
 </div>
 <div id="settings-view" hidden>
@@ -310,6 +313,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
+.presentation-panel #presentation-slide{margin-top:12px;padding:28px 24px;min-height:150px;background:#162638;color:#f6faf8;border-radius:10px}
+.presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
+.presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
+.presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -355,15 +362,23 @@ gamepadScanButton.addEventListener('click',async()=>{
 });"""
 JS += """
 const presentationStartButton=document.querySelector('#presentation-start');
+const presentationPrevButton=document.querySelector('#presentation-prev');
+const presentationNextButton=document.querySelector('#presentation-next');
+const presentationFullscreenButton=document.querySelector('#presentation-fullscreen');
 const presentationStatus=document.querySelector('#presentation-status');
 const presentationSlide=document.querySelector('#presentation-slide');
 const presentationMode=document.querySelector('#presentation-mode');
+let presentationSlides=[];
+let presentationIndex=0;
 function renderPresentationSlide(slide){
  presentationSlide.replaceChildren();
  if(!slide){presentationSlide.textContent='Žádný slide k zobrazení.';return;}
  const title=document.createElement('h3');title.textContent=slide.title;
  const body=document.createElement('p');body.textContent=slide.body;
  presentationSlide.append(title,body);
+ presentationPrevButton.disabled=presentationIndex===0;
+ presentationNextButton.disabled=presentationIndex>=presentationSlides.length-1;
+ presentationStatus.textContent=`Promítám slide ${presentationIndex+1} z ${presentationSlides.length}.`;
 }
 presentationStartButton.addEventListener('click',async()=>{
  presentationStartButton.disabled=true;
@@ -373,12 +388,31 @@ presentationStartButton.addEventListener('click',async()=>{
    body:JSON.stringify({action:'start'}),signal:AbortSignal.timeout(4000)});
   const result=await response.json();
   if(!response.ok) throw new Error(result.error || 'Prezentaci nebylo možné připravit.');
-  presentationStatus.textContent=result.message || 'Prezentace připravena.';
-  renderPresentationSlide(result.slides?.[result.current_slide ?? 0]);
+    presentationSlides=Array.isArray(result.slides) ? result.slides : [];
+    presentationIndex=Math.min(result.current_slide ?? 0,Math.max(0,presentationSlides.length-1));
+    presentationPrevButton.disabled=false;presentationNextButton.disabled=false;
+    presentationFullscreenButton.disabled=!presentationSlides.length;
+    presentationStartButton.textContent='Restartovat prezentaci';
+    renderPresentationSlide(presentationSlides[presentationIndex]);
  }catch(error){
   presentationStatus.textContent=error.message || 'Prezentace nebylo možné spustit.';
   presentationSlide.textContent='Demo promítání vyžaduje běžící desktop app a validní prezentaci.';
  }finally{presentationStartButton.disabled=false;}
+});
+function movePresentation(offset){
+ if(!presentationSlides.length)return;
+ presentationIndex=Math.max(0,Math.min(presentationSlides.length-1,presentationIndex+offset));
+ renderPresentationSlide(presentationSlides[presentationIndex]);
+}
+presentationPrevButton.addEventListener('click',()=>movePresentation(-1));
+presentationNextButton.addEventListener('click',()=>movePresentation(1));
+presentationFullscreenButton.addEventListener('click',async()=>{
+ try{await presentationSlide.requestFullscreen();presentationSlide.focus();}
+ catch(error){presentationStatus.textContent='Celou obrazovku se nepodařilo spustit.';}
+});
+presentationMode.addEventListener('keydown',event=>{
+ if(event.key==='ArrowLeft'){event.preventDefault();movePresentation(-1);}
+ if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
 });
 """
 JS += """
