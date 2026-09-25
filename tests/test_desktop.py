@@ -228,7 +228,7 @@ assert.equal(linked.children.length,1);
         self.assertTrue(public_payload['visible'])
         ratio_payload = presentation_public_payload(public_server, {'action': 'display-ratio', 'ratio': '4:3'})
         self.assertEqual(ratio_payload['ratio'], '4:3')
-        self.assertIn('display-ratio', ASSETS['/presentation-screen'][1])
+        self.assertIn('display-ratio', ASSETS['/presentation-screen.js'][1])
         self.assertNotIn('notes', public_payload['content'])
         self.assertNotIn('backups', public_payload)
 
@@ -405,6 +405,101 @@ assert.equal(linked.children.length,1);
                     'https://evil.example/', 'http://platform.openai.com/api-keys'):
             with self.subTest(url=url):
                 self.assertIsNone(provider_key_url(url))
+
+    def test_management_serves_audience_page_and_authenticates_slide_polling(self):
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.desktop_ui import PUBLIC_HTML
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler) as server:
+            self.assertEqual(request_policy(server.origin + '/presentation-screen',
+                                            '', 'GET', server.origin), 'allow')
+            response = driver.request(server, method='GET', path='/presentation-screen',
+                                      headers={'Authorization': None})
+            self.assertTrue(response.startswith(b'HTTP/1.0 200'), response[:100])
+            self.assertEqual(response.split(b'\r\n\r\n', 1)[1], PUBLIC_HTML.encode())
+            self.assertNotIn(server.token.encode(), response)
+            self.assertNotIn('<script>', PUBLIC_HTML)
+            self.assertNotIn('<style>', PUBLIC_HTML)
+            for path in ('/presentation-screen.css', '/presentation-screen.js'):
+                self.assertIn(path, PUBLIC_HTML)
+                self.assertEqual(request_policy(server.origin + path, server.origin,
+                                                'GET', server.origin), 'allow')
+                asset = driver.request(server, method='GET', path=path,
+                                       headers={'Authorization': None})
+                self.assertTrue(asset.startswith(b'HTTP/1.0 200'), asset[:100])
+                self.assertNotIn(server.token.encode(), asset)
+            self.assertEqual(request_policy(server.origin + '/v1/presentation/public',
+                                            server.origin, 'POST', server.origin), 'authenticate')
+            driver.rejected(server, path='/v1/presentation/public', body=b'{}',
+                            headers={'Authorization': None})
+            shown = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0,
+                'content': {'title': 'Audience regression', 'body': 'Approved content'},
+            }).encode())
+            self.assertTrue(shown.startswith(b'HTTP/1.0 200'), shown[:100])
+            public = driver.request(server, path='/v1/presentation/public', body=b'{}')
+            payload = json.loads(public.split(b'\r\n\r\n', 1)[1])
+            self.assertTrue(payload['visible'])
+            self.assertEqual(payload['content']['title'], 'Audience regression')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_audience_renders_approved_slide(self):
+        script = r"""
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_management import DesktopManagementHandler
+from spikes.local_api import running_api
+from tests.test_local_api import LocalAPITests
+app = QApplication([])
+with running_api('http', handler=DesktopManagementHandler) as server:
+    class Interceptor(QWebEngineUrlRequestInterceptor):
+        def interceptRequest(self, info):
+            policy = request_policy(info.requestUrl().toString(), info.initiator().toString(),
+                                    bytes(info.requestMethod()).decode(), server.origin)
+            if policy == 'block':
+                info.block(True)
+            elif policy == 'authenticate':
+                info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
+    profile = QWebEngineProfile(app)
+    interceptor = Interceptor(profile)
+    profile.setUrlRequestInterceptor(interceptor)
+    page = QWebEnginePage(profile, app)
+    state = {'phase': 0}
+    driver = LocalAPITests()
+    def received(value):
+        if not value:
+            return
+        text, color = json.loads(value)
+        if state['phase'] == 0 and 'čeká na schválený slide' in text:
+            response = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0,
+                'content': {'title': 'Audience smoke', 'body': 'Approved slide rendered'},
+            }).encode())
+            assert response.startswith(b'HTTP/1.0 200')
+            state['phase'] = 1
+        elif state['phase'] == 1 and 'Approved slide rendered' in text and color == 'rgb(5, 9, 12)':
+            print('audience: page, stylesheet, authenticated polling and approved slide verified', flush=True)
+            app.exit(0)
+    poll = QTimer()
+    poll.timeout.connect(lambda: page.runJavaScript(
+        "JSON.stringify([document.querySelector('#screen')?.textContent || '',getComputedStyle(document.body).backgroundColor])",
+        0, received))
+    poll.start(100)
+    page.loadFinished.connect(lambda ok: None if ok else app.exit(3))
+    page.setUrl(QUrl(server.origin + '/presentation-screen'))
+    QTimer.singleShot(10000, lambda: app.exit(2))
+    code = app.exec()
+    poll.stop()
+    raise SystemExit(code)
+"""
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('approved slide verified', result.stdout)
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

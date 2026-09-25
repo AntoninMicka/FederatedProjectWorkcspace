@@ -179,3 +179,21 @@ dávku z BACKLOG podle pravidel předání.
   Samostatný skutečný Qt/WebEngine smoke potvrdil fragmentovou událost bez
   reloadu stránky. `git diff --check` prošel. Fyzické monitory/Wayland a celé
   živé propojení presenteru se dvěma displeji neověřeny; nejde o production-ready.
+
+- [x] [completed] **D-06 — Oprava načítání diváckého okna (implemented).**
+  Původ: uživatelské hlášení 2026-09-25 o nedostupné stránce publika;
+  oprava nutná pro akceptaci presenteru na `feature/gamepad-demo-presenter`.
+  Příčina: desktopový management handler přepisoval mapu assetů a vynechal
+  `/presentation-screen`, takže ji blokoval i request interceptor. Po opravě
+  skutečný WebEngine odhalil druhou chybu: CSP blokovala inline styl a skript.
+  Reuse/adapt: management přebírá základní mapu a mění jen vlastní UI assety;
+  divácký CSS/JS se servíruje jako samostatné lokální assety podle existující CSP.
+  Bez oslabení CSP, rozšíření API oprávnění či změn persistence/recovery.
+  Akceptace: skutečný management handler vrací stránku i její assety; divácké
+  polling API stále vyžaduje token a WebEngine vykreslí schválený slide.
+  HTTP regrese před opravou reprodukovala blokování stránky. Po opravě cílená
+  sada 18 testů prošla se 2 skipy; nový samostatný Qt/WebEngine offscreen smoke
+  ověřil stránku, CSS, autentizovaný polling a skutečně vykreslený schválený slide.
+  Finální úplná sada: 367 testů, OK (23 environmentálních skipů, včetně
+  opt-in WebEngine testu spuštěného výše samostatně). `node --check` a
+  `git diff --check` prošly. Fyzické displeje neověřeny.
