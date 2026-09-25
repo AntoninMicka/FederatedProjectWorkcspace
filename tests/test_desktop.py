@@ -45,6 +45,21 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('selectMainTab', input_handler)
         self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
 
+    def test_gamepad_demo_ui_and_backend_are_exposed(self):
+        from spikes.desktop_ui import HTML, JS
+        self.assertIn('id="gamepad-scan"', HTML)
+        self.assertIn('/v1/gamepad/status', JS)
+        self.assertIn('Gamepad demo', HTML)
+        self.assertIn('id="gamepad-list"', HTML)
+
+    def test_presentation_ui_and_backend_are_exposed(self):
+        from spikes.desktop_ui import HTML, JS
+        self.assertIn('id="presentation-start"', HTML)
+        self.assertIn('id="presentation-slide"', HTML)
+        self.assertIn('/v1/presentation/status', JS)
+        self.assertIn('Promítání prezentace', HTML)
+        self.assertIn('presentation-mode', JS)
+
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
         self.assertIn("projectRequest('/v1/chat/configure',binding)", JS)

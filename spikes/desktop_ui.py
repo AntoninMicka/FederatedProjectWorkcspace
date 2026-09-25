@@ -5,6 +5,7 @@
 import json
 import sqlite3
 import subprocess
+from pathlib import Path
 
 from spikes.local_api import Handler
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
@@ -12,6 +13,66 @@ from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+
+
+def scan_gamepads():
+    """Return a safe, Linux-specific list of likely joystick/gamepad devices."""
+    base = Path('/dev/input')
+    if not base.exists():
+        return {'available': False, 'devices': [], 'message': 'Linux /dev/input není dostupné.'}
+    matches = []
+    for entry in sorted(base.iterdir(), key=lambda p: p.name):
+        if not entry.name.startswith('event'):
+            continue
+        path = str(entry)
+        name = entry.name
+        labels = [name]
+        try:
+            result = subprocess.run(
+                ['udevadm', 'info', '--query=property', '--name=' + path],
+                capture_output=True, text=True, check=False, timeout=2)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            result = None
+        if result and result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD', 'ID_INPUT_KEYBOARD', 'DEVNAME'}:
+                    labels.append(f'{key}={value}')
+                    if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD'} and value in {'1', 'true', 'True'}:
+                        matches.append(path)
+        if any(token in ' '.join(labels).lower() for token in ('gamepad', 'joystick', 'controller', 'pad')):
+            matches.append(path)
+    devices = []
+    seen = set()
+    for path in sorted(set(matches)):
+        device_name = path.rsplit('/', 1)[-1]
+        if path in seen:
+            continue
+        seen.add(path)
+        devices.append({'path': path, 'name': device_name})
+    return {
+        'available': bool(devices),
+        'devices': devices,
+        'message': 'Nalezeno gamepad/joystick zařízení.' if devices else 'Nebyl nalezen žádný gamepad/joystick.'
+    }
+
+
+def presentation_deck():
+    """Return a small presenter deck for desktop projection demo."""
+    return {
+        'active': True,
+        'slides': [
+            {'title': 'Úvod', 'body': 'Demo: desktopová prezentace a promítání.'},
+            {'title': 'Problém', 'body': 'Potřebujeme jasnou, bezpečnou prezentaci bez rizika ztráty kontextu.'},
+            {'title': 'Řešení', 'body': 'Vytvoření jednoduchého decku s aktuálním slide a UI pro promítání v aplikaci.'},
+            {'title': 'Výhody', 'body': 'Snadné zobrazení, rychlá iterace a lehká integrace do desktopového workflow.'},
+        ],
+        'current_slide': 0,
+        'message': 'Prezentace je připravena k promítání.'
+    }
+
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,6 +102,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p class="home-help">Nový projekt vytvoříte tlačítkem v horní liště.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
+<details class="diagnostics"><summary>Gamepad demo</summary>
+<button id="gamepad-scan" type="button">Vyhledat gamepad</button>
+<p id="gamepad-status" role="status">Stav: zatím bez skenování.</p>
+<ul id="gamepad-list" aria-live="polite"></ul>
+</details>
+<details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
+<button id="presentation-start" type="button">Spustit prezentaci</button>
+<p id="presentation-status" role="status">Stav: prezentace není spuštěna.</p>
+<div id="presentation-slide" aria-live="polite">Zde se zobrazí aktuální slide.</div>
+</details>
 </div>
 <div id="settings-view" hidden>
 <header><span class="badge">Nastavení uzlu</span><span>Platí pro tento počítač</span></header>
@@ -194,6 +265,8 @@ h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#62718
 button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
 button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
+#gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
+#gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
 .provider-link{color:#176b60;font-weight:600}
@@ -255,6 +328,59 @@ button.addEventListener('click',async()=>{
  }catch(error){status.textContent='Spojení se nezdařilo. Zavřete a znovu spusťte aplikaci.';}
  finally{button.disabled=false;}
 });'''
+JS += """
+const gamepadScanButton=document.querySelector('#gamepad-scan');
+const gamepadStatus=document.querySelector('#gamepad-status');
+const gamepadList=document.querySelector('#gamepad-list');
+gamepadScanButton.addEventListener('click',async()=>{
+ gamepadScanButton.disabled=true;
+ gamepadStatus.textContent='Skenuji vstupní zařízení…';
+ gamepadList.replaceChildren();
+ try{
+  const response=await fetch('/v1/gamepad/status',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({action:'scan'}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error || 'Gamepad není dostupný.');
+  gamepadStatus.textContent=result.message || 'Gamepad demo hotovo.';
+  if(!result.devices || !result.devices.length){
+   const item=document.createElement('li');item.textContent='Žádné joystick/gamepad zařízení nebylo detekováno.';gamepadList.append(item);return;
+  }
+  for(const device of result.devices){
+   const item=document.createElement('li');item.textContent=`${device.name} — ${device.path}`;gamepadList.append(item);
+  }
+ }catch(error){
+  gamepadStatus.textContent=error.message || 'Gamepad demo nebylo možné spustit.';
+  const item=document.createElement('li');item.textContent='Demo vyžaduje Linux /dev/input a dostupné udev metadata.';gamepadList.append(item);
+ }finally{gamepadScanButton.disabled=false;}
+});"""
+JS += """
+const presentationStartButton=document.querySelector('#presentation-start');
+const presentationStatus=document.querySelector('#presentation-status');
+const presentationSlide=document.querySelector('#presentation-slide');
+const presentationMode=document.querySelector('#presentation-mode');
+function renderPresentationSlide(slide){
+ presentationSlide.replaceChildren();
+ if(!slide){presentationSlide.textContent='Žádný slide k zobrazení.';return;}
+ const title=document.createElement('h3');title.textContent=slide.title;
+ const body=document.createElement('p');body.textContent=slide.body;
+ presentationSlide.append(title,body);
+}
+presentationStartButton.addEventListener('click',async()=>{
+ presentationStartButton.disabled=true;
+ presentationStatus.textContent='Načítám prezentaci…';
+ try{
+  const response=await fetch('/v1/presentation/status',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({action:'start'}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error || 'Prezentaci nebylo možné připravit.');
+  presentationStatus.textContent=result.message || 'Prezentace připravena.';
+  renderPresentationSlide(result.slides?.[result.current_slide ?? 0]);
+ }catch(error){
+  presentationStatus.textContent=error.message || 'Prezentace nebylo možné spustit.';
+  presentationSlide.textContent='Demo promítání vyžaduje běžící desktop app a validní prezentaci.';
+ }finally{presentationStartButton.disabled=false;}
+});
+"""
 JS += """
 const projectCards=document.querySelector('#project-cards');
 const sidebarProjects=document.querySelector('#sidebar-project-list');
@@ -1295,7 +1421,7 @@ class DesktopHandler(Handler):
     max_body = 64 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
-        '/v1/chat/orchestration',
+        '/v1/chat/orchestration', '/v1/gamepad/status', '/v1/presentation/status',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -1312,6 +1438,10 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
+            return self.reply(200, scan_gamepads())
+        if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
+            return self.reply(200, presentation_deck())
         projects = self.server.projects or Projects()
         try:
             if self.path == '/v1/metadata-suggestions/status' and request == {}:
