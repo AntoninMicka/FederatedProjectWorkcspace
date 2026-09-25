@@ -69,6 +69,10 @@ def presentation_deck():
             {'title': 'Řešení', 'body': 'Vytvoření jednoduchého decku s aktuálním slide a UI pro promítání v aplikaci.'},
             {'title': 'Výhody', 'body': 'Snadné zobrazení, rychlá iterace a lehká integrace do desktopového workflow.'},
         ],
+        'backups': [
+            {'title': 'Technický detail', 'body': 'Lokální same-origin API odděluje data prezentace od řízení desktopového okna.', 'after_slide': 1},
+            {'title': 'Další krok', 'body': 'Další iterace může přidat skutečné projektové artefakty, notes a export decku.', 'after_slide': 3},
+        ],
         'current_slide': 0,
         'message': 'Prezentace je připravena k promítání.'
     }
@@ -109,6 +113,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </details>
 <details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
 <button id="presentation-start" type="button">Spustit prezentaci</button>
+<button id="presentation-open" type="button">Otevřít presenter</button>
 <button id="presentation-prev" type="button" disabled aria-label="Předchozí slide">Předchozí</button>
 <button id="presentation-next" type="button" disabled aria-label="Další slide">Další</button>
 <button id="presentation-fullscreen" type="button" disabled>Celá obrazovka</button>
@@ -257,6 +262,18 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section>
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
 </div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+<div id="presenter-view" hidden>
+<header class="presenter-header"><div><span class="badge">Presenter</span><h1>Promítání prezentace</h1></div>
+<button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></header>
+<p id="presenter-status" role="status">Presenter není spuštěný.</p>
+<div class="presenter-layout">
+<section class="presenter-audience" aria-label="Obrazovka pro publikum"><div class="presenter-kicker">PROMÍTÁNÍ PRO PUBLIKUM</div>
+<div id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
+<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button></div></section>
+<aside class="presenter-speaker" aria-label="Ovládání řečníka"><h2>Řečník</h2><p id="presenter-counter">Slide 0 z 0</p><div id="presenter-preview"></div>
+<h3>Backupy</h3><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></aside>
+</div>
+</div>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
@@ -317,6 +334,9 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
 .presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
 .presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
+.presenter-header h1{font-size:28px;color:#162638;margin:6px 0}.presenter-layout{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:18px;min-height:calc(100vh - 150px)}
+.presenter-audience{background:#10222f;border-radius:14px;padding:24px;display:flex;flex-direction:column;min-width:0}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8vw 5vw;color:#f6faf8;outline:none}.presenter-audience #presenter-screen:fullscreen{background:#10222f}
+.presenter-audience #presenter-screen h2{font-size:clamp(34px,6vw,78px);color:#79c9ac;margin:0 0 18px}.presenter-audience #presenter-screen p{font-size:clamp(20px,3vw,40px);line-height:1.45;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h3{border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p{margin:0;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -414,6 +434,64 @@ presentationMode.addEventListener('keydown',event=>{
  if(event.key==='ArrowLeft'){event.preventDefault();movePresentation(-1);}
  if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
 });
+const presentationOpenButton=document.querySelector('#presentation-open');
+const presenterView=document.querySelector('#presenter-view');
+const presenterScreen=document.querySelector('#presenter-screen');
+const presenterPreview=document.querySelector('#presenter-preview');
+const presenterStatus=document.querySelector('#presenter-status');
+const presenterCounter=document.querySelector('#presenter-counter');
+const presenterBackups=document.querySelector('#presenter-backups');
+const presenterBackupStatus=document.querySelector('#presenter-backup-status');
+const presenterPrevButton=document.querySelector('#presenter-prev');
+const presenterNextButton=document.querySelector('#presenter-next');
+const presenterFullscreenButton=document.querySelector('#presenter-fullscreen');
+let presenterSlides=[];
+let presenterBackupsData=[];
+let presenterIndex=0;
+function renderPresenterContent(target,slide){
+ target.replaceChildren();
+ if(!slide){target.textContent='Žádný slide k zobrazení.';return;}
+ const title=document.createElement('h2');title.textContent=slide.title;
+ const body=document.createElement('p');body.textContent=slide.body;
+ target.append(title,body);
+}
+function renderPresenterSlide(){
+ const slide=presenterSlides[presenterIndex];
+ renderPresenterContent(presenterScreen,slide);renderPresenterContent(presenterPreview,slide);
+ presenterCounter.textContent=`Slide ${presenterIndex+1} z ${presenterSlides.length}`;
+ presenterPrevButton.disabled=presenterIndex===0;presenterNextButton.disabled=presenterIndex>=presenterSlides.length-1;
+ presenterStatus.textContent=`Promítám slide ${presenterIndex+1} z ${presenterSlides.length}.`;
+}
+function renderPresenterBackups(){
+ presenterBackups.replaceChildren();
+ presenterBackupStatus.textContent=presenterBackupsData.length ? 'Volitelné odbočky pro dotazy publika.' : 'Tento deck nemá backupy.';
+ for(const backup of presenterBackupsData){
+  const item=document.createElement('li');const button=document.createElement('button');button.type='button';button.className='presenter-backup';
+  const title=document.createElement('strong');title.textContent=backup.title;const body=document.createElement('span');body.textContent=backup.body;
+  button.append(title,body);button.addEventListener('click',()=>{renderPresenterContent(presenterScreen,backup);presenterStatus.textContent=`Backup: ${backup.title}. Hlavní slide zůstává ${presenterIndex+1}.`;});
+  item.append(button);presenterBackups.append(item);
+ }
+}
+async function loadPresenter(){
+ presenterStatus.textContent='Načítám presenter…';
+ try{
+  const result=await projectRequest('/v1/presentation/status',{action:'start'});
+  presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;
+  presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
+  renderPresenterSlide();renderPresenterBackups();
+ }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
+}
+function openPresenter(){
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
+}
+function closePresenter(){presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
+presentationOpenButton.addEventListener('click',openPresenter);
+document.querySelector('#presenter-back').addEventListener('click',closePresenter);
+presenterPrevButton.addEventListener('click',()=>{presenterIndex=Math.max(0,presenterIndex-1);renderPresenterSlide();});
+presenterNextButton.addEventListener('click',()=>{presenterIndex=Math.min(presenterSlides.length-1,presenterIndex+1);renderPresenterSlide();});
+presenterFullscreenButton.addEventListener('click',async()=>{try{await presenterScreen.requestFullscreen();presenterScreen.focus();}catch(error){presenterStatus.textContent='Celou obrazovku se nepodařilo spustit.';}});
+presenterView.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'){presenterPrevButton.click();}if(event.key==='ArrowRight'){presenterNextButton.click();}});
 """
 JS += """
 const projectCards=document.querySelector('#project-cards');

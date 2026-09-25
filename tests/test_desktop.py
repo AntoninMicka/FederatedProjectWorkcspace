@@ -64,6 +64,12 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presentation-fullscreen"', HTML)
         self.assertIn('requestFullscreen()', JS)
         self.assertIn("event.key==='ArrowRight'", JS)
+        self.assertIn('id="presenter-view"', HTML)
+        self.assertIn('id="presenter-screen"', HTML)
+        self.assertIn('id="presenter-backups"', HTML)
+        self.assertIn('presenterBackupsData=[]', JS)
+        self.assertIn("result.backups", JS)
+        self.assertIn('Otevřít presenter', HTML)
 
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
