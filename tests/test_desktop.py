@@ -101,6 +101,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('grid-template-columns:15% 25% minmax(0,1fr)', CSS)
         self.assertIn('.presenter-speaker{width:100%;align-self:stretch}', CSS)
         self.assertIn('#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column', CSS)
+        self.assertIn('.presenter-header{font-size:1.5em;min-height:52px', CSS)
         self.assertIn('height:100%', CSS)
         self.assertIn('aspect-ratio:16/9', CSS)
         self.assertIn('max-width:420px', CSS)
