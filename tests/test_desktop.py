@@ -89,6 +89,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presenter-backup-list"', HTML)
         self.assertIn('id="presenter-question-list"', HTML)
         self.assertIn('class="presenter-selection-preview"', HTML)
+        self.assertIn('min-height:48px', CSS)
+        self.assertIn('presenter-next-selector h3', CSS)
         self.assertIn('setPresenterNextSelection', JS)
         self.assertIn("setPresenterNextSelection(backup,'backup')", JS)
         self.assertIn('#presenter-tab-status,#presenter-backup-status{display:none}', CSS)
