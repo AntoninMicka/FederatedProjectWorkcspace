@@ -17,6 +17,44 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_presenter_next_preview_follows_tab_and_includes_notes(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js is required for presenter behavior validation')
+        start = JS.index('function renderPresenterContent(')
+        end = JS.index('function renderPresenterSlide()', start)
+        harness = """
+const assert=require('node:assert/strict');
+const element=()=>({textContent:'',children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},dataset:{}});
+const elements={};
+const document={createElement:element,querySelector(id){return elements[id]??=element();}};
+const presenterPrivatePreview=element(),presenterNextPreview=element();
+let presenterNextSelection=null,presenterNextSelectionKind='main',presenterTabIndex=0,presenterIndex=0;
+const presenterSlides=[{title:'Current'}, {title:'Next',body:'Main body',notes:'Main notes'}];
+"""
+        checks = """
+refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSlides[1]);
+assert.equal(elements['#presenter-next-notes'].textContent,'Main notes');
+presenterTabIndex=1;refreshPresenterNext();
+assert.equal(presenterNextPreview.disabled,true);
+presenterSelectedBackup={title:'Backup',body:'Backup body',notes:'Backup notes'};
+refreshPresenterNext();
+assert.equal(presenterNextSelectionKind,'backup');
+assert.equal(presenterPrivatePreview.children[0].textContent,'Backup');
+assert.equal(elements['#presenter-next-notes'].textContent,'Backup notes');
+presenterTabIndex=0;refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSlides[1]);
+presenterIndex=1;refreshPresenterNext();
+assert.equal(presenterNextPreview.disabled,true);
+assert.equal(elements['#presenter-next-notes'].textContent,'Žádné poznámky.');
+presenterTabIndex=1;refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSelectedBackup);
+renderPresenterWidget(element(),elements['#presenter-next-notes'],{title:'No notes'});
+assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá poznámky.');
+"""
+        subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
+
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
             def external_send_stream(self, request, on_delta):
@@ -88,7 +126,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presenter-slide-list"', HTML)
         self.assertIn('id="presenter-backup-list"', HTML)
         self.assertIn('id="presenter-question-list"', HTML)
-        self.assertIn('class="presenter-selection-preview"', HTML)
+        self.assertIn('class="presenter-slide-widget"', HTML)
         self.assertIn('min-height:48px', CSS)
         self.assertIn('presenter-next-selector h3', CSS)
         self.assertIn('setPresenterNextSelection', JS)

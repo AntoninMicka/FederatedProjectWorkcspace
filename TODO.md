@@ -92,3 +92,25 @@ Funkce je implementovaná a PoC validovaná. PR #43 obsahuje implementaci;
 navazující acceptance diff doplňuje regresní testy a opravuje stavovou evidenci.
 Po jeho začlenění přesunout tuto dávku do WORK_LOG a aktivovat jedinou další
 dávku z BACKLOG podle pravidel předání.
+
+## Ad-hoc úprava existujícího presenteru — D-02
+
+- [x] [completed] **D-02 — Rozdělení pravého panelu presenteru (implemented).**
+  Původ: požadavek uživatele 2026-09-25; pokračování existujícího demo UI
+  na větvi `feature/gamepad-demo-presenter`, cíl případného PR `develop`.
+  Rozsah: záložky a samostatný náhled dalšího obsahu s poznámkami;
+  „K slidu“ používá další hlavní slide, „Backupy“ soukromý výběr backupu.
+  Adaptuje existující renderer a presenter controls v `spikes/desktop_ui.py`;
+  náhled aktuálního i vybraného slidu sdílí renderování poznámek a vzhled.
+  Bez změny persistence či recovery. Akceptace: přepínání obsahu i poznámek,
+  prázdný výběr a konec decku, zachování explicitního promítnutí.
+  Cílených 16 desktopových testů prošlo se 2 Qt skipy; nový Node.js test
+  ověřuje přepínání zdroje náhledu, poznámky a konec decku. Syntaxe JS ověřena.
+  Úplná sada: 357 testů, 22 skipů, jediná chyba byla chybějící SPDX
+  hlavička v existujícím `docs/gamepad-demo-presenter.md`. Hlavička doplněna
+  jako oprava nutná pro ověření presenter větve; následný samostatný
+  `python3 -m unittest tests.test_spdx -v` prošel. Po této čistě dokumentační
+  opravě nebyla celá sada opakována. `node --check` a `git diff --check` prošly.
+  Obrázek nebyl ve zprávě dostupný; vizuální shoda s ním
+  a živé Qt UI nejsou ověřené. Historická evidence TODO popisuje jinou
+  dávku než existující presenter větev; tato úprava ji administrativně neuzavírá.
