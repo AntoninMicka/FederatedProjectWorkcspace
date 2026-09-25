@@ -67,6 +67,8 @@ def main():
                                        QFileDialog, QInputDialog)
         from spikes.desktop_editor import EditorDialog
         from spikes.desktop_displays import PresenterDisplays
+        from spikes.desktop_presentation_editor import PresentationEditorDialog
+        from spikes.presentation_documents import PresentationDocuments
         from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
@@ -318,8 +320,45 @@ def main():
             button = QPushButton(label)
             button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
             editor_toolbar.addWidget(button)
+        presentation_editor_open = False
+        def edit_presentation():
+            nonlocal presentation_editor_open
+            if controller.busy or presentation_editor_open:
+                return
+            presentation_editor_open = True
+            def selected_project(project_id):
+                nonlocal presentation_editor_open
+                try:
+                    if view.closing:
+                        return
+                    if not project_id:
+                        rows = server.projects.catalog()
+                        if not rows:
+                            QMessageBox.information(window, 'Editor prezentací', 'Nejprve vytvořte nebo načtěte projekt.')
+                            return
+                        labels = [row['title'] + ' — ' + row['id'] for row in rows]
+                        label, accepted = QInputDialog.getItem(window, 'Projekt prezentace', 'Uložit prezentace do projektu:', labels, 0, False)
+                        if not accepted:
+                            return
+                        project_id = rows[labels.index(label)]['id']
+                    dialog = PresentationEditorDialog(PresentationDocuments(node_path), project_id, window)
+                    def use_deck(deck):
+                        server.presentation_selected_deck = deck
+                        page.runJavaScript('openPresenter()')
+                    dialog.selected.connect(use_deck)
+                    dialog.exec()
+                    for worker in dialog.workers:
+                        worker.wait()
+                    dialog.deleteLater()
+                finally:
+                    presentation_editor_open = False
+            page.runJavaScript('activeProject?.id || null', 0, selected_project)
+        presentation_editor_button = QPushButton('Prezentace…')
+        presentation_editor_button.clicked.connect(edit_presentation)
+        editor_toolbar.addWidget(presentation_editor_button)
         def native_action(url):
             actions = {
+                '/#presentation-editor': edit_presentation,
                 '/#presenter-open': displays.open,
                 '/#presenter-displays': displays.configure,
                 '/#presenter-close': displays.stop,

@@ -12,6 +12,7 @@ import unittest
 
 from spikes.desktop import provider_key_url, request_policy
 from spikes.desktop_ui import DesktopHandler, HTML, JS
+from spikes.presentation_visual import SLIDE_JS
 from spikes.local_api import running_api
 from tests import test_local_api
 
@@ -25,7 +26,7 @@ class DesktopTests(unittest.TestCase):
         end = JS.index('function renderPresenterSlide()', start)
         harness = """
 const assert=require('node:assert/strict');
-const element=()=>({textContent:'',children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},setAttribute(){},dataset:{}});
+const element=()=>({textContent:'',style:{},children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},setAttribute(){},dataset:{}});
 const elements={};
 const document={createElement:element,querySelector(id){return elements[id]??=element();}};
 const presenterPrivatePreview=element(),presenterNextPreview=element(),presenterNextButton=element();
@@ -54,7 +55,7 @@ assert.equal(elements['#presenter-next-notes'].textContent,'Žádné poznámky.'
 renderPresenterWidget(element(),elements['#presenter-next-notes'],{title:'No notes'});
 assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá poznámky.');
 """
-        subprocess.run(['node', '-e', harness + model + JS[start:end] + checks], check=True)
+        subprocess.run(['node', '-e', harness + SLIDE_JS + model + JS[start:end] + checks], check=True)
 
     def test_presenter_only_lists_explicitly_assigned_backups(self):
         import shutil
@@ -444,7 +445,7 @@ assert.equal(linked.children.length,1);
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_webengine_audience_renders_approved_slide(self):
-        script = r"""
+        script = r'''
 import json
 from PySide6.QtCore import QTimer, QUrl
 from PySide6.QtWidgets import QApplication
@@ -453,6 +454,8 @@ from spikes.desktop import request_policy
 from spikes.desktop_management import DesktopManagementHandler
 from spikes.local_api import running_api
 from tests.test_local_api import LocalAPITests
+from tests.test_presentation_documents import sample
+from spikes.presentation_documents import project_deck
 app = QApplication([])
 with running_api('http', handler=DesktopManagementHandler) as server:
     class Interceptor(QWebEngineUrlRequestInterceptor):
@@ -472,7 +475,7 @@ with running_api('http', handler=DesktopManagementHandler) as server:
     def received(value):
         if not value:
             return
-        text, color = json.loads(value)
+        text, color, foreground, image_ready, bullets = json.loads(value)
         if state['phase'] == 0 and 'čeká na schválený slide' in text:
             response = driver.request(server, path='/v1/presentation/control', body=json.dumps({
                 'action': 'show', 'slide': 0,
@@ -481,11 +484,30 @@ with running_api('http', handler=DesktopManagementHandler) as server:
             assert response.startswith(b'HTTP/1.0 200')
             state['phase'] = 1
         elif state['phase'] == 1 and 'Approved slide rendered' in text and color == 'rgb(5, 9, 12)':
+            deck = sample()
+            deck['slides'][0]['foreground'] = '#aabbcc'
+            server.presentation_selected_deck = project_deck(deck, 'saved-revision')
+            response = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0, 'slide_id': deck['slides'][0]['id'],
+                'deck_revision': 'saved-revision',
+            }).encode())
+            assert response.startswith(b'HTTP/1.0 200')
+            state['phase'] = 2
+        elif state['phase'] == 2 and bullets == ['First point', '<b>Plain text</b>'] and image_ready and foreground == 'rgb(170, 187, 204)':
+            assert 'Private' not in text
             print('audience: page, stylesheet, authenticated polling and approved slide verified', flush=True)
+            print('editor: saved slide, literal bullets, foreground and decoded wallpaper verified', flush=True)
             app.exit(0)
     poll = QTimer()
     poll.timeout.connect(lambda: page.runJavaScript(
-        "JSON.stringify([document.querySelector('#screen')?.textContent || '',getComputedStyle(document.body).backgroundColor])",
+        """(()=>{const target=document.querySelector('#screen');if(!target)return '';
+const style=getComputedStyle(target);
+if(style.backgroundImage.startsWith('url("data:') && !window.wallpaperProbe){
+ window.wallpaperProbe=new Image();window.wallpaperProbe.src=style.backgroundImage.slice(5,-2);
+}
+return JSON.stringify([target.textContent,getComputedStyle(document.body).backgroundColor,style.color,
+ Boolean(window.wallpaperProbe?.naturalWidth),[...target.querySelectorAll('li')].map(li=>li.textContent)]);
+})()""",
         0, received))
     poll.start(100)
     page.loadFinished.connect(lambda ok: None if ok else app.exit(3))
@@ -494,12 +516,13 @@ with running_api('http', handler=DesktopManagementHandler) as server:
     code = app.exec()
     poll.stop()
     raise SystemExit(code)
-"""
+'''
         result = subprocess.run([sys.executable, '-c', script],
                                 cwd=Path(__file__).resolve().parents[1], capture_output=True,
                                 text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('approved slide verified', result.stdout)
+        self.assertIn('decoded wallpaper verified', result.stdout)
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

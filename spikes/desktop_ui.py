@@ -3,11 +3,14 @@
 #
 """Static same-origin UI; project data arrives through authenticated reads."""
 import json
+import copy
 import sqlite3
 import subprocess
 from pathlib import Path
 
 from spikes.local_api import Handler
+from spikes.presentation_visual import SLIDE_JS
+from spikes.presentation_documents import public_content
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.projects import Projects
@@ -89,14 +92,23 @@ def presentation_deck():
 
 def presentation_public_payload(server, request=None):
     """Return only the currently approved public presentation content."""
-    deck = presentation_deck()
+    deck = getattr(server, 'presentation_selected_deck', None) or presentation_deck()
     state = getattr(server, 'presentation_public_state',
                     {'visible': False, 'blackout': True, 'slide': 0, 'content': None, 'ratio': '16:9'})
     if request and request.get('action') == 'show':
         index = request.get('slide', state['slide'])
         if not isinstance(index, int) or not 0 <= index < len(deck['slides']):
             index = 0
-        content = request.get('content')
+        if 'slide_id' in request:
+            if request.get('deck_revision') != deck.get('revision'):
+                raise ValueError('Prezentace se změnila. Znovu otevřete presenter.')
+            source = next((s for s in deck['slides'] + deck['backups'] if s.get('id') == request['slide_id']), None)
+            if source is None:
+                raise ValueError('Slide v této prezentaci neexistuje.')
+            content = public_content(source)
+            content['body'] = source.get('body', '')
+        else:
+            content = request.get('content')
         if not isinstance(content, dict):
             source = deck['slides'][index]
             content = {'title': source['title'], 'body': source['body']}
@@ -104,7 +116,7 @@ def presentation_public_payload(server, request=None):
         if ratio not in {'16:9', '4:3'}:
             ratio = '16:9'
         state = {'visible': True, 'blackout': False, 'slide': index, 'ratio': ratio,
-                 'content': {'title': str(content.get('title', '')), 'body': str(content.get('body', ''))}}
+                 'content': (content if 'slide_id' in request else {'title': str(content.get('title', '')), 'body': str(content.get('body', ''))})}
     elif request and request.get('action') == 'display-ratio' and request.get('ratio') in {'16:9', '4:3'}:
         state = dict(state, ratio=request['ratio'])
     elif request and request.get('action') == 'ratio' and request.get('ratio') in {'16:9', '4:3'}:
@@ -120,7 +132,7 @@ def presentation_public_payload(server, request=None):
 
 
 def presentation_status(server):
-    result = presentation_deck()
+    result = copy.deepcopy(getattr(server, 'presentation_selected_deck', None) or presentation_deck())
     state = getattr(server, 'presentation_public_state', {})
     result['ratio'] = state.get('ratio', '16:9')
     return result
@@ -161,6 +173,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </details>
 <details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
 <button id="presentation-start" type="button">Spustit prezentaci</button>
+<button id="presentation-editor" type="button">Editor prezentací…</button>
 <button id="presentation-open" type="button">Otevřít presenter</button>
 <button id="presentation-prev" type="button" disabled aria-label="Předchozí slide">Předchozí</button>
 <button id="presentation-next" type="button" disabled aria-label="Další slide">Další</button>
@@ -410,7 +423,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:1100px){.presenter-layout{grid-template-columns:15% 25% minmax(0,1fr)}}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
 '''
-JS = '''const button=document.querySelector('#increment');
+JS = SLIDE_JS + '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
  const status=document.querySelector('#status');
@@ -461,11 +474,7 @@ const presentationMode=document.querySelector('#presentation-mode');
 let presentationSlides=[];
 let presentationIndex=0;
 function renderPresentationSlide(slide){
- presentationSlide.replaceChildren();
- if(!slide){presentationSlide.textContent='Žádný slide k zobrazení.';return;}
- const title=document.createElement('h3');title.textContent=slide.title;
- const body=document.createElement('p');body.textContent=slide.body;
- presentationSlide.append(title,body);
+ renderSlideVisual(presentationSlide,slide,'h3');
  presentationPrevButton.disabled=presentationIndex===0;
  presentationNextButton.disabled=presentationIndex>=presentationSlides.length-1;
  presentationStatus.textContent=`Promítám slide ${presentationIndex+1} z ${presentationSlides.length}.`;
@@ -505,6 +514,7 @@ presentationMode.addEventListener('keydown',event=>{
  if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
 });
 const presentationOpenButton=document.querySelector('#presentation-open');
+document.querySelector('#presentation-editor').addEventListener('click',()=>{location.hash='presentation-editor';});
 const presenterView=document.querySelector('#presenter-view');
 const presenterScreen=document.querySelector('#presenter-screen');
 const presenterPreview=document.querySelector('#presenter-preview');
@@ -604,13 +614,7 @@ function createPresenterGamepadInput(){
  };
 }
 const readPresenterGamepad=createPresenterGamepadInput();
-function renderPresenterContent(target,slide){
- target.replaceChildren();
- if(!slide){target.textContent='Žádný slide k zobrazení.';return;}
- const title=document.createElement('h2');title.textContent=slide.title;
- const body=document.createElement('p');body.textContent=slide.body;
- target.append(title,body);
-}
+function renderPresenterContent(target,slide){renderSlideVisual(target,slide);}
 function renderPresenterWidget(preview,notes,slide){
  renderPresenterContent(preview,slide);
  notes.textContent=slide?.notes || (slide ? 'Tento slide nemá poznámky.' : 'Žádné poznámky.');
@@ -668,7 +672,7 @@ async function showPresenterEntry(entry){
  let failure=null;
  presenterNavigating=true;presenterPrevButton.disabled=true;presenterNextButton.disabled=true;presenterNextPreview.disabled=true;
  try{
-  await presentationControl({action:'show',slide:entry.mainIndex,content:{title:entry.slide.title,body:entry.slide.body}});
+  await presentationControl(entry.slide.id?{action:'show',slide:entry.mainIndex,slide_id:entry.slide.id,deck_revision:entry.slide.deck_revision}:{action:'show',slide:entry.mainIndex,content:{title:entry.slide.title,body:entry.slide.body}});
   presenterSequence.commit(entry);presenterPrivateSelection=null;
   presenterBlackout=false;presenterView.classList.remove('presenter-blackout');
   presenterBlackoutButton.textContent='Zatemnit';presenterBlackoutState.textContent='Veřejný výstup aktivní';
@@ -708,7 +712,7 @@ function renderPresenterBackups(){
  const filter=(presenterBackupSearch.value || '').trim().toLowerCase();
  let assigned=0,visible=0;
  for(const backup of presenterBackupsData){
-  const linked=Boolean(presenterSlides[presenterIndex]) && backup.after_slide===presenterIndex;
+  const linked=Boolean(presenterSlides[presenterIndex]) && (backup.after_slide===presenterIndex || (Array.isArray(backup.after_slides) && backup.after_slides.includes(presenterIndex)));
   if(linked)assigned++;
   if(filter && !`${backup.title} ${backup.body}`.toLowerCase().includes(filter))continue;
   presenterBackups.append(createPresenterBackupItem(backup));
@@ -1829,9 +1833,9 @@ document.querySelector('#metadata-publish').addEventListener('click',async event
 loadProjects();
 """
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
-PUBLIC_JS = '''
+PUBLIC_JS = SLIDE_JS + '''
 const screen=document.querySelector('#screen');
-function render(result){screen.replaceChildren();if(!result.visible){const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';const title=document.createElement('h1');title.textContent=result.content.title;const body=document.createElement('p');body.textContent=result.content.body;screen.append(title,body);}
+function render(result){renderSlideVisual(screen,result.visible?result.content:null,'h1');if(!result.visible){screen.replaceChildren();const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';}
 async function poll(){try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}}
 async function reportDisplayRatio(){const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
 reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInterval(poll,300);
@@ -1873,7 +1877,10 @@ class DesktopHandler(Handler):
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, presentation_status(self.server))
         if self.path == '/v1/presentation/control' and isinstance(request, dict):
-            return self.reply(200, presentation_public_payload(self.server, request))
+            try:
+                return self.reply(200, presentation_public_payload(self.server, request))
+            except ValueError as exc:
+                return self.reply(409, {'error': str(exc)})
         if self.path == '/v1/presentation/public' and request == {}:
             return self.reply(200, presentation_public_payload(self.server))
         projects = self.server.projects or Projects()

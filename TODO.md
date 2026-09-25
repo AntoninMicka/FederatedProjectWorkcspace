@@ -197,3 +197,39 @@ dávku z BACKLOG podle pravidel předání.
   Finální úplná sada: 367 testů, OK (23 environmentálních skipů, včetně
   opt-in WebEngine testu spuštěného výše samostatně). `node --check` a
   `git diff --check` prošly. Fyzické displeje neověřeny.
+
+- [x] [completed] **D-07 — Základní projektový editor prezentací (implemented).**
+  Původ: uživatelský požadavek 2026-09-25 na editor pozadí, barvy, tapety,
+  nadpisu, odrážek a vazeb next/backup v obou směrech. Uživatel výslovně
+  schválil pokračování v `feature/gamepad-demo-presenter`; pro tuto změnu
+  jde o výjimku z oddělené feature větve. Cíl zůstává `develop`, PR nevytvořen.
+  Rozsah: více verzovaných prezentací v projektu, přidání/odstranění hlavních
+  slidů a backupů, soukromé poznámky, lokálně vložené tapety, nativní náhled,
+  next/previous jako jedna konzistentní linie a sdílené backupy s opačným
+  přiřazením. Presenter přebírá uloženou revizi až explicitním spuštěním;
+  editace/uložení nemění veřejný výstup. Stará revize nesmí promítnout cizí slide.
+  Reuse/adapt: `Artifacts.save`, `Workspace.transact`, `EditorWorker`, stávající
+  nativní fragmentové akce, dočasná navigace a veřejný renderer. Žádný nový
+  framework, HTTP writer ani externí asset; REUSE_CATALOG a ADR 0003 zachovány.
+  Recovery: před commitem journal dokončí připravený zápis, po commitu rebuild
+  indexu z HEAD; žádné nové crash boundaries oproti ADR 0003. Opakované uložení
+  používá stejný operation ID/request, neuložený koncept žije v paměti editoru.
+  Akceptace: save/reopen/restart a idempotentní retry; odmítnutí stale HEAD,
+  chybných vazeb/ID/obrázků; recovery po pádu; obousměrné vazby v nativním UI;
+  oddělený veřejný obsah se skutečně vykreslenou tapetou/barvami/odrážkami.
+  Cílená sada: 35 testů, OK (3 opt-in WebEngine skipy). Samostatný skutečný
+  Qt/WebEngine smoke prošel: demo i uložený slide, doslovné odrážky, barva
+  textu a dekódovaná tapeta. Nové testy pokrývají čtyři skutečné pády procesu
+  (`prepared`, `files-applied`, `ref-updated`, `indexed`), přesné obnovení decku
+  a jediný commit. Tři nativní Qt testy ověřily editaci, sdílené backupy,
+  save/reopen/use, odmítnutí zahození konceptu a opakování nejistého uložení.
+  Oba JavaScript assety prošly `node --check`; editor vizuálně zkontrolován
+  screenshotem při 1180 × 820. Finální úplná sada: 376 testů, OK
+  (23 environmentálních skipů). Také dva launcher/WebEngine smoke testy
+  (spuštění/zavření/restart a pád rendereru) prošly se softwarovým renderingem
+  `QT_QUICK_BACKEND=software`, `QTWEBENGINE_CHROMIUM_FLAGS=--disable-gpu`;
+  první offscreen pokus s GPU selhal ztrátou grafického kontextu/SIGSEGV.
+  `git diff --check`, syntaxe a whitespace nových souborů i odkaz na ADR
+  v návodu ověřeny. Dokumentační změny po testech nemění běhový kód.
+  Omezení: desktopový PoC, bez zanořených scénářů a trvalé relace; základní
+  limity obsahu a 16:9 editorový náhled viz návod. Fyzické displeje neověřeny.

@@ -130,3 +130,61 @@ obnoví původní geometrii hlavního okna. Role žijí jen po dobu běhu aplika
 restart vyžaduje nový výběr. Pro oddělené zobrazení nastavte v systému rozšířenou
 plochu: zrcadlení displejů aplikace nevypíná. Umístění oken může omezovat správce
 oken, zejména na Waylandu; fyzické zapojení je nutné před přednáškou vyzkoušet.
+
+## 10. Základní editor prezentací
+
+Otevřete **Prezentace…** v horní liště desktopu nebo **Editor prezentací…**
+v panelu promítání. Editor používá aktuální projekt; pokud žádný není otevřený,
+nabídne výběr z registrovaných projektů. Nový projekt založte běžným projektovým
+ovládáním. V horním seznamu editoru lze přepínat uložené prezentace nebo založit novou.
+
+- Přidávejte hlavní slidy a backupy. Každý slide má nadpis, odrážky (jednu na
+  řádek), soukromé poznámky, barvu pozadí, barvu textu a volitelnou tapetu.
+- Tapetu vyberte z místního PNG/JPEG/WebP souboru. Editor vloží zmenšenou PNG
+  kopii do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
+  překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
+  SVG se nepoužívají.
+- V záložce **Vazby** upravte **Next** nebo **Previous**. Změna přesune slide
+  v hlavní linii a opačný směr dopočítá automaticky. Volba „Konec“ přesune
+  aktuální slide na konec, „Začátek“ na začátek. Hlavní linie nemá cykly.
+- U hlavního slidu zaškrtněte jeho backupy. U backupu lze stejnou vazbu upravit
+  z opačné strany v **Backup pro / návrat k**. Jeden backup může patřit k více
+  hlavním slidům; návrat v presenteru vede k hlavnímu slidu, odkud byl vyvolán.
+  Nepřiřazený backup zůstává dostupný v celkové knihovně. Odstranění slidu
+  odstraní jeho vazby; poslední hlavní slide odstranit nelze.
+- **Uložit do projektu** uloží celý deck v jedné projektové operaci a vytvoří
+  jeho verzi v Gitu. Samotné psaní, náhled a uložení nemění divácký výstup.
+  **Spustit uloženou prezentaci** zahájí novou relaci presenteru z uložené
+  verze a nabídne role displejů. Neuložený koncept spustit nelze.
+
+Při chybě uložení zůstává koncept i identita operace v editoru. Tlačítko
+**Opakovat stejné uložení** opakuje tutéž operaci; nevytváří další commit po
+ztraceném potvrzení. **Znovu načíst** po potvrzení opuštění konceptu obnoví
+případnou připravenou operaci a načte aktuální projekt. Při změně HEAD se cizí
+úpravy nepřepisují. Po restartu aplikace otevřete uloženou prezentaci z editoru
+znovu; pozice a dočasná cesta presenteru se neukládají.
+
+Jde o základní desktopový editor: nejvýše 100 slidů, 12 odrážek po 500 znacích,
+256 KiB vložené tapety na slide a přibližně 1 MiB na celý dokument. Při importu
+má obrázek nejvýše 10 MiB a 8192 pixelů v každém rozměru; editor jej zmenší
+nejvýše na 960 × 540 a podle velikosti dále. Dlouhý obsah je nutné zkrátit nebo
+rozdělit do více slidů. Editorový náhled je 16:9, presenter přebírá poměr
+projekčního displeje. Nejde o plný graf zanořených scénářů, animace ani editor PPTX.
+
+### Formát a ukládání
+
+Deck je běžný projektový dokument `artifacts/<id>/content.md` s blokem
+`fpw-presentation-v1` obsahujícím JSON a metadaty spravovanými existujícím
+editorem artefaktů. Každý slide má stabilní UUID, typ `main`/`backup`, `title`,
+`bullets`, `notes`, `background`, `foreground`, `wallpaper`, `next` a `backups`.
+`Previous` a opačné přiřazení backupu jsou odvozené pohledy, nikoli druhá kopie
+stejné vazby. Formát není export pro publikum: obsahuje i poznámky a backupy.
+Divácké API vrací pouze vizuální obsah výslovně promítnutého slidu.
+
+Zápis adaptuje `Artifacts.save` → `Workspace.transact`; crash boundaries,
+serializace zápisů a recovery zůstávají podle
+[ADR 0003](adr/0003-coordinated-operation.md). Validace editoru před zápisem
+ověřuje ID, cíle vazeb, souvislou hlavní linii, barvy a limity. Ručně poškozený
+dokument se v editoru označí jako neplatný a automaticky se neopravuje.
+Tento formát nerozšiřuje obecný validátor projektových dokumentů o celé schéma
+prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
