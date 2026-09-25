@@ -257,3 +257,11 @@ dávku z BACKLOG podle pravidel předání.
   Fyzický gamepad/displeje a živé Qt/WebEngine propojení této změny neověřeny.
   Změna je implemented, nikoli production-ready; širší historická dávka
   ani strategický Disclosure Presenter MVP se tím neuzavírají.
+
+  Upřesnění D-08 od uživatele 2026-09-26: levá páčka nahoru/dolů mění
+  soukromý výběr hlavní linie; doprava/doleva opět promítá další/předchozí
+  dostupný slide. Pravidla opakování, návratu a řádků se nemění. Při šikmém
+  gestu má promítnutí původní volby přednost před změnou výběru.
+  Adaptace existujícího mapování bez změny persistence. Ověření 2026-09-26:
+  6 cílených testů prošlo; úplná sada 380 testů, OK (23 skipů).
+  `node --check` a `git diff --check` prošly; fyzický gamepad neověřen.

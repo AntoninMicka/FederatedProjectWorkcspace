@@ -629,14 +629,15 @@ function createPresenterSequence(slides){
 let presenterSequence=createPresenterSequence([]);
 let presenterNavigating=false;
 function createPresenterGamepadInput(){
- let identity=null,armed={left:false,x:false,y:false,confirm:false};
+ let identity=null,armed={left:false,leftY:false,x:false,y:false,confirm:false};
  return (pad,active)=>{
-  if(!active || !pad){identity=null;armed={left:false,x:false,y:false,confirm:false};return [];}
+  if(!active || !pad){identity=null;armed={left:false,leftY:false,x:false,y:false,confirm:false};return [];}
   const key=`${pad.index}:${pad.id}`;
-  if(identity!==key){identity=key;armed={left:false,x:false,y:false,confirm:false};}
+  if(identity!==key){identity=key;armed={left:false,leftY:false,x:false,y:false,confirm:false};}
   const actions=[];
   for(const [name,value,negative,positive] of [
    ['left',pad.axes[0] ?? 0,'previous','next'],
+   ['leftY',pad.axes[1] ?? 0,'mainPrevious','mainNext'],
    ['x',pad.axes[2] ?? 0,'tabPrevious','tabNext'],
    ['y',pad.axes[3] ?? 0,'itemPrevious','itemNext'],
    ['confirm',pad.buttons?.[0]?.pressed?1:0,'confirm','confirm']
@@ -819,11 +820,12 @@ function pollPresenterGamepad(){
  const pad=Array.from(navigator.getGamepads?.() || []).find(item=>item);
  const active=!presenterView.hidden && !document.hidden && document.hasFocus();
  const actions=readPresenterGamepad(pad,active);
- presenterGamepadStatus.textContent=pad?`Gamepad: ${pad.id.slice(0,32)} · levý: výběr hlavního slidu · pravý: výběr backupu · A: promítnout`:'Gamepad: čekám na připojení.';
- // Stick selection is private; projection requires explicit confirmation.
- if(actions.includes('confirm'))movePresenter(1);
- else if(!presenterNavigating && (actions.includes('previous') || actions.includes('next'))){
-  presenterSequence.chooseMain(actions.includes('next')?1:-1);refreshPresenterNext();renderPresenterDeck();
+ presenterGamepadStatus.textContent=pad?`Gamepad: ${pad.id.slice(0,32)} · levý ↑↓: výběr hlavního slidu · ←→: předchozí/další · pravý: výběr backupu · A: promítnout`:'Gamepad: čekám na připojení.';
+ // Horizontal navigation projects the choice visible before this frame.
+ if(actions.includes('previous'))movePresenter(-1);
+ else if(actions.includes('next') || actions.includes('confirm'))movePresenter(1);
+ else if(!presenterNavigating && (actions.includes('mainPrevious') || actions.includes('mainNext'))){
+  presenterSequence.chooseMain(actions.includes('mainNext')?1:-1);refreshPresenterNext();renderPresenterDeck();
  }
  else if(!presenterNavigating){
   for(const action of actions){

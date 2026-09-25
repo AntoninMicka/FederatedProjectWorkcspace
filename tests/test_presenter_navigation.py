@@ -84,7 +84,11 @@ assert.deepEqual(read(pad,true),[]); // Held stick, no repeat.
 pad.axes[0]=-1;assert.deepEqual(read(pad,true),[]); // Must cross sampled neutral first.
 pad.axes[0]=0;read(pad,true);pad.axes[0]=-1;
 assert.deepEqual(read(pad,true),['previous']);
-pad.axes=[0,1,1,0];assert.deepEqual(read(pad,true),['tabNext']);
+pad.axes=[0,1,1,0];assert.deepEqual(read(pad,true),['mainNext','tabNext']);
+assert.deepEqual(read(pad,true),[]);
+pad.axes[1]=-1;assert.deepEqual(read(pad,true),[]);
+pad.axes[1]=0;read(pad,true);pad.axes[1]=-1;
+assert.deepEqual(read(pad,true),['mainPrevious']);
 pad.axes=[0,0,0,1];assert.deepEqual(read(pad,true),['itemNext']);
 read(pad,false);pad.axes=[1,0,0,0];assert.deepEqual(read(pad,true),[]);
 pad.axes[0]=0;read(pad,true);pad.axes[0]=1;assert.deepEqual(read(pad,true),['next']);
@@ -107,19 +111,32 @@ const navigator={getGamepads:()=>[pad]},document={hidden:false,hasFocus:()=>true
 const presenterView={hidden:false},presenterGamepadStatus={};
 function requestAnimationFrame(){};function refreshPresenterNext(){};function renderPresenterDeck(){};
 let projections=[];
-function movePresenter(){projections.push(presenterSequence.next.slide.title);}
+function movePresenter(delta){projections.push(delta<0?'previous':presenterSequence.next.slide.title);}
 function selectPresenterTab(){};function movePresenterItem(){};
 let presenterTabIndex=0;
 presenterSequence=createPresenterSequence([{title:'A'},{title:'B'},{title:'C'}]);
 presenterSequence.commit(presenterSequence.current);
 """ + poll + """
-pollPresenterGamepad();pad.axes[0]=1;pollPresenterGamepad();
+pollPresenterGamepad();pad.axes[1]=1;pollPresenterGamepad();
 assert.equal(presenterSequence.next.slide.title,'C');assert.deepEqual(projections,[]);
-pad.buttons[0].pressed=true;pollPresenterGamepad();assert.deepEqual(projections,['C']);
+pad.axes[1]=0;pollPresenterGamepad();pad.axes[1]=-1;pollPresenterGamepad();
+assert.equal(presenterSequence.next.slide.title,'B');assert.deepEqual(projections,[]);
+pad.axes[1]=0;pollPresenterGamepad();pad.axes[1]=1;pollPresenterGamepad();
+pad.axes[0]=1;pollPresenterGamepad();assert.deepEqual(projections,['C']);
 pollPresenterGamepad();assert.deepEqual(projections,['C']);
+pad.axes[0]=0;pollPresenterGamepad();pad.axes[0]=-1;pollPresenterGamepad();
+assert.deepEqual(projections,['C','previous']);
+pad.axes[0]=0;pad.axes[1]=0;pollPresenterGamepad();
+// A diagonal must project the existing choice, not the newly selected one.
+pad.axes=[1,-1,0,0];pollPresenterGamepad();
+assert.equal(presenterSequence.next.slide.title,'C');
+assert.deepEqual(projections,['C','previous','C']);
+pad.axes=[0,0,0,0];pollPresenterGamepad();
+pad.buttons[0].pressed=true;pollPresenterGamepad();
+assert.deepEqual(projections,['C','previous','C','C']);
 presenterView.hidden=true;pad.axes[0]=0;pad.buttons[0].pressed=false;pollPresenterGamepad();
 pad.axes[0]=-1;pad.buttons[0].pressed=true;pollPresenterGamepad();
-assert.deepEqual(projections,['C']);
+assert.deepEqual(projections,['C','previous','C','C']);
 """)
 
     def test_navigation_commits_only_on_success_and_serializes_requests(self):

@@ -195,9 +195,11 @@ prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
 
 ## 11. Výběr a postup během prezentace
 
-Levá páčka vodorovně vybírá další slide z dostupné hlavní linie. Náhled je
+Levá páčka nahoru/dolů vybírá další slide z dostupné hlavní linie. Náhled je
 soukromý; promítnutí potvrďte tlačítkem **A** (tlačítko 0 standardního gamepadu)
-nebo **Zobrazit další slide**. Pravá páčka mění záložky a výběr backupu.
+nebo **Zobrazit další slide**. Levá páčka doprava promítne vybraný další slide,
+doleva předchozí dostupný slide (z backupu návratový slide). Pravá páčka mění
+záložky a výběr backupu.
 Každé gesto vyžaduje návrat do neutrální polohy; držení tlačítka neopakuje akci.
 Šipka doprava a tlačítko **Další** promítnou právě vybranou možnost.
 
