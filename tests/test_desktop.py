@@ -37,6 +37,7 @@ const presenterSlides=[{title:'Current'}, {title:'Next',body:'Main body',notes:'
                    JS.index('function renderPresenterContent(')]
         checks = """
 presenterSequence=createPresenterSequence(presenterSlides);
+presenterSequence.commit(presenterSequence.current);
 refreshPresenterNext();
 assert.equal(presenterNextSelection,presenterSlides[1]);
 assert.equal(elements['#presenter-next-notes'].textContent,'Main notes');
@@ -103,7 +104,12 @@ assert.match(elements['#presenter-slide-backup-status'].textContent,/nejsou při
 presenterIndex=0;renderPresenterBackups();
 assert.equal(linked.children.length,1);
 """
-        subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
+        model = JS[JS.index('function createPresenterSequence('):JS.index('function renderPresenterContent(')]
+        checks += '''
+presenterSequence.chooseBackup(presenterBackupsData[0]);presenterSequence.commit(presenterSequence.next);
+renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(presenterBackups.children.length,4);
+'''
+        subprocess.run(['node', '-e', harness + model + 'presenterSequence=createPresenterSequence(presenterSlides);' + JS[start:end] + checks], check=True)
         slide_renderer = JS[JS.index('function renderPresenterSlide()'):
                             JS.index('function renderPresenterDeck()')]
         self.assertIn('renderPresenterBackups();', slide_renderer)

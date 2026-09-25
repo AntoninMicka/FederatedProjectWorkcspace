@@ -62,6 +62,34 @@ class PresentationModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             remove_slide(deck, a['id'])
 
+    def test_optional_playback_settings_and_public_row_prefix(self):
+        deck = sample(); first = deck['slides'][0]
+        first.update(repeat=True, reveal='step')
+        self.assertEqual(decode_deck(encode_deck(deck)), deck)
+        projected = project_deck(deck, 'rev')
+        self.assertTrue(projected['slides'][0]['repeat'])
+        server = SimpleNamespace(presentation_selected_deck=projected)
+        request = dict(action='show', slide_id=first['id'], deck_revision='rev', rows=1)
+        shown = presentation_public_payload(server, request)
+        self.assertEqual(shown['content']['bullets'], ['First point'])
+        self.assertEqual(shown['content']['body'], 'First point')
+        self.assertNotIn('repeat', shown['content'])
+        for rows in (-1, 3, True, '1', None):
+            with self.subTest(rows=rows), self.assertRaises(ValueError):
+                presentation_public_payload(server, dict(request, rows=rows))
+            self.assertEqual(presentation_public_payload(server), shown)
+        self.assertEqual(len(projected['slides'][0]['bullets']), 2)
+        self.assertEqual(len(presentation_public_payload(server, dict(request, rows=2))['content']['bullets']), 2)
+        for slide in deck['slides']:
+            slide.pop('repeat'); slide.pop('reveal')
+        self.assertEqual(decode_deck(encode_deck(deck)), deck)
+        legacy = project_deck(deck, 'old')['slides'][0]
+        self.assertFalse(legacy['repeat']); self.assertEqual(legacy['reveal'], 'all')
+        for fields in ({'repeat': 1}, {'repeat': 'false'}, {'reveal': 'unknown'}):
+            bad = copy.deepcopy(deck); bad['slides'][0].update(fields)
+            with self.assertRaises(ValueError):
+                validate_deck(bad)
+
     def test_invalid_graphs_wallpapers_and_bounds(self):
         for mutation in (
             lambda d: d['slides'][0].update(next=d['slides'][0]['id']),

@@ -10,7 +10,7 @@ from PySide6.QtCore import Qt, Signal, QRectF, QBuffer, QByteArray, QIODevice
 from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QPainter
 from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPlainTextEdit, QPushButton, QLabel, QListWidget, QListWidgetItem,
-    QComboBox, QSplitter, QMessageBox, QColorDialog, QFileDialog, QTabWidget)
+    QComboBox, QSplitter, QMessageBox, QColorDialog, QFileDialog, QTabWidget, QCheckBox)
 
 from spikes.desktop_editor import EditorWorker
 from spikes.presentation_documents import (MAX_WALLPAPER, new_deck, new_slide, main_order,
@@ -97,6 +97,11 @@ class PresentationEditorDialog(QDialog):
         self.bullets.setMaximumHeight(130)
         self.notes = QPlainTextEdit(); self.notes.setMaximumHeight(75)
         form.addRow('Nadpis', self.title); form.addRow('Odrážky', self.bullets); form.addRow('Soukromé poznámky', self.notes)
+        self.repeat = QCheckBox('Povolit opakované promítnutí')
+        self.reveal = QComboBox()
+        self.reveal.addItem('Všechny řádky najednou', 'all')
+        self.reveal.addItem('Postupně po řádcích', 'step')
+        form.addRow(self.repeat); form.addRow('Zobrazení odrážek', self.reveal)
         colors = QHBoxLayout()
         self.background = QPushButton('Barva pozadí'); self.foreground = QPushButton('Barva textu')
         self.wallpaper = QPushButton('Vybrat tapetu…'); self.clear_wallpaper = QPushButton('Odebrat tapetu')
@@ -134,6 +139,8 @@ class PresentationEditorDialog(QDialog):
         self.title.textChanged.connect(self.edit)
         self.bullets.textChanged.connect(self.edit)
         self.notes.textChanged.connect(self.edit)
+        self.repeat.toggled.connect(self.edit)
+        self.reveal.currentIndexChanged.connect(self.edit)
         self.background.clicked.connect(lambda: self.color('background'))
         self.foreground.clicked.connect(lambda: self.color('foreground'))
         self.wallpaper.clicked.connect(self.pick_wallpaper)
@@ -244,6 +251,8 @@ class PresentationEditorDialog(QDialog):
     def show_slide(self):
         self.loading = True; s = self.current()
         self.title.setText(s['title']); self.bullets.setPlainText('\n'.join(s['bullets'])); self.notes.setPlainText(s['notes'])
+        self.repeat.setChecked(s.get('repeat', False))
+        self.reveal.setCurrentIndex(self.reveal.findData(s.get('reveal', 'all')))
         order = main_order(self.deck); by_id = {s['id']: s for s in self.deck['slides']}
         for combo, label in ((self.previous, 'Začátek'), (self.next, 'Konec')):
             combo.clear(); combo.addItem(label, None); combo.setEnabled(s['kind'] == 'main')
@@ -282,6 +291,8 @@ class PresentationEditorDialog(QDialog):
         s = self.current(); s['title'] = self.title.text()
         s['bullets'] = [line for line in self.bullets.toPlainText().splitlines() if line.strip()]
         s['notes'] = self.notes.toPlainText()
+        s['repeat'] = self.repeat.isChecked()
+        s['reveal'] = self.reveal.currentData()
         if self.slides.currentItem():
             self.slides.currentItem().setText(('Backup · ' if s['kind'] == 'backup' else '') + s['title'])
         self.changed()

@@ -18,7 +18,7 @@ MAX_WALLPAPER = 256 * 1024
 
 def new_slide(kind='main'):
     return dict(id=str(uuid4()), kind=kind, title='Nový slide', bullets=[], notes='',
-                background='#102b36', foreground='#ffffff', wallpaper='', next=None, backups=[])
+                background='#102b36', foreground='#ffffff', wallpaper='', next=None, backups=[], repeat=False, reveal='all')
 
 
 def new_deck():
@@ -99,9 +99,12 @@ def validate_deck(deck):
     require(isinstance(deck['slides'], list) and 1 <= len(deck['slides']) <= 100, 'Prezentace má mít 1–100 slidů.')
     seen = set()
     for slide in deck['slides']:
-        require(isinstance(slide, dict) and slide.keys() == {
-            'id', 'kind', 'title', 'bullets', 'notes', 'background', 'foreground', 'wallpaper', 'next', 'backups'},
+        required = {'id', 'kind', 'title', 'bullets', 'notes', 'background', 'foreground', 'wallpaper', 'next', 'backups'}
+        require(isinstance(slide, dict) and required <= slide.keys()
+                and slide.keys() <= required | {'repeat', 'reveal'},
             'Neplatná pole slidu.')
+        require(type(slide.get('repeat', False)) is bool, 'Opakování musí být boolean.')
+        require(slide.get('reveal', 'all') in ('all', 'step'), 'Neplatný režim odrážek.')
         uuid(slide['id'])
         require(slide['id'] not in seen, 'Duplicitní ID slidu.')
         seen.add(slide['id'])
@@ -147,7 +150,8 @@ def project_deck(deck, revision):
     order = main_order(deck)
     def project(slide):
         return dict(public_content(slide), id=slide['id'], body='\n'.join(slide['bullets']),
-                    notes=slide['notes'], deck_revision=revision)
+                    notes=slide['notes'], deck_revision=revision,
+                    repeat=slide.get('repeat', False), reveal=slide.get('reveal', 'all'))
     return dict(active=True, title=deck['title'], slides=[project(by_id[id_]) for id_ in order],
                 backups=[dict(project(s), after_slides=[i for i, id_ in enumerate(order) if s['id'] in by_id[id_]['backups']])
                          for s in deck['slides'] if s['kind'] == 'backup'],

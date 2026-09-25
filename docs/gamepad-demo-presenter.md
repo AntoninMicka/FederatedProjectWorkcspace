@@ -140,6 +140,8 @@ ovládáním. V horním seznamu editoru lze přepínat uložené prezentace nebo
 
 - Přidávejte hlavní slidy a backupy. Každý slide má nadpis, odrážky (jednu na
   řádek), soukromé poznámky, barvu pozadí, barvu textu a volitelnou tapetu.
+  **Zobrazení odrážek** volí všechny řádky najednou nebo postupné odhalování.
+  **Povolit opakované promítnutí** výslovně povolí opětovné nabízení slidu.
 - Tapetu vyberte z místního PNG/JPEG/WebP souboru. Editor vloží zmenšenou PNG
   kopii do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
   překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
@@ -149,7 +151,7 @@ ovládáním. V horním seznamu editoru lze přepínat uložené prezentace nebo
   aktuální slide na konec, „Začátek“ na začátek. Hlavní linie nemá cykly.
 - U hlavního slidu zaškrtněte jeho backupy. U backupu lze stejnou vazbu upravit
   z opačné strany v **Backup pro / návrat k**. Jeden backup může patřit k více
-  hlavním slidům; návrat v presenteru vede k hlavnímu slidu, odkud byl vyvolán.
+  hlavním slidům; výchozí návrat v presenteru vede ke slidu, odkud byl vyvolán.
   Nepřiřazený backup zůstává dostupný v celkové knihovně. Odstranění slidu
   odstraní jeho vazby; poslední hlavní slide odstranit nelze.
 - **Uložit do projektu** uloží celý deck v jedné projektové operaci a vytvoří
@@ -177,6 +179,8 @@ Deck je běžný projektový dokument `artifacts/<id>/content.md` s blokem
 `fpw-presentation-v1` obsahujícím JSON a metadaty spravovanými existujícím
 editorem artefaktů. Každý slide má stabilní UUID, typ `main`/`backup`, `title`,
 `bullets`, `notes`, `background`, `foreground`, `wallpaper`, `next` a `backups`.
+Volitelná pole `repeat` (boolean, výchozí `false`) a `reveal` (`all` nebo `step`,
+výchozí `all`) určují přehrávání; starší dokumenty zůstávají čitelné.
 `Previous` a opačné přiřazení backupu jsou odvozené pohledy, nikoli druhá kopie
 stejné vazby. Formát není export pro publikum: obsahuje i poznámky a backupy.
 Divácké API vrací pouze vizuální obsah výslovně promítnutého slidu.
@@ -188,3 +192,29 @@ ověřuje ID, cíle vazeb, souvislou hlavní linii, barvy a limity. Ručně poš
 dokument se v editoru označí jako neplatný a automaticky se neopravuje.
 Tento formát nerozšiřuje obecný validátor projektových dokumentů o celé schéma
 prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
+
+## 11. Výběr a postup během prezentace
+
+Levá páčka vodorovně vybírá další slide z dostupné hlavní linie. Náhled je
+soukromý; promítnutí potvrďte tlačítkem **A** (tlačítko 0 standardního gamepadu)
+nebo **Zobrazit další slide**. Pravá páčka mění záložky a výběr backupu.
+Každé gesto vyžaduje návrat do neutrální polohy; držení tlačítka neopakuje akci.
+Šipka doprava a tlačítko **Další** promítnou právě vybranou možnost.
+
+Vybraný hlavní slide se přesune za aktuální pozici v dočasném pořadí.
+Přeskočené slidy zůstávají na později. Již dokončený slide se bez povoleného
+opakování nenabízí a nelze jej znovu promítnout ani navigací zpět; pravidlo
+platí také pro backupy. Výjimkou je návrat z backupu: výchozí další volba
+je slide, ze kterého byl backup otevřen, i když byl již dokončen.
+Výběrem jiného slidu lze tento návrat přeskočit.
+
+V postupném režimu první promítnutí ukáže první odrážku. Další potvrzení
+přidá jednu odrážku a ponechá předchozí viditelné. Po odbočce se pokračuje
+následujícím dosud neodhaleným řádkem; nedokončený slide zůstává dostupný.
+Po posledním řádku se bez povoleného opakování vyřadí. Výjimečný návrat z backupu
+na již dokončený slide ukáže všechny jeho řádky. Opakování odhalené řádky
+neresetuje. Prázdný slide se dokončí prvním promítnutím.
+
+Počet odhalených řádků a navštívené slidy platí pro jednu relaci. Nové spuštění
+nebo reload je vynuluje; uložený deck se navigací nemění. Selhání potvrzení
+výstupu neposune místní postup; při ztracené odpovědi zkontrolujte veřejné okno.

@@ -14,48 +14,63 @@ class PresenterNavigationTests(unittest.TestCase):
         model = JS[JS.index('function createPresenterSequence('):
                    JS.index('function renderPresenterContent(')]
         subprocess.run(['node', '-e', "const assert=require('node:assert/strict');\n"
-                        + model + script], check=True, capture_output=True, text=True)
+                        + model + script], check=True, text=True)
 
-    def test_sequence_preserves_backup_order_and_can_replace_unshown_choice(self):
+    def test_private_main_selection_reorders_and_excludes_consumed_slides(self):
         self.run_js("""
-const slides=[{title:'A'},{title:'B'},{title:'C'}];
-const first={title:'Backup 1'},second={title:'Backup 2'};
-const seq=createPresenterSequence(slides);
-seq.chooseBackup(first);
-assert.equal(seq.current.slide,slides[0]);
-assert.equal(seq.next.slide,first);
-seq.chooseBackup(second);
-assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','Backup 2','B','C']);
-seq.choosePlanned();
-assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','B','C']);
-seq.chooseBackup(first);seq.commit(seq.target(1));
-assert.equal(seq.current.mainIndex,0);
-seq.chooseBackup(second);seq.commit(seq.target(1));
-seq.commit(seq.target(1));
-assert.equal(seq.current.slide,slides[1]);
-const backwards=[];
-while(seq.target(-1)){seq.commit(seq.target(-1));backwards.push(seq.current.slide.title);}
-assert.deepEqual(backwards,['Backup 2','Backup 1','A']);
-seq.chooseBackup(first); // Reuse the already recorded next occurrence.
-assert.equal(seq.entries.length,5);
-const forwards=[];
-while(seq.target(1)){seq.commit(seq.target(1));forwards.push(seq.current.slide.title);}
-assert.deepEqual(forwards,['Backup 1','Backup 2','B','C']);
-assert.equal(seq.target(1),undefined);
-seq.chooseBackup(first);seq.commit(seq.target(1)); // Also works after the last main slide.
-assert.equal(seq.current.mainIndex,2);
-assert.equal(seq.planned,undefined);
-seq.commit(seq.target(-1));assert.equal(seq.current.slide,slides[2]);
-assert.deepEqual(slides.map(s=>s.title),['A','B','C']);
-assert.equal(createPresenterSequence(slides).entries.length,3); // A new session resets the route.
-const empty=createPresenterSequence([]);empty.chooseBackup(first);empty.choosePlanned();
-assert.equal(empty.entries.length,0);assert.equal(empty.next,undefined);
-const revisit=createPresenterSequence(slides);
-revisit.chooseBackup(first);revisit.commit(revisit.next);revisit.commit(revisit.next);
-revisit.commit(revisit.target(-1));revisit.commit(revisit.target(-1));
-revisit.choosePlanned();revisit.commit(revisit.next);
-assert.equal(revisit.current.slide,slides[1]);
-revisit.commit(revisit.target(-1));assert.equal(revisit.current.slide,first);
+const slides=[{title:'A'},{title:'B'},{title:'C'}],seq=createPresenterSequence(slides);
+seq.commit(seq.current);
+seq.chooseMain(1);
+assert.equal(seq.current.slide,slides[0]);assert.equal(seq.next.slide,slides[2]);
+seq.commit(seq.next);
+assert.deepEqual(seq.entries.map(e=>e.slide.title),['A','C','B']);
+assert.equal(seq.next.slide,slides[1]);
+assert.equal(seq.available(slides[0]),false);
+seq.chooseEntry(seq.entries[0]);assert.equal(seq.next.slide,slides[1]);
+seq.commit(seq.next);assert.equal(seq.next,undefined);assert.equal(seq.target(-1),undefined);
+assert.equal(createPresenterSequence(slides).available(slides[0]),true);
+assert.equal(createPresenterSequence([]).next,undefined);
+""")
+
+    def test_backups_return_once_and_repeat_requires_explicit_permission(self):
+        self.run_js("""
+const slides=[{title:'A'},{title:'B',repeat:true}],seq=createPresenterSequence(slides);
+const backup={title:'X'},other={title:'Y'};
+seq.commit(seq.current);const origin=seq.current;
+seq.chooseBackup(backup);seq.chooseBackup(other);assert.equal(seq.next.slide,other);
+seq.choosePlanned();assert.equal(seq.next.slide,slides[1]);
+seq.chooseBackup(backup);seq.commit(seq.next);
+assert.equal(seq.next,origin);assert.equal(seq.available(backup),false);
+assert.equal(seq.chooseBackup(backup),false);
+seq.commit(seq.next);assert.equal(seq.current,origin);assert.equal(seq.next.slide,slides[1]);
+seq.commit(seq.next);assert.equal(seq.available(slides[1]),true);
+seq.chooseBackup(other);seq.commit(seq.next);seq.commit(seq.next);
+assert.equal(seq.current.slide,slides[1]);assert.equal(seq.available(other),false);
+// Backup chains return to the immediately preceding slide, then its origin.
+const chain=createPresenterSequence(slides);chain.commit(chain.current);
+chain.chooseBackup(backup);chain.commit(chain.next);
+chain.chooseBackup(other);chain.commit(chain.next);
+assert.equal(chain.next.slide,backup);chain.commit(chain.next);
+assert.equal(chain.next.slide,slides[0]);chain.commit(chain.next);
+assert.equal(chain.next.slide,slides[1]);
+""")
+
+    def test_progressive_rows_survive_detours_and_complete_without_replay(self):
+        self.run_js("""
+const slide={id:'one',title:'A',reveal:'step',bullets:['one','two','three']};
+const seq=createPresenterSequence([slide,{title:'B'}]),backup={title:'X'};
+assert.deepEqual(seq.visual(seq.current,true).bullets,['one']);
+seq.commit(seq.current);assert.equal(seq.count(slide),1);
+assert.deepEqual(seq.visual(seq.next,true).bullets,['one','two']);
+seq.chooseBackup(backup);seq.commit(seq.next);
+assert.deepEqual(seq.visual(seq.next,true).bullets,['one','two']);
+seq.commit(seq.next);assert.equal(seq.count(slide),2);
+seq.chooseMain(1);seq.commit(seq.next); // Leave unfinished A for B.
+assert.equal(seq.next.slide,slide);seq.commit(seq.next);
+assert.equal(seq.count(slide),3);assert.equal(seq.available(slide),false);
+assert.equal(seq.next,undefined);
+const empty=createPresenterSequence([{reveal:'step',bullets:[]}]);
+empty.commit(empty.current);assert.equal(empty.next,undefined);
 """)
 
     def test_joysticks_are_independent_and_require_neutral_after_activation(self):
@@ -77,6 +92,34 @@ read(null,true);assert.deepEqual(read(pad,true),[]); // Reconnect needs neutral.
 pad.id='Replacement';assert.deepEqual(read(pad,true),[]);
 pad.axes=[0,0];read(pad,true);pad.axes[0]=-1;
 assert.deepEqual(read(pad,true),['previous']); // No fallback from left to right stick.
+pad.buttons=[{pressed:true}];assert.deepEqual(read(pad,true),['confirm']);
+assert.deepEqual(read(pad,true),[]);
+read(pad,false);assert.deepEqual(read(pad,true),[]);
+pad.buttons[0].pressed=false;read(pad,true);
+pad.buttons[0].pressed=true;assert.deepEqual(read(pad,true),['confirm']);
+""")
+
+    def test_gamepad_poll_selects_privately_and_confirms_visible_choice(self):
+        poll = JS[JS.index('function pollPresenterGamepad()'):JS.index("addEventListener('gamepadconnected'")]
+        self.run_js("""
+const pad={index:0,id:'pad',axes:[0,0,0,0],buttons:[{pressed:false}]};
+const navigator={getGamepads:()=>[pad]},document={hidden:false,hasFocus:()=>true};
+const presenterView={hidden:false},presenterGamepadStatus={};
+function requestAnimationFrame(){};function refreshPresenterNext(){};function renderPresenterDeck(){};
+let projections=[];
+function movePresenter(){projections.push(presenterSequence.next.slide.title);}
+function selectPresenterTab(){};function movePresenterItem(){};
+let presenterTabIndex=0;
+presenterSequence=createPresenterSequence([{title:'A'},{title:'B'},{title:'C'}]);
+presenterSequence.commit(presenterSequence.current);
+""" + poll + """
+pollPresenterGamepad();pad.axes[0]=1;pollPresenterGamepad();
+assert.equal(presenterSequence.next.slide.title,'C');assert.deepEqual(projections,[]);
+pad.buttons[0].pressed=true;pollPresenterGamepad();assert.deepEqual(projections,['C']);
+pollPresenterGamepad();assert.deepEqual(projections,['C']);
+presenterView.hidden=true;pad.axes[0]=0;pad.buttons[0].pressed=false;pollPresenterGamepad();
+pad.axes[0]=-1;pad.buttons[0].pressed=true;pollPresenterGamepad();
+assert.deepEqual(projections,['C']);
 """)
 
     def test_navigation_commits_only_on_success_and_serializes_requests(self):
@@ -107,13 +150,26 @@ async function presentationControl(payload){calls.push(payload);if(fail)throw ne
  assert.equal(presenterSequence.current.slide,backup);assert.equal(presenterNavigating,false);
  assert.equal(presenterStatus.textContent,'offline');
  assert.match(presenterPrivateStatus.textContent,/nebylo potvrzeno/);
- fail=false;const next=movePresenter(1);release();await next;
- assert.equal(presenterSequence.current.slide,main[1]);
- const back=movePresenter(-1);release();await back;
- assert.equal(presenterSequence.current.slide,backup);
- const home=returnPresenterMain();release();await home;
+ fail=false;const home=movePresenter(1);release();await home;
  assert.equal(presenterSequence.current.slide,main[0]);
+ const next=movePresenter(1);release();await next;
+ assert.equal(presenterSequence.current.slide,main[1]);
+ await movePresenter(-1);assert.equal(calls.length,4);
+ assert.equal(presenterSequence.current.slide,main[1]);
  assert.equal(presenterSequence.entries.length,3);
 })().catch(error=>{console.error(error);process.exitCode=1;});
 """
         self.run_js(harness + navigation + checks)
+        self.run_js(harness + navigation + """
+(async()=>{
+ const slide={id:'one',deck_revision:'rev',reveal:'step',bullets:['one','two'],title:'A'};
+ presenterSequence=createPresenterSequence([slide]);
+ const first=showPresenterEntry(presenterSequence.current);
+ assert.equal(calls[0].rows,1);assert.equal(presenterSequence.count(slide),0);
+ release();await first;assert.equal(presenterSequence.count(slide),1);
+ fail=true;await movePresenter(1);assert.equal(presenterSequence.count(slide),1);
+ fail=false;const second=movePresenter(1);
+ assert.equal(calls[2].rows,2);release();await second;
+ assert.equal(presenterSequence.count(slide),2);assert.equal(presenterSequence.next,undefined);
+})().catch(error=>{console.error(error);process.exitCode=1;});
+""")

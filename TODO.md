@@ -233,3 +233,27 @@ dávku z BACKLOG podle pravidel předání.
   v návodu ověřeny. Dokumentační změny po testech nemění běhový kód.
   Omezení: desktopový PoC, bez zanořených scénářů a trvalé relace; základní
   limity obsahu a 16:9 editorový náhled viz návod. Fyzické displeje neověřeny.
+
+- [x] [completed] **D-08 — Výběr hlavní linie, jednorázové slidy a řádky (implemented).**
+  Původ: požadavek uživatele 2026-09-25; navazuje na D-04/D-07 na existující
+  větvi `feature/gamepad-demo-presenter`, cíl `develop`, PR nevytvořen.
+  Rozsah/akceptace: soukromý výběr hlavního slidu levou páčkou, potvrzení
+  tlačítkem A, dočasné přeuspořádání bez ztráty přeskočených slidů;
+  promítnuté hlavní i backup slidy se bez explicitního opakování nenabízejí.
+  Výjimkou je jednorázový výchozí návrat z backupu na předchozí slide.
+  Editor nastavuje opakování a odrážky najednou/postupně; relace uchovává
+  odhalené řádky, návrat přidává další řádek, dokončený slide se vyřadí.
+  Reuse/adapt: existující sekvence, Qt editor, veřejný renderer a projektový
+  dokument; žádná externí komponenta. Nahrazuje historické chování D-04.
+  Recovery: nastavení se ukládá stejnou transakcí dle ADR 0003, beze změny
+  crash boundaries; postup a pořadí jsou pouze v paměti relace. Při chybě
+  potvrzení se lokální postup nemění, reload zakládá novou relaci.
+  Staré dokumenty bez nových polí mají opakování vypnuté a řádky najednou.
+  Finálních 35 cílených testů prošlo se 3 opt-in WebEngine skipy; testy
+  pokrývají soukromý výběr, potvrzení, neutrální polohu, návraty, filtrování,
+  postupné řádky, selhání/souběh requestů a save/reopen nových voleb.
+  Finální úplná sada: 380 testů, OK (23 environmentálních/opt-in skipů).
+  Syntaxe obou JS assetů prošla `node --check`; `git diff --check` prošel.
+  Fyzický gamepad/displeje a živé Qt/WebEngine propojení této změny neověřeny.
+  Změna je implemented, nikoli production-ready; širší historická dávka
+  ani strategický Disclosure Presenter MVP se tím neuzavírají.

@@ -55,6 +55,8 @@ class PresentationEditorTests(unittest.TestCase):
         self.dialog.title.setText('First')
         self.dialog.bullets.setPlainText('Point one\nPoint two')
         self.dialog.notes.setPlainText('Private only')
+        self.dialog.repeat.setChecked(True)
+        self.dialog.reveal.setCurrentIndex(1)
         self.dialog.set_wallpaper(PNG)
         first = self.dialog.slide_id
         self.dialog.add('main'); self.dialog.title.setText('Second'); second = self.dialog.slide_id
@@ -76,6 +78,8 @@ class PresentationEditorTests(unittest.TestCase):
         self.assertEqual(stored['title'], 'Edited deck')
         slide = next(s for s in stored['slides'] if s['id'] == first)
         self.assertEqual(slide['wallpaper'], PNG)
+        self.assertTrue(slide['repeat'])
+        self.assertEqual(slide['reveal'], 'step')
         self.assertEqual(slide['bullets'], ['Point one', 'Point two'])
         self.assertTrue(self.dialog.use_button.isEnabled())
         self.dialog.use()
@@ -84,6 +88,9 @@ class PresentationEditorTests(unittest.TestCase):
         self.assertFalse(self.dialog.isVisible())
         self.dialog.loaded(view)
         self.assertEqual(self.dialog.deck, stored)
+        self.dialog.slide_id = first; self.dialog.refresh()
+        self.assertTrue(self.dialog.repeat.isChecked())
+        self.assertEqual(self.dialog.reveal.currentData(), 'step')
 
     def test_uncertain_save_freezes_draft_and_retries_same_operation(self):
         original = self.service.save
