@@ -35,6 +35,10 @@ uzavřením akceptace. Dokončení části D proto probíhá na navazující vě
   creator/opponent workflow, obrazové capability, změna provider billing nebo
   obecná správa a mazání vláken.
 
+- [ ] **[planned] D-01 — Demo presenter: Linux gamepad driver patch pro jiný projekt.**
+  Příprava stručného přednáškového materiálu a demo flow pro udev/evdev gamepad patch z externího projektu. Výstup: přehled funkce, ukázka klíčových změn, výhody, rizika a návrhy dalšího kroku bez zasahování do aktuálního repozitáře.
+  Úroveň: designed.
+
 ## Aktivní části dávky
 
 - [x] [completed] **F-M3-CHAT-DIRECT-01-A — Kontrakt, provider review a reuse
