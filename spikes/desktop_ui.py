@@ -272,16 +272,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
 </div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
 <div id="presenter-view" hidden>
-<header class="presenter-header"><div><span class="badge">Presenter · NÁCVIK</span><h1>Disclosure cockpit</h1><p>Workspace / demo meeting / revize r1</p></div>
-<div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
+<header class="presenter-header"><div><span class="badge">Presenter · NÁCVIK</span><h1>Disclosure cockpit</h1><p>Projekt Demo workspace · jednání Ukázková schůzka · publikum Interní demo · revize r1</p></div>
+<div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span>Schůzka <b id="presenter-meeting-time">00:00</b></span><span>Odbočka <b id="presenter-branch-time">00:00</b></span><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
 <p id="presenter-status" role="status">Presenter není spuštěný.</p>
 <div class="presenter-layout">
 <nav class="presenter-deck" aria-label="Hlavní prezentace"><h2>Hlavní deck</h2><ol id="presenter-deck-list"></ol><p id="presenter-return-anchor">Návrat: hlavní slide 01</p></nav>
 <section class="presenter-audience" aria-label="Obrazovka pro publikum"><div class="presenter-kicker">PUBLIKUM PRÁVĚ VIDÍ</div>
 <div id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
-<section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p></section>
+<section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
 <div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další hlavní</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
-<aside class="presenter-speaker" aria-label="Soukromý kokpit"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K tomuto slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Všechny backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky a odpovědi</button></div><h3>Současný slide</h3><div id="presenter-preview"></div>
+<aside class="presenter-speaker" aria-label="Soukromý kokpit"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K tomuto slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Všechny backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky a odpovědi</button></div><label class="presenter-search" for="presenter-backup-search">Hledat backupy<input id="presenter-backup-search" type="search" placeholder="Hledat…"></label><p id="presenter-tab-status">K tomuto slidu · otázky a doplňky</p><h3>Současný slide</h3><div id="presenter-preview"></div>
 <h3>Další slide</h3><div id="presenter-next-preview"><p>Další slide se zobrazí po spuštění.</p></div>
 <h3>Soukromý náhled — ještě nepromítnuto</h3><div id="presenter-private-preview"><p>Vyberte backup nebo otázku.</p></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-show-private" type="button" disabled>Zobrazit publiku</button><h3>Backupy</h3><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul><h3>Otázky / doplňky</h3><button id="presenter-question" type="button">Doplňující otázka</button><p id="presenter-question-status">Žádná aktivní odbočka.</p></aside>
 </div>
@@ -347,11 +347,12 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
 .presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
 .presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
-.presenter-header h1{font-size:28px;color:#162638;margin:6px 0}.presenter-header-state{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}.presenter-layout{display:grid;grid-template-columns:minmax(150px,16fr) minmax(360px,48fr) minmax(280px,36fr);gap:14px;min-height:calc(100vh - 190px)}
+.presenter-header h1{font-size:28px;color:#162638;margin:6px 0}.presenter-header-state{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}.presenter-layout{display:grid;grid-template-columns:minmax(150px,16fr) minmax(360px,48fr) minmax(280px,36fr);gap:14px;min-height:calc(100vh - 190px)}
 .presenter-deck,.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:16px;overflow:auto}.presenter-deck h2{margin-top:0;font-size:16px}.presenter-deck ol{padding-left:24px;margin:0}.presenter-deck li{padding:9px 6px;color:#456276;cursor:pointer;border-radius:6px}.presenter-deck li:hover,.presenter-deck li[aria-current="true"]{background:#e0efe9;color:#176b60}.presenter-deck li.presenter-live{font-weight:700;border-left:3px solid #176b60}.presenter-deck li.presenter-visited{color:#82909d}.presenter-deck button{background:transparent;color:inherit;padding:0;text-align:left;font-weight:inherit;width:100%}.presenter-return-anchor{border-top:1px solid #dce3e9;padding-top:14px;font-size:12px}
 .presenter-audience{background:#10222f;border-radius:14px;padding:24px;display:flex;flex-direction:column;min-width:0}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{flex:1;display:flex;flex-direction:column;justify-content:center;padding:8vw 5vw;color:#f6faf8;outline:none}.presenter-audience #presenter-screen:fullscreen{background:#10222f}
 .presenter-audience #presenter-screen h2{font-size:clamp(34px,6vw,78px);color:#79c9ac;margin:0 0 18px}.presenter-audience #presenter-screen p{font-size:clamp(20px,3vw,40px);line-height:1.45;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview,.presenter-speaker #presenter-next-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h2,.presenter-speaker #presenter-next-preview h2{font-size:17px;border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p,.presenter-speaker #presenter-next-preview p{margin:0;white-space:pre-wrap;font-size:13px}.presenter-speaker #presenter-notes{background:#fffaf0;border-left:3px solid #d6b36a;padding:10px 12px;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}#presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}#presenter-private-preview h2{font-size:16px;color:#176b60}#presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
+.presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:block;font-size:11px;color:#627183;margin:12px 0}.presenter-search input{display:block;width:100%;padding:8px;margin-top:5px;border:1px solid #bfcdc9;border-radius:7px}.presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px){.presenter-layout{grid-template-columns:150px minmax(300px,1fr) 280px}}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}}
@@ -456,6 +457,11 @@ const presenterScreen=document.querySelector('#presenter-screen');
 const presenterPreview=document.querySelector('#presenter-preview');
 const presenterNotes=document.querySelector('#presenter-notes');
 const presenterNextPreview=document.querySelector('#presenter-next-preview');
+const presenterOutline=document.querySelector('#presenter-outline');
+const presenterMeetingTime=document.querySelector('#presenter-meeting-time');
+const presenterBranchTime=document.querySelector('#presenter-branch-time');
+const presenterBackupSearch=document.querySelector('#presenter-backup-search');
+const presenterTabStatus=document.querySelector('#presenter-tab-status');
 const presenterDeckList=document.querySelector('#presenter-deck-list');
 const presenterPrivatePreview=document.querySelector('#presenter-private-preview');
 const presenterPrivateStatus=document.querySelector('#presenter-private-status');
@@ -481,6 +487,10 @@ let presenterIndex=0;
 let presenterPrivateSelection=null;
 let presenterExposureValue=0;
 let presenterBlackout=false;
+let presenterMeetingStarted=0;
+let presenterBranchStarted=0;
+function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
+setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
 function renderPresenterContent(target,slide){
  target.replaceChildren();
  if(!slide){target.textContent='Žádný slide k zobrazení.';return;}
@@ -492,6 +502,7 @@ function renderPresenterSlide(){
  const slide=presenterSlides[presenterIndex];
  renderPresenterContent(presenterScreen,slide);renderPresenterContent(presenterPreview,slide);
  presenterNotes.textContent=slide?.notes || 'Tento slide nemá poznámky.';
+ presenterOutline.textContent=slide ? `Cíl: ${slide.title}. Veřejně potvrzený obsah zůstává oddělený od soukromé přípravy.` : 'Osnova se zobrazí po spuštění.';
  renderPresenterContent(presenterNextPreview,presenterSlides[presenterIndex+1]);
  presenterCounter.textContent=`Slide ${presenterIndex+1} z ${presenterSlides.length}`;
  presenterPrevButton.disabled=presenterIndex===0;presenterNextButton.disabled=presenterIndex>=presenterSlides.length-1;
@@ -512,12 +523,14 @@ function renderPresenterDeck(){
 function renderPrivateSelection(slide,status){
  presenterPrivateSelection=slide;presenterPrivatePreview.replaceChildren();
  const title=document.createElement('h2');title.textContent=slide?.title || 'Bez výběru';const body=document.createElement('p');body.textContent=slide?.body || 'Vyberte obsah.';
- presenterPrivatePreview.append(title,body);presenterPrivateStatus.textContent=status;presenterShowPrivate.disabled=!slide;
+ presenterPrivatePreview.append(title,body);presenterPrivateStatus.textContent=status;presenterShowPrivate.disabled=!slide;if(slide && !presenterBranchStarted)presenterBranchStarted=Date.now();
 }
 function renderPresenterBackups(){
  presenterBackups.replaceChildren();
  presenterBackupStatus.textContent=presenterBackupsData.length ? 'Volitelné odbočky pro dotazy publika.' : 'Tento deck nemá backupy.';
+ const filter=(presenterBackupSearch.value || '').trim().toLowerCase();
  for(const backup of presenterBackupsData){
+    if(filter && !`${backup.title} ${backup.body}`.toLowerCase().includes(filter))continue;
   const item=document.createElement('li');const button=document.createElement('button');button.type='button';button.className='presenter-backup';
   const title=document.createElement('strong');title.textContent=backup.title;const body=document.createElement('span');body.textContent=backup.body;
     button.append(title,body);button.addEventListener('click',()=>renderPrivateSelection(backup,`Backup je soukromě připravený. Dopad: +1 · návrat na slide ${presenterIndex+1}.`));
@@ -530,7 +543,7 @@ async function loadPresenter(){
   const result=await projectRequest('/v1/presentation/status',{action:'start'});
   presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;
   presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
-    presenterExposureValue=0;presenterBlackout=false;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
+    presenterExposureValue=0;presenterBlackout=false;presenterMeetingStarted=Date.now();presenterBranchStarted=0;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
     renderPresenterSlide();renderPresenterDeck();renderPresenterBackups();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
@@ -549,7 +562,9 @@ presenterShowPrivate.addEventListener('click',()=>{if(!presenterPrivateSelection
 presenterReturnAnchor.addEventListener('click',()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');});
 document.querySelector('#presenter-return').addEventListener('click',()=>{presenterPrivateSelection=null;renderPresenterSlide();renderPrivateSelection(null,'Návrat na hlavní linii.');});
 presenterBlackoutButton.addEventListener('click',()=>{presenterBlackout=!presenterBlackout;presenterView.classList.toggle('presenter-blackout',presenterBlackout);presenterBlackoutButton.textContent=presenterBlackout?'Zobrazit veřejný výstup':'Zatemnit';presenterBlackoutState.textContent=presenterBlackout?'Veřejný výstup zatemněn':'Veřejný výstup aktivní';});
-presenterQuestionButton.addEventListener('click',()=>{presenterQuestionCount.textContent=String(Number(presenterQuestionCount.textContent)+1);presenterQuestionStatus.textContent=`Odbočka uložena: slide ${presenterIndex+1}. Veřejný výstup zůstává beze změny.`;});
+presenterQuestionButton.addEventListener('click',()=>{if(!presenterBranchStarted)presenterBranchStarted=Date.now();presenterQuestionCount.textContent=String(Number(presenterQuestionCount.textContent)+1);presenterQuestionStatus.textContent=`Odbočka uložena: slide ${presenterIndex+1}. Veřejný výstup zůstává beze změny.`;});
+presenterBackupSearch.addEventListener('input',renderPresenterBackups);
+for(const tab of document.querySelectorAll('.presenter-tabs [role="tab"]'))tab.addEventListener('click',()=>{for(const item of document.querySelectorAll('.presenter-tabs [role="tab"]'))item.setAttribute('aria-selected',String(item===tab));presenterTabStatus.textContent=tab.id==='presenter-slide-tab'?'K tomuto slidu · otázky a doplňky':tab.id==='presenter-backup-tab'?'Všechny backupy · soukromá knihovna':'Otázky a odpovědi · strom odboček';});
 """
 JS += """
 const projectCards=document.querySelector('#project-cards');
