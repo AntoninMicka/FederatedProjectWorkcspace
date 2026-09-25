@@ -69,6 +69,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("event.key==='ArrowRight'", JS)
         self.assertIn('id="presenter-view"', HTML)
         self.assertIn('id="presenter-screen"', HTML)
+        self.assertNotIn('id="presenter-ratio"', HTML)
         self.assertIn('id="presenter-backups"', HTML)
         self.assertIn('presenterBackupsData=[]', JS)
         self.assertIn("result.backups", JS)
@@ -108,6 +109,9 @@ class DesktopTests(unittest.TestCase):
         self.assertFalse(presentation_public_payload(public_server)['visible'])
         public_payload = presentation_public_payload(public_server, {'action': 'show', 'slide': 0})
         self.assertTrue(public_payload['visible'])
+        ratio_payload = presentation_public_payload(public_server, {'action': 'display-ratio', 'ratio': '4:3'})
+        self.assertEqual(ratio_payload['ratio'], '4:3')
+        self.assertIn('display-ratio', ASSETS['/presentation-screen'][1])
         self.assertNotIn('notes', public_payload['content'])
         self.assertNotIn('backups', public_payload)
 

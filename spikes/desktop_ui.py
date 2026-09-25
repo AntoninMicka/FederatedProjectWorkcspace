@@ -91,7 +91,7 @@ def presentation_public_payload(server, request=None):
     """Return only the currently approved public presentation content."""
     deck = presentation_deck()
     state = getattr(server, 'presentation_public_state',
-                    {'visible': False, 'blackout': True, 'slide': 0, 'content': None})
+                    {'visible': False, 'blackout': True, 'slide': 0, 'content': None, 'ratio': '16:9'})
     if request and request.get('action') == 'show':
         index = request.get('slide', state['slide'])
         if not isinstance(index, int) or not 0 <= index < len(deck['slides']):
@@ -100,8 +100,15 @@ def presentation_public_payload(server, request=None):
         if not isinstance(content, dict):
             source = deck['slides'][index]
             content = {'title': source['title'], 'body': source['body']}
-        state = {'visible': True, 'blackout': False, 'slide': index,
+        ratio = request.get('ratio', state.get('ratio', '16:9'))
+        if ratio not in {'16:9', '4:3'}:
+            ratio = '16:9'
+        state = {'visible': True, 'blackout': False, 'slide': index, 'ratio': ratio,
                  'content': {'title': str(content.get('title', '')), 'body': str(content.get('body', ''))}}
+    elif request and request.get('action') == 'display-ratio' and request.get('ratio') in {'16:9', '4:3'}:
+        state = dict(state, ratio=request['ratio'])
+    elif request and request.get('action') == 'ratio' and request.get('ratio') in {'16:9', '4:3'}:
+        state = dict(state, ratio=request['ratio'])
     elif request and request.get('action') == 'blackout':
         state = dict(state, blackout=True)
     elif request and request.get('action') == 'reveal':
@@ -109,7 +116,14 @@ def presentation_public_payload(server, request=None):
     server.presentation_public_state = state
     if not state['visible'] or state['blackout']:
         return {'visible': False, 'blackout': True}
-    return {'visible': True, 'blackout': False, 'slide': state['slide'], 'content': state['content']}
+    return {'visible': True, 'blackout': False, 'slide': state['slide'], 'ratio': state.get('ratio', '16:9'), 'content': state['content']}
+
+
+def presentation_status(server):
+    result = presentation_deck()
+    state = getattr(server, 'presentation_public_state', {})
+    result['ratio'] = state.get('ratio', '16:9')
+    return result
 
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
@@ -302,7 +316,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="presenter-status" role="status">Presenter není spuštěný.</p>
 <div class="presenter-layout">
 <nav class="presenter-deck" aria-label="Hlavní prezentace"><h2>Hlavní deck</h2><ol id="presenter-deck-list"></ol><p id="presenter-return-anchor">Návrat: hlavní slide 01</p></nav>
-<section class="presenter-audience" aria-label="Obrazovka pro publikum"><div class="presenter-kicker">PUBLIKUM PRÁVĚ VIDÍ</div>
+<section class="presenter-audience" aria-label="Náhled veřejného výstupu"><div class="presenter-kicker">ZMENŠENÝ NÁHLED VEŘEJNÉHO VÝSTUPU</div>
 <div id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
 <div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další hlavní</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
@@ -374,7 +388,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
 .presenter-header{font-size:1.5em;min-height:72px;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:12px 16px}.presenter-header h1{font-size:28px;color:#162638;margin:6px 0}.presenter-header-state{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}.presenter-layout{display:grid;grid-template-columns:15% 25% minmax(0,1fr);gap:14px;min-height:0;flex:1}.presenter-layout>nav,.presenter-layout>section,.presenter-layout>aside{min-width:0}
 .presenter-deck,.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:16px;overflow:auto}.presenter-deck h2{margin-top:0;font-size:16px}.presenter-deck ol{padding-left:24px;margin:0}.presenter-deck li{padding:9px 6px;color:#456276;cursor:pointer;border-radius:6px}.presenter-deck li:hover,.presenter-deck li[aria-current="true"]{background:#e0efe9;color:#176b60}.presenter-deck li.presenter-live{font-weight:700;border-left:3px solid #176b60}.presenter-deck li.presenter-visited{color:#82909d}.presenter-deck button{background:transparent;color:inherit;padding:0;text-align:left;font-weight:inherit;width:100%}.presenter-return-anchor{border-top:1px solid #dce3e9;padding-top:14px;font-size:12px}
-.presenter-audience{background:#10222f;border-radius:14px;padding:16px;display:flex;flex-direction:column;min-width:0}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{width:100%;max-width:420px;aspect-ratio:16/9;height:auto;flex:none;display:flex;flex-direction:column;justify-content:center;align-self:center;padding:5%;color:#f6faf8;outline:none;border:1px solid #496072}.presenter-audience #presenter-screen:fullscreen{background:#10222f;max-width:none}
+.presenter-audience{background:#10222f;border-radius:14px;padding:16px;display:flex;flex-direction:column;min-width:0}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-ratio{align-self:flex-end;color:#a9c5b7;font-size:11px;margin:0 0 8px}.presenter-ratio select{margin-left:6px;padding:4px;background:#f6faf8;border-radius:5px}.presenter-audience #presenter-screen{width:100%;max-width:420px;aspect-ratio:16/9;height:auto;flex:none;display:flex;flex-direction:column;justify-content:center;align-self:center;padding:5%;color:#f6faf8;outline:none;border:1px solid #496072}.presenter-audience #presenter-screen:fullscreen{background:#10222f;max-width:none}
 .presenter-audience #presenter-screen h2{font-size:clamp(14px,1.8vw,30px);color:#79c9ac;margin:0 0 8px}.presenter-audience #presenter-screen p{font-size:clamp(10px,1.2vw,20px);line-height:1.35;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview,.presenter-speaker #presenter-next-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h2,.presenter-speaker #presenter-next-preview h2{font-size:17px;border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p,.presenter-speaker #presenter-next-preview p{margin:0;white-space:pre-wrap;font-size:13px}.presenter-speaker #presenter-notes{background:#fffaf0;border-left:3px solid #d6b36a;padding:10px 12px;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}#presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}#presenter-private-preview h2{font-size:16px;color:#176b60}#presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{font-size:1.5em;display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:10px 14px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:block;font-size:11px;color:#627183;margin:12px 0}.presenter-search input{display:block;width:100%;padding:8px;margin-top:5px;border:1px solid #bfcdc9;border-radius:7px}.presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
@@ -519,6 +533,7 @@ async function presentationControl(payload){
  if(!response.ok)throw new Error('Veřejné okno nepřijalo změnu.');
  return response.json();
 }
+function applyPresenterRatio(ratio){presenterScreen.style.aspectRatio=ratio==='4:3'?'4 / 3':'16 / 9';}
 function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
 setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
 function renderPresenterContent(target,slide){
@@ -574,7 +589,7 @@ async function loadPresenter(){
   presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;
   presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
     presenterExposureValue=0;presenterBlackout=false;presenterMeetingStarted=Date.now();presenterBranchStarted=0;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
-    renderPresenterSlide();renderPresenterDeck();renderPresenterBackups();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await presentationControl({action:'show',slide:0});
+    applyPresenterRatio(result.ratio);renderPresenterSlide();renderPresenterDeck();renderPresenterBackups();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await presentationControl({action:'show',slide:0});
  }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
 }
 function openPresenter(){
@@ -1631,9 +1646,10 @@ PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}</style>
 <main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><script>
 const screen=document.querySelector('#screen');
-function render(result){screen.replaceChildren();if(!result.visible){const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}const title=document.createElement('h1');title.textContent=result.content.title;const body=document.createElement('p');body.textContent=result.content.body;screen.append(title,body);}
+function render(result){screen.replaceChildren();if(!result.visible){const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';const title=document.createElement('h1');title.textContent=result.content.title;const body=document.createElement('p');body.textContent=result.content.body;screen.append(title,body);}
 async function poll(){try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}}
-poll();setInterval(poll,300);
+async function reportDisplayRatio(){const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
+reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInterval(poll,300);
 </script></html>'''
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/presentation-screen': ('text/html; charset=utf-8', PUBLIC_HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS)}
@@ -1665,7 +1681,7 @@ class DesktopHandler(Handler):
         if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, scan_gamepads())
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
-            return self.reply(200, presentation_deck())
+            return self.reply(200, presentation_status(self.server))
         if self.path == '/v1/presentation/control' and isinstance(request, dict):
             return self.reply(200, presentation_public_payload(self.server, request))
         if self.path == '/v1/presentation/public' and request == {}:
