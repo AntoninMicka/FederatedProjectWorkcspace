@@ -111,6 +111,25 @@ dávku z BACKLOG podle pravidel předání.
   jako oprava nutná pro ověření presenter větve; následný samostatný
   `python3 -m unittest tests.test_spdx -v` prošel. Po této čistě dokumentační
   opravě nebyla celá sada opakována. `node --check` a `git diff --check` prošly.
-  Obrázek nebyl ve zprávě dostupný; vizuální shoda s ním
-  a živé Qt UI nejsou ověřené. Historická evidence TODO popisuje jinou
+  Po dodání obrázku upřesněno rozložení na dva sloupce vedle sebe:
+  vlevo záložky a samostatně posouvaný seznam, vpravo náhled a pod ním
+  poznámky vyplňující zbývající výšku. Opraven kontrast nadpisů a poznámek
+  v bílém panelu. Statický layout ověřen screenshotem headless Chromium
+  při 1996 × 1120 s dlouhým seznamem backupů; živé Qt UI není ověřené.
+  Finální úplná sada po změně CSS: 357 testů, OK (22 environmentálních
+  skipů). `git diff --check` prošel. Historická evidence TODO popisuje jinou
   dávku než existující presenter větev; tato úprava ji administrativně neuzavírá.
+
+- [x] [completed] **D-03 — Backupy přiřazené k aktuálnímu slidu (implemented).**
+  Původ: navazující požadavek uživatele 2026-09-25 pro existující presenter
+  na větvi `feature/gamepad-demo-presenter`, cíl `develop`.
+  Rozsah a akceptace: záložka „K slidu“ ukazuje pouze backupy s explicitním
+  `after_slide` odpovídajícím aktuálnímu hlavnímu slidu, aktualizuje se při
+  navigaci, podporuje hledání, prázdný stav a soukromý výběr backupu.
+  Reuse/adapt: existující pole `after_slide`, společná tvorba položek obou
+  seznamů a dosavadní potvrzení promítnutí; bez změny persistence/recovery.
+  Cílených 17 desktopových testů prošlo se 2 Qt skipy. Node.js regrese ověřuje
+  explicitní vazbu včetně odmítnutí chybějící/null/textové hodnoty, změnu slidu,
+  hledání, prázdný seznam a soukromý výběr. `node --check` prošel.
+  Úplná sada: 358 testů, OK (22 environmentálních skipů).
+  `git diff --check` prošel; živé Qt UI není ověřené.

@@ -55,6 +55,57 @@ assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá po
 """
         subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
 
+    def test_presenter_only_lists_explicitly_assigned_backups(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js is required for presenter behavior validation')
+        start = JS.index('function createPresenterBackupItem(')
+        end = JS.index('async function loadPresenter()', start)
+        harness = """
+const assert=require('node:assert/strict');
+const element=()=>({textContent:'',children:[],events:{},replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},addEventListener(name,fn){this.events[name]=fn;}});
+const elements={};
+const document={createElement:element,querySelector(id){return elements[id]??=element();}};
+const presenterBackups=element(),presenterBackupStatus=element(),presenterBackupSearch={value:''};
+const presenterSlides=[{title:'First'},{title:'Second'},{title:'No backups'}];
+let presenterIndex=0,presenterSelectedBackup=null,selected=null;
+function renderPrivateSelection(backup){selected=backup;}
+function setPresenterNextSelection(backup,kind){assert.equal(kind,'backup');selected=backup;}
+const presenterBackupsData=[
+ {title:'First backup',body:'A',after_slide:0},
+ {title:'Second backup',body:'B',after_slide:1},
+ {title:'Unassigned',body:'C'},
+ {title:'Null assignment',body:'D',after_slide:null},
+ {title:'Invalid string',body:'E',after_slide:'0'}
+];
+"""
+        checks = """
+const linked=document.querySelector('#presenter-slide-backups');
+renderPresenterBackups();
+assert.equal(linked.children.length,1);
+assert.equal(presenterBackups.children.length,5);
+assert.equal(selected,null);
+linked.children[0].children[0].events.click();
+assert.equal(selected,presenterBackupsData[0]);
+assert.equal(presenterSelectedBackup,selected);
+presenterIndex=1;renderPresenterBackups();
+assert.equal(linked.children.length,1);
+assert.equal(linked.children[0].children[0].children[0].textContent,'Second backup');
+presenterBackupSearch.value='First';renderPresenterBackups();
+assert.equal(linked.children.length,0);
+assert.equal(presenterBackups.children.length,1);
+assert.match(elements['#presenter-slide-backup-status'].textContent,/Hledání/);
+presenterBackupSearch.value='';presenterIndex=2;renderPresenterBackups();
+assert.equal(linked.children.length,0);
+assert.match(elements['#presenter-slide-backup-status'].textContent,/nejsou přiřazené/);
+presenterIndex=0;renderPresenterBackups();
+assert.equal(linked.children.length,1);
+"""
+        subprocess.run(['node', '-e', harness + JS[start:end] + checks], check=True)
+        slide_renderer = JS[JS.index('function renderPresenterSlide()'):
+                            JS.index('function renderPresenterDeck()')]
+        self.assertIn('renderPresenterBackups();', slide_renderer)
+
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
             def external_send_stream(self, request, on_delta):
