@@ -47,6 +47,7 @@ Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wra
 ./run.sh check "/cesta/k/projektu"
 ./run.sh config project "/cesta/k/projektu/project.json"
 ./run.sh config node "/cesta/k/lokalnimu/node.json"
+./run.sh module-check modules/priklad.module.json [http://127.0.0.1:PORT]
 ./run.sh help
 ```
 
@@ -55,6 +56,11 @@ Pokud už jsou závislosti dostupné, krok `setup` lze vynechat. Použije se `.v
 Výchozí demo přes `spikes/demo.py` založí izolovaný dočasný Git repozitář, uloží Markdown artefakt přes Workspace a vypíše commit, index po znovuotevření a historii. Po dokončení se demo data odstraní. **Nespouští se webový server ani desktopové UI; nejde zatím o aplikaci pro běžnou práci.** Při násilném ukončení může zůstat dočasný adresář uvedený ve výstupu; demo není určeno k uchování dat.
 
 Wrapper lze zavolat absolutní cestou z jiného adresáře; relativní cesta u `check` se vztahuje k adresáři volajícího. `check` vrací 0 pro platnou projekci a 1 při chybě validace, neplatné argumenty wrapperu vracejí 2.
+
+`module-check` bez URL pouze striktně ověří obecný modulový manifest. S URL
+načte pevný manifest endpoint API a vyžaduje přesnou shodu celé reviewované
+deklarace. PoC přijímá jen literal loopback HTTP adresu s explicitním portem,
+nesleduje redirect a neobsahuje instalaci, discovery ani spuštění modulu.
 
 Ruční příprava a spuštění bez wrapperu:
 

@@ -643,33 +643,36 @@ Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RB
 
 # 11C. Externě verzované moduly a jednotné API
 
-**Stav: planned / designed, neimplementováno.** Dosavadní moduly a jejich
+**Stav: PoC validated v MOD-01; runtime volání neimplementováno.** Dosavadní moduly a jejich
 požadavky zůstávají v této hlavní roadmapě. Pouze nově výslovně vytipovaný modul
 může mít samostatný repozitář a roadmapu; jeho pracovní kopie nebo symlink leží
 v lokální, Gitem ignorované složce `modules.local/`. Hlavní plán jej neobsahuje
 jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
 
-- [ ] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
+- [x] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
   odkaz na jeho vlastní roadmapu, deklarované capability, závislosti a stav
   kompatibility s jednotným API. Text společné dokumentace musí být zobecněním
   potřebným pro API, ne doslovným přepisem modulové specifikace.
-- [ ] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
+- [x] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
   schéma, chyby a limity, oprávnění, privacy/execution boundary, idempotenci,
   `unknown` externí účinek a provenance. Modul nepřistupuje přímo k projektovému
   Gitu, indexu, journalu ani credentials; mutace používají autorizované
   aplikační služby a Workspace lifecycle.
-- [ ] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
+- [x] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
   symlinky nebo samostatně verzované checkouty, ale jejich obsah, Git historie,
   credentials, build výstupy a roadmapy nejsou součástí tohoto repozitáře ani
   distribučního balíku. Symlink není důkaz kompatibility, oprávnění ani trusted
   execution boundary a nesmí se sledovat při balení, importu či automatickém
   načítání kódu.
-- [ ] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
+- [x] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
   licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
   chování jádra ani spustit fallback.
 
-Podrobný návrhový kontrakt drží [ADR 0026](docs/adr/0026-module-unified-api.md);
-implementační rozpad drží `MOD-01` v BACKLOG.
+Podrobný kontrakt a hranice PoC drží
+[ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
+[WORK_LOG](WORK_LOG.md#mod-01--kontrakt-externě-verzovaných-modulů--2026-09-29).
+Implementace neznamená instalaci, trusted discovery, runtime autorizaci
+capability ani produkční distribuci.
 
 ---
 

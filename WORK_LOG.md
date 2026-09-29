@@ -5,6 +5,64 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## MOD-01 — Kontrakt externě verzovaných modulů — 2026-09-29
+
+Dávka na větvi `feature/mod-01-publication-registry` implementovala obecný
+manifest v1 a fail-closed load-time ověření proti API prvního samostatně
+verzovaného modulu. Dosažená úroveň je PoC validated; PR dosud nebyl vytvořen
+ani sloučen. Samostatný modulový repozitář zůstává mimo hostitelský Git v
+ignorovaném `modules.local/` a nemá vytvořený commit.
+
+- [x] [completed] **MOD-01-A — Obecný manifest a capability kontrakt
+  (implemented).** Manifest deklaruje identitu/verzi, API, vstupní a výstupní
+  schema reference, oprávnění, privacy, execution boundary, limity,
+  idempotenci, side effect/stavy a provenance bez endpointu nebo credentials.
+- [x] [completed] **MOD-01-B — Fail-closed load-time ověření (implemented).**
+  Bounded parser a read-only CLI v1 přijímají pouze explicitní literal loopback
+  HTTP, nesledují redirect a vyžadují přesnou shodu API odpovědi s reviewovaným
+  manifestem. Selhání nic neregistruje a nemění projektový stav.
+- [x] [completed] **MOD-01-C — První samostatný modul (implemented).** Externí
+  repozitář obsahuje vlastní MPL-2.0 licenci, roadmapu a bezpečnostní hranice,
+  provider-neutral registry model, read-only API, prázdný sandbox manifest a
+  Worker katalog/detail/404. Jeho budoucí funkce se do hlavní roadmapy
+  nekopírují.
+- [x] [completed] **MOD-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Pět cílených hostitelských testů prošlo s reálným
+  loopbackem, samostatný modul prošel 6 Python testy a Worker suite; skutečný
+  host↔module compatibility smoke přijal verzi 0.1.0. Finální hostitelská sada
+  prošla: 359 testů, 22 environmentálních skipů. `git diff --check`, kontrola
+  nových souborů a oddělení obou Git repozitářů byly součástí předání.
+
+Cloudflare Worker nebyl nasazen, DNS/TLS ani tři cílové hostname nebyly živě
+ověřeny. Mutující publish/unpublish, durable externí operation journal,
+disclosure, proxy, analytika a marketingové UI patří do vlastní roadmapy modulu.
+
+## F-M3-CHAT-DIRECT-01 — Přímý brainstormingový dispatch — 2026-09-20
+
+Dávka byla dokončena navazujícím acceptance PR #44 jako commit `8171923` v
+`develop`; implementační PR #43 (`32cf743`) dodal přímý externí dispatch,
+historii přesného requestu a volitelné streamované zobrazení. Dosažená úroveň
+je PoC validated. Živý desktopový OpenAI stream byl potvrzen; živý streamovaný
+webový smoke nebyl proveden.
+
+- [x] [completed] **F-M3-CHAT-DIRECT-01-A — Kontrakt, provider review a reuse
+  (designed).** ADR 0008 vymezil přímý dispatch po serverové autorizaci,
+  request evidence bez secrets, ephemerální SSE delty a durable `unknown` bez
+  automatického retry.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-B — Přímý dispatch a historie requestu
+  (implemented).** Brainstorming používá Context Manifest, binding hash a run
+  journal; vlastník vidí request i po restartu a webový vstup je do oddělení
+  identity store omezen na administrátora.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
+  (implemented).** Capability-gated stream zachovává jediný durable finální
+  výsledek; timeout nebo přerušení končí `unknown`, chybná událost `failed`.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Cílených 69 testů prošlo se 3 Qt skipy, JavaScript prošel
+  `node --check` a úplná sada 354 testů prošla s 22 environmentálními skipy.
+
+Implementace i akceptace byly sloučeny do `develop`; evidence byla přesunuta z
+TODO při aktivaci následující uživatelem vyžádané dávky.
+
 ## M3-UB-01 — Usage & billing backendů — 2026-09-20
 
 Dávka uzavřena po začlenění PR #42 jako commit `43fc8e3` v `develop`; feature

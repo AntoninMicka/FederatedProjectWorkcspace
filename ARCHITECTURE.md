@@ -24,6 +24,11 @@ včetně `unknown`, provenance a kompatibilitu. Nejde tím o automatické načí
 cizího kódu či převzetí jeho roadmapy. Podrobnosti:
 [ADR 0026](docs/adr/0026-module-unified-api.md).
 
+`MOD-01` implementuje striktní manifest v1 a read-only load-time kontrolu proti
+API modulu. Portable manifest neobsahuje endpoint ani credentials; PoC runtime
+binding je omezený na explicitní literal loopback HTTP a musí vrátit přesně
+shodnou deklaraci. Kontrola sama modul nespouští ani neregistruje capability.
+
 Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal PySide6 a nativní předání tokenu jsou ověřeny v ADR 0010; volbu stacku uzavírá ADR 0013. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
 
 ## Data a zápis
