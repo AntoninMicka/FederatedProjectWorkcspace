@@ -36,7 +36,10 @@ PR dosud nebyl vytvořen ani sloučen.
   automaticky nalezen, povolen a použit pro preview ve verzi 0.3.0.
 - [ ] [planned] **MOD-01-UI-F (designed)** — zobrazit skutečný stav deploymentů
   a odděleně potvrdit jejich vytvoření nebo aktualizaci přes konkrétní provider
-  adapter. Provider, credential hranice a cílové účty/projekty zatím nejsou
+  adapter. Prvním adapterem má být Cloudflare; pracovní návrh propojeného
+  projektového výstupu, stavů a recovery je v
+  [diskusním nástřelu](docs/publication-site-set-cloudflare-outline.md). Přesný
+  Cloudflare runtime, credential hranice a cílové účty/projekty zatím nejsou
   určeny; lokální `dist/sites` se za deployment nevydává.
 
 Generování je pouze lokální. Deployment, DNS, TLS a cache zůstávají neověřené;
