@@ -176,6 +176,14 @@ komponenty neřeší tento manifest/kompatibilitní kontrakt; jejich převzetí 
 odmítnuto kvůli odlišné autoritě, recovery a licenčnímu kontextu. Rozhodnutí:
 [ADR 0026](docs/adr/0026-module-unified-api.md).
 
+MOD-01-UI **reuse/adaptuje** existující same-origin autentizované UI/API,
+node-local atomické bindingy, SQLite run journal a explicitní preview/confirm
+tok externích operací. Generátor ani jeho doménový model se nekopírují do hosta:
+Workspace spouští pevný entrypoint samostatného modulu až po kontrole čisté
+revize, manifestu a reviewovaných SHA-256 runtime souborů. Obecný plugin loader,
+shell příkaz z konfigurace a přímý zápis do projektového Gitu byly odmítnuty.
+Rozhodnutí: [ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.

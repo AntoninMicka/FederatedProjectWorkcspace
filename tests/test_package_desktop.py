@@ -23,6 +23,8 @@ class PackageTests(unittest.TestCase):
             names = archive.getnames()
             for name in ('docs/project-opening.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
                 self.assertIn(PREFIX + '/' + name, names)
+            self.assertIn(PREFIX + '/modules/publication-experiment-registry.module.json', names)
+            self.assertIn(PREFIX + '/modules/publication-experiment-registry.source.json', names)
             self.assertTrue(all(m.isfile() and m.name.startswith(PREFIX + '/') for m in archive))
             self.assertFalse(any('/.git/' in n or '/.venv/' in n or '.private.' in n or '/dist/' in n for n in names))
             manifest = json.load(archive.extractfile(PREFIX + '/MANIFEST.sha256.json'))

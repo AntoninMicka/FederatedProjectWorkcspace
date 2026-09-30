@@ -48,6 +48,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
@@ -81,6 +82,31 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button type="submit">Uložit administrátorský klíč</button>
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
 <pre id="backend-metrics-report" hidden></pre></section>
+</section>
+<section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
+<h2>Publikační CMS</h2>
+<p id="cms-status" role="status" aria-live="polite">Modul zatím nebyl načten.</p>
+<form id="cms-binding-form">
+<label>Kořen checkoutu modulu <input name="module_root" type="text" required placeholder="/absolutní/cesta/publication-experiment-registry"></label>
+<label>Připnutá Git revize <input name="source_revision" type="text" required pattern="[0-9a-f]{40,64}" autocomplete="off"></label>
+<button type="submit">Ověřit a připojit modul</button></form>
+<small>Workspace spustí jen čistý checkout na přesné revizi se shodným reviewovaným manifestem. Cesta a obsah webů zůstávají lokální konfigurací uzlu.</small>
+<div id="cms-editor" hidden>
+<hr><label>Doména <select id="cms-hostname"></select></label>
+<label>Název <input id="cms-title" maxlength="128"></label>
+<label>Popis <textarea id="cms-description" rows="3" maxlength="512"></textarea></label>
+<label>Katalog <select id="cms-catalog-kind"><option value="sandbox">Sandbox projekty</option><option value="realized">Realizované projekty</option><option value="both">Obojí</option></select></label>
+<label>Nadpis katalogu <input id="cms-catalog-title" maxlength="128"></label>
+<label>Kontakty <textarea id="cms-contacts" rows="3" placeholder="Popisek | https://… nebo mailto:…"></textarea></label>
+<label>Odkazy <textarea id="cms-links" rows="3" placeholder="Popisek | https://…"></textarea></label>
+<label>CV <textarea id="cms-cv" rows="4" placeholder="Období | Název | Popis"></textarea></label>
+<label>Timeline <textarea id="cms-timeline" rows="5" placeholder="Datum | Název | Popis | volitelné https://…"></textarea></label>
+<div class="cms-actions"><button id="cms-preview-button" type="button">Vytvořit náhled</button></div>
+<div id="cms-preview" hidden><h3>Přesný náhled požadavku</h3><pre id="cms-request-preview"></pre>
+<iframe id="cms-preview-frame" sandbox title="Náhled statické stránky"></iframe>
+<label class="confirm"><input id="cms-confirm" type="checkbox"> Potvrzuji vygenerování statických výstupů všech tří domén z tohoto náhledu.</label>
+<button id="cms-generate-button" type="button" disabled>Vygenerovat statické weby</button></div>
+</div>
 </section>
 <div id="administration-host"></div>
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
@@ -195,7 +221,8 @@ button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600
 button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
-.settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select{padding:9px;max-width:100%}.settings-card input{width:100%}.settings-card small{display:block;margin-top:16px}
+.settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
+.cms-card{max-width:900px}.cms-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
  background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
@@ -437,7 +464,8 @@ function selectSettingsTab(selected){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
   const panel=document.getElementById(tab.getAttribute('aria-controls'));if(panel)panel.hidden=!active;
  }
- const administration=document.getElementById('administration');if(administration)administration.hidden=selected.id==='settings-backend-tab';
+ const administration=document.getElementById('administration');if(administration)administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id);
+ if(selected.id==='settings-cms-tab')loadCmsStatus();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -470,6 +498,58 @@ async function closeSettings(){
 document.querySelector('#open-settings').addEventListener('click',openSettings);
 document.querySelector('#chat-open-settings').addEventListener('click',openSettings);
 document.querySelector('#settings-back').addEventListener('click',closeSettings);
+const cmsStatus=document.querySelector('#cms-status');
+const cmsEditor=document.querySelector('#cms-editor');
+const cmsHostname=document.querySelector('#cms-hostname');
+let cmsConfig=null,cmsPreview=null,cmsGenerationAttempt=null,cmsActiveHostname=null;
+function cmsRows(value,fields){return (value || []).map(item=>fields.map(field=>item[field] || '').join(' | ')).join('\\n');}
+function parseCmsRows(value,fields){return value.split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+ const parts=line.split('|').map(item=>item.trim()),minimum=fields.at(-1)==='url' && fields.length>2 ? fields.length-1 : fields.length;
+ if(parts.length<minimum || parts.length>fields.length)throw new Error('Řádek CMS nemá očekávaný počet částí oddělených znakem |.');
+ const item={};for(let index=0;index<fields.length;index++)if(parts[index])item[fields[index]]=parts[index];return item;
+});}
+function selectedCmsSite(hostname=cmsHostname.value){return cmsConfig?.sites.find(item=>item.hostname===hostname);}
+function invalidateCmsPreview(){cmsPreview=null;cmsGenerationAttempt=null;document.querySelector('#cms-preview').hidden=true;document.querySelector('#cms-confirm').checked=false;document.querySelector('#cms-generate-button').disabled=true;}
+function saveCmsSiteForm(hostname=cmsHostname.value){const site=selectedCmsSite(hostname);if(!site)return;
+ site.title=document.querySelector('#cms-title').value.trim();site.description=document.querySelector('#cms-description').value.trim();
+ site.catalog.kind=document.querySelector('#cms-catalog-kind').value;site.catalog.title=document.querySelector('#cms-catalog-title').value.trim();
+ site.contacts=parseCmsRows(document.querySelector('#cms-contacts').value,['label','url']);
+ site.links=parseCmsRows(document.querySelector('#cms-links').value,['label','url']);
+ site.cv=parseCmsRows(document.querySelector('#cms-cv').value,['period','title','description']);
+ site.timeline=parseCmsRows(document.querySelector('#cms-timeline').value,['date','title','description','url']);
+}
+function renderCmsSite(){const site=selectedCmsSite();if(!site)return;
+ document.querySelector('#cms-title').value=site.title;document.querySelector('#cms-description').value=site.description;
+ document.querySelector('#cms-catalog-kind').value=site.catalog.kind;document.querySelector('#cms-catalog-title').value=site.catalog.title;
+ document.querySelector('#cms-contacts').value=cmsRows(site.contacts,['label','url']);
+ document.querySelector('#cms-links').value=cmsRows(site.links,['label','url']);
+ document.querySelector('#cms-cv').value=cmsRows(site.cv,['period','title','description']);
+ document.querySelector('#cms-timeline').value=cmsRows(site.timeline,['date','title','description','url']);cmsActiveHostname=site.hostname;invalidateCmsPreview();
+}
+function fillCmsStatus(result){cmsStatus.textContent=result.message;cmsEditor.hidden=!result.compatible;
+ const form=document.querySelector('#cms-binding-form');if(result.binding){form.elements.module_root.value=result.binding.module_root;form.elements.source_revision.value=result.binding.source_revision;}
+ if(!result.compatible || !result.config){cmsConfig=null;return;}cmsConfig=structuredClone(result.config);cmsHostname.replaceChildren();
+ for(const site of cmsConfig.sites){const option=document.createElement('option');option.value=site.hostname;option.textContent=site.hostname;cmsHostname.append(option);}renderCmsSite();
+}
+async function loadCmsStatus(){try{fillCmsStatus(await projectRequest('/v1/publication-cms/status',{}));}catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
+document.querySelector('#cms-binding-form').addEventListener('submit',async event=>{event.preventDefault();const fields=event.currentTarget.elements;
+ cmsStatus.textContent='Ověřuji manifest, revizi a čistotu checkoutu…';try{fillCmsStatus(await projectRequest('/v1/publication-cms/configure',{module_root:fields.module_root.value.trim(),source_revision:fields.source_revision.value.trim()}));}
+ catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}});
+cmsHostname.addEventListener('change',()=>{if(cmsActiveHostname)saveCmsSiteForm(cmsActiveHostname);renderCmsSite();});
+for(const id of ['cms-title','cms-description','cms-catalog-kind','cms-catalog-title','cms-contacts','cms-links','cms-cv','cms-timeline'])document.querySelector('#'+id).addEventListener('input',invalidateCmsPreview);
+document.querySelector('#cms-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
+ try{saveCmsSiteForm();const request={config:structuredClone(cmsConfig),hostname:cmsHostname.value};cmsStatus.textContent='Generuji izolovaný náhled…';
+  const result=await projectRequest('/v1/publication-cms/preview',request,60000);cmsPreview={request,result};cmsGenerationAttempt=null;
+  document.querySelector('#cms-request-preview').textContent=JSON.stringify({source_revision:result.source_revision,hostname:result.hostname,preview_sha256:result.preview_sha256,config:request.config},null,2);
+  document.querySelector('#cms-preview-frame').srcdoc=result.html;document.querySelector('#cms-preview').hidden=false;
+  document.querySelector('#cms-confirm').checked=false;document.querySelector('#cms-generate-button').disabled=true;cmsStatus.textContent='Náhled je připraven. Výstup ještě nebyl změněn.';
+ }catch(error){cmsStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}});
+document.querySelector('#cms-confirm').addEventListener('change',event=>{document.querySelector('#cms-generate-button').disabled=!event.currentTarget.checked || !cmsPreview;});
+document.querySelector('#cms-generate-button').addEventListener('click',async event=>{if(!cmsPreview || !document.querySelector('#cms-confirm').checked)return;
+ event.currentTarget.disabled=true;cmsStatus.textContent='Generuji potvrzené statické weby…';
+ if(!cmsGenerationAttempt)cmsGenerationAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsPreview.result.preview_sha256,approved:true,config:cmsPreview.request.config};
+ try{const result=await projectRequest('/v1/publication-cms/generate',cmsGenerationAttempt,60000);cmsStatus.textContent=`Vygenerováno ${result.generated_hostnames.length} webů · revize ${result.source_revision.slice(0,12)} · ${result.output}.`;cmsGenerationAttempt=null;}
+ catch(error){cmsStatus.textContent=error.message;event.currentTarget.disabled=false;}});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
@@ -1292,7 +1372,7 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
-    max_body = 64 * 1024
+    max_body = 320 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
         '/v1/chat/orchestration',
@@ -1307,13 +1387,23 @@ class DesktopHandler(Handler):
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
-        '/v1/metadata-suggestions/publish'}
+        '/v1/metadata-suggestions/publish',
+        '/v1/publication-cms/status', '/v1/publication-cms/configure',
+        '/v1/publication-cms/preview', '/v1/publication-cms/generate'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path == '/v1/publication-cms/status' and request == {}:
+                return self.reply(200, self.server.publication_cms.status())
+            if self.path == '/v1/publication-cms/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.publication_cms.configure(request))
+            if self.path == '/v1/publication-cms/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.publication_cms.preview(request))
+            if self.path == '/v1/publication-cms/generate' and isinstance(request, dict):
+                return self.reply(200, self.server.publication_cms.generate(request))
             if self.path == '/v1/metadata-suggestions/status' and request == {}:
                 return self.reply(200, self.server.metadata_suggestion_service.status())
             if self.path == '/v1/metadata-suggestions/preview' and isinstance(request, dict):
@@ -1450,10 +1540,12 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route':
                 return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
-            if self.path.startswith(('/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
-                return self.reply(422, {'error': 'Chat požadavek nelze provést. Ověřte backend, '
-                                       'projekt, výběr kontextu a lokální stav.'})
+                message = ('Publikační CMS požadavek nelze provést. Ověřte připnutou revizi, čistotu '
+                           'checkoutu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
+                           'Chat požadavek nelze provést. Ověřte backend, projekt, výběr kontextu a lokální stav.')
+                return self.reply(422, {'error': message})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})
@@ -1472,7 +1564,7 @@ class DesktopHandler(Handler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'no-referrer')
-        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)

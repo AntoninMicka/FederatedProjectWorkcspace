@@ -25,6 +25,7 @@ def sources(root):
     paths = [root / name for name in ('run.sh', 'requirements.txt', 'LICENSE', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md')]
     for directory, pattern in [('spikes', '*.py'), ('scripts', '*.py'), ('tests', '*.py'), ('docs/adr', '*.md')]:
         paths.extend(sorted((root / directory).glob(pattern)))
+    paths.extend(sorted((root / 'modules').glob('*.json')))
     paths.extend(root / name for name in ('spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md'))
     # Include docs linked by README/ADRs, excluding the private local inventory.
     paths.extend(root / name for name in ('AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md',

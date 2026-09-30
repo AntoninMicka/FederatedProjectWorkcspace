@@ -24,6 +24,8 @@ class DebianPackageTests(unittest.TestCase):
             self.assertIn('Maintainer: Federated workspace contributors', control)
             self.assertNotIn('noreply@example.invalid', control)
             self.assertTrue((tree / f'usr/lib/{NAME}/spikes/artifact_preview.py').exists())
+            self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.module.json').exists())
+            self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.source.json').exists())
             self.assertFalse((tree / 'home').exists())
             self.assertFalse((tree / 'var').exists())
             self.assertTrue((tree / f'usr/bin/{NAME}').stat().st_mode & 0o111)

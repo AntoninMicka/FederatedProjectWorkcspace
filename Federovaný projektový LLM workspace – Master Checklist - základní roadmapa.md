@@ -643,7 +643,7 @@ Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RB
 
 # 11C. Externě verzované moduly a jednotné API
 
-**Stav: PoC validated v MOD-01; runtime volání neimplementováno.** Dosavadní moduly a jejich
+**Stav: PoC validated v MOD-01; úzké CMS runtime volání implementováno v MOD-01-UI, obecný runtime ne.** Dosavadní moduly a jejich
 požadavky zůstávají v této hlavní roadmapě. Pouze nově výslovně vytipovaný modul
 může mít samostatný repozitář a roadmapu; jeho pracovní kopie nebo symlink leží
 v lokální, Gitem ignorované složce `modules.local/`. Hlavní plán jej neobsahuje
@@ -671,8 +671,9 @@ jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
 Podrobný kontrakt a hranice PoC drží
 [ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
 [WORK_LOG](WORK_LOG.md#mod-01--kontrakt-externě-verzovaných-modulů--2026-09-29).
-Implementace neznamená instalaci, trusted discovery, runtime autorizaci
-capability ani produkční distribuci.
+Připnutý preview/generate bridge prvního publikačního modulu vymezuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md); nejde o obecný
+loader, discovery, deploy ani produkční distribuci.
 
 ---
 

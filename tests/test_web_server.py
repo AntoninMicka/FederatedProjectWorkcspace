@@ -78,9 +78,11 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('localStorage', WEB_JS)
         self.assertFalse(WEB_JS.endswith('loadProjects();\n'))
         self.assertIn('id="settings-users-tab"', WEB_HTML)
+        self.assertIn('id="settings-cms-tab"', WEB_HTML)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#settings-cms-tab').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
@@ -102,6 +104,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/publication-cms/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/request',
             body=json.dumps({'run_id':str(uuid4())}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/send-stream',

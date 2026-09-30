@@ -47,7 +47,11 @@ credential-free HTTP na explicitní literal loopback adrese a pevný endpoint
 `/v1/module/manifest`; redirect, jiný content type, příliš velká odpověď nebo
 jakýkoli rozdíl proti reviewovanému manifestu znamená nekompatibilitu. Kontrola
 je read-only a modul neregistruje ani nespouští. Private-network transport,
-discovery, instalace a autorizované capability volání vyžadují další kontrakt.
+discovery, instalace a obecné autorizované capability volání vyžadují další
+kontrakt. Úzce vymezenou výjimku pro dvě lokální capability prvního
+publikačního modulu přijímá [ADR 0027](0027-pinned-publication-cms-invocation.md):
+vyžaduje explicitní binding, čistou připnutou revizi, reviewované runtime hashe,
+náhled a potvrzení a nezavádí obecný plugin runtime.
 
 ## Důsledky a ověření
 

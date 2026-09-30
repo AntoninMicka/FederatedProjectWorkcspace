@@ -62,6 +62,15 @@ načte pevný manifest endpoint API a vyžaduje přesnou shodu celé reviewovan�
 deklarace. PoC přijímá jen literal loopback HTTP adresu s explicitním portem,
 nesleduje redirect a neobsahuje instalaci, discovery ani spuštění modulu.
 
+První publikační modul má navíc úzce vymezené CMS UI v **Nastavení → Weby**.
+Nejprve zadejte absolutní cestu jeho čistého checkoutu a plný commit `HEAD`.
+Workspace ověří revizi, manifest i reviewované hashe runtime souborů. Poté lze
+upravit obsah tří domén, vytvořit izolovaný náhled, zkontrolovat přesný request a
+samostatně potvrdit lokální generování do modulového `dist/sites`. Webové UI je
+dostupné pouze administrátorovi. Generování nic nenasazuje a nemění DNS; recovery
+a bezpečnostní hranice popisuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+
 Ruční příprava a spuštění bez wrapperu:
 
 ```sh

@@ -45,7 +45,7 @@ class ModuleManifestTests(unittest.TestCase):
 
     def test_api_contract_must_match_exactly(self):
         self.assertEqual(verify_module_api(self.value, canonical_manifest(self.value)), self.value)
-        for field, changed in [('module_version', '0.2.0'), ('module_id', 'cz.example.other')]:
+        for field, changed in [('module_version', '0.3.0'), ('module_id', 'cz.example.other')]:
             value = deepcopy(self.value); value[field] = changed
             with self.subTest(field=field), self.assertRaises(ValidationError):
                 verify_module_api(self.value, canonical_manifest(value))
@@ -85,7 +85,7 @@ class ModuleManifestTests(unittest.TestCase):
                     'http://user:secret@127.0.0.1:1234'):
             with self.subTest(url=url), self.assertRaises(ValidationError):
                 fetch_and_verify_module(MANIFEST, url)
-        Handler.response = canonical_manifest(dict(self.value, module_version='0.2.0'))
+        Handler.response = canonical_manifest(dict(self.value, module_version='0.3.0'))
         with self.assertRaises(ValidationError):
             fetch_and_verify_module(MANIFEST, base)
         Handler.response = payload; Handler.content_type = 'text/plain'

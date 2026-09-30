@@ -19,6 +19,7 @@ from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
+from spikes.publication_cms import PublicationCms
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
@@ -134,6 +135,7 @@ def main():
         server.metadata_suggestion_service = MetadataSuggestionService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
+        server.publication_cms = PublicationCms(server.chat_service.state_dir)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)

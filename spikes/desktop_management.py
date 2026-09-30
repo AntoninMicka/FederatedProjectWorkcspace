@@ -13,10 +13,12 @@ from spikes.project_creation import ProjectCreation
 ASSETS = {'/': ('text/html; charset=utf-8', HTML.replace(
               'id="backend-metrics" hidden', 'id="backend-metrics"').replace(
               'id="backend-metrics-indicator" hidden', 'id="backend-metrics-indicator"').replace(
+              'id="settings-cms-tab" type="button"', 'id="settings-cms-tab" type="button" data-desktop="true"').replace(
               '<div id="administration-host"></div>', ADMIN_HTML).replace(
               'id="settings-users-tab" type="button"', 'id="settings-users-tab" type="button" data-desktop="true"').replace(
               'id="settings-federation-tab" type="button"', 'id="settings-federation-tab" type="button" data-desktop="true"').replace(
               ' tabindex="-1" hidden>Uživatelé', ' tabindex="-1">Uživatelé').replace(
+              ' tabindex="-1" hidden>Weby', ' tabindex="-1">Weby').replace(
               ' tabindex="-1" hidden>Federace', ' tabindex="-1">Federace')),
           '/app.css': ('text/css; charset=utf-8', CSS + ADMIN_CSS),
           '/app.js': ('text/javascript; charset=utf-8', JS + ADMIN_JS)}

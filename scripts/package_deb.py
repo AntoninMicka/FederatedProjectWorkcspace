@@ -36,6 +36,10 @@ def build(output, version='0.1.0~m0'):
             if source.is_symlink() or not source.is_file():
                 raise ValueError('Expected regular source')
             write(f'usr/lib/{NAME}/spikes/{source.name}', source.read_bytes())
+        for source in sorted((ROOT / 'modules').glob('*.json')):
+            if source.is_symlink() or not source.is_file():
+                raise ValueError('Expected regular module declaration')
+            write(f'usr/lib/{NAME}/modules/{source.name}', source.read_bytes())
         for source in legal_sources:
             write(f'usr/share/doc/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
             # Desktop deployment builds the same source/legal allowlist as CLI deployment.
