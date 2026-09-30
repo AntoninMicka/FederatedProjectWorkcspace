@@ -45,14 +45,24 @@ PR dosud nebyl vytvořen ani sloučen.
   celý Workspace 366 testy s 22 podmíněnými skipy a JavaScript prošel
   `node --check`. Reálný offscreen Qt/WebEngine smoke ověřil vykreslení stránky,
   přidání a odebrání domény i volbu Profil + Timeline.
-- [ ] [planned] **MOD-01-UI-G (designed)** — zobrazit skutečný stav deploymentů
+- [x] [completed] **MOD-01-UI-G (implemented)** — zobrazit skutečný stav deploymentů
   a odděleně potvrdit jejich vytvoření nebo aktualizaci přes konkrétní provider
   adapter. Prvním adapterem má být Cloudflare; pracovní návrh propojeného
   projektového výstupu, stavů a recovery je v
-  [diskusním nástřelu](docs/publication-site-set-cloudflare-outline.md). Přesný
-  Cloudflare runtime, credential hranice a cílové účty/projekty zatím nejsou
-  určeny; lokální `dist/sites` se za deployment nevydává.
+  [diskusním nástřelu](docs/publication-site-set-cloudflare-outline.md) a přijatý
+  kontrakt v [ADR 0028](docs/adr/0028-cloudflare-publication-portal.md). Jeden
+  portál `main` používá jeden existující Worker, node-local token a přímý Static
+  Assets API tok. UI odděluje lokální generování, read-only provider status,
+  přesný deployment plán a potvrzení; journal zachovává `dispatching`/`unknown`
+  bez automatického retry. Custom Domains a DNS se výslovně nemění. Živá
+  Cloudflare akceptace chybí; lokální `dist/sites` se za deployment nevydává.
+  Cílených 34 CMS/desktop/web testů prošlo se 3
+  podmíněnými skipy, celá Workspace sada prošla 369 testy s 22 skipy,
+  JavaScript prošel `node --check` a reálný offscreen Qt/WebEngine smoke prošel.
+  Test provideru ověřil asset session, více bucket uploadů, vytvoření Worker
+  verze a deploymentu; recovery test ověřil `unknown` bez druhého uploadu a
+  uzavření až po shodě provider release tagu.
 
-Generování je pouze lokální. Deployment, DNS, TLS a cache zůstávají neověřené;
-externí create/update nesmí být implementován bez výslovného provider kontraktu
-a `unknown` recovery hranice.
+Živý Cloudflare deployment, DNS, TLS a cache zůstávají neověřené. Provider
+kontrakt a `unknown` recovery jsou implementované, ale bez cílového účtu a
+výslovného potvrzení nebyl proveden žádný externí účinek.

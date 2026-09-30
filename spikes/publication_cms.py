@@ -17,6 +17,7 @@ import tempfile
 
 from spikes.metadata import MAX_METADATA, parse_json, require, uuid
 from spikes.module_manifest import read_module_manifest
+from spikes.publication_cloudflare import PublicationDeployment
 
 
 MAX_CONFIG = 256 * 1024
@@ -62,13 +63,16 @@ class PublicationCms:
     def __init__(self, state_dir, *, reviewed_manifest=REVIEWED_MANIFEST,
                  reviewed_sources=REVIEWED_SOURCES,
                  module_roots=DEFAULT_MODULE_ROOTS,
-                 python_executable=sys.executable, checkpoint=lambda stage: None):
+                 python_executable=sys.executable, checkpoint=lambda stage: None,
+                 deployment_transport=None):
         self.state_dir = Path(state_dir).absolute()
         self.reviewed_manifest = Path(reviewed_manifest).absolute()
         self.reviewed_sources = Path(reviewed_sources).absolute()
         self.module_roots = tuple(Path(path).absolute() for path in module_roots)
         self.python_executable = python_executable
         self.checkpoint = checkpoint
+        self.deployment = PublicationDeployment(
+            self.state_dir, self._deployment_release, deployment_transport)
 
     def _root(self):
         if not os.path.lexists(self.state_dir):
@@ -394,3 +398,27 @@ class PublicationCms:
                 self.checkpoint('prepared')
             return self._complete(db, request['operation_id'], request, root,
                                   module_version, runtime_revision)
+
+    def _deployment_release(self):
+        _, _, root, module_version, runtime_revision = self._enabled_module()
+        require(self.config_path.is_file(),
+                'Generate the publication release before checking deployment')
+        config = self._config(root)
+        digest, _ = self._digest(config, module_version, runtime_revision)
+        hostnames = sorted(item['hostname'] for item in config['sites'])
+        output = root / 'dist' / 'sites'
+        require(output.is_dir() and not output.is_symlink(),
+                'Generated publication output is unavailable')
+        return digest, hostnames, output
+
+    def deployment_configure(self, request):
+        return self.deployment.configure(request)
+
+    def deployment_status(self):
+        return self.deployment.status()
+
+    def deployment_preview(self, request):
+        return self.deployment.preview(request)
+
+    def deployment_confirm(self, request):
+        return self.deployment.deploy(request)

@@ -5,7 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # Pracovní nástřel: propojené webové výstupy a Cloudflare adapter
 
-Stav: **diskusní návrh, nikoli přijaté architektonické rozhodnutí**.
+Stav: **historický diskusní návrh**. Volbu prvního runtime, credential hranici a
+recovery přijímá [ADR 0028](adr/0028-cloudflare-publication-portal.md). Otevřený
+zůstává přesun CMS do projektu, katalog výstupů a správa Custom Domains/DNS.
 
 Tento dokument zachycuje směr k dalšímu promyšlení. Neznamená autorizaci
 produkčního deploymentu, změn DNS, vytvoření Cloudflare prostředků ani uložení
@@ -78,13 +80,10 @@ Navržený tok v **Projekt → Výstupy → Webové stránky**:
 
 ## První Cloudflare adapter
 
-Výchozí varianta k posouzení je jeden Cloudflare Pages projekt pro každou
-kořenovou doménu, svázaný společným Workspace release ID. To zachová oddělený
-obsah a stav domén, zatímco Workspace je obslouží jako jeden celek.
-
-Alternativa je jeden Worker s host-based routingem a assety všech domén. Má méně
-providerových projektů, ale přidává runtime routing a větší společný blast
-radius. Volba Pages versus Worker zatím není uzavřena.
+Přijatá první varianta je jeden předem existující Cloudflare Worker s
+host-based routingem a Workers Static Assets pro všechny domény jednoho portálu.
+Binding nese stabilní `portal_id`, aby další, obsahově oddělený portál mohl
+později používat samostatný Worker. Důvody a recovery popisuje ADR 0028.
 
 Adapter má pro každý cíl rozlišit alespoň:
 
@@ -142,7 +141,6 @@ Provider credentials zůstávají mimo projekt, logy a verzované dokumenty.
 
 ## Otevřené otázky
 
-- Cloudflare Pages projekty po doménách, nebo jeden Worker s host routingem?
 - Má být katalog součástí jednoho „portfolio“ projektu, nebo samostatného
   publikačního projektu?
 - Jak projekt explicitně zpřístupní výstup do nadprojektového katalogu?

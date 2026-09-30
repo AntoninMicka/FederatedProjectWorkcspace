@@ -9,6 +9,7 @@ import subprocess
 from spikes.local_api import Handler
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
+from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -115,6 +116,22 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <iframe id="cms-preview-frame" sandbox title="Náhled statické stránky"></iframe>
 <label class="confirm"><input id="cms-confirm" type="checkbox"> Potvrzuji vygenerování statických výstupů všech uvedených domén z tohoto náhledu.</label>
 <button id="cms-generate-button" type="button" disabled>Vygenerovat statické weby</button></div>
+<hr><h3>Cloudflare deployment</h3>
+<p>Jeden portál používá jeden existující Worker pro všechny uvedené domény. Token zůstává pouze na tomto uzlu; připojení Custom Domains a DNS se tímto krokem nemění.</p>
+<form id="cms-deployment-form"><input name="portal_id" type="hidden" value="main">
+<input name="provider" type="hidden" value="cloudflare">
+<label>Cloudflare Account ID <input name="account_id" maxlength="32" pattern="[0-9a-f]{32}" required></label>
+<label>Název existujícího Workeru <input name="worker_name" maxlength="63" required></label>
+<label>API token <input name="api_token" type="password" autocomplete="new-password" maxlength="4096" required></label>
+<button type="submit">Uložit připojení</button>
+<button id="cms-deployment-refresh" type="button">Načíst skutečný stav</button></form>
+<p id="cms-deployment-status" role="status" aria-live="polite">Cloudflare zatím nebyl načten.</p>
+<div id="cms-deployment-domains"></div>
+<button id="cms-deployment-preview-button" type="button" hidden>Připravit plán deploymentu</button>
+<section id="cms-deployment-preview" hidden><h4>Přesný plán externí změny</h4>
+<pre id="cms-deployment-request-preview"></pre>
+<label class="confirm"><input id="cms-deployment-confirm" type="checkbox"> Potvrzuji vytvoření nové verze existujícího Workeru a převedení 100 % provozu. Custom Domains ani DNS se nemění.</label>
+<button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
 </section>
 <div id="administration-host"></div>
@@ -510,7 +527,7 @@ document.querySelector('#settings-back').addEventListener('click',closeSettings)
 const cmsStatus=document.querySelector('#cms-status');
 const cmsEditor=document.querySelector('#cms-editor');
 const cmsHostname=document.querySelector('#cms-hostname');
-let cmsConfig=null,cmsPreview=null,cmsGenerationAttempt=null,cmsActiveHostname=null;
+let cmsConfig=null,cmsPreview=null,cmsGenerationAttempt=null,cmsActiveHostname=null,cmsDeploymentPreview=null,cmsDeploymentAttempt=null;
 function cmsRows(value,fields){return (value || []).map(item=>fields.map(field=>item[field] || '').join(' | ')).join('\\n');}
 function parseCmsRows(value,fields){return value.split(/\\r?\\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
  const parts=line.split('|').map(item=>item.trim()),minimum=fields.at(-1)==='url' && fields.length>2 ? fields.length-1 : fields.length;
@@ -546,7 +563,15 @@ function fillCmsStatus(result){cmsStatus.textContent=result.message;cmsEditor.hi
  if(!result.compatible || !result.config){cmsConfig=null;return;}cmsConfig=structuredClone(result.config);cmsHostname.replaceChildren();
  for(const site of cmsConfig.sites){const option=document.createElement('option');option.value=site.hostname;option.textContent=site.hostname;cmsHostname.append(option);}renderCmsSite();
 }
-async function loadCmsStatus(){try{fillCmsStatus(await projectRequest('/v1/publication-cms/status',{}));}catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
+const cmsDeploymentStatus=document.querySelector('#cms-deployment-status');
+function fillCmsDeploymentStatus(result){cmsDeploymentStatus.textContent=result.message+(result.state ? ` Stav: ${result.state}.` : '');
+ const form=document.querySelector('#cms-deployment-form');if(result.binding){form.elements.account_id.value=result.binding.account_id;form.elements.worker_name.value=result.binding.worker_name;}
+ const domains=document.querySelector('#cms-deployment-domains');domains.replaceChildren();for(const item of result.domains || []){const row=document.createElement('p');row.textContent=`${item.hostname} · obsah: ${item.content} · Custom Domain: ${item.custom_domain}`;domains.append(row);}
+ document.querySelector('#cms-deployment-preview-button').hidden=!result.configured || !['partial','current','outdated'].includes(result.state);
+ cmsDeploymentPreview=null;cmsDeploymentAttempt=null;document.querySelector('#cms-deployment-preview').hidden=true;document.querySelector('#cms-deployment-confirm').checked=false;document.querySelector('#cms-deployment-run').disabled=true;
+}
+async function loadCmsDeploymentStatus(){try{fillCmsDeploymentStatus(await projectRequest('/v1/publication-cms/deployment/status',{}));}catch(error){cmsDeploymentStatus.textContent=error.message;}}
+async function loadCmsStatus(){try{const result=await projectRequest('/v1/publication-cms/status',{});fillCmsStatus(result);if(result.compatible)await loadCmsDeploymentStatus();}catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
 async function setCmsEnabled(enabled){cmsStatus.textContent=enabled ? 'Ověřuji verzi manifestu a povoluji modul…' : 'Zakazuji modul…';
  try{fillCmsStatus(await projectRequest('/v1/publication-cms/configure',{module_id:'cz.proofofidea.publication-experiment-registry',enabled}));}
  catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
@@ -580,6 +605,21 @@ document.querySelector('#cms-generate-button').addEventListener('click',async ev
  if(!cmsGenerationAttempt)cmsGenerationAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsPreview.result.preview_sha256,approved:true,config:cmsPreview.request.config};
  try{const result=await projectRequest('/v1/publication-cms/generate',cmsGenerationAttempt,60000);cmsStatus.textContent=`Vygenerováno ${result.generated_hostnames.length} webů · modul ${result.module_version} · ${result.output}.`;cmsGenerationAttempt=null;}
  catch(error){cmsStatus.textContent=error.message;event.currentTarget.disabled=false;}});
+document.querySelector('#cms-deployment-form').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget;
+ try{const request=Object.fromEntries(new FormData(form));cmsDeploymentStatus.textContent='Ukládám node-local Cloudflare připojení…';
+  const result=await projectRequest('/v1/publication-cms/deployment/configure',request);form.elements.api_token.value='';cmsDeploymentStatus.textContent=result.message;await loadCmsDeploymentStatus();
+ }catch(error){cmsDeploymentStatus.textContent=error.message;}});
+document.querySelector('#cms-deployment-refresh').addEventListener('click',loadCmsDeploymentStatus);
+document.querySelector('#cms-deployment-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
+ try{cmsDeploymentStatus.textContent='Načítám provider stav a připravuji přesný plán…';cmsDeploymentPreview=await projectRequest('/v1/publication-cms/deployment/preview',{});cmsDeploymentAttempt=null;
+  document.querySelector('#cms-deployment-request-preview').textContent=JSON.stringify(cmsDeploymentPreview,null,2);document.querySelector('#cms-deployment-preview').hidden=false;
+  document.querySelector('#cms-deployment-confirm').checked=false;document.querySelector('#cms-deployment-run').disabled=true;cmsDeploymentStatus.textContent='Plán je připraven. Cloudflare ještě nebyl změněn.';
+ }catch(error){cmsDeploymentStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}});
+document.querySelector('#cms-deployment-confirm').addEventListener('change',event=>{document.querySelector('#cms-deployment-run').disabled=!event.currentTarget.checked || !cmsDeploymentPreview;});
+document.querySelector('#cms-deployment-run').addEventListener('click',async event=>{if(!cmsDeploymentPreview || !document.querySelector('#cms-deployment-confirm').checked)return;
+ event.currentTarget.disabled=true;if(!cmsDeploymentAttempt)cmsDeploymentAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsDeploymentPreview.preview_sha256,approved:true};
+ try{cmsDeploymentStatus.textContent='Nahrávám potvrzený release do Cloudflare…';const result=await projectRequest('/v1/publication-cms/deployment/confirm',cmsDeploymentAttempt,120000);cmsDeploymentAttempt=null;cmsDeploymentStatus.textContent=`Deployment ${result.deployment_id} dokončen pro ${result.hostnames.length} domén.`;await loadCmsDeploymentStatus();
+ }catch(error){cmsDeploymentStatus.textContent=error.message;}});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
@@ -1419,7 +1459,9 @@ class DesktopHandler(Handler):
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
         '/v1/metadata-suggestions/publish',
         '/v1/publication-cms/status', '/v1/publication-cms/configure',
-        '/v1/publication-cms/preview', '/v1/publication-cms/generate'}
+        '/v1/publication-cms/preview', '/v1/publication-cms/generate',
+        '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
+        '/v1/publication-cms/deployment/preview', '/v1/publication-cms/deployment/confirm'}
 
     def dispatch(self, request):
         if self.path == '/v1/counter':
@@ -1434,6 +1476,14 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.publication_cms.preview(request))
             if self.path == '/v1/publication-cms/generate' and isinstance(request, dict):
                 return self.reply(200, self.server.publication_cms.generate(request))
+            if self.path == '/v1/publication-cms/deployment/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.publication_cms.deployment_configure(request))
+            if self.path == '/v1/publication-cms/deployment/status' and request == {}:
+                return self.reply(200, self.server.publication_cms.deployment_status())
+            if self.path == '/v1/publication-cms/deployment/preview' and request == {}:
+                return self.reply(200, self.server.publication_cms.deployment_preview(request))
+            if self.path == '/v1/publication-cms/deployment/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.publication_cms.deployment_confirm(request))
             if self.path == '/v1/metadata-suggestions/status' and request == {}:
                 return self.reply(200, self.server.metadata_suggestion_service.status())
             if self.path == '/v1/metadata-suggestions/preview' and isinstance(request, dict):
@@ -1551,6 +1601,12 @@ class DesktopHandler(Handler):
         except OpenAIUnknownRun:
             return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
                                    'automaticky neopakujte; stav byl zachován.'})
+        except CloudflareUnknown:
+            return self.reply(409, {'error': 'Výsledek Cloudflare deploymentu není známý. '
+                                   'Požadavek automaticky neopakujte; načtěte skutečný stav provideru.'})
+        except CloudflareUnavailable:
+            return self.reply(502, {'error': 'Cloudflare stav nyní nelze bezpečně načíst. '
+                                   'Nebyla zahájena nová potvrzená změna.'})
         except OllamaResponseError:
             return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
         except OpenAIResponseError:

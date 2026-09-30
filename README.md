@@ -73,6 +73,9 @@ modulového `dist/sites`. CMS je zatím nadprojektové node-local nastavení. We
 UI je dostupné pouze administrátorovi. Generování nic nenasazuje a nemění DNS;
 recovery a bezpečnostní hranice popisuje
 [ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+[ADR 0028](docs/adr/0028-cloudflare-publication-portal.md) vymezuje jeden
+host-routed Cloudflare Worker pro jeden publikační portál a bezpečnou hranici
+potvrzení/recovery externího deploymentu.
 
 Ruční příprava a spuštění bez wrapperu:
 
