@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import stat
 import subprocess
@@ -255,7 +256,20 @@ class PublicationCms:
 
     def _config(self, root):
         path = self.config_path if self.config_path.exists() else root / 'data' / 'sites.json'
-        return self._load_json(path)
+        value = self._load_json(path)
+        if isinstance(value, dict) and value.get('schema_version') == 1:
+            value = json.loads(json.dumps(value))
+            for site in value.get('sites', []):
+                variant = site.pop('variant', None)
+                site['presentation'] = ('proof-of-idea' if variant == 'proof-of-idea'
+                                        else 'standard')
+                site['sections'] = ({'proof-of-idea': ['profile'],
+                                     'profile': ['profile', 'cv'],
+                                     'timeline': ['timeline']}.get(variant, []))
+                for field in ('contacts', 'links', 'cv', 'timeline'):
+                    site.setdefault(field, [])
+            value['schema_version'] = 2
+        return value
 
     def _digest(self, config, module_version, runtime_revision):
         raw = _canonical(config)
@@ -283,10 +297,15 @@ class PublicationCms:
         require(digest == request['preview_sha256'], 'CMS preview is stale or belongs to another module version')
         output = root / 'dist' / 'sites'
         self._run(root, raw, output)
+        hostnames = sorted(item['hostname'] for item in request['config']['sites'])
+        for child in output.iterdir():
+            if child.name not in hostnames:
+                require(child.is_dir() and not child.is_symlink(),
+                        'Unexpected file in derived CMS output')
+                shutil.rmtree(child)
         self.checkpoint('output-generated')
         _atomic_write(self.config_path, raw)
         self.checkpoint('config-saved')
-        hostnames = sorted(item['hostname'] for item in request['config']['sites'])
         receipt = {'operation_id': operation_id, 'state': 'completed',
                    'preview_sha256': digest, 'module_version': module_version,
                    'generated_hostnames': hostnames, 'output': 'dist/sites'}

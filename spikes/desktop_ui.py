@@ -92,7 +92,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="cms-disable" type="button" hidden>Zakázat modul</button></div>
 <small>Workspace moduly automaticky detekuje, ale nikdy je bez výslovného povolení nespustí. Kompatibilita se řídí verzí reviewovaného manifestu, ne Git commitem. Nastavení CMS zatím platí pro celý uzel.</small>
 <div id="cms-editor" hidden>
-<hr><label>Doména <select id="cms-hostname"></select></label>
+<hr><h3>Domény a povolené části</h3>
+<p>Každá doména může zveřejnit vlastní kombinaci částí. Vypnutí části její rozepsaný obsah nesmaže.</p>
+<div class="cms-domain-row"><label>Doména <select id="cms-hostname"></select></label>
+<button id="cms-remove-domain" type="button">Odebrat doménu</button></div>
+<div class="cms-domain-row"><label>Nová doména <input id="cms-new-hostname" maxlength="253" placeholder="example.cz"></label>
+<button id="cms-add-domain" type="button">Přidat doménu</button></div>
+<fieldset id="cms-sections"><legend>Povolené části této domény</legend>
+<label><input id="cms-section-profile" type="checkbox" value="profile"> Profil <small>O mně, kontakt a odkazy</small></label>
+<label><input id="cms-section-cv" type="checkbox" value="cv"> CV</label>
+<label><input id="cms-section-timeline" type="checkbox" value="timeline"> Timeline</label></fieldset>
 <label>Název <input id="cms-title" maxlength="128"></label>
 <label>Popis <textarea id="cms-description" rows="3" maxlength="512"></textarea></label>
 <label>Katalog <select id="cms-catalog-kind"><option value="sandbox">Sandbox projekty</option><option value="realized">Realizované projekty</option><option value="both">Obojí</option></select></label>
@@ -104,7 +113,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="cms-actions"><button id="cms-preview-button" type="button">Vytvořit náhled</button></div>
 <div id="cms-preview" hidden><h3>Přesný náhled požadavku</h3><pre id="cms-request-preview"></pre>
 <iframe id="cms-preview-frame" sandbox title="Náhled statické stránky"></iframe>
-<label class="confirm"><input id="cms-confirm" type="checkbox"> Potvrzuji vygenerování statických výstupů všech tří domén z tohoto náhledu.</label>
+<label class="confirm"><input id="cms-confirm" type="checkbox"> Potvrzuji vygenerování statických výstupů všech uvedených domén z tohoto náhledu.</label>
 <button id="cms-generate-button" type="button" disabled>Vygenerovat statické weby</button></div>
 </div>
 </section>
@@ -222,7 +231,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
-.cms-card{max-width:900px}.cms-actions{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
+.cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
  background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
@@ -513,18 +522,22 @@ function invalidateCmsPreview(){cmsPreview=null;cmsGenerationAttempt=null;docume
 function saveCmsSiteForm(hostname=cmsHostname.value){const site=selectedCmsSite(hostname);if(!site)return;
  site.title=document.querySelector('#cms-title').value.trim();site.description=document.querySelector('#cms-description').value.trim();
  site.catalog.kind=document.querySelector('#cms-catalog-kind').value;site.catalog.title=document.querySelector('#cms-catalog-title').value.trim();
+ site.sections=['profile','cv','timeline'].filter(section=>document.querySelector('#cms-section-'+section).checked);
+ if(!site.sections.length)throw new Error('Povolte pro doménu alespoň jednu část.');
  site.contacts=parseCmsRows(document.querySelector('#cms-contacts').value,['label','url']);
  site.links=parseCmsRows(document.querySelector('#cms-links').value,['label','url']);
  site.cv=parseCmsRows(document.querySelector('#cms-cv').value,['period','title','description']);
  site.timeline=parseCmsRows(document.querySelector('#cms-timeline').value,['date','title','description','url']);
 }
 function renderCmsSite(){const site=selectedCmsSite();if(!site)return;
+ for(const section of ['profile','cv','timeline'])document.querySelector('#cms-section-'+section).checked=site.sections.includes(section);
  document.querySelector('#cms-title').value=site.title;document.querySelector('#cms-description').value=site.description;
  document.querySelector('#cms-catalog-kind').value=site.catalog.kind;document.querySelector('#cms-catalog-title').value=site.catalog.title;
  document.querySelector('#cms-contacts').value=cmsRows(site.contacts,['label','url']);
  document.querySelector('#cms-links').value=cmsRows(site.links,['label','url']);
  document.querySelector('#cms-cv').value=cmsRows(site.cv,['period','title','description']);
- document.querySelector('#cms-timeline').value=cmsRows(site.timeline,['date','title','description','url']);cmsActiveHostname=site.hostname;invalidateCmsPreview();
+ document.querySelector('#cms-timeline').value=cmsRows(site.timeline,['date','title','description','url']);cmsActiveHostname=site.hostname;
+ document.querySelector('#cms-remove-domain').disabled=cmsConfig.sites.length===1;invalidateCmsPreview();
 }
 function fillCmsStatus(result){cmsStatus.textContent=result.message;cmsEditor.hidden=!result.compatible;
  const moduleList=document.querySelector('#cms-module-list');moduleList.replaceChildren();for(const item of result.modules || []){const row=document.createElement('p'),name=document.createElement('strong'),detail=document.createElement('span');name.textContent=item.display_name;detail.textContent=` · ${item.module_version} · ${item.compatible ? 'kompatibilní' : item.message}`;row.append(name,detail);moduleList.append(row);}if(!result.modules?.length)moduleList.textContent='Nebyl nalezen žádný modul s validním manifestem.';
@@ -541,6 +554,19 @@ document.querySelector('#cms-enable').addEventListener('click',()=>setCmsEnabled
 document.querySelector('#cms-disable').addEventListener('click',()=>setCmsEnabled(false));
 cmsHostname.addEventListener('change',()=>{if(cmsActiveHostname)saveCmsSiteForm(cmsActiveHostname);renderCmsSite();});
 for(const id of ['cms-title','cms-description','cms-catalog-kind','cms-catalog-title','cms-contacts','cms-links','cms-cv','cms-timeline'])document.querySelector('#'+id).addEventListener('input',invalidateCmsPreview);
+for(const section of ['profile','cv','timeline'])document.querySelector('#cms-section-'+section).addEventListener('change',event=>{
+ if(!['profile','cv','timeline'].some(name=>document.querySelector('#cms-section-'+name).checked)){event.currentTarget.checked=true;cmsStatus.textContent='Každá doména musí mít povolenou alespoň jednu část.';return;}invalidateCmsPreview();
+});
+document.querySelector('#cms-add-domain').addEventListener('click',()=>{if(cmsActiveHostname)saveCmsSiteForm(cmsActiveHostname);
+ const input=document.querySelector('#cms-new-hostname'),hostname=input.value.trim().toLowerCase();
+ if(!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(hostname)){cmsStatus.textContent='Zadejte platnou doménu bez protokolu a cesty.';return;}
+ if(selectedCmsSite(hostname)){cmsStatus.textContent='Tato doména už v seznamu je.';return;}
+ const site={hostname,presentation:'standard',sections:['profile'],title:hostname,description:'',catalog:{kind:'realized',title:'Projekty'},contacts:[],links:[],cv:[],timeline:[]};
+ cmsConfig.sites.push(site);const option=document.createElement('option');option.value=hostname;option.textContent=hostname;cmsHostname.append(option);cmsHostname.value=hostname;input.value='';renderCmsSite();cmsStatus.textContent='Doména byla přidána do rozepsané konfigurace. Změnu potvrďte až po kontrole náhledu.';
+});
+document.querySelector('#cms-remove-domain').addEventListener('click',()=>{if(cmsConfig.sites.length<=1)return;const hostname=cmsHostname.value,index=cmsConfig.sites.findIndex(site=>site.hostname===hostname);if(index<0)return;
+ cmsConfig.sites.splice(index,1);cmsHostname.options[index].remove();cmsHostname.selectedIndex=Math.min(index,cmsHostname.options.length-1);renderCmsSite();cmsStatus.textContent='Doména byla odebrána z rozepsané konfigurace. Výstup se změní až po potvrzeném generování.';
+});
 document.querySelector('#cms-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
  try{saveCmsSiteForm();const request={config:structuredClone(cmsConfig),hostname:cmsHostname.value};cmsStatus.textContent='Generuji izolovaný náhled…';
   const result=await projectRequest('/v1/publication-cms/preview',request,60000);cmsPreview={request,result};cmsGenerationAttempt=null;

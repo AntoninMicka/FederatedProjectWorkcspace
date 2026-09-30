@@ -41,20 +41,24 @@ from html import escape
 from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('--registry');p.add_argument('--sites');p.add_argument('--template');p.add_argument('--output');a=p.parse_args()
 value=json.loads(Path(a.sites).read_text());sites=value.get('sites')
-if value.get('schema_version')!=1 or not isinstance(sites,list) or not sites:raise SystemExit(2)
+if value.get('schema_version')!=2 or not isinstance(sites,list) or not sites:raise SystemExit(2)
 for site in sites:
  host=site['hostname'];target=Path(a.output)/host/'index.html';target.parent.mkdir(parents=True,exist_ok=True)
  target.write_text('<!doctype html><h1>'+escape(site['title'])+'</h1>',encoding='utf-8')
 ''', encoding='utf-8')
-        self.config = {'schema_version': 1, 'sites': [
-            {'hostname': 'proofofidea.cz', 'variant': 'proof-of-idea', 'title': 'Proof',
-             'description': 'Ideas', 'catalog': {'kind': 'sandbox', 'title': 'Sandbox'}},
-            {'hostname': 'antoninmicka.cz', 'variant': 'profile', 'title': 'Antonín',
+        self.config = {'schema_version': 2, 'sites': [
+            {'hostname': 'proofofidea.cz', 'presentation': 'proof-of-idea',
+             'sections': ['profile'], 'title': 'Proof', 'description': 'Ideas',
+             'catalog': {'kind': 'sandbox', 'title': 'Sandbox'},
+             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
+            {'hostname': 'antoninmicka.cz', 'presentation': 'standard',
+             'sections': ['profile', 'cv'], 'title': 'Antonín',
              'description': 'Profile', 'catalog': {'kind': 'realized', 'title': 'Projects'},
-             'contacts': [], 'links': [], 'cv': []},
-            {'hostname': 'tonymicka.cz', 'variant': 'timeline', 'title': 'Timeline',
+             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
+            {'hostname': 'tonymicka.cz', 'presentation': 'standard',
+             'sections': ['timeline'], 'title': 'Timeline',
              'description': 'Events', 'catalog': {'kind': 'realized', 'title': 'Projects'},
-             'timeline': []},
+             'contacts': [], 'links': [], 'cv': [], 'timeline': []},
         ]}
         (self.module / 'data' / 'sites.json').write_text(json.dumps(self.config), encoding='utf-8')
         (self.module / 'data' / 'registry.json').write_text('{}', encoding='utf-8')
@@ -81,7 +85,7 @@ for site in sites:
     def test_discovery_enable_and_manifest_version_replace_git_pin(self):
         preview = self.cms.preview({'config': self.config, 'hostname': 'antoninmicka.cz'})
         self.assertIn('<h1>Antonín</h1>', preview['html'])
-        self.assertEqual(preview['module_version'], '0.3.0')
+        self.assertEqual(preview['module_version'], '0.4.0')
         self.assertEqual(len(preview['preview_sha256']), 64)
         (self.module / 'unreviewed.txt').write_text('change')
         self.assertTrue(self.cms.status()['compatible'])
@@ -108,7 +112,7 @@ for site in sites:
     def test_changed_manifest_version_requires_new_review_and_enable(self):
         manifest_path = self.module / 'module.json'
         manifest = json.loads(manifest_path.read_text())
-        manifest['module_version'] = '0.4.0'
+        manifest['module_version'] = '0.5.0'
         manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
         status = self.cms.status()
         self.assertFalse(status['compatible'])
@@ -116,6 +120,21 @@ for site in sites:
         with self.assertRaises(ValidationError):
             self.cms.configure({
                 'module_id': 'cz.proofofidea.publication-experiment-registry', 'enabled': True})
+
+    def test_legacy_fixed_variants_are_migrated_without_losing_content(self):
+        legacy = {'schema_version': 1, 'sites': [
+            {'hostname': 'old.example', 'variant': 'profile', 'title': 'Old',
+             'description': 'Kept', 'catalog': {'kind': 'realized', 'title': 'Projects'},
+             'contacts': [], 'links': [], 'cv': [{'period': '2020', 'title': 'Role',
+                                                  'description': 'Work'}]},
+        ]}
+        self.cms.config_path.write_text(json.dumps(legacy), encoding='utf-8')
+        migrated = self.cms.status()['config']
+        self.assertEqual(migrated['schema_version'], 2)
+        self.assertEqual(migrated['sites'][0]['sections'], ['profile', 'cv'])
+        self.assertEqual(migrated['sites'][0]['presentation'], 'standard')
+        self.assertEqual(migrated['sites'][0]['cv'][0]['title'], 'Role')
+        self.assertEqual(migrated['sites'][0]['timeline'], [])
 
     def test_confirmed_generation_is_idempotent_and_rejects_stale_preview(self):
         preview = self.cms.preview({'config': self.config, 'hostname': 'proofofidea.cz'})
@@ -126,6 +145,12 @@ for site in sites:
         self.assertEqual(receipt['generated_hostnames'],
                          ['antoninmicka.cz', 'proofofidea.cz', 'tonymicka.cz'])
         self.assertTrue((self.module / 'dist' / 'sites' / 'tonymicka.cz' / 'index.html').is_file())
+        reduced = json.loads(json.dumps(self.config)); reduced['sites'] = reduced['sites'][:2]
+        reduced_preview = self.cms.preview({'config': reduced, 'hostname': 'antoninmicka.cz'})
+        self.cms.generate({'operation_id': str(uuid4()),
+                           'preview_sha256': reduced_preview['preview_sha256'],
+                           'approved': True, 'config': reduced})
+        self.assertFalse((self.module / 'dist' / 'sites' / 'tonymicka.cz').exists())
         changed = json.loads(json.dumps(self.config)); changed['sites'][0]['title'] = 'Changed'
         with self.assertRaises(ValidationError):
             self.cms.generate(dict(request, operation_id=str(uuid4()), config=changed))

@@ -100,7 +100,7 @@
         "completed",
         "failed"
       ],
-      "version": "2.0"
+      "version": "3.0"
     },
     {
       "execution_boundary": "same-node",
@@ -131,13 +131,13 @@
         "completed",
         "failed"
       ],
-      "version": "2.0"
+      "version": "3.0"
     }
   ],
   "dependencies": [],
   "display_name": "Publication & Experiment Registry",
   "module_id": "cz.proofofidea.publication-experiment-registry",
-  "module_version": "0.3.0",
+  "module_version": "0.4.0",
   "roadmap": "ROADMAP.md",
   "schema_version": 1
 }

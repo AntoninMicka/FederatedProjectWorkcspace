@@ -34,7 +34,18 @@ PR dosud nebyl vytvořen ani sloučen.
   Cílená sada prošla 35 testy se 3 podmíněně přeskočenými, celý Workspace 365
   testy s 22 přeskočenými. Skutečný rozpracovaný modul byl bez Git kontroly
   automaticky nalezen, povolen a použit pro preview ve verzi 0.3.0.
-- [ ] [planned] **MOD-01-UI-F (designed)** — zobrazit skutečný stav deploymentů
+- [x] [completed] **MOD-01-UI-F (PoC validated)** — nahradit tři pevné doménové
+  varianty jednou správou domén, kde lze doménu přidat nebo odebrat a nezávisle
+  jí povolit sekce Profil, CV a Timeline. Vypnutí sekce zachovává její obsah;
+  stará konfigurace se při načtení převádí bez ztráty dat. Generování i odebrání
+  odvozeného výstupu zůstává za přesným náhledem a potvrzením. Modul 0.4.0
+  prošel 11 Python testy a 1 Worker testem; skutečný izolovaný modul prošel
+  hostitelským review, náhledem kombinace Profil + Timeline a potvrzeným
+  generováním čtyř domén. Cílených 31 CMS/desktop/web testů prošlo se 3 skipy,
+  celý Workspace 366 testy s 22 podmíněnými skipy a JavaScript prošel
+  `node --check`. Reálný offscreen Qt/WebEngine smoke ověřil vykreslení stránky,
+  přidání a odebrání domény i volbu Profil + Timeline.
+- [ ] [planned] **MOD-01-UI-G (designed)** — zobrazit skutečný stav deploymentů
   a odděleně potvrdit jejich vytvoření nebo aktualizaci přes konkrétní provider
   adapter. Prvním adapterem má být Cloudflare; pracovní návrh propojeného
   projektového výstupu, stavů a recovery je v

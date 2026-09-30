@@ -25,7 +25,8 @@ Webový celek „Antonín / Proof of Idea"
 ```
 
 Celek má společnou identitu, šablonu, verzi vydání a potvrzovací operaci, ale
-každá doména si zachovává vlastní variantu obsahu a samostatně zjistitelný stav
+každá doména si zachovává vlastní kombinaci povolených částí a samostatně
+zjistitelný stav
 deploymentu.
 
 ## Rozdělení odpovědností
@@ -49,7 +50,7 @@ Pracovní název: `publication-site-set`.
 Artefakt by obsahoval zejména:
 
 - stabilní ID celku a jeho název;
-- seznam domén, variant a jejich kurátorovaného obsahu;
+- seznam domén, povolených částí a jejich kurátorovaného obsahu;
 - identitu společné šablony a verzi jejího kontraktu;
 - pravidla katalogu veřejných projektových výstupů;
 - explicitní vztahy na publikované výstupy jiných projektů;
@@ -65,7 +66,7 @@ Výběr nesmí vzniknout skrytým procházením všech soukromých projektů.
 Navržený tok v **Projekt → Výstupy → Webové stránky**:
 
 1. vytvořit nebo otevřít propojený webový celek;
-2. editovat jednotlivé doménové varianty;
+2. přidávat domény a editovat jejich části Profil, CV a Timeline;
 3. spravovat společnou šablonu a katalog;
 4. vytvořit náhled celého release, ne jen izolované domény;
 5. zobrazit přesný seznam zahrnutých projektových výstupů;

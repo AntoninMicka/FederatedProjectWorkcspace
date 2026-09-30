@@ -39,7 +39,10 @@ Desktop zpřístupňuje záložku **Weby** lokálnímu uživateli. Webová varia
 všechny `/v1/publication-cms/*` operace zpřístupňuje pouze node/federation
 administrátorovi. UI nejprve zobrazí automaticky zjištěnou přítomnost, verzi a
 kompatibilitu a nabídne samostatné Povolit/Zakázat. Po povolení načte
-konfiguraci, dovolí editovat tři varianty, vytvoří izolovaný HTML náhled, zobrazí
+konfiguraci, dovolí přidat nebo odebrat doménu a pro každou nezávisle povolit
+části Profil, CV a Timeline. Vypnutí části zachová její rozepsaný obsah; stará
+konfigurace tří variant se v hostitelském adapteru převede na nový model. UI
+vytvoří izolovaný HTML náhled, zobrazí
 přesnou konfiguraci, verzi modulu a hash náhledu a vyžádá samostatné potvrzení
 před generováním. Náhled se vykresluje v sandboxed iframe; do okolního DOM se
 nevkládá jako HTML.
@@ -58,7 +61,8 @@ generace. Jeden filesystem lock serializuje konfiguraci, recovery i generování
 1. Před spuštěním modulu se uloží `operation_id`, hash a celý potvrzený request
    ve stavu `prepared`. Pád před výstupem nezmění autoritativní konfiguraci.
 2. Generátor může při pádu zanechat částečný `dist/sites`; jde o odvozený lokální
-   výstup. Opakování stejné operace jej deterministicky přegeneruje.
+   výstup. Opakování stejné operace jej deterministicky přegeneruje a po úspěchu
+   odstraní odvozené adresáře domén, které už v potvrzené konfiguraci nejsou.
 3. Po úspěšném generování se konfigurace uloží atomickým replace + fsync. Pád
    mezi výstupem a konfigurací ponechá journal `prepared`; příští status nebo
    stejné `operation_id` operaci bezpečně zopakuje.

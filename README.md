@@ -66,7 +66,8 @@ První publikační modul má navíc úzce vymezené CMS UI v **Nastavení → W
 Workspace automaticky zjistí jeho přítomnost v `modules.local/`, ale nespustí jej,
 dokud jej uživatel výslovně nepovolí. Ověří identitu a verzi manifestu, přesnou
 reviewovanou deklaraci capabilities a hashe runtime souborů; Git commit není
-součástí kompatibility. Poté lze upravit obsah tří domén, vytvořit izolovaný
+součástí kompatibility. Poté lze v jedné správě přidávat domény a pro každou
+nezávisle povolit části Profil, CV a Timeline, vytvořit izolovaný
 náhled, zkontrolovat přesný request a samostatně potvrdit lokální generování do
 modulového `dist/sites`. CMS je zatím nadprojektové node-local nastavení. Webové
 UI je dostupné pouze administrátorovi. Generování nic nenasazuje a nemění DNS;
