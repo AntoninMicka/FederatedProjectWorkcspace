@@ -4,7 +4,6 @@ import json
 import hashlib
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 import unittest
 from uuid import uuid4
@@ -68,36 +67,55 @@ for site in sites:
         self.reviewed_sources.write_text(json.dumps({'schema_version': 1,
             'module_id': 'cz.proofofidea.publication-experiment-registry',
             'runtime_files': runtime}), encoding='utf-8')
-        self.git('init'); self.git('config', 'user.name', 'CMS Test')
-        self.git('config', 'user.email', 'cms@example.test'); self.git('add', '.')
-        self.git('commit', '-m', 'fixture')
-        self.revision = self.git('rev-parse', 'HEAD').stdout.strip()
         self.cms = self.service()
-        self.cms.configure({'module_root': str(self.module), 'source_revision': self.revision})
+        discovered = self.cms.status()
+        self.assertFalse(discovered['compatible'])
+        self.assertTrue(discovered['modules'][0]['present'])
+        self.cms.configure({'module_id': 'cz.proofofidea.publication-experiment-registry',
+                            'enabled': True})
 
     def service(self, **kwargs):
-        return PublicationCms(self.state, reviewed_sources=self.reviewed_sources, **kwargs)
+        return PublicationCms(self.state, reviewed_sources=self.reviewed_sources,
+                              module_roots=(self.module.parent,), **kwargs)
 
-    def git(self, *args):
-        return subprocess.run(['git', '-C', str(self.module), *args], check=True,
-                              capture_output=True, text=True)
-
-    def test_preview_requires_pinned_clean_reviewed_module(self):
+    def test_discovery_enable_and_manifest_version_replace_git_pin(self):
         preview = self.cms.preview({'config': self.config, 'hostname': 'antoninmicka.cz'})
         self.assertIn('<h1>Antonín</h1>', preview['html'])
-        self.assertEqual(preview['source_revision'], self.revision)
+        self.assertEqual(preview['module_version'], '0.3.0')
         self.assertEqual(len(preview['preview_sha256']), 64)
         (self.module / 'unreviewed.txt').write_text('change')
+        self.assertTrue(self.cms.status()['compatible'])
+        (self.module / 'unreviewed.txt').unlink()
+        extra_runtime = self.module / 'src' / 'publication_registry' / 'unreviewed.py'
+        extra_runtime.write_text('# unreviewed runtime\n')
         self.assertFalse(self.cms.status()['compatible'])
         with self.assertRaises(ValidationError):
             self.cms.preview({'config': self.config, 'hostname': 'antoninmicka.cz'})
-        (self.module / 'unreviewed.txt').unlink()
+        extra_runtime.unlink()
         generator = self.module / 'src' / 'publication_registry' / 'sitegen.py'
         generator.write_text(generator.read_text() + '\n# changed after review\n')
-        self.git('add', '.'); self.git('commit', '-m', 'unreviewed runtime')
+        self.assertFalse(self.cms.status()['compatible'])
+
+    def test_disable_keeps_discovery_but_prevents_execution(self):
+        status = self.cms.configure({
+            'module_id': 'cz.proofofidea.publication-experiment-registry', 'enabled': False})
+        self.assertFalse(status['compatible'])
+        self.assertTrue(status['modules'][0]['present'])
+        self.assertFalse(status['modules'][0]['enabled'])
+        with self.assertRaises(FileNotFoundError):
+            self.cms.preview({'config': self.config, 'hostname': 'proofofidea.cz'})
+
+    def test_changed_manifest_version_requires_new_review_and_enable(self):
+        manifest_path = self.module / 'module.json'
+        manifest = json.loads(manifest_path.read_text())
+        manifest['module_version'] = '0.4.0'
+        manifest_path.write_text(json.dumps(manifest), encoding='utf-8')
+        status = self.cms.status()
+        self.assertFalse(status['compatible'])
+        self.assertIn('version changed', status['message'])
         with self.assertRaises(ValidationError):
-            self.cms.configure({'module_root': str(self.module),
-                                'source_revision': self.git('rev-parse', 'HEAD').stdout.strip()})
+            self.cms.configure({
+                'module_id': 'cz.proofofidea.publication-experiment-registry', 'enabled': True})
 
     def test_confirmed_generation_is_idempotent_and_rejects_stale_preview(self):
         preview = self.cms.preview({'config': self.config, 'hostname': 'proofofidea.cz'})

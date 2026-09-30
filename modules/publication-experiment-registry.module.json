@@ -87,7 +87,7 @@
         "max_response_bytes": 1048576,
         "max_sites": 32
       },
-      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-preview-result-v1.json",
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-preview-result-v2.json",
       "permissions": [
         "publication.site.preview"
       ],
@@ -100,7 +100,7 @@
         "completed",
         "failed"
       ],
-      "version": "1.0"
+      "version": "2.0"
     },
     {
       "execution_boundary": "same-node",
@@ -118,7 +118,7 @@
         "max_output_bytes": 1048576,
         "max_sites": 32
       },
-      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-generate-result-v1.json",
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-generate-result-v2.json",
       "permissions": [
         "publication.site.generate"
       ],
@@ -131,13 +131,13 @@
         "completed",
         "failed"
       ],
-      "version": "1.0"
+      "version": "2.0"
     }
   ],
   "dependencies": [],
   "display_name": "Publication & Experiment Registry",
   "module_id": "cz.proofofidea.publication-experiment-registry",
-  "module_version": "0.2.0",
+  "module_version": "0.3.0",
   "roadmap": "ROADMAP.md",
   "schema_version": 1
 }

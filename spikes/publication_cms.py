@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Pinned same-node bridge for previewing and generating publication sites."""
+"""Explicitly enabled same-node bridge for discovered publication modules."""
 from contextlib import contextmanager
 import fcntl
 import hashlib
@@ -14,7 +14,6 @@ import subprocess
 import sys
 import tempfile
 
-from spikes.configuration import local_path
 from spikes.metadata import MAX_METADATA, parse_json, require, uuid
 from spikes.module_manifest import read_module_manifest
 
@@ -27,6 +26,7 @@ REVIEWED_MANIFEST = (Path(__file__).resolve().parents[1] / 'modules'
                      / 'publication-experiment-registry.module.json')
 REVIEWED_SOURCES = (Path(__file__).resolve().parents[1] / 'modules'
                     / 'publication-experiment-registry.source.json')
+DEFAULT_MODULE_ROOTS = (Path(__file__).resolve().parents[1] / 'modules.local',)
 
 
 def _canonical(value):
@@ -60,10 +60,12 @@ class PublicationCms:
     """Node-local CMS state; project Git and credentials are never touched."""
     def __init__(self, state_dir, *, reviewed_manifest=REVIEWED_MANIFEST,
                  reviewed_sources=REVIEWED_SOURCES,
+                 module_roots=DEFAULT_MODULE_ROOTS,
                  python_executable=sys.executable, checkpoint=lambda stage: None):
         self.state_dir = Path(state_dir).absolute()
         self.reviewed_manifest = Path(reviewed_manifest).absolute()
         self.reviewed_sources = Path(reviewed_sources).absolute()
+        self.module_roots = tuple(Path(path).absolute() for path in module_roots)
         self.python_executable = python_executable
         self.checkpoint = checkpoint
 
@@ -133,32 +135,51 @@ class PublicationCms:
 
     def _load_binding(self):
         value = self._load_json(self.binding_path, MAX_METADATA)
-        require(isinstance(value, dict) and set(value) == {'module_root', 'source_revision'},
+        require(isinstance(value, dict)
+                and set(value) == {'module_id', 'module_version', 'enabled'}
+                and value['module_id'] == MODULE_ID
+                and isinstance(value['module_version'], str)
+                and value['enabled'] is True,
                 'Invalid CMS module binding')
-        root = local_path(value['module_root'])
-        revision = value['source_revision']
-        require(isinstance(revision, str) and bool(re.fullmatch(r'[0-9a-f]{40,64}', revision)),
-                'CMS binding requires a full source revision')
-        return {'module_root': str(root), 'source_revision': revision}
+        require(bool(re.fullmatch(r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)',
+                                  value['module_version'])),
+                'Invalid CMS module version')
+        return value
 
-    def _git(self, root, *args):
-        result = subprocess.run(['git', '-C', str(root), *args], capture_output=True,
-                                text=True, timeout=10, check=False)
-        require(result.returncode == 0, 'CMS module Git revision is unavailable')
-        return result.stdout.strip()
+    def _discover(self):
+        found = []
+        for modules_root in self.module_roots:
+            if not modules_root.exists():
+                continue
+            require(modules_root.is_dir() and modules_root.resolve() == modules_root,
+                    'Module discovery root is unsafe')
+            for candidate in sorted(modules_root.iterdir(), key=lambda path: path.name):
+                if candidate.is_symlink() or not candidate.is_dir():
+                    continue
+                manifest_path = candidate / 'module.json'
+                if not manifest_path.is_file() or manifest_path.is_symlink():
+                    continue
+                try:
+                    manifest = read_module_manifest(manifest_path)
+                except (OSError, ValueError):
+                    continue
+                found.append((candidate, manifest))
+        ids = [manifest['module_id'] for _, manifest in found]
+        require(len(ids) == len(set(ids)), 'Multiple copies of one module were discovered')
+        return found
 
-    def _verify(self, binding):
-        root = Path(binding['module_root'])
+    def _verify(self, root, actual=None):
+        root = Path(root)
         require(root.is_dir() and root.absolute() == root.resolve(),
                 'CMS module root is unavailable or contains symlinks')
-        revision = self._git(root, 'rev-parse', 'HEAD')
-        require(revision == binding['source_revision'], 'CMS module revision changed')
-        require(not self._git(root, 'status', '--porcelain=v1', '--untracked-files=normal'),
-                'CMS module checkout has unreviewed changes')
         reviewed = read_module_manifest(self.reviewed_manifest)
-        actual = read_module_manifest(root / 'module.json')
-        require(reviewed == actual and actual['module_id'] == MODULE_ID,
-                'CMS module manifest differs from the reviewed declaration')
+        actual = actual or read_module_manifest(root / 'module.json')
+        require(actual['module_id'] == MODULE_ID, 'Unexpected CMS module identity')
+        require(actual['schema_version'] == reviewed['schema_version']
+                and actual['module_version'] == reviewed['module_version']
+                and actual['api']['version'] == reviewed['api']['version'],
+                'CMS module manifest version is incompatible')
+        require(actual == reviewed, 'CMS module declaration differs from the reviewed manifest version')
         capabilities = {item['id'] for item in actual['capabilities']}
         require(REQUIRED_CAPABILITIES <= capabilities,
                 'CMS module does not declare required capabilities')
@@ -175,7 +196,8 @@ class PublicationCms:
         reviewed_python = {path for path in runtime_files if path.endswith('.py')}
         require(actual_python == reviewed_python,
                 'CMS module Python runtime differs from the reviewed source set')
-        for relative, expected in runtime_files.items():
+        runtime_hashes = []
+        for relative, expected in sorted(runtime_files.items()):
             require(isinstance(relative, str) and isinstance(expected, str)
                     and bool(re.fullmatch(r'[0-9a-f]{64}', expected)),
                     'Invalid reviewed CMS source hash')
@@ -184,29 +206,62 @@ class PublicationCms:
                     'Reviewed CMS runtime file is unavailable')
             require(hashlib.sha256(target.read_bytes()).hexdigest() == expected,
                     'CMS module runtime differs from reviewed content')
-        return root, revision
+            runtime_hashes.append(expected)
+        runtime_revision = hashlib.sha256('\n'.join(runtime_hashes).encode()).hexdigest()
+        return root, actual['module_version'], runtime_revision
+
+    def _module_status(self):
+        discovered = self._discover()
+        modules = []
+        selected = None
+        for root, manifest in discovered:
+            item = {'module_id': manifest['module_id'], 'display_name': manifest['display_name'],
+                    'module_version': manifest['module_version'], 'present': True,
+                    'enabled': False, 'compatible': False}
+            if manifest['module_id'] == MODULE_ID:
+                selected = (root, manifest)
+                try:
+                    self._verify(root, manifest)
+                    item['compatible'] = True
+                    item['message'] = 'Modul je přítomný a jeho verze je kompatibilní.'
+                except (ValueError, OSError) as exc:
+                    item['message'] = str(exc)
+            else:
+                item['message'] = 'Workspace pro tuto verzi modulu nemá reviewovaný adapter.'
+            modules.append(item)
+        return modules, selected
 
     def configure(self, request):
-        require(isinstance(request, dict) and set(request) == {'module_root', 'source_revision'},
+        require(isinstance(request, dict) and set(request) == {'module_id', 'enabled'}
+                and request['module_id'] == MODULE_ID and type(request['enabled']) is bool,
                 'Invalid CMS module binding request')
-        root = local_path(request['module_root'])
-        binding = {'module_root': str(root), 'source_revision': request['source_revision']}
         with self._writer():
             with self._database() as db:
                 pending = db.execute("SELECT 1 FROM operations WHERE state='prepared' LIMIT 1").fetchone()
             require(not pending, 'Finish CMS recovery before changing the module binding')
-            self._verify(binding)
-            _atomic_write(self.binding_path, _canonical(binding))
+            if request['enabled']:
+                modules, discovered = self._module_status()
+                module = next((item for item in modules if item['module_id'] == MODULE_ID), None)
+                require(discovered is not None and module is not None and module['compatible'],
+                        'Compatible CMS module is not present')
+                root, manifest = discovered
+                self._verify(root, manifest)
+                binding = {'module_id': MODULE_ID,
+                           'module_version': manifest['module_version'], 'enabled': True}
+                _atomic_write(self.binding_path, _canonical(binding))
+            elif self.binding_path.exists():
+                self.binding_path.unlink()
         return self.status()
 
     def _config(self, root):
         path = self.config_path if self.config_path.exists() else root / 'data' / 'sites.json'
         return self._load_json(path)
 
-    def _digest(self, config, revision):
+    def _digest(self, config, module_version, runtime_revision):
         raw = _canonical(config)
         require(len(raw) <= MAX_CONFIG, 'CMS config exceeds size limit')
-        return hashlib.sha256(revision.encode() + b'\0' + raw).hexdigest(), raw
+        identity = f'{MODULE_ID}\0{module_version}\0{runtime_revision}'.encode()
+        return hashlib.sha256(identity + b'\0' + raw).hexdigest(), raw
 
     def _run(self, root, raw, output):
         with tempfile.TemporaryDirectory(prefix='publication-cms-', dir=self._root()) as temp:
@@ -223,9 +278,9 @@ class PublicationCms:
             ], cwd=root, env=env, capture_output=True, timeout=30, check=False)
             require(result.returncode == 0, 'CMS module rejected the site configuration')
 
-    def _complete(self, db, operation_id, request, root, revision):
-        digest, raw = self._digest(request['config'], revision)
-        require(digest == request['preview_sha256'], 'CMS preview is stale or belongs to another revision')
+    def _complete(self, db, operation_id, request, root, module_version, runtime_revision):
+        digest, raw = self._digest(request['config'], module_version, runtime_revision)
+        require(digest == request['preview_sha256'], 'CMS preview is stale or belongs to another module version')
         output = root / 'dist' / 'sites'
         self._run(root, raw, output)
         self.checkpoint('output-generated')
@@ -233,7 +288,7 @@ class PublicationCms:
         self.checkpoint('config-saved')
         hostnames = sorted(item['hostname'] for item in request['config']['sites'])
         receipt = {'operation_id': operation_id, 'state': 'completed',
-                   'preview_sha256': digest, 'source_revision': revision,
+                   'preview_sha256': digest, 'module_version': module_version,
                    'generated_hostnames': hostnames, 'output': 'dist/sites'}
         db.execute("UPDATE operations SET state='completed',receipt_json=? "
                    "WHERE operation_id=? AND state='prepared'",
@@ -241,35 +296,50 @@ class PublicationCms:
         db.commit()
         return receipt
 
-    def _recover(self, root, revision):
+    def _recover(self, root, module_version, runtime_revision):
         with self._database() as db:
             rows = db.execute("SELECT operation_id,request_json FROM operations "
                               "WHERE state='prepared' ORDER BY rowid").fetchall()
             for operation_id, raw in rows:
-                self._complete(db, operation_id, json.loads(raw), root, revision)
+                self._complete(db, operation_id, json.loads(raw), root,
+                               module_version, runtime_revision)
+
+    def _enabled_module(self):
+        binding = self._load_binding()
+        modules, discovered = self._module_status()
+        require(discovered is not None, 'Enabled CMS module is no longer present')
+        root, manifest = discovered
+        require(binding['module_version'] == manifest['module_version'],
+                'Enabled CMS module version changed; enable it again after review')
+        root, module_version, runtime_revision = self._verify(root, manifest)
+        next(item for item in modules if item['module_id'] == MODULE_ID)['enabled'] = True
+        return binding, modules, root, module_version, runtime_revision
 
     def status(self):
         try:
-            binding = self._load_binding()
-        except FileNotFoundError:
-            return {'binding': None, 'compatible': False, 'config': None,
-                    'message': 'Publikační CMS modul zatím není připojen.'}
-        try:
-            root, revision = self._verify(binding)
+            modules, _ = self._module_status()
+            try:
+                binding, modules, root, module_version, runtime_revision = self._enabled_module()
+            except FileNotFoundError:
+                cms_present = any(item['module_id'] == MODULE_ID for item in modules)
+                return {'binding': None, 'modules': modules, 'compatible': False, 'config': None,
+                        'message': ('Publikační CMS modul je dostupný, ale není povolený.' if cms_present else
+                                    'Publikační CMS modul nebyl nalezen.')}
             with self._writer():
-                self._recover(root, revision)
-            return {'binding': binding, 'compatible': True, 'config': self._config(root),
-                    'message': 'Připojený modul odpovídá připnuté revizi a reviewovanému runtime obsahu.'}
+                self._recover(root, module_version, runtime_revision)
+            return {'binding': binding, 'modules': modules, 'compatible': True,
+                    'config': self._config(root),
+                    'message': f'Publikační CMS modul {module_version} je povolený a připravený.'}
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
-            return {'binding': binding, 'compatible': False, 'config': None,
+            return {'binding': locals().get('binding'), 'modules': locals().get('modules', []),
+                    'compatible': False, 'config': None,
                     'message': str(exc)}
 
     def preview(self, request):
         require(isinstance(request, dict) and set(request) == {'config', 'hostname'},
                 'Invalid CMS preview request')
-        binding = self._load_binding()
-        root, revision = self._verify(binding)
-        digest, raw = self._digest(request['config'], revision)
+        _, _, root, module_version, runtime_revision = self._enabled_module()
+        digest, raw = self._digest(request['config'], module_version, runtime_revision)
         with tempfile.TemporaryDirectory(prefix='publication-preview-', dir=self._root()) as temp:
             output = Path(temp) / 'sites'
             self._run(root, raw, output)
@@ -279,16 +349,15 @@ class PublicationCms:
             html = target.read_bytes()
             require(len(html) <= MAX_HTML, 'CMS preview exceeds size limit')
         return {'hostname': request['hostname'], 'html': html.decode('utf-8'),
-                'preview_sha256': digest, 'source_revision': revision}
+                'preview_sha256': digest, 'module_version': module_version}
 
     def generate(self, request):
         required = {'operation_id', 'preview_sha256', 'approved', 'config'}
         require(isinstance(request, dict) and set(request) == required
                 and request['approved'] is True, 'Invalid or unconfirmed CMS generation request')
         uuid(request['operation_id'])
-        binding = self._load_binding()
-        root, revision = self._verify(binding)
-        digest, _ = self._digest(request['config'], revision)
+        _, _, root, module_version, runtime_revision = self._enabled_module()
+        digest, _ = self._digest(request['config'], module_version, runtime_revision)
         require(digest == request['preview_sha256'], 'CMS preview is stale or changed')
         request_json = json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
         request_sha = hashlib.sha256(request_json.encode()).hexdigest()
@@ -304,4 +373,5 @@ class PublicationCms:
                            (request['operation_id'], request_sha, request_json, 'prepared'))
                 db.commit()
                 self.checkpoint('prepared')
-            return self._complete(db, request['operation_id'], request, root, revision)
+            return self._complete(db, request['operation_id'], request, root,
+                                  module_version, runtime_revision)

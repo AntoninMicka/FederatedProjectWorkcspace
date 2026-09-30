@@ -33,8 +33,9 @@ symlinku nebo názvu adresáře.
 Modul nesmí přímo zapisovat projektový Git, SQLite index, operation journal ani
 číst credentials. Používá autorizované aplikační služby; projektová mutace jde
 přes běžný Workspace expected-HEAD/journal/commit/index/receipt lifecycle.
-Symlink nebo checkout nesmí být automaticky načten, spuštěn, zabalen, importován
-ani považován za autorizovaný či kompatibilní.
+Bezpečný adresář lze automaticky prohlédnout a zobrazit deklarovanou přítomnost
+modulu. Nalezení checkoutu ani symlinku jej nesmí automaticky povolit, spustit,
+zabalit, importovat ani považovat za kompatibilní.
 
 Manifest v1 je přenosná reviewovaná deklarace bez endpointu a credentials.
 Obsahuje identitu a verzi modulu, verzi API a pro každou capability reference na
@@ -50,8 +51,9 @@ je read-only a modul neregistruje ani nespouští. Private-network transport,
 discovery, instalace a obecné autorizované capability volání vyžadují další
 kontrakt. Úzce vymezenou výjimku pro dvě lokální capability prvního
 publikačního modulu přijímá [ADR 0027](0027-pinned-publication-cms-invocation.md):
-vyžaduje explicitní binding, čistou připnutou revizi, reviewované runtime hashe,
-náhled a potvrzení a nezavádí obecný plugin runtime.
+vyžaduje automatickou detekci pouze přítomnosti, explicitní povolení, kompatibilní
+reviewovanou verzi manifestu a runtime hashe, náhled a potvrzení a nezavádí
+obecný plugin runtime.
 
 ## Důsledky a ověření
 

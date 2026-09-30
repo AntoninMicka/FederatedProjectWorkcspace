@@ -1,7 +1,7 @@
 {
   "module_id": "cz.proofofidea.publication-experiment-registry",
   "runtime_files": {
-    "src/publication_registry/__init__.py": "7fd8200bc3fc78f3ff102f58c89e3742d81f6a10ff4e5b2d88c8b1af9feb495a",
+    "src/publication_registry/__init__.py": "a0af3802af9949d536904a09015214dae477bf7794ed4eed8c269e1af2fc529a",
     "src/publication_registry/api.py": "3e97ebe7badeea7089a363159db337efce9280cdfb581f1c6579a7ce2e7731f3",
     "src/publication_registry/model.py": "6f71dd2fc1a3f8bb45f66a16dbd051fb2f0564c9c6a1a563ac20e4c4b0612a7f",
     "src/publication_registry/sitegen.py": "d900ed7a8713ff78c6b2286397f4c2a89a0883de78936d01ed22da995abe0e79",

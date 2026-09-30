@@ -86,11 +86,11 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
 <h2>Publikační CMS</h2>
 <p id="cms-status" role="status" aria-live="polite">Modul zatím nebyl načten.</p>
-<form id="cms-binding-form">
-<label>Kořen checkoutu modulu <input name="module_root" type="text" required placeholder="/absolutní/cesta/publication-experiment-registry"></label>
-<label>Připnutá Git revize <input name="source_revision" type="text" required pattern="[0-9a-f]{40,64}" autocomplete="off"></label>
-<button type="submit">Ověřit a připojit modul</button></form>
-<small>Workspace spustí jen čistý checkout na přesné revizi se shodným reviewovaným manifestem. Cesta a obsah webů zůstávají lokální konfigurací uzlu.</small>
+<h3>Dostupné moduly</h3><div id="cms-module-list"></div>
+<div id="cms-module" class="module-card">
+<button id="cms-enable" type="button" hidden>Povolit modul</button>
+<button id="cms-disable" type="button" hidden>Zakázat modul</button></div>
+<small>Workspace moduly automaticky detekuje, ale nikdy je bez výslovného povolení nespustí. Kompatibilita se řídí verzí reviewovaného manifestu, ne Git commitem. Nastavení CMS zatím platí pro celý uzel.</small>
 <div id="cms-editor" hidden>
 <hr><label>Doména <select id="cms-hostname"></select></label>
 <label>Název <input id="cms-title" maxlength="128"></label>
@@ -527,20 +527,24 @@ function renderCmsSite(){const site=selectedCmsSite();if(!site)return;
  document.querySelector('#cms-timeline').value=cmsRows(site.timeline,['date','title','description','url']);cmsActiveHostname=site.hostname;invalidateCmsPreview();
 }
 function fillCmsStatus(result){cmsStatus.textContent=result.message;cmsEditor.hidden=!result.compatible;
- const form=document.querySelector('#cms-binding-form');if(result.binding){form.elements.module_root.value=result.binding.module_root;form.elements.source_revision.value=result.binding.source_revision;}
+ const moduleList=document.querySelector('#cms-module-list');moduleList.replaceChildren();for(const item of result.modules || []){const row=document.createElement('p'),name=document.createElement('strong'),detail=document.createElement('span');name.textContent=item.display_name;detail.textContent=` · ${item.module_version} · ${item.compatible ? 'kompatibilní' : item.message}`;row.append(name,detail);moduleList.append(row);}if(!result.modules?.length)moduleList.textContent='Nebyl nalezen žádný modul s validním manifestem.';
+ const module=result.modules?.find(item=>item.module_id==='cz.proofofidea.publication-experiment-registry'),enabled=Boolean(module?.enabled);
+ document.querySelector('#cms-enable').hidden=!module || enabled || !module.compatible;document.querySelector('#cms-disable').hidden=!enabled;
  if(!result.compatible || !result.config){cmsConfig=null;return;}cmsConfig=structuredClone(result.config);cmsHostname.replaceChildren();
  for(const site of cmsConfig.sites){const option=document.createElement('option');option.value=site.hostname;option.textContent=site.hostname;cmsHostname.append(option);}renderCmsSite();
 }
 async function loadCmsStatus(){try{fillCmsStatus(await projectRequest('/v1/publication-cms/status',{}));}catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
-document.querySelector('#cms-binding-form').addEventListener('submit',async event=>{event.preventDefault();const fields=event.currentTarget.elements;
- cmsStatus.textContent='Ověřuji manifest, revizi a čistotu checkoutu…';try{fillCmsStatus(await projectRequest('/v1/publication-cms/configure',{module_root:fields.module_root.value.trim(),source_revision:fields.source_revision.value.trim()}));}
- catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}});
+async function setCmsEnabled(enabled){cmsStatus.textContent=enabled ? 'Ověřuji verzi manifestu a povoluji modul…' : 'Zakazuji modul…';
+ try{fillCmsStatus(await projectRequest('/v1/publication-cms/configure',{module_id:'cz.proofofidea.publication-experiment-registry',enabled}));}
+ catch(error){cmsStatus.textContent=error.message;cmsEditor.hidden=true;}}
+document.querySelector('#cms-enable').addEventListener('click',()=>setCmsEnabled(true));
+document.querySelector('#cms-disable').addEventListener('click',()=>setCmsEnabled(false));
 cmsHostname.addEventListener('change',()=>{if(cmsActiveHostname)saveCmsSiteForm(cmsActiveHostname);renderCmsSite();});
 for(const id of ['cms-title','cms-description','cms-catalog-kind','cms-catalog-title','cms-contacts','cms-links','cms-cv','cms-timeline'])document.querySelector('#'+id).addEventListener('input',invalidateCmsPreview);
 document.querySelector('#cms-preview-button').addEventListener('click',async event=>{event.currentTarget.disabled=true;
  try{saveCmsSiteForm();const request={config:structuredClone(cmsConfig),hostname:cmsHostname.value};cmsStatus.textContent='Generuji izolovaný náhled…';
   const result=await projectRequest('/v1/publication-cms/preview',request,60000);cmsPreview={request,result};cmsGenerationAttempt=null;
-  document.querySelector('#cms-request-preview').textContent=JSON.stringify({source_revision:result.source_revision,hostname:result.hostname,preview_sha256:result.preview_sha256,config:request.config},null,2);
+  document.querySelector('#cms-request-preview').textContent=JSON.stringify({module_version:result.module_version,hostname:result.hostname,preview_sha256:result.preview_sha256,config:request.config},null,2);
   document.querySelector('#cms-preview-frame').srcdoc=result.html;document.querySelector('#cms-preview').hidden=false;
   document.querySelector('#cms-confirm').checked=false;document.querySelector('#cms-generate-button').disabled=true;cmsStatus.textContent='Náhled je připraven. Výstup ještě nebyl změněn.';
  }catch(error){cmsStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}});
@@ -548,7 +552,7 @@ document.querySelector('#cms-confirm').addEventListener('change',event=>{documen
 document.querySelector('#cms-generate-button').addEventListener('click',async event=>{if(!cmsPreview || !document.querySelector('#cms-confirm').checked)return;
  event.currentTarget.disabled=true;cmsStatus.textContent='Generuji potvrzené statické weby…';
  if(!cmsGenerationAttempt)cmsGenerationAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsPreview.result.preview_sha256,approved:true,config:cmsPreview.request.config};
- try{const result=await projectRequest('/v1/publication-cms/generate',cmsGenerationAttempt,60000);cmsStatus.textContent=`Vygenerováno ${result.generated_hostnames.length} webů · revize ${result.source_revision.slice(0,12)} · ${result.output}.`;cmsGenerationAttempt=null;}
+ try{const result=await projectRequest('/v1/publication-cms/generate',cmsGenerationAttempt,60000);cmsStatus.textContent=`Vygenerováno ${result.generated_hostnames.length} webů · modul ${result.module_version} · ${result.output}.`;cmsGenerationAttempt=null;}
  catch(error){cmsStatus.textContent=error.message;event.currentTarget.disabled=false;}});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
@@ -1542,8 +1546,8 @@ class DesktopHandler(Handler):
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
                                      '/v1/metadata-suggestions/')):
-                message = ('Publikační CMS požadavek nelze provést. Ověřte připnutou revizi, čistotu '
-                           'checkoutu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
+                message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
+                           'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
                            'Chat požadavek nelze provést. Ověřte backend, projekt, výběr kontextu a lokální stav.')
                 return self.reply(422, {'error': message})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.

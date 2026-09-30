@@ -27,7 +27,18 @@ PR dosud nebyl vytvořen ani sloučen.
   prošla 363 testy, z toho 22 podmíněných testů přeskočeno. JavaScript prošel
   `node --check`; lokální integrace s izolovanou čistou kopií skutečného modulu
   ověřila preview i potvrzené generování všech tří webů.
+- [x] [completed] **MOD-01-UI-E (implemented)** — nahradit ruční cestu a Git pin
+  automatickou detekcí přítomnosti modulu a explicitním Povolit/Zakázat.
+  Kompatibilita používá identitu/verzi manifestu, přesnou reviewovanou deklaraci
+  capabilities a runtime SHA-256; CMS zůstává node-local a nadprojektové.
+  Cílená sada prošla 35 testy se 3 podmíněně přeskočenými, celý Workspace 365
+  testy s 22 přeskočenými. Skutečný rozpracovaný modul byl bez Git kontroly
+  automaticky nalezen, povolen a použit pro preview ve verzi 0.3.0.
+- [ ] [planned] **MOD-01-UI-F (designed)** — zobrazit skutečný stav deploymentů
+  a odděleně potvrdit jejich vytvoření nebo aktualizaci přes konkrétní provider
+  adapter. Provider, credential hranice a cílové účty/projekty zatím nejsou
+  určeny; lokální `dist/sites` se za deployment nevydává.
 
-Živý tok s modulem nelze přijmout, dokud rozpracovaný modulový checkout nebude
-commitnutý a jeho plná revize připnutá v UI. Generování je pouze lokální;
-deployment, DNS, TLS a cache zůstávají neověřené a nejsou součástí dávky.
+Generování je pouze lokální. Deployment, DNS, TLS a cache zůstávají neověřené;
+externí create/update nesmí být implementován bez výslovného provider kontraktu
+a `unknown` recovery hranice.
