@@ -178,7 +178,7 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ## 2E. Materializované kompiláty
 
-**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Návrh vznikl z ad-hoc požadavku M1-AH-01; důkaz návrhové kontroly drží [WORK_LOG](WORK_LOG.md).
+**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Stejný základ má sloužit projektovým webům, prezentacím, reportům a dalším složeným výstupům; nejde o samostatné paralelní publikační mechanismy. Návrh vznikl z ad-hoc požadavku M1-AH-01 a byl rozšířen uživatelským požadavkem na projektové výstupy z 2026-09-30; důkaz původní návrhové kontroly drží [WORK_LOG](WORK_LOG.md).
 
 - [ ] Uchovat zadání a pravidlo výběru zdrojů odděleně od výsledku; přenositelné definice verzovat, výstupní soubory ukládat jako lokální cache mimo projektový Git.
 - [ ] Nabídnout ruční aktualizaci z aktuálních verzí i nových zdrojů odpovídajících pravidlu výběru. Neprovádět automatický výpočet při otevření či restartu.
@@ -186,6 +186,13 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] Cache neverzovat ani nepřenášet při federaci/exportu; umožnit její odstranění a nový výpočet bez ztráty zdrojů či zadání.
 - [ ] Respektovat privacy a oprávnění vstupů, Context Manifest pro LLM a recovery oddělené od autoritativního journalu/run recordu.
 - [ ] Výsledek určený k trvalému uchování uložit pouze explicitní akcí jako běžný verzovaný artefakt s provenance.
+- [ ] V každém projektu nabídnout sekci **Výstupy**, ve které lze spravovat jednu nebo více verzovaných definic výstupu. Definice určí typ rendereru, explicitně vybrané artefakty, jejich pořadí a role/sekce; skryté automatické prohledání celého projektu není zdrojem reprodukovatelného výstupu.
+- [ ] Oddělit obecné sestavení zmrazených projektových artefaktů od rendereru. Projektový web, prezentace nebo report jsou adaptéry nad stejnou definicí, manifestem a cache lifecycle; jejich specifické rozvržení ani publikační provider se nesmí propsat do obecného kompilačního kontraktu.
+- [ ] Ukázat samostatné stavové ukazatele definice (`draft / saved / invalid`), každého zdroje (`available / changed / missing / forbidden`), kompilace (`missing / current / outdated / running / failed`), náhledu (`unavailable / current / stale`) a případné publikace (`not configured / unpublished / current / outdated / unknown / unavailable`). Jeden souhrnný stav nesmí zakrýt chybějící zdroj nebo neurčitý externí účinek.
+- [ ] Akce zpřístupnit podle doloženého stavu: definici lze uložit až po validaci, kompilovat pouze uloženou definici s dostupnými oprávněnými zdroji a publikovat pouze aktuální úplnou generaci. Změna definice, zdrojů nebo rendereru označí náhled i publikaci jako neaktuální, ale sama nic nepřepočítá ani nenasazuje.
+- [ ] Před publikací nebo exportem zobrazit úplný náhled výsledku a vedle něj seznam použitých artefaktů v pořadí, sestavené sekce/slidy, kompilační manifest s revizemi a hashy a přesný plán zamýšlené externí operace. Náhled není potvrzení publikace.
+- [ ] První webový renderer umožní spravovat vlastní stránku uvnitř konkrétního projektu, například stránku průzkumu složenou z metodiky, dat, grafů a závěrů. Obsah, kompilace, náhled a publikace patří do projektu; globální Nastavení obsahuje jen dostupnost modulu/provideru a node-local credentials.
+- [ ] Prezentační renderer podle sekce 22C znovu použije stejný výběr zdrojů, pořadí, manifest, indikaci neaktuálnosti a úplný privátní náhled. Audience view, poznámky řečníka, postupné odhalení a disclosure evidence zůstávají prezentačně specifické schopnosti.
 
 Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
 
@@ -643,33 +650,42 @@ Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RB
 
 # 11C. Externě verzované moduly a jednotné API
 
-**Stav: planned / designed, neimplementováno.** Dosavadní moduly a jejich
+**Stav: PoC validated v MOD-01; úzké CMS runtime volání implementováno v MOD-01-UI, obecný runtime ne.** Dosavadní moduly a jejich
 požadavky zůstávají v této hlavní roadmapě. Pouze nově výslovně vytipovaný modul
 může mít samostatný repozitář a roadmapu; jeho pracovní kopie nebo symlink leží
 v lokální, Gitem ignorované složce `modules.local/`. Hlavní plán jej neobsahuje
 jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
 
-- [ ] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
+- [x] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
   odkaz na jeho vlastní roadmapu, deklarované capability, závislosti a stav
   kompatibility s jednotným API. Text společné dokumentace musí být zobecněním
   potřebným pro API, ne doslovným přepisem modulové specifikace.
-- [ ] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
+- [x] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
   schéma, chyby a limity, oprávnění, privacy/execution boundary, idempotenci,
   `unknown` externí účinek a provenance. Modul nepřistupuje přímo k projektovému
   Gitu, indexu, journalu ani credentials; mutace používají autorizované
   aplikační služby a Workspace lifecycle.
-- [ ] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
+- [x] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
   symlinky nebo samostatně verzované checkouty, ale jejich obsah, Git historie,
   credentials, build výstupy a roadmapy nejsou součástí tohoto repozitáře ani
   distribučního balíku. Symlink není důkaz kompatibility, oprávnění ani trusted
   execution boundary a nesmí se sledovat při balení, importu či automatickém
   načítání kódu.
-- [ ] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
+- [x] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
   licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
   chování jádra ani spustit fallback.
 
-Podrobný návrhový kontrakt drží [ADR 0026](docs/adr/0026-module-unified-api.md);
-implementační rozpad drží `MOD-01` v BACKLOG.
+Podrobný kontrakt a hranice PoC drží
+[ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
+[WORK_LOG](WORK_LOG.md#mod-01--kontrakt-externě-verzovaných-modulů--2026-09-29).
+Připnutý preview/generate bridge prvního publikačního modulu vymezuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md); nejde o obecný
+loader, discovery, deploy ani produkční distribuci. Dosavadní umístění
+obsahové správy a deploymentu do globálního Nastavení nebylo uživatelsky
+akceptováno jako použitelný workflow. Provider adapter zůstává využitelnou
+infrastrukturou, ale cílové UI a lifecycle se přesouvají do projektových
+Výstupů podle sekce 2E; samotné lokální testy dosavadního UI tuto akceptaci
+nenahrazují.
 
 ---
 
@@ -1104,6 +1120,7 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 
 ## 22C. Disclosure Presenter
 
+- [ ] Přípravu decku realizovat jako prezentační renderer obecné projektové kompilace ze sekce 2E. Sdílet definici zdrojů, jejich pořadí, manifest, stavy dostupnosti/neaktuálnosti a atomickou lokální generaci; prezentační runtime a disclosure evidence zůstávají samostatnou nadstavbou.
 - [ ] Přidat modul pro přípravu verzovaných prezentací: skládat deck z projektových artefaktů a médií, spravovat pořadí, šablonu, poznámky řečníka a kroky postupného odhalení a před spuštěním ověřit chybějící zdroje i přesné revize. Vytvořený deck a jeho bezpečný export nesmějí obsahovat privátní scénář, poznámky nebo skryté backupy, pokud je uživatel výslovně nezahrne do oprávněného výstupu.
 - [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
 - [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.

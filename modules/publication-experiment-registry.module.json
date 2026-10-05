@@ -1,0 +1,143 @@
+{
+  "api": {
+    "manifest_path": "/v1/module/manifest",
+    "name": "workspace-module-api",
+    "version": "1.0"
+  },
+  "capabilities": [
+    {
+      "execution_boundary": "same-node",
+      "errors": [
+        "invalid-request",
+        "unauthorized",
+        "not-found",
+        "unavailable",
+        "incompatible"
+      ],
+      "id": "experiments.read",
+      "idempotency": "read-only",
+      "input_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/experiment-query-v1.json",
+      "limits": {
+        "max_items": 1000,
+        "max_response_bytes": 1048576
+      },
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/experiment-list-v1.json",
+      "permissions": [
+        "experiment.read"
+      ],
+      "privacy": [
+        "public",
+        "project",
+        "confidential",
+        "local-only"
+      ],
+      "provenance_required": true,
+      "side_effect": "none",
+      "states": [
+        "completed",
+        "failed"
+      ],
+      "version": "1.0"
+    },
+    {
+      "execution_boundary": "same-node",
+      "errors": [
+        "invalid-request",
+        "unauthorized",
+        "not-found",
+        "unavailable",
+        "incompatible"
+      ],
+      "id": "sandbox.config.read",
+      "idempotency": "read-only",
+      "input_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/sandbox-config-query-v1.json",
+      "limits": {
+        "max_items": 1000,
+        "max_response_bytes": 1048576
+      },
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/sandbox-config-v1.json",
+      "permissions": [
+        "publication.config.read"
+      ],
+      "privacy": [
+        "public",
+        "project"
+      ],
+      "provenance_required": true,
+      "side_effect": "none",
+      "states": [
+        "completed",
+        "failed"
+      ],
+      "version": "1.0"
+    },
+    {
+      "execution_boundary": "same-node",
+      "errors": [
+        "invalid-request",
+        "unauthorized",
+        "unavailable",
+        "incompatible"
+      ],
+      "id": "publication-sites.preview",
+      "idempotency": "read-only",
+      "input_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-preview-v1.json",
+      "limits": {
+        "max_config_bytes": 262144,
+        "max_response_bytes": 1048576,
+        "max_sites": 32
+      },
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-preview-result-v2.json",
+      "permissions": [
+        "publication.site.preview"
+      ],
+      "privacy": [
+        "public"
+      ],
+      "provenance_required": true,
+      "side_effect": "none",
+      "states": [
+        "completed",
+        "failed"
+      ],
+      "version": "3.0"
+    },
+    {
+      "execution_boundary": "same-node",
+      "errors": [
+        "invalid-request",
+        "unauthorized",
+        "unavailable",
+        "incompatible"
+      ],
+      "id": "publication-sites.generate",
+      "idempotency": "operation-id",
+      "input_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-generate-v1.json",
+      "limits": {
+        "max_config_bytes": 262144,
+        "max_output_bytes": 1048576,
+        "max_sites": 32
+      },
+      "output_schema": "module://cz.proofofidea.publication-experiment-registry/schemas/publication-sites-generate-result-v2.json",
+      "permissions": [
+        "publication.site.generate"
+      ],
+      "privacy": [
+        "public"
+      ],
+      "provenance_required": true,
+      "side_effect": "local",
+      "states": [
+        "completed",
+        "failed"
+      ],
+      "version": "3.0"
+    }
+  ],
+  "dependencies": [],
+  "display_name": "Publication & Experiment Registry",
+  "module_id": "cz.proofofidea.publication-experiment-registry",
+  "module_version": "0.4.0",
+  "roadmap": "ROADMAP.md",
+  "schema_version": 1
+}

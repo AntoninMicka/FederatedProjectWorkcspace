@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0026 — Externě verzované moduly a jednotné API
 
-Stav: přijato jako **designed**. Implementace patří do `MOD-01`; tento dokument
+Stav: přijato a v `MOD-01` implementováno jako **PoC validated**. Tento dokument
 nezavádí plugin runtime, dynamické načítání kódu ani distribuci modulů.
 
 ## Rozhodnutí
@@ -33,13 +33,36 @@ symlinku nebo názvu adresáře.
 Modul nesmí přímo zapisovat projektový Git, SQLite index, operation journal ani
 číst credentials. Používá autorizované aplikační služby; projektová mutace jde
 přes běžný Workspace expected-HEAD/journal/commit/index/receipt lifecycle.
-Symlink nebo checkout nesmí být automaticky načten, spuštěn, zabalen, importován
-ani považován za autorizovaný či kompatibilní.
+Bezpečný adresář lze automaticky prohlédnout a zobrazit deklarovanou přítomnost
+modulu. Nalezení checkoutu ani symlinku jej nesmí automaticky povolit, spustit,
+zabalit, importovat ani považovat za kompatibilní.
+
+Manifest v1 je přenosná reviewovaná deklarace bez endpointu a credentials.
+Obsahuje identitu a verzi modulu, verzi API a pro každou capability reference na
+vstupní/výstupní schéma, oprávnění, privacy třídy, execution boundary, kladné
+limity, idempotenci, side-effect třídu, stavy a požadavek provenance. Capability s
+externím efektem musí deklarovat `unknown`.
+
+Node-local binding se předává odděleně při načtení. PoC podporuje pouze
+credential-free HTTP na explicitní literal loopback adrese a pevný endpoint
+`/v1/module/manifest`; redirect, jiný content type, příliš velká odpověď nebo
+jakýkoli rozdíl proti reviewovanému manifestu znamená nekompatibilitu. Kontrola
+je read-only a modul neregistruje ani nespouští. Private-network transport,
+discovery, instalace a obecné autorizované capability volání vyžadují další
+kontrakt. Úzce vymezenou výjimku pro dvě lokální capability prvního
+publikačního modulu přijímá [ADR 0027](0027-pinned-publication-cms-invocation.md):
+vyžaduje automatickou detekci pouze přítomnosti, explicitní povolení, kompatibilní
+reviewovanou verzi manifestu a runtime hashe, náhled a potvrzení a nezavádí
+obecný plugin runtime.
 
 ## Důsledky a ověření
 
 Každý externí modul podléhá samostatnému reuse, licenčnímu, bezpečnostnímu a
 kompatibilitnímu review. Nekompatibilní, chybějící nebo neautorizovaná capability
-selže uzavřeně; jádro nemění chování ani nehledá náhradní modul. Konkrétní
-mechanismus instalace, discovery, sandboxu a publikace se rozhodne až v `MOD-01`
-nad doloženým prvním modulem a jeho testovacím kontraktem.
+selže uzavřeně; jádro nemění chování ani nehledá náhradní modul.
+
+První doložený modul má samostatný repozitář v ignorovaném `modules.local/` a
+vrací manifest přes stejné API; jeho funkční roadmapa se do tohoto repozitáře
+nekopíruje. Implementovaný validátor a CLI ověřují pouze kompatibilitu
+deklarace. Instalace, discovery, autorizace volání a publikace zůstávají mimo
+tento PoC.

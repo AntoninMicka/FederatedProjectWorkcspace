@@ -47,6 +47,7 @@ Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wra
 ./run.sh check "/cesta/k/projektu"
 ./run.sh config project "/cesta/k/projektu/project.json"
 ./run.sh config node "/cesta/k/lokalnimu/node.json"
+./run.sh module-check modules/priklad.module.json [http://127.0.0.1:PORT]
 ./run.sh help
 ```
 
@@ -55,6 +56,26 @@ Pokud už jsou závislosti dostupné, krok `setup` lze vynechat. Použije se `.v
 Výchozí demo přes `spikes/demo.py` založí izolovaný dočasný Git repozitář, uloží Markdown artefakt přes Workspace a vypíše commit, index po znovuotevření a historii. Po dokončení se demo data odstraní. **Nespouští se webový server ani desktopové UI; nejde zatím o aplikaci pro běžnou práci.** Při násilném ukončení může zůstat dočasný adresář uvedený ve výstupu; demo není určeno k uchování dat.
 
 Wrapper lze zavolat absolutní cestou z jiného adresáře; relativní cesta u `check` se vztahuje k adresáři volajícího. `check` vrací 0 pro platnou projekci a 1 při chybě validace, neplatné argumenty wrapperu vracejí 2.
+
+`module-check` bez URL pouze striktně ověří obecný modulový manifest. S URL
+načte pevný manifest endpoint API a vyžaduje přesnou shodu celé reviewované
+deklarace. PoC přijímá jen literal loopback HTTP adresu s explicitním portem,
+nesleduje redirect a neobsahuje instalaci, discovery ani spuštění modulu.
+
+První publikační modul má navíc úzce vymezené CMS UI v **Nastavení → Weby**.
+Workspace automaticky zjistí jeho přítomnost v `modules.local/`, ale nespustí jej,
+dokud jej uživatel výslovně nepovolí. Ověří identitu a verzi manifestu, přesnou
+reviewovanou deklaraci capabilities a hashe runtime souborů; Git commit není
+součástí kompatibility. Poté lze v jedné správě přidávat domény a pro každou
+nezávisle povolit části Profil, CV a Timeline, vytvořit izolovaný
+náhled, zkontrolovat přesný request a samostatně potvrdit lokální generování do
+modulového `dist/sites`. CMS je zatím nadprojektové node-local nastavení. Webové
+UI je dostupné pouze administrátorovi. Generování nic nenasazuje a nemění DNS;
+recovery a bezpečnostní hranice popisuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+[ADR 0028](docs/adr/0028-cloudflare-publication-portal.md) vymezuje jeden
+host-routed Cloudflare Worker pro jeden publikační portál a bezpečnou hranici
+potvrzení/recovery externího deploymentu.
 
 Ruční příprava a spuštění bez wrapperu:
 

@@ -176,6 +176,7 @@ def sync_ca_to_router(host, container):
 def bundle(root):
     files = [root / 'requirements.txt', *license_files(root)]
     files += sorted((root / 'spikes').glob('*.py'))
+    files += sorted((root / 'modules').glob('*.json'))
     # Fixed source allowlist: no .git, credentials, private catalog or user data.
     stream = io.BytesIO()
     with tarfile.open(fileobj=stream, mode='w:gz') as archive:

@@ -20,9 +20,27 @@ kontrakt a dokumentaci. Modul se připojuje přes verzované capability API, nik
 přímým přístupem k projektovému Gitu, indexu, journalům nebo credentials.
 Kontrakt zahrnuje identitu/verzi modulu, capabilities, vstupní a výstupní
 schémata, oprávnění, privacy/execution boundary, limity, idempotenci a stavy
-včetně `unknown`, provenance a kompatibilitu. Nejde tím o automatické načítání
-cizího kódu či převzetí jeho roadmapy. Podrobnosti:
+včetně `unknown`, provenance a kompatibilitu. Bezpečné adresáře modulů lze
+automaticky prohlédnout a zobrazit jejich deklarovanou přítomnost; to samo modul
+nepovoluje, neimportuje ani nespouští. Podrobnosti:
 [ADR 0026](docs/adr/0026-module-unified-api.md).
+
+`MOD-01` implementuje striktní manifest v1 a read-only load-time kontrolu proti
+API modulu. Portable manifest neobsahuje endpoint ani credentials; PoC runtime
+binding je omezený na explicitní literal loopback HTTP a musí vrátit přesně
+shodnou deklaraci. Kontrola sama modul nespouští ani neregistruje capability.
+
+`MOD-01-UI` přidává úzký same-node invocation bridge pouze pro
+`publication-sites.preview` a `publication-sites.generate`. Před spuštěním
+automaticky zjistí přítomnost reviewovaného modulu a vyžaduje jeho explicitní
+povolení. Kompatibilita se řídí identitou/verzí manifestu, přesnou deklarací a
+reviewovaným hashem celé množiny Python runtime souborů a šablony, nikoli Git
+commitem; interpret běží izolovaně. Node-local konfigurace, SQLite operation
+journal, exact-preview hash a explicitní potvrzení oddělují náhled od
+deterministického lokálního generování. Výstup `dist/sites` není deploy ani
+projektový artefakt. CMS zatím zůstává nadprojektové; obecné spouštění jiných
+capabilities zůstává neimplementované. Podrobnosti:
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
 
 Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal PySide6 a nativní předání tokenu jsou ověřeny v ADR 0010; volbu stacku uzavírá ADR 0013. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
 

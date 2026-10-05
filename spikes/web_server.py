@@ -22,6 +22,7 @@ from spikes.administration import Administration, AccessDenied, identifier
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
+from spikes.publication_cms import PublicationCms
 
 HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
 CSS += ADMIN_CSS
@@ -72,6 +73,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
   projectCreateForm.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
@@ -263,6 +265,9 @@ class WebHandler(DesktopHandler):
             # expose that history through a different web account identity.
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
+        if self.path.startswith('/v1/publication-cms/'):
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
         if self.path in {'/v1/projects/open', '/v1/artifacts/preview'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
                 return self.send_error(403)
@@ -287,7 +292,7 @@ class WebHandler(DesktopHandler):
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('X-Content-Type-Options', 'nosniff')
-        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
         self.send_header('Connection', 'close')
         self.end_headers()
         self.wfile.write(data)
@@ -325,6 +330,7 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.projects = Projects(node, network=True)
     server.node = node
     server.chat_service = ChatService(node, server.projects)
+    server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.administration = Administration(node)
     return server
 

@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
   deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
@@ -20,6 +20,8 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
   test         Spustí celou unittest sadu.
   check CESTA  Ověří artefakty a registry projektu bez zápisu; neověřuje project.json.
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
+  module-check MANIFEST [API_BASE_URL]
+               Ověří manifest; s URL porovná deklaraci s API modulu.
   help         Zobrazí tuto nápovědu.
 
 Desktop umožňuje vytvoření a čtení projektů; editor artefaktů, LLM a federace zatím chybí.
@@ -45,6 +47,8 @@ case "$command_name" in
         if (( $# != 3 )) || [[ "$2" != project && "$2" != node ]]; then
             usage >&2; exit 2
         fi ;;
+    module-check)
+        if (( $# != 2 && $# != 3 )); then usage >&2; exit 2; fi ;;
     *) printf 'Neznámý příkaz: %s\n' "$command_name" >&2; usage >&2; exit 2 ;;
 esac
 
@@ -55,7 +59,7 @@ if [[ "$command_name" == desktop && $# == 3 ]]; then
     desktop_args=(--node "$node_path")
 fi
 # Resolve caller-relative project paths before switching to the source directory.
-if [[ "$command_name" == check || "$command_name" == config ]]; then
+if [[ "$command_name" == check || "$command_name" == config || "$command_name" == module-check ]]; then
     if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
     if [[ "$project_path" != /* ]]; then project_path="$PWD/$project_path"; fi
 fi
@@ -118,4 +122,10 @@ case "$command_name" in
     test) exec "$python_bin" -m unittest discover -s tests -v ;;
     check) exec "$python_bin" -m spikes.check_project "$project_path" ;;
     config) exec "$python_bin" -m spikes.check_config "$2" "$project_path" ;;
+    module-check)
+        if (( $# == 3 )); then
+            exec "$python_bin" -m spikes.check_module "$project_path" "$3"
+        fi
+        exec "$python_bin" -m spikes.check_module "$project_path"
+        ;;
 esac

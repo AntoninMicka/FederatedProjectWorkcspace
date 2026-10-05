@@ -17,8 +17,9 @@ F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
 F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
-po PR #37, F-M3-CHAT-MODES-01 po PR #40 a M3-UB-01 po PR #42 uzavřen ve
-WORK_LOG. Aktivní F-M3-CHAT-DIRECT-01 drží [TODO](TODO.md).
+po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
+F-M3-CHAT-DIRECT-01 po PR #44 jsou uzavřené ve WORK_LOG. Akceptovaný MOD-01 je
+ve WORK_LOG a jeho větev čeká na doručení PR podle [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -91,21 +92,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
-
-- [ ] [planned] **MOD-01 — Kontrakt externě verzovaných modulů a jednotného API
-  (cílová úroveň: designed → PoC validated).** Dosavadní moduly zůstávají v
-  hlavní roadmapě; jen nově výslovně vybraný modul může být samostatně verzovaný
-  mimo tento repozitář. Jeho lokální checkout nebo symlink leží v ignorovaném
-  `modules.local/`; vlastní roadmapa, Git historie, credentials a build výstupy
-  se sem nekopírují ani nebalí. Definovat verzovanou identitu, capability,
-  vstupní/výstupní schémata, chyby/limity, oprávnění, privacy/boundary,
-  idempotenci, `unknown`, provenance a kompatibilitu s jednotným API. Hlavní
-  dokumentace smí převzít pouze nezbytnou generalizaci kontraktu, ne doslovný
-  popis funkčnosti modulu. Akceptace: symlink i samostatný checkout nejsou
-  automaticky spuštěny ani zahrnuty do balíku; modul nemá přímý přístup ke Gitu,
-  indexu, journalu ani credentials; nekompatibilní, nedostupná či neautorizovaná
-  capability fail-closed a nezmění jádro ani fallback. Před implementací
-  provést reuse, licenční a bezpečnostní review podle ADR 0026.
 
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.

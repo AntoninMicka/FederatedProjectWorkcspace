@@ -20,6 +20,8 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(archive.getnames(), names)
             self.assertTrue(all(m.isfile() for m in archive))
         self.assertIn('spikes/workspace.py', names)
+        self.assertIn('modules/publication-experiment-registry.module.json', names)
+        self.assertIn('modules/publication-experiment-registry.source.json', names)
         self.assertFalse(any('private' in n or '.venv' in n or n.startswith('/') for n in names))
 
     def test_dry_run_and_input_rejection_do_not_connect(self):

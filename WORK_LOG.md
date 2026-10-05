@@ -5,6 +5,113 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## MOD-01-UI — Publikační CMS ve Workspace — 2026-10-05
+
+Dávka na větvi `feature/mod-01-publication-registry` navázala před vytvořením PR
+na MOD-01 a dodala úzce připnuté CMS capability, správu propojených domén a
+potvrzený Cloudflare deployment. Dosažená úroveň je PoC validated. Evidence byla
+na výslovný pokyn uživatele přesunuta z TODO ještě před PR; PR do `develop`
+dosud nebyl vytvořen ani sloučen a dávka se tím nepovažuje za začleněnou.
+
+- [x] [completed] **MOD-01-UI-A (designed)** — ADR 0027 vymezil spuštění dvou
+  CMS capabilities bez obecného plugin runtime; ADR 0028 přijal jeden
+  host-routed Cloudflare Worker, oddělené potvrzení a durable `unknown` recovery.
+- [x] [completed] **MOD-01-UI-B (implemented)** — node-local binding, přesná
+  kontrola manifestu/capabilities/runtime hashů a izolované spuštění pevného
+  entrypointu modulu.
+- [x] [completed] **MOD-01-UI-C (implemented)** — desktopové a administrátorské
+  webové UI pro správu domén, přesný request, sandboxed HTML náhled a samostatné
+  potvrzení generování.
+- [x] [completed] **MOD-01-UI-D (PoC validated)** — serializované generování,
+  SQLite journal a recovery pádu mezi odvozeným výstupem a atomickým uložením
+  node-local konfigurace.
+- [x] [completed] **MOD-01-UI-E (implemented)** — automatická detekce modulu a
+  explicitní Povolit/Zakázat podle kompatibility manifestu namísto ruční cesty
+  nebo Git pinu.
+- [x] [completed] **MOD-01-UI-F (PoC validated)** — přidávání a odebírání domén,
+  nezávislé sekce Profil/CV/Timeline, zachování vypnutého obsahu a bezeztrátová
+  migrace staré konfigurace.
+- [x] [completed] **MOD-01-UI-G (PoC validated)** — read-only provider status,
+  přesný deployment plán, samostatné potvrzení, přímý Workers Static Assets tok
+  a `unknown` bez automatického retry. Živá akceptace odhalila, že Cloudflare
+  asset upload vrací také úspěšný HTTP 202; adapter jej po cílené regresi přijímá
+  pouze s platnou úspěšnou envelope a completion JWT.
+
+Živá akceptace 2026-10-05 nasadila release
+`46465cf5933abe03023f228426363188e3c18a06ce9580ec28fd54db7a78564f` jako
+Worker verzi `b81f5b22-e4d4-474c-9fdb-ff61b9e09daa` a deployment
+`445aa43c-e051-4d77-9943-589850603c88`. Následný read-only refresh vrátil
+`current` a stejný provider release tag. `antoninmicka.cz`, `proofofidea.cz` a
+`tonymicka.cz` odpověděly přes validované HTTPS stavem 200 a `CF-Cache-Status:
+HIT`; SHA-256 každého těla se přesně shodoval s potvrzeným lokálním
+`dist/sites/<hostname>/index.html`. Deployment nezměnil DNS ani Custom Domains.
+
+Předchozí dva nejednoznačné pokusy byly po read-only kontrole operátorsky
+uzavřeny jako `abandoned`: aktivní version/deployment ID zůstaly shodné s
+očekávaným stavem před pokusem a provider neobsahoval žádnou verzi s cílovým
+release tagem. Nový upload se spustil až poté. Cílená sada
+`python3 -m unittest tests.test_publication_cms -v` prošla 10 testy. Po opravě
+adapteru prošla úplná sada `python3 -m unittest discover -s tests -v`: 369
+testů, z toho 22 podmíněných testů přeskočeno.
+
+## MOD-01 — Kontrakt externě verzovaných modulů — 2026-09-29
+
+Dávka na větvi `feature/mod-01-publication-registry` implementovala obecný
+manifest v1 a fail-closed load-time ověření proti API prvního samostatně
+verzovaného modulu. Dosažená úroveň je PoC validated; PR dosud nebyl vytvořen
+ani sloučen. Samostatný modulový repozitář zůstává mimo hostitelský Git v
+ignorovaném `modules.local/` a nemá vytvořený commit.
+
+- [x] [completed] **MOD-01-A — Obecný manifest a capability kontrakt
+  (implemented).** Manifest deklaruje identitu/verzi, API, vstupní a výstupní
+  schema reference, oprávnění, privacy, execution boundary, limity,
+  idempotenci, side effect/stavy a provenance bez endpointu nebo credentials.
+- [x] [completed] **MOD-01-B — Fail-closed load-time ověření (implemented).**
+  Bounded parser a read-only CLI v1 přijímají pouze explicitní literal loopback
+  HTTP, nesledují redirect a vyžadují přesnou shodu API odpovědi s reviewovaným
+  manifestem. Selhání nic neregistruje a nemění projektový stav.
+- [x] [completed] **MOD-01-C — První samostatný modul (implemented).** Externí
+  repozitář obsahuje vlastní MPL-2.0 licenci, roadmapu a bezpečnostní hranice,
+  provider-neutral registry model, read-only API, prázdný sandbox manifest a
+  Worker katalog/detail/404. Jeho budoucí funkce se do hlavní roadmapy
+  nekopírují.
+- [x] [completed] **MOD-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Pět cílených hostitelských testů prošlo s reálným
+  loopbackem, samostatný modul prošel 6 Python testy a Worker suite; skutečný
+  host↔module compatibility smoke přijal verzi 0.1.0. Finální hostitelská sada
+  prošla: 359 testů, 22 environmentálních skipů. `git diff --check`, kontrola
+  nových souborů a oddělení obou Git repozitářů byly součástí předání.
+
+Cloudflare Worker nebyl nasazen, DNS/TLS ani tři cílové hostname nebyly živě
+ověřeny. Mutující publish/unpublish, durable externí operation journal,
+disclosure, proxy, analytika a marketingové UI patří do vlastní roadmapy modulu.
+
+## F-M3-CHAT-DIRECT-01 — Přímý brainstormingový dispatch — 2026-09-20
+
+Dávka byla dokončena navazujícím acceptance PR #44 jako commit `8171923` v
+`develop`; implementační PR #43 (`32cf743`) dodal přímý externí dispatch,
+historii přesného requestu a volitelné streamované zobrazení. Dosažená úroveň
+je PoC validated. Živý desktopový OpenAI stream byl potvrzen; živý streamovaný
+webový smoke nebyl proveden.
+
+- [x] [completed] **F-M3-CHAT-DIRECT-01-A — Kontrakt, provider review a reuse
+  (designed).** ADR 0008 vymezil přímý dispatch po serverové autorizaci,
+  request evidence bez secrets, ephemerální SSE delty a durable `unknown` bez
+  automatického retry.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-B — Přímý dispatch a historie requestu
+  (implemented).** Brainstorming používá Context Manifest, binding hash a run
+  journal; vlastník vidí request i po restartu a webový vstup je do oddělení
+  identity store omezen na administrátora.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-C — Volitelné streamované zobrazení
+  (implemented).** Capability-gated stream zachovává jediný durable finální
+  výsledek; timeout nebo přerušení končí `unknown`, chybná událost `failed`.
+- [x] [completed] **F-M3-CHAT-DIRECT-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Cílených 69 testů prošlo se 3 Qt skipy, JavaScript prošel
+  `node --check` a úplná sada 354 testů prošla s 22 environmentálními skipy.
+
+Implementace i akceptace byly sloučeny do `develop`; evidence byla přesunuta z
+TODO při aktivaci následující uživatelem vyžádané dávky.
+
 ## M3-UB-01 — Usage & billing backendů — 2026-09-20
 
 Dávka uzavřena po začlenění PR #42 jako commit `43fc8e3` v `develop`; feature

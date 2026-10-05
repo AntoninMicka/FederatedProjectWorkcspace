@@ -166,6 +166,26 @@ nedokládá kompatibilní streaming/recovery kontrakt ani licenci k převzetí, 
 se z ní nekopíruje kód. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#přímý-brainstorming-request-record-a-streaming--f-m3-chat-direct-01).
 
+MOD-01 **reuse/adaptuje** bounded striktní JSON parser, fail-closed validaci a
+verzované capability hranice tohoto repozitáře. Pro read-only load-time kontrolu
+používá Python stdlib HTTP bez nové runtime závislosti; redirect a nelokální
+endpoint odmítá. První externí modul používá Python stdlib a standardní
+Cloudflare Worker API, ale nepřebírá cizí kód ani provider SDK. Soukromá
+inventura byla použita jen ke kontrole, že obecné backendové a lokální API
+komponenty neřeší tento manifest/kompatibilitní kontrakt; jejich převzetí bylo
+odmítnuto kvůli odlišné autoritě, recovery a licenčnímu kontextu. Rozhodnutí:
+[ADR 0026](docs/adr/0026-module-unified-api.md).
+
+MOD-01-UI **reuse/adaptuje** existující same-origin autentizované UI/API,
+node-local atomické bindingy, SQLite run journal a explicitní preview/confirm
+tok externích operací. Generátor ani jeho doménový model se nekopírují do hosta:
+Workspace automaticky zjistí přítomnost modulu, ale spustí jeho pevný entrypoint
+až po explicitním povolení a kontrole verze manifestu, přesné deklarace a
+reviewovaných SHA-256 runtime souborů. Git commit není runtime kontraktem.
+Obecný plugin loader, shell příkaz z konfigurace a přímý zápis do projektového
+Gitu byly odmítnuty.
+Rozhodnutí: [ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+
 M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
 
 M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
