@@ -10,9 +10,10 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
 
 ## Rozsah a hranice
 
-- Stav dávky: [ ] [in progress]; aktivována 2026-09-21 z `develop` po začlenění
-  F-M3-CHAT-DIRECT-01 v PR #43 (`32cf743`) a jeho acceptance PR #44
-  (`8171923`). Větev `feature/f-m3-media-01` vznikla z commitu `8171923`.
+- Stav dávky: [ ] [in progress]; původně aktivována 2026-09-21 z commitu
+  `8171923` po PR #43/#44. Po začlenění MOD-01-UI v PR #45 byla existující
+  nepushnutá větev 2026-10-05 rebasována na aktuální `develop` `d4a83d2`;
+  aktivační commit zůstává prvním feature commitem jako `51dbb44`.
 - Původ: roadmapa M3, ADR 0008 a backlogová položka `F-M3-MEDIA-01`.
 - Výstup: provider-neutral explicitní obrazová capability s OpenAI Images a
   ComfyUI jako oddělenými adaptery, bezpečným preview, potvrzeným dispatch,
@@ -78,6 +79,9 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   output node. Webovou změnu smí provést jen node admin; generování, preview,
   potvrzení a publikace v této části ještě zbývají. Cíleně 22 testů OK
   (2 podmíněné smoke přeskočeny), úplná sada 363 testů OK, 22 přeskočeno.
+  Po rebasu na PR #45 prošlo 43 cílených media/CMS/desktop/web testů se 3
+  podmíněnými Qt/WebEngine skipy; obecný kompoziční router z roadmapy 2E.1
+  zůstává mimo rozsah této dávky.
 - [ ] [planned] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
   (PoC validated).** Ověřit MIME/magic bytes, rozměry a limity, secrets,
   RBAC/privacy, přesný request, malformed/oversized výsledek, timeout,
@@ -85,3 +89,17 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   Spustit úplnou sadu a relevantní skutečný UI/provider smoke; neprovedené živé
   ověření ponechat výslovně otevřené. Závěrečný úklid evidence provést v této
   feature větvi před jejím jediným PR.
+
+## K předání do backlogu
+
+- [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
+  capability a kompoziční router (cílová úroveň: designed → PoC validated).**
+  Uživatelský požadavek z 2026-10-05 je zanesen v roadmapě 2E.1. První dávka má
+  dodat verzovaný statický descriptor pro renderery i nástroje, fail-closed
+  katalog a read-only návrh typovaného plan/step DAG bez spuštění. Navazující
+  execution musí skládat explicitní artefakty a materializované mezivýstupy,
+  například účetní data → schválený Julia skript → tabulka/graf → prezentace,
+  se samostatnými Context Manifest/run contracty, privacy, receipts, preview a
+  potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět pluginy, měnit
+  modely/bindingy nebo oslabit oprávnění. Položka není součástí akceptace
+  F-M3-MEDIA-01; tato dávka zachová pouze kompatibilní capability metadata.

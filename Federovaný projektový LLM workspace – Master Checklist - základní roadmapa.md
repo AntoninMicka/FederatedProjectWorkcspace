@@ -194,6 +194,58 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] První webový renderer umožní spravovat vlastní stránku uvnitř konkrétního projektu, například stránku průzkumu složenou z metodiky, dat, grafů a závěrů. Obsah, kompilace, náhled a publikace patří do projektu; globální Nastavení obsahuje jen dostupnost modulu/provideru a node-local credentials.
 - [ ] Prezentační renderer podle sekce 22C znovu použije stejný výběr zdrojů, pořadí, manifest, indikaci neaktuálnosti a úplný privátní náhled. Audience view, poznámky řečníka, postupné odhalení a disclosure evidence zůstávají prezentačně specifické schopnosti.
 
+### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
+
+**Stav: plánovaný návrh, neimplementováno.** Web, prezentace, obrázek, report ani
+jiný výstupní modul nemají být pro Ollamu či jiný planner známé pouze textem v
+globálním promptu. Každý výstupní renderer a integrovaný nástroj poskytne
+verzovaný, validovaný a staticky načitatelný capability descriptor. Descriptor
+je vstup deterministického aplikačního routeru; není executable pluginem,
+oprávněním ke spuštění ani náhradou aplikační validace.
+
+- [ ] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
+  podporované záměry a příklady pokynů (např. „vygeneruj prezentaci na téma…“),
+  výslovně nepodporované použití, vstupní a výstupní schéma/MIME, formát
+  výsledku, dostupné šablony s verzí a hashem, požadované role a backendové
+  capability, limity, privacy/execution boundary, oprávnění, cost/side-effect
+  třídu, provenance a potřebu preview či lidského potvrzení.
+- [ ] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
+  očekávaným strukturovaným výstupem, nikoli jako skrytý volný text vložený
+  pluginem do libovolného požadavku. Node-local binding modelu, endpoint,
+  credentials a runtime dostupnost zůstávají oddělené od přenosného descriptoru.
+- [ ] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
+  transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
+  graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
+  ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
+- [ ] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
+  návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
+  capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
+  model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.
+- [ ] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
+  stabilním plan/step ID. Každá hrana předává explicitní artefakt nebo zmrazený
+  materializovaný výstup s formátem, schématem, privacy, revizí a hashem; skryté
+  sdílení celé konverzace nebo projektu není dovoleno.
+- [ ] Podporovat například plán „z účetních dat za rok XXXX spusť schválený Julia
+  skript YYY, vypočítej výtěžnost jednotlivých her, z výsledné tabulky/grafů
+  sestav prezentaci podle šablony Z“. Preview před spuštěním ukáže přesné zdroje,
+  kroky, nástroje/modely, šablony, mezivýstupy, execution boundaries, očekávané
+  externí účinky a místa samostatného potvrzení.
+- [ ] Každý krok má vlastní Context Manifest nebo deterministický run contract,
+  stav a receipt. `unknown`, stale vstup, zamítnutí či nevalidní výstup zastaví
+  závislé kroky; router nesmí automaticky opakovat neurčitý externí účinek ani
+  tajně zvolit jiný model, plugin nebo nástroj. Obnova naváže pouze na doložené
+  dokončené kroky a znovu ověří jejich hashe a oprávnění.
+- [ ] UI vysvětlí, proč byla capability navržena, které alternativy jsou
+  kompatibilní a co uživatel potvrzuje. Uživatel může plán nebo konkrétní
+  binding/model změnit před spuštěním; automatický výběr dostupného backendu
+  není souhlas se změnou privacy, ceny ani execution boundary.
+
+První implementační dávka má definovat descriptor/schema, validaci katalogu a
+read-only návrh plánu bez spouštění. Teprve navazující dávka propojí execution
+s workflow engine, materializovanými kompiláty, Julia runnerem a výstupními
+renderery. Obrazová dávka `F-M3-MEDIA-01` zachová kompatibilní capability
+metadata, ale obecný kompoziční router není její součástí.
+
 Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
 
 ## 2F. Read-only artefakty sdílené mezi projekty
@@ -674,6 +726,10 @@ jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
 - [x] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
   licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
   chování jádra ani spustit fallback.
+- [ ] Rozšířit jednotné API o staticky načitatelný Output Capability Descriptor
+  a typované vazby podle sekce 2E.1. Descriptor smí planneru popsat účel, formát,
+  šablony a příklady pokynů, ale nesmí mu předat credentials, executable kód ani
+  oprávnění obejít aplikační router, Context Manifest nebo potvrzení uživatele.
 
 Podrobný kontrakt a hranice PoC drží
 [ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
