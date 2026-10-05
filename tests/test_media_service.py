@@ -9,8 +9,8 @@ import unittest
 from uuid import uuid4
 import zlib
 
-from spikes.media_backend import ComfyImageAdapter
-from spikes.media_service import MediaService
+from spikes.media_backend import ComfyImageAdapter, MediaUnknownRun
+from spikes.media_service import MediaService, PREVIEW_LIMIT
 from spikes.metadata import validate_snapshot
 from spikes.openai_backend import OpenAIBinding, OpenAIBindings, OpenAICredentials
 from spikes.project_creation import ProjectCreation
@@ -26,10 +26,10 @@ def chunk(kind, data):
             + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
 
 
-def png(width=1024, height=1024):
+def png(width=1024, height=1024, payload=b'x'):
     header = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header)
-            + chunk(b'IDAT', b'x') + chunk(b'IEND', b''))
+            + chunk(b'IDAT', payload) + chunk(b'IEND', b''))
 
 
 class MediaServiceTests(unittest.TestCase):
@@ -142,6 +142,101 @@ class MediaServiceTests(unittest.TestCase):
             self.service.confirm(dict(base, privacy='confidential'))
         with self.assertRaisesRegex(ValueError, 'differs'):
             self.service.confirm(dict(base, preview_sha256='0' * 64))
+
+    def test_confirmation_recovers_stored_result_without_redispatch(self):
+        request = self.request(); preview = self.service.preview(request)
+        confirmation = {'approval_id': request['approval_id'],
+            'project_id': self.project_id, 'preview_sha256': preview['preview_sha256'],
+            'approved': True, 'privacy': request['privacy']}
+        crashed = False
+        def checkpoint(stage):
+            nonlocal crashed
+            if stage == 'response-received' and not crashed:
+                crashed = True
+                raise RuntimeError('lost approval result')
+        with self.assertRaisesRegex(RuntimeError, 'lost approval result'):
+            self.service.confirm(confirmation, checkpoint=checkpoint)
+        self.assertEqual(len(self.calls), 1)
+
+        restarted = MediaService(self.node, Projects(self.node), state_dir=self.state,
+            adapter_factories={'comfyui': self.factory})
+        result = restarted.confirm(confirmation)
+        self.assertEqual(result['image_sha256'], hashlib.sha256(png()).hexdigest())
+        self.assertEqual(len(self.calls), 1)
+
+    def test_timeout_requires_a_consciously_new_approval_and_run(self):
+        calls = []
+        def factory(runs):
+            def transport(_binding, _request):
+                calls.append(1)
+                if len(calls) == 1: raise TimeoutError('provider timeout')
+                return png(), {'prompt_id': 'provider-2',
+                    'workflow_revision': 'workflow-v1',
+                    'workflow_sha256': self.binding['workflow_sha256'],
+                    'image': {'filename': 'result.png', 'subfolder': '', 'type': 'output'}}
+            return ComfyImageAdapter(runs, transport=transport)
+        service = MediaService(self.node, Projects(self.node), state_dir=self.state,
+            adapter_factories={'comfyui': factory})
+        first = self.request(); first_preview = service.preview(first)
+        first_confirmation = {'approval_id': first['approval_id'],
+            'project_id': self.project_id, 'preview_sha256': first_preview['preview_sha256'],
+            'approved': True, 'privacy': first['privacy']}
+        with self.assertRaises(MediaUnknownRun): service.confirm(first_confirmation)
+        with self.assertRaisesRegex(ValueError, 'cannot be dispatched again'):
+            service.confirm(first_confirmation)
+        self.assertEqual(len(calls), 1)
+
+        second = self.request(); second_preview = service.preview(second)
+        result = service.confirm({'approval_id': second['approval_id'],
+            'project_id': self.project_id, 'preview_sha256': second_preview['preview_sha256'],
+            'approved': True, 'privacy': second['privacy']})
+        self.assertEqual(result['run_id'], second['run_id'])
+        self.assertNotEqual(first['run_id'], second['run_id'])
+        self.assertEqual(len(calls), 2)
+
+    def test_large_valid_result_is_publishable_without_inline_preview(self):
+        large = png(payload=b'x' * (PREVIEW_LIMIT + 1))
+        def factory(runs):
+            return ComfyImageAdapter(runs, transport=lambda _binding, _request:
+                (large, {'prompt_id': 'provider-large',
+                    'workflow_revision': 'workflow-v1',
+                    'workflow_sha256': self.binding['workflow_sha256'],
+                    'image': {'filename': 'large.png', 'subfolder': '', 'type': 'output'}}))
+        service = MediaService(self.node, Projects(self.node), state_dir=self.state,
+            adapter_factories={'comfyui': factory})
+        request = self.request(); preview = service.preview(request)
+        result = service.confirm({'approval_id': request['approval_id'],
+            'project_id': self.project_id, 'preview_sha256': preview['preview_sha256'],
+            'approved': True, 'privacy': request['privacy']})
+        self.assertFalse(result['preview_available'])
+        self.assertNotIn('image_base64', result)
+        publication = self.publication(result)
+        published = service.publish(publication)
+        files = self.git.snapshot(published['receipt']['commit_id'])
+        self.assertEqual(files[f'artifacts/{publication["artifact_id"]}/image.png'], large)
+
+    def test_publication_recovers_without_duplicate_provider_or_artifact(self):
+        for crash_stage in ('before-ref', 'ref-updated', 'workspace-complete'):
+            with self.subTest(stage=crash_stage):
+                request = self.request(); preview = self.service.preview(request)
+                result = self.service.confirm({'approval_id': request['approval_id'],
+                    'project_id': self.project_id, 'preview_sha256': preview['preview_sha256'],
+                    'approved': True, 'privacy': request['privacy']})
+                publication = self.publication(result)
+                crashed = False
+                def checkpoint(stage):
+                    nonlocal crashed
+                    if stage == crash_stage and not crashed:
+                        crashed = True
+                        raise RuntimeError('publication crash')
+                with self.assertRaisesRegex(RuntimeError, 'publication crash'):
+                    self.service.publish(publication, checkpoint=checkpoint)
+                recovered = self.service.publish(publication)
+                self.assertEqual(recovered['state'], 'published')
+                entities = validate_snapshot(self.git.snapshot(self.git.head()))
+                self.assertIn(publication['artifact_id'], entities)
+                self.assertEqual(len(self.calls), 1 + list(
+                    ('before-ref', 'ref-updated', 'workspace-complete')).index(crash_stage))
 
     def test_openai_image_binding_reuses_secret_without_exposing_it_and_rejects_local_only(self):
         credentials = OpenAICredentials(self.state)

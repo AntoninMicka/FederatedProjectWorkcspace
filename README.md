@@ -36,6 +36,29 @@ python3 -m spikes.desktop --smoke
 
 Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vlastního okna. Bez `M0_DESKTOP_TEST=1` se grafický test v celé sadě přeskočí; ostatní desktopové testy běží vždy. `demo` zůstává výchozím příkazem wrapperu.
 
+### Generování obrázků (PoC)
+
+Po otevření projektu nabízí karta **Obrázek** samostatný tok **připravit přesný
+požadavek → potvrdit dispatch → zkontrolovat validovaný výsledek → uložit do
+projektu**. Pouhé vytvoření preview provider nevolá. Publikace je další
+explicitní krok a ukládá původní validovaný PNG s generation provenance; prompt
+se do projektových metadat neukládá.
+
+OpenAI Images používá existující node-local OpenAI credential, ale vlastní
+explicitní obrazový binding v **Nastavení**. ComfyUI vyžaduje tamtéž explicitní
+literal-loopback endpoint nebo schválenou privátní adresu, verzovanou workflow
+šablonu, její SHA-256, mapu allowlisted vstupů a output node. Workspace neposílá
+libovolný workflow ani custom node a mezi providery automaticky nepřepíná.
+`local-only` lze odeslat pouze same-node ComfyUI.
+
+Výsledek musí být jediný PNG v jednom z podporovaných rozměrů a nejvýše 16 MiB.
+Inline UI preview je omezeno na 4 MiB; větší platný obrázek lze po kontrole
+metadat stále publikovat. Timeout nebo ztracená odpověď zůstává `unknown` a
+stejný run se automaticky neopakuje. Nový pokus musí mít nový approval i run ID.
+Pád při publikaci se obnovuje stejným operation ID bez druhého providerového
+volání. Kontrakt a hranice popisuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md),
+ruční akceptaci [checklist obrazové capability](docs/image-generation-acceptance.md).
+
 ## Spuštění storage experimentu
 
 Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wrapper [run.sh](run.sh):

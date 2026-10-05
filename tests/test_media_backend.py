@@ -15,7 +15,7 @@ import zlib
 from spikes.backend_contract import BackendCapabilities
 from spikes.media_backend import (ComfyImageAdapter, ComfyImageBinding,
                                   ComfyBindings, ImageGenerationRequest, MediaResponseError,
-                                  MediaRuns, MediaUnknownRun, OpenAIImageAdapter,
+                                  MAX_IMAGE, MediaRuns, MediaUnknownRun, OpenAIImageAdapter,
                                   OpenAIImageBinding, validate_png)
 from spikes.openai_backend import OpenAICredentials
 
@@ -25,9 +25,9 @@ def chunk(kind, data):
             + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff))
 
 
-def png(width=1024, height=1024):
+def png(width=1024, height=1024, payload=b'x'):
     header = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
-    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IDAT', b'x') + chunk(b'IEND', b'')
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IDAT', payload) + chunk(b'IEND', b'')
 
 
 class MediaBackendTests(unittest.TestCase):
@@ -147,6 +147,14 @@ class MediaBackendTests(unittest.TestCase):
         adapter = OpenAIImageAdapter(self.runs, self.credentials(),
                                      lambda _binding, _request: (b'not png', {}))
         with self.assertRaises(MediaResponseError): adapter.dispatch(self.request, binding)
+        self.assertEqual(self.runs.get(self.request.run_id)['state'], 'failed')
+
+    def test_oversized_provider_image_is_known_failure(self):
+        binding = self.openai_binding()
+        adapter = OpenAIImageAdapter(self.runs, self.credentials(),
+                                     lambda _binding, _request: (png(payload=b'x' * MAX_IMAGE), {}))
+        with self.assertRaisesRegex(MediaResponseError, '16 MiB'):
+            adapter.dispatch(self.request, binding)
         self.assertEqual(self.runs.get(self.request.run_id)['state'], 'failed')
 
     def test_comfy_only_substitutes_allowlisted_inputs_and_persists_identity(self):

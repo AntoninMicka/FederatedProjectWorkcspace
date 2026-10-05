@@ -303,7 +303,10 @@ class ComfyBindings:
 
 
 def validate_png(raw, expected_size):
-    require(isinstance(raw, bytes) and len(raw) <= MAX_IMAGE, 'PNG exceeds 16 MiB')
+    if not isinstance(raw, bytes):
+        raise MediaResponseError('PNG result must be bytes')
+    if len(raw) > MAX_IMAGE:
+        raise MediaResponseError('PNG exceeds 16 MiB')
     if not raw.startswith(b'\x89PNG\r\n\x1a\n'):
         raise MediaResponseError('Invalid PNG signature')
     offset = 8; chunks = []; width = height = None; saw_idat = False

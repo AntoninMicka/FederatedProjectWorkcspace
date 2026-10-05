@@ -89,13 +89,30 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   JavaScript prošel `node --check`, `git diff --check` je čistý. Skutečný
   Qt/WebEngine a živý OpenAI/ComfyUI smoke zůstávají otevřené v části D; obecný
   kompoziční router z roadmapy 2E.1 zůstává mimo rozsah této dávky.
-- [ ] [planned] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
-  (PoC validated).** Ověřit MIME/magic bytes, rozměry a limity, secrets,
+- [ ] [in progress] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
+  (cílová úroveň: PoC validated).** Ověřit MIME/magic bytes, rozměry a limity, secrets,
   RBAC/privacy, přesný request, malformed/oversized výsledek, timeout,
   `unknown`, restart a vědomý nový run, idempotentní publikaci a provenance.
   Spustit úplnou sadu a relevantní skutečný UI/provider smoke; neprovedené živé
   ověření ponechat výslovně otevřené. Závěrečný úklid evidence provést v této
   feature větvi před jejím jediným PR.
+  Automatizovaná část 2026-10-05 pokrývá přesný request a secret-free stav,
+  PNG signature/IHDR/CRC/rozměry, malformed i >16 MiB výsledek, oddělený 4 MiB
+  inline-preview limit, RBAC/privacy, timeout → durable `unknown`, zákaz retry
+  stejného approval/run, vědomě nový run, restart mezi uloženým providerovým
+  výsledkem a approval evidencí i idempotentní publikaci/recovery před a po Git
+  ref s neměnnou provenance. Regrese odhalila a opravila klasifikaci oversized
+  PNG z neurčitého `unknown` na známé `failed`. Cílená media/desktop/web sada:
+  43 testů OK, 3 podmíněné browser testy přeskočeny; úplná sada po poslední
+  změně: 388 testů OK, 22 přeskočeno. Skutečný Qt/WebEngine smoke v grafické
+  relaci prošel pro běžný start i izolované vytvoření projektu a vykreslenou
+  kartu Obrázek bez providerového volání. Postup, hranice a ruční providerová
+  akceptace jsou v `docs/image-generation-acceptance.md`; README a threat model
+  jsou aktualizované.
+  **Otevřeno:** výchozí node nemá nakonfigurovaný OpenAI Images ani ComfyUI
+  image binding. Živý smoke obou providerů proto nebyl proveden; OpenAI je navíc
+  explicitně nákladová externí akce. Do jejich konfigurace a potvrzení reálného
+  requestu nelze úroveň PoC validated ani celou dávku označit za dokončenou.
 
 ## K předání do backlogu
 

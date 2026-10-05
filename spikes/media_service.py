@@ -230,7 +230,7 @@ class MediaService:
         tasks.bind(request['approval_id'], node_id, user_id)
         return approval
 
-    def confirm(self, request, *, owner_id=None):
+    def confirm(self, request, *, owner_id=None, checkpoint=lambda stage: None):
         required = {'approval_id', 'project_id', 'preview_sha256', 'approved', 'privacy'}
         require(isinstance(request, dict) and set(request) == required,
                 'Invalid image approval confirmation')
@@ -271,8 +271,10 @@ class MediaService:
             result = {'schema': 'fpw-image-result-v1', 'run_id': original['run_id'],
                 'image_sha256': row['image_sha256'], 'metadata': row['metadata'],
                 'preview_available': len(row['image']) <= PREVIEW_LIMIT}
+            checkpoint('response-received')
             task = tasks.succeed(request['approval_id'], node_id, user_id,
                                  _canonical(result).decode())
+            checkpoint('succeeded')
             return self._result(request['approval_id'], task, runs)
         except BackendUnknown as exc:
             tasks.finish(request['approval_id'], node_id, user_id, 'unknown', str(exc)); raise
