@@ -1017,6 +1017,9 @@ není vydáván za celý uzavřený.
 - [ ] Git sync.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
+- [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné
+  capability profily `same-company-same-team` a `same-company`; profily obecně
+  netvoří pořadový žebříček a tato transportní policy sama neuděluje přístup.
 - [ ] Explicitní publikace chatu, shrnutí, zadání nebo jiného podporovaného artefaktu do projektu.
 - [ ] Node-local backend registry.
 - [ ] Federation status.
@@ -1202,6 +1205,28 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 - [ ] Mail: více účtů, IMAP synchronizace, SMTP odesílání, složky, hledání, vlákna, přílohy, odpovědi a přeposílání, koncepty a odchozí fronta. Výchozí obsah a činnosti jsou soukromé; přiřazení projektu je explicitní nebo potvrzené pravidlo.
 - [ ] Připojení stavět na standardních protokolech a capability adaptéru. TLS a podporovaný způsob autentizace včetně OAuth2 řešit už pro prvního cílového poskytovatele; neslibovat univerzální kompatibilitu bez ověření.
 - [ ] Kalendář: CalDAV, více kalendářů, pozvánky a odpovědi, opakování, časová pásma a vazba na interní schůzku. Kontakty: CardDAV pohled nad Relationship Registry, mapování polí a řízené konflikty bez druhého CRM.
+- [ ] XMPP rozdělit na dvě samostatně konfigurované a auditované hranice. Interní
+  adaptér může přenášet federovaná lidská vlákna F-M5-CHAT-01 pouze mezi uzly,
+  jejichž konkrétní bilaterální vztah má profil `same-company-same-team` nebo
+  `same-company`; uživatelsky jde o „nejvyšší dva“ interní profily, nikoli o
+  zavedení obecného pořadí profilů. Každé spojení nadále vyžaduje schváleného
+  peera, mapovanou identitu a explicitní thread/project scope a nesmí zpřístupnit
+  credentials, session, role ani projektová data mimo jednotlivé zprávy a vědomě
+  přiložený obsah.
+- [ ] Veřejný XMPP klient/federační edge provozovat pod oddělenou doménou, účty,
+  credentials, úložištěm a policy jako vnější kanál pro komunikaci s veřejností.
+  Vnější JID není workspace účet ani federovaný uzel; příchozí zpráva je
+  nedůvěryhodný externí vstup a bez explicitního importu nemá přístup k projektu,
+  Context Manifestu, LLM, pluginům ani nástrojům. Počítat s moderací, blokováním,
+  rate limits/anti-spam, pravidly retence, souhlasem, bezpečnou prací s odkazy a
+  přílohami a se stavy doručení včetně `unknown` bez slepého opakování odeslání.
+- [ ] Mezi interním a veřejným XMPP nezavádět implicitní bridge, sdílený adresář
+  ani automatické přeposílání. Přenos zprávy nebo jejího výsledku přes hranici
+  musí mít preview, potvrzenou cílovou identitu a rozsah, provenance, zděděnou
+  privacy a disclosure událost; interní JID, topologie uzlů a membership se
+  veřejnosti nezveřejňují. Před implementací ověřit interoperabilitu server-to-
+  server federace, DNS/TLS, MUC, příloh a zvoleného end-to-end šifrování a popsat,
+  která metadata zůstávají viditelná serverům.
 - [ ] Před odesláním zkontrolovat konkrétní příjemce, citovaný text, přílohy a jejich revize. Pozvánka i sdílený kontakt jsou rovněž možné externí přenosy.
 - [ ] Do projektového Gitu ukládat jen vědomě vybrané komunikační artefakty, metadata a disclosure události. Celá schránka, cache, synchronizační kurzory, koncepty a odchozí fronta mají oddělený lokální nebo poskytovatelský životní cyklus.
 
@@ -1215,6 +1240,7 @@ Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M
 | Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
 | Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, verzovaný scénář, kontextové i globální backupy, návrat z přerušení a restart bez ztráty relace. |
 | Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
+| Interní a veřejný XMPP | Interní adaptér navazuje na F-M5-TRUST-01 a F-M5-CHAT-01/02; veřejný edge na ER-00 až ER-03 | Oddělené identity, domény, credentials, úložiště a policy; interní provoz jen pro dva přesně povolené profily, veřejný vstup bez implicitního přístupu a žádný automatický bridge. |
 | Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
 | Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |
 

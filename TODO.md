@@ -103,3 +103,16 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět pluginy, měnit
   modely/bindingy nebo oslabit oprávnění. Položka není součástí akceptace
   F-M3-MEDIA-01; tato dávka zachová pouze kompatibilní capability metadata.
+- [ ] [planned] **F-M5-CHAT-XMPP-01 — Oddělený interní a veřejný XMPP adaptér
+  (cílová úroveň: designed → PoC validated).** Doplnění uživatelského požadavku
+  z 2026-10-05 k existujícím F-M5-TRUST-01, F-M5-CHAT-01/02 a ER-00 až ER-03 je
+  zanesené v roadmapě 22D. Interní XMPP smí obsloužit pouze konkrétní bilaterální
+  vztahy `same-company-same-team` a `same-company`; nejde o změnu profilů na
+  obecný pořadový žebříček. Veřejný federovaný XMPP je oddělený vnější kanál s
+  vlastní doménou, účty, credentials, úložištěm, moderací a disclosure policy.
+  Mezi hranicemi není implicitní bridge a vnější zprávy nesmějí automaticky
+  získat projektový kontext ani spustit LLM, plugin nebo nástroj. Před PoC
+  uzavřít identity/JID mapping, durable delivery a `unknown`, MUC, přílohy,
+  DNS/TLS, server-to-server interoperabilitu, end-to-end šifrování, retenci,
+  anti-spam a explicitní import/přeposlání s provenance a privacy. Položka není
+  součástí akceptace F-M3-MEDIA-01.
