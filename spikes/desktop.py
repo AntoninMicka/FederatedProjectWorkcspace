@@ -127,7 +127,8 @@ def main():
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
-        server.media_service = MediaService(node_path, state_dir=server.chat_service.state_dir)
+        server.media_service = MediaService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)

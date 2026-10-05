@@ -62,11 +62,21 @@ Ověření konfigurace nepotvrzuje existenci klíče, autentizaci, RBAC ani shod
 
 ## Společná metadata
 
-Spustitelný parser `spikes/metadata.py` přijímá striktní schémata v1 a v2 ve stejném snapshotu. Společná povinná pole: `schema_version` (1 nebo 2), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID). Registry navíc povinně obsahují `status` a `body`; `relations` zůstávají volitelné i u registrů.
+Spustitelný parser `spikes/metadata.py` přijímá striktní schémata v1, v2 a v3 ve stejném snapshotu. Společná povinná pole: `schema_version` (1, 2 nebo 3), `id` (UUID), `title` (neprázdný text), `kind`, `created_at` (UTC RFC3339), `author_id`, `privacy` (public/project/confidential/local-only), `provenance` (user/external/llm-generated/llm-transformed/snapshot). Sidecar navíc obsahuje `file`. Volitelná pole: description, tags, source_url a relations (typ vztahu + cílové ID). Registry navíc povinně obsahují `status` a `body`; `relations` zůstávají volitelné i u registrů.
 
 `created_at` označuje vznik entity v projektu. U dnešního nativního importu je zároveň časem importu, nikoli doloženým časem vzniku externího díla. `author_id` je projektový aktér, který entitu vytvořil nebo import spustil, nikoli automaticky původní autor. `source_url` je pouze volitelný locator a `provenance` hrubá třída, ne kompletní auditní manifest.
 
 Schéma v2 s `provenance: external` povinně nese striktní blok `import`: `imported_at`, `imported_by`, lowercase SHA-256 přijatých bajtů, identitu/verzi importéru a pouze doložené volitelné údaje původního zdroje. U nového native importu se čas/aktér rovnají `created_at`/`author_id`; oddělený volitelný `source_created_at` je doložený čas vzniku externího zdroje a může importu předcházet. Hash source sidecaru se při validaci snapshotu porovnává se skutečnými bajty. Pro jinou provenance je blok zakázaný. Přesný kontrakt, kompatibilitu a explicitní doloženou migraci stanoví [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). V1 zůstává čitelné a nemigruje se automaticky.
+
+Schéma v3 je úzké pouze pro generovaný PNG source `image.png` s
+`provenance: llm-generated`. Povinný blok `generation` váže adapter, binding a
+capability revision, run a Context Manifest, hash přesného requestu i výsledných
+bajtů, rozměr, kvalitu, seed a přesný target. ComfyUI navíc eviduje revizi/hash
+workflow, `prompt_id` a výstupní identitu `filename/subfolder/type`; prompt se do
+projektového Gitu automaticky nekopíruje. Snapshot validátor ověřuje PNG
+signaturu a shodu `result_sha256` se skutečnými bajty. Celý blok `generation` je
+pro dané source UUID neměnný. V1/v2 zůstávají čitelné a nemigrují se automaticky;
+rozhodnutí obrazového kontraktu popisuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#obrazová-capability-v1--rozhodnutí-f-m3-media-01-a).
 
 ### Definice vazeb mezi entitami
 
@@ -99,7 +109,7 @@ Registry: JSON objekt pro každou entitu, společná metadata plus `status`, `bo
 
 Smazání prověřuje příchozí vztahy. Přejmenování obsahu a změna pole `file` patří do stejného commitu. Zachování obou konfliktních verzí vytváří nové ID pro kopii a vyžaduje rozhodnutí o odkazech. Změna–smazání vyžaduje volbu člověka.
 
-U `kind: source` jsou obsahové bajty, basename v `file`, identita a importní provenance neměnné pod jedním UUID. Nové bajty se ukládají jako nový artefakt s novým UUID a volitelným vztahem `supersedes` na předchůdce. Běžné projektové anotace lze měnit samostatným commitem; přesná pravidla, transition validace a recovery jsou v [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Současný snapshot validátor tato historická pravidla ještě nevynucuje.
+U `kind: source` jsou obsahové bajty, basename v `file`, identita a importní nebo generační provenance neměnné pod jedním UUID. Nové bajty se ukládají jako nový artefakt s novým UUID a volitelným vztahem `supersedes` na předchůdce. Běžné projektové anotace lze měnit samostatným commitem; přesná pravidla, transition validace a recovery jsou v [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Transition validátor vynucuje neměnnost bloků `import` i `generation` a původních source bajtů.
 
 SQLite obsahuje lokálně obnovitelnou projekci metadat a cest entit, štítků a směrovaných vztahů a jeden commit ID pro celý snapshot; neobsahuje jedinou kopii uživatelských dat. Migruje se z validovaného HEAD atomicky, samostatně od Git schématu a journalu, viz [ADR 0022](docs/adr/0022-relational-index.md). Při selhání validace nový index nepublikovat. MVP nepotřebuje sdílenou SQLite databázi ani synchronizaci jejího souboru.
 

@@ -128,6 +128,20 @@ class OpenAIImageBinding:
                                    frozenset({'generate-image'}),
                                    frozenset({'image/png'})).validate()
 
+    def serialize(self):
+        return {'schema_version': 1, 'binding_id': self.binding_id,
+                'revision': self.revision, 'adapter': self.adapter_id,
+                'boundary': self.boundary, 'endpoint': self.endpoint,
+                'model': self.model, 'target_id': self.target_id,
+                'credential_ref': self.credential_ref,
+                'credential_revision': self.credential_revision,
+                'timeout_seconds': self.timeout_seconds}
+
+    def target(self):
+        from spikes.context_builder import Target
+        return Target(self.binding_id, self.revision, self.boundary,
+                      self.target_id, self.model)
+
 
 @dataclass(frozen=True)
 class ComfyImageBinding:
@@ -223,6 +237,11 @@ class ComfyImageBinding:
         if self.tls_cert_sha256:
             value['tls_cert_sha256'] = self.tls_cert_sha256
         return value
+
+    def target(self):
+        from spikes.context_builder import Target
+        return Target(self.binding_id, self.revision, self.boundary,
+                      self.target_id, self.workflow_revision)
 
     def render(self, request):
         workflow = deepcopy(self.workflow)

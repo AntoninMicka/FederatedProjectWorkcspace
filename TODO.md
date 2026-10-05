@@ -68,7 +68,7 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   cíleně 8 testů OK; úplná sada 362 testů OK, 22 podmíněných smoke testů přeskočeno
   (první sandboxový běh měl 27 očekávaných socket permission chyb, opakování s
   povolenými lokálními sockety prošlo).
-- [ ] [in progress] **F-M3-MEDIA-01-C — UI a explicitní publikace artefaktu
+- [x] [completed] **F-M3-MEDIA-01-C — UI a explicitní publikace artefaktu
   (implemented).** Přidat bezpečný preview vstupů i výsledku, privacy souhlas a
   oddělenou publikaci přes Workspace se zdrojovým hashem, provider/run identitou
   a provenance. Ollama může obrazovou akci jen navrhnout; uživatel ji musí
@@ -76,12 +76,19 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   autorizační hranice. Průběžně 2026-09-21: desktop i web sdílejí node-local
   nastavení ComfyUI; administrace ukládá atomicky mode-0600 pouze validovaný
   verzovaný API workflow, jeho hash, mapu allowlisted parametrů a explicitní
-  output node. Webovou změnu smí provést jen node admin; generování, preview,
-  potvrzení a publikace v této části ještě zbývají. Cíleně 22 testů OK
-  (2 podmíněné smoke přeskočeny), úplná sada 363 testů OK, 22 přeskočeno.
-  Po rebasu na PR #45 prošlo 43 cílených media/CMS/desktop/web testů se 3
-  podmíněnými Qt/WebEngine skipy; obecný kompoziční router z roadmapy 2E.1
-  zůstává mimo rozsah této dávky.
+  output node. Dokončeno 2026-10-05: desktop i web mají oddělený
+  preview → potvrzený dispatch → validovaný PNG preview → potvrzenou Workspace
+  publikaci. Approval, Context Manifest a run přežijí restart; publikace používá
+  původní durable BLOB bez druhého providerového účinku a zapisuje striktní
+  metadata schema v3 s binding/run/workflow/output provenance bez promptu.
+  OpenAI Images má samostatný explicitní binding nad již uloženým credentialem;
+  status ani UI secret nevrací a `local-only` odmítne mimo same-node ComfyUI.
+  Web vyžaduje editor/project-admin nebo node admin a konfiguraci smí měnit jen
+  node admin. Ověření: 29 cílených media/desktop/web testů OK, 3 podmíněné
+  Qt/WebEngine smoke přeskočeny; úplná sada 383 testů OK, 22 přeskočeno.
+  JavaScript prošel `node --check`, `git diff --check` je čistý. Skutečný
+  Qt/WebEngine a živý OpenAI/ComfyUI smoke zůstávají otevřené v části D; obecný
+  kompoziční router z roadmapy 2E.1 zůstává mimo rozsah této dávky.
 - [ ] [planned] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
   (PoC validated).** Ověřit MIME/magic bytes, rozměry a limity, secrets,
   RBAC/privacy, přesný request, malformed/oversized výsledek, timeout,

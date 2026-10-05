@@ -26,7 +26,8 @@ class SummaryTasks:
                 and stat.S_IMODE(info.st_mode) == 0o700,
                 'Summary state directory requires owned mode 0700')
         require(filename in {'summary-tasks.sqlite', 'extraction-tasks.sqlite',
-                             'metadata-suggestion-tasks.sqlite'},
+                             'metadata-suggestion-tasks.sqlite',
+                             'media-approvals.sqlite'},
                 'Unsupported task store')
         self.path = self.root / filename
 

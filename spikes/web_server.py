@@ -23,6 +23,7 @@ from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
+from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 
 HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
@@ -260,8 +261,31 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error):
                 return self.reply(422, {'error': 'Účetní přehled nelze načíst nebo uložit. '
                                        'Ověřte administrátorský klíč a lokální stav.'})
-        if self.path == '/v1/media/comfyui/configure' and not self.server.administration.is_admin(self.actor):
-            return self.send_error(403)
+        if self.path in {'/v1/media/comfyui/configure', '/v1/media/openai/configure'}:
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+        if self.path == '/v1/media/status':
+            if request != {}: return self.send_error(400)
+            return self.reply(200, self.server.media_service.status(owner_id=self.actor['id']))
+        if self.path in {'/v1/media/preview', '/v1/media/confirm', '/v1/media/publish'}:
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+            try:
+                if self.path == '/v1/media/preview':
+                    result = self.server.media_service.preview(request, owner_id=self.actor['id'])
+                elif self.path == '/v1/media/confirm':
+                    result = self.server.media_service.confirm(request, owner_id=self.actor['id'])
+                else:
+                    result = self.server.media_service.publish(request, owner_id=self.actor['id'])
+                return self.reply(200, result)
+            except BackendUnknown:
+                return self.reply(409, {'error': 'Výsledek obrazového běhu není známý; '
+                                       'požadavek automaticky neopakujte.'})
+            except BackendResponseError:
+                return self.reply(502, {'error': 'Obrazový backend nevrátil platný PNG výsledek.'})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Obrazový požadavek nelze provést. Ověřte '
+                                       'projekt, oprávnění, backend a lokální stav.'})
         if self.path in {'/v1/external/send', '/v1/external/send-stream',
                          '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
@@ -333,7 +357,8 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.projects = Projects(node, network=True)
     server.node = node
     server.chat_service = ChatService(node, server.projects)
-    server.media_service = MediaService(node, state_dir=server.chat_service.state_dir)
+    server.media_service = MediaService(node, server.projects,
+        state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.administration = Administration(node)
     return server

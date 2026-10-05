@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 
 from spikes.local_api import Handler
+from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
@@ -90,6 +91,12 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
 <small>Správa klíče se otevře v systémovém prohlížeči; workspace nevidí přihlášení ani vytvořený klíč. Klíč sem potom vložíte jednou, po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
+<hr><h2>OpenAI Images</h2>
+<p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
+<form id="openai-image-form"><label>Model <input name="model" value="gpt-image-1" maxlength="128" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<button type="submit">Uložit obrazový binding</button></form>
+<small>Použije uložený OpenAI credential, ale samostatný Images endpoint, model a binding. Klíč se do formuláře ani odpovědi nevrací.</small>
 <section id="backend-metrics" hidden><hr><h2>Spotřeba a náklady OpenAI</h2>
 <p id="backend-metrics-status" role="status">Účetní přehled zatím nebyl načten.</p>
 <form id="backend-metrics-form"><label>OpenAI Admin API klíč
@@ -160,6 +167,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
 <button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
 <button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button>
+<button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" tabindex="-1">Obrázek</button>
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
@@ -209,6 +217,23 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="extraction-publish-controls" hidden><label for="extraction-title">Název zdroje</label>
 <input id="extraction-title" maxlength="200" value="Strukturovaná extrakce">
 <button id="extraction-publish" type="button">Uložit do projektu</button></div></div>
+<div id="image-panel" role="tabpanel" aria-labelledby="image-tab" hidden><h2>Generování obrázku</h2>
+<p>Nejdřív zkontrolujete přesný požadavek. Provider se zavolá až po samostatném potvrzení a výsledek se uloží do projektu až dalším krokem.</p>
+<label for="image-adapter">Backend</label><select id="image-adapter"><option value="comfyui">ComfyUI</option><option value="openai-images">OpenAI Images</option></select>
+<label for="image-prompt">Prompt</label><textarea id="image-prompt" rows="5" maxlength="32768"></textarea>
+<label for="image-size">Rozměr</label><select id="image-size"><option value="1024x1024">1024 × 1024</option><option value="1536x1024">1536 × 1024</option><option value="1024x1536">1024 × 1536</option></select>
+<label for="image-quality">Kvalita</label><select id="image-quality"><option value="auto">Auto</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+<label for="image-seed">Seed pro ComfyUI</label><input id="image-seed" type="number" min="0" step="1" value="0">
+<label for="image-privacy">Soukromí</label><select id="image-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
+<button id="image-preview-button" type="button">Připravit přesný požadavek</button>
+<p id="image-status" role="status" aria-live="polite"></p>
+<section id="image-request-preview" hidden><h3>Požadavek před odesláním</h3><pre id="image-request-json"></pre>
+<label class="confirm"><input id="image-confirm" type="checkbox"> Potvrzuji tento prompt, backend, parametry a privacy.</label>
+<button id="image-dispatch" type="button" disabled>Vygenerovat obrázek</button></section>
+<section id="image-result" hidden><h3>Validovaný výsledek</h3><img id="image-result-preview" alt="Náhled vygenerovaného obrázku">
+<pre id="image-result-metadata"></pre><label for="image-title">Název artefaktu</label>
+<input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
+<button id="image-publish" type="button">Uložit do projektu</button></section></div>
 <div id="metadata-panel" role="tabpanel" aria-labelledby="metadata-tab" hidden><h2>Návrh popisu a štítků</h2>
 <p>Vyberte jeden artefakt. Návrh projekt nezmění, dokud nepotvrdíte konkrétní pole.</p>
 <label for="metadata-artifact">Artefakt</label><select id="metadata-artifact"></select>
@@ -304,6 +329,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
+#image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 '''
@@ -402,7 +428,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
- currentArtifacts=[];clearSummary();clearExtraction();clearMetadata();
+ currentArtifacts=[];clearSummary();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
@@ -894,10 +920,14 @@ async function loadBackendBinding(){
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
    'Externí backend zatím není nastaven.';
-  const media=await projectRequest('/v1/media/status',{}),comfy=media.comfyui;
+  const media=await projectRequest('/v1/media/status',{}),comfy=media.bindings?.comfyui;
   document.querySelector('#settings-comfy-status').textContent=comfy ?
    `ComfyUI ${comfy.workflow_revision} · ${comfy.boundary} · ${comfy.endpoint}` :
    'ComfyUI zatím není nastaveno.';
+  const openaiImage=media.bindings?.['openai-images'];
+  document.querySelector('#settings-openai-image-status').textContent=openaiImage ?
+   `OpenAI Images ${openaiImage.model} · ${openaiImage.revision}` :
+   'OpenAI Images zatím není nastaveno.';
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
   return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
@@ -951,6 +981,15 @@ document.querySelector('#comfy-backend-form').addEventListener('submit',async ev
   if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
   status.textContent='Ukládám ComfyUI…';const result=await projectRequest('/v1/media/comfyui/configure',binding);
   status.textContent=`ComfyUI ${result.binding.workflow_revision} bylo uloženo.`;
+ }catch(error){status.textContent=error.message;}
+});
+document.querySelector('#openai-image-form').addEventListener('submit',async event=>{
+ event.preventDefault();const fields=event.currentTarget.elements;
+ const status=document.querySelector('#settings-openai-image-status');
+ try{status.textContent='Ukládám OpenAI Images binding…';
+  const result=await projectRequest('/v1/media/openai/configure',{
+   model:fields.model.value.trim(),timeout_seconds:Number(fields.timeout_seconds.value)});
+  status.textContent=`OpenAI Images ${result.binding.model} bylo uloženo.`;
  }catch(error){status.textContent=error.message;}
 });
 document.querySelector('#backend-metrics-refresh').addEventListener('click',async event=>{
@@ -1469,6 +1508,83 @@ document.querySelector('#metadata-publish').addEventListener('click',async event
   await openRegisteredProject(projectId);
  }catch(error){metadataStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
 });
+let imageApproval=null,imageResult=null,pendingImageRequest=null,pendingImagePublish=null;
+const imageStatus=document.querySelector('#image-status');
+function clearImage(){
+ imageApproval=null;imageResult=null;pendingImageRequest=null;pendingImagePublish=null;
+ const request=document.querySelector('#image-request-preview'),result=document.querySelector('#image-result');
+ if(request)request.hidden=true;if(result)result.hidden=true;
+ const preview=document.querySelector('#image-result-preview');if(preview)preview.removeAttribute('src');
+ const confirm=document.querySelector('#image-confirm');if(confirm)confirm.checked=false;
+ const dispatch=document.querySelector('#image-dispatch');if(dispatch)dispatch.disabled=true;
+ if(imageStatus)imageStatus.textContent='';
+}
+function refreshImageAdapter(){
+ const comfy=document.querySelector('#image-adapter').value==='comfyui';
+ const quality=document.querySelector('#image-quality'),seed=document.querySelector('#image-seed');
+ if(comfy)quality.value='auto';quality.disabled=comfy;seed.disabled=!comfy;
+}
+document.querySelector('#image-adapter').addEventListener('change',()=>{clearImage();refreshImageAdapter();});
+for(const id of ['image-prompt','image-size','image-quality','image-seed','image-privacy']){
+ document.querySelector('#'+id).addEventListener('input',clearImage);
+}
+document.querySelector('#image-preview-button').addEventListener('click',async event=>{
+ if(!activeProject){imageStatus.textContent='Nejprve otevřete projekt.';return;}
+ const adapter=document.querySelector('#image-adapter').value;
+ const prompt=document.querySelector('#image-prompt').value;
+ if(!prompt.trim()){imageStatus.textContent='Vyplňte prompt.';return;}
+ if(!pendingImageRequest)pendingImageRequest={schema:'fpw-image-request-v1',
+  approval_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+  project_id:activeProject.id,expected_head:activeProject.head,adapter,prompt,
+  size:document.querySelector('#image-size').value,
+  quality:adapter==='comfyui'?'auto':document.querySelector('#image-quality').value,
+  seed:adapter==='comfyui'?Number(document.querySelector('#image-seed').value):null,
+  privacy:document.querySelector('#image-privacy').value};
+ event.currentTarget.disabled=true;imageStatus.textContent='Připravuji požadavek bez volání provideru…';
+ try{imageApproval=await projectRequest('/v1/media/preview',pendingImageRequest);
+  document.querySelector('#image-request-json').textContent=JSON.stringify(imageApproval,null,2);
+  document.querySelector('#image-request-preview').hidden=false;
+  document.querySelector('#image-confirm').checked=false;document.querySelector('#image-dispatch').disabled=true;
+  imageStatus.textContent='Požadavek je připraven. Provider ještě nebyl zavolán.';
+ }catch(error){pendingImageRequest=null;imageStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#image-confirm').addEventListener('change',event=>{
+ document.querySelector('#image-dispatch').disabled=!event.currentTarget.checked || !imageApproval;
+});
+document.querySelector('#image-dispatch').addEventListener('click',async event=>{
+ if(!imageApproval || !document.querySelector('#image-confirm').checked || !activeProject)return;
+ event.currentTarget.disabled=true;imageStatus.textContent='Odesílám potvrzený požadavek…';
+ try{imageResult=await projectRequest('/v1/media/confirm',{
+   approval_id:imageApproval.approval_id,project_id:activeProject.id,
+   preview_sha256:imageApproval.preview_sha256,approved:true,privacy:imageApproval.privacy},210000);
+  pendingImagePublish=null;const preview=document.querySelector('#image-result-preview');
+  if(imageResult.image_base64)preview.src='data:image/png;base64,'+imageResult.image_base64;
+  else preview.removeAttribute('src');
+  document.querySelector('#image-result-metadata').textContent=JSON.stringify({
+   image_sha256:imageResult.image_sha256,metadata:imageResult.metadata,
+   preview_available:imageResult.preview_available},null,2);
+  document.querySelector('#image-result').hidden=false;
+  imageStatus.textContent=imageResult.preview_available ?
+   'PNG byl validován. Uložení do projektu vyžaduje další potvrzenou akci.' :
+   'PNG byl validován, ale překročil 4 MiB limit UI náhledu. Původní bajty lze uložit do projektu.';
+ }catch(error){imageStatus.textContent=error.message;}
+});
+document.querySelector('#image-publish').addEventListener('click',async event=>{
+ if(!imageResult || !activeProject)return;
+ const title=document.querySelector('#image-title').value.trim();
+ if(!title){imageStatus.textContent='Vyplňte název artefaktu.';return;}
+ if(!pendingImagePublish)pendingImagePublish={approval_id:imageResult.approval_id,
+  result_sha256:imageResult.result_sha256,project_id:activeProject.id,
+  expected_head:activeProject.head,artifact_id:crypto.randomUUID(),title,
+  created_at:new Date().toISOString(),operation_id:crypto.randomUUID(),privacy:imageResult.privacy};
+ event.currentTarget.disabled=true;imageStatus.textContent='Ukládám původní validovaný PNG do projektu…';
+ try{const projectId=activeProject.id;
+  await projectRequest('/v1/media/publish',pendingImagePublish,120000);
+  imageStatus.textContent='Obrázek byl uložen do projektu.';await openRegisteredProject(projectId);
+ }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
+refreshImageAdapter();
 loadProjects();
 """
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
@@ -1493,7 +1609,8 @@ class DesktopHandler(Handler):
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
         '/v1/metadata-suggestions/publish', '/v1/media/status',
-        '/v1/media/comfyui/configure',
+        '/v1/media/comfyui/configure', '/v1/media/openai/configure',
+        '/v1/media/preview', '/v1/media/confirm', '/v1/media/publish',
         '/v1/publication-cms/status', '/v1/publication-cms/configure',
         '/v1/publication-cms/preview', '/v1/publication-cms/generate',
         '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
@@ -1508,6 +1625,14 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.media_service.status())
             if self.path == '/v1/media/comfyui/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.media_service.configure_comfy(request))
+            if self.path == '/v1/media/openai/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.media_service.configure_openai(request))
+            if self.path == '/v1/media/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.media_service.preview(request))
+            if self.path == '/v1/media/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.media_service.confirm(request))
+            if self.path == '/v1/media/publish' and isinstance(request, dict):
+                return self.reply(200, self.server.media_service.publish(request))
             if self.path == '/v1/publication-cms/status' and request == {}:
                 return self.reply(200, self.server.publication_cms.status())
             if self.path == '/v1/publication-cms/configure' and isinstance(request, dict):
@@ -1641,6 +1766,9 @@ class DesktopHandler(Handler):
         except OpenAIUnknownRun:
             return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
                                    'automaticky neopakujte; stav byl zachován.'})
+        except BackendUnknown:
+            return self.reply(409, {'error': 'Výsledek obrazového běhu není známý. Požadavek '
+                                   'automaticky neopakujte; pro nový pokus použijte nové ID.'})
         except CloudflareUnknown:
             return self.reply(409, {'error': 'Výsledek Cloudflare deploymentu není známý. '
                                    'Požadavek automaticky neopakujte; načtěte skutečný stav provideru.'})
@@ -1655,6 +1783,9 @@ class DesktopHandler(Handler):
                                        'Uložené nastavení nebylo změněno.'})
             return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
                                    'Běh byl ukončen bez automatického opakování.'})
+        except BackendResponseError:
+            return self.reply(502, {'error': 'Obrazový backend nevrátil bezpečně použitelný PNG '
+                                   'výsledek. Běh byl ukončen bez automatického opakování.'})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
@@ -1666,7 +1797,7 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route':
                 return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
