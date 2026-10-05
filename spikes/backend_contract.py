@@ -37,10 +37,12 @@ class BackendCapabilities:
                 'Unsupported backend capability schema')
         _text(self.revision, 'backend capability revision')
         require(isinstance(self.operations, frozenset)
-                and self.operations <= {'generate-text'} and bool(self.operations),
+                and self.operations <= {'generate-text', 'generate-image'}
+                and bool(self.operations),
                 'Unknown or empty backend capability set')
         require(isinstance(self.output_formats, frozenset)
-                and self.output_formats <= {'text', 'json'} and bool(self.output_formats),
+                and self.output_formats <= {'text', 'json', 'image/png'}
+                and bool(self.output_formats),
                 'Unknown or empty backend output format set')
         return self
 

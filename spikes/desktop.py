@@ -19,6 +19,7 @@ from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
+from spikes.media_service import MediaService
 from spikes.publication_cms import PublicationCms
 
 
@@ -126,6 +127,8 @@ def main():
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
+        server.media_service = MediaService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
@@ -446,6 +449,17 @@ def main():
                     if(!adapter.disabled || artifacts.hidden)return null;
                     window.chatModesChecked=true;
                   }
+                  if(!window.imagePanelChecked){
+                    const imageTab=document.querySelector('#image-tab');imageTab.click();
+                    const imagePanel=document.querySelector('#image-panel');
+                    if(imagePanel.hidden || imageTab.getAttribute('aria-selected')!=='true' ||
+                       !document.querySelector('#image-prompt') ||
+                       !document.querySelector('#image-request-preview').hidden ||
+                       !document.querySelector('#image-result').hidden ||
+                       !document.querySelector('#image-dispatch').disabled)return null;
+                    window.imagePanelChecked=true;chatTab.click();
+                    if(document.querySelector('#chat-panel').hidden)return null;
+                  }
                   const composer=document.querySelector('#chat-composer');
                   if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
@@ -493,6 +507,13 @@ def main():
                   if(document.querySelector('#project-view').hidden ||
                      document.querySelector('#project-title').textContent!=='Nový projekt z dialogu' ||
                      !document.querySelector('#project-commit').textContent) return null;
+                  const imageTab=document.querySelector('#image-tab');imageTab.click();
+                  if(document.querySelector('#image-panel').hidden ||
+                     imageTab.getAttribute('aria-selected')!=='true' ||
+                     !document.querySelector('#image-prompt') ||
+                     !document.querySelector('#image-request-preview').hidden ||
+                     !document.querySelector('#image-result').hidden ||
+                     !document.querySelector('#image-dispatch').disabled)return null;
                   return document.querySelector('#count').textContent;
                 })()"""
             poll.timeout.connect(lambda: page.runJavaScript(script, 0, checked))

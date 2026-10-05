@@ -77,6 +77,59 @@ def validate_import(value):
     return value
 
 
+def validate_generation(value):
+    required = {'schema', 'adapter', 'binding_id', 'binding_revision',
+                'capability_revision', 'run_id', 'request_sha256',
+                'manifest_sha256', 'size', 'quality', 'seed', 'result_sha256',
+                'target'}
+    require(isinstance(value, dict) and set(value) in (required, required | {'workflow'}),
+            'Invalid image generation provenance')
+    require(value['schema'] == 'fpw-image-generation-v1'
+            and value['adapter'] in {'openai-images', 'comfyui'},
+            'Unsupported image generation provenance')
+    for key in ('binding_id', 'run_id'):
+        uuid(value[key])
+    for key in ('binding_revision', 'capability_revision'):
+        require(isinstance(value[key], str) and bool(value[key].strip())
+                and not any(char in value[key] for char in '\0\r\n'),
+                f'Invalid generation {key}')
+    for key in ('request_sha256', 'manifest_sha256', 'result_sha256'):
+        require(isinstance(value[key], str) and bool(re.fullmatch(r'[0-9a-f]{64}', value[key])),
+                f'Invalid generation {key}')
+    require(value['size'] in {'1024x1024', '1536x1024', '1024x1536'}
+            and value['quality'] in {'auto', 'low', 'medium', 'high'}
+            and (value['seed'] is None or
+                 (type(value['seed']) is int and 0 <= value['seed'] < 2 ** 63)),
+            'Invalid image generation parameters')
+    target = value['target']
+    require(isinstance(target, dict) and set(target) == {'binding_id',
+        'binding_revision', 'boundary', 'target_id', 'model'}
+        and target['binding_id'] == value['binding_id']
+        and target['binding_revision'] == value['binding_revision']
+        and target['boundary'] in {'same-node', 'private-network',
+                                   'trusted-federation', 'external-provider'}
+        and all(isinstance(target[key], str) and bool(target[key].strip())
+                and not any(char in target[key] for char in '\0\r\n')
+                for key in ('binding_revision', 'target_id', 'model')),
+        'Invalid image generation target')
+    if value['adapter'] == 'comfyui':
+        workflow = value.get('workflow')
+        require(isinstance(workflow, dict)
+                and set(workflow) == {'revision', 'sha256', 'prompt_id', 'output'}
+                and isinstance(workflow['revision'], str) and bool(workflow['revision'])
+                and isinstance(workflow['sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', workflow['sha256']))
+                and isinstance(workflow['prompt_id'], str) and bool(workflow['prompt_id'])
+                and isinstance(workflow['output'], dict)
+                and set(workflow['output']) >= {'filename', 'subfolder', 'type'}
+                and all(isinstance(workflow['output'][key], str)
+                        for key in ('filename', 'subfolder', 'type')),
+                'Invalid ComfyUI generation provenance')
+    else:
+        require('workflow' not in value, 'OpenAI image provenance cannot contain a workflow')
+    return value
+
+
 def safe_path(value):
     require(isinstance(value, str) and bool(value), 'Expected relative path')
     parts = value.split('/')
@@ -177,8 +230,10 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     require(isinstance(meta, dict), 'Metadata must be an object')
     extra = {'file'} if sidecar else ({'status', 'body'} if registry else set())
     require(REQUIRED | extra <= meta.keys(), 'Missing required metadata')
-    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2}, 'Unknown schema version')
-    allowed = REQUIRED | OPTIONAL | extra | ({'import'} if meta['schema_version'] == 2 else set())
+    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2, 3}, 'Unknown schema version')
+    allowed = REQUIRED | OPTIONAL | extra
+    if meta['schema_version'] == 2: allowed |= {'import'}
+    if meta['schema_version'] == 3: allowed |= {'generation'}
     require(meta.keys() <= allowed, 'Unknown metadata field')
     uuid(meta['id'])
     uuid(meta['author_id'])
@@ -195,6 +250,14 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
         require(imported['imported_by'] == meta['author_id'], 'imported_by must match author_id')
     else:
         require('import' not in meta, 'Import provenance is only valid for external v2 metadata')
+    if meta['schema_version'] == 3:
+        require(meta['kind'] == 'source' and meta['provenance'] == 'llm-generated'
+                and meta.get('file') == 'image.png' and 'generation' in meta,
+                'Generated image metadata requires source kind and LLM provenance')
+        validate_generation(meta['generation'])
+    else:
+        require('generation' not in meta,
+                'Generation provenance is only valid for generated image metadata')
     for key in ('description', 'source_url'):
         if key in meta:
             require(isinstance(meta[key], str), f'Invalid {key}')
@@ -249,6 +312,12 @@ def validate_snapshot(files):
             if meta['schema_version'] == 2 and meta['kind'] == 'source':
                 digest = hashlib.sha256(entries[meta['file']]).hexdigest()
                 require(meta['import']['content_sha256'] == digest, 'Source content differs from import provenance')
+            if meta['schema_version'] == 3:
+                digest = hashlib.sha256(entries[meta['file']]).hexdigest()
+                require(meta['generation']['result_sha256'] == digest,
+                        'Generated image content differs from provenance')
+                require(entries[meta['file']].startswith(b'\x89PNG\r\n\x1a\n'),
+                        'Generated image content is not PNG')
         else:
             require(len(entries) == 1, 'Expected one Markdown artifact')
             name, data = next(iter(entries.items()))
@@ -269,7 +338,8 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     base = validate_snapshot(base_files)
     candidate = validate_snapshot(candidate_files)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
-    immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file')
+    immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
+                 'generation')
 
     def content(files, meta):
         prefix = f"artifacts/{meta['id']}/"

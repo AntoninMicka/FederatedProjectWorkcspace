@@ -189,6 +189,17 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="summary-artifact-list"', HTML)
         self.assertIn("projectRequest('/v1/summary/preview',pendingSummaryRequest,210000)", JS)
         self.assertIn("projectRequest('/v1/summary/publish',pendingSummaryPublish)", JS)
+
+    def test_image_ui_separates_preview_dispatch_and_project_publication(self):
+        self.assertIn('id="image-tab"', HTML)
+        self.assertIn('id="image-request-preview"', HTML)
+        self.assertIn('id="image-confirm"', HTML)
+        self.assertIn('id="image-result-preview"', HTML)
+        self.assertIn("projectRequest('/v1/media/preview',pendingImageRequest)", JS)
+        self.assertIn("projectRequest('/v1/media/confirm'", JS)
+        self.assertIn("projectRequest('/v1/media/publish',pendingImagePublish", JS)
+        self.assertIn("projectRequest('/v1/media/openai/configure'", JS)
+        self.assertIn("preview.src='data:image/png;base64,'+imageResult.image_base64", JS)
         self.assertIn("selection={kind:'artifacts',artifact_ids:ids}", JS)
         self.assertIn("selection={kind:'messages'", JS)
         self.assertIn("item.textContent=heading?heading[2]:line", JS)

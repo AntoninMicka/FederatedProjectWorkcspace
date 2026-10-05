@@ -60,13 +60,23 @@ Ad-hoc úkol zapiš se stabilním ID, původem/požadavkem, rozsahem, cílovou �
 
 Po dokončení a relevantním ověření všech úkolů aktuální dávky:
 
-1. Vyhodnoť podmínky feature dávky a relevantní část gate. Neověřenou práci neoznačuj za hotovou. Připrav předání jednoho PR do `develop`: rozsah, důkazy ověření, recovery a omezení. Rozlišuj implemented/validated výstup od stavu PR (není vytvořen / otevřen / sloučen); bez důkazu neuváděj merge. Dávka se uzavírá až po splnění akceptace a sloučení jejího PR, případně po výslovně zaznamenaném rozhodnutí uživatele o jiném předání. Nezačínej nesouvisející feature ve stejné větvi.
+Závěrečné vyhodnocení, konsolidace důkazů, přesun dokončené evidence do
+WORK_LOG, předání odkladů do BACKLOG, úklid TODO a aktualizace roadmapy patří
+ještě do stejné feature větve a jejího jediného PR. WORK_LOG při tom zaznamená
+skutečný stav předání a nesmí před merge tvrdit, že PR už byl sloučen. Stav
+feature akceptace a stav doručení PR eviduj odděleně; odmítnutá nebo změněná
+akceptace dávku znovu otevře. Po merge se nová dávka aktivuje na vlastní větvi
+z aktuálního `develop`. Výjimku lze výslovně schválit, například když už byla
+předchozí feature sloučena: tehdy se její administrativní úklid provede jako
+první krok nové dávky a důvod se zapíše do WORK_LOG.
+
+1. Vyhodnoť podmínky feature dávky a relevantní část gate. Neověřenou práci neoznačuj za hotovou. Připrav předání jednoho PR do `develop`: rozsah, důkazy ověření, recovery a omezení. Rozlišuj implemented/validated výstup od stavu PR (není vytvořen / otevřen / sloučen); bez důkazu neuváděj merge. Feature evidenci lze po splnění akceptace uzavřít a archivovat v jejím finálním diffu, ale doručení zůstává výslovně neuzavřené do merge nebo do jiného uživatelem schváleného předání. Nezačínej nesouvisející feature ve stejné větvi.
 2. Přesuň dokončenou dávku z TODO do WORK_LOG s ID úkolů, daty dokončení, úrovní výsledků, důkazy ověření a omezeními; zachovej i ad-hoc úkoly a důvody změn rozsahu.
 3. Přenes odložené úkoly a poznámky z „K předání do backlogu“ do odpovídajících dávek BACKLOG; aktualizuj stávající položky podle ID. Nedokončené úkoly zůstávají otevřené.
-4. Přesuň jednu další feature dávku z BACKLOG do TODO se stejnými ID, rozsahem, feature větví a cílem PR `develop`. Backlog doplň na přibližně tři další konkrétní feature dávky, nikoli celé milníky, bez vymýšlení práce. Další větev má vycházet z aktuálního `develop` po začlenění potřebných závislostí; stacked PR jsou pouze výslovně schválená výjimka. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
+4. Ve finálním diffu feature ponech TODO pouze s informací, že její akceptovaná evidence byla archivována a čeká se na doručení PR; neaktivuj v její větvi nesouvisející další feature. Po merge založ další větev z aktuálního `develop` a jako její první administrativní krok přesuň jednu další dávku z BACKLOG do TODO se stejnými ID, rozsahem, feature větví a cílem PR `develop`. Backlog doplň na přibližně tři další konkrétní feature dávky, nikoli celé milníky, bez vymýšlení práce. Stacked PR jsou pouze výslovně schválená výjimka. Není-li další dávka doložená, ponech TODO prázdné a uveď to.
 5. Ve stejné změně oprav odkazy a případný stav milníku/gate v roadmapě. Jeden úkol má jediný aktuální záznam; odkazy a historické důkazy nejsou konkurenčními kopiemi stavů.
 
-**Povinné čištění při předání:** po přesunech nahraď obsah TODO pouze hlavičkou, jedinou nově aktivovanou feature dávkou a jejími relevantními poznámkami. Odstraň odtud přenesené dokončené úkoly, výsledky starých testů, odložené úkoly, vyřízenou sekci „K předání do backlogu“ i přechodové přílohy. Nic nezahazuj: dokončené důkazy patří do WORK_LOG, otevřené stavy a odložené požadavky do BACKLOG. Pokud další dávka není aktivována, TODO obsahuje jen informaci o čekání, nikoli kopii backlogu. Žádný podúkol mimo novou feature nesmí v TODO zůstat „pro jistotu“.
+**Povinné čištění při předání:** ve finálním diffu uzavírané feature nahraď obsah TODO pouze hlavičkou a informací o čekání na doručení jejího PR. Odstraň odtud přenesené dokončené úkoly, výsledky starých testů, odložené úkoly, vyřízenou sekci „K předání do backlogu“ i přechodové přílohy. Nic nezahazuj: dokončené důkazy patří do WORK_LOG, otevřené stavy a odložené požadavky do BACKLOG. Po merge nový feature branch nahradí čekací TODO jedinou nově aktivovanou dávkou a jejími relevantními poznámkami. Žádný podúkol mimo aktuální feature nesmí v TODO zůstat „pro jistotu“.
 
 Předání není hotové, dokud není zkontrolováno, že TODO drží právě jednu dávku, každý přesunutý úkol má zachované ID a jediný aktuální stav, staré důkazy se neztratily a odkazy míří na nové umístění. Úklid dokumentů není důkaz testů, uzavření milníku ani sloučení PR. Jednorázovou migraci staré široké dávky označ jako administrativní přesun evidence; její neověřené části zůstávají otevřené.
 

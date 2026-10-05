@@ -194,6 +194,58 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] První webový renderer umožní spravovat vlastní stránku uvnitř konkrétního projektu, například stránku průzkumu složenou z metodiky, dat, grafů a závěrů. Obsah, kompilace, náhled a publikace patří do projektu; globální Nastavení obsahuje jen dostupnost modulu/provideru a node-local credentials.
 - [ ] Prezentační renderer podle sekce 22C znovu použije stejný výběr zdrojů, pořadí, manifest, indikaci neaktuálnosti a úplný privátní náhled. Audience view, poznámky řečníka, postupné odhalení a disclosure evidence zůstávají prezentačně specifické schopnosti.
 
+### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
+
+**Stav: plánovaný návrh, neimplementováno.** Web, prezentace, obrázek, report ani
+jiný výstupní modul nemají být pro Ollamu či jiný planner známé pouze textem v
+globálním promptu. Každý výstupní renderer a integrovaný nástroj poskytne
+verzovaný, validovaný a staticky načitatelný capability descriptor. Descriptor
+je vstup deterministického aplikačního routeru; není executable pluginem,
+oprávněním ke spuštění ani náhradou aplikační validace.
+
+- [ ] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
+  podporované záměry a příklady pokynů (např. „vygeneruj prezentaci na téma…“),
+  výslovně nepodporované použití, vstupní a výstupní schéma/MIME, formát
+  výsledku, dostupné šablony s verzí a hashem, požadované role a backendové
+  capability, limity, privacy/execution boundary, oprávnění, cost/side-effect
+  třídu, provenance a potřebu preview či lidského potvrzení.
+- [ ] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
+  očekávaným strukturovaným výstupem, nikoli jako skrytý volný text vložený
+  pluginem do libovolného požadavku. Node-local binding modelu, endpoint,
+  credentials a runtime dostupnost zůstávají oddělené od přenosného descriptoru.
+- [ ] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
+  transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
+  graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
+  ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
+- [ ] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
+  návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
+  capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
+  model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.
+- [ ] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
+  stabilním plan/step ID. Každá hrana předává explicitní artefakt nebo zmrazený
+  materializovaný výstup s formátem, schématem, privacy, revizí a hashem; skryté
+  sdílení celé konverzace nebo projektu není dovoleno.
+- [ ] Podporovat například plán „z účetních dat za rok XXXX spusť schválený Julia
+  skript YYY, vypočítej výtěžnost jednotlivých her, z výsledné tabulky/grafů
+  sestav prezentaci podle šablony Z“. Preview před spuštěním ukáže přesné zdroje,
+  kroky, nástroje/modely, šablony, mezivýstupy, execution boundaries, očekávané
+  externí účinky a místa samostatného potvrzení.
+- [ ] Každý krok má vlastní Context Manifest nebo deterministický run contract,
+  stav a receipt. `unknown`, stale vstup, zamítnutí či nevalidní výstup zastaví
+  závislé kroky; router nesmí automaticky opakovat neurčitý externí účinek ani
+  tajně zvolit jiný model, plugin nebo nástroj. Obnova naváže pouze na doložené
+  dokončené kroky a znovu ověří jejich hashe a oprávnění.
+- [ ] UI vysvětlí, proč byla capability navržena, které alternativy jsou
+  kompatibilní a co uživatel potvrzuje. Uživatel může plán nebo konkrétní
+  binding/model změnit před spuštěním; automatický výběr dostupného backendu
+  není souhlas se změnou privacy, ceny ani execution boundary.
+
+První implementační dávka má definovat descriptor/schema, validaci katalogu a
+read-only návrh plánu bez spouštění. Teprve navazující dávka propojí execution
+s workflow engine, materializovanými kompiláty, Julia runnerem a výstupními
+renderery. Obrazová dávka `F-M3-MEDIA-01` zachová kompatibilní capability
+metadata, ale obecný kompoziční router není její součástí.
+
 Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
 
 ## 2F. Read-only artefakty sdílené mezi projekty
@@ -674,6 +726,10 @@ jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
 - [x] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
   licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
   chování jádra ani spustit fallback.
+- [ ] Rozšířit jednotné API o staticky načitatelný Output Capability Descriptor
+  a typované vazby podle sekce 2E.1. Descriptor smí planneru popsat účel, formát,
+  šablony a příklady pokynů, ale nesmí mu předat credentials, executable kód ani
+  oprávnění obejít aplikační router, Context Manifest nebo potvrzení uživatele.
 
 Podrobný kontrakt a hranice PoC drží
 [ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
@@ -911,8 +967,10 @@ a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 je po PR #43 a
 navazující akceptaci PoC validovaný: externí brainstorming používá přímý
 dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
 OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
-capability, webové hledání a obecný workflow zůstávají
-samostatné navazující schopnosti. Gate M3 proto
+capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
+F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů; dávka čeká na
+PR do `develop`. Webové hledání a obecný workflow zůstávají samostatné
+navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
@@ -928,6 +986,11 @@ není vydáván za celý uzavřený.
   acceptance; výjimka z dosavadního
   preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
   autorizaci a privacy kontrole.
+- [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
+  ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
+  `unknown` bez retry a samostatná recovery-safe publikace s generation
+  provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
+  providerů jsou PoC validated; PR dosud není vytvořen ani sloučen.
 - [ ] Provenance.
 - [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
@@ -960,6 +1023,9 @@ není vydáván za celý uzavřený.
 - [ ] Git sync.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
+- [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné
+  capability profily `same-company-same-team` a `same-company`; profily obecně
+  netvoří pořadový žebříček a tato transportní policy sama neuděluje přístup.
 - [ ] Explicitní publikace chatu, shrnutí, zadání nebo jiného podporovaného artefaktu do projektu.
 - [ ] Node-local backend registry.
 - [ ] Federation status.
@@ -1145,6 +1211,28 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 - [ ] Mail: více účtů, IMAP synchronizace, SMTP odesílání, složky, hledání, vlákna, přílohy, odpovědi a přeposílání, koncepty a odchozí fronta. Výchozí obsah a činnosti jsou soukromé; přiřazení projektu je explicitní nebo potvrzené pravidlo.
 - [ ] Připojení stavět na standardních protokolech a capability adaptéru. TLS a podporovaný způsob autentizace včetně OAuth2 řešit už pro prvního cílového poskytovatele; neslibovat univerzální kompatibilitu bez ověření.
 - [ ] Kalendář: CalDAV, více kalendářů, pozvánky a odpovědi, opakování, časová pásma a vazba na interní schůzku. Kontakty: CardDAV pohled nad Relationship Registry, mapování polí a řízené konflikty bez druhého CRM.
+- [ ] XMPP rozdělit na dvě samostatně konfigurované a auditované hranice. Interní
+  adaptér může přenášet federovaná lidská vlákna F-M5-CHAT-01 pouze mezi uzly,
+  jejichž konkrétní bilaterální vztah má profil `same-company-same-team` nebo
+  `same-company`; uživatelsky jde o „nejvyšší dva“ interní profily, nikoli o
+  zavedení obecného pořadí profilů. Každé spojení nadále vyžaduje schváleného
+  peera, mapovanou identitu a explicitní thread/project scope a nesmí zpřístupnit
+  credentials, session, role ani projektová data mimo jednotlivé zprávy a vědomě
+  přiložený obsah.
+- [ ] Veřejný XMPP klient/federační edge provozovat pod oddělenou doménou, účty,
+  credentials, úložištěm a policy jako vnější kanál pro komunikaci s veřejností.
+  Vnější JID není workspace účet ani federovaný uzel; příchozí zpráva je
+  nedůvěryhodný externí vstup a bez explicitního importu nemá přístup k projektu,
+  Context Manifestu, LLM, pluginům ani nástrojům. Počítat s moderací, blokováním,
+  rate limits/anti-spam, pravidly retence, souhlasem, bezpečnou prací s odkazy a
+  přílohami a se stavy doručení včetně `unknown` bez slepého opakování odeslání.
+- [ ] Mezi interním a veřejným XMPP nezavádět implicitní bridge, sdílený adresář
+  ani automatické přeposílání. Přenos zprávy nebo jejího výsledku přes hranici
+  musí mít preview, potvrzenou cílovou identitu a rozsah, provenance, zděděnou
+  privacy a disclosure událost; interní JID, topologie uzlů a membership se
+  veřejnosti nezveřejňují. Před implementací ověřit interoperabilitu server-to-
+  server federace, DNS/TLS, MUC, příloh a zvoleného end-to-end šifrování a popsat,
+  která metadata zůstávají viditelná serverům.
 - [ ] Před odesláním zkontrolovat konkrétní příjemce, citovaný text, přílohy a jejich revize. Pozvánka i sdílený kontakt jsou rovněž možné externí přenosy.
 - [ ] Do projektového Gitu ukládat jen vědomě vybrané komunikační artefakty, metadata a disclosure události. Celá schránka, cache, synchronizační kurzory, koncepty a odchozí fronta mají oddělený lokální nebo poskytovatelský životní cyklus.
 
@@ -1158,6 +1246,7 @@ Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M
 | Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
 | Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, verzovaný scénář, kontextové i globální backupy, návrat z přerušení a restart bez ztráty relace. |
 | Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
+| Interní a veřejný XMPP | Interní adaptér navazuje na F-M5-TRUST-01 a F-M5-CHAT-01/02; veřejný edge na ER-00 až ER-03 | Oddělené identity, domény, credentials, úložiště a policy; interní provoz jen pro dva přesně povolené profily, veřejný vstup bez implicitního přístupu a žádný automatický bridge. |
 | Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
 | Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |
 

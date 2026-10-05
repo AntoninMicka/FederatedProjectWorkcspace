@@ -257,7 +257,86 @@ Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;
 F-M3-MEDIA-01 musí před implementací uzavřít MIME, rozměry, byte limity,
 provenance a bezpečné přijetí bajtů. První verze nesmí převzít obecné stahování
-libovolné providerové URL. Usage a billing zůstávají oddělené capability
+libovolné providerové URL.
+
+Stejnou capability může poskytovat samostatný ComfyUI adapter podle jeho
+oficiálního [serverového API](https://docs.comfy.org/development/comfyui-server/comms_routes)
+a referenčního [API příkladu](https://github.com/Comfy-Org/ComfyUI/blob/master/script_examples/basic_api_example.py).
+ComfyUI není fallback za externí provider a blízkost v LAN sama neuděluje
+důvěru. Binding určuje explicitní endpoint a execution boundary; dispatch smí
+použít pouze verzovanou správcem schválenou workflow šablonu a allowlisted
+parametry. LLM nesmí dodat ani spustit workflow JSON, měnit node class ani
+vybírat custom node. Run evidence váže workflow hash/revizi, parametry,
+`prompt_id`, endpoint a přesné výstupy z historie. Bajty se přijmou jen z
+konkrétní výstupní identity vrácené pro tento run, s bounded limity a bez
+obecného následování URL. Custom nodes a samotný ComfyUI proces jsou samostatná
+provozní a supply-chain hranice mimo automatickou správu workspace.
+
+### Obrazová capability v1 — rozhodnutí F-M3-MEDIA-01-A
+
+První verze implementuje pouze provider-neutral operaci `generate-image` s
+výstupním formátem `image/png`. `image-to-text`, editace/maska, více výsledků,
+video a obecný multimodální chat jsou odloženy jako samostatné capability;
+nesmějí se vydávat za variantu textového `generate-text`. Capability revision
+musí určit adapter, podporované parametry a limity, binding explicitně určuje
+provider/model nebo ComfyUI endpoint/workflow. Model ani capability se
+neodvozují pouze z názvu a mezi adaptery není automatický fallback.
+
+Společný request v1 obsahuje stabilní `run_id`, `approval_id`, přesný UTF-8
+prompt do 32 KiB, právě jeden rozměr z množiny `1024x1024`, `1536x1024` a
+`1024x1536`, privacy, binding/revision a provider-neutral volbu kvality
+`auto|low|medium|high`. Vytváří právě jeden obrázek. Preview ukáže prompt,
+provider/endpoint boundary, model nebo workflow revision/hash, rozměr, kvalitu,
+privacy a přesný sanitizovaný provider request bez credentialu. Potvrzení váže
+Context Manifest, request hash, binding hash a credential/workflow revision;
+`local-only` smí pouze na skutečný `same-node` ComfyUI binding, nikdy na
+externího providera ani pouze blízký LAN endpoint.
+
+OpenAI Images adapter používá pouze přesný endpoint uvedený bindingem a
+vyžaduje inline `b64_json`; dočasné URL odmítne. Request fixuje `n=1`,
+`output_format=png` a schválené model/size/quality hodnoty. Limit odpovědi je
+24 MiB JSON a dekódovaný obrázek nejvýše 16 MiB. Model z odpovědi nebo
+providerová metadata se nesmějí použít k tiché změně schváleného bindingu.
+
+ComfyUI adapter používá pro v1 bounded polling, nikoli povinný WebSocket:
+`POST /prompt` vrátí jedno `prompt_id`, `GET /history/{prompt_id}` musí doložit
+dokončený schválený output node a `GET /view` smí načíst pouze jeho přesnou
+trojici `filename/subfolder/type=output` ze stejného bindingu. Každý request má
+deadline, nejvýše 120 pollů a nejvýše jeden výsledný soubor. Workflow API JSON
+je node-local verzovaná šablona do 1 MiB s SHA-256, deklarovanou revision,
+výstupním node ID a mapou povolených parametrů. Workspace nahradí jen prompt,
+width, height a seed; všechny class types, model/checkpoint, sampler a hrany
+grafu zůstávají neměnné. Seed je explicitní 64bitové nezáporné číslo generované
+aplikací nebo zadané uživatelem a je součástí requestu i provenance. Přijetí
+šablony je administrátorská operace; neinstaluje modely ani custom nodes a
+neprokazuje jejich bezpečnost.
+
+Výstup musí mít PNG signaturu, jediný IHDR jako první chunk, kladnou šířku a
+výšku přesně shodnou se schváleným rozměrem a celkovou délku nejvýše 16 MiB.
+Parser kontroluje bounded strukturu chunků, délky, CRC a závěrečný IEND; žádná
+metadata obrázku se nevydávají za důvěryhodnou provenance. Náhled používá až
+takto validované bajty a vlastní 4MiB prezentační limit může zobrazit jen
+zmenšenou odvozeninu, nikdy nahradit původní výsledek.
+
+Obrazové runy a approval mají samostatné node-local SQLite úložiště se
+`synchronous=FULL`. Run se před sítí atomicky přepne na `dispatching`; po úplném
+přijetí a validaci se metadata a PNG BLOB uloží v jedné transakci jako
+`succeeded`. Timeout, pád procesu, ztracená odpověď nebo zavření klienta po
+začátku síťového účinku zanechá `unknown`; malformed či oversized odpověď s
+jednoznačně přijatým výsledkem je `failed`. Ani jeden stav se automaticky
+neopakuje. Nový vědomý pokus má nové run/approval ID.
+
+Úspěšný node-local výsledek není projektovým artefaktem. Samostatná potvrzená
+publikace adaptuje Workspace/source-import transakci a vloží původní PNG bajty
+pod novým artifact UUID. Metadata nové verze provenance evidují adapter,
+binding/revision, capability revision, run ID, request SHA-256, model nebo
+workflow revision/hash, seed, rozměr, quality a SHA-256 výsledných bajtů; prompt
+se do Gitu nekopíruje automaticky. Pád před Workspace intentem nic nepublikuje,
+pád během publikace obnoví stejný operation ID a bajty z durable úspěšného runu
+bez druhého providerového dispatch. Změněný HEAD nebo privacy vyžadují nové
+publikační potvrzení, nikoli nový obrazový běh.
+
+Usage a billing zůstávají oddělené capability
 M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
 ani spolehlivý výpočet ceny.
 

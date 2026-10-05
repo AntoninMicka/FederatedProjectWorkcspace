@@ -18,17 +18,15 @@ F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
 F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
-F-M3-CHAT-DIRECT-01 po PR #44 jsou uzavřené ve WORK_LOG. Akceptovaný MOD-01 je
-ve WORK_LOG a jeho větev čeká na doručení PR podle [TODO](TODO.md).
+F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
+F-M3-MEDIA-01 je PoC validated a čeká na svůj jediný PR do `develop`; evidence
+je podle uživatelské dohody před PR ve [WORK_LOG](WORK_LOG.md), TODO další dávku
+zatím neaktivuje.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-M3-MEDIA-01 — Externí obrazové capability (cílová úroveň: designed → PoC validated).** Po textovém provideru a podle capability/licenčního review oddělit `text-to-image` a případně `image-to-text` od textového dispatch. Akceptace: přesné model/capability/input MIME a hash, limity velikosti a rozměrů, bezpečný preview, privacy a potvrzení před odesláním, durable nejednoznačný výsledek, bounded download bez následování nedůvěryhodného URL a explicitní publikace obrázku jako artefaktu s provenance. Ollama může navrhnout obrazovou akci, ale nesmí ji sama spustit; providerem vrácené URL ani metadata nejsou důvěryhodné. Usage/billing zůstává M3-UB-01.
 - [ ] [planned] **F-M4-WORKFLOW-01 — Artifact-based creator/opponent handoff (cílová úroveň: designed → PoC validated).** Po provider-neutral backendu a prvním externím provideru zavést první dvourolový workflow, v němž creator vydá explicitní artefakt a opponent dostane pouze schválený artefaktový výběr, nikoli implicitně celou creator konverzaci. Akceptace: stabilní workflow/step/run ID, role a backend volené odděleně, Context Manifest pro každý krok, lidské potvrzení před předáním a publikací, stale/unknown/retry bez duplicitního síťového účinku, privacy odvozenin a auditovatelný výsledek i při různých backendech.
 - [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout, přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav; zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez ztráty zadání, výběru kontextu nebo již připraveného externího preview. Automaticky neopakovat běh s neznámým výsledkem ani neprovádět skrytý fallback. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď, chybný JSON, pád před/po durable přechodech, souběh a oddělení chyby lokálního routeru od chyby externího providera.
-
-## Zjištěné mezery a navazující ověření
-
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
   cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
@@ -45,6 +43,18 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   Autoritou pracovní historie zůstává node-local `chat-threads.sqlite` mimo Git
   a obnovitelný projektový index; projektové Git artefakty vznikají jen
   explicitním full/delta otiskem nebo publikací výstupu.
+
+- [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
+  capability a kompoziční router (cílová úroveň: designed → PoC validated).**
+  Podle roadmapy 2E.1 nejprve dodat verzovaný statický descriptor pro renderery
+  a nástroje, fail-closed katalog a read-only typovaný plan/step DAG bez
+  spuštění. Navazující execution skládá explicitní artefakty a materializované
+  mezivýstupy, například účetní data → schválený Julia skript → tabulka/graf →
+  prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
+  preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
+  pluginy, měnit modely/bindingy nebo oslabit oprávnění.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
@@ -152,6 +162,16 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 - [ ] [planned] **F-M5-CHAT-01 — Federovaná lidská vlákna a durable delivery (cílová úroveň: PoC validated).** Přímý chat a explicitně založené skupinové vlákno mezi mapovanými uživateli schválených peerů; výchozí klasifikace `brainstorming`. Stabilní message/thread ID, kvalifikovaný autor, podpis/provenance, durable outbox/inbox, deduplikace a pending/sent/delivered/failed/unknown bez globálního pořadí odvozeného pouze z hodin. Profil `partner` nesmí chat využít k background synchronizaci ani procházení projektu; mimo samotné zprávy projde jen obsah explicitně přiložený nebo nasdílený uživatelem. Akceptace: offline obě strany, retry/lost response, duplicita, změněný mapping, downgrade profilu, revokace, restart na každé persistentní hranici a oddělení vláken/projektů; chat funguje bez LLM.
 
 - [ ] [planned] **F-M5-CHAT-02 — Otisk, shrnutí a publikace výsledku chatu (cílová úroveň: PoC validated).** Z vybraných zpráv nabídnout preview a explicitní vytvoření úplného/rozdílového otisku, shrnutí, zadání nebo jiného schématem podporovaného artefaktu. Volitelné LLM zpracování používá Context Manifest a povolenou execution boundary. Akceptace: lidské potvrzení cílového projektu/typu/obsahu/privacy; provenance na přesná thread/message ID a vstupy; nejpřísnější privacy a průnik práv; stale/revoked/změněné zprávy, expected HEAD, retry a pád před/po CAS; editace artefaktu nepřepisuje chat.
+
+- [ ] [planned] **F-M5-CHAT-XMPP-01 — Oddělený interní a veřejný XMPP adaptér
+  (cílová úroveň: designed → PoC validated).** Interní XMPP smí obsloužit jen
+  bilaterální vztahy `same-company-same-team` a `same-company`. Veřejný
+  federovaný XMPP je oddělený vnější kanál s vlastní doménou, účty, credentials,
+  úložištěm, moderací a disclosure policy; není mezi nimi implicitní bridge.
+  Před PoC uzavřít identity/JID mapping, durable delivery a `unknown`, MUC,
+  přílohy, DNS/TLS, server-to-server interoperabilitu, E2EE, retenci, anti-spam
+  a explicitní import/přeposlání s provenance/privacy. Vnější zpráva nesmí
+  automaticky získat projektový kontext ani spustit LLM, plugin či nástroj.
 
 - [ ] [planned] **M5 — Federovaná publikace (cílová úroveň: PoC validated).** Implementovat izolovaný příjem, autorizaci celého přenášeného obsahu včetně historie, validaci kandidáta a CAS/recovery dle ADR 0008. Ověřit změnu HEAD po lidském řešení, neplatný fast-forward/merge, revokaci a odmítnutí přenosu local-only historie; zachovat konfliktní rodiče. Dílčí pořadí: F-M5-TRUST-01 → F-M5-TRANSFER-01 → F-M5-CHAT-01 → F-M5-CHAT-02.
 

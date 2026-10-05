@@ -104,6 +104,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/media/openai/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/publication-cms/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/request',
             body=json.dumps({'run_id':str(uuid4())}), headers=headers)[0], 403)
@@ -114,6 +115,8 @@ class WebTests(unittest.TestCase):
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
+        self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
+            'project_id': project}), headers=headers)[0], 403)
         view = Projects(self.root/'node.json').open(project)
         source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')
         self.assertEqual(self.request(path='/v1/sources/import', body=json.dumps({

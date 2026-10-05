@@ -5,6 +5,54 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-MEDIA-01 — Externí obrazové capability — 2026-10-05
+
+Dávka na větvi `feature/f-m3-media-01` dodala provider-neutral explicitní
+generování jednoho PNG přes samostatné OpenAI Images a ComfyUI adaptery,
+bezpečný preview/confirmation tok a oddělenou publikaci projektového artefaktu.
+Dosažená úroveň je PoC validated. Evidence byla podle výslovné dohody s
+uživatelem přesunuta z TODO ještě před PR; PR do `develop` dosud nebyl vytvořen
+ani sloučen a dávka se tím nepovažuje za začleněnou.
+
+- [x] [completed] **F-M3-MEDIA-01-A — Kontrakt, provider/licenční review a
+  reuse (designed).** ADR 0008 vymezil `generate-image`, jeden inline PNG,
+  přesné rozměry/limity, Context Manifest, samostatný BLOB run journal a zákaz
+  URL downloadu, implicitního fallbacku i LLM-sestaveného ComfyUI workflow.
+- [x] [completed] **F-M3-MEDIA-01-B — Adapter, durable dispatch a bezpečné
+  přijetí výsledku (implemented).** OpenAI Images a ComfyUI mají oddělené
+  explicitní bindingy, přesný request, allowlisted workflow parametry,
+  strictní PNG/IHDR/CRC/rozměrovou validaci a durable `unknown` bez retry.
+- [x] [completed] **F-M3-MEDIA-01-C — UI a explicitní publikace artefaktu
+  (implemented).** Desktop i oprávněný web oddělují preview, potvrzený dispatch,
+  validovaný výsledek a publikaci přes Workspace. Approval/run přežijí restart;
+  metadata schema v3 zapisují binding/run/workflow a hashe bez promptu.
+- [x] [completed] **F-M3-MEDIA-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Testy pokryly secrets, RBAC/privacy, malformed a oversized
+  odpověď, 4/16 MiB limity, timeout/`unknown`, vědomě nový run, restart mezi
+  providerem a approval evidencí a idempotentní recovery publikace. Regrese
+  opravila klasifikaci oversized PNG z `unknown` na známé `failed`.
+
+Automatizovaná cílená media/desktop/web sada prošla 43 testy se 3 podmíněnými
+browser skipy. Úplná sada po poslední změně prošla 388 testy s 22 podmíněnými
+skipy. Skutečný Qt/WebEngine smoke prošel pro běžný start i izolované vytvoření
+projektu a vykreslenou kartu Obrázek. `git diff --check` byl čistý.
+
+Živý ComfyUI smoke použil uživatelem dodaný workflow na same-node endpointu
+`http://127.0.0.1:8188`, revision `cyberrealisticxl-v90-api-v1`, workflow
+revision `cyberrealisticxl-v90-workflow-v1` a SHA-256
+`e2ffd0a880341c2031b65266c8af4cde62c1068e5c36b764e5de16e94e26ccb9`.
+Izolovaný dočasný projekt prošel preview, potvrzeným dispatch, validací PNG
+1024 × 1024 / 864 300 B a publikací; retry publikace vrátil stejný commit,
+provenance odpovídala runu/bindingu/workflow a prompt nebyl v metadatech.
+Uživatel vizuálně potvrdil očekávanou červenou kostku.
+
+Jeden uživatelem výslovně schválený placený OpenAI Images smoke proběhl nad
+novým prázdným dočasným projektem, nikoli nad soukromým registrovaným projektem.
+`gpt-image-1` vrátil validní PNG 1024 × 1024 / 1 180 851 B; HEAD zůstal beze
+změny a výsledek nebyl publikován. Dočasný projekt, node/state a dočasná kopie
+credentialu byly odstraněny. Trvale zůstávají pouze schválené node-local
+provider bindingy mimo projektový Git; žádný secret není v evidenci.
+
 ## MOD-01-UI — Publikační CMS ve Workspace — 2026-10-05
 
 Dávka na větvi `feature/mod-01-publication-registry` navázala před vytvořením PR

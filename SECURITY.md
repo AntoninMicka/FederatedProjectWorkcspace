@@ -11,6 +11,7 @@ SPDX-License-Identifier: MPL-2.0
 | Soubor → storage | Path traversal, symlink, škodlivý parser vstup | Omezené kořenové cesty, validace, limity velikosti a schémat | PoC; bez ochrany proti závodícím FS změnám |
 | Peer → projekt | Neoprávněný přenos a škodlivá konfigurace Gitu | Node autentizace, aktuální RBAC, izolovaný import, zákaz cizích hooků a helperů | návrh |
 | Zdroj → LLM | Prompt injection a únik kontextu | Zdroj jako data, aplikační privacy filtr, náhled kontextu | návrh |
+| Projekt/UI → obrazový provider | Únik promptu, skrytý fallback, škodlivý nebo příliš velký výsledek, duplicitní placený run | Přesný potvrzený request a Context Manifest, explicitní binding/privacy, žádný fallback/retry po `unknown`, bounded PNG validace a oddělená publikace | PoC F-M3-MEDIA-01; živá providerová akceptace prostředí je ruční |
 | Desktop disk → jiný uživatel | Únik credentials | Systémové úložiště klíčů, restriktivní práva, token mimo logy/URL | návrh |
 | Restart → stav projektu | Ztracený zápis / zastaralý index | Journal operací, validace a obnova podle commit ID | Linux PoC přes Workspace, ADR 0003; produkční ochrany otevřené |
 
