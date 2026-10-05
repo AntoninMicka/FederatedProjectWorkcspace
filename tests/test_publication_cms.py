@@ -297,7 +297,9 @@ for site in sites:
         self.assertEqual([item[0] for item in transport.requests],
                          ['POST', 'POST', 'POST', 'POST', 'POST'])
         self.assertEqual(transport.requests[1][2], 'upload-jwt')
+        self.assertEqual(transport.requests[1][3]['accepted'], (200, 201, 202))
         self.assertEqual(transport.requests[2][2], 'upload-jwt')
+        self.assertEqual(transport.requests[2][3]['accepted'], (200, 201, 202))
         version = transport.requests[3][3]['value']
         self.assertEqual(version['assets']['jwt'], 'completion-jwt')
         self.assertEqual(version['compatibility_date'], '2026-09-30')

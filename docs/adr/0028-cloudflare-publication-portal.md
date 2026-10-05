@@ -5,8 +5,10 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0028 — Jeden Cloudflare Worker pro jeden publikační portál
 
-Stav: přijato pro první adapter v `MOD-01-UI-G` jako **implemented**. Živý účet,
-Custom Domains, DNS, TLS a cache dosud nejsou akceptované.
+Stav: přijato pro první adapter v `MOD-01-UI-G` jako **PoC validated**. Živý
+provider release, veřejné HTTPS a cache hit byly akceptovány 2026-10-05;
+adapter DNS ani Custom Domains nespravuje a jejich změnový lifecycle nebyl
+testován.
 
 ## Kontext a rozhodnutí
 
@@ -56,7 +58,10 @@ je stále jen obnovitelný vstup uploadu, nikoli důkaz deploymentu.
 
 Adapter je implementovaný proti přímému Cloudflare Workers API a testovaný s
 deterministickým provider transportem včetně ztracené odpovědi a reconciliation.
-Bez konkrétního účtu a tokenu není doložen živý upload ani shoda DNS/TLS/cache.
+Živá akceptace 2026-10-05 doložila, že asset upload může vedle dokumentovaného
+HTTP 200 vrátit také úspěšný HTTP 202 s completion JWT; adapter proto přijímá
+200, 201 a 202, ale nadále vyžaduje úspěšnou Cloudflare envelope a platný JWT.
+Shoda DNS/TLS/cache se ověřuje odděleně od providerového deployment receipt.
 Správa Custom Domains, vytváření Workeru, rollback na předchozí verzi a více
 portálů jsou oddělené navazující schopnosti.
 

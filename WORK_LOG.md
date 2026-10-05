@@ -5,6 +5,55 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## MOD-01-UI — Publikační CMS ve Workspace — 2026-10-05
+
+Dávka na větvi `feature/mod-01-publication-registry` navázala před vytvořením PR
+na MOD-01 a dodala úzce připnuté CMS capability, správu propojených domén a
+potvrzený Cloudflare deployment. Dosažená úroveň je PoC validated. Evidence byla
+na výslovný pokyn uživatele přesunuta z TODO ještě před PR; PR do `develop`
+dosud nebyl vytvořen ani sloučen a dávka se tím nepovažuje za začleněnou.
+
+- [x] [completed] **MOD-01-UI-A (designed)** — ADR 0027 vymezil spuštění dvou
+  CMS capabilities bez obecného plugin runtime; ADR 0028 přijal jeden
+  host-routed Cloudflare Worker, oddělené potvrzení a durable `unknown` recovery.
+- [x] [completed] **MOD-01-UI-B (implemented)** — node-local binding, přesná
+  kontrola manifestu/capabilities/runtime hashů a izolované spuštění pevného
+  entrypointu modulu.
+- [x] [completed] **MOD-01-UI-C (implemented)** — desktopové a administrátorské
+  webové UI pro správu domén, přesný request, sandboxed HTML náhled a samostatné
+  potvrzení generování.
+- [x] [completed] **MOD-01-UI-D (PoC validated)** — serializované generování,
+  SQLite journal a recovery pádu mezi odvozeným výstupem a atomickým uložením
+  node-local konfigurace.
+- [x] [completed] **MOD-01-UI-E (implemented)** — automatická detekce modulu a
+  explicitní Povolit/Zakázat podle kompatibility manifestu namísto ruční cesty
+  nebo Git pinu.
+- [x] [completed] **MOD-01-UI-F (PoC validated)** — přidávání a odebírání domén,
+  nezávislé sekce Profil/CV/Timeline, zachování vypnutého obsahu a bezeztrátová
+  migrace staré konfigurace.
+- [x] [completed] **MOD-01-UI-G (PoC validated)** — read-only provider status,
+  přesný deployment plán, samostatné potvrzení, přímý Workers Static Assets tok
+  a `unknown` bez automatického retry. Živá akceptace odhalila, že Cloudflare
+  asset upload vrací také úspěšný HTTP 202; adapter jej po cílené regresi přijímá
+  pouze s platnou úspěšnou envelope a completion JWT.
+
+Živá akceptace 2026-10-05 nasadila release
+`46465cf5933abe03023f228426363188e3c18a06ce9580ec28fd54db7a78564f` jako
+Worker verzi `b81f5b22-e4d4-474c-9fdb-ff61b9e09daa` a deployment
+`445aa43c-e051-4d77-9943-589850603c88`. Následný read-only refresh vrátil
+`current` a stejný provider release tag. `antoninmicka.cz`, `proofofidea.cz` a
+`tonymicka.cz` odpověděly přes validované HTTPS stavem 200 a `CF-Cache-Status:
+HIT`; SHA-256 každého těla se přesně shodoval s potvrzeným lokálním
+`dist/sites/<hostname>/index.html`. Deployment nezměnil DNS ani Custom Domains.
+
+Předchozí dva nejednoznačné pokusy byly po read-only kontrole operátorsky
+uzavřeny jako `abandoned`: aktivní version/deployment ID zůstaly shodné s
+očekávaným stavem před pokusem a provider neobsahoval žádnou verzi s cílovým
+release tagem. Nový upload se spustil až poté. Cílená sada
+`python3 -m unittest tests.test_publication_cms -v` prošla 10 testy. Po opravě
+adapteru prošla úplná sada `python3 -m unittest discover -s tests -v`: 369
+testů, z toho 22 podmíněných testů přeskočeno.
+
 ## MOD-01 — Kontrakt externě verzovaných modulů — 2026-09-29
 
 Dávka na větvi `feature/mod-01-publication-registry` implementovala obecný

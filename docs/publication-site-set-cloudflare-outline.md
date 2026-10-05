@@ -155,5 +155,3 @@ Provider credentials zůstávají mimo projekt, logy a verzované dokumenty.
 ## Poznámky k doplnění
 
 Sem lze průběžně zapisovat nové nápady před převodem návrhu do ADR:
-
-- 

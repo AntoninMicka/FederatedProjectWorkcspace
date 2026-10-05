@@ -204,7 +204,7 @@ class CloudflareTransport:
             body, content_type = self._multipart(fields)
             uploaded = self._request('POST', f"/accounts/{binding['account_id']}/workers/assets/upload?base64=true",
                                      upload_token, body=body, content_type=content_type,
-                                     accepted=(200, 201))
+                                     accepted=(200, 201, 202))
             require(isinstance(uploaded, dict), 'Invalid Cloudflare asset upload response')
             if isinstance(uploaded.get('jwt'), str):
                 completion = uploaded['jwt']
