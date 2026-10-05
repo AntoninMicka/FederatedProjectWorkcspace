@@ -109,10 +109,19 @@ Milník M3; jedna dávka, větev `feature/f-m3-media-01`, budoucí PR do `develo
   kartu Obrázek bez providerového volání. Postup, hranice a ruční providerová
   akceptace jsou v `docs/image-generation-acceptance.md`; README a threat model
   jsou aktualizované.
-  **Otevřeno:** výchozí node nemá nakonfigurovaný OpenAI Images ani ComfyUI
-  image binding. Živý smoke obou providerů proto nebyl proveden; OpenAI je navíc
-  explicitně nákladová externí akce. Do jejich konfigurace a potvrzení reálného
-  requestu nelze úroveň PoC validated ani celou dávku označit za dokončenou.
+  Živý ComfyUI smoke 2026-10-05: uživatelem dodaný API workflow je uložen jako
+  `same-node` binding nad `http://127.0.0.1:8188`, revision
+  `cyberrealisticxl-v90-api-v1`, workflow revision
+  `cyberrealisticxl-v90-workflow-v1` a SHA-256
+  `e2ffd0a880341c2031b65266c8af4cde62c1068e5c36b764e5de16e94e26ccb9`.
+  Izolovaný dočasný projekt prošel skutečným preview → potvrzeným dispatch →
+  validací a preview PNG 1024 × 1024 / 864 300 B → publikací. Opakovaná
+  publikace vrátila stejný commit, generation provenance odpovídala bindingu,
+  workflow a runu a prompt nebyl v projektových metadatech. Dočasný projekt byl
+  odstraněn; binding zůstal node-local mimo projektový Git.
+  **Otevřeno:** živý OpenAI Images smoke nebyl proveden a zůstává neověřený;
+  vyžaduje samostatné potvrzení placené externí akce. Do té doby nelze celou
+  dávku označit za dokončenou ani doporučit PR.
 
 ## K předání do backlogu
 
