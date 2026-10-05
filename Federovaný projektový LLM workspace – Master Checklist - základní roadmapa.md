@@ -967,9 +967,10 @@ a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 je po PR #43 a
 navazující akceptaci PoC validovaný: externí brainstorming používá přímý
 dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
 OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
-capability přes oddělené OpenAI Images a ComfyUI adaptery jsou aktivní dávka
-F-M3-MEDIA-01; webové hledání a obecný workflow zůstávají samostatné navazující
-schopnosti. Gate M3 proto
+capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
+F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů; dávka čeká na
+PR do `develop`. Webové hledání a obecný workflow zůstávají samostatné
+navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
@@ -985,6 +986,11 @@ není vydáván za celý uzavřený.
   acceptance; výjimka z dosavadního
   preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
   autorizaci a privacy kontrole.
+- [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
+  ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
+  `unknown` bez retry a samostatná recovery-safe publikace s generation
+  provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
+  providerů jsou PoC validated; PR dosud není vytvořen ani sloučen.
 - [ ] Provenance.
 - [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
