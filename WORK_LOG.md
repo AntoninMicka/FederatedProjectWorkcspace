@@ -11,8 +11,8 @@ Dávka na větvi `feature/f-m3-media-01` dodala provider-neutral explicitní
 generování jednoho PNG přes samostatné OpenAI Images a ComfyUI adaptery,
 bezpečný preview/confirmation tok a oddělenou publikaci projektového artefaktu.
 Dosažená úroveň je PoC validated. Evidence byla podle výslovné dohody s
-uživatelem přesunuta z TODO ještě před PR; PR do `develop` dosud nebyl vytvořen
-ani sloučen a dávka se tím nepovažuje za začleněnou.
+uživatelem přesunuta z TODO ještě před PR. PR #46 byl 2026-10-05 sloučen do
+`develop` jako `da449bc`.
 
 - [x] [completed] **F-M3-MEDIA-01-A — Kontrakt, provider/licenční review a
   reuse (designed).** ADR 0008 vymezil `generate-image`, jeden inline PNG,

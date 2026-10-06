@@ -968,8 +968,8 @@ navazující akceptaci PoC validovaný: externí brainstorming používá přím
 dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
 OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
 capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
-F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů; dávka čeká na
-PR do `develop`. Webové hledání a obecný workflow zůstávají samostatné
+F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
+začleněná do `develop`. Webové hledání a obecný workflow zůstávají samostatné
 navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
@@ -990,7 +990,7 @@ není vydáván za celý uzavřený.
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
   provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
-  providerů jsou PoC validated; PR dosud není vytvořen ani sloučen.
+  providerů jsou PoC validated; PR #46 je sloučený do `develop`.
 - [ ] Provenance.
 - [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
@@ -1004,6 +1004,10 @@ není vydáván za celý uzavřený.
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
 ## Milestone M4 – Multi-role workflow
+
+Aktivní dávka `F-M4-WORKFLOW-01` zavádí první explicitní creator → opponent
+handoff přes hashovaný materializovaný výstup a samostatné Context Manifesty;
+nejde o implicitní sdílení celé konverzace ani o obecný pluginový router.
 
 - [ ] Creator.
 - [ ] Opponent.
