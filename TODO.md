@@ -159,5 +159,24 @@ Milník M4; jedna dávka, větev
 
 ## K předání do backlogu
 
-Zatím prázdné. Obecný output/plugin router zůstává samostatnou plánovanou dávkou
+- **Doplnění priority `IMP-01` až `IMP-04` (požadavek uživatele 2026-10-06):**
+  po uzavření a sloučení této dávky aktivovat jako další feature úzký import
+  dat nad konkrétním reálným uživatelským vzorkem. Před aktivací vybrat právě
+  jeden doložený formát/zdroj a odpovídající existující `IMP-*` ID; nezačínat
+  univerzálním import frameworkem ani všemi konektory současně. Akceptace má
+  zahrnout skutečný import, následné běžné použití dat ve workspace, zjištěné
+  UX/schema nedostatky a zachování provenance, privacy, původních bajtů,
+  idempotence a recovery. Toto je změna pořadí, nikoli duplicitní backlogový
+  úkol.
+- [ ] [planned] **UX-MOBILE-01 — Responzivní web pro telefon (cílová úroveň:
+  PoC validated; požadavek uživatele 2026-10-06).** Jako samostatnou feature po
+  prvním reálném importu optimalizovat sdílené webové UI pro úzký dotykový
+  viewport podle skutečně používaných toků, nejprve import, seznam projektu,
+  náhled artefaktu a potvrzovací kroky. Akceptace: žádný horizontální overflow
+  hlavního obsahu, ovladatelné taby/formuláře/dialogy a dotykové cíle,
+  čitelné dlouhé názvy a chyby, zachovaná klávesnicová přístupnost a skutečný
+  smoke na telefonu nebo odpovídajícím WebEngine/browser viewportu. Nejde o
+  nativní mobilní aplikaci ani o změnu backendových autorizačních hranic.
+
+Obecný output/plugin router zůstává samostatnou plánovanou dávkou
 `F-M4-OUTPUT-ROUTER-01` v BACKLOG a není podmínkou dokončení tohoto workflow.

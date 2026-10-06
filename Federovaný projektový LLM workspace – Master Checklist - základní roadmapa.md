@@ -774,6 +774,11 @@ nenahrazují.
 - [ ] Projekt nesmí působit primárně jako „chat s AI“.
 - [ ] Chat je pouze jeden z možných pohledů.
 - [ ] Orchestrator chat je volitelný; bez dostupného/povoleného LLM musí stejné základní projektové operace zůstat dostupné deterministickým UI/workflow.
+- [ ] Sdílené webové UI přizpůsobit úzkému dotykovému viewportu telefonu;
+  prioritně ověřit na skutečně používaném importu, seznamu projektu, náhledu
+  artefaktu a potvrzovacích tocích. Zachovat stejné serverové RBAC/privacy
+  hranice, klávesnicovou přístupnost a bezpečné textové vykreslení jako na
+  desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -1077,7 +1082,8 @@ akceptace a merge do `develop` zůstávají otevřené.
 - [ ] Vlastní model training.
 - [ ] Plnohodnotný replacement GitHub/GitLab.
 - [ ] Automatickou synchronizaci secrets.
-- [ ] Mobilní aplikaci.
+- [ ] Mobilní aplikaci. Toto odložení se netýká responzivní optimalizace
+  existujícího webového UI pro telefon dle sekce 12.
 
 ---
 
