@@ -9,10 +9,10 @@ Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshot
 a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC
 ve F-M2-CONTEXT-01. Navazující dávky lokálně PoC validovaly Ollama adapter,
 vlákna a jejich projektové výstupy, task služby, provider-neutral runtime, první
-externí textový provider i usage/billing. F-M3-CHAT-DIRECT-01 zde navrhuje
-přímý externí brainstorming a streaming; jeho implementace a živá akceptace
-zůstávají otevřené. Nejde o úplné RBAC, synchronizační službu ani obrazový
-pipeline.
+externí textový provider, usage/billing, přímý brainstorming i obrazovou
+capability. F-M4-WORKFLOW-01-A zde uzavírá návrh prvního artifact-based
+creator/opponent handoffu. Nejde o úplné RBAC, synchronizační službu, obecný
+agent framework ani pluginový router.
 
 ## Rozsah a návaznost
 
@@ -483,6 +483,140 @@ handoff a dodat vlastní durable přechod `dispatching`/`unknown`.
 Fallback je ve výchozím stavu zakázaný. Explicitní pravidlo může povolit náhradní backend/cíl a nákladový rozsah; i potom se sestaví nový manifest a znovu ověří celý požadavek. Uživatelský výběr backendu nepřebíjí zákaz projektu. `local-only` nikdy nejde na peer ani provider bez explicitní, oprávněné a auditované reklasifikace konkrétních dat. Pouhé potvrzení „odeslat“ nestačí.
 
 Lokální run record rozlišuje prepared, authorized, dispatching, succeeded, failed, cancelled a unknown. Přechod dispatching se trvale zaznamená před síťovým pokusem. Pád v této fázi nebo ztráta odpovědi znamená unknown, pokud provider nedoloží výsledek; není důvod automaticky opakovat potenciálně placený požadavek. Cancel requested není potvrzené cancelled. Ollama PoC tyto hranice realizuje vlastním node-local journalem; každý další adapter je musí doložit samostatně. Git journal z ADR 0003 nezajišťuje právě-jednou síťové volání.
+
+## Artifact-based creator/opponent handoff — F-M4-WORKFLOW-01-A
+
+První multi-role workflow je deterministicky řízená aplikační operace se dvěma
+oddělenými LLM kroky, nikoli konverzace modelů. V1 má právě jeden povinný
+`creator` krok a nejvýše jeden `opponent` krok. Aplikace nepouští autonomní
+loop, paralelní agenty, background pokračování, provider discovery ani
+fallback. Uživatel potvrzuje creator dispatch, následný opponent handoff a
+případnou projektovou publikaci jako tři různé účinky.
+
+### Identity a uzavřená schémata v1
+
+Workflow request `fpw-role-workflow-v1` obsahuje stabilní UUID `workflow_id`,
+`project_id`, výchozí `expected_head`, žádajícího uživatele/uzel odvozené ze
+session, uživatelský účel a privacy a přesně dva předem přidělené step sloty.
+Creator slot je povinný, opponent slot lze vědomě nepoužít. Každý slot má
+vlastní stabilní UUID `step_id`, pořadí (`creator` = 1, `opponent` = 2),
+`run_id`, `manifest_id`, přesnou `role_id`/revision, explicitní adapter/binding
+revision a model, vybraný vstupní seznam a vlastní approval digest. ID jednoho
+kroku se nesmí použít v jiném workflow, roli nebo backendovém runu.
+
+`creator-v1` zůstává textová role `generate-text`/`text`. Nová role
+`opponent-v1` má stejnou capability a formát, ale pevnou verzovanou instrukci:
+kriticky posoudit předaný creator výstup vůči explicitním podkladům, uvést
+konkrétní slabiny, nepodložená tvrzení, rizika a návrhy opravy. Role sama
+nevybírá backend, nepřidává zdroj, neuděluje oprávnění a nesmí vydat tool call
+nebo akci. Přidání do `RoleRegistry` je implementace části B; tento návrh
+neoznačuje roli za runtime dostupnou.
+
+Výstup kroku `fpw-workflow-step-output-v1` je neměnný neprázdný UTF-8 Markdown
+nejvýše 1 MiB. Durable záznam váže přesné bajty a SHA-256 na workflow/step/run/
+manifest ID, role revision, execution identitu, provider response evidenci,
+privacy, `created_at` a seznam přesných vstupních referencí s hashi. Providerem
+vrácený text je nedůvěryhodný obsah; HTML se nevykonává. Změna jediného bajtu,
+identity nebo provenance vytváří jiný výstup a ruší navazující approval.
+
+### Context isolation a approvals
+
+Creator Context Manifest smí obsahovat jen explicitně zvolených nejvýše 64
+projektových artefaktů z jednoho `expected_head` a samostatný uživatelský účel.
+V1 nepřijímá chat thread ani implicitní historii. Preview před prvním dispatch
+zobrazuje přesné vstupy, role/instruction revision, privacy, cíl/model a celý
+secret-free provider request. Jeho kanonický approval digest se uloží spolu s
+manifestem a payloadem; potvrzení jiné revize se odmítne.
+
+Opponent Context Manifest má jako povinný ad-hoc vstup přesné durable creator
+output bajty identifikované creator `step_id` a SHA-256. Navíc smí obsahovat
+jen nový explicitně seřazený výběr nula až 64 projektových artefaktů ze stejného
+`expected_head`. Nedostane creator prompt, provider request/response obálku,
+jiné zprávy, celý projekt ani skrytý výběr původního creator kontextu. Pokud má
+opponent vidět původní zdroj, musí být jednotlivě uveden v jeho vlastním preview
+a manifestu. Preview handoffu ukáže celý creator výstup, přidané zdroje,
+instruction, cíl/model, privacy a přesný opponent provider request; změna
+kterékoli položky po uložení preview vyžaduje nové workflow se dvěma novými
+step sloty a nové potvrzení. V1 nemění identitu ani obsah připraveného slotu.
+
+Každý krok znovu vyhodnotí session, RBAC, HEAD, policy, binding/capabilities,
+execution boundary a přesné bajty bezprostředně před dispatch. Privacy creator
+výstupu je nejpřísnější privacy creator účelu a skutečných vstupů. Opponent
+výstup zdědí nejpřísnější privacy creator výstupu a všech svých dalších vstupů;
+opponent binding nesmí rozšířit povolenou boundary. `local-only` lze použít jen
+se `same-node` bindingem. V1 neobsahuje reklasifikaci.
+
+### Durable autority a crash boundaries
+
+Nový vlastněný mode-0600 SQLite workflow journal mimo projektový Git je jediná
+autorita workflow requestu, vlastnictví, step identit, přesných manifest/payload
+bajtů, approval digestů, materializovaných výstupů a publikace. Není
+obnovitelným indexem ani backend run storem. Backendové journals zůstávají
+jedinou autoritou síťového účinku a Workspace journal jedinou autoritou
+rozpracované projektové publikace; žádná SQLite transakce nepředstírá atomický
+commit přes tyto tři vrstvy.
+
+Workflow journal používá schéma v1 se dvěma tabulkami: jeden `workflows` řádek
+pro workflow/owner/project/base HEAD a případný fixovaný publikační request a
+receipt, a přesně dva `steps` řádky pro předem přidělené creator/opponent sloty,
+pořadí, role/execution identitu, request digest, manifest/payload, privacy, stav,
+approval digest a result bajty/hash. Nepoužitý opponent slot zůstává `unused`;
+creator začíná `prepared` a opponent do něj přejde až po sestavení handoffu.
+Stav spuštěného kroku je uzavřený
+`prepared → run-bound → succeeded | failed | unknown`; potvrzené `cancelled` je
+možné jen před dispatch. Publikační stav workflow je odvozeně `unpublished`,
+`publishing` nebo `published`. Průběh creator/opponent se odvozuje ze step řádků
+a neukládá se podruhé jako konkurenční globální stav.
+
+Pořadí durable hranic kroku je:
+
+1. pod projektovým writer lockem vytvořit Context Manifest/payload, exact
+   provider request a approval digest a atomicky uložit `prepared` step;
+2. připravit a svázat přesný backend run, poté uložit `run-bound` ještě bez
+   síťového účinku;
+3. po potvrzení znovu autorizovat původní PreparedContext a tentýž binding,
+   následně smí backend adapter přejít do `dispatching` a volat nejvýše jednou;
+4. po doloženém backend `succeeded` validovat a atomicky uložit přesné output
+   bajty/hash jako step `succeeded`;
+5. opponent preview čte pouze tento uložený creator výstup. Pád před jeho
+   uložením nevytvoří handoff; pád po backend úspěchu se obnoví opětovným čtením
+   stejného runu bez druhého providerového volání;
+6. `dispatching`, timeout nebo ztracená odpověď zůstává `unknown`. Stejný step
+   ani run se neopakuje; vědomý nový pokus v1 vytvoří nové workflow se dvěma
+   novými step/run/manifest identitami a původní evidence zůstane zachována.
+
+### Publikace a provenance
+
+Publikace je povolena jen pro `succeeded` creator nebo opponent output, který
+uživatel zvolí podle přesného `step_id` a result SHA-256. Preview publikace
+obsahuje projekt/expected HEAD, cílové artifact/operation ID, title, privacy a
+vybraný výstup. Workspace zapíše běžný Markdown artefakt s neměnnou
+`fpw-role-workflow-provenance-v1`: workflow ID, vybraný i předchozí step ID,
+run/manifest ID a hashe, role/binding/capability revision, vstupní reference a
+result hash; předchozí step ID je u creator výstupu prázdné. Plný prompt,
+Context Manifest, secret ani nepoužitý mezivýstup se do Gitu nekopíruje.
+
+Workflow journal fixuje publikační request/digest před Workspace operací. Pád
+před Workspace nemění projekt; pád uvnitř se obnovuje stejným operation ID;
+pád po Workspace commitu před uložením receipt načte stejný receipt bez dalšího
+LLM dispatch nebo druhého commitu. Změněný HEAD, result hash, artifact ID,
+privacy nebo operation ID není retry původní publikace.
+
+### Reuse rozhodnutí
+
+Implementace má adaptovat `ContextBuilder`/`PreparedContext`, explicitní
+`RoleRegistry`, stávající provider-neutral adaptery a jejich run journals,
+durable prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a
+bezpečný textový preview/RBAC desktopu a webu. `SummaryTasks` se nerozšíří o
+druhý krok: jeho one-task/one-run schéma neumí atomicky vynutit dvě role a
+hashovaný handoff, proto vznikne úzce zaměřený workflow journal se stejnými
+bezpečnostními primitivy. `ChatThreads` se odmítá jako workflow autorita,
+protože konverzace není povoleným implicitním předáním.
+
+Není doložena potřeba cizího agent frameworku, message queue, provider poolu,
+vektorové DB ani nového Git writeru. Soukromá inventura neposkytla komponentu s
+kompatibilním Context Manifest/RBAC/approval/`unknown`/Workspace recovery
+kontraktem; žádný kód ani neveřejný název se nepřebírá.
 
 ## Lokální živé vlákno, zprávy a turn
 

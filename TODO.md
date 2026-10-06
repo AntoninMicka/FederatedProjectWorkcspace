@@ -32,7 +32,8 @@ Milník M4; jedna dávka, větev
   providerový účinek; handoff se váže na uložené bajty/hash. Pád před publikací
   nemění projekt, pád během publikace obnovuje stejný Workspace operation ID.
   Změna HEAD, vstupů, policy, oprávnění, role, bindingu nebo materializovaného
-  výstupu ruší starý souhlas a vyžaduje nový krok/manifest, nikoli tichý retry.
+  výstupu ruší starý souhlas a ve v1 vyžaduje nové workflow s novými
+  step/run/manifest identitami, nikoli tichý retry.
 - Privacy odvozeniny je nejpřísnější privacy a průnik oprávnění všech skutečných
   vstupů daného kroku. Backend druhého kroku nesmí rozšířit povolenou execution
   boundary. `local-only` nesmí opustit lokální hranici bez samostatné oprávněné
@@ -44,14 +45,29 @@ Milník M4; jedna dávka, větev
 
 ## Aktivní části dávky
 
-- [ ] [planned] **F-M4-WORKFLOW-01-A — Kontrakt workflow, isolation a reuse
-  (cílová úroveň: designed).** Uzavřít verzi a validaci `workflow_id`, dvou
+- [x] [completed] **F-M4-WORKFLOW-01-A — Kontrakt workflow, isolation a reuse
+  (designed).** Uzavřít verzi a validaci `workflow_id`, dvou
   stabilních `step_id`, samostatných `run_id`/`manifest_id`, stavů, role/binding
   identity, přesného vstupního selection a materializovaného creator outputu.
   Doplnit roli `opponent` bez změny oprávnění; popsat instruction/revision,
   formát, byte limit, hash, privacy/provenance, approval digest a publikovatelný
   výsledek. Zaznamenat reuse/adapt/reject a všechny persistentní/crash hranice;
   změnit ADR pouze tam, kde dosavadní rozhodnutí workflow neurčuje.
+  Dokončeno 2026-10-06 v ADR 0008: v1 má právě jeden creator a nejvýše jeden
+  opponent krok, samostatná step/run/manifest ID, explicitní role/binding/model
+  a tři oddělená potvrzení dispatch, handoff a publikace. Creator output je
+  neměnný UTF-8 Markdown do 1 MiB se SHA-256; opponent dostane povinně pouze
+  tyto durable bajty a nula až 64 znovu explicitně vybraných artefaktů, nikdy
+  prompt, chat ani celý creator kontext. Privacy je nejpřísnější průnik
+  skutečných vstupů a trust boundary se nesmí rozšířit. Navržen je vlastní
+  workflow journal v SQLite s režimem `0600` a dvěma step záznamy; backendové
+  run journaly a Workspace zůstávají oddělenými autoritami účinků. Pro
+  crash/restart/`unknown`, nové vědomé workflow a idempotentní publikaci jsou
+  vymezené recovery hranice. Reuse katalog adaptuje `ContextBuilder`,
+  `RoleRegistry`, adaptery, vzor `SummaryTasks` a Workspace; odmítá
+  `ChatThreads` jako workflow autoritu i nový agent framework, frontu nebo DB.
+  Runtime role `opponent-v1`, schéma, journal a validace zůstávají implementací
+  části B.
 
 - [ ] [planned] **F-M4-WORKFLOW-01-B — Durable dvoukrokový orchestrátor
   (cílová úroveň: implemented).** Implementovat striktní node-local workflow

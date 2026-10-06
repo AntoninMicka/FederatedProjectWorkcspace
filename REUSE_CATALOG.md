@@ -180,6 +180,21 @@ nedokládá kompatibilní streaming/recovery kontrakt ani licenci k převzetí, 
 se z ní nekopíruje kód. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#přímý-brainstorming-request-record-a-streaming--f-m3-chat-direct-01).
 
+F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
+provider-neutral `RoleRegistry` a backend adapter/run journals, durable
+prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný
+textový preview/RBAC desktopu i webu. `SummaryTasks` zůstává autoritou jediného
+tasku/runu; nekopíruje se na dvoukrokový workflow bez nového striktního schématu.
+`ChatThreads` se odmítá jako workflow autorita, protože opponent nesmí dostat
+implicitní creator konverzaci. Nový malý node-local workflow journal bude
+autoritou pouze workflow/step/approval/handoff evidence; backend run store a
+Workspace journal si zachovají své oddělené účinky a recovery. Soukromá
+inventura neobsahuje komponentu s doloženým Context Manifest, aplikačním RBAC,
+trojím potvrzením, durable `unknown` a Workspace recovery; nepřebírá se z ní
+kód ani názvy. Agent framework, message queue, provider pool, vektorová DB a
+druhý Git writer se pro v1 odmítají. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#artifact-based-creatoropponent-handoff--f-m4-workflow-01-a).
+
 MOD-01 **reuse/adaptuje** bounded striktní JSON parser, fail-closed validaci a
 verzované capability hranice tohoto repozitáře. Pro read-only load-time kontrolu
 používá Python stdlib HTTP bez nové runtime závislosti; redirect a nelokální
