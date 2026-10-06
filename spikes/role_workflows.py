@@ -55,7 +55,7 @@ class RoleWorkflows:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(1);
+                    INSERT INTO schema_info VALUES(2);
                     CREATE TABLE workflows(
                         workflow_id TEXT PRIMARY KEY,
                         node_id TEXT NOT NULL,
@@ -63,7 +63,12 @@ class RoleWorkflows:
                         project_id TEXT NOT NULL,
                         expected_head TEXT NOT NULL,
                         request_digest TEXT NOT NULL,
-                        request_json BLOB NOT NULL);
+                        request_json BLOB NOT NULL,
+                        publish_state TEXT NOT NULL CHECK(publish_state IN
+                            ('unpublished','publishing','published')),
+                        publish_digest TEXT,
+                        publish_json BLOB,
+                        receipt_json BLOB);
                     CREATE TABLE steps(
                         workflow_id TEXT NOT NULL,
                         ordinal INTEGER NOT NULL CHECK(ordinal IN (1,2)),
@@ -91,13 +96,23 @@ class RoleWorkflows:
             else:
                 require(tables == {'schema_info', 'workflows', 'steps'},
                         'Unknown or incomplete workflow schema')
-                require(db.execute('SELECT version FROM schema_info').fetchall() == [(1,)],
+                version = db.execute('SELECT version FROM schema_info').fetchall()
+                require(version in ([(1,)], [(2,)]),
                         'Unsupported workflow schema version')
+                if version == [(1,)]:
+                    db.execute("ALTER TABLE workflows ADD COLUMN publish_state TEXT NOT NULL "
+                               "DEFAULT 'unpublished' CHECK(publish_state IN "
+                               "('unpublished','publishing','published'))")
+                    db.execute('ALTER TABLE workflows ADD COLUMN publish_digest TEXT')
+                    db.execute('ALTER TABLE workflows ADD COLUMN publish_json BLOB')
+                    db.execute('ALTER TABLE workflows ADD COLUMN receipt_json BLOB')
+                    db.execute('UPDATE schema_info SET version=2')
                 workflow_columns = [row[1] for row in
                     db.execute('PRAGMA table_info(workflows)')]
                 step_columns = [row[1] for row in db.execute('PRAGMA table_info(steps)')]
                 require(workflow_columns == ['workflow_id', 'node_id', 'user_id',
-                    'project_id', 'expected_head', 'request_digest', 'request_json']
+                    'project_id', 'expected_head', 'request_digest', 'request_json',
+                    'publish_state', 'publish_digest', 'publish_json', 'receipt_json']
                     and step_columns == ['workflow_id', 'ordinal', 'step_id', 'run_id',
                     'manifest_id', 'role_id', 'role_revision', 'state',
                     'approval_digest', 'preview_json', 'manifest', 'payload', 'privacy',
@@ -130,9 +145,11 @@ class RoleWorkflows:
                 require(row[2:] == (request_digest, request_raw),
                         'Workflow ID belongs to a different request')
             else:
-                db.execute('INSERT INTO workflows VALUES(?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?,'
+                           'NULL,NULL,NULL)',
                     (workflow_id, node_id, user_id, request['project_id'],
-                     request['expected_head'], request_digest, request_raw))
+                     request['expected_head'], request_digest, request_raw,
+                     'unpublished'))
                 db.execute('INSERT INTO steps VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (workflow_id, 1, creator_step['step_id'], creator_step['run_id'],
                      creator_step['manifest_id'], creator_step['role_id'],
@@ -233,11 +250,49 @@ class RoleWorkflows:
             db.commit()
         return self.get(workflow_id, node_id, user_id)
 
+    def begin_publish(self, workflow_id, node_id, user_id, request):
+        raw = canonical(request); request_digest = digest(raw)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT node_id,user_id,publish_state,publish_digest,'
+                'publish_json FROM workflows WHERE workflow_id=?',
+                (workflow_id,)).fetchone()
+            self._owned(row, node_id, user_id)
+            if row[2] == 'unpublished':
+                require(row[3:] == (None, None),
+                        'Workflow has inconsistent publication data')
+                db.execute("UPDATE workflows SET publish_state='publishing',"
+                           'publish_digest=?,publish_json=? WHERE workflow_id=?',
+                           (request_digest, raw, workflow_id))
+            else:
+                require(row[2] in {'publishing', 'published'}
+                        and row[3:] == (request_digest, raw),
+                        'Workflow has a different publication request')
+            db.commit()
+        return self.get(workflow_id, node_id, user_id)
+
+    def complete_publish(self, workflow_id, node_id, user_id, receipt):
+        raw = canonical(receipt)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT node_id,user_id,publish_state,receipt_json '
+                'FROM workflows WHERE workflow_id=?', (workflow_id,)).fetchone()
+            self._owned(row, node_id, user_id)
+            if row[2] == 'publishing':
+                db.execute("UPDATE workflows SET publish_state='published',receipt_json=? "
+                           'WHERE workflow_id=?', (raw, workflow_id))
+            else:
+                require(row[2] == 'published' and row[3] == raw,
+                        'Published workflow differs from durable receipt')
+            db.commit()
+        return self.get(workflow_id, node_id, user_id)
+
     def get(self, workflow_id, node_id, user_id):
         uuid(workflow_id); uuid(node_id); uuid(user_id)
         with self.connect() as db:
             workflow = db.execute('SELECT node_id,user_id,project_id,expected_head,'
-                'request_digest,request_json FROM workflows WHERE workflow_id=?',
+                'request_digest,request_json,publish_state,publish_digest,publish_json,'
+                'receipt_json FROM workflows WHERE workflow_id=?',
                 (workflow_id,)).fetchone()
             self._owned(workflow, node_id, user_id)
             rows = db.execute('SELECT ordinal,step_id,run_id,manifest_id,role_id,'
@@ -249,6 +304,22 @@ class RoleWorkflows:
         request = json.loads(workflow[5]); request_raw = canonical(request)
         require(request_raw == workflow[5] and digest(request_raw) == workflow[4],
                 'Stored workflow request changed')
+        require(workflow[6] in {'unpublished', 'publishing', 'published'},
+                'Invalid workflow publication state')
+        publish = json.loads(workflow[8]) if workflow[8] is not None else None
+        receipt = json.loads(workflow[9]) if workflow[9] is not None else None
+        if publish is None:
+            require(workflow[6] == 'unpublished' and workflow[7] is None
+                    and receipt is None, 'Unpublished workflow has publication data')
+        else:
+            publish_raw = canonical(publish)
+            require(publish_raw == workflow[8] and digest(publish_raw) == workflow[7],
+                    'Stored workflow publication changed')
+            require(workflow[6] in {'publishing', 'published'},
+                    'Workflow publication state is inconsistent')
+        if receipt is not None:
+            require(workflow[6] == 'published' and canonical(receipt) == workflow[9],
+                    'Stored workflow publication receipt changed')
         steps = []
         for row in rows:
             require(row[6] in STEP_STATES, 'Invalid stored workflow step state')
@@ -282,7 +353,9 @@ class RoleWorkflows:
         return {'workflow_id': workflow_id, 'node_id': workflow[0],
                 'user_id': workflow[1], 'project_id': workflow[2],
                 'expected_head': workflow[3], 'request_digest': workflow[4],
-                'request': request, 'steps': steps}
+                'request': request, 'publish_state': workflow[6],
+                'publish_digest': workflow[7], 'publish': publish,
+                'receipt': receipt, 'steps': steps}
 
     def list(self, node_id, user_id):
         uuid(node_id); uuid(user_id)

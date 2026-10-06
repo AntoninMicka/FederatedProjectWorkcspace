@@ -92,14 +92,31 @@ Milník M4; jedna dávka, větev
   22 přeskočených volitelných native/integration smoke testů. Skutečný Ollama
   dispatch nebyl v této části proveden a zůstává součástí akceptace D.
 
-- [ ] [planned] **F-M4-WORKFLOW-01-C — UI, opponent preview a publikace
-  (cílová úroveň: implemented).** Desktop i oprávněný web zobrazí workflow a
+- [x] [completed] **F-M4-WORKFLOW-01-C — UI, opponent preview a publikace
+  (implemented).** Desktop i oprávněný web zobrazí workflow a
   každý krok odděleně: zdroje, roli, backend/model, privacy, exact request,
   stav a materializovaný předávaný výstup. Uživatel samostatně potvrdí creator
   dispatch, opponent handoff/dispatch a až poté volitelnou publikaci vybraného
   výsledku jako Markdown artefaktu s workflow/step/run/manifest provenance.
   Změna kteréhokoli potvrzeného pole zneplatní navazující preview; publikace
   použije standardní Workspace recovery a serverové RBAC na desktopu i webu.
+  Dokončeno 2026-10-06: desktopový i webový asset mají samostatný workflow tab
+  s explicitním výběrem creator/opponent podkladů, rolemi, modely, privacy,
+  přesnými provider requesty a textově vykreslenými nedůvěryhodnými výsledky.
+  Creator dispatch, opponent handoff/dispatch a publikace mají oddělená
+  potvrzení; změna vstupů ruší připravenou UI projekci. Autentizované API váže
+  webového actora na write RBAC konkrétního projektu, odděluje vlastníky a přes
+  web odmítá `local-only`. Oba targety musí být uložený node-local Ollama
+  binding nebo jeho deterministická per-run model revision; request nemůže
+  podstrčit jiný endpoint či pin. Workflow journal drží fixovaný publish
+  request/receipt; schéma 1 se na 2 migruje v jedné SQLite transakci a Workspace
+  recovery vrací tentýž commit bez duplicitního artefaktu. Markdown artefakt
+  nese `fpw-role-workflow-provenance-v1`, privacy,
+  source relations a hashe obou použitých kroků, ale nekopíruje prompt,
+  mezivýstup, endpoint ani TLS pin. Cílených 33 workflow/UI/web testů prošlo
+  (3 volitelné native smoke přeskočeny), JavaScript prošel `node --check` a
+  úplná sada prošla: 396 testů, 22 přeskočených volitelných testů. Skutečný
+  Qt/WebEngine a živý Ollama běh zůstávají akceptací části D.
 
 - [ ] [planned] **F-M4-WORKFLOW-01-D — Regrese, dokumentace a akceptace
   (cílová úroveň: PoC validated).** Ověřit creator a opponent se stejnými i

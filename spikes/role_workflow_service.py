@@ -10,11 +10,13 @@ import stat
 from types import MappingProxyType
 
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
-from spikes.configuration import parse_node, read_config
+from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     PreparedContext, ProjectInput, TaskInstruction)
-from spikes.metadata import ValidationError, require, uuid, validate_snapshot
-from spikes.ollama_backend import BACKENDS, OllamaAdapter, OllamaRuns
+from spikes.metadata import (MAX_FILE, ValidationError, require, timestamp, uuid,
+                             validate_snapshot)
+from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
+                                   OllamaRuns)
 from spikes.project_creation import ProjectCreation
 from spikes.role_workflows import RoleWorkflows, canonical, digest
 
@@ -26,6 +28,8 @@ CREATOR_INSTRUCTION = (
 OPPONENT_INSTRUCTION = (
     'Critically review the supplied creator output against only the explicit sources. '
     'List concrete weaknesses, unsupported claims, risks, and proposed corrections in Markdown.')
+WORKFLOW_MARKER = '<!-- fpw-role-workflow-v1\n'
+WORKFLOW_END = '\n-->\n'
 
 
 class RoleWorkflowService:
@@ -39,9 +43,11 @@ class RoleWorkflowService:
                           self.node_path.parent / ('.' + self.node_path.name + '.workflows'))
         self.adapter_factory = adapter_factory
 
-    def _identity(self):
+    def _identity(self, owner_id=None):
         node = parse_node(read_config(self.node_path), location=self.node_path)
-        return node['id'], ProjectCreation(self.node_path).author_id()
+        user = owner_id or ProjectCreation(self.node_path).author_id()
+        uuid(user)
+        return node['id'], user
 
     def _root(self):
         if not os.path.lexists(self.state_dir):
@@ -59,9 +65,27 @@ class RoleWorkflowService:
         return RoleWorkflows(root), adapter
 
     @staticmethod
-    def _target(value):
+    def _parse_target(value):
         binding = BACKENDS.parse_binding(value)
         binding.capabilities().require('generate-text', 'text')
+        return binding
+
+    def _binding(self, value):
+        binding = self._parse_target(value)
+        configured = OllamaBindings(self._root()).load()
+        requested = binding.serialize(); base = configured.serialize()
+        for key in set(base) - {'model', 'revision'}:
+            require(requested.get(key) == base[key],
+                    'Workflow target is not the configured Ollama binding')
+        require(set(requested) == set(base),
+                'Workflow target differs from configured Ollama binding')
+        if binding.model == configured.model:
+            expected_revision = configured.revision
+        else:
+            suffix = hashlib.sha256(binding.model.encode('utf-8')).hexdigest()[:16]
+            expected_revision = configured.revision + '.run-model-' + suffix
+        require(binding.revision == expected_revision,
+                'Workflow target has an invalid model revision')
         return binding
 
     @classmethod
@@ -105,7 +129,7 @@ class RoleWorkflowService:
                     f'{name.capitalize()} requires {minimum} to 64 unique artifacts')
             for value in ids:
                 uuid(value)
-            cls._target(step['target'])
+            cls._parse_target(step['target'])
         require(request['purpose']['input_id'] not in
                 request['creator']['artifact_ids'] + request['opponent']['artifact_ids'],
                 'Purpose ID must not overlap selected artifacts')
@@ -172,9 +196,9 @@ class RoleWorkflowService:
                     'sha256': step['response_sha256']}
         return result
 
-    def prepare(self, request):
+    def prepare(self, request, *, owner_id=None, allow_local_only=True):
         request = self._validate_request(request)
-        node_id, user_id = self._identity(); workflows, adapter = self._stores()
+        node_id, user_id = self._identity(owner_id); workflows, adapter = self._stores()
         try:
             existing = workflows.get(request['workflow_id'], node_id, user_id)
         except ValidationError as exc:
@@ -184,9 +208,12 @@ class RoleWorkflowService:
         if existing is not None:
             require(existing['request_digest'] == digest(canonical(request)),
                     'Workflow ID belongs to a different request')
+            require(allow_local_only or not any(step['privacy'] == 'local-only'
+                    for step in existing['steps'] if step['privacy'] is not None),
+                    'Web workflow cannot expose local-only data')
             return self._result(existing)
 
-        creator = request['creator']; binding = self._target(creator['target'])
+        creator = request['creator']; binding = self._binding(creator['target'])
         workspace = self.projects.workspace(request['project_id'], blocking=False)
         require(workspace.git.head() == request['expected_head'],
                 'Project changed before workflow preparation')
@@ -211,6 +238,8 @@ class RoleWorkflowService:
         provider_request = adapter._request(handoff, binding, role, 'text')[0]
         privacy = max([purpose['privacy']] + [entities[value]['privacy'] for value in ids],
                       key=PRIVACY_ORDER.__getitem__)
+        require(allow_local_only or privacy != 'local-only',
+                'Web workflow cannot expose local-only data')
         preview = self._preview(request['workflow_id'], 1, creator['step_id'], prepared,
                                 provider_request, privacy)
         creator_data = {'preview': preview,
@@ -222,17 +251,19 @@ class RoleWorkflowService:
                                      creator=creator_data)
         return self._result(workflow)
 
-    def prepare_opponent(self, workflow_id):
+    def prepare_opponent(self, workflow_id, *, owner_id=None, allow_local_only=True):
         uuid(workflow_id)
-        node_id, user_id = self._identity(); workflows, adapter = self._stores()
+        node_id, user_id = self._identity(owner_id); workflows, adapter = self._stores()
         workflow = workflows.get(workflow_id, node_id, user_id)
         creator, opponent = workflow['steps']
         require(creator['state'] == 'succeeded',
                 'Creator output is not available for opponent handoff')
         if opponent['state'] != 'unused':
+            require(allow_local_only or opponent['privacy'] != 'local-only',
+                    'Web workflow cannot expose local-only data')
             return self._result(workflow)
         request = workflow['request']; definition = request['opponent']
-        binding = self._target(definition['target'])
+        binding = self._binding(definition['target'])
         workspace = self.projects.workspace(request['project_id'], blocking=False)
         require(workspace.git.head() == request['expected_head'],
                 'Project changed before opponent handoff')
@@ -257,6 +288,8 @@ class RoleWorkflowService:
         provider_request = adapter._request(handoff, binding, role, 'text')[0]
         privacy = max([creator['privacy']] + [entities[value]['privacy'] for value in ids],
                       key=PRIVACY_ORDER.__getitem__)
+        require(allow_local_only or privacy != 'local-only',
+                'Web workflow cannot expose local-only data')
         preview = self._preview(workflow_id, 2, definition['step_id'], prepared,
                                 provider_request, privacy)
         opponent_data = {'preview': preview,
@@ -266,13 +299,16 @@ class RoleWorkflowService:
         workflow = workflows.prepare_opponent(workflow_id, node_id, user_id, opponent_data)
         return self._result(workflow)
 
-    def _dispatch(self, workflow_id, ordinal, approval_digest, checkpoint):
+    def _dispatch(self, workflow_id, ordinal, approval_digest, checkpoint, owner_id,
+                  allow_local_only):
         require(isinstance(approval_digest, str)
                 and bool(re.fullmatch(r'[0-9a-f]{64}', approval_digest)),
                 'Invalid workflow approval digest')
-        node_id, user_id = self._identity(); workflows, adapter = self._stores()
+        node_id, user_id = self._identity(owner_id); workflows, adapter = self._stores()
         workflow = workflows.get(workflow_id, node_id, user_id)
         step = workflow['steps'][ordinal - 1]
+        require(allow_local_only or step['privacy'] != 'local-only',
+                'Web workflow cannot expose local-only data')
         require(step['approval_digest'] == approval_digest,
                 'Workflow preview approval differs from prepared request')
         if step['state'] == 'succeeded':
@@ -280,7 +316,7 @@ class RoleWorkflowService:
         require(step['state'] in {'prepared', 'run-bound'},
                 'Workflow step cannot be retried automatically')
         definition = workflow['request']['creator' if ordinal == 1 else 'opponent']
-        binding = self._target(definition['target'])
+        binding = self._binding(definition['target'])
         role = ROLES.resolve(step['role_id'], step['role_revision'])
         if ordinal == 2:
             creator = workflow['steps'][0]
@@ -333,20 +369,161 @@ class RoleWorkflowService:
             workflows.finish(workflow_id, ordinal, node_id, user_id,
                              'failed', str(exc)); raise
 
-    def dispatch_creator(self, workflow_id, approval_digest, *, checkpoint=lambda stage: None):
+    def dispatch_creator(self, workflow_id, approval_digest, *, owner_id=None,
+                         allow_local_only=True, checkpoint=lambda stage: None):
         uuid(workflow_id)
-        return self._dispatch(workflow_id, 1, approval_digest, checkpoint)
+        return self._dispatch(workflow_id, 1, approval_digest, checkpoint, owner_id,
+                              allow_local_only)
 
-    def dispatch_opponent(self, workflow_id, approval_digest, *, checkpoint=lambda stage: None):
+    def dispatch_opponent(self, workflow_id, approval_digest, *, owner_id=None,
+                          allow_local_only=True, checkpoint=lambda stage: None):
         uuid(workflow_id)
-        return self._dispatch(workflow_id, 2, approval_digest, checkpoint)
+        return self._dispatch(workflow_id, 2, approval_digest, checkpoint, owner_id,
+                              allow_local_only)
 
-    def get(self, workflow_id):
-        node_id, user_id = self._identity()
+    def publish(self, request, *, owner_id=None, allow_local_only=True,
+                checkpoint=lambda stage: None):
+        required = {'workflow_id', 'step_id', 'result_sha256', 'project_id',
+                    'expected_head', 'artifact_id', 'title', 'created_at', 'operation_id'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid workflow publication request')
+        for key in ('workflow_id', 'step_id', 'project_id', 'artifact_id', 'operation_id'):
+            uuid(request[key])
+        require(isinstance(request['result_sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', request['result_sha256'])),
+                'Invalid workflow result digest')
+        require(isinstance(request['expected_head'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}',
+                                      request['expected_head'])),
+                'Invalid workflow publication commit')
+        require(isinstance(request['title'], str)
+                and request['title'].strip() == request['title']
+                and 0 < len(request['title']) <= 200
+                and not any(char in request['title'] for char in '\0\r\n'),
+                'Invalid workflow publication title')
+        timestamp(request['created_at'])
+        node_id, user_id = self._identity(owner_id); workflows, _ = self._stores()
+        workflow = workflows.get(request['workflow_id'], node_id, user_id)
+        selected = next((step for step in workflow['steps']
+                         if step['step_id'] == request['step_id']), None)
+        require(selected is not None and selected['state'] == 'succeeded',
+                'Selected workflow result is not publishable')
+        require(allow_local_only or selected['privacy'] != 'local-only',
+                'Web workflow cannot expose local-only data')
+        require(selected['response_sha256'] == request['result_sha256'],
+                'Workflow result changed before publication')
+        require((workflow['project_id'], workflow['expected_head']) ==
+                (request['project_id'], request['expected_head']),
+                'Workflow publication project or HEAD differs from result')
+        workflow = workflows.begin_publish(request['workflow_id'], node_id, user_id,
+                                           request)
+        checkpoint('publishing')
+        if workflow['publish_state'] == 'published':
+            return self._published_result(workflow)
+
+        workspace = self.projects.workspace(request['project_id'], blocking=False)
+        intent = dict(request, action='publish-role-workflow', author_id=user_id,
+                      workflow_request_digest=workflow['request_digest'])
+
+        def prepare(ws):
+            head = ws.git.head()
+            require(head == request['expected_head'],
+                    'Project changed before workflow publication')
+            committed_project(ws.git, head, request['project_id'])
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            require(request['artifact_id'] not in entities, 'Artifact ID already exists')
+            source_steps = workflow['steps'][:selected['ordinal']]
+            relation_ids = []
+            for step in source_steps:
+                for item in step['manifest']['inputs']:
+                    if item['source'] != 'project':
+                        continue
+                    raw = files.get(item['path'])
+                    require(item['input_id'] in entities and raw is not None
+                            and len(raw) == item['size']
+                            and hashlib.sha256(raw).hexdigest() == item['sha256']
+                            and entities[item['input_id']]['privacy'] == item['privacy'],
+                            'Workflow source artifact changed')
+                    if item['input_id'] not in relation_ids:
+                        relation_ids.append(item['input_id'])
+            selected_record = self._provenance_step(selected,
+                workflow['request']['creator' if selected['ordinal'] == 1 else 'opponent'])
+            previous = (None if selected['ordinal'] == 1 else
+                        self._provenance_step(workflow['steps'][0],
+                                             workflow['request']['creator']))
+            record = {'schema': 'fpw-role-workflow-provenance-v1',
+                'workflow_id': workflow['workflow_id'],
+                'workflow_request_sha256': workflow['request_digest'],
+                'project_id': request['project_id'], 'project_commit': head,
+                'selected_step': selected_record, 'previous_step': previous,
+                'privacy': selected['privacy']}
+            content = (WORKFLOW_MARKER + canonical(record).decode() + WORKFLOW_END + '\n'
+                       + selected['response'].rstrip() + '\n').encode()
+            require(len(content) <= MAX_FILE,
+                    'Published workflow output exceeds artifact limit')
+            metadata = {'schema_version': 1, 'id': request['artifact_id'],
+                'title': request['title'], 'kind': 'document',
+                'created_at': request['created_at'], 'author_id': user_id,
+                'privacy': selected['privacy'], 'provenance': 'llm-generated',
+                'file': 'content.md',
+                'relations': [{'type': 'derived_from', 'target_id': value}
+                              for value in relation_ids]}
+            prefix = f'artifacts/{request["artifact_id"]}/'
+            changes = {prefix + 'content.md': content,
+                prefix + 'metadata.json': (json.dumps(metadata, ensure_ascii=False,
+                    sort_keys=True, indent=2) + '\n').encode()}
+            return changes, 'Local workspace author', user_id + '@local.invalid', \
+                'Publish role workflow output'
+
+        receipt = workspace.transact(request['operation_id'], intent, prepare,
+            expected_head=request['expected_head'], checkpoint=checkpoint)
+        checkpoint('workspace-complete')
+        workflow = workflows.complete_publish(request['workflow_id'], node_id, user_id,
+                                              receipt)
+        checkpoint('published')
+        return self._published_result(workflow)
+
+    @staticmethod
+    def _provenance_step(step, definition):
+        target = definition['target']
+        return {'step_id': step['step_id'], 'run_id': step['run_id'],
+                'manifest_id': step['manifest_id'],
+                'manifest_sha256': digest(canonical(step['manifest'])),
+                'role_id': step['role_id'], 'role_revision': step['role_revision'],
+                'execution': {'adapter': target['adapter'],
+                    'binding_id': target['binding_id'],
+                    'binding_revision': target['revision'],
+                    'capability_revision': 'ollama-generate-v1',
+                    'boundary': target['boundary'], 'target_id': target['target_id'],
+                    'model': target['model']},
+                'result_sha256': step['response_sha256'],
+                'created_at': step['completed_at'],
+                'inputs': [dict(input_id=item['input_id'], source=item['source'],
+                                privacy=item['privacy'], sha256=item['sha256'])
+                           for item in step['manifest']['inputs']]}
+
+    @staticmethod
+    def _published_result(workflow):
+        return {'workflow_id': workflow['workflow_id'], 'state': 'published',
+                'artifact_id': workflow['publish']['artifact_id'],
+                'step_id': workflow['publish']['step_id'],
+                'result_sha256': workflow['publish']['result_sha256'],
+                'receipt': workflow['receipt']}
+
+    def get(self, workflow_id, *, owner_id=None, allow_local_only=True):
+        node_id, user_id = self._identity(owner_id)
         workflows, _ = self._stores()
-        return self._result(workflows.get(workflow_id, node_id, user_id))
+        workflow = workflows.get(workflow_id, node_id, user_id)
+        require(allow_local_only or not any(step['privacy'] == 'local-only'
+                for step in workflow['steps'] if step['privacy'] is not None),
+                'Web workflow cannot expose local-only data')
+        return self._result(workflow)
 
-    def status(self):
-        node_id, user_id = self._identity(); workflows, _ = self._stores()
-        return {'workflows': [self._result(value)
-                              for value in workflows.list(node_id, user_id)]}
+    def status(self, *, owner_id=None, allow_local_only=True):
+        node_id, user_id = self._identity(owner_id); workflows, _ = self._stores()
+        values = workflows.list(node_id, user_id)
+        if not allow_local_only:
+            values = [value for value in values if not any(
+                step['privacy'] == 'local-only' for step in value['steps']
+                if step['privacy'] is not None)]
+        return {'workflows': [self._result(value) for value in values]}

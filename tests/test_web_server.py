@@ -69,6 +69,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn(created['id'], [p['id'] for p in json.loads(catalog)['projects']])
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':created['id']}))[0], 200)
+        code, data, _ = self.request(path='/v1/workflows/status',
+            body=json.dumps({'project_id': created['id']}))
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(data), {'workflows': []})
         for path in ('/', '/app.js', '/app.css'):
             code, data, headers = self.request('GET',path)
             self.assertEqual(code,200)
@@ -85,6 +89,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("querySelector('#settings-cms-tab').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
+        self.assertIn('id="workflow-tab"', WEB_HTML)
+        self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
@@ -116,6 +122,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
         self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
+            'project_id': project}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/workflows/status', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
         view = Projects(self.root/'node.json').open(project)
         source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')

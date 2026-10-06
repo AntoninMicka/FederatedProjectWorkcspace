@@ -23,6 +23,7 @@ from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
+from spikes.role_workflow_service import RoleWorkflowService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 
@@ -286,6 +287,52 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Obrazový požadavek nelze provést. Ověřte '
                                        'projekt, oprávnění, backend a lokální stav.'})
+        if self.path.startswith('/v1/workflows/'):
+            if not isinstance(request, dict): return self.send_error(400)
+            project_id = request.get('project_id')
+            if not self._can_write(project_id): return self.send_error(403)
+            owner_id = self.actor.get('id')
+            try:
+                if self.path == '/v1/workflows/status' and set(request) == {'project_id'}:
+                    result = self.server.role_workflow_service.status(
+                        owner_id=owner_id, allow_local_only=False)
+                    result['workflows'] = [item for item in result['workflows']
+                                           if item['project_id'] == project_id]
+                elif self.path == '/v1/workflows/prepare':
+                    result = self.server.role_workflow_service.prepare(
+                        request, owner_id=owner_id, allow_local_only=False)
+                elif (self.path in {'/v1/workflows/creator/dispatch',
+                                    '/v1/workflows/opponent/dispatch'}
+                      and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
+                    owned = self.server.role_workflow_service.get(
+                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
+                    if owned['project_id'] != project_id: return self.send_error(403)
+                    method = (self.server.role_workflow_service.dispatch_creator
+                              if self.path.endswith('/creator/dispatch') else
+                              self.server.role_workflow_service.dispatch_opponent)
+                    result = method(request['workflow_id'], request['approval_digest'],
+                        owner_id=owner_id, allow_local_only=False)
+                elif (self.path == '/v1/workflows/opponent/prepare'
+                      and set(request) == {'workflow_id', 'project_id'}):
+                    owned = self.server.role_workflow_service.get(
+                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
+                    if owned['project_id'] != project_id: return self.send_error(403)
+                    result = self.server.role_workflow_service.prepare_opponent(
+                        request['workflow_id'], owner_id=owner_id, allow_local_only=False)
+                elif self.path == '/v1/workflows/publish':
+                    result = self.server.role_workflow_service.publish(
+                        request, owner_id=owner_id, allow_local_only=False)
+                else:
+                    return self.send_error(400)
+                return self.reply(200, result)
+            except BackendUnknown:
+                return self.reply(409, {'error': 'Výsledek workflow kroku není známý; '
+                                       'požadavek automaticky neopakujte.'})
+            except BackendResponseError:
+                return self.reply(502, {'error': 'Workflow backend nevrátil platný výsledek.'})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Workflow požadavek nelze provést. Ověřte '
+                                       'projekt, oprávnění, backend, privacy a lokální stav.'})
         if self.path in {'/v1/external/send', '/v1/external/send-stream',
                          '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
@@ -358,6 +405,8 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.node = node
     server.chat_service = ChatService(node, server.projects)
     server.media_service = MediaService(node, server.projects,
+        state_dir=server.chat_service.state_dir)
+    server.role_workflow_service = RoleWorkflowService(node, server.projects,
         state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.administration = Administration(node)

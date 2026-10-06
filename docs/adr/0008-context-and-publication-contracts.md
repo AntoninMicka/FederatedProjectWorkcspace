@@ -12,8 +12,9 @@ vlákna a jejich projektové výstupy, task služby, provider-neutral runtime, p
 externí textový provider, usage/billing, přímý brainstorming i obrazovou
 capability. F-M4-WORKFLOW-01-A uzavřela návrh prvního artifact-based
 creator/opponent handoffu a část B implementovala jeho node-local journal a
-aplikační službu pro explicitní Ollama textové bindingy. UI, publikace, úplná
-živá akceptace, obecný agent framework ani pluginový router tím nevznikají.
+aplikační službu pro explicitní Ollama textové bindingy. Část C doplnila
+desktopové/webové UI, autentizované API a explicitní Workspace publikaci.
+Úplná živá akceptace, obecný agent framework ani pluginový router tím nevznikají.
 
 ## Rozsah a návaznost
 
@@ -626,7 +627,25 @@ provider request bajty. Restart čte doložený stav backend run journalu: úsp�
 materializuje bez druhého volání, zatímco `dispatching`/`unknown` uzavře workflow
 krok jako `unknown`. Opponent manifest se při dispatchi znovu váže na SHA-256 a
 privacy uloženého creator výsledku. Implementace části B nezapisuje projektový
-Git a zatím nepřidává HTTP/UI ani publikační operaci.
+Git.
+
+Část C zpřístupňuje stejnou službu autentizovaným desktopovým a webovým routám.
+Webový actor musí mít write oprávnění ke konkrétnímu projektu, vlastní oddělený
+workflow stav a nesmí přes web načíst ani spustit `local-only` workflow. Target
+obou kroků musí vycházet z node-local uloženého Ollama bindingu; volitelný
+per-run model má deterministickou odvozenou revision, ale request nesmí změnit
+endpoint, binding ID, boundary, pin ani target ID.
+
+UI zobrazuje role, explicitní zdroje, privacy, model a celý provider request
+pomocí textového vykreslení. Creator dispatch, opponent handoff/dispatch a
+publikace jsou tři samostatná potvrzení; změna vstupních polí zahodí připravený
+UI stav a vyžaduje nové workflow identity. Publikace fixuje request v workflow
+journalu a používá standardní Workspace operation ID/recovery. Journal se kvůli
+publikačnímu requestu a receiptu transakčně migruje ze schématu 1 na 2; pád před
+SQLite commitem zachová celé v1 a opakované otevření migraci bezpečně dokončí.
+Git artefakt má
+`fpw-role-workflow-provenance-v1`, odkazuje na vybraný a případný předchozí krok
+a jejich hashe, ale neobsahuje prompt, mezivýstup, endpoint ani TLS pin.
 
 ## Lokální živé vlákno, zprávy a turn
 

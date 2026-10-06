@@ -3,17 +3,24 @@
 import hashlib
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
 from spikes.backend_contract import BackendUnknown
-from spikes.ollama_backend import OllamaAdapter
+from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
-from spikes.role_workflow_service import RoleWorkflowService
+from spikes.role_workflow_service import (WORKFLOW_END, WORKFLOW_MARKER,
+                                          RoleWorkflowService)
+from spikes.role_workflows import RoleWorkflows
+from spikes.metadata import validate_snapshot
 from spikes.storage import Git
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+from tests import test_local_api
 
 
 class RoleWorkflowServiceTests(unittest.TestCase):
@@ -32,6 +39,10 @@ class RoleWorkflowServiceTests(unittest.TestCase):
             body='Confidential risk.\n', new=True), str(uuid4()), privacy='confidential')
         self.state = self.base / 'workflow-state'; self.state.mkdir(mode=0o700)
         self.calls = []
+        self.base_binding = dict(schema_version=1, binding_id=str(uuid4()), revision='one',
+            adapter='ollama', boundary='same-node', endpoint='http://127.0.0.1:11434',
+            model='creator-model', target_id='local-process')
+        OllamaBindings(self.state).save(OllamaBinding.parse(self.base_binding))
 
         def factory(runs):
             def transport(binding, raw):
@@ -44,11 +55,12 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         self.service = RoleWorkflowService(self.node, Projects(self.node),
             state_dir=self.state, adapter_factory=factory)
 
-    @staticmethod
-    def binding(model, **changes):
-        value = dict(schema_version=1, binding_id=str(uuid4()), revision='one',
-            adapter='ollama', boundary='same-node', endpoint='http://127.0.0.1:11434',
-            model=model, target_id='local-process')
+    def binding(self, model, **changes):
+        value = dict(self.base_binding)
+        if model != value['model']:
+            value['revision'] += '.run-model-' + hashlib.sha256(
+                model.encode()).hexdigest()[:16]
+        value['model'] = model
         value.update(changes)
         return value
 
@@ -149,6 +161,54 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         self.assertEqual(len(attempts), 1)
         self.assertEqual(service.get(request['workflow_id'])['steps'][0]['state'], 'unknown')
 
+    def test_selected_result_publication_is_idempotent_and_preserves_provenance(self):
+        request = self.request(); workflow = self.service.prepare(request)
+        workflow = self.service.dispatch_creator(
+            request['workflow_id'], workflow['steps'][0]['approval_digest'])
+        workflow = self.service.prepare_opponent(request['workflow_id'])
+        workflow = self.service.dispatch_opponent(
+            request['workflow_id'], workflow['steps'][1]['approval_digest'])
+        selected = workflow['steps'][1]
+        publication = {'workflow_id': request['workflow_id'],
+            'step_id': selected['step_id'], 'result_sha256': selected['response_sha256'],
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'artifact_id': str(uuid4()), 'title': 'Independent review',
+            'created_at': '2026-10-06T12:00:00Z', 'operation_id': str(uuid4())}
+        seen = False
+        def checkpoint(stage):
+            nonlocal seen
+            if stage == 'workspace-complete' and not seen:
+                seen = True
+                raise RuntimeError('publication crash')
+        with self.assertRaisesRegex(RuntimeError, 'publication crash'):
+            self.service.publish(publication, checkpoint=checkpoint)
+        committed = self.git.head()
+        result = self.service.publish(publication)
+        self.assertEqual((result['state'], result['receipt']['commit_id']),
+                         ('published', committed))
+        self.assertEqual(self.service.publish(publication)['receipt']['commit_id'], committed)
+        self.assertEqual(self.git.head(), committed)
+        files = self.git.snapshot(committed); entities = validate_snapshot(files)
+        metadata = entities[publication['artifact_id']]
+        self.assertEqual((metadata['privacy'], metadata['provenance']),
+                         ('confidential', 'llm-generated'))
+        self.assertEqual({item['target_id'] for item in metadata['relations']},
+                         {self.public_id, self.private_id})
+        raw = files[f'artifacts/{publication["artifact_id"]}/content.md']
+        record = json.loads(raw.split(WORKFLOW_MARKER.encode(), 1)[1]
+                            .split(WORKFLOW_END.encode(), 1)[0])
+        self.assertEqual(record['schema'], 'fpw-role-workflow-provenance-v1')
+        self.assertEqual(record['selected_step']['result_sha256'],
+                         selected['response_sha256'])
+        self.assertEqual(record['previous_step']['step_id'],
+                         request['creator']['step_id'])
+        self.assertNotIn('content', record['previous_step'])
+        self.assertNotIn('endpoint', record['selected_step']['execution'])
+        self.assertNotIn('tls_cert_sha256', record['selected_step']['execution'])
+
+        with self.assertRaisesRegex(ValueError, 'unavailable to this owner'):
+            self.service.get(request['workflow_id'], owner_id=str(uuid4()))
+
     def test_stale_head_identity_and_privacy_boundary_fail_closed(self):
         duplicate = str(uuid4())
         request = self.request()
@@ -160,14 +220,78 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Project changed'):
             self.service.prepare(request)
 
+        request = self.request()
+        request['creator']['target']['binding_id'] = str(uuid4())
+        with self.assertRaisesRegex(ValueError, 'not the configured'):
+            self.service.prepare(request)
+
+        request = self.request(purpose={'input_id': str(uuid4()),
+            'content': 'Local purpose', 'privacy': 'local-only'})
+        with self.assertRaisesRegex(ValueError, 'Web workflow cannot expose local-only'):
+            self.service.prepare(request, owner_id=str(uuid4()), allow_local_only=False)
+
         request = self.request(purpose={'input_id': duplicate, 'content': 'Local purpose',
                                        'privacy': 'local-only'})
         request['creator']['target'] = self.binding('creator-model', revision='lan',
             boundary='private-network', endpoint='https://10.0.0.2:11434',
             target_id=str(uuid4()), tls_cert_sha256='a' * 64)
+        OllamaBindings(self.state).save(OllamaBinding.parse(request['creator']['target']))
         with self.assertRaisesRegex(ValueError, 'local-only requires same-node'):
             self.service.prepare(request)
         self.assertEqual(self.calls, [])
+
+    def test_authenticated_desktop_api_keeps_prepare_dispatch_and_publish_separate(self):
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler,
+                         projects=Projects(self.node)) as server:
+            server.role_workflow_service = self.service
+            request = self.request()
+            response = driver.request(server, path='/v1/workflows/prepare',
+                                      body=json.dumps(request).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head); workflow = json.loads(body)
+            self.assertEqual(self.calls, [])
+            response = driver.request(server, path='/v1/workflows/creator/dispatch',
+                body=json.dumps({'workflow_id': request['workflow_id'],
+                    'project_id': self.project_id,
+                    'approval_digest': workflow['steps'][0]['approval_digest']}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body)['steps'][0]['state'], 'succeeded')
+            self.assertEqual(len(self.calls), 1)
+            response = driver.request(server, path='/v1/workflows/status',
+                body=json.dumps({'project_id': self.project_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            driver.rejected(server, path='/v1/workflows/status',
+                            body=json.dumps({'project_id': self.project_id}).encode(),
+                            headers={'Authorization': None})
+
+    def test_v1_journal_migrates_publication_columns_transactionally(self):
+        legacy = self.base / 'legacy-workflows'; legacy.mkdir(mode=0o700)
+        path = legacy / 'role-workflows.sqlite'
+        with sqlite3.connect(path) as db:
+            db.executescript('''
+                CREATE TABLE schema_info(version INTEGER NOT NULL);
+                INSERT INTO schema_info VALUES(1);
+                CREATE TABLE workflows(
+                    workflow_id TEXT PRIMARY KEY,node_id TEXT NOT NULL,user_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,expected_head TEXT NOT NULL,
+                    request_digest TEXT NOT NULL,request_json BLOB NOT NULL);
+                CREATE TABLE steps(
+                    workflow_id TEXT NOT NULL,ordinal INTEGER NOT NULL,
+                    step_id TEXT NOT NULL UNIQUE,run_id TEXT NOT NULL UNIQUE,
+                    manifest_id TEXT NOT NULL UNIQUE,role_id TEXT NOT NULL,
+                    role_revision TEXT NOT NULL,state TEXT NOT NULL,approval_digest TEXT,
+                    preview_json BLOB,manifest BLOB,payload BLOB,privacy TEXT,
+                    provider_request BLOB,response BLOB,response_sha256 TEXT,
+                    completed_at TEXT,error TEXT,PRIMARY KEY(workflow_id,ordinal));
+            ''')
+        path.chmod(0o600)
+        with RoleWorkflows(legacy).connect() as db:
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (2,))
+            columns = [row[1] for row in db.execute('PRAGMA table_info(workflows)')]
+            self.assertEqual(columns[-4:], ['publish_state', 'publish_digest',
+                                            'publish_json', 'receipt_json'])
 
 
 if __name__ == '__main__':

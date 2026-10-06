@@ -190,6 +190,20 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/summary/preview',pendingSummaryRequest,210000)", JS)
         self.assertIn("projectRequest('/v1/summary/publish',pendingSummaryPublish)", JS)
 
+    def test_role_workflow_ui_separates_both_approvals_and_publication(self):
+        from spikes.desktop_ui import HTML
+        self.assertIn('id="workflow-tab"', HTML)
+        self.assertIn('id="workflow-creator-confirm"', HTML)
+        self.assertIn('id="workflow-opponent-confirm"', HTML)
+        self.assertIn('id="workflow-publish-step"', HTML)
+        self.assertIn("projectRequest('/v1/workflows/prepare'", JS)
+        self.assertIn("projectRequest('/v1/workflows/creator/dispatch'", JS)
+        self.assertIn("projectRequest('/v1/workflows/opponent/prepare'", JS)
+        self.assertIn("projectRequest('/v1/workflows/opponent/dispatch'", JS)
+        self.assertIn("projectRequest('/v1/workflows/publish'", JS)
+        self.assertIn("section.querySelector('pre').textContent", JS)
+        self.assertNotIn('workflow-creator-result.innerHTML', JS)
+
     def test_image_ui_separates_preview_dispatch_and_project_publication(self):
         self.assertIn('id="image-tab"', HTML)
         self.assertIn('id="image-request-preview"', HTML)

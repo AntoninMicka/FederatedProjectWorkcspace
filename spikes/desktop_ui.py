@@ -165,6 +165,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
 <button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
 <button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
+<button id="workflow-tab" role="tab" aria-controls="workflow-panel" aria-selected="false" tabindex="-1">Creator → opponent</button>
 <button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
 <button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button>
 <button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" tabindex="-1">Obrázek</button>
@@ -200,6 +201,29 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="summary-publish-controls" hidden><label for="summary-title">Název dokumentu</label>
 <input id="summary-title" maxlength="200" value="Souhrn projektu">
 <button id="summary-publish" type="button">Uložit do projektu</button></div></div>
+<div id="workflow-panel" role="tabpanel" aria-labelledby="workflow-tab" hidden><h2>Creator → opponent</h2>
+<p>Každý krok má vlastní přesný požadavek a potvrzení. Opponent nedostane historii creatoru, pouze jeho uložený výstup a zde vybrané podklady.</p>
+<label for="workflow-purpose">Účel</label><textarea id="workflow-purpose" rows="3" maxlength="16384"></textarea>
+<label for="workflow-privacy">Soukromí účelu</label><select id="workflow-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
+<label for="workflow-creator-model">Creator model</label><input id="workflow-creator-model" maxlength="128">
+<fieldset><legend>Podklady creatoru</legend><div id="workflow-creator-artifacts"></div></fieldset>
+<label for="workflow-opponent-model">Opponent model</label><input id="workflow-opponent-model" maxlength="128">
+<fieldset><legend>Dodatečné podklady opponenta</legend><div id="workflow-opponent-artifacts"></div></fieldset>
+<button id="workflow-prepare" type="button">Připravit creator požadavek</button>
+<p id="workflow-status" role="status" aria-live="polite"></p>
+<section id="workflow-creator-preview" hidden><h3>Creator — přesný požadavek</h3><pre></pre>
+<label class="confirm"><input id="workflow-creator-confirm" type="checkbox"> Potvrzuji creator vstupy, model, privacy a přesný request.</label>
+<button id="workflow-creator-dispatch" type="button" disabled>Spustit creatora</button></section>
+<section id="workflow-creator-result" hidden><h3>Materializovaný creator výstup</h3><pre></pre>
+<button id="workflow-opponent-prepare" type="button">Připravit opponent handoff</button></section>
+<section id="workflow-opponent-preview" hidden><h3>Opponent — přesný handoff</h3><pre></pre>
+<label class="confirm"><input id="workflow-opponent-confirm" type="checkbox"> Potvrzuji předaný creator výstup, podklady, model a privacy.</label>
+<button id="workflow-opponent-dispatch" type="button" disabled>Spustit opponenta</button></section>
+<section id="workflow-opponent-result" hidden><h3>Materializovaná oponentura</h3><pre></pre></section>
+<section id="workflow-publish" hidden><h3>Uložit vybraný výsledek</h3>
+<label for="workflow-publish-step">Výsledek</label><select id="workflow-publish-step"></select>
+<label for="workflow-title">Název dokumentu</label><input id="workflow-title" maxlength="200" value="Oponentura návrhu">
+<button id="workflow-publish-button" type="button">Uložit do projektu</button></section></div>
 <div id="extraction-panel" role="tabpanel" aria-labelledby="extraction-tab" hidden><h2>Strukturovaná extrakce</h2>
 <p>Vyberte podklady a uzavřené schéma. Náhled se uloží až po potvrzení.</p>
 <label>Schéma <select id="extraction-schema"><option value="facts|facts-v1">Fakta</option>
@@ -328,6 +352,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
+#workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
@@ -388,6 +413,7 @@ function renderSidebarArtifacts(items){
  row.append(title,id);sidebarArtifacts.append(row);
  }
  renderSummarySources();
+ renderWorkflowSources();
  renderExtractionSources();
  renderMetadataSources();
  renderTaskArtifactSources();
@@ -428,7 +454,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
- currentArtifacts=[];clearSummary();clearExtraction();clearImage();clearMetadata();
+ currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
@@ -904,6 +930,8 @@ function fillBinding(binding){
   fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
   chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
   settingsBackendStatus.textContent=`Nastaven backend ${binding.model} · ${binding.boundary}.`;
+  if(!document.querySelector('#workflow-creator-model').value)document.querySelector('#workflow-creator-model').value=binding.model;
+  if(!document.querySelector('#workflow-opponent-model').value)document.querySelector('#workflow-opponent-model').value=binding.model;
  }else{
   chatStatus.textContent='Backend zatím není nastaven.';
   settingsBackendStatus.textContent='Backend zatím není nastaven.';
@@ -1322,6 +1350,116 @@ document.querySelector('#chat-save-output').addEventListener('click',event=>runC
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
 });
+let roleWorkflow=null,pendingWorkflowRequest=null,pendingWorkflowPublish=null;
+const workflowStatus=document.querySelector('#workflow-status');
+function resetWorkflowProjection(message=''){
+ roleWorkflow=null;pendingWorkflowRequest=null;pendingWorkflowPublish=null;
+ for(const id of ['workflow-creator-preview','workflow-creator-result','workflow-opponent-preview',
+                  'workflow-opponent-result','workflow-publish'])document.querySelector('#'+id).hidden=true;
+ document.querySelector('#workflow-creator-confirm').checked=false;
+ document.querySelector('#workflow-creator-dispatch').disabled=true;
+ document.querySelector('#workflow-opponent-confirm').checked=false;
+ document.querySelector('#workflow-opponent-dispatch').disabled=true;
+ document.querySelector('#workflow-publish-step').replaceChildren();
+ workflowStatus.textContent=message;
+}
+function clearWorkflow(){resetWorkflowProjection();}
+function invalidateWorkflow(){if(roleWorkflow || pendingWorkflowRequest)resetWorkflowProjection('Vstupy se změnily. Připravte nové workflow s novými ID.');}
+function renderWorkflowSources(){
+ for(const [id,required] of [['workflow-creator-artifacts',true],['workflow-opponent-artifacts',false]]){
+  const list=document.querySelector('#'+id);if(!list)return;list.replaceChildren();
+  for(const item of currentArtifacts){const label=document.createElement('label');
+   const input=document.createElement('input');input.type='checkbox';input.value=item.id;
+   input.addEventListener('change',invalidateWorkflow);label.append(input,document.createTextNode(' '+item.title));list.append(label);}
+  if(!currentArtifacts.length){const empty=document.createElement('p');empty.textContent=required?'Creator vyžaduje alespoň jeden podklad.':'Žádné dodatečné podklady.';list.append(empty);}
+ }
+}
+async function workflowTarget(model){
+ if(!chatBinding)throw new Error('Nejprve nastavte lokální Ollama backend.');
+ const target=structuredClone(chatBinding);model=model.trim();if(!model)throw new Error('Zadejte oba modely.');
+ if(model!==target.model){const raw=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(model));
+  const suffix=[...new Uint8Array(raw)].map(value=>value.toString(16).padStart(2,'0')).join('').slice(0,16);
+  target.revision=target.revision+'.run-model-'+suffix;target.model=model;}
+ return target;
+}
+function workflowStep(ordinal){return roleWorkflow?.steps?.find(step=>step.ordinal===ordinal);}
+function renderWorkflow(){
+ if(!roleWorkflow)return;const creator=workflowStep(1),opponent=workflowStep(2);
+ if(creator?.preview){const section=document.querySelector('#workflow-creator-preview');section.hidden=creator.state!=='prepared';
+  section.querySelector('pre').textContent=JSON.stringify(creator.preview,null,2)+'\\n\\nProvider request:\\n'+JSON.stringify(creator.provider_request,null,2);}
+ if(creator?.response){const section=document.querySelector('#workflow-creator-result');section.hidden=false;
+  section.querySelector('pre').textContent=creator.response;}
+ if(opponent?.preview){const section=document.querySelector('#workflow-opponent-preview');section.hidden=opponent.state!=='prepared';
+  section.querySelector('pre').textContent=JSON.stringify(opponent.preview,null,2)+'\\n\\nProvider request:\\n'+JSON.stringify(opponent.provider_request,null,2);}
+ if(opponent?.response){const section=document.querySelector('#workflow-opponent-result');section.hidden=false;
+  section.querySelector('pre').textContent=opponent.response;}
+ const options=document.querySelector('#workflow-publish-step');options.replaceChildren();
+ for(const [step,label] of [[creator,'Creator výstup'],[opponent,'Oponentura']])if(step?.state==='succeeded'){
+  const option=document.createElement('option');option.value=step.step_id;option.textContent=label;options.append(option);}
+ document.querySelector('#workflow-publish').hidden=!options.options.length;
+}
+for(const id of ['workflow-purpose','workflow-privacy','workflow-creator-model','workflow-opponent-model'])
+ document.querySelector('#'+id).addEventListener('input',invalidateWorkflow);
+document.querySelector('#workflow-creator-confirm').addEventListener('change',event=>{
+ document.querySelector('#workflow-creator-dispatch').disabled=!event.currentTarget.checked;});
+document.querySelector('#workflow-opponent-confirm').addEventListener('change',event=>{
+ document.querySelector('#workflow-opponent-dispatch').disabled=!event.currentTarget.checked;});
+document.querySelector('#workflow-title').addEventListener('input',()=>{pendingWorkflowPublish=null;});
+document.querySelector('#workflow-publish-step').addEventListener('change',()=>{pendingWorkflowPublish=null;});
+document.querySelector('#workflow-prepare').addEventListener('click',async event=>{
+ if(!activeProject || !chatBinding){workflowStatus.textContent='Nejprve otevřete projekt a nastavte lokální backend.';return;}
+ const purpose=document.querySelector('#workflow-purpose').value.trim();
+ const creatorIds=[...document.querySelectorAll('#workflow-creator-artifacts input:checked')].map(item=>item.value);
+ const opponentIds=[...document.querySelectorAll('#workflow-opponent-artifacts input:checked')].map(item=>item.value);
+ if(!purpose || !creatorIds.length){workflowStatus.textContent='Zadejte účel a vyberte alespoň jeden creator podklad.';return;}
+ event.currentTarget.disabled=true;workflowStatus.textContent='Připravuji přesný creator požadavek…';
+ try{const creatorTarget=await workflowTarget(document.querySelector('#workflow-creator-model').value);
+  const opponentTarget=await workflowTarget(document.querySelector('#workflow-opponent-model').value);
+  pendingWorkflowRequest={schema:'fpw-role-workflow-v1',workflow_id:crypto.randomUUID(),
+   project_id:activeProject.id,expected_head:activeProject.head,
+   purpose:{input_id:crypto.randomUUID(),content:purpose,privacy:document.querySelector('#workflow-privacy').value},
+   creator:{step_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+    role_id:'creator',role_revision:'creator-v1',target:creatorTarget,artifact_ids:creatorIds},
+   opponent:{step_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
+    role_id:'opponent',role_revision:'opponent-v1',target:opponentTarget,artifact_ids:opponentIds}};
+  roleWorkflow=await projectRequest('/v1/workflows/prepare',pendingWorkflowRequest);
+  pendingWorkflowRequest=null;renderWorkflow();workflowStatus.textContent='Creator požadavek je připraven k samostatnému potvrzení.';
+ }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#workflow-creator-dispatch').addEventListener('click',async event=>{
+ const step=workflowStep(1);if(!roleWorkflow || !step)return;event.currentTarget.disabled=true;
+ workflowStatus.textContent='Spouštím potvrzený creator krok…';
+ try{roleWorkflow=await projectRequest('/v1/workflows/creator/dispatch',{workflow_id:roleWorkflow.workflow_id,
+   project_id:activeProject.id,approval_digest:step.approval_digest},210000);
+  document.querySelector('#workflow-creator-preview').hidden=true;renderWorkflow();workflowStatus.textContent='Creator výstup je durable uložen. Připravte samostatný opponent handoff.';
+ }catch(error){workflowStatus.textContent=error.message;}
+});
+document.querySelector('#workflow-opponent-prepare').addEventListener('click',async event=>{
+ if(!roleWorkflow)return;event.currentTarget.disabled=true;workflowStatus.textContent='Připravuji přesný opponent handoff…';
+ try{roleWorkflow=await projectRequest('/v1/workflows/opponent/prepare',{workflow_id:roleWorkflow.workflow_id,
+   project_id:activeProject.id});renderWorkflow();workflowStatus.textContent='Opponent handoff je připraven k novému potvrzení.';
+ }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#workflow-opponent-dispatch').addEventListener('click',async event=>{
+ const step=workflowStep(2);if(!roleWorkflow || !step)return;event.currentTarget.disabled=true;
+ workflowStatus.textContent='Spouštím potvrzený opponent krok…';
+ try{roleWorkflow=await projectRequest('/v1/workflows/opponent/dispatch',{workflow_id:roleWorkflow.workflow_id,
+   project_id:activeProject.id,approval_digest:step.approval_digest},210000);
+  document.querySelector('#workflow-opponent-preview').hidden=true;renderWorkflow();workflowStatus.textContent='Oponentura je durable uložená.';
+ }catch(error){workflowStatus.textContent=error.message;}
+});
+document.querySelector('#workflow-publish-button').addEventListener('click',async event=>{
+ if(!roleWorkflow || !activeProject)return;const stepId=document.querySelector('#workflow-publish-step').value;
+ const step=roleWorkflow.steps.find(item=>item.step_id===stepId);const title=document.querySelector('#workflow-title').value.trim();
+ if(!step || !title){workflowStatus.textContent='Vyberte výsledek a zadejte název.';return;}
+ if(!pendingWorkflowPublish)pendingWorkflowPublish={workflow_id:roleWorkflow.workflow_id,step_id:step.step_id,
+  result_sha256:step.response_sha256,project_id:activeProject.id,expected_head:activeProject.head,
+  artifact_id:crypto.randomUUID(),title,created_at:new Date().toISOString(),operation_id:crypto.randomUUID()};
+ event.currentTarget.disabled=true;workflowStatus.textContent='Ukládám vybraný workflow výstup do projektu…';
+ try{await projectRequest('/v1/workflows/publish',pendingWorkflowPublish,120000);const projectId=activeProject.id;
+  await openRegisteredProject(projectId);workflowStatus.textContent='Workflow výstup byl uložen do projektu.';
+ }catch(error){workflowStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
 let summaryPreview=null,pendingSummaryRequest=null,pendingSummaryPublish=null;
 const summaryStatus=document.querySelector('#summary-status');
 const summaryPreviewElement=document.querySelector('#summary-preview');
@@ -1605,6 +1743,9 @@ class DesktopHandler(Handler):
         '/v1/tasks/artifact', '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
+        '/v1/workflows/status', '/v1/workflows/prepare',
+        '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/prepare',
+        '/v1/workflows/opponent/dispatch', '/v1/workflows/publish',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
@@ -1621,6 +1762,37 @@ class DesktopHandler(Handler):
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if (self.path == '/v1/workflows/status' and isinstance(request, dict)
+                    and set(request) == {'project_id'}):
+                result = self.server.role_workflow_service.status()
+                result['workflows'] = [item for item in result['workflows']
+                                       if item['project_id'] == request['project_id']]
+                return self.reply(200, result)
+            if self.path == '/v1/workflows/prepare' and isinstance(request, dict):
+                return self.reply(200, self.server.role_workflow_service.prepare(request))
+            if (self.path == '/v1/workflows/creator/dispatch' and isinstance(request, dict)
+                    and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
+                owned = self.server.role_workflow_service.get(request['workflow_id'])
+                if owned['project_id'] != request['project_id']: return self.send_error(400)
+                result = self.server.role_workflow_service.dispatch_creator(
+                    request['workflow_id'], request['approval_digest'])
+                return self.reply(200, result)
+            if (self.path == '/v1/workflows/opponent/prepare' and isinstance(request, dict)
+                    and set(request) == {'workflow_id', 'project_id'}):
+                owned = self.server.role_workflow_service.get(request['workflow_id'])
+                if owned['project_id'] != request['project_id']: return self.send_error(400)
+                result = self.server.role_workflow_service.prepare_opponent(
+                    request['workflow_id'])
+                return self.reply(200, result)
+            if (self.path == '/v1/workflows/opponent/dispatch' and isinstance(request, dict)
+                    and set(request) == {'workflow_id', 'project_id', 'approval_digest'}):
+                owned = self.server.role_workflow_service.get(request['workflow_id'])
+                if owned['project_id'] != request['project_id']: return self.send_error(400)
+                result = self.server.role_workflow_service.dispatch_opponent(
+                    request['workflow_id'], request['approval_digest'])
+                return self.reply(200, result)
+            if self.path == '/v1/workflows/publish' and isinstance(request, dict):
+                return self.reply(200, self.server.role_workflow_service.publish(request))
             if self.path == '/v1/media/status' and request == {}:
                 return self.reply(200, self.server.media_service.status())
             if self.path == '/v1/media/comfyui/configure' and isinstance(request, dict):
@@ -1767,8 +1939,12 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
                                    'automaticky neopakujte; stav byl zachován.'})
         except BackendUnknown:
-            return self.reply(409, {'error': 'Výsledek obrazového běhu není známý. Požadavek '
-                                   'automaticky neopakujte; pro nový pokus použijte nové ID.'})
+            message = ('Výsledek workflow kroku není známý. Požadavek automaticky '
+                       'neopakujte; pro nový pokus vytvořte nové workflow.'
+                       if self.path.startswith('/v1/workflows/') else
+                       'Výsledek obrazového běhu není známý. Požadavek automaticky '
+                       'neopakujte; pro nový pokus použijte nové ID.')
+            return self.reply(409, {'error': message})
         except CloudflareUnknown:
             return self.reply(409, {'error': 'Výsledek Cloudflare deploymentu není známý. '
                                    'Požadavek automaticky neopakujte; načtěte skutečný stav provideru.'})
@@ -1797,7 +1973,7 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route':
                 return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
