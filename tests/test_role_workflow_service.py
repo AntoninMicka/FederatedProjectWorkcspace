@@ -2,21 +2,23 @@
 # SPDX-License-Identifier: MPL-2.0
 import hashlib
 import json
+import os
 from pathlib import Path
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
-from spikes.backend_contract import BackendUnknown
+from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.ollama_backend import OllamaAdapter, OllamaBinding, OllamaBindings
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.role_workflow_service import (WORKFLOW_END, WORKFLOW_MARKER,
                                           RoleWorkflowService)
 from spikes.role_workflows import RoleWorkflows
-from spikes.metadata import validate_snapshot
+from spikes.metadata import ValidationError, validate_snapshot
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
@@ -130,6 +132,52 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         self.assertEqual(final['steps'][1]['state'], 'succeeded')
         self.assertEqual(len(self.calls), 2)
 
+    def test_same_explicit_model_still_passes_only_materialized_handoff(self):
+        request = self.request()
+        request['opponent']['target'] = self.binding('creator-model')
+        request['opponent']['artifact_ids'] = []
+        workflow = self.service.prepare(request)
+        workflow = self.service.dispatch_creator(
+            request['workflow_id'], workflow['steps'][0]['approval_digest'])
+        workflow = self.service.prepare_opponent(request['workflow_id'])
+        prompt = workflow['steps'][1]['provider_request']['prompt']
+        self.assertIn('Bounded result.', prompt)
+        self.assertNotIn('Prepare a decision note.', prompt)
+        self.assertNotIn('Known public fact.', prompt)
+        workflow = self.service.dispatch_opponent(
+            request['workflow_id'], workflow['steps'][1]['approval_digest'])
+        self.assertEqual([call['model'] for call in self.calls],
+                         ['creator-model', 'creator-model'])
+        self.assertEqual(workflow['steps'][1]['state'], 'succeeded')
+
+    @unittest.skipUnless(os.environ.get('WORKFLOW_OLLAMA_TEST') == '1',
+                         'Set WORKFLOW_OLLAMA_TEST=1 for live Ollama workflow smoke')
+    def test_live_ollama_creator_opponent_handoff(self):
+        model = os.environ.get('WORKFLOW_OLLAMA_MODEL', 'phi:latest')
+        self.base_binding.update(model=model, revision='live-one')
+        OllamaBindings(self.state).save(OllamaBinding.parse(self.base_binding))
+        service = RoleWorkflowService(self.node, Projects(self.node), state_dir=self.state)
+        request = self.request(purpose={'input_id': str(uuid4()),
+            'content': 'Write one short sentence, then review only that sentence.',
+            'privacy': 'project'})
+        request['creator']['target'] = self.binding(model)
+        request['opponent']['target'] = self.binding(model)
+        request['opponent']['artifact_ids'] = []
+        workflow = service.prepare(request)
+        workflow = service.dispatch_creator(
+            request['workflow_id'], workflow['steps'][0]['approval_digest'])
+        workflow = service.prepare_opponent(request['workflow_id'])
+        creator = workflow['steps'][0]
+        opponent_prompt = workflow['steps'][1]['provider_request']['prompt']
+        self.assertIn(creator['response'], opponent_prompt)
+        self.assertNotIn(request['purpose']['content'], opponent_prompt)
+        workflow = service.dispatch_opponent(
+            request['workflow_id'], workflow['steps'][1]['approval_digest'])
+        self.assertEqual([step['state'] for step in workflow['steps']],
+                         ['succeeded', 'succeeded'])
+        self.assertEqual(workflow['steps'][1]['output']['previous_step_id'],
+                         creator['step_id'])
+
     def test_crash_after_backend_success_reconciles_without_second_dispatch(self):
         request = self.request(); workflow = self.service.prepare(request)
         approval = workflow['steps'][0]['approval_digest']
@@ -143,6 +191,28 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         recovered = self.service.dispatch_creator(request['workflow_id'], approval)
         self.assertEqual(recovered['steps'][0]['state'], 'succeeded')
         self.assertEqual(len(self.calls), 1)
+
+    def test_restart_recovers_each_dispatch_checkpoint_without_duplicate_effect(self):
+        for stage, calls_before_restart in (
+                ('run-bound', 0), ('response-received', 1), ('succeeded', 1)):
+            with self.subTest(stage=stage):
+                request = self.request(); workflow = self.service.prepare(request)
+                approval = workflow['steps'][0]['approval_digest']
+                before = len(self.calls)
+
+                def checkpoint(current, expected=stage):
+                    if current == expected:
+                        raise RuntimeError('workflow crash at ' + expected)
+
+                with self.assertRaisesRegex(RuntimeError, 'workflow crash'):
+                    self.service.dispatch_creator(request['workflow_id'], approval,
+                                                  checkpoint=checkpoint)
+                self.assertEqual(len(self.calls) - before, calls_before_restart)
+                restarted = RoleWorkflowService(self.node, Projects(self.node),
+                    state_dir=self.state, adapter_factory=self.factory)
+                recovered = restarted.dispatch_creator(request['workflow_id'], approval)
+                self.assertEqual(recovered['steps'][0]['state'], 'succeeded')
+                self.assertEqual(len(self.calls) - before, 1)
 
     def test_unknown_is_durable_and_cannot_be_retried(self):
         attempts = []
@@ -161,6 +231,39 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         self.assertEqual(len(attempts), 1)
         self.assertEqual(service.get(request['workflow_id'])['steps'][0]['state'], 'unknown')
 
+    def test_known_and_oversized_failures_require_consciously_new_run(self):
+        responses = [
+            {'model': 'wrong-model', 'response': 'invalid'},
+            {'model': 'creator-model', 'response': 'x' * (1024 * 1024 + 1)},
+            {'model': 'creator-model', 'response': '# Fresh result\n'},
+        ]
+        attempts = []
+
+        def factory(runs):
+            def transport(binding, raw):
+                attempts.append(json.loads(raw))
+                return responses[len(attempts) - 1]
+            return OllamaAdapter(runs, transport=transport)
+
+        service = RoleWorkflowService(self.node, Projects(self.node),
+            state_dir=self.state, adapter_factory=factory)
+        for exception, message in ((BackendResponseError, 'Invalid Ollama response'),
+                                   (ValidationError, 'exceeds 1 MiB')):
+            request = self.request(); workflow = service.prepare(request)
+            approval = workflow['steps'][0]['approval_digest']
+            with self.assertRaisesRegex(exception, message):
+                service.dispatch_creator(request['workflow_id'], approval)
+            self.assertEqual(service.get(request['workflow_id'])['steps'][0]['state'],
+                             'failed')
+            with self.assertRaisesRegex(ValueError, 'cannot be retried'):
+                service.dispatch_creator(request['workflow_id'], approval)
+
+        fresh = self.request(); workflow = service.prepare(fresh)
+        workflow = service.dispatch_creator(
+            fresh['workflow_id'], workflow['steps'][0]['approval_digest'])
+        self.assertEqual(workflow['steps'][0]['state'], 'succeeded')
+        self.assertEqual(len(attempts), 3)
+
     def test_selected_result_publication_is_idempotent_and_preserves_provenance(self):
         request = self.request(); workflow = self.service.prepare(request)
         workflow = self.service.dispatch_creator(
@@ -174,6 +277,15 @@ class RoleWorkflowServiceTests(unittest.TestCase):
             'project_id': self.project_id, 'expected_head': self.git.head(),
             'artifact_id': str(uuid4()), 'title': 'Independent review',
             'created_at': '2026-10-06T12:00:00Z', 'operation_id': str(uuid4())}
+        original = self.git.head()
+        with self.assertRaisesRegex(RuntimeError, 'publication crash'):
+            self.service.publish(publication, checkpoint=lambda stage: (
+                (_ for _ in ()).throw(RuntimeError('publication crash'))
+                if stage == 'publishing' else None))
+        self.assertEqual(self.git.head(), original)
+        self.assertEqual(self.service.get(request['workflow_id'])['publish_state'],
+                         'publishing')
+
         seen = False
         def checkpoint(stage):
             nonlocal seen
@@ -239,6 +351,33 @@ class RoleWorkflowServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'local-only requires same-node'):
             self.service.prepare(request)
         self.assertEqual(self.calls, [])
+
+    def test_stale_selection_policy_head_and_binding_fail_before_dispatch(self):
+        request = self.request(); workflow = self.service.prepare(request)
+        changed = json.loads(json.dumps(request))
+        changed['creator']['artifact_ids'] = [self.private_id]
+        with self.assertRaisesRegex(ValueError, 'different request'):
+            self.service.prepare(changed)
+
+        Artifacts(self.node).save(dict(project_id=self.project_id,
+            artifact_id=str(uuid4()), base_head=self.git.head(), title='Changed HEAD',
+            body='new bytes\n', new=True), str(uuid4()))
+        with self.assertRaisesRegex(ValueError, 'Project changed'):
+            self.service.dispatch_creator(
+                request['workflow_id'], workflow['steps'][0]['approval_digest'])
+
+        request = self.request(); workflow = self.service.prepare(request)
+        with patch.object(RoleWorkflowService, 'policy_revision', 'changed-policy'):
+            with self.assertRaisesRegex(ValueError, 'Authority changed'):
+                self.service.dispatch_creator(
+                    request['workflow_id'], workflow['steps'][0]['approval_digest'])
+
+        request = self.request(); workflow = self.service.prepare(request)
+        changed_binding = dict(self.base_binding, revision='two')
+        OllamaBindings(self.state).save(OllamaBinding.parse(changed_binding))
+        with self.assertRaisesRegex(ValueError, 'invalid model revision'):
+            self.service.dispatch_creator(
+                request['workflow_id'], workflow['steps'][0]['approval_digest'])
 
     def test_authenticated_desktop_api_keeps_prepare_dispatch_and_publish_separate(self):
         driver = test_local_api.LocalAPITests()

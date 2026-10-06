@@ -13,8 +13,10 @@ externí textový provider, usage/billing, přímý brainstorming i obrazovou
 capability. F-M4-WORKFLOW-01-A uzavřela návrh prvního artifact-based
 creator/opponent handoffu a část B implementovala jeho node-local journal a
 aplikační službu pro explicitní Ollama textové bindingy. Část C doplnila
-desktopové/webové UI, autentizované API a explicitní Workspace publikaci.
-Úplná živá akceptace, obecný agent framework ani pluginový router tím nevznikají.
+desktopové/webové UI, autentizované API a explicitní Workspace publikaci. Část
+D lokálně PoC validovala regresní hranice, skutečné Qt/WebEngine vykreslení a
+same-node Ollama creator/opponent běh. Produkční nebo private-network akceptace,
+obecný agent framework ani pluginový router tím nevznikají.
 
 ## Rozsah a návaznost
 
@@ -646,6 +648,16 @@ SQLite commitem zachová celé v1 a opakované otevření migraci bezpečně dok
 Git artefakt má
 `fpw-role-workflow-provenance-v1`, odkazuje na vybraný a případný předchozí krok
 a jejich hashe, ale neobsahuje prompt, mezivýstup, endpoint ani TLS pin.
+
+Část D doplňuje regresi stejného i odlišného explicitního modelu, nulového
+implicitního kontextu, stale HEAD/selection/policy/binding, známého providerového
+selhání, oversized výstupu, `unknown`, vědomě nového runu a restartu po každém
+dispatch checkpointu i obou publikačních hranicích. Opt-in Qt/WebEngine smoke
+skutečně otevřel projekt a přepnul na workflow panel. Oddělený živý service
+smoke provedl oba kroky přes same-node Ollamu s `phi:latest` a ověřil, že
+opponent request obsahuje materializovaný creator výstup, nikoli původní účel.
+Nešlo o private-network Ollamu ani o klikací end-to-end dispatch z Qt UI; tyto
+širší produkční varianty nejsou podmínkou tohoto úzkého PoC.
 
 ## Lokální živé vlákno, zprávy a turn
 

@@ -1005,19 +1005,23 @@ není vydáván za celý uzavřený.
 
 ## Milestone M4 – Multi-role workflow
 
-Aktivní dávka `F-M4-WORKFLOW-01` zavádí první explicitní creator → opponent
-handoff přes hashovaný materializovaný výstup a samostatné Context Manifesty;
-nejde o implicitní sdílení celé konverzace ani o obecný pluginový router.
+Aktivní dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitní
+creator → opponent handoff přes hashovaný materializovaný výstup a samostatné
+Context Manifesty; nejde o implicitní sdílení celé konverzace ani o obecný
+pluginový router. Začlenění feature větve do `develop` zůstává otevřené.
 
-- [ ] Creator.
-- [ ] Opponent.
+- [x] Creator — jeden explicitně potvrzený bounded krok přes Context Manifest.
+- [x] Opponent — nový run pouze nad hashovaným creator výstupem a explicitními zdroji.
 - [ ] Analyst.
 - [ ] Editor.
-- [ ] Workflow handoff.
-- [ ] Human approval.
-- [ ] Artifact-based context isolation.
+- [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
+- [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
+- [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
-**Gate M4:** lze provést nezávislou oponenturu bez sdílení původní konverzační historie.
+**Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
+sdílení původní konverzační historie; automatická regrese, skutečný
+Qt/WebEngine panel a same-node Ollama smoke prošly. Produkční/private-network
+akceptace a merge do `develop` zůstávají otevřené.
 
 ## Milestone M5 – Federation
 

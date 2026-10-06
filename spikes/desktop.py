@@ -452,6 +452,19 @@ def main():
                     if(!adapter.disabled || artifacts.hidden)return null;
                     window.chatModesChecked=true;
                   }
+                  if(!window.workflowPanelChecked){
+                    const workflowTab=document.querySelector('#workflow-tab');workflowTab.click();
+                    const workflowPanel=document.querySelector('#workflow-panel');
+                    if(workflowPanel.hidden || workflowTab.getAttribute('aria-selected')!=='true' ||
+                       !document.querySelector('#workflow-purpose') ||
+                       !document.querySelector('#workflow-creator-artifacts') ||
+                       !document.querySelector('#workflow-opponent-artifacts') ||
+                       !document.querySelector('#workflow-creator-preview').hidden ||
+                       !document.querySelector('#workflow-opponent-preview').hidden ||
+                       !document.querySelector('#workflow-publish').hidden)return null;
+                    window.workflowPanelChecked=true;chatTab.click();
+                    if(document.querySelector('#chat-panel').hidden)return null;
+                  }
                   if(!window.imagePanelChecked){
                     const imageTab=document.querySelector('#image-tab');imageTab.click();
                     const imagePanel=document.querySelector('#image-panel');

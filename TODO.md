@@ -13,7 +13,8 @@ Milník M4; jedna dávka, větev
 
 - Stav dávky: [ ] [in progress]; aktivována 2026-10-06 z `develop` `da449bc`
   po začlenění F-M3-MEDIA-01 v PR #46. Tento aktivační dokument je první změna
-  nové feature větve.
+  nové feature větve. Všechny části A–D a podmínky PoC akceptace jsou splněné;
+  PR dosud nebyl vytvořen ani sloučen, proto dávka zůstává aktivní do předání.
 - Původ: roadmapa M4, ADR 0008 a backlogová položka `F-M4-WORKFLOW-01`.
 - Výstup: první deterministicky řízený dvoukrokový workflow creator → opponent.
   Creator vytvoří bounded materializovaný výstup s hashem a provenance;
@@ -118,14 +119,29 @@ Milník M4; jedna dávka, větev
   úplná sada prošla: 396 testů, 22 přeskočených volitelných testů. Skutečný
   Qt/WebEngine a živý Ollama běh zůstávají akceptací části D.
 
-- [ ] [planned] **F-M4-WORKFLOW-01-D — Regrese, dokumentace a akceptace
-  (cílová úroveň: PoC validated).** Ověřit creator a opponent se stejnými i
+- [x] [completed] **F-M4-WORKFLOW-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Ověřit creator a opponent se stejnými i
   různými explicitními backendy, nulové implicitní zprávy, přesné hashe a
   provenance, privacy/RBAC, stale HEAD/selection/policy/binding, malformed a
   oversized výstup, známé selhání versus `unknown`, restart na každé durable
   hranici, vědomě nový run a idempotentní publikaci bez duplicitního provider
   účinku. Spustit úplnou sadu a relevantní skutečný Qt/WebEngine i dostupný
   provider smoke; neprovedené živé ověření ponechat výslovně otevřené.
+  Dokončeno 2026-10-06: cílená regrese pokrývá stejný i rozdílný explicitní
+  model, nulový implicitní creator kontext, přesné hashe/provenance,
+  privacy/RBAC, stale HEAD/selection/policy/binding, malformed a oversized
+  odpověď, známé selhání versus `unknown`, vědomě nový workflow a obnovu po
+  `run-bound`, `response-received`, `succeeded`, `publishing` i
+  `workspace-complete`. Opakovaná publikace zachovává jediný commit a provider
+  se po doloženém účinku znovu nevolá. Skutečný Qt/WebEngine smoke dvakrát
+  spustil a zavřel desktop; další smoke vytvořil, po restartu otevřel projekt a
+  ověřil workflow panel. Živý same-node Ollama test s `phi:latest` provedl oba
+  kroky a doložil materializovaný handoff bez původního účelu. Private-network
+  Ollama ani klikací end-to-end dispatch z Qt nebyly součástí této PoC
+  akceptace. Cílená sada s oběma živými opt-in kontrolami prošla: 38 testů bez
+  přeskočení. Úplná výchozí sada prošla: 401 testů, 23 přeskočených volitelných
+  native/package/live testů; živé workflow testy jsou doložené samostatným
+  během výše.
 
 ## Podmínky dokončení dávky
 
