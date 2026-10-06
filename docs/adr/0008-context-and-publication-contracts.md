@@ -10,9 +10,10 @@ a dvoufázová revalidace Context Builderu jsou implementované jako lokální P
 ve F-M2-CONTEXT-01. Navazující dávky lokálně PoC validovaly Ollama adapter,
 vlákna a jejich projektové výstupy, task služby, provider-neutral runtime, první
 externí textový provider, usage/billing, přímý brainstorming i obrazovou
-capability. F-M4-WORKFLOW-01-A zde uzavírá návrh prvního artifact-based
-creator/opponent handoffu. Nejde o úplné RBAC, synchronizační službu, obecný
-agent framework ani pluginový router.
+capability. F-M4-WORKFLOW-01-A uzavřela návrh prvního artifact-based
+creator/opponent handoffu a část B implementovala jeho node-local journal a
+aplikační službu pro explicitní Ollama textové bindingy. UI, publikace, úplná
+živá akceptace, obecný agent framework ani pluginový router tím nevznikají.
 
 ## Rozsah a návaznost
 
@@ -509,8 +510,8 @@ kroku se nesmí použít v jiném workflow, roli nebo backendovém runu.
 kriticky posoudit předaný creator výstup vůči explicitním podkladům, uvést
 konkrétní slabiny, nepodložená tvrzení, rizika a návrhy opravy. Role sama
 nevybírá backend, nepřidává zdroj, neuděluje oprávnění a nesmí vydat tool call
-nebo akci. Přidání do `RoleRegistry` je implementace části B; tento návrh
-neoznačuje roli za runtime dostupnou.
+nebo akci. Část B ji přidala do `RoleRegistry`; využívá ji pouze explicitně
+volaná workflow služba, nikoli automatický router.
 
 Výstup kroku `fpw-workflow-step-output-v1` je neměnný neprázdný UTF-8 Markdown
 nejvýše 1 MiB. Durable záznam váže přesné bajty a SHA-256 na workflow/step/run/
@@ -617,6 +618,15 @@ Není doložena potřeba cizího agent frameworku, message queue, provider poolu
 vektorové DB ani nového Git writeru. Soukromá inventura neposkytla komponentu s
 kompatibilním Context Manifest/RBAC/approval/`unknown`/Workspace recovery
 kontraktem; žádný kód ani neveřejný název se nepřebírá.
+
+Část B implementuje schéma v `RoleWorkflows` a orchestrace
+`RoleWorkflowService`. Příprava nevykonává providerový účinek; creator a
+opponent dispatch vyžadují vlastní approval digest přes preview a přesné
+provider request bajty. Restart čte doložený stav backend run journalu: úspěch
+materializuje bez druhého volání, zatímco `dispatching`/`unknown` uzavře workflow
+krok jako `unknown`. Opponent manifest se při dispatchi znovu váže na SHA-256 a
+privacy uloženého creator výsledku. Implementace části B nezapisuje projektový
+Git a zatím nepřidává HTTP/UI ani publikační operaci.
 
 ## Lokální živé vlákno, zprávy a turn
 

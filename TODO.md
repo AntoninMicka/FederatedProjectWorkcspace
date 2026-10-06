@@ -66,17 +66,31 @@ Milník M4; jedna dávka, větev
   vymezené recovery hranice. Reuse katalog adaptuje `ContextBuilder`,
   `RoleRegistry`, adaptery, vzor `SummaryTasks` a Workspace; odmítá
   `ChatThreads` jako workflow autoritu i nový agent framework, frontu nebo DB.
-  Runtime role `opponent-v1`, schéma, journal a validace zůstávají implementací
-  části B.
+  Runtime role `opponent-v1`, schéma, journal a validaci následně implementovala
+  část B níže.
 
-- [ ] [planned] **F-M4-WORKFLOW-01-B — Durable dvoukrokový orchestrátor
-  (cílová úroveň: implemented).** Implementovat striktní node-local workflow
+- [x] [completed] **F-M4-WORKFLOW-01-B — Durable dvoukrokový orchestrátor
+  (implemented).** Implementovat striktní node-local workflow
   journal a aplikační službu: připravit creator Context Manifest a přesný
   request, potvrdit nejvýše jeden dispatch, validovat/uložit bounded výstup,
   zobrazit přesný opponent handoff a teprve po novém potvrzení připravit jeho
   samostatný manifest a run. Vynutit oddělené role/backendy, immutable hashe,
   privacy/RBAC revalidaci, žádný skrytý kontext, fallback nebo retry po
   `unknown`; restart musí navázat na doložené succeeded runy bez druhého volání.
+  Dokončeno 2026-10-06: `RoleWorkflows` drží v mode-0600 SQLite přesně dva
+  vlastněné sloty, kanonický request/preview/manifest/payload, approval digest,
+  stavy a bounded UTF-8 výstup se SHA-256. `RoleWorkflowService` připravuje a
+  samostatně potvrzuje creator a opponent krok přes explicitní Ollama
+  binding/model; před dispatch znovu autorizuje HEAD, RBAC, binding a přesné
+  bajty. Opponent dostává jen uložený creator output svázaný step ID, hashem a
+  privacy plus svůj explicitní výběr nula až 64 artefaktů. Backend journal
+  zůstává autoritou síťového účinku: restart převezme doložený úspěch bez
+  druhého volání a `unknown` nelze automaticky opakovat. Přidána runtime role
+  `opponent-v1`; projektový Git, HTTP/UI a publikace se v části B nemění.
+  Cílených 29 souvisejících testů prošlo mimo socketově omezený sandbox;
+  úplná sada `python3 -m unittest discover -s tests -v` prošla: 392 testů,
+  22 přeskočených volitelných native/integration smoke testů. Skutečný Ollama
+  dispatch nebyl v této části proveden a zůstává součástí akceptace D.
 
 - [ ] [planned] **F-M4-WORKFLOW-01-C — UI, opponent preview a publikace
   (cílová úroveň: implemented).** Desktop i oprávněný web zobrazí workflow a
