@@ -1010,10 +1010,11 @@ není vydáván za celý uzavřený.
 
 ## Milestone M4 – Multi-role workflow
 
-Aktivní dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitní
+Akceptovaná dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitní
 creator → opponent handoff přes hashovaný materializovaný výstup a samostatné
 Context Manifesty; nejde o implicitní sdílení celé konverzace ani o obecný
-pluginový router. Začlenění feature větve do `develop` zůstává otevřené.
+pluginový router. Evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-workflow-01--artifact-based-creatoropponent-handoff--2026-10-07);
+začlenění feature větve do `develop` zůstává otevřené.
 
 - [x] Creator — jeden explicitně potvrzený bounded krok přes Context Manifest.
 - [x] Opponent — nový run pouze nad hashovaným creator výstupem a explicitními zdroji.

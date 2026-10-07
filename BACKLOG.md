@@ -19,10 +19,30 @@ F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
-F-M3-MEDIA-01 je po PR #46 uzavřen ve WORK_LOG. Aktivní F-M4-WORKFLOW-01 drží
-[TODO](TODO.md).
+F-M3-MEDIA-01 je po PR #46 uzavřen ve WORK_LOG. F-M4-WORKFLOW-01 je lokálně
+PoC validated, jeho evidence je ve WORK_LOG a TODO čeká na doručení jediného
+PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
+
+Po merge F-M4-WORKFLOW-01 má nejvyšší prioritu jedna úzká feature skutečného
+importu nad uživatelem dodaným vzorkem. Před aktivací se vybere právě jeden
+doložený formát/zdroj a odpovídající existující ID `IMP-01`, `IMP-02` nebo
+`IMP-03` z kanonických položek níže; `IMP-04` může navázat až na konkrétní
+importér. Akceptace zahrne skutečný import, běžné použití dat ve workspace,
+zjištěné UX/schema mezery a zachování provenance, privacy, původních bajtů,
+idempotence a recovery. Nejde o univerzální import framework ani paralelní
+implementaci všech konektorů.
+
+- [ ] [planned] **UX-MOBILE-01 — Responzivní web pro telefon (cílová úroveň:
+  PoC validated).** Jako samostatnou feature po prvním reálném importu upravit
+  sdílené webové UI pro úzký dotykový viewport podle skutečně používaných toků,
+  nejprve import, seznam projektu, náhled artefaktu a potvrzovací kroky.
+  Akceptace: žádný horizontální overflow hlavního obsahu, ovladatelné
+  taby/formuláře/dialogy a dotykové cíle, čitelné dlouhé názvy a chyby,
+  zachovaná klávesnicová přístupnost a skutečný smoke na telefonu nebo
+  odpovídajícím WebEngine/browser viewportu. Nejde o nativní mobilní aplikaci
+  ani změnu backendových autorizačních hranic.
 
 - [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout, přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav; zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez ztráty zadání, výběru kontextu nebo již připraveného externího preview. Automaticky neopakovat běh s neznámým výsledkem ani neprovádět skrytý fallback. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď, chybný JSON, pád před/po durable přechodech, souběh a oddělení chyby lokálního routeru od chyby externího providera.
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
