@@ -20,6 +20,7 @@ from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.media_service import MediaService
+from spikes.role_workflow_service import RoleWorkflowService
 from spikes.publication_cms import PublicationCms
 
 
@@ -128,6 +129,8 @@ def main():
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir)
+        server.role_workflow_service = RoleWorkflowService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
@@ -448,6 +451,19 @@ def main():
                     mode.value='orchestration';mode.dispatchEvent(new Event('change',{bubbles:true}));
                     if(!adapter.disabled || artifacts.hidden)return null;
                     window.chatModesChecked=true;
+                  }
+                  if(!window.workflowPanelChecked){
+                    const workflowTab=document.querySelector('#workflow-tab');workflowTab.click();
+                    const workflowPanel=document.querySelector('#workflow-panel');
+                    if(workflowPanel.hidden || workflowTab.getAttribute('aria-selected')!=='true' ||
+                       !document.querySelector('#workflow-purpose') ||
+                       !document.querySelector('#workflow-creator-artifacts') ||
+                       !document.querySelector('#workflow-opponent-artifacts') ||
+                       !document.querySelector('#workflow-creator-preview').hidden ||
+                       !document.querySelector('#workflow-opponent-preview').hidden ||
+                       !document.querySelector('#workflow-publish').hidden)return null;
+                    window.workflowPanelChecked=true;chatTab.click();
+                    if(document.querySelector('#chat-panel').hidden)return null;
                   }
                   if(!window.imagePanelChecked){
                     const imageTab=document.querySelector('#image-tab');imageTab.click();

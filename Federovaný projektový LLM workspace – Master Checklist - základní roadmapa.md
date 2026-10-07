@@ -774,6 +774,11 @@ nenahrazují.
 - [ ] Projekt nesmí působit primárně jako „chat s AI“.
 - [ ] Chat je pouze jeden z možných pohledů.
 - [ ] Orchestrator chat je volitelný; bez dostupného/povoleného LLM musí stejné základní projektové operace zůstat dostupné deterministickým UI/workflow.
+- [ ] Sdílené webové UI přizpůsobit úzkému dotykovému viewportu telefonu;
+  prioritně ověřit na skutečně používaném importu, seznamu projektu, náhledu
+  artefaktu a potvrzovacích tocích. Zachovat stejné serverové RBAC/privacy
+  hranice, klávesnicovou přístupnost a bezpečné textové vykreslení jako na
+  desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -968,8 +973,8 @@ navazující akceptaci PoC validovaný: externí brainstorming používá přím
 dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
 OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
 capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
-F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů; dávka čeká na
-PR do `develop`. Webové hledání a obecný workflow zůstávají samostatné
+F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
+začleněná do `develop`. Webové hledání a obecný workflow zůstávají samostatné
 navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
@@ -990,7 +995,7 @@ není vydáván za celý uzavřený.
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
   provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
-  providerů jsou PoC validated; PR dosud není vytvořen ani sloučen.
+  providerů jsou PoC validated; PR #46 je sloučený do `develop`.
 - [ ] Provenance.
 - [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
@@ -1005,15 +1010,24 @@ není vydáván za celý uzavřený.
 
 ## Milestone M4 – Multi-role workflow
 
-- [ ] Creator.
-- [ ] Opponent.
+Akceptovaná dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitní
+creator → opponent handoff přes hashovaný materializovaný výstup a samostatné
+Context Manifesty; nejde o implicitní sdílení celé konverzace ani o obecný
+pluginový router. Evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-workflow-01--artifact-based-creatoropponent-handoff--2026-10-07);
+začlenění feature větve do `develop` zůstává otevřené.
+
+- [x] Creator — jeden explicitně potvrzený bounded krok přes Context Manifest.
+- [x] Opponent — nový run pouze nad hashovaným creator výstupem a explicitními zdroji.
 - [ ] Analyst.
 - [ ] Editor.
-- [ ] Workflow handoff.
-- [ ] Human approval.
-- [ ] Artifact-based context isolation.
+- [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
+- [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
+- [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
-**Gate M4:** lze provést nezávislou oponenturu bez sdílení původní konverzační historie.
+**Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
+sdílení původní konverzační historie; automatická regrese, skutečný
+Qt/WebEngine panel a same-node Ollama smoke prošly. Produkční/private-network
+akceptace a merge do `develop` zůstávají otevřené.
 
 ## Milestone M5 – Federation
 
@@ -1069,7 +1083,8 @@ není vydáván za celý uzavřený.
 - [ ] Vlastní model training.
 - [ ] Plnohodnotný replacement GitHub/GitLab.
 - [ ] Automatickou synchronizaci secrets.
-- [ ] Mobilní aplikaci.
+- [ ] Mobilní aplikaci. Toto odložení se netýká responzivní optimalizace
+  existujícího webového UI pro telefon dle sekce 12.
 
 ---
 

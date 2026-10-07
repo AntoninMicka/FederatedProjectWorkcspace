@@ -36,6 +36,30 @@ python3 -m spikes.desktop --smoke
 
 Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vlastního okna. Bez `M0_DESKTOP_TEST=1` se grafický test v celé sadě přeskočí; ostatní desktopové testy běží vždy. `demo` zůstává výchozím příkazem wrapperu.
 
+### Creator → opponent workflow (PoC)
+
+Po otevření projektu nabízí karta **Creator → opponent** řízený dvoukrokový
+workflow. Nejdřív v **Nastavení** uložte explicitní Ollama binding. Ve workflow
+vyberte podklady a model creatoru, zkontrolujte celý request a potvrďte dispatch.
+Teprve nad uloženým a hashovaným výsledkem lze připravit samostatný opponent
+handoff, případně s nově explicitně vybranými podklady a jiným modelem. Opponent
+nedostává původní chat ani skryté zdroje. Publikace creator nebo opponent
+výsledku do projektového Gitu je třetí samostatná akce.
+
+Workflow nepoužívá fallback ani automatický retry neurčitého providerového
+účinku. Stav `unknown` vyžaduje vědomě nový workflow s novými identitami.
+Opakovatelný živý smoke proti same-node Ollamě je opt-in:
+
+```sh
+WORKFLOW_OLLAMA_TEST=1 WORKFLOW_OLLAMA_MODEL=phi:latest \
+  python3 -m unittest \
+  tests.test_role_workflow_service.RoleWorkflowServiceTests.test_live_ollama_creator_opponent_handoff -v
+```
+
+Test vytváří pouze dočasný projekt a journal; zvolený model musí být v Ollamě
+již dostupný. Kontrakt, privacy a recovery hranice popisuje
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+
 ### Generování obrázků (PoC)
 
 Po otevření projektu nabízí karta **Obrázek** samostatný tok **připravit přesný

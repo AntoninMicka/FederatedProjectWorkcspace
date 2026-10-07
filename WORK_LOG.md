@@ -5,14 +5,103 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-WORKFLOW-01 — Artifact-based creator/opponent handoff — 2026-10-07
+
+Dávka na větvi `feature/f-m4-workflow-01-artifact-handoff` dodala první
+deterministicky řízený creator → opponent workflow. Dosažená úroveň je PoC
+validated a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
+závěrečném předání přesunuta z TODO; jediný PR do `develop` dosud nebyl vytvořen
+ani sloučen, takže stav feature akceptace není tvrzením o jejím doručení.
+Větev vznikla 2026-10-06 z `develop` `da449bc` po začlenění F-M3-MEDIA-01 v
+PR #46.
+
+Projektový Git je autoritou až pro samostatně potvrzenou publikaci. Workflow,
+step/run záznamy, přesné Context Manifesty, materializovaný mezivýstup a
+approval zůstávají node-local durable stav mimo projektový Git a nejsou
+obnovitelným indexem. Každý backendový run zachovává vlastní
+`dispatching`/`unknown` hranici: pád po odpovědi nesmí vyvolat druhý providerový
+účinek, handoff se váže na uložené bajty/hash a publikace obnovuje stejné
+Workspace operation ID. Změna HEAD, vstupů, policy, oprávnění, role, bindingu
+nebo mezivýstupu ruší starý souhlas a vyžaduje vědomě nový workflow. Reuse
+adaptoval `ContextBuilder`, `RoleRegistry`, backendové adaptery, durable vzor
+`SummaryTasks`, Workspace recovery, bezpečný Markdown preview a existující
+desktop/web RBAC; `ChatThreads`, nový agent framework, fronta, provider pool,
+druhý Git writer, projektový index nebo vektorová DB byly pro tuto dávku
+odmítnuty.
+
+- [x] [completed] **F-M4-WORKFLOW-01-A — Kontrakt workflow, isolation a reuse
+  (designed).** ADR 0008 vymezil právě jeden creator a nejvýše jeden opponent
+  krok, samostatná workflow/step/run/manifest ID a oddělená potvrzení dispatch,
+  handoff a publikace. Creator output je neměnný bounded UTF-8 Markdown se
+  SHA-256; opponent dostává jen jeho uložené bajty a nula až 64 explicitně
+  vybraných artefaktů. Privacy je nejpřísnější průnik skutečných vstupů a
+  execution boundary se nesmí rozšířit. Vlastní mode-0600 SQLite workflow
+  journal je oddělený od backendových run journalů a Workspace autority.
+  Kontrakt zahrnuje neměnný výstup do 1 MiB, přesnou instruction/revision,
+  formát, privacy/provenance a approval digest; opponent nedostává creator
+  prompt, chat ani celý creator kontext. `local-only` nesmí bez samostatné
+  oprávněné reklasifikace opustit lokální hranici důvěry.
+- [x] [completed] **F-M4-WORKFLOW-01-B — Durable dvoukrokový orchestrátor
+  (implemented).** `RoleWorkflows` a `RoleWorkflowService` drží kanonický
+  request, preview, manifest, payload, approval digest, bounded výstup a stavy
+  obou kroků. Před dispatch se znovu autorizují HEAD, RBAC, binding i přesné
+  bajty. Restart převezme doložený úspěch bez druhého providerového účinku;
+  `dispatching`/`unknown` se automaticky neopakují. Runtime role `opponent-v1`
+  nemění projektový Git ani oprávnění.
+  Cílených 29 souvisejících testů prošlo mimo socketově omezený sandbox;
+  tehdejší úplná sada prošla v rozsahu 392 testů s 22 přeskočenými volitelnými
+  native/integration smoke testy. Skutečný Ollama dispatch byl odložen do části
+  D, nikoli vydáván za ověřený už v části B.
+- [x] [completed] **F-M4-WORKFLOW-01-C — UI, opponent preview a publikace
+  (implemented).** Desktop a oprávněný web zobrazují oba kroky, přesné requesty,
+  explicitní zdroje, role, binding/model, privacy a textově vykreslené
+  nedůvěryhodné výsledky. Creator dispatch, opponent handoff/dispatch a
+  publikace mají samostatná potvrzení. Web váže actora na projektové write RBAC,
+  odmítá `local-only` a nemůže podstrčit endpoint či pin. Publikace přes
+  Workspace je idempotentní a zapisuje workflow provenance bez promptu,
+  mezivýstupu, endpointu či TLS pinu.
+  Oba targety musí být uložený node-local Ollama binding nebo jeho
+  deterministická per-run model revision. Workflow journal fixuje publish
+  request/receipt a schéma 1 migruje na 2 v jediné SQLite transakci. Cílených
+  33 workflow/UI/web testů prošlo se třemi volitelnými native skipy,
+  JavaScript prošel `node --check` a tehdejší úplná sada prošla v rozsahu 396
+  testů s 22 volitelnými skipy. Skutečné Qt/WebEngine a živý provider zůstaly
+  do části D výslovně neověřené.
+- [x] [completed] **F-M4-WORKFLOW-01-D — Regrese, dokumentace a akceptace
+  (PoC validated).** Regrese pokryla stejné i různé explicitní backendy/modely,
+  nulový implicitní creator kontext, hashe/provenance, privacy/RBAC, stale
+  HEAD/selection/policy/binding, malformed a oversized odpověď, známé selhání
+  versus `unknown`, vědomě nový workflow a recovery po `run-bound`,
+  `response-received`, `succeeded`, `publishing` i `workspace-complete`.
+  Opakovaná publikace zachovala jediný commit bez druhého providerového účinku.
+
+Cílená sada s oběma živými opt-in kontrolami prošla 38 testy bez přeskočení.
+Skutečný Qt/WebEngine smoke dvakrát spustil a zavřel desktop; další smoke
+vytvořil, po restartu otevřel projekt a ověřil workflow panel. Živý same-node
+Ollama test s `phi:latest` provedl oba kroky a doložil hashovaný materializovaný
+handoff bez původního účelu. Úplná výchozí sada
+`python3 -m unittest discover -s tests -v` prošla: 401 testů, 23 podmíněných
+native/package/live testů bylo přeskočeno. Private-network Ollama ani klikací
+end-to-end dispatch z Qt nebyly součástí této PoC akceptace. Závěrečný
+`git diff --check` a kontrola odkazů byly provedeny při předání dávky.
+
+Splněný kontrakt akceptace: každý krok má stabilní identitu, přesný request a
+durable recovery bez automatického opakování neurčitého síťového účinku;
+opponent dostává pouze hashovaný materializovaný handoff a explicitní podklady;
+projektový artefakt vzniká jen samostatnou potvrzenou publikací s
+workflow/step/run/manifest provenance a retry vrací stejný receipt/commit.
+Desktop a web zachovávají stejné serverové autorizační hranice a bezpečné
+textové vykreslení nedůvěryhodného výstupu. Obecný output/plugin router zůstává
+samostatnou plánovanou dávkou `F-M4-OUTPUT-ROUTER-01` v BACKLOG.
+
 ## F-M3-MEDIA-01 — Externí obrazové capability — 2026-10-05
 
 Dávka na větvi `feature/f-m3-media-01` dodala provider-neutral explicitní
 generování jednoho PNG přes samostatné OpenAI Images a ComfyUI adaptery,
 bezpečný preview/confirmation tok a oddělenou publikaci projektového artefaktu.
 Dosažená úroveň je PoC validated. Evidence byla podle výslovné dohody s
-uživatelem přesunuta z TODO ještě před PR; PR do `develop` dosud nebyl vytvořen
-ani sloučen a dávka se tím nepovažuje za začleněnou.
+uživatelem přesunuta z TODO ještě před PR. PR #46 byl 2026-10-05 sloučen do
+`develop` jako `da449bc`.
 
 - [x] [completed] **F-M3-MEDIA-01-A — Kontrakt, provider/licenční review a
   reuse (designed).** ADR 0008 vymezil `generate-image`, jeden inline PNG,
