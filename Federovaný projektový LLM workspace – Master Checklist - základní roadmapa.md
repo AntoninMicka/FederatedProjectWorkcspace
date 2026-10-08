@@ -324,17 +324,17 @@ Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM back
 
 ## 3C. Import z Google služeb, NotebookLM a chatbotů
 
-**Stav: `IMP-02` aktivováno 2026-10-08, ostatní konektory a automatické
-zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM.
-Aktivní dávka importuje jeden kompletní NotebookLM notebook jako nový Workspace
-projekt ze skutečného uživatelského exportu. Potvrzenou edicí je osobní Google
-AI plán přes Google One, nikoli Google Cloud Enterprise; dostupné části nejprve
-ověří podle skutečného Takeout vzorku. Navazuje na import artefaktů M1 a provenance.
-Operativní stav `IMP-02` drží TODO, ostatní `IMP-*` BACKLOG.
+**Stav: `IMP-02` PoC validated a uživatelsky přijato 2026-10-08; čeká na
+doručení jednoho PR do `develop`. Ostatní konektory a automatické zařazení
+zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
+importuje jeden kompletní notebook osobního Google AI plánu přes Google One ze
+skutečného Takeout exportu jako nový Workspace projekt; necílí na Google Cloud
+Enterprise. Operativní důkazy `IMP-02` drží WORK_LOG a stav doručení TODO,
+ostatní `IMP-*` BACKLOG.
 
 - [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
 - [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.
-- [ ] NotebookLM: importovat dostupné zdroje, uživatelské poznámky a generované výstupy jako odlišné artefakty; zachovat citace a vazby, pokud jsou exportem/API poskytovány. Nedostupné části uvést v přehledu importu. Rozlišit běžný NotebookLM a Enterprise; existence Enterprise API není důkaz dostupnosti stejné funkce běžnému účtu ani exportu celé historie chatu.
+- [x] NotebookLM: osobní Takeout import PoC validated pro dostupné zdroje, generované výstupy a chat jako odlišné artefakty; zachovává poskytované vazby a nedostupné části uvádí v přehledu. Skutečný vzorek neobsahoval notes ani původní binární bajty za HTML/JSON reprezentacemi, proto je import nevymýšlí. Přímý konektor a Enterprise zůstávají mimo ověřený rozsah; existence Enterprise API není důkaz stejné funkce pro osobní účet.
 - [ ] Chatboty: podporovat import uživatelem získaných exportů (např. ChatGPT nebo Gemini/Takeout) a ručně dodaného textu/Markdownu. Konkrétní formáty potvrdit na vzorcích; odlišit archiv konverzace od samostatné odpovědi. Zachovat role, pořadí, čas, větvení, přílohy a zdrojová ID, pokud je export obsahuje; chybějící hodnoty nevymýšlet.
 - [ ] Dostupnost čtení historie ověřovat samostatně pro každý produkt a edici. Generační API modelu není automaticky přístup k historii jeho webového chatbota. Při chybějícím oficiálním API nabídnout souborový import; nevyžadovat session cookies ani neoficiální interní endpointy.
 - [ ] Import s aktivním projektem nejprve nabídne náhled výběru, cílový projekt a privacy třídu. Oprávnění cloudového zdroje nepřenášet automaticky na projektové RBAC; OAuth credentials držet mimo Git, používat minimální potřebná oprávnění a zvládnout odvolání přístupu.
