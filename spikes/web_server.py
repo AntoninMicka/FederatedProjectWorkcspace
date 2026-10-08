@@ -54,11 +54,11 @@ WEB_HTML = WEB_HTML.replace(
 <p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto serveru. Import je dostupný pouze správci uzlu.</p>
 <label>Takeout TGZ na serveru <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
 <button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
-<label>Notebook <select id="notebooklm-selection" disabled></select></label>
+<label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
 <label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
 <button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
 <pre id="notebooklm-preview" hidden></pre>
-<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný notebook, cílovou cestu, privacy a uvedené limity.</label>
+<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
 <button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
 <p id="notebooklm-status" role="status"></p></details>
 <p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>''')
@@ -113,7 +113,7 @@ document.querySelector('#notebooklm-load').addEventListener('click',async event=
    option.textContent=`${item.title} · ${item.sources.length} zdrojů · ${item.artifacts.length} výstupů · ${item.chats.length} chatů`;
    option.disabled=!item.importable;return option;}));
   notebookSelection.disabled=false;document.querySelector('#notebooklm-plan').disabled=false;
-  notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} notebooků. Vyberte právě jeden.`;
+  notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} projektů NotebookLM. Vyberte právě jeden.`;
  }catch(error){notebookStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#notebooklm-plan').addEventListener('click',async()=>{
@@ -121,7 +121,7 @@ document.querySelector('#notebooklm-plan').addEventListener('click',async()=>{
   notebookPlan=await projectRequest('/v1/notebooklm/plan',{archive_path,
    selection_digest:notebookSelection.value,privacy:document.querySelector('#notebooklm-privacy').value,
    operation_id:crypto.randomUUID()},120000);
-  const summary={edice:'Personal NotebookLM / Google Takeout',notebook:notebookPlan.title,
+  const summary={edice:'Personal NotebookLM / Google Takeout',vybrany_projekt:notebookPlan.title,
    cil:notebookPlan.target_root,privacy:notebookPlan.privacy,polozky:notebookPlan.artifacts.length,
    existujici_shodne_importy:notebookPlan.existing_imports,
    varovani:notebookPlan.warnings,digest:notebookPlan.request_digest};

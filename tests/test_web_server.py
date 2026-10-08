@@ -102,6 +102,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
         self.assertIn('id="workflow-tab"', WEB_HTML)
+        self.assertIn('Projekt z archivu (NotebookLM notebook)', WEB_HTML)
+        self.assertIn('id="notebooklm-selection"', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 

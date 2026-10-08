@@ -228,6 +228,25 @@ class NotebookLMProjectImportTests(unittest.TestCase):
             self.service.confirm(changed_archive, self.plan)
         self.assertFalse(self.target.exists())
 
+    def test_plan_selects_one_project_from_archive_with_multiple_projects(self):
+        members = valid_members()
+        second_root = 'Takeout/NotebookLM/Second project'
+        second = {path.replace(ROOT, second_root): raw for path, raw in members.items()}
+        second[f'{second_root}/Demo notebook metadata.json'] = encoded({
+            'title': 'Second project', 'emoji': '📘', 'metadata': {
+                'createTime': STAMP, 'isShared': False, 'lastViewed': STAMP}})
+        members.update(second)
+        archive = self.archive(members, name='multiple-projects.tgz')
+        preview = self.service.preview(archive)
+        self.assertEqual(['Demo notebook', 'Second project'],
+                         sorted(item['title'] for item in preview['notebooks']))
+        selected = next(item for item in preview['notebooks'] if item['title'] == 'Second project')
+        plan = self.service.plan(
+            archive, selected['selection_digest'], self.base / 'second project target',
+            'project', str(uuid4()), imported_at='2026-10-08T04:00:00.000000Z')
+        self.assertEqual('Second project', plan['title'])
+        self.assertEqual(selected['selection_digest'], plan['selection_digest'])
+
     def test_crash_before_build_recovers_same_seed_without_archive(self):
         with self.assertRaises(RuntimeError):
             self.service.confirm(
@@ -274,6 +293,7 @@ class NotebookLMProjectImportTests(unittest.TestCase):
         dialog.archive.setText(str(self.archive_path)); dialog.root.setText(str(self.target))
         dialog.load_preview()
         self.assertTrue(dialog.notebook.isEnabled())
+        self.assertEqual(1, dialog.notebook.count())
         dialog.validate()
         self.assertIsNotNone(dialog.plan)
         self.assertEqual(QDialog.DialogCode.Rejected, dialog.result())

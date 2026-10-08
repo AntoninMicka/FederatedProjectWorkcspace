@@ -121,7 +121,7 @@ jediný PR do `develop`.
   `git diff --check`. Opt-in test importoval do izolovaného uzlu největší
   skutečný notebook (22 895 488 deklarovaných bajtů) jako 69 artefaktů / 138
   souborů v jediném commitu, znovu jej otevřel a ověřil stejný receipt při
-  retry. Úplná sada: 424 testů OK, 26 opt-in přeskočeno; samostatně prošly dva
+  retry. Úplná sada: 425 testů OK, 26 opt-in přeskočeno; samostatně prošly dva
   testy skutečného TGZ a offscreen Qt test povinného preview/plán/potvrzení.
   `git diff --check` prošel. Zbývá uživatelsky vybrat notebook a trvalou cílovou
   cestu v UI, restartovat aplikaci, prakticky otevřít podklady a provést celý

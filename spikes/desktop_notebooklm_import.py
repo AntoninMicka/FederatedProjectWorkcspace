@@ -25,7 +25,7 @@ class NotebookLMImportDialog(QDialog):
         self.privacy.addItem('Jen na tomto počítači', 'local-only')
         self.privacy.addItem('Veřejné', 'public')
         form.addRow('Google Takeout TGZ', self.archive)
-        form.addRow('Notebook', self.notebook)
+        form.addRow('Projekt z archivu (NotebookLM notebook)', self.notebook)
         form.addRow('Cílová složka projektu', self.root)
         form.addRow('Soukromí', self.privacy); layout.addLayout(form)
         choose = QPushButton('Vybrat TGZ…')
@@ -72,9 +72,9 @@ class NotebookLMImportDialog(QDialog):
             self.notebook.setEnabled(True); self.plan = None
             self.preview.setPlainText(json.dumps({
                 'edice': 'Personal NotebookLM / Google Takeout',
-                'notebooky': len(result['notebooks']),
+                'projekty_v_archivu': len(result['notebooks']),
                 'sha256_archivu': result['archive_sha256']}, ensure_ascii=False, indent=2))
-            self.error.setText('Vyberte právě jeden notebook a připravte plán.')
+            self.error.setText('Vyberte právě jeden projekt z archivu a připravte plán.')
         except Exception as exc:
             self.error.setText(str(exc)); self.notebook.setEnabled(False); self.plan = None
 
@@ -86,7 +86,7 @@ class NotebookLMImportDialog(QDialog):
         try:
             signature = self.signature()
             if not all(signature) or not Path(signature[2]).is_absolute():
-                raise ValueError('Vyberte archiv, notebook, absolutní cílovou cestu a privacy.')
+                raise ValueError('Vyberte archiv, projekt, absolutní cílovou cestu a privacy.')
             if self.plan is None or self.plan.get('_dialog_signature') != list(signature):
                 plan = self.service.plan(*signature[:2], signature[2], signature[3], str(uuid4()))
                 plan['_dialog_signature'] = list(signature)
