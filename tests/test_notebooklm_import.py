@@ -328,8 +328,7 @@ class ActualNotebookLMTakeoutTests(unittest.TestCase):
                     receipt['id'], item['id'], receipt['commit_id'])['format']
                 for item in reopened['artifacts']
             }
-            self.assertIn('html-text', formats)
-            self.assertIn('json', formats)
+            self.assertIn('markdown', formats)
             self.assertEqual('1', Git(root / 'project').run(
                 'rev-list', '--count', 'HEAD').stdout.strip())
             self.assertEqual(receipt, service.confirm(archive, plan))

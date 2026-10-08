@@ -518,7 +518,7 @@ def main():
                     if(['image','pdf'].includes(expected.preview.format) && !image)return null;
                     if(image && (!image.complete || !image.naturalWidth))return null;
                     if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
-                    if(['json','html-text'].includes(expected.preview.format) &&
+                    if(expected.preview.format==='json' &&
                        content.querySelector('pre')?.textContent!==expected.preview.text)return null;
                     if(!window.previewClearChecked){
                       window.previewClearChecked=true;window.previewStarted=false;

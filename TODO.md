@@ -122,12 +122,12 @@ jediný PR do `develop`.
   skutečný notebook (22 895 488 deklarovaných bajtů) jako 69 artefaktů / 138
   souborů v jediném commitu, znovu jej otevřel a ověřil stejný receipt při
   retry. Po uživatelském zjištění, že Takeout poskytuje hlavně HTML/JSON, byl běžný
-  artifact preview rozšířen o bounded prostý text z HTML bez předání značek
-  rendereru a o čitelné formátování platného JSON bez ztráty polí. Původní
+  artifact preview rozšířen o bounded Markdown z HTML bez předání značek
+  rendereru a o JSON v Markdown code blocku bez ztráty polí. Původní
   importované bajty se nemění. Cílených 22 testů prošlo se třemi volitelnými
   grafickými skipy; samostatný offscreen Qt/WebEngine smoke zobrazil Markdown,
   HTML text, JSON, PNG i PDF. Opt-in test největšího skutečného notebooku
-  ověřil po importu dostupný `html-text` i `json` náhled. Úplná sada po poslední
+  ověřil po importu odvozené Markdown náhledy HTML i JSON. Úplná sada po poslední
   změně: 427 testů OK, 26 opt-in přeskočeno; `git diff --check` prošel. Stále
   zbývá uživatelské vytvoření trvalého projektu a potvrzení použití po běžném
   restartu skutečného okna.

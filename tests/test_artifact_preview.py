@@ -104,30 +104,38 @@ class PreviewTests(unittest.TestCase):
         html = (b'<!doctype html><html><head><title>Secret title</title>'
                 b'<style>body{display:none}</style></head><body><h1>Heading &amp; context</h1>'
                 b'<p>First <strong>paragraph</strong>.</p><script>alert(1)</script>'
+                b'<p><a href="https://example.invalid/source">Source</a> '
+                b'<a href="javascript:evil()">Unsafe label</a></p>'
                 b'<iframe src="https://evil.invalid">fallback</iframe><ul><li>One</li><li>Two</li></ul>'
                 b'</body></html>')
         html_result = preview(dict(raw=html, path='source.html', sidecar=True, metadata={}))
-        self.assertEqual(html_result['format'], 'html-text')
-        self.assertEqual(html_result['text'], 'Heading & context\nFirst paragraph.\nOne\nTwo')
+        self.assertEqual(html_result['format'], 'markdown')
+        self.assertEqual(html_result['derived_from'], 'html')
+        self.assertEqual(
+            html_result['text'],
+            '# Heading & context\nFirst paragraph.\n'
+            '[Source](https://example.invalid/source) Unsafe label\n- One\n- Two')
         self.assertNotIn('alert', html_result['text'])
         self.assertNotIn('evil.invalid', html_result['text'])
         self.assertIn('nespouštějí', html_result['message'])
 
         json_result = preview(dict(raw=b'{"nested":{"value":"text"},"items":[1,2]}',
                                    path='source.json', sidecar=True, metadata={}))
-        self.assertEqual(json_result['format'], 'json')
-        self.assertEqual(json.loads(json_result['text']),
+        self.assertEqual(json_result['format'], 'markdown')
+        self.assertEqual(json_result['derived_from'], 'json')
+        json_text = json_result['text'].split('\n', 1)[1].rsplit('\n', 1)[0]
+        self.assertEqual(json.loads(json_text),
                          {'nested': {'value': 'text'}, 'items': [1, 2]})
-        self.assertIn('\n  "nested"', json_result['text'])
+        self.assertIn('\n  "nested"', json_text)
         self.assertIn('přeformátovaný', json_result['message'])
 
         invalid = preview(dict(raw=b'{not json}', path='source.json', sidecar=True, metadata={}))
-        self.assertEqual(invalid['format'], 'json')
-        self.assertEqual(invalid['text'], '{not json}')
+        self.assertEqual(invalid['format'], 'markdown')
+        self.assertIn('{not json}', invalid['text'])
         self.assertIn('není jednoznačný platný JSON', invalid['message'])
         duplicate = preview(dict(raw=b'{"key":1,"key":2}', path='source.json',
                                  sidecar=True, metadata={}))
-        self.assertEqual(duplicate['text'], '{"key":1,"key":2}')
+        self.assertIn('{"key":1,"key":2}', duplicate['text'])
         self.assertIn('původní text', duplicate['message'])
 
     def test_html_preview_is_bounded_and_rejects_invalid_utf8(self):

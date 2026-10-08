@@ -202,7 +202,8 @@ validovaný počáteční snapshot, uloží jej do vlastního durable stagingu a
 jediný počáteční commit; nevzniká druhý Git writer ani importní databáze. Nový
 stdlib parser je omezený na doložený osobní NotebookLM Google Takeout formát a
 HTML ukládá jako data; společný artifact preview z něj stdlib parserem odvozuje
-jen bounded prostý text a klient jej zobrazuje přes `textContent`. Enterprise
+jen bounded Markdown a klient jej vykresluje vlastními DOM uzly přes
+`textContent`. Enterprise
 API, session cookies, scraping,
 spojování podle názvu, automatické rozbalování nested archivů a obecný ETL
 framework byly odmítnuty. Soukromá inventura neposkytla komponentu se stejným
