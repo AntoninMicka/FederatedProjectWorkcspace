@@ -36,6 +36,40 @@ python3 -m spikes.desktop --smoke
 
 Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vlastního okna. Bez `M0_DESKTOP_TEST=1` se grafický test v celé sadě přeskočí; ostatní desktopové testy běží vždy. `demo` zůstává výchozím příkazem wrapperu.
 
+### Import celého projektu z osobního NotebookLM
+
+Google Takeout TGZ lze v desktopu otevřít přes **Importovat NotebookLM…**.
+Nejdřív se zobrazí bounded read-only přehled všech projektů (v Takeoutu jsou
+uložené jako jednotlivé NotebookLM notebooky); potom se vybere právě jeden
+projekt, nová cílová složka a privacy. Projekt vznikne až po
+kontrole přesného plánu a explicitním potvrzení. Webová varianta je dostupná
+jen správci uzlu a přijímá absolutní cestu k TGZ, který už je bezpečně uložený
+na serveru; archiv se neposílá jako velký JSON přes prohlížeč.
+
+Import zachová přesné Takeout bajty zdrojů, výstupů, chatu a discovered sources
+v oddělených neměnných artefaktech. Původní metadata jsou vratně uložena v
+base64 obálce a odvozený soupis je jasně označen jako snapshot. Takeout v
+ověřeném osobním formátu poskytuje HTML/JSON reprezentace zdrojů, nikoli původní
+PDF, obrázky nebo Google dokumenty; samostatné notes ve vzorku chyběly. HTML se
+nikdy nespouští. Artifact source UUID nelze bezpečně propojit, protože zdroje v
+exportu nemají odpovídající stabilní ID. Kontrakt, limity, duplicate pravidla a
+recovery popisuje [ADR 0029](docs/adr/0029-notebooklm-takeout-project-import.md).
+
+Po otevření importovaného projektu lze jednotlivé podklady vybrat v levém
+seznamu. JSON se v odvozeném Markdown náhledu pouze přeformátuje do code blocku,
+bez ztráty polí. Z HTML server bounded způsobem odvodí Markdown s nadpisy,
+odstavci, seznamy a bezpečnými textovými odkazy. Původní HTML se nikdy nevloží
+do stránky ani nespustí a Markdown renderer používá pouze `textContent`.
+Skripty, styly, vložené rámce a další neviditelný obsah se do projekce nepřenášejí;
+původní bajty zůstávají beze změny autoritou uloženou v projektu.
+
+Soukromý regresní vzorek lze ověřit bez přidání archivu do Gitu:
+
+```sh
+NOTEBOOKLM_TAKEOUT_SAMPLE=/cesta/takeout.tgz \
+  python3 -m unittest tests.test_notebooklm_import.ActualNotebookLMTakeoutTests -v
+```
+
 ### Creator → opponent workflow (PoC)
 
 Po otevření projektu nabízí karta **Creator → opponent** řízený dvoukrokový

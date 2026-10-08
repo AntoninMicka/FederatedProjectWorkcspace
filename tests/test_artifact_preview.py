@@ -100,6 +100,53 @@ class PreviewTests(unittest.TestCase):
             result = preview(dict(raw=pdf_bytes(), path='x.pdf', sidecar=True, metadata={}))
             self.assertEqual(result['format'], 'unsupported')
 
+    def test_html_is_visible_text_only_and_json_is_pretty_printed(self):
+        html = (b'<!doctype html><html><head><title>Secret title</title>'
+                b'<style>body{display:none}</style></head><body><h1>Heading &amp; context</h1>'
+                b'<p>First <strong>paragraph</strong>.</p><script>alert(1)</script>'
+                b'<p><a href="https://example.invalid/source">Source</a> '
+                b'<a href="javascript:evil()">Unsafe label</a></p>'
+                b'<iframe src="https://evil.invalid">fallback</iframe><ul><li>One</li><li>Two</li></ul>'
+                b'</body></html>')
+        html_result = preview(dict(raw=html, path='source.html', sidecar=True, metadata={}))
+        self.assertEqual(html_result['format'], 'markdown')
+        self.assertEqual(html_result['derived_from'], 'html')
+        self.assertEqual(
+            html_result['text'],
+            '# Heading & context\nFirst paragraph.\n'
+            '[Source](https://example.invalid/source) Unsafe label\n- One\n- Two')
+        self.assertNotIn('alert', html_result['text'])
+        self.assertNotIn('evil.invalid', html_result['text'])
+        self.assertIn('nespouštějí', html_result['message'])
+
+        json_result = preview(dict(raw=b'{"nested":{"value":"text"},"items":[1,2]}',
+                                   path='source.json', sidecar=True, metadata={}))
+        self.assertEqual(json_result['format'], 'markdown')
+        self.assertEqual(json_result['derived_from'], 'json')
+        json_text = json_result['text'].split('\n', 1)[1].rsplit('\n', 1)[0]
+        self.assertEqual(json.loads(json_text),
+                         {'nested': {'value': 'text'}, 'items': [1, 2]})
+        self.assertIn('\n  "nested"', json_text)
+        self.assertIn('přeformátovaný', json_result['message'])
+
+        invalid = preview(dict(raw=b'{not json}', path='source.json', sidecar=True, metadata={}))
+        self.assertEqual(invalid['format'], 'markdown')
+        self.assertIn('{not json}', invalid['text'])
+        self.assertIn('není jednoznačný platný JSON', invalid['message'])
+        duplicate = preview(dict(raw=b'{"key":1,"key":2}', path='source.json',
+                                 sidecar=True, metadata={}))
+        self.assertIn('{"key":1,"key":2}', duplicate['text'])
+        self.assertIn('původní text', duplicate['message'])
+
+    def test_html_preview_is_bounded_and_rejects_invalid_utf8(self):
+        many_lines = ''.join(f'<p>{number}</p>' for number in range(2001)).encode()
+        result = preview(dict(raw=many_lines, path='source.html', sidecar=True, metadata={}))
+        self.assertEqual(result['format'], 'unsupported')
+        self.assertIn('2000 řádků', result['message'])
+        invalid = preview(dict(raw=b'<p>\xff</p>', path='source.html', sidecar=True, metadata={}))
+        self.assertEqual(invalid['format'], 'unsupported')
+        self.assertIn('UTF-8', invalid['message'])
+
     def test_authenticated_api_and_no_filesystem_parameters(self):
         id_ = self.add('note.md', b'# Test')
         driver = test_local_api.LocalAPITests()
@@ -113,7 +160,10 @@ class PreviewTests(unittest.TestCase):
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real WebEngine')
     def test_real_main_panel_markdown_image_pdf(self):
-        for name, raw in [('note.md', b'# Heading\n<script>evil()</script>'), ('image.png', PNG), ('source.pdf', pdf_bytes())]:
+        for name, raw in [('note.md', b'# Heading\n<script>evil()</script>'),
+                          ('source.html', b'<h1>Safe heading</h1><script>evil()</script>'),
+                          ('source.json', b'{"visible":true}'),
+                          ('image.png', PNG), ('source.pdf', pdf_bytes())]:
             id_ = self.add(name, raw, v2=name == 'source.pdf')
             # One displayed artifact per smoke; preserve the same project identity.
             for folder in (self.root / 'artifacts').iterdir():

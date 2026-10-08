@@ -23,6 +23,7 @@ from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
+from spikes.notebooklm_project_import import NotebookLMProjectImport
 from spikes.role_workflow_service import RoleWorkflowService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
@@ -47,6 +48,20 @@ WEB_HTML = WEB_HTML.replace(
     '<button id="create-project-btn">Vytvořit projekt</button></div>'
     '<p id="create-project-status" role="status"> </p></form>'
     '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>')
+WEB_HTML = WEB_HTML.replace(
+    '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>',
+    '''<details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
+<p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto serveru. Import je dostupný pouze správci uzlu.</p>
+<label>Takeout TGZ na serveru <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
+<button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
+<label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
+<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
+<pre id="notebooklm-preview" hidden></pre>
+<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
+<button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
+<p id="notebooklm-status" role="status"></p></details>
+<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>''')
 WEB_HTML = WEB_HTML.replace(
     '<button id="back-projects" class="back-button">',
     '''<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
@@ -75,7 +90,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  projectCreateForm.hidden=!admin;notebookImport.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.querySelector('#backend-metrics').hidden=!admin;
@@ -85,6 +100,45 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
 });
 const projectCreateForm=document.querySelector('#create-project');
 const createStatus=document.querySelector('#create-project-status');
+const notebookImport=document.querySelector('#notebooklm-import');
+const notebookStatus=document.querySelector('#notebooklm-status');
+const notebookSelection=document.querySelector('#notebooklm-selection');
+let notebookBundle=null,notebookPlan=null;
+document.querySelector('#notebooklm-load').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;notebookStatus.textContent='Kontroluji archiv…';notebookPlan=null;
+ try{const archive_path=document.querySelector('#notebooklm-archive').value.trim();
+  notebookBundle=await projectRequest('/v1/notebooklm/preview',{archive_path},120000);
+  notebookSelection.replaceChildren(...notebookBundle.notebooks.map(item=>{
+   const option=document.createElement('option');option.value=item.selection_digest;
+   option.textContent=`${item.title} · ${item.sources.length} zdrojů · ${item.artifacts.length} výstupů · ${item.chats.length} chatů`;
+   option.disabled=!item.importable;return option;}));
+  notebookSelection.disabled=false;document.querySelector('#notebooklm-plan').disabled=false;
+  notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} projektů NotebookLM. Vyberte právě jeden.`;
+ }catch(error){notebookStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#notebooklm-plan').addEventListener('click',async()=>{
+ try{notebookStatus.textContent='Připravuji plán…';const archive_path=document.querySelector('#notebooklm-archive').value.trim();
+  notebookPlan=await projectRequest('/v1/notebooklm/plan',{archive_path,
+   selection_digest:notebookSelection.value,privacy:document.querySelector('#notebooklm-privacy').value,
+   operation_id:crypto.randomUUID()},120000);
+  const summary={edice:'Personal NotebookLM / Google Takeout',vybrany_projekt:notebookPlan.title,
+   cil:notebookPlan.target_root,privacy:notebookPlan.privacy,polozky:notebookPlan.artifacts.length,
+   existujici_shodne_importy:notebookPlan.existing_imports,
+   varovani:notebookPlan.warnings,digest:notebookPlan.request_digest};
+  const output=document.querySelector('#notebooklm-preview');output.textContent=JSON.stringify(summary,null,2);output.hidden=false;
+  document.querySelector('#notebooklm-confirm-row').hidden=false;document.querySelector('#notebooklm-confirm').checked=false;
+  document.querySelector('#notebooklm-run').disabled=true;notebookStatus.textContent='Plán je připraven k potvrzení.';
+ }catch(error){notebookStatus.textContent=error.message;}
+});
+document.querySelector('#notebooklm-confirm').addEventListener('change',event=>{
+ document.querySelector('#notebooklm-run').disabled=!(event.currentTarget.checked&&notebookPlan);});
+document.querySelector('#notebooklm-run').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;notebookStatus.textContent='Importuji projekt…';
+ try{const archive_path=document.querySelector('#notebooklm-archive').value.trim();
+  const result=await projectRequest('/v1/notebooklm/confirm',{archive_path,plan:notebookPlan},180000);
+  notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';notebookPlan=null;await loadProjects(result.id);
+ }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
 let creationAttempt=null;
 projectCreateForm.addEventListener('submit',async(event)=>{
  event.preventDefault();
@@ -132,6 +186,7 @@ WEB_CSS = CSS + '''body:not(.authenticated)>aside,body:not(.authenticated)>main{
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}#create-main-todo,#todo-help{display:none!important}
 .project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}#web-source-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#web-source-import label{display:block;margin:9px 0}#web-source-import input,#web-source-import textarea,#web-source-import select{max-width:100%;padding:8px}#web-source-import textarea{width:100%}
+#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#notebooklm-import label{display:block;margin:9px 0}#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}#notebooklm-archive{width:min(680px,100%)}#notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 @media(max-width:600px){.project-create-row{flex-direction:column}#new-project-title{width:100%;box-sizing:border-box}}'''
 ASSETS = {'/': ('text/html; charset=utf-8', WEB_HTML),
           '/app.css': ('text/css; charset=utf-8', WEB_CSS),
@@ -158,7 +213,9 @@ class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
-                                               '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh'}
+                                               '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
+                                               '/v1/notebooklm/preview', '/v1/notebooklm/plan',
+                                               '/v1/notebooklm/confirm'}
 
     def do_POST(self):
         from spikes.federation_probe import PATH, reply_probe
@@ -248,6 +305,33 @@ class WebHandler(DesktopHandler):
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Změnu nelze uložit. Ověřte údaje a dostupnost úložiště uzlu.'})
+        if self.path.startswith('/v1/notebooklm/'):
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            try:
+                if self.path == '/v1/notebooklm/preview' and isinstance(request, dict) \
+                        and set(request) == {'archive_path'}:
+                    return self.reply(200, self.server.notebooklm_import.preview(request['archive_path']))
+                if self.path == '/v1/notebooklm/plan' and isinstance(request, dict) \
+                        and set(request) == {'archive_path', 'selection_digest', 'privacy', 'operation_id'}:
+                    if request['privacy'] not in {'public', 'project', 'confidential'}:
+                        return self.reply(422, {'error': 'Webový import nepovoluje local-only obsah.'})
+                    root = self._default_projects_root(); root.mkdir(mode=0o700, exist_ok=True)
+                    target = root / f'projekt-{request["operation_id"]}'
+                    result = self.server.notebooklm_import.plan(
+                        request['archive_path'], request['selection_digest'], target,
+                        request['privacy'], request['operation_id'])
+                    return self.reply(200, result)
+                if self.path == '/v1/notebooklm/confirm' and isinstance(request, dict) \
+                        and set(request) == {'archive_path', 'plan'}:
+                    result = self.server.notebooklm_import.confirm(
+                        request['archive_path'], request['plan'],
+                        author_id=self.actor.get('id') or ProjectCreation(self.server.node).author_id())
+                    self.server.projects = Projects(self.server.node, network=True)
+                    return self.reply(200, result)
+                return self.send_error(400)
+            except (ValueError, CreationConflict, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Import NotebookLM nelze provést. Obnovte náhled a ověřte cestu, obsah a cílové úložiště.'})
         if self.path.startswith('/v1/backend-metrics/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -409,6 +493,7 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.role_workflow_service = RoleWorkflowService(node, server.projects,
         state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
+    server.notebooklm_import = NotebookLMProjectImport(node)
     server.administration = Administration(node)
     return server
 

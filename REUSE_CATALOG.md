@@ -195,6 +195,21 @@ kód ani názvy. Agent framework, message queue, provider pool, vektorová DB a
 druhý Git writer se pro v1 odmítají. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#artifact-based-creatoropponent-handoff--f-m4-workflow-01-a).
 
+IMP-02 **reuse/adaptuje** `ProjectCreation`, validaci snapshotu,
+Workspace/Journal/Index, standardní immutable source/snapshot artefakty a
+existující desktop/web autorizační hranice. `ProjectCreation` přijímá předem
+validovaný počáteční snapshot, uloží jej do vlastního durable stagingu a vytvoří
+jediný počáteční commit; nevzniká druhý Git writer ani importní databáze. Nový
+stdlib parser je omezený na doložený osobní NotebookLM Google Takeout formát a
+HTML ukládá jako data; společný artifact preview z něj stdlib parserem odvozuje
+jen bounded Markdown a klient jej vykresluje vlastními DOM uzly přes
+`textContent`. Enterprise
+API, session cookies, scraping,
+spojování podle názvu, automatické rozbalování nested archivů a obecný ETL
+framework byly odmítnuty. Soukromá inventura neposkytla komponentu se stejným
+formátem, provenance a recovery kontraktem; nebyl z ní převzat kód ani názvy.
+Rozhodnutí: [ADR 0029](docs/adr/0029-notebooklm-takeout-project-import.md).
+
 MOD-01 **reuse/adaptuje** bounded striktní JSON parser, fail-closed validaci a
 verzované capability hranice tohoto repozitáře. Pro read-only load-time kontrolu
 používá Python stdlib HTTP bez nové runtime závislosti; redirect a nelokální

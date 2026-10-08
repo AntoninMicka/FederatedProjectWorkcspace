@@ -75,6 +75,8 @@ def main():
         from spikes.desktop_network import NetworkDialog
         from spikes.desktop_transfer import TransferDialog
         from spikes.desktop_import import ImportDialog
+        from spikes.desktop_notebooklm_import import NotebookLMImportDialog
+        from spikes.notebooklm_project_import import NotebookLMProjectImport
         from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
@@ -180,6 +182,20 @@ def main():
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         project_toolbar = controller.toolbar
+        notebooklm_button = QPushButton('Importovat NotebookLM…')
+        notebooklm_service = NotebookLMProjectImport(node_path)
+        def import_notebooklm():
+            if controller.busy:
+                return
+            dialog = NotebookLMImportDialog(window, notebooklm_service,
+                                            controller.service.default_projects_root())
+            accepted = dialog.exec() == dialog.DialogCode.Accepted
+            archive, plan = dialog.archive.text().strip(), dialog.plan
+            dialog.deleteLater()
+            if accepted:
+                controller.start(lambda: notebooklm_service.confirm(archive, plan))
+        notebooklm_button.clicked.connect(import_notebooklm)
+        project_toolbar.addWidget(notebooklm_button)
         register_button = QPushButton('Načíst projekt z umístění…')
         def register_project():
             if controller.busy:
@@ -502,6 +518,8 @@ def main():
                     if(['image','pdf'].includes(expected.preview.format) && !image)return null;
                     if(image && (!image.complete || !image.naturalWidth))return null;
                     if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
+                    if(expected.preview.format==='json' &&
+                       content.querySelector('pre')?.textContent!==expected.preview.text)return null;
                     if(!window.previewClearChecked){
                       window.previewClearChecked=true;window.previewStarted=false;
                       clearProject();

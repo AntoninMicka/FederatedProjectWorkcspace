@@ -17,6 +17,17 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_notebooklm_desktop_uses_native_two_step_dialog(self):
+        desktop = Path('spikes/desktop.py').read_text()
+        dialog = Path('spikes/desktop_notebooklm_import.py').read_text()
+        self.assertIn("QPushButton('Importovat NotebookLM…')", desktop)
+        self.assertIn('NotebookLMImportDialog', desktop)
+        self.assertIn('service.preview', dialog)
+        self.assertIn('service.plan', dialog)
+        self.assertIn('service.confirm', desktop)
+        self.assertIn('Potvrzuji přesný notebook', dialog)
+        self.assertIn('setReadOnly(True)', dialog)
+
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
             def external_send_stream(self, request, on_delta):
@@ -231,6 +242,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("selection={kind:'messages'", JS)
         self.assertNotIn('extractionPreviewElement.innerHTML', JS)
         self.assertIn("result.format==='json'", JS)
+        self.assertIn("document.createElement('ul')", JS)
 
     def test_metadata_ui_uses_safe_diff_and_explicit_field_confirmation(self):
         from spikes.desktop_ui import HTML

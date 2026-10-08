@@ -5,13 +5,82 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## IMP-02 — Import kompletního projektu z NotebookLM — 2026-10-08
+
+Dávka na větvi `feature/imp-02-notebooklm-project-import`, založené z
+`develop` `8854d69`, dodala import jednoho kompletního osobního NotebookLM
+notebooku ze skutečného Google Takeout TGZ jako nového Workspace projektu.
+Dosažená úroveň je PoC validated a uživatel 2026-10-08 potvrdil všechny
+zbývající kroky fyzické akceptace: vytvoření trvalého projektu přes běžné UI,
+jeho otevření po běžném restartu a použitelnost zdrojů, výstupů, vztahů a
+náhledů. Evidence byla při závěrečném předání přesunuta z TODO. Jediný PR do
+`develop` zatím nebyl vytvořen; push ani merge nebyly provedeny.
+
+„Kompletní“ znamená vše doložené skutečným exportem osobní Google AI edice,
+nikoli domyšlený obsah nebo Enterprise API. Přijatý bundle je před potvrzením
+jen bounded node-local vstup. Potvrzení váže přesný hash, formát, verzi
+importéru, cílovou cestu, privacy a kanonický plán. `ProjectCreation` durable
+stageuje validovaný seed, publikuje jediný počáteční commit a po pádu dokončí
+stav, index a registraci ze stage bez opětovné potřeby Takeoutu. Retry stejné
+operace vrací tentýž receipt, projekt UUID a commit; cizí cesta, změněný plán
+nebo bundle a konflikt identity se odmítnou. Reuse adaptoval `ProjectCreation`,
+`Sources`, provenance v2, source immutability, Workspace/Journal/Index,
+bezpečný preview a desktop/web RBAC. Nevznikl druhý Git writer, index ani DB.
+
+- [x] [completed] **IMP-02-A — Edice, skutečný vzorek, kontrakt a reuse
+  (designed).** Potvrzena byla osobní edice přes Google One a skutečný Takeout
+  s 243 bezpečnými členy a šesti notebooky. ADR 0029 vymezuje
+  source/artifact/chat mapping, manifest, limity, privacy, duplicate pravidla a
+  recovery. Vzorek poskytuje zejména HTML/JSON reprezentace, nikoli původní
+  binární soubory; chybějící notes a nerozřešitelné artifact source UUID se
+  hlásí. Enterprise API, scraping, session cookies, vykonání HTML a spojování
+  pouze podle názvu jsou mimo rozsah.
+- [x] [completed] **IMP-02-B — Bounded parser a přesný preview
+  (implemented).** Fail-closed TGZ parser zachovává bundle a původní soubory,
+  nic nevykonává a před potvrzením rozlišuje importované, nepodporované a
+  chybějící části. Testy pokryly traversal, odkazy, case-fold kolizi, nested
+  archiv, neznámá pole/kategorii, orphan obsah, script v chatu, poškozený gzip,
+  limity a změnu archivu/digestu. Skutečný vzorek prošel pro všech šest
+  notebooků: 113 sources, tři výstupy, jeden chat a jedna sada discovered
+  sources.
+- [x] [completed] **IMP-02-C — Obnovitelné vytvoření celého projektu a UI
+  (implemented).** Desktop nabízí nativní dvoukrokový dialog; webový tok je
+  node-admin only, používá server-local TGZ a nepovoluje `local-only`. Přesné
+  exportní bajty jsou immutable sources, odvozený report a metadata jsou
+  oddělené snapshots. Testy všech creation hranic, restartu, retry a kolizí
+  zachovaly jediný projekt a commit; nový operation ID před potvrzením ukáže
+  shodné existující importy.
+- [x] [completed] **IMP-02-D — Reálný workflow, regrese a dokumentace
+  (PoC validated).** Opt-in test importoval největší skutečný notebook s
+  22 895 488 deklarovanými bajty jako 69 artefaktů / 138 souborů v jediném
+  commitu, znovu jej otevřel a ověřil shodný receipt při retry. HTML se
+  převádí do bounded Markdownu bez předání značek rendereru; JSON se zobrazuje
+  v Markdown code blocku bez ztráty polí. Původní bajty zůstávají beze změny.
+  Uživatelská akceptace následně potvrdila trvalý UI projekt i jeho běžné
+  použití po restartu.
+
+Ověření před fyzickou akceptací: cílených 22 testů prošlo se třemi volitelnými
+grafickými skipy; samostatný offscreen Qt/WebEngine smoke zobrazil Markdown,
+HTML text, JSON, PNG i PDF. Opt-in test skutečného notebooku ověřil také
+odvozené Markdown náhledy HTML a JSON. Úplná sada
+`python3 -m unittest discover -s tests -v` prošla: **427 testů OK, 26 opt-in
+testů přeskočeno**. Tehdejší `git diff --check` prošel. Při závěrečném předání
+se měnila pouze dokumentace, proto se aplikační sada neopakovala.
+
+Omezení: osobní Takeout neposkytl notes ani původní binární bajty za HTML/JSON
+reprezentacemi, proto je import nevymýšlí. Přímý NotebookLM konektor,
+Enterprise API, průběžná synchronizace, zápis zpět a automatické odesílání
+importovaných dat LLM nejsou součástí dávky. Navazující požadavek `IMP-01` na
+explicitní jednorázový výběr podkladů z Google Drive byl sloučen do existující
+položky BACKLOG a zůstává samostatnou budoucí feature.
+
 ## F-M4-WORKFLOW-01 — Artifact-based creator/opponent handoff — 2026-10-07
 
 Dávka na větvi `feature/f-m4-workflow-01-artifact-handoff` dodala první
 deterministicky řízený creator → opponent workflow. Dosažená úroveň je PoC
 validated a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
-závěrečném předání přesunuta z TODO; jediný PR do `develop` dosud nebyl vytvořen
-ani sloučen, takže stav feature akceptace není tvrzením o jejím doručení.
+závěrečném předání přesunuta z TODO. PR #47 byl 2026-10-07 sloučen do `develop`
+jako `8854d69`.
 Větev vznikla 2026-10-06 z `develop` `da449bc` po začlenění F-M3-MEDIA-01 v
 PR #46.
 

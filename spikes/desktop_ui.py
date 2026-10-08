@@ -697,16 +697,20 @@ function clearPreview(){
 }
 function renderMarkdown(text){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
- let fence=null,code=null;
+ let fence=null,code=null,list=null;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
+   list=null;
    if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');previewContent.append(code);}
    continue;
   }
   if(fence){code.textContent+=line+'\\n';continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
-  const element=document.createElement(heading?'h'+heading[1].length:'p');
+  const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
+  if(bullet){if(!list){list=document.createElement('ul');previewContent.append(list);}
+   const item=document.createElement('li');item.textContent=bullet[1];list.append(item);continue;}
+  list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
   element.textContent=heading?heading[2]:line;previewContent.append(element);
  }
 }
