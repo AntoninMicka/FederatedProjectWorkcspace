@@ -19,20 +19,10 @@ F-M3-BACKEND-01 jsou po PR #26–#35 uzavřeny ve WORK_LOG.
 F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
-F-M3-MEDIA-01 je po PR #46 uzavřen ve WORK_LOG. F-M4-WORKFLOW-01 je lokálně
-PoC validated, jeho evidence je ve WORK_LOG a TODO čeká na doručení jediného
-PR do `develop`.
+F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
+Aktivní `IMP-02` drží [TODO](TODO.md).
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-Po merge F-M4-WORKFLOW-01 má nejvyšší prioritu jedna úzká feature skutečného
-importu nad uživatelem dodaným vzorkem. Před aktivací se vybere právě jeden
-doložený formát/zdroj a odpovídající existující ID `IMP-01`, `IMP-02` nebo
-`IMP-03` z kanonických položek níže; `IMP-04` může navázat až na konkrétní
-importér. Akceptace zahrne skutečný import, běžné použití dat ve workspace,
-zjištěné UX/schema mezery a zachování provenance, privacy, původních bajtů,
-idempotence a recovery. Nejde o univerzální import framework ani paralelní
-implementaci všech konektorů.
 
 - [ ] [planned] **UX-MOBILE-01 — Responzivní web pro telefon (cílová úroveň:
   PoC validated).** Jako samostatnou feature po prvním reálném importu upravit
@@ -198,7 +188,6 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 Strategický rozsah drží sekce 3C master roadmapy; tyto úkoly nemění prioritu desktopového PoC.
 
 - [ ] [planned] **IMP-01 — Import z Google služeb přímo i z exportu (cílová úroveň: implemented).** První rozsah je Drive včetně Docs/Sheets/Slides: ověřit OAuth scopes, výběr souborů, download/export podle typu a limity. Souběžně navrhnout bezpečný lokální import uživatelem dodaného Takeout/nativního exportu; každou další službu aktivovat až po ověření skutečného API nebo vzorku. Navázat na aplikační import a ADR 0023/0024. Akceptace: binární soubor i nativní Google dokument oběma dostupnými cestami, oddělený doložený čas vzniku od importu, provenance exportu, duplicita/nová revize, odvolané oprávnění, limity a přerušený přenos nebo archiv bez částečného publikování do projektu. Před zápisy popsat crash boundaries podle ADR 0003.
-- [ ] [planned] **IMP-02 — NotebookLM import (cílová úroveň: PoC validated).** Určit edici účtu a ověřit dostupné oficiální exporty/API zvlášť pro zdroje, poznámky, generované výstupy a chat. Enterprise preview nepovažovat za obecné API osobního účtu. Akceptace: uživatelem poskytnutý vzorek, zachované dostupné citace/provenance, jasný seznam neimportovatelných částí a funkční souborový fallback tam, kde export existuje. Nezavádět automaticky placenou Enterprise závislost.
 - [ ] [planned] **IMP-03 — Import exportů konverzací (cílová úroveň: implemented).** Získat uživatelem schválené anonymizované vzorky ChatGPT a Gemini/Takeout, ověřit skutečnou strukturu a vytvořit lokální import s náhledem. Akceptace: role/pořadí/větvení podle dostupnosti, chybějící metadata, přílohy, opakovaný import a poškozený archiv; omezit velikost i rozbalení archivu, odmítnout traversal/symlinky a nevykonávat importované HTML. Generační API není předpokládaným zdrojem historie webového účtu.
 - [ ] [planned] **IMP-04 — Vstupní fronta a lokální LLM návrh zařazení (cílová úroveň: PoC validated).** Umožnit import bez aktivního projektu do soukromé lokální fronty a nad validovaným vstupem nabídnout návrh nuly, jednoho nebo více oprávněných cílových projektů. LLM je pouze lokální volitelný poradce; bez něj zůstává ruční zařazení. Akceptace: vysvětlení/confidence a navržená privacy, lidské potvrzení před prvním projektovým zápisem, nezařazení/odmítnutí, multi-project fan-out se samostatným stavem a idempotentním retry pro každý projekt, částečný úspěch bez tichého rollbacku commitů, pád před/po jednotlivých publikacích a žádný externí fallback pro `local-only`. Závisí na příslušném importéru, Workspace recovery a lokálním LLM/Context Manifest kontraktu.
 

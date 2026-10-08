@@ -10,8 +10,8 @@ SPDX-License-Identifier: MPL-2.0
 Dávka na větvi `feature/f-m4-workflow-01-artifact-handoff` dodala první
 deterministicky řízený creator → opponent workflow. Dosažená úroveň je PoC
 validated a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
-závěrečném předání přesunuta z TODO; jediný PR do `develop` dosud nebyl vytvořen
-ani sloučen, takže stav feature akceptace není tvrzením o jejím doručení.
+závěrečném předání přesunuta z TODO. PR #47 byl 2026-10-07 sloučen do `develop`
+jako `8854d69`.
 Větev vznikla 2026-10-06 z `develop` `da449bc` po začlenění F-M3-MEDIA-01 v
 PR #46.
 
