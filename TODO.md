@@ -144,3 +144,17 @@ jediný PR do `develop`.
 - Přerušení na každé durable hranici a retry nevytvoří částečný či duplicitní
   projekt. Cílená regrese, úplná sada a skutečný vzorek projdou; neprovedené
   ověření zůstane výslovně otevřené.
+
+## K předání do backlogu
+
+- **IMP-01 — doplnění z uživatelského workflow 2026-10-08:** uživatel často
+  uchovává jednotlivé projektové podklady na osobním Google Drive. První
+  praktický tok má nabídnout explicitní ruční výběr jednoho nebo více
+  souborů či složky a jejich jednorázový import do zvoleného aktivního projektu
+  s náhledem, privacy a provenance. Nemá bez samostatného rozhodnutí procházet
+  celý Drive, zapnout průběžnou synchronizaci ani zapisovat zpět do Drive.
+  Běžné soubory stáhnout v původních bajtech; nativní Docs/Sheets/Slides
+  exportovat do explicitně uvedeného formátu a transformaci nezaměňovat za
+  původní obsah. OAuth scopes, picker, sdílené položky, duplicity/revize,
+  odvolání přístupu, limity a recovery přerušeného přenosu ověřit při aktivaci
+  samostatné dávky proti aktuálnímu oficiálnímu API.
