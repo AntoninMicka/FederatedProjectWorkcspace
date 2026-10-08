@@ -742,7 +742,7 @@ async function openPreview(id,page=1){
   }
   document.querySelector('#preview-details').hidden=false;
   if(result.format==='markdown')renderMarkdown(result.text);
-  else if(result.format==='json'){
+  else if(result.format==='json' || result.format==='html-text'){
    const pre=document.createElement('pre');pre.textContent=result.text;previewContent.append(pre);
   }
   else if(result.format==='image' || result.format==='pdf'){

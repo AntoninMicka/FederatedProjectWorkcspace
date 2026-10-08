@@ -323,6 +323,13 @@ class ActualNotebookLMTakeoutTests(unittest.TestCase):
             reopened = Projects(root / 'node.json').open(receipt['id'])
             self.assertEqual(receipt['commit_id'], reopened['commit_id'])
             self.assertEqual(len(plan['artifacts']), len(reopened['artifacts']))
+            formats = {
+                Projects(root / 'node.json').preview(
+                    receipt['id'], item['id'], receipt['commit_id'])['format']
+                for item in reopened['artifacts']
+            }
+            self.assertIn('html-text', formats)
+            self.assertIn('json', formats)
             self.assertEqual('1', Git(root / 'project').run(
                 'rev-list', '--count', 'HEAD').stdout.strip())
             self.assertEqual(receipt, service.confirm(archive, plan))

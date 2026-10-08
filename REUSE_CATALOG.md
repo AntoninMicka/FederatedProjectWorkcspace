@@ -201,7 +201,9 @@ existující desktop/web autorizační hranice. `ProjectCreation` přijímá př
 validovaný počáteční snapshot, uloží jej do vlastního durable stagingu a vytvoří
 jediný počáteční commit; nevzniká druhý Git writer ani importní databáze. Nový
 stdlib parser je omezený na doložený osobní NotebookLM Google Takeout formát a
-HTML pouze ukládá jako data. Enterprise API, session cookies, scraping,
+HTML ukládá jako data; společný artifact preview z něj stdlib parserem odvozuje
+jen bounded prostý text a klient jej zobrazuje přes `textContent`. Enterprise
+API, session cookies, scraping,
 spojování podle názvu, automatické rozbalování nested archivů a obecný ETL
 framework byly odmítnuty. Soukromá inventura neposkytla komponentu se stejným
 formátem, provenance a recovery kontraktem; nebyl z ní převzat kód ani názvy.

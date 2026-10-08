@@ -242,6 +242,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("selection={kind:'messages'", JS)
         self.assertNotIn('extractionPreviewElement.innerHTML', JS)
         self.assertIn("result.format==='json'", JS)
+        self.assertIn("result.format==='html-text'", JS)
+        self.assertIn("['json','html-text'].includes(expected.preview.format)",
+                      Path('spikes/desktop.py').read_text())
 
     def test_metadata_ui_uses_safe_diff_and_explicit_field_confirmation(self):
         from spikes.desktop_ui import HTML

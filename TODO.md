@@ -121,11 +121,16 @@ jediný PR do `develop`.
   `git diff --check`. Opt-in test importoval do izolovaného uzlu největší
   skutečný notebook (22 895 488 deklarovaných bajtů) jako 69 artefaktů / 138
   souborů v jediném commitu, znovu jej otevřel a ověřil stejný receipt při
-  retry. Úplná sada: 425 testů OK, 26 opt-in přeskočeno; samostatně prošly dva
-  testy skutečného TGZ a offscreen Qt test povinného preview/plán/potvrzení.
-  `git diff --check` prošel. Zbývá uživatelsky vybrat notebook a trvalou cílovou
-  cestu v UI, restartovat aplikaci, prakticky otevřít podklady a provést celý
-  Qt/WebEngine smoke skutečného okna.
+  retry. Po uživatelském zjištění, že Takeout poskytuje hlavně HTML/JSON, byl běžný
+  artifact preview rozšířen o bounded prostý text z HTML bez předání značek
+  rendereru a o čitelné formátování platného JSON bez ztráty polí. Původní
+  importované bajty se nemění. Cílených 22 testů prošlo se třemi volitelnými
+  grafickými skipy; samostatný offscreen Qt/WebEngine smoke zobrazil Markdown,
+  HTML text, JSON, PNG i PDF. Opt-in test největšího skutečného notebooku
+  ověřil po importu dostupný `html-text` i `json` náhled. Úplná sada po poslední
+  změně: 427 testů OK, 26 opt-in přeskočeno; `git diff --check` prošel. Stále
+  zbývá uživatelské vytvoření trvalého projektu a potvrzení použití po běžném
+  restartu skutečného okna.
 
 ## Podmínky dokončení dávky
 

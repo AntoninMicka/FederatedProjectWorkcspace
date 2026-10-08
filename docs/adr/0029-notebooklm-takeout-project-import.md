@@ -96,7 +96,11 @@ deklarovanou rozbalenou velikost, počet členů, velikost jednoho členu, hloub
 délku cest. Odmítne absolutní cesty, `..`, backslash/control znaky, Unicode nebo
 case-fold kolize, symlinky, hardlinky, zařízení a jiné typy, nested archivy a
 změnu vstupního inode/size/mtime během čtení. HTML se nikdy nevykonává; v
-projektu se zobrazuje pouze jako escaped text nebo bezpečně odvozená projekce.
+projektu se zobrazuje pouze jako bounded bezpečně odvozená prostá textová
+projekce. Importované značky se nepředávají rendereru; skripty, styly, vložené
+rámce, SVG, templates a obsah hlavičky se vynechají. JSON náhled zachová všechna
+pole a hodnoty a platný dokument pouze přeformátuje pro čitelnost. Původní HTML
+i JSON bajty zůstávají autoritativním obsahem artefaktu.
 
 Preview ukáže přesný notebook, kategorie, počty, source typy, velikosti,
 nepodporované části, chybějící notes a omezení vztahů. Projektový Git, node

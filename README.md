@@ -55,6 +55,13 @@ nikdy nespouští. Artifact source UUID nelze bezpečně propojit, protože zdro
 exportu nemají odpovídající stabilní ID. Kontrakt, limity, duplicate pravidla a
 recovery popisuje [ADR 0029](docs/adr/0029-notebooklm-takeout-project-import.md).
 
+Po otevření importovaného projektu lze jednotlivé podklady vybrat v levém
+seznamu. JSON se v náhledu pouze přeformátuje pro čitelnost, bez ztráty polí.
+HTML se nikdy nevloží do stránky ani nespustí: server z něj bounded způsobem
+odvodí prostý text a klient jej zobrazí přes `textContent`. Skripty, styly,
+vložené rámce a další neviditelný obsah se do textové projekce nepřenášejí;
+původní bajty zůstávají beze změny autoritou uloženou v projektu.
+
 Soukromý regresní vzorek lze ověřit bez přidání archivu do Gitu:
 
 ```sh
