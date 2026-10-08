@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import http.client
+import io
 import os
 import json
 from pathlib import Path
@@ -9,7 +10,9 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import tarfile
 import unittest
+from uuid import uuid4
 
 from spikes.web_server import make_server, secret, WEB_HTML, WEB_JS
 from spikes.projects import Projects
@@ -17,6 +20,7 @@ from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
 from spikes.source_import import Sources, request_from_bytes
 from spikes.configuration import parse_node, read_config
+from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
@@ -53,6 +57,14 @@ class WebTests(unittest.TestCase):
         code, data, response_headers = result.status, result.read(), dict(result.getheaders())
         conn.close()
         return code, data, response_headers
+
+    def notebook_archive(self):
+        path = self.root / 'notebooklm.tgz'
+        with tarfile.open(path, 'w:gz') as bundle:
+            for member_name, raw in valid_members().items():
+                info = tarfile.TarInfo(member_name); info.size = len(raw); info.mode = 0o600
+                bundle.addfile(info, io.BytesIO(raw))
+        return path
 
     def test_https_auth_origin_host_routes_and_no_token_bootstrap(self):
         self.assertEqual(self.request()[0], 200)
@@ -117,6 +129,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/external/send-stream',
             body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/projects/create', body='{"title":"Denied"}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/notebooklm/preview',
+            body='{"archive_path":"/tmp/denied.tgz"}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
@@ -147,6 +161,29 @@ class WebTests(unittest.TestCase):
         self.assertEqual(first[0],200);self.assertEqual(second[0],200)
         self.assertEqual(json.loads(first[1]),json.loads(second[1]))
         self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
+
+    def test_admin_previews_plans_and_confirms_server_local_notebooklm_export(self):
+        archive = self.notebook_archive()
+        code, data, _ = self.request(path='/v1/notebooklm/preview',
+                                     body=json.dumps({'archive_path': str(archive)}))
+        self.assertEqual(200, code)
+        preview = json.loads(data)
+        operation = str(uuid4())
+        request = {'archive_path': str(archive),
+                   'selection_digest': preview['notebooks'][0]['selection_digest'],
+                   'privacy': 'confidential', 'operation_id': operation}
+        code, data, _ = self.request(path='/v1/notebooklm/plan', body=json.dumps(request))
+        self.assertEqual(200, code)
+        plan = json.loads(data)
+        self.assertEqual('confidential', plan['privacy'])
+        self.assertIn(str(self.root / 'projects'), plan['target_root'])
+        body = json.dumps({'archive_path': str(archive), 'plan': plan})
+        first = self.request(path='/v1/notebooklm/confirm', body=body)
+        second = self.request(path='/v1/notebooklm/confirm', body=body)
+        self.assertEqual(200, first[0]); self.assertEqual(first, second)
+        receipt = json.loads(first[1])
+        self.assertEqual(plan['project_id'], receipt['id'])
+        self.assertEqual(6, len(Projects(self.root / 'node.json').open(receipt['id'])['artifacts']))
 
     def test_web_import_preserves_bytes_and_retries_one_operation(self):
         from uuid import uuid4

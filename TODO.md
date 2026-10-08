@@ -26,6 +26,17 @@ jediný PR do `develop`.
   NotebookLM Plus/Workspace a Gemini Notebook Enterprise se nesmějí zaměnit.
   Enterprise Preview API není fallback pro osobní účet a placená Enterprise
   závislost se nezavádí bez samostatného rozhodnutí.
+- Edice potvrzena uživatelem 2026-10-08: osobní Gemini Notebook/NotebookLM s
+  Google AI plánem přes Google One; Enterprise funkce účet odmítá. V1 proto
+  necílí na Google Cloud Enterprise API. Oficiální nápověda potvrzuje oddělené
+  Google AI plány a Cloud Enterprise, export jednotlivých poznámek do Docs a
+  vybraných Studio výstupů do Docs/Sheets; kopie notebooku přenáší sources a
+  Studio obsah, ale výslovně ne chat history ani notes. Jediný úplný přenosný
+  formát osobního notebooku tím není doložen a musí jej určit skutečný Takeout
+  export. Podklady ověřené 2026-10-08: [plány Gemini Notebook](https://support.google.com/gemininotebook/answer/16213268?hl=en),
+  [export poznámek](https://support.google.com/gemininotebook/answer/16262519?hl=en),
+  [obsah a kopie notebooku](https://support.google.com/gemininotebook/answer/16206563?hl=en)
+  a [Google Takeout](https://support.google.com/accounts/answer/3024190?hl=en).
 - První verze importuje uživatelem dodaný lokální export/bundle. Nečte session
   cookies, nevolá neoficiální interní endpointy, nescrapuje přihlášené UI,
   nezapisuje zpět do NotebookLM a neposílá importovaný obsah LLM. Přímý
@@ -58,41 +69,63 @@ jediný PR do `develop`.
   viditelný projekt. Po publikaci rootu recovery dokončí stav/index/registraci
   a vrátí tentýž receipt, projekt UUID a commit, nikdy druhý projekt. Cizí
   cílová cesta, změněný bundle/plán nebo konflikt registrace musí fail-closed.
-- Opakování stejné potvrzené operace je idempotentní. Nový export se stejnou
-  doloženou notebook identity, ale jinými bajty není tichý overwrite; preview
-  jej označí jako novou verzi/import a zachová předchozí projekt i historii.
+- Opakování stejné potvrzené operace je idempotentní. Protože osobní Takeout
+  nedoložil stabilní notebook/source ID, změněný nebo přejmenovaný export se
+  nespojí pouze podle názvu; vyžaduje explicitní volbu existujícího importu či
+  nového projektu a zachová předchozí historii.
 
 ## Aktivní části dávky
 
-- [ ] [in progress] **IMP-02-A — Edice, skutečný vzorek, kontrakt a reuse
-  (cílová úroveň: designed).** Potvrdit osobní/Plus/Workspace versus Enterprise
-  edici a získat jeden uživatelem schválený export kompletního notebooku.
-  Inventarizovat přesnou strukturu a zvlášť doložit dostupnost zdrojů, poznámek,
-  generovaných výstupů, citací/vztahů, chatu a notebookových metadat. Navrhnout
-  kanonický import manifest, mapování notebook → projekt a položka → artefakt,
-  limity, privacy, preview, duplicate/version pravidla a výše uvedenou recovery.
-  ADR změnit jen pokud skutečný formát vyžaduje nové rozhodnutí.
-- [ ] [planned] **IMP-02-B — Bounded parser a přesný preview
+- [x] [completed] **IMP-02-A — Edice, skutečný vzorek, kontrakt a reuse
+  (designed).** Osobní Google AI edice a skutečný Takeout TGZ byly potvrzeny.
+  Bez extrakce bylo ověřeno 243 běžných členů, šest NotebookLM notebooků,
+  bezpečné cesty a reprezentativní notebook s 63 sources, třemi tailored-report
+  artefakty a jedním chatem. ADR 0029 vymezuje source/artifact/chat mapping,
+  přesný manifest, limity, privacy, absence stabilních provider ID, duplicate
+  pravidla a seeded `ProjectCreation` recovery. Vzorek exportuje source obsah
+  jako HTML/JSON reprezentace, nikoli původní binární bajty; chybějící notes a
+  nerozřešitelné artifact source UUID se musí hlásit. Enterprise API, scraping,
+  session cookies, vykonání HTML, spojování podle názvu a nový writer/DB byly
+  odmítnuty.
+- [x] [completed] **IMP-02-B — Bounded parser a přesný preview
   (cílová úroveň: implemented).** Implementovat parser výhradně pro doložený
   exportní formát. Zachovat bundle a původní soubory podle limitů, odvozený text
   držet odděleně, nic nevykonávat a zobrazit soupis importovaných,
   nepodporovaných a chybějících částí před potvrzením. Ověřit poškozený archiv,
   traversal/symlinky, duplicity cest, size/count/depth limity, neznámá pole a
-  změnu vstupu mezi preview a potvrzením.
-- [ ] [planned] **IMP-02-C — Obnovitelné vytvoření celého projektu a UI
+  změnu vstupu mezi preview a potvrzením. Implementováno jako fail-closed TGZ
+  parser s content-free preview a revalidovanou materializací jednoho výběru.
+  Syntetická sada pokrývá platný export, traversal, symlink, case-fold kolizi,
+  nested archiv, neznámé pole/kategorii, orphan obsah, script v chatu, poškozený
+  gzip a změněný archiv/digest. Skutečný vzorek prošel pro všech šest notebooků:
+  113 sources, tři výstupy, jeden chat a jedna sada discovered sources.
+- [x] [completed] **IMP-02-C — Obnovitelné vytvoření celého projektu a UI
   (cílová úroveň: implemented).** Z potvrzeného plánu vytvořit jediný nový
   projekt přes stávající autority, s neměnnými source artefakty, oddělenými
   poznámkami/výstupy, vztahy a importní provenance. Desktop i oprávněný web
   ukážou edici, notebook, cílovou cestu, privacy, přesný obsah a receipt.
   Ověřit všechny durable hranice, restart, retry, kolizi cesty/identity a žádný
-  částečný projekt nebo duplicitní commit.
-- [ ] [planned] **IMP-02-D — Reálný workflow, regrese a dokumentace
+  částečný projekt nebo duplicitní commit. `ProjectCreation` nyní durable
+  stageuje předem validovaný seed, vytvoří jeden počáteční commit a po pádu už
+  Takeout znovu nepotřebuje. Všechny creation hranice prošly s jedním projektem
+  a commitem. Desktop má nativní dvoukrokový dialog; webový tok je node-admin
+  only, používá server-local TGZ a nepovoluje `local-only`. Přesné exportní
+  bajty jsou immutable sources, odvozený report a metadata obálka snapshots;
+  nový operation ID zobrazí shodné existující importy před potvrzením.
+- [ ] [in progress] **IMP-02-D — Reálný workflow, regrese a dokumentace
   (cílová úroveň: PoC validated).** Importovat schválený skutečný notebook,
   otevřít jej po restartu a použít zdroje, poznámky, výstupy a vztahy v běžném
   Workspace workflow. Porovnat soupis s exportem, ověřit opakovaný identický i
   změněný import, jasně uvést neimportovatelné části a spustit cílené testy,
   úplnou sadu, relevantní Qt/WebEngine smoke, kontrolu dokumentace a
-  `git diff --check`.
+  `git diff --check`. Opt-in test importoval do izolovaného uzlu největší
+  skutečný notebook (22 895 488 deklarovaných bajtů) jako 69 artefaktů / 138
+  souborů v jediném commitu, znovu jej otevřel a ověřil stejný receipt při
+  retry. Úplná sada: 424 testů OK, 26 opt-in přeskočeno; samostatně prošly dva
+  testy skutečného TGZ a offscreen Qt test povinného preview/plán/potvrzení.
+  `git diff --check` prošel. Zbývá uživatelsky vybrat notebook a trvalou cílovou
+  cestu v UI, restartovat aplikaci, prakticky otevřít podklady a provést celý
+  Qt/WebEngine smoke skutečného okna.
 
 ## Podmínky dokončení dávky
 

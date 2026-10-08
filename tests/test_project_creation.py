@@ -3,6 +3,7 @@
 #
 """Real process crashes, Git, registration and native desktop creation."""
 from contextlib import closing
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -35,6 +36,27 @@ class CreationTests(unittest.TestCase):
 
     def create(self, **kwargs):
         return self.service.create('První projekt', self.root, self.operation, **kwargs)
+
+    def seeded(self, **kwargs):
+        project_id = kwargs.pop('project_id', str(uuid4()))
+        artifact_id = str(uuid4())
+        created = '2026-10-08T03:01:03Z'
+        raw = b'<html><body>NotebookLM source</body></html>'
+        author = self.service.author_id()
+        meta = {'schema_version': 2, 'id': artifact_id, 'title': 'Imported source',
+                'kind': 'source', 'created_at': created, 'author_id': author,
+                'privacy': 'project', 'provenance': 'external', 'file': 'source.html',
+                'import': {'imported_at': created, 'imported_by': author,
+                           'content_sha256': hashlib.sha256(raw).hexdigest(),
+                           'importer': {'name': 'notebooklm-takeout-import', 'version': '1'}}}
+        prefix = f'artifacts/{artifact_id}/'
+        files = {prefix + 'source.html': raw,
+                 prefix + 'metadata.json': (json.dumps(meta, sort_keys=True) + '\n').encode()}
+        receipt = self.service.create(
+            'Imported notebook', self.root, self.operation, initial_files=files,
+            project_id=project_id, created_at=created, request_digest='a' * 64,
+            commit_message='Import NotebookLM project', **kwargs)
+        return receipt, files, project_id
 
     def record(self):
         with closing(sqlite3.connect(self.service.database)) as db:
@@ -140,6 +162,35 @@ class CreationTests(unittest.TestCase):
         self.assertEqual(parse_node(read_config(self.node), location=self.node)['id'], node['id'])
         with self.assertRaises(CreationConflict):
             self.service.create('Changed request', self.root, self.operation)
+
+    def test_seeded_creation_commits_validated_snapshot_once_and_replays(self):
+        receipt, files, project_id = self.seeded()
+        self.assertEqual(project_id, receipt['id'])
+        self.assertEqual('1', Git(self.root).run('rev-list', '--count', 'HEAD').stdout.strip())
+        self.assertEqual(files, Git(self.root).snapshot('HEAD'))
+        self.assertEqual(1, len(Projects(self.node).open(project_id)['artifacts']))
+        replay = self.service.create(
+            'Imported notebook', self.root, self.operation, initial_files=files,
+            project_id=project_id, created_at='2026-10-08T03:01:03Z',
+            request_digest='a' * 64, commit_message='Import NotebookLM project')
+        self.assertEqual(receipt, replay)
+
+    def test_seeded_creation_recovery_uses_durable_seed_and_rejects_changed_request(self):
+        project_id = str(uuid4())
+        with self.assertRaises(RuntimeError):
+            self.seeded(project_id=project_id,
+                        checkpoint=lambda stage: (_ for _ in ()).throw(RuntimeError('stop'))
+                        if stage == 'prepared' else None)
+        record = self.record()
+        self.assertTrue((Path(record['stage']) / 'seed').is_dir())
+        receipt = ProjectCreation(self.node).recover()
+        self.assertEqual(project_id, receipt['id'])
+        self.assertEqual('1', Git(self.root).run('rev-list', '--count', 'HEAD').stdout.strip())
+        with self.assertRaises(CreationConflict):
+            self.service.create('Imported notebook', self.root, self.operation,
+                                initial_files={}, project_id=project_id,
+                                created_at='2026-10-08T03:01:03Z', request_digest='b' * 64,
+                                commit_message='Import NotebookLM project')
 
     def test_saved_default_parent_and_recoverable_location_repair(self):
         receipt = self.service.create('První projekt', self.root, self.operation, remember_parent=True)

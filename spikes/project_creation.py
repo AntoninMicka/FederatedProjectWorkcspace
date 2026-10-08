@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import ctypes
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,7 +19,7 @@ from uuid import uuid4
 
 from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
 from spikes.journal import sync_dir
-from spikes.metadata import require, uuid
+from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, safe_path, uuid, validate_snapshot
 from spikes.projects import directory
 from spikes.storage import Git
 from spikes.workspace import Workspace
@@ -104,6 +105,53 @@ def sync_tree(root):
             finally:
                 os.close(fd)
         sync_dir(parent)
+
+
+def seed_manifest(files):
+    """Validate an unpublished initial snapshot and bind its exact bytes."""
+    check(isinstance(files, dict), 'Počáteční snapshot musí být mapa souborů.')
+    manifest, total = [], 0
+    for name, raw in sorted(files.items()):
+        safe_path(name)
+        check(name not in {'project.json', '.git'} and not name.startswith('.git/'),
+              'Počáteční snapshot nesmí nahradit konfiguraci ani Git metadata.')
+        check(isinstance(raw, bytes) and len(raw) <= MAX_FILE,
+              'Soubor počátečního snapshotu přesahuje 16 MiB.')
+        total += len(raw)
+        check(total <= MAX_SNAPSHOT, 'Počáteční snapshot přesahuje 64 MiB.')
+        manifest.append({'path': name, 'size': len(raw),
+                         'sha256': hashlib.sha256(raw).hexdigest()})
+    return manifest
+
+
+def write_seed(root, files):
+    for name, raw in sorted(files.items()):
+        target = root.joinpath(*safe_path(name))
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(raw); handle.flush(); os.fsync(handle.fileno())
+    sync_tree(root)
+
+
+def read_seed(root, expected):
+    files, total = {}, 0
+    for parent, dirs, names in os.walk(root, followlinks=False):
+        for dirname in dirs:
+            check(not (Path(parent) / dirname).is_symlink(), 'Počáteční snapshot obsahuje symlink.')
+        for name in names:
+            path = Path(parent) / name
+            regular(path)
+            relative = path.relative_to(root).as_posix()
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as handle:
+                raw = handle.read(MAX_FILE + 1)
+            check(len(raw) <= MAX_FILE, 'Soubor počátečního snapshotu přesahuje 16 MiB.')
+            total += len(raw)
+            check(total <= MAX_SNAPSHOT, 'Počáteční snapshot přesahuje 64 MiB.')
+            files[relative] = raw
+    check(seed_manifest(files) == expected, 'Počáteční snapshot operace se změnil.')
+    return files
 
 
 class ProjectCreation:
@@ -234,10 +282,31 @@ class ProjectCreation:
         return self.configured_projects_root() or Path.home()
 
     def create(self, title, root, operation_id, *, remember_parent=False,
+               initial_files=None, project_id=None, created_at=None,
+               request_digest=None, commit_message='Initialize project',
                checkpoint=lambda stage: None):
         uuid(operation_id)
         check(isinstance(title, str) and bool(title.strip()) and len(title) <= 200
               and not any(ord(c) < 32 for c in title), 'Zadejte název projektu (nejvýše 200 znaků).')
+        seeded = initial_files is not None
+        files = initial_files if seeded else {}
+        manifest = seed_manifest(files)
+        seed_digest = hashlib.sha256(encoded(manifest)).hexdigest() if seeded else None
+        check(isinstance(commit_message, str) and bool(commit_message.strip())
+              and len(commit_message) <= 200 and '\n' not in commit_message and '\r' not in commit_message,
+              'Neplatná zpráva počátečního commitu.')
+        if seeded:
+            check(bool(files), 'Seeded vytvoření vyžaduje neprázdný počáteční snapshot.')
+            uuid(project_id)
+            check(isinstance(created_at, str) and isinstance(request_digest, str)
+                  and len(request_digest) == 64
+                  and all(char in '0123456789abcdef' for char in request_digest),
+                  'Seeded vytvoření vyžaduje platný identifikátor, čas a digest požadavku.')
+            validate_snapshot(files)
+        else:
+            check(project_id is None and created_at is None and request_digest is None
+                  and commit_message == 'Initialize project',
+                  'Počáteční metadata lze zadat pouze se seeded snapshotem.')
         root = Path(root)
         check(root.is_absolute() and root == local_path(str(root)), 'Zadejte absolutní cestu bez symlinků.')
         try:
@@ -250,7 +319,11 @@ class ProjectCreation:
             if row:
                 record = json.loads(row[0])
                 check(record.get('type', 'create') == 'create' and record['root'] == str(root)
-                      and record['title'] == title and record.get('remember_parent', False) == remember_parent,
+                      and record['title'] == title and record.get('remember_parent', False) == remember_parent
+                      and record.get('seed_digest') == seed_digest
+                      and record.get('request_digest') == request_digest
+                      and record.get('commit_message', 'Initialize project') == commit_message
+                      and (project_id is None or record['meta']['id'] == project_id),
                       'ID operace už patří jinému požadavku.')
                 if row[1]:
                     return record['receipt']
@@ -269,7 +342,7 @@ class ProjectCreation:
             node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
             if remember_parent:
                 node['projects_root'] = str(root.parent)
-            project_id = str(uuid4())
+            project_id = project_id or str(uuid4())
             state = root.parent / ('.workspace-state-' + project_id)
             check(not os.path.lexists(state), 'Cílový lokální stav již existuje.')
             node['projects'].append(dict(project_id=project_id, root=str(root), state_dir=str(state)))
@@ -280,23 +353,59 @@ class ProjectCreation:
                     check(not overlap(self.runtime, local_path(binding[key])),
                           'Projekt ani stav nesmí překrývat journal uzlu.')
             meta = dict(schema_version=1, id=project_id, title=title,
-                        created_at=datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                        created_at=created_at or datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
                         author_id=db.execute('SELECT id FROM local_author').fetchone()[0])
             parse_project(encoded(meta))
             stage = Path(tempfile.mkdtemp(prefix='.workspace-create-' + operation_id + '-', dir=root.parent))
-            (stage / 'repo').mkdir(mode=0o700)
-            (stage / 'state').mkdir(mode=0o700)
-            sync_dir(stage)
-            sync_dir(stage.parent)
+            try:
+                (stage / 'repo').mkdir(mode=0o700)
+                (stage / 'state').mkdir(mode=0o700)
+                if seeded:
+                    (stage / 'seed').mkdir(mode=0o700)
+                    write_seed(stage / 'seed', files)
+                sync_dir(stage)
+                sync_dir(stage.parent)
+            except Exception:
+                shutil.rmtree(stage)
+                raise
             record = dict(operation_id=operation_id, title=title, root=str(root), state=str(state),
                           stage=str(stage), stage_identity=identity(stage), meta=meta,
                           before=before.decode() if before is not None else None, after=after.decode(),
                           type='create', remember_parent=remember_parent, ready=False, receipt=None,
+                          seed_manifest=manifest if seeded else None, seed_digest=seed_digest,
+                          request_digest=request_digest, commit_message=commit_message,
                           existing_root=existing_root,
                           target_identity=identity(root) if existing_root else None)
             self._save(db, record)
             checkpoint('prepared')
             return self._finish(db, record, deadline, checkpoint)
+
+    def resume_seeded(self, title, root, operation_id, project_id, request_digest,
+                      *, checkpoint=lambda stage: None):
+        """Return/recover a matching seeded creation without its original input bundle."""
+        uuid(operation_id); uuid(project_id)
+        root = Path(root)
+        check(root.is_absolute() and isinstance(request_digest, str)
+              and len(request_digest) == 64
+              and all(char in '0123456789abcdef' for char in request_digest),
+              'Neplatný požadavek na obnovu seeded projektu.')
+        if not self.database.exists():
+            return None
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?',
+                             (operation_id,)).fetchone()
+            if row is None:
+                return None
+            record = json.loads(row[0])
+            check(record.get('type', 'create') == 'create'
+                  and record.get('seed_manifest') is not None
+                  and record['root'] == str(root) and record['title'] == title
+                  and record['meta']['id'] == project_id
+                  and record.get('request_digest') == request_digest,
+                  'ID operace už patří jinému požadavku.')
+            return record['receipt'] if row[1] else self._finish(
+                db, record, deadline, checkpoint)
 
     def register(self, root, operation_id, *, checkpoint=lambda stage: None):
         uuid(operation_id)
@@ -471,7 +580,8 @@ class ProjectCreation:
             else:
                 check(not os.path.lexists(root), 'Cíl přerušené operace je obsazený.')
             check(not os.path.lexists(state), 'Cílový lokální stav je obsazený.')
-            check({p.name for p in stage.iterdir()} <= {'repo', 'state'}, 'Pracovní složka má cizí soubory.')
+            allowed = {'repo', 'state'} | ({'seed'} if record.get('seed_manifest') is not None else set())
+            check({p.name for p in stage.iterdir()} <= allowed, 'Pracovní složka má cizí soubory.')
             # Before ready, these are solely unpublished disposable files owned by the recorded staging inode.
             if (stage / 'repo').exists():
                 check(not (stage / 'repo').is_symlink(), 'Neplatný staging projektu.')
@@ -479,14 +589,20 @@ class ProjectCreation:
             (stage / 'repo').mkdir(mode=0o700)
             check(not list((stage / 'state').iterdir()), 'Pracovní stav není prázdný.')
             repo = stage / 'repo'
+            seed_files = (read_seed(stage / 'seed', record['seed_manifest'])
+                          if record.get('seed_manifest') is not None else {})
+            if seed_files:
+                write_seed(repo, seed_files)
             (repo / 'project.json').write_bytes(encoded(record['meta']))
+            validate_snapshot(seed_files)
             git = Git(repo, deadline=deadline)
             git.run('init', '--template=', '--initial-branch=main')
             (repo / '.git').chmod(0o700)
-            git.run('add', '--', 'project.json')
+            git.run('add', '--all')
             author = record['meta']['author_id']
             date = record['meta']['created_at']
-            git.run('commit', '-m', 'Initialize project\n\nWorkspace-Creation: ' + record['operation_id'],
+            git.run('commit', '-m', record.get('commit_message', 'Initialize project')
+                    + '\n\nWorkspace-Creation: ' + record['operation_id'],
                     env_extra=dict(GIT_AUTHOR_NAME='Local user', GIT_COMMITTER_NAME='Local user',
                                    GIT_AUTHOR_EMAIL=author + '@local.invalid', GIT_COMMITTER_EMAIL=author + '@local.invalid',
                                    GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date))
@@ -528,6 +644,20 @@ class ProjectCreation:
         self._save(db, record, done=True)
         # Receipt is authoritative even if optional staging cleanup is interrupted.
         try:
+            seed = stage / 'seed'
+            if seed.exists() and record.get('seed_manifest') is not None:
+                read_seed(seed, record['seed_manifest'])
+                for item in reversed(record['seed_manifest']):
+                    path = seed / item['path']
+                    path.unlink()
+                    parent = path.parent
+                    while parent != seed:
+                        try:
+                            parent.rmdir()
+                        except OSError:
+                            break
+                        parent = parent.parent
+                seed.rmdir()
             if record.get('existing_root'):
                 displaced = stage / 'repo'
                 if displaced.exists() and identity(displaced) == record['target_identity']:

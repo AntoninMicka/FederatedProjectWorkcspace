@@ -327,8 +327,9 @@ Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM back
 **Stav: `IMP-02` aktivováno 2026-10-08, ostatní konektory a automatické
 zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM.
 Aktivní dávka importuje jeden kompletní NotebookLM notebook jako nový Workspace
-projekt ze skutečného uživatelského exportu; konkrétní edici a dostupné části
-nejprve ověří podle vzorku. Navazuje na import artefaktů M1 a provenance.
+projekt ze skutečného uživatelského exportu. Potvrzenou edicí je osobní Google
+AI plán přes Google One, nikoli Google Cloud Enterprise; dostupné části nejprve
+ověří podle skutečného Takeout vzorku. Navazuje na import artefaktů M1 a provenance.
 Operativní stav `IMP-02` drží TODO, ostatní `IMP-*` BACKLOG.
 
 - [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
