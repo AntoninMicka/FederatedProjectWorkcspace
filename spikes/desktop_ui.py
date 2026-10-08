@@ -18,7 +18,9 @@ from spikes.workspace import PendingOperation
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
-<body><aside><div class="brand">◈ &nbsp; WORKSPACE</div>
+<body><button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
+<button id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci" hidden></button>
+<aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
 <div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
 <div id="sidebar-project-tools" hidden>
@@ -301,13 +303,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
+#mobile-sidebar-toggle,#mobile-sidebar-backdrop{display:none}
 aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
 .brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:32px}.global-nav{margin-top:auto;background:#176b60;text-align:left}.node-note{font-size:11px;line-height:1.8;padding-top:18px;color:#9eb5c7}
 main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
 .badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
 h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
 button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
-button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
+button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
@@ -357,6 +360,31 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
+@media(max-width:640px){
+ body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
+ #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
+ #mobile-sidebar-backdrop{display:block;position:fixed;z-index:45;inset:0;width:100%;height:100%;border:0;border-radius:0;background:#07131fa8;padding:0}
+ #mobile-sidebar-backdrop:hover{background:#07131fa8}
+ aside{position:fixed;z-index:50;inset:0 auto 0 0;width:min(88vw,360px);max-width:calc(100vw - 48px);padding:68px 18px 24px;transform:translateX(-105%);transition:transform .18s ease;box-shadow:8px 0 24px #07131f45}
+ body.mobile-sidebar-open aside{transform:translateX(0)}
+ main{width:100%;min-height:100vh;min-height:100dvh;padding:68px 14px 24px;overflow:visible}
+ header,.project-header{align-items:flex-start;flex-direction:column}.project-header details{max-width:100%}
+ .home-heading,.settings-heading{margin-top:20px}.home-heading h1,h1{font-size:30px}
+ #project-cards{grid-template-columns:minmax(0,1fr);gap:12px}.project-card{min-width:0;min-height:0;padding:18px}
+ #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
+ #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
+ #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
+ #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
+ .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}
+ button{min-height:44px}input,select,textarea{font-size:16px;max-width:100%}fieldset{min-width:0}
+ .prompt-row,.cms-domain-row{align-items:stretch}.prompt-row button,.cms-domain-row button{width:100%}
+ .confirm{display:flex!important;align-items:flex-start;gap:10px;overflow-wrap:anywhere}.confirm input{flex:0 0 auto;margin-top:4px}
+ pre,code,output,[role="status"],[role="alert"]{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+ #preview-content pre,#workflow-panel pre,#image-request-json,#image-result-metadata,#external-preview pre,#cms-request-preview{white-space:pre-wrap;overflow-x:auto}
+ #pdf-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#pdf-page{margin:0}
+ #backend-metrics-indicator{right:8px;bottom:8px;max-width:calc(100vw - 16px)}
+}
+@media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 '''
 JS = '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
@@ -383,6 +411,33 @@ const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
 const sidebarArtifactStatus=document.querySelector('#sidebar-artifact-status');
+const workspaceSidebar=document.querySelector('#workspace-sidebar');
+const mobileSidebarToggle=document.querySelector('#mobile-sidebar-toggle');
+const mobileSidebarBackdrop=document.querySelector('#mobile-sidebar-backdrop');
+const mobileViewport=window.matchMedia('(max-width:640px)');
+let mobileSidebarReturnFocus=null;
+function syncMobileSidebar(){
+ const open=document.body.classList.contains('mobile-sidebar-open')&&mobileViewport.matches;
+ mobileSidebarToggle.setAttribute('aria-expanded',String(open));mobileSidebarBackdrop.hidden=!open;
+ workspaceSidebar.inert=mobileViewport.matches&&!open;
+}
+function openMobileSidebar(){
+ if(!mobileViewport.matches)return;mobileSidebarReturnFocus=mobileSidebarToggle;
+ document.body.classList.add('mobile-sidebar-open');syncMobileSidebar();
+ const target=[...workspaceSidebar.querySelectorAll('button:not([hidden]),[href],input:not([hidden]),select:not([hidden]),textarea:not([hidden])')].find(item=>item.offsetParent!==null);
+ if(target)target.focus();
+}
+function closeMobileSidebar(restoreFocus=true){
+ document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();
+ if(restoreFocus&&mobileSidebarReturnFocus instanceof HTMLElement)mobileSidebarReturnFocus.focus();
+ mobileSidebarReturnFocus=null;
+}
+mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
+mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-settings,#sidebar-project-list button,#sidebar-artifact-list button'))closeMobileSidebar();});
+mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
+syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
 function selectSidebarTab(selected){
  for(const tab of sidebarTabs){

@@ -14,7 +14,7 @@ import tarfile
 import unittest
 from uuid import uuid4
 
-from spikes.web_server import make_server, secret, WEB_HTML, WEB_JS
+from spikes.web_server import make_server, secret, WEB_HTML, WEB_CSS, WEB_JS
 from spikes.projects import Projects
 from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
@@ -106,6 +106,21 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
+
+    def test_mobile_layout_has_accessible_drawer_and_bounded_priority_flows(self):
+        self.assertIn('id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar"', WEB_HTML)
+        self.assertIn('id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci"', WEB_HTML)
+        self.assertIn('id="workspace-sidebar" aria-label="Navigace pracovního prostoru"', WEB_HTML)
+        self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
+        self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
+        self.assertIn("event.key==='Escape'", WEB_JS)
+        self.assertIn("#sidebar-artifact-list button'))closeMobileSidebar()", WEB_JS)
+        self.assertIn('@media(max-width:640px)', WEB_CSS)
+        self.assertIn('max-width:calc(100vw - 48px)', WEB_CSS)
+        self.assertIn('grid-template-columns:minmax(0,1fr)', WEB_CSS)
+        self.assertIn('overflow-x:auto;overscroll-behavior-x:contain', WEB_CSS)
+        self.assertIn('body:not(.authenticated)>#mobile-sidebar-toggle', WEB_CSS)
+        self.assertIn('#notebooklm-preview{max-height:50vh;max-width:100%', WEB_CSS)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
         from uuid import uuid4
@@ -298,6 +313,82 @@ sys.exit(app.exec())
             capture_output=True, text=True, timeout=25)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('web smoke: login, catalog and logout OK', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_mobile_browser_import_catalog_preview_and_keyboard_drawer(self):
+        title = 'Český projekt s velmi dlouhým názvem ' + 'bez-mezer-' * 14
+        _, data, _ = self.request(path='/v1/projects/create', body=json.dumps({'title': title}))
+        project = json.loads(data)
+        source = request_from_bytes(project['id'], project['commit_id'], 'mobile.md',
+                                    b'# Mobilni nahled\nBezpecny text.', 'Mobilní podklad',
+                                    'Dlouhý popis pro telefon', ['mobile'], 'project')
+        code, _, _ = self.request(path='/v1/sources/import', body=json.dumps({
+            'operation_id': str(uuid4()), 'source': source}))
+        self.assertEqual(code, 200)
+        archive = self.notebook_archive()
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();view.resize(390,844)
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+phase=0;ticks=0;key=os.environ['WORKSPACE_SMOKE_KEY'];archive=os.environ['WORKSPACE_NOTEBOOK_ARCHIVE']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0:
+  phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1:
+  phase=2;run("document.querySelector('#notebooklm-import').open=true;document.querySelector('#notebooklm-archive').value="+json.dumps(archive)+";document.querySelector('#notebooklm-load').click();")
+ elif phase==2:
+  phase=3;run("document.querySelector('#notebooklm-plan').click();")
+ elif phase==3:
+  phase=4;run("const c=document.querySelector('#notebooklm-confirm');c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('.project-card').click();")
+ elif phase==4:
+  phase=5;run("document.querySelector('#mobile-sidebar-toggle').click();")
+ elif phase==5:
+  phase=6;run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));")
+ elif phase==6:
+  phase=7;run("document.querySelector('#mobile-sidebar-toggle').click();")
+ elif phase==7:
+  phase=8;run("document.querySelector('#sidebar-artifact-list button').click();")
+ elif phase==8:
+  phase=9;run("document.querySelector('#mobile-sidebar-toggle').click();")
+ elif phase==9:
+  phase=10;run("document.querySelector('#logout').click();")
+ elif phase==10: finish('mobile web smoke: import plan, catalog, keyboard drawer and preview OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>450: finish('mobile web smoke timeout at phase '+str(phase));return
+ checks={
+ 0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
+ 1:"(()=>{if(!document.body.classList.contains('authenticated')||document.querySelectorAll('.project-card').length!==1)return'waiting';if(innerWidth!==390)return'FAIL: wrong viewport '+innerWidth;if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: home overflow';const b=document.querySelector('#mobile-sidebar-toggle');if(getComputedStyle(b).display==='none'||parseFloat(getComputedStyle(b).minHeight)<44)return'FAIL: touch target';return'ready'})()",
+ 2:"document.querySelector('#notebooklm-selection')&&!document.querySelector('#notebooklm-selection').disabled?'ready':'waiting'",
+ 3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row');if(row.hidden)return'waiting';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
+ 4:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-artifact-list button')?'ready':'waiting'",
+ 5:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='true')return'waiting';if(s.inert)return'FAIL: open drawer inert';return'ready'})()",
+ 6:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='false')return'waiting';if(!s.inert)return'FAIL: closed drawer focusable';if(document.activeElement!==b)return'FAIL: drawer focus not restored';return'ready'})()",
+ 7:"document.querySelector('#mobile-sidebar-toggle').getAttribute('aria-expanded')==='true'?'ready':'waiting'",
+ 8:"(()=>{if(document.querySelector('#preview-title').textContent!=='Mobilní podklad')return'waiting';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: preview overflow';const s=document.querySelector('#workspace-sidebar');if(!s.inert)return'FAIL: selected drawer focusable';return'ready'})()",
+ 9:"document.querySelector('#mobile-sidebar-toggle').getAttribute('aria-expanded')==='true'?'ready':'waiting'",
+ 10:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(
+            os.environ, WORKSPACE_SMOKE_KEY=self.token,
+            WORKSPACE_SMOKE_URL='https://'+self.authority+'/',
+            WORKSPACE_NOTEBOOK_ARCHIVE=str(archive)), capture_output=True, text=True,
+            timeout=55)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('mobile web smoke: import plan, catalog, keyboard drawer and preview OK', result.stdout)
 
 
 class NetworkPrivacyTests(unittest.TestCase):

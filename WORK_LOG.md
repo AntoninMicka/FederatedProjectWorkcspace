@@ -5,6 +5,49 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-MOBILE-01 — Responzivní web pro telefon — 2026-10-09
+
+Dávka na větvi `feature/ux-mobile-01-responsive-web`, založené z
+`develop` `519dce8` po merge PR #48, přizpůsobila jediné stávající sdílené
+HTML/CSS/JS úzkému dotykovému viewportu. Dosažená úroveň je PoC validated
+a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
+závěrečném předání přesunuta z TODO. Jediný PR do `develop` zatím nebyl
+vytvořen; push ani merge nebyly provedeny.
+
+- [x] [completed] **UX-MOBILE-01-A — Mobilní navigace a layout
+  (implemented).** Původní pevný levý sloupec nahradil na viewportu do 640 px
+  otevíratelný panel pro projekty, úkoly, podklady a nastavení. Zavřený panel
+  je `inert`, Escape jej zavře a vrátí focus jedinému otevíracímu tlačítku;
+  desktopové rozložení zůstalo zachované.
+- [x] [completed] **UX-MOBILE-01-B — Prioritní dotykové toky
+  (implemented).** Katalog, import NotebookLM i jednotlivého zdroje, náhled
+  artefaktu, taby, formuláře a potvrzovací bloky se vejdou do hlavního obsahu
+  bez horizontálního overflow. Dotykové prvky mají nejméně 44 px, dlouhé
+  názvy, chyby a bezpečné textové náhledy se zalamují.
+- [x] [completed] **UX-MOBILE-01-C — Přístupnost a regresní testy
+  (PoC validated).** Strukturální test hlídá ARIA vazby, inert/focus kontrakt,
+  Escape, rozměry dotykových prvků, vnitřní rolování tabů a omezení importního
+  preview. Bezpečný renderer nadále vkládá importovaný obsah pouze jako text.
+- [x] [completed] **UX-MOBILE-01-D — Telefonní smoke a závěrečné
+  ověření (PoC validated).** Skutečný Qt/WebEngine na 390 × 844 prošel
+  přihlášením, přípravou a potvrzením NotebookLM plánu, katalogem,
+  otevřením projektu, klávesnicovým zavřením panelu a návratem focusu,
+  výběrem podkladu a jeho náhledem bez dokumentového overflow.
+
+Cílená webová, preview a katalogová sada: **32 testů, 27 prošlo a 5
+volitelných WebEngine testů bylo přeskočeno**. Samostatný mobilní WebEngine
+smoke prošel; jeden předchozí pokus jednorázově timeoutoval při
+startu/přihlášení Chromium a následující běh chybu nereprodukoval. Úplná
+sada `python3 -m unittest discover -s tests -v` prošla: **429 testů OK, 27
+volitelných testů přeskočeno**. Před dokumentačním předáním prošel také
+`git diff --check`; po čistě dokumentačním předání se aplikační sada
+neopakovala.
+
+Omezení: smoke použil skutečný WebEngine s telefonním viewportem, nikoli
+fyzický telefon nebo jeho mobilní prohlížeč. Nativní mobilní aplikace,
+backendová API, RBAC/privacy hranice, importní autorita a persistentní
+Workspace/journal kontrakty se neměnily; nevznikly nové crash boundaries.
+
 ## IMP-02 — Import kompletního projektu z NotebookLM — 2026-10-08
 
 Dávka na větvi `feature/imp-02-notebooklm-project-import`, založené z

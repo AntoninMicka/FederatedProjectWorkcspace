@@ -182,12 +182,19 @@ webImportForm.addEventListener('submit',async event=>{
     'createTodo.hidden=!!todo;', 'createTodo.hidden=true;').replace(
     'Založte seznam a mějte úkoly projektu po ruce.', 'Projekt zatím nemá hlavní seznam úkolů.').replace(
     'První dokument vytvoříte tlačítkem Dokumenty v horní liště.', 'Dokumenty vytvoříte v desktopové aplikaci.')
-WEB_CSS = CSS + '''body:not(.authenticated)>aside,body:not(.authenticated)>main{display:none}
+WEB_CSS = CSS + '''body:not(.authenticated)>aside,body:not(.authenticated)>main,body:not(.authenticated)>#mobile-sidebar-toggle,body:not(.authenticated)>#mobile-sidebar-backdrop{display:none}
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}#create-main-todo,#todo-help{display:none!important}
 .project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}#web-source-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#web-source-import label{display:block;margin:9px 0}#web-source-import input,#web-source-import textarea,#web-source-import select{max-width:100%;padding:8px}#web-source-import textarea{width:100%}
 #notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#notebooklm-import label{display:block;margin:9px 0}#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}#notebooklm-archive{width:min(680px,100%)}#notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
-@media(max-width:600px){.project-create-row{flex-direction:column}#new-project-title{width:100%;box-sizing:border-box}}'''
+@media(max-width:600px){
+ #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
+ .project-create-row{flex-direction:column}.project-create-row button,#new-project-title{width:100%}
+ #web-source-import,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
+ #web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{width:100%}
+ #notebooklm-import button,#web-source-import button{width:100%;margin-top:6px}
+ #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+}'''
 ASSETS = {'/': ('text/html; charset=utf-8', WEB_HTML),
           '/app.css': ('text/css; charset=utf-8', WEB_CSS),
           '/app.js': ('text/javascript; charset=utf-8', WEB_JS)}
