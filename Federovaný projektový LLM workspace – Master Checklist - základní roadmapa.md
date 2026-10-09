@@ -780,11 +780,13 @@ nenahrazují.
 - [ ] Projekt nesmí působit primárně jako „chat s AI“.
 - [ ] Chat je pouze jeden z možných pohledů.
 - [ ] Orchestrator chat je volitelný; bez dostupného/povoleného LLM musí stejné základní projektové operace zůstat dostupné deterministickým UI/workflow.
-- [ ] Sdílené webové UI přizpůsobit úzkému dotykovému viewportu telefonu;
+- [x] Sdílené webové UI přizpůsobit úzkému dotykovému viewportu telefonu;
   prioritně ověřit na skutečně používaném importu, seznamu projektu, náhledu
   artefaktu a potvrzovacích tocích. Zachovat stejné serverové RBAC/privacy
   hranice, klávesnicovou přístupnost a bezpečné textové vykreslení jako na
   desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
+  UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
+  [WORK_LOG](WORK_LOG.md).
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
