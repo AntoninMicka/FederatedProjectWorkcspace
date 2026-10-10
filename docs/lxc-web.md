@@ -189,6 +189,11 @@ nevytváří účet služby, nebootstrapuje uzel a negeneruje TLS. Připraví no
 izolované vydání s vlastní venv, nainstaluje jeho Python dependencies a teprve
 pak přepne službu s rollback snapshotem a HTTPS healthcheckem. Aktualizace
 krátce restartuje aplikaci, nikoli router či kontejner. Není to offline update.
+Healthcheck čeká až 45 sekund na skutečný HTTPS listener; samotný stav systemd
+`active` nestačí, protože na pomalejším ARM uzlu mohou ještě probíhat importy a
+lokální recovery. Při pádu nebo timeoutu vypíše stav služby a posledních 120
+řádků journalu ještě před rollbackem. Takové deterministické selhání se slepě
+neopakuje; nový pokus musí správce spustit vědomě až po diagnóze.
 Chybějící systémové závislosti řešte běžným deployem bez `--update-only`;
 ten nyní přeskočí apt, pokud jsou všechny požadované balíky již nainstalované.
 
@@ -207,7 +212,9 @@ reakci na chybu. Chyba deploye nyní vypisuje tyto příkazy pro konkrétní cí
 `--regen-tls` patří k běžnému deployi a mění CA důvěru; nelze ho spojit s update,
 recover ani reset. Žádný z těchto režimů nemění firewall.
 
-Změny jsou implementované, zatím bez nového testového či cílového ověření.
+Lokální testy ověřují generovaný update, rollback a zákaz slepého opakování
+readiness chyby. Úspěšný update a následný restart na skutečné Omnii zůstávají
+samostatnou provozní akceptací.
 
 Desktop nabízí také nativní **Nasadit LXC uzel…** s jedním SSH spojením,
 detekcí IP a prvotním založením lokálního správce/propojením peerů.

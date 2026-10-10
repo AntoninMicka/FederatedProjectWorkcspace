@@ -50,6 +50,15 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(deploy_omnia.main(), 0)
             self.assertEqual(run.call_count, 3)
 
+    def test_failed_https_readiness_is_not_blindly_retried(self):
+        failed = SimpleNamespace(returncode=70)
+        with patch('sys.argv', ['deploy', 'root@example.invalid', '--retries', '3',
+                                '--web-lan', '192.168.100.0/24']), \
+                patch('scripts.deploy_omnia.run_ssh', return_value=failed) as run, \
+                patch('builtins.print'):
+            self.assertEqual(deploy_omnia.main(), 70)
+            run.assert_called_once()
+
     def test_web_reset_mode_uses_reset_script(self):
         with patch('sys.argv', ['deploy', 'root@example.invalid', '--web-lan', '192.168.100.0/24', '--reset']), patch('subprocess.run') as run:
             run.return_value = SimpleNamespace(returncode=0)

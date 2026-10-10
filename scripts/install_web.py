@@ -123,12 +123,38 @@ mv -Tf "$base/.current-{release}" "$base/current"
 systemctl daemon-reload
 systemctl enable federated-workspace.service
 systemctl restart federated-workspace.service
-# Give startup a bounded interval. The service validates token and TLS on start.
-i=0
-until systemctl is-active --quiet federated-workspace.service; do
- i=$((i+1)); [ "$i" -lt 10 ]; sleep 1
-done
-python3 -c 'import http.client,ssl,time; c=ssl.create_default_context(cafile="/etc/federated-workspace/ca.crt"); c.check_hostname=False; time.sleep(1); h=http.client.HTTPSConnection("127.0.0.1",8443,context=c,timeout=3); h.request("GET","/"); assert h.getresponse().status==200; h.close()'
+# A Type=simple unit becomes active before Python imports and recovery finish. Probe the
+# actual HTTPS listener for a bounded interval, especially on slower ARM routers.
+if ! python3 -c '
+import http.client, ssl, time
+context = ssl.create_default_context(cafile="/etc/federated-workspace/ca.crt")
+context.check_hostname = False
+deadline = time.monotonic() + 45
+while True:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise SystemExit(1)
+    connection = http.client.HTTPSConnection(
+        "127.0.0.1", 8443, context=context, timeout=min(2, remaining))
+    try:
+        connection.request("GET", "/")
+        if connection.getresponse().status == 200:
+            raise SystemExit(0)
+    except (OSError, ssl.SSLError, http.client.HTTPException):
+        pass
+    finally:
+        connection.close()
+    time.sleep(min(1, max(0, deadline - time.monotonic())))
+'; then
+ if systemctl is-active --quiet federated-workspace.service; then
+  echo 'New workspace service did not expose HTTPS within 45 seconds' >&2
+ else
+  echo 'New workspace service exited before HTTPS became ready' >&2
+ fi
+ systemctl --no-pager --full status federated-workspace.service >&2 || :
+ journalctl -u federated-workspace.service -n 120 --no-pager >&2 || :
+ exit 70
+fi
 trap - EXIT
 rm -r "$base/web-rollback"
 echo 'HTTPS viewer installed; access key remains in /var/lib/federated-workspace/access-key'

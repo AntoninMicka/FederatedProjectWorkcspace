@@ -61,7 +61,7 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   dokumentaci, odkazy, finální diff a omezení skutečného LAN ověření.
   Automatizované ověření 2026-10-10: cílené testy transportu, desktopového UI,
   webového RBAC a balení prošly; úplná sada `python3 -m unittest discover -s
-  tests -v` po poslední změně prošla 442 testy, 27 testů bylo záměrně přeskočeno
+  tests -v` po poslední změně prošla 443 testy, 27 testů bylo záměrně přeskočeno
   kvůli chybějícímu
   nativnímu Qt/WebEngine či libgit2 prostředí. Živý read-only dotaz stejného uzlu
   na `http://127.0.0.1:11434/api/tags` prošel a našel nakonfigurovaný model.
@@ -79,6 +79,14 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   skutečně z Omnie. Existující SSH host key routeru je známý, ale unattended
   přihlášení nemá autorizovaný klíč; na routeru proto zatím nebyl spuštěn žádný
   příkaz ani provedena změna.
+  První skutečný `--update-only` pokus z Omnie vytvořil izolované release, ale
+  jednorázový healthcheck po jedné sekundě třikrát našel odmítnuté HTTPS a
+  neodlišil pomalý start ARMv7 od trvalého selhání; rollback vrátil předchozí
+  `current`, persistentní identitu a data nezměnil. Instalátor nyní čeká až 45
+  sekund na skutečný HTTPS listener, při selhání vypíše stav a journal před
+  rollbackem a návratový kód readiness
+  chyby automaticky neopakuje. Cílených 10 testů a shell syntaxe prošly; nový
+  deploy na Omnii po opravě zatím proveden nebyl.
 - [x] [completed] **F-M3-OLLAMA-ROBUST-01-E — Tolerantní fingerprint a
   neaktivní koncept nastavení (cílová úroveň: implemented; ad-hoc požadavek
   uživatele 2026-10-10).** Přijmout běžný OpenSSL SHA-256 fingerprint, před
@@ -93,8 +101,17 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
 
 ## K předání do backlogu
 
-Zatím bez nových odkladů. Basic Auth nebo mTLS pro LAN proxy vyžadují samostatný
-credential lifecycle; současný binding credentials záměrně nepřijímá a tato
-dávka jej bez doložené potřeby nezavádí.
+- [ ] [planned] **WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru
+  (cílová úroveň: implemented; zjištěno při živé diagnostice 2026-10-10).**
+  Journal skutečné LXC instance doložil `AttributeError`, protože `WebServer`
+  neinicializuje `summary_service`, ačkoli zděděný handler její endpointy
+  obsluhuje; stejnou statickou mezeru mají extraction a metadata suggestions.
+  Samostatná feature má sjednotit runtime wiring desktopu a webu a regresně
+  ověřit všechny vystavené endpointy. Tento problém nezpůsobil odmítnutí portu
+  během update healthchecku a nepatří do Ollama dávky.
+
+Basic Auth nebo mTLS pro LAN proxy vyžadují samostatný credential lifecycle;
+současný binding credentials záměrně nepřijímá a tato dávka jej bez doložené
+potřeby nezavádí.
 
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)

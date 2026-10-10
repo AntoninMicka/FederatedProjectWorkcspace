@@ -316,6 +316,10 @@ def main():
                     print('Application deployed, but copying public CA to router failed. Retry deployment; do not reset the working application.')
                 return sync_result
             return 0
+        if result.returncode == 70:
+            print('The new service failed its bounded HTTPS readiness check; not retrying the same release automatically.')
+            advice()
+            return result.returncode
         if attempt < args.retries:
             time.sleep(2 ** (attempt - 1))
             print(f'Attempt {attempt}/{args.retries}: failed, retrying')
