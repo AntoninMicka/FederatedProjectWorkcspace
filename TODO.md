@@ -65,6 +65,16 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   firewall, pin, generační běh a dostupnost po restartu Ollamy/stroje. Bez adresy
   a certifikátu cílového serveru tyto body nejsou ověřené a dávka není připravena
   k předání PR.
+  Průběžná živá kontrola 2026-10-10 zjistila Docker Ollamu na hostu
+  `192.168.100.192`, funkční TLS proxy `:11443` a úspěšný model catalog přes její
+  LAN adresu. Současný leaf certifikát však pokrývá pouze localhost a starý
+  `open-webui` kontejner i exportovaná systemd jednotka publikují nešifrovaný
+  port `11434` na všech IPv4/IPv6 rozhraních. Před akceptací je nutné certifikát
+  obnovit s IP SAN, řízeně znovu vytvořit kontejnery tak, aby `11434` zůstal na
+  loopbacku, omezit `11443` na zdrojovou IP Omnie a provést dotaz i generaci
+  skutečně z Omnie. Existující SSH host key routeru je známý, ale unattended
+  přihlášení nemá autorizovaný klíč; na routeru proto zatím nebyl spuštěn žádný
+  příkaz ani provedena změna.
 
 ## K předání do backlogu
 

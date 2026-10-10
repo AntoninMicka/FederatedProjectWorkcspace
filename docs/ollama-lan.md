@@ -55,6 +55,49 @@ uzlu nebo z nezbytně úzkého správcovského subnetu. Workspace v této verzi
 neposílá Basic Auth ani klientský mTLS certifikát. Ollama lokální API samo
 autentizaci nevyžaduje; samotný TLS pin proto nenahrazuje omezení firewallu.
 
+### Ollama uvnitř Open WebUI Docker image
+
+Pokud Ollama běží uvnitř kontejneru `open-webui` a TLS proxy v samostatném
+kontejneru, proxy nesmí používat svůj vlastní loopback. Oba kontejnery připojte
+do jedné uživatelské Docker sítě a použijte interní jméno služby:
+
+```nginx
+location / {
+    resolver 127.0.0.11 valid=10s;
+    set $ollama_upstream http://open-webui:11434;
+    proxy_pass $ollama_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    proxy_buffering off;
+}
+```
+
+Na hostiteli má být nešifrované API publikované pouze na loopbacku, zatímco
+HTTPS proxy může poslouchat na LAN adrese:
+
+```text
+127.0.0.1:11434 -> open-webui:11434
+LAN_IP:11443    -> ollama-tls-proxy:443 -> open-webui:11434
+```
+
+AI Production Studio tento režim připraví volbou **Zpřístupnit Ollama API přes
+TLS reverse proxy**. Po změně je nutné řízeně znovu vytvořit `open-webui` i proxy
+a aktualizovat exportované systemd unity; pouhý restart starého kontejneru
+nezmění jeho publikované porty. Pojmenované volumes s modely a Open WebUI daty
+se při tomto znovuvytvoření zachovají. Výsledek ověřte například:
+
+```sh
+docker ps --format '{{.Names}} {{.Ports}}' \
+  --filter name=open-webui --filter name=ollama-tls-proxy
+```
+
+Kontrola nesmí u `open-webui` ukázat `0.0.0.0:11434` ani `[::]:11434`. Pokud je
+HTTPS proxy dostupná celé důvěryhodné LAN, omezte navíc její port hostitelským
+firewallem na přesnou zdrojovou IP Omnie. Alternativní Nginx `allow`/`deny`
+může být druhá vrstva, ne náhrada kontroly hostitelského firewallu.
+
 ## Kontrola serveru
 
 Nejdřív ověřte proxy běžným TLS klientem proti důvěryhodné CA, bez `-k`:
@@ -63,6 +106,10 @@ Nejdřív ověřte proxy běžným TLS klientem proti důvěryhodné CA, bez `-k
 curl --fail --show-error --cacert /cesta/ca.crt \
   https://PRIVATE_IP:11443/api/tags
 ```
+
+Serverový certifikát musí mít `PRIVATE_IP` v IP SAN. Certifikát pouze pro
+`localhost` nestačí pro nezávislou CA validaci z Omnie, i kdyby přes proxy
+technicky prošel klient používající jen přesný leaf pin.
 
 SHA-256 pin, který Workspace očekává, je hash přes DER bajty aktuálního leaf
 certifikátu:
