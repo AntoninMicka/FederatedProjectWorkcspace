@@ -11,8 +11,8 @@ Dávka na větvi `feature/ux-mobile-01-responsive-web`, založené z
 `develop` `519dce8` po merge PR #48, přizpůsobila jediné stávající sdílené
 HTML/CSS/JS úzkému dotykovému viewportu. Dosažená úroveň je PoC validated
 a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
-závěrečném předání přesunuta z TODO. Jediný PR do `develop` zatím nebyl
-vytvořen; push ani merge nebyly provedeny.
+závěrečném předání přesunuta z TODO. Dávka byla začleněna do `develop` jako
+PR #49, merge commit `2c9b1b2`.
 
 - [x] [completed] **UX-MOBILE-01-A — Mobilní navigace a layout
   (implemented).** Původní pevný levý sloupec nahradil na viewportu do 640 px

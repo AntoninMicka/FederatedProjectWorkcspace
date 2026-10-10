@@ -13,10 +13,31 @@ import unittest
 from spikes.desktop import provider_key_url, request_policy
 from spikes.desktop_ui import DesktopHandler, HTML, JS
 from spikes.local_api import running_api
+from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_ollama_diagnostic_response_distinguishes_failed_and_unknown(self):
+        driver = test_local_api.LocalAPITests()
+        cases = ((OllamaResponseError('pin', code='tls-pin-mismatch'), 502,
+                  'tls-pin-mismatch', 'failed'),
+                 (UnknownRun('timeout', code='response-timeout'), 409,
+                  'response-timeout', 'unknown'))
+        for error, status, diagnostic, outcome in cases:
+            class Service:
+                def test_binding(self, request):
+                    raise error
+            with self.subTest(diagnostic=diagnostic), running_api(
+                    'http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                response = driver.request(server, path='/v1/chat/test', body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(f' {status} '.encode(), head)
+            payload = json.loads(body)
+            self.assertEqual((payload['diagnostic'], payload['outcome'], payload['retry']),
+                             (diagnostic, outcome, 'new-run'))
+
     def test_notebooklm_desktop_uses_native_two_step_dialog(self):
         desktop = Path('spikes/desktop.py').read_text()
         dialog = Path('spikes/desktop_notebooklm_import.py').read_text()
@@ -82,7 +103,10 @@ class DesktopTests(unittest.TestCase):
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("'/v1/tasks/'", Path('spikes/desktop_ui.py').read_text())
         self.assertIn('error.status=response.status', JS)
-        self.assertIn('if(error.status===422)pendingChatRequest=null', JS)
+        self.assertIn("if([409,422,502].includes(error.status))pendingChatRequest=null", JS)
+        self.assertIn("'/v1/chat/test'", JS)
+        self.assertIn('Ověřit bez uložení', HTML)
+        self.assertIn('Zadání a výběr zůstaly zachovány', JS)
         self.assertIn('Ollama vrátila neplatný formát výsledku úlohy',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)

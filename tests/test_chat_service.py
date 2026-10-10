@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
@@ -114,6 +115,19 @@ class ChatServiceTests(unittest.TestCase):
                      content='First question', privacy='project', created_at=NOW)
         value.update(changes)
         return value
+
+    def test_candidate_probe_does_not_replace_confirmed_binding(self):
+        before = self.service.status()['binding']
+        candidate = dict(self.binding, revision='candidate', model='other:latest')
+        expected = {'status': 'available', 'diagnostic': 'model-unavailable',
+                    'model': 'other:latest', 'model_available': False,
+                    'model_count': 1, 'boundary': 'same-node',
+                    'endpoint': 'http://127.0.0.1:11434',
+                    'target_id': 'local-process'}
+        with patch.object(OllamaAdapter, 'probe', return_value=expected) as probe:
+            self.assertEqual(self.service.test_binding(candidate), expected)
+        self.assertEqual(probe.call_args.args[0].model, 'other:latest')
+        self.assertEqual(self.service.status()['binding'], before)
 
     def test_account_metric_failure_does_not_change_routing_or_chat_run(self):
         class UnavailableMetrics:

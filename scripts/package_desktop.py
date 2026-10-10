@@ -22,7 +22,8 @@ PREFIX = 'federated-workspace-poc'
 
 
 def sources(root):
-    paths = [root / name for name in ('run.sh', 'requirements.txt', 'LICENSE', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md')]
+    paths = [root / name for name in ('run.sh', 'requirements.txt', 'LICENSE', 'README.md',
+             'docs/project-opening.md', 'docs/lxc-web.md', 'docs/ollama-lan.md')]
     for directory, pattern in [('spikes', '*.py'), ('scripts', '*.py'), ('tests', '*.py'), ('docs/adr', '*.md')]:
         paths.extend(sorted((root / directory).glob(pattern)))
     paths.extend(sorted((root / 'modules').glob('*.json')))

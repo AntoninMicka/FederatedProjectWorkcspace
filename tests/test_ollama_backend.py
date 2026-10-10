@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
@@ -107,6 +108,25 @@ class OllamaAdapterTests(unittest.TestCase):
         restarted = OllamaAdapter(OllamaRuns(self.state),
                                   lambda binding, request: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
+
+    def test_concurrent_same_run_never_starts_second_transport(self):
+        entered = threading.Event(); release = threading.Event(); calls = []
+        def transport(binding, request):
+            calls.append(request); entered.set(); self.assertTrue(release.wait(2))
+            return {'model': binding.model, 'response': 'answer'}
+        adapter = OllamaAdapter(OllamaRuns(self.state), transport)
+        result = []
+        worker = threading.Thread(target=lambda: result.append(
+            adapter.dispatch(self.handoff, self.binding)))
+        worker.start(); self.assertTrue(entered.wait(2))
+        try:
+            with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+                adapter.dispatch(self.handoff, self.binding)
+        finally:
+            release.set(); worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result[0]['response'], 'answer')
 
     def test_new_run_records_backend_execution_identity(self):
         role = ROLES.resolve('extractor', 'extractor-v1')
@@ -212,6 +232,49 @@ class OllamaAdapterTests(unittest.TestCase):
             adapter.dispatch(self.handoff, self.binding)
         self.assertEqual(len(calls), 1)
         self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'unknown')
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['error_code'],
+                         'transport-unknown')
+
+    def test_connect_failure_is_known_and_diagnostic_survives_restart(self):
+        class Connection:
+            def __init__(self, *args, **kwargs): pass
+            def connect(self): raise ConnectionRefusedError('refused')
+            def close(self): pass
+        adapter = OllamaAdapter(OllamaRuns(self.state))
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            with self.assertRaisesRegex(OllamaResponseError, 'unavailable') as first:
+                adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(first.exception.code, 'unavailable')
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['error_code']), ('failed', 'unavailable'))
+        restarted = OllamaAdapter(OllamaRuns(self.state),
+                                  lambda *_args: self.fail('must not redispatch'))
+        with self.assertRaises(OllamaResponseError) as second:
+            restarted.dispatch(self.handoff, self.binding)
+        self.assertEqual(second.exception.code, 'unavailable')
+
+    def test_timeout_after_request_is_unknown_and_diagnostic_survives_restart(self):
+        events = []
+        class Connection:
+            def __init__(self, *args, **kwargs): pass
+            def connect(self): events.append('connect')
+            def request(self, *args, **kwargs): events.append('request')
+            def getresponse(self): raise TimeoutError('slow response')
+            def close(self): events.append('close')
+        adapter = OllamaAdapter(OllamaRuns(self.state))
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            with self.assertRaises(UnknownRun) as first:
+                adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(first.exception.code, 'response-timeout')
+        self.assertEqual(events, ['connect', 'request', 'close'])
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['error_code']),
+                         ('unknown', 'response-timeout'))
+        restarted = OllamaAdapter(OllamaRuns(self.state),
+                                  lambda *_args: self.fail('must not redispatch'))
+        with self.assertRaises(UnknownRun) as second:
+            restarted.dispatch(self.handoff, self.binding)
+        self.assertEqual(second.exception.code, 'response-timeout')
 
     def test_known_failure_and_binding_change_fail_closed(self):
         def rejected(binding, request):
@@ -276,3 +339,60 @@ class OllamaAdapterTests(unittest.TestCase):
             result = OllamaAdapter._http_transport(binding, b'{}')
         self.assertEqual(result['response'], 'ok')
         self.assertEqual(events, [('timeout', 180), 'connect', 'pin', 'request', 'close'])
+
+    def test_wrong_private_tls_pin_fails_before_request(self):
+        certificate = b'unexpected certificate'; events = []
+        binding = OllamaBinding.parse(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='revision-1', adapter='ollama', boundary='private-network',
+            endpoint='https://10.0.0.2:11434', model='gemma3', target_id=str(uuid4()),
+            tls_cert_sha256='a' * 64))
+        class Socket:
+            def getpeercert(self, binary_form=False): return certificate
+        class Connection:
+            def __init__(self, *args, **kwargs): self.sock = Socket()
+            def connect(self): events.append('connect')
+            def request(self, *args, **kwargs): events.append('request')
+            def close(self): events.append('close')
+        with patch('spikes.ollama_backend.http.client.HTTPSConnection', Connection):
+            with self.assertRaises(OllamaResponseError) as caught:
+                OllamaAdapter._http_transport(binding, b'{}')
+        self.assertEqual(caught.exception.code, 'tls-pin-mismatch')
+        self.assertEqual(events, ['connect', 'close'])
+
+    def test_invalid_wire_json_has_specific_known_diagnostic(self):
+        class Response:
+            status = 200
+            def read(self, limit): return b'not-json'
+        class Connection:
+            def __init__(self, *args, **kwargs): pass
+            def connect(self): pass
+            def request(self, *args, **kwargs): pass
+            def getresponse(self): return Response()
+            def close(self): pass
+        adapter = OllamaAdapter(OllamaRuns(self.state))
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            with self.assertRaises(OllamaResponseError) as caught:
+                adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(caught.exception.code, 'invalid-json')
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['error_code']), ('failed', 'invalid-json'))
+
+    def test_probe_reads_only_model_catalog_and_reports_missing_model(self):
+        events = []
+        class Response:
+            status = 200
+            def read(self, limit):
+                return b'{"models":[{"name":"other:latest"}]}'
+        class Connection:
+            def __init__(self, *args, **kwargs): events.append(('timeout', kwargs['timeout']))
+            def connect(self): events.append('connect')
+            def request(self, method, path, body=None, headers=None):
+                events.append((method, path, body))
+            def getresponse(self): return Response()
+            def close(self): events.append('close')
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            result = OllamaAdapter.probe(self.binding)
+        self.assertEqual(result['diagnostic'], 'model-unavailable')
+        self.assertFalse(result['model_available'])
+        self.assertEqual(result['model_count'], 1)
+        self.assertEqual(events, [('timeout', 10), 'connect', ('GET', '/api/tags', None), 'close'])

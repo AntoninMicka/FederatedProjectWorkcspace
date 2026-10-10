@@ -20,13 +20,12 @@ F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
-`IMP-02` bylo doručeno PR #48. Přijaté `UX-MOBILE-01` je archivované ve
-WORK_LOG a v [TODO](TODO.md) čeká na doručení jediného PR do `develop`;
-další dávka zatím není aktivovaná.
+`IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49. Aktivní
+`F-M3-OLLAMA-ROBUST-01` je pouze v [TODO](TODO.md); níže zůstávají dvě další
+připravené dávky.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout, přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav; zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez ztráty zadání, výběru kontextu nebo již připraveného externího preview. Automaticky neopakovat běh s neznámým výsledkem ani neprovádět skrytý fallback. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď, chybný JSON, pád před/po durable přechodech, souběh a oddělení chyby lokálního routeru od chyby externího providera.
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
   cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu

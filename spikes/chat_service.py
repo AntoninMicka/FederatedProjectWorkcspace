@@ -79,6 +79,11 @@ class ChatService:
         bindings.save(binding)
         return self.status()
 
+    def test_binding(self, value):
+        """Probe a candidate without saving it or sending project content."""
+        binding = BACKENDS.parse_binding(value)
+        return OllamaAdapter.probe(binding)
+
     def status(self):
         node_id, user_id = self._identity()
         threads, bindings, _ = self._stores()

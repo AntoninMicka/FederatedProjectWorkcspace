@@ -27,11 +27,21 @@ OLLAMA_GENERATE_TIMEOUT = 180
 
 
 class UnknownRun(BackendUnknown):
-    pass
+    def __init__(self, message, *, code='outcome-unknown'):
+        super().__init__(message)
+        self.code = code
 
 
 class OllamaResponseError(BackendResponseError):
-    pass
+    def __init__(self, message, *, code='response-invalid'):
+        super().__init__(message)
+        self.code = code
+
+
+class _OllamaTransportUnknown(RuntimeError):
+    def __init__(self, message, *, code='transport-interrupted'):
+        super().__init__(message)
+        self.code = code
 
 
 @dataclass(frozen=True)
@@ -185,7 +195,8 @@ class BackendRuns:
         additions = {
             'adapter_id': 'TEXT', 'binding_id': 'TEXT', 'binding_revision': 'TEXT',
             'capability_revision': 'TEXT', 'operation': 'TEXT', 'output_format': 'TEXT',
-            'role_id': 'TEXT', 'role_revision': 'TEXT', 'manifest_sha256': 'TEXT'}
+            'role_id': 'TEXT', 'role_revision': 'TEXT', 'manifest_sha256': 'TEXT',
+            'error_code': 'TEXT'}
         for name, kind in additions.items():
             if name not in columns:
                 db.execute(f'ALTER TABLE runs ADD COLUMN {name} {kind}')
@@ -197,7 +208,7 @@ class BackendRuns:
         with self.connect() as db:
             row = db.execute('SELECT request_digest,state,response,error,adapter_id,binding_id,'
                              'binding_revision,capability_revision,operation,output_format,'
-                             'role_id,role_revision,manifest_sha256 FROM runs WHERE run_id=?',
+                             'role_id,role_revision,manifest_sha256,error_code FROM runs WHERE run_id=?',
                              (run_id,)).fetchone()
             return None if row is None else dict(request_digest=row[0], state=row[1],
                                                   response=json.loads(row[2]) if row[2] else None,
@@ -205,7 +216,7 @@ class BackendRuns:
                                                   binding_revision=row[6], capability_revision=row[7],
                                                   operation=row[8], output_format=row[9],
                                                   role_id=row[10], role_revision=row[11],
-                                                  manifest_sha256=row[12])
+                                                  manifest_sha256=row[12], error_code=row[13])
 
     def prepare(self, run_id, digest, legacy_digest, execution, manifest_sha256):
         execution.validate()
@@ -375,9 +386,11 @@ class OllamaAdapter:
         if row['state'] == 'succeeded':
             return row['response']
         if row['state'] in {'dispatching', 'unknown'}:
-            raise UnknownRun('Ollama result is unknown; automatic retry is forbidden')
+            raise UnknownRun('Ollama result is unknown; automatic retry is forbidden',
+                             code=row.get('error_code') or 'outcome-unknown')
         if row['state'] != 'prepared':
-            raise OllamaResponseError(row['error'] or 'Ollama run failed; explicit new run required')
+            raise OllamaResponseError(row['error'] or 'Ollama run failed; explicit new run required',
+                                      code=row.get('error_code') or 'response-invalid')
         # Revalidate the exact binding again immediately before crossing the transport boundary.
         require(handoff.target == binding.target(), 'Ollama binding changed before dispatch')
         with self.runs.connect() as db:
@@ -390,17 +403,26 @@ class OllamaAdapter:
             response = self.transport(binding, request)
             if not (isinstance(response, dict) and response.get('model') == binding.model
                     and isinstance(response.get('response'), str)):
-                raise OllamaResponseError('Invalid Ollama response')
+                raise OllamaResponseError('Invalid Ollama response', code='invalid-envelope')
         except OllamaResponseError as exc:
             with self.runs.connect() as db, db:
-                db.execute("UPDATE runs SET state='failed',error=? WHERE run_id=? AND state='dispatching'",
-                           (str(exc), handoff.run_id))
+                db.execute("UPDATE runs SET state='failed',error=?,error_code=? "
+                           "WHERE run_id=? AND state='dispatching'",
+                           (str(exc), exc.code, handoff.run_id))
             raise
+        except _OllamaTransportUnknown as exc:
+            with self.runs.connect() as db, db:
+                db.execute("UPDATE runs SET state='unknown',error=?,error_code=? "
+                           "WHERE run_id=? AND state='dispatching'",
+                           (str(exc), exc.code, handoff.run_id))
+            raise UnknownRun('Ollama dispatch outcome is unknown', code=exc.code) from exc
         except Exception as exc:
             with self.runs.connect() as db, db:
-                db.execute("UPDATE runs SET state='unknown',error=? WHERE run_id=? AND state='dispatching'",
-                           (type(exc).__name__, handoff.run_id))
-            raise UnknownRun('Ollama dispatch outcome is unknown') from exc
+                db.execute("UPDATE runs SET state='unknown',error=?,error_code=? "
+                           "WHERE run_id=? AND state='dispatching'",
+                           (type(exc).__name__, 'transport-unknown', handoff.run_id))
+            raise UnknownRun('Ollama dispatch outcome is unknown',
+                             code='transport-unknown') from exc
         encoded = json.dumps(response, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
         with self.runs.connect() as db, db:
             result = db.execute("UPDATE runs SET state='succeeded',response=? "
@@ -410,35 +432,105 @@ class OllamaAdapter:
 
     @staticmethod
     def _http_transport(binding, request):
+        return OllamaAdapter._json_transport(
+            binding, 'POST', '/api/generate', request,
+            timeout=OLLAMA_GENERATE_TIMEOUT, uncertain_after_send=True)
+
+    @staticmethod
+    def _json_transport(binding, method, path, body=None, *, timeout, uncertain_after_send):
         parsed = urlsplit(binding.endpoint)
         if binding.boundary == 'same-node':
             connection = http.client.HTTPConnection(
-                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT)
+                parsed.hostname, parsed.port, timeout=timeout)
         else:
             context = ssl._create_unverified_context()
             connection = http.client.HTTPSConnection(
-                parsed.hostname, parsed.port, timeout=OLLAMA_GENERATE_TIMEOUT,
+                parsed.hostname, parsed.port, timeout=timeout,
                 context=context)
         try:
-            connection.connect()
+            try:
+                connection.connect()
+            except TimeoutError as exc:
+                raise OllamaResponseError('Ollama connection timed out',
+                                          code='connect-timeout') from exc
+            except ssl.SSLError as exc:
+                raise OllamaResponseError('Ollama TLS handshake failed',
+                                          code='tls-failed') from exc
+            except OSError as exc:
+                raise OllamaResponseError('Ollama endpoint is unavailable',
+                                          code='unavailable') from exc
             if binding.tls_cert_sha256:
-                certificate = connection.sock.getpeercert(binary_form=True)
-                require(hashlib.sha256(certificate).hexdigest() == binding.tls_cert_sha256,
-                        'Ollama TLS certificate pin mismatch')
-            connection.request('POST', '/api/generate', body=request,
-                               headers={'Content-Type': 'application/json',
-                                        'Accept': 'application/json'})
-            response = connection.getresponse()
+                try:
+                    certificate = connection.sock.getpeercert(binary_form=True)
+                except (AttributeError, OSError, ssl.SSLError) as exc:
+                    raise OllamaResponseError('Ollama TLS certificate is unavailable',
+                                              code='tls-failed') from exc
+                if hashlib.sha256(certificate).hexdigest() != binding.tls_cert_sha256:
+                    raise OllamaResponseError('Ollama TLS certificate pin mismatch',
+                                              code='tls-pin-mismatch')
+            headers = {'Accept': 'application/json'}
+            if body is not None:
+                headers['Content-Type'] = 'application/json'
+            try:
+                connection.request(method, path, body=body, headers=headers)
+                response = connection.getresponse()
+            except (TimeoutError, OSError, http.client.HTTPException) as exc:
+                if uncertain_after_send:
+                    raise _OllamaTransportUnknown(
+                        'Ollama transport was interrupted after dispatch',
+                        code='response-timeout' if isinstance(exc, TimeoutError)
+                        else 'transport-interrupted') from exc
+                raise OllamaResponseError('Ollama healthcheck transport failed',
+                                          code='healthcheck-unavailable') from exc
             if 300 <= response.status < 400:
-                raise OllamaResponseError('Ollama redirect is forbidden')
+                raise OllamaResponseError('Ollama redirect is forbidden', code='redirect-forbidden')
             if response.status != 200:
-                raise OllamaResponseError(f'Ollama returned HTTP {response.status}')
-            raw = response.read(16 * 1024 * 1024 + 1)
+                codes = {400: 'request-rejected', 401: 'access-denied',
+                         403: 'access-denied', 404: ('model-unavailable'
+                         if path == '/api/generate' else 'api-incompatible'),
+                         429: 'overloaded', 503: 'overloaded'}
+                raise OllamaResponseError(f'Ollama returned HTTP {response.status}',
+                                          code=codes.get(response.status, 'http-error'))
+            try:
+                raw = response.read(16 * 1024 * 1024 + 1)
+            except (TimeoutError, OSError, http.client.HTTPException) as exc:
+                if uncertain_after_send:
+                    raise _OllamaTransportUnknown(
+                        'Ollama response was interrupted',
+                        code='response-timeout' if isinstance(exc, TimeoutError)
+                        else 'transport-interrupted') from exc
+                raise OllamaResponseError('Ollama healthcheck response failed',
+                                          code='healthcheck-unavailable') from exc
             if len(raw) > 16 * 1024 * 1024:
-                raise OllamaResponseError('Ollama response exceeds 16 MiB')
+                raise OllamaResponseError('Ollama response exceeds 16 MiB',
+                                          code='response-too-large')
             try:
                 return json.loads(raw)
             except (UnicodeError, ValueError) as exc:
-                raise OllamaResponseError('Invalid Ollama JSON response') from exc
+                raise OllamaResponseError('Invalid Ollama JSON response',
+                                          code='invalid-json') from exc
         finally:
-            connection.close()
+            try:
+                connection.close()
+            except OSError:
+                pass
+
+    @staticmethod
+    def probe(binding, *, timeout=10):
+        require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
+        value = OllamaAdapter._json_transport(
+            binding, 'GET', '/api/tags', timeout=timeout, uncertain_after_send=False)
+        models = value.get('models') if isinstance(value, dict) else None
+        if not (isinstance(models, list) and len(models) <= 4096):
+            raise OllamaResponseError('Invalid Ollama model catalog', code='invalid-envelope')
+        names = []
+        for item in models:
+            name = item.get('name') if isinstance(item, dict) else None
+            if not (isinstance(name, str) and name and len(name.encode()) <= 4096):
+                raise OllamaResponseError('Invalid Ollama model catalog', code='invalid-envelope')
+            names.append(name)
+        return {'status': 'available', 'diagnostic': ('ok' if binding.model in names
+                else 'model-unavailable'), 'model': binding.model,
+                'model_available': binding.model in names, 'model_count': len(names),
+                'boundary': binding.boundary, 'endpoint': binding.endpoint,
+                'target_id': binding.target_id}

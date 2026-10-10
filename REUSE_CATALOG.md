@@ -127,6 +127,15 @@ identitu bindingu ani durable `unknown` recovery. Existující Ollama kód se
 adaptuje za provider-neutral rozhraní bez kopie transportu a bez automatického
 fallbacku. Rozhodnutí a kompatibilní migrace: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#provider-neutral-aplikační-kontrakt-v1).
 
+F-M3-OLLAMA-ROBUST-01 **reuse/adaptuje** jediný `OllamaBinding`,
+`OllamaAdapter`/`OllamaRuns`, provider-neutral chybové báze a centralizované
+nastavení. Diagnostika rozšiřuje stávající stdlib HTTP/TLS transport a SQLite
+journal; read-only `/api/tags` probe nevytváří druhého klienta ani konfiguraci.
+Obecný backend pool a automatický fallback se odmítají, protože by obcházely
+přesný Target, Context Manifest a privacy boundary. Soukromá inventura byla
+zohledněna pouze srovnávacím posouzením; žádný kód ani její neveřejné detaily se
+nepřenášejí. Provozní topologie a omezení: [Ollama v LAN](docs/ollama-lan.md).
+
 F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
 soukromá inventura obsahuje obecné backendové capability, textový a obrazový
 adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context
