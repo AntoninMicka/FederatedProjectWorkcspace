@@ -125,6 +125,13 @@ certifikátu, nikoli tajný klíč. Po legitimní rotaci certifikátu se spojen�
 záměrně odmítne, dokud správce nezíská nový pin jiným důvěryhodným kanálem a
 vědomě neupraví binding.
 
+Pole přijme také běžný výstup OpenSSL ve tvaru
+`SHA256 Fingerprint=68:34:...`: prefix, dvojtečky a velikost písmen Workspace
+před validací normalizuje. Pokud uložení přesto selže, vyplněné hodnoty zůstanou
+jako node-local neaktivní koncept i po obnovení stránky nebo restartu. Poslední
+platný binding se konceptem nemění a dál je jediným nastavením použitelným pro
+LLM běhy.
+
 Pro **ID cíle** vytvořte jednou stabilní UUID, například `uuidgen`, a uchovejte
 je jako identitu této služby i při běžném restartu. UUID není autentizační
 doklad; kryptografickou vazbu na dosažený endpoint v této verzi poskytuje

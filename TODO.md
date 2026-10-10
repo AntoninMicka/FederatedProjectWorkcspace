@@ -58,7 +58,8 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   dokumentaci, odkazy, finální diff a omezení skutečného LAN ověření.
   Automatizované ověření 2026-10-10: cílené testy transportu, desktopového UI,
   webového RBAC a balení prošly; úplná sada `python3 -m unittest discover -s
-  tests -v` prošla 437 testy, 27 testů bylo záměrně přeskočeno kvůli chybějícímu
+  tests -v` po poslední změně prošla 441 testy, 27 testů bylo záměrně přeskočeno
+  kvůli chybějícímu
   nativnímu Qt/WebEngine či libgit2 prostředí. Živý read-only dotaz stejného uzlu
   na `http://127.0.0.1:11434/api/tags` prošel a našel nakonfigurovaný model.
   Zbývá provozní akceptace proti skutečnému druhému LAN stroji: HTTPS proxy,
@@ -75,6 +76,17 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   skutečně z Omnie. Existující SSH host key routeru je známý, ale unattended
   přihlášení nemá autorizovaný klíč; na routeru proto zatím nebyl spuštěn žádný
   příkaz ani provedena změna.
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-E — Tolerantní fingerprint a
+  neaktivní koncept nastavení (cílová úroveň: implemented; ad-hoc požadavek
+  uživatele 2026-10-10).** Přijmout běžný OpenSSL SHA-256 fingerprint, před
+  aktivací jej kanonizovat a po neúspěšném uložení zachovat omezený node-local
+  koncept přes reload/restart. Koncept nesmí obsahovat credentials, změnit
+  poslední platný binding ani být použit pro dispatch. Ověřit oddělené atomické
+  zápisy, restart a UI rozlišení potvrzeného bindingu od konceptu.
+  Výsledek: OpenSSL prefix, dvojtečky a velikost písmen se normalizují; omezený
+  koncept se ukládá atomicky do samostatného souboru s módem 0600 a po chybě i
+  restartu se znovu načte. Cílená regrese prošla 74 testy se 2 volitelnými skipy;
+  úplná sada je zaznamenána u bodu D.
 
 ## K předání do backlogu
 

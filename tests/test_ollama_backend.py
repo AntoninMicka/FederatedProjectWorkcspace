@@ -48,6 +48,14 @@ class OllamaBindingTests(unittest.TestCase):
                 OllamaBinding.parse(self.binding(boundary='private-network', endpoint=endpoint,
                     target_id=peer, tls_cert_sha256=pin))
 
+    def test_private_network_normalizes_common_openssl_fingerprint(self):
+        raw = 'sha256 Fingerprint=' + ':'.join(['AB'] * 32)
+        binding = OllamaBinding.parse(self.binding(boundary='private-network',
+            endpoint='https://192.168.10.4:11443', target_id=str(uuid4()),
+            tls_cert_sha256=raw))
+        self.assertEqual(binding.tls_cert_sha256, 'ab' * 32)
+        self.assertEqual(binding.serialize()['tls_cert_sha256'], 'ab' * 32)
+
     def test_unknown_fields_credentials_and_missing_identity_fail_closed(self):
         for changes in ({'token': 'secret'}, {'endpoint': 'http://u:p@127.0.0.1:11434'},
                         {'boundary': 'private-network', 'endpoint': 'https://10.0.0.2:11434',
@@ -65,6 +73,25 @@ class OllamaBindingTests(unittest.TestCase):
             store.path.chmod(0o644)
             with self.assertRaisesRegex(ValidationError, 'Unsafe'):
                 OllamaBindings(state).load()
+
+    def test_bounded_invalid_draft_is_atomic_secret_free_and_restart_safe(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / 'state'; state.mkdir(mode=0o700)
+            store = OllamaBindings(state)
+            draft = self.binding(boundary='private-network',
+                                 endpoint='https://192.168.10.4:11443',
+                                 target_id=str(uuid4()), tls_cert_sha256='unfinished')
+            store.save_draft(draft)
+            self.assertEqual(OllamaBindings(state).load_draft(), draft)
+            self.assertEqual(store.draft_path.stat().st_mode & 0o777, 0o600)
+            with self.assertRaisesRegex(ValidationError, 'draft endpoint'):
+                store.save_draft(dict(draft, endpoint=11443))
+            with self.assertRaisesRegex(ValidationError, 'credentials'):
+                store.save_draft(dict(draft, endpoint='https://user:secret@192.168.10.4:11443'))
+            self.assertEqual(store.load_draft(), draft)
+            store.draft_path.chmod(0o644)
+            with self.assertRaisesRegex(ValidationError, 'Unsafe'):
+                store.load_draft()
 
     def test_backend_registry_capabilities_and_roles_fail_closed(self):
         registry = BackendRegistry(); registry.register('ollama', OllamaBinding.parse)

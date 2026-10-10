@@ -26,6 +26,14 @@ from spikes.metadata import require, uuid
 OLLAMA_GENERATE_TIMEOUT = 180
 
 
+def normalize_tls_fingerprint(value):
+    if not isinstance(value, str):
+        return value
+    normalized = value.strip()
+    normalized = re.sub(r'(?i)^sha256\s*fingerprint\s*=\s*', '', normalized)
+    return normalized.replace(':', '').lower()
+
+
 class UnknownRun(BackendUnknown):
     def __init__(self, message, *, code='outcome-unknown'):
         super().__init__(message)
@@ -80,7 +88,7 @@ class OllamaBinding:
             address = ipaddress.ip_address(parsed.hostname or '')
         except ValueError as exc:
             raise ValueError('Ollama endpoint requires a numeric IP address') from exc
-        pin = value.get('tls_cert_sha256')
+        pin = normalize_tls_fingerprint(value.get('tls_cert_sha256'))
         if value['boundary'] == 'same-node':
             require(parsed.scheme == 'http' and address.is_loopback,
                     'same-node Ollama requires a numeric loopback HTTP endpoint')
@@ -126,19 +134,21 @@ class OllamaBindings:
                 and stat.S_IMODE(info.st_mode) == 0o700,
                 'Binding state directory requires owned mode 0700')
         self.path = self.root / 'ollama-binding.json'
+        self.draft_path = self.root / 'ollama-binding-draft.json'
 
-    def save(self, binding):
-        require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
-        raw = (json.dumps(binding.serialize(), ensure_ascii=False, sort_keys=True,
+    def _save_json(self, path, value, temporary_prefix):
+        raw = (json.dumps(value, ensure_ascii=False, sort_keys=True,
                           separators=(',', ':')) + '\n').encode()
-        temporary = self.root / ('.ollama-binding-' + binding.binding_id + '.tmp')
+        require(len(raw) <= 64 * 1024, 'Ollama setting exceeds 64 KiB')
+        temporary = self.root / (temporary_prefix + hashlib.sha256(
+            raw + os.urandom(32)).hexdigest() + '.tmp')
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
         fd = os.open(temporary, flags, 0o600)
         try:
             with os.fdopen(fd, 'wb', closefd=False) as stream:
                 stream.write(raw); stream.flush(); os.fsync(stream.fileno())
             os.close(fd); fd = -1
-            os.replace(temporary, self.path)
+            os.replace(temporary, path)
             directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
             try:
                 os.fsync(directory)
@@ -150,23 +160,58 @@ class OllamaBindings:
             if temporary.exists():
                 temporary.unlink()
 
-    def load(self):
+    def save(self, binding):
+        require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
+        self._save_json(self.path, binding.serialize(), '.ollama-binding-')
+
+    def save_draft(self, value):
+        self._validate_draft(value)
+        self._save_json(self.draft_path, value, '.ollama-binding-draft-')
+
+    def _load_json(self, path):
         flags = os.O_RDONLY | os.O_NOFOLLOW
-        fd = os.open(self.path, flags)
+        fd = os.open(path, flags)
         try:
             info = os.fstat(fd)
             require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
                     and info.st_nlink == 1 and not info.st_mode & 0o077,
-                    'Unsafe Ollama binding file')
+                    'Unsafe Ollama setting file')
             raw = os.read(fd, 64 * 1024 + 1)
         finally:
             os.close(fd)
-        require(len(raw) <= 64 * 1024, 'Ollama binding exceeds 64 KiB')
+        require(len(raw) <= 64 * 1024, 'Ollama setting exceeds 64 KiB')
         try:
             value = json.loads(raw)
         except (UnicodeError, ValueError) as exc:
-            raise ValueError('Invalid Ollama binding JSON') from exc
-        return OllamaBinding.parse(value)
+            raise ValueError('Invalid Ollama setting JSON') from exc
+        return value
+
+    def load(self):
+        return OllamaBinding.parse(self._load_json(self.path))
+
+    def load_draft(self):
+        value = self._load_json(self.draft_path)
+        # Reuse the bounded, secret-free draft contract without requiring a valid binding.
+        self._validate_draft(value)
+        return value
+
+    @staticmethod
+    def _validate_draft(value):
+        require(isinstance(value, dict), 'Ollama binding draft must be an object')
+        allowed = {'schema_version', 'binding_id', 'revision', 'adapter', 'boundary',
+                   'endpoint', 'model', 'target_id', 'tls_cert_sha256'}
+        require(set(value) <= allowed and set(value) >= allowed - {'tls_cert_sha256'},
+                'Unknown or missing Ollama binding draft field')
+        require(value['schema_version'] == 1 and value['adapter'] == 'ollama',
+                'Unsupported Ollama binding draft')
+        for key in allowed - {'schema_version'}:
+            if key in value:
+                require(isinstance(value[key], str)
+                        and len(value[key].encode()) <= 4096
+                        and not any(c in value[key] for c in '\0\r\n'),
+                        f'Invalid Ollama draft {key}')
+        require('@' not in value['endpoint'],
+                'Ollama binding draft must not contain credentials')
 
 
 class BackendRuns:

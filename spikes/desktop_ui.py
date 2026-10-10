@@ -62,7 +62,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
 <label>Model <input name="model" placeholder="gemma3" required></label>
 <label>ID cíle <input name="target_id" value="local-process" required></label>
-<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
 <button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
@@ -986,23 +986,29 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
   'Nové vlákno · nejprve nastavte backend.';
  draft.focus();
 });
-function fillBinding(binding){
- chatBinding=binding;const fields=chatForm.elements;
- if(binding){fields.boundary.value=binding.boundary;fields.endpoint.value=binding.endpoint;
-  fields.model.value=binding.model;fields.target_id.value=binding.target_id;
-  fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
+function fillBinding(binding,draft=null,draftState=null){
+ chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
+ if(candidate){fields.boundary.value=candidate.boundary;fields.endpoint.value=candidate.endpoint;
+  fields.model.value=candidate.model;fields.target_id.value=candidate.target_id;
+  fields.tls_cert_sha256.value=candidate.tls_cert_sha256 || '';
+ }
+ if(binding){
   chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
-  settingsBackendStatus.textContent=`Nastaven backend ${binding.model} · ${binding.boundary}.`;
+  settingsBackendStatus.textContent=draftState && draftState!=='confirmed' ?
+   `Aktivní je ${binding.model} · ${binding.boundary}; formulář obsahuje ${draftState==='invalid'?'neplatný':'nepotvrzený'} uložený koncept.` :
+   `Nastaven backend ${binding.model} · ${binding.boundary}.`;
   if(!document.querySelector('#workflow-creator-model').value)document.querySelector('#workflow-creator-model').value=binding.model;
   if(!document.querySelector('#workflow-opponent-model').value)document.querySelector('#workflow-opponent-model').value=binding.model;
  }else{
   chatStatus.textContent='Backend zatím není nastaven.';
-  settingsBackendStatus.textContent='Backend zatím není nastaven.';
+  settingsBackendStatus.textContent=draft ? 'Formulář obsahuje uložený nepotvrzený koncept.' :
+   'Backend zatím není nastaven.';
  }
  refreshChatModeControls();
 }
 async function loadBackendBinding(){
- try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+ try{const result=await projectRequest('/v1/chat/status',{});
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -1122,7 +1128,8 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  try{
-  const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+  const result=await projectRequest('/v1/chat/status',{});
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   const active=[...result.threads].reverse().filter(item=>item.status==='active');
   const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
   if(selectionRevision!==chatSelectionRevision)return;
@@ -1142,9 +1149,11 @@ function backendCandidate(){
  const binding={schema_version:1,binding_id:chatBinding?.binding_id || crypto.randomUUID(),
   revision:crypto.randomUUID(),adapter:'ollama',boundary,endpoint:fields.endpoint.value.trim(),
   model:fields.model.value.trim(),target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim()};
- if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
+ if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
  return binding;
 }
+function normalizeFingerprint(value){return value.trim()
+ .replace(/^sha256\\s*fingerprint\\s*=\\s*/i,'').replaceAll(':','').toLowerCase();}
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
@@ -1157,7 +1166,8 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const binding=backendCandidate();
  settingsBackendStatus.textContent='Ukládám backend…';
- try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);
+ try{const result=await projectRequest('/v1/chat/configure',binding);
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
  catch(error){
   const message=error.message;const reloaded=await loadBackendBinding();

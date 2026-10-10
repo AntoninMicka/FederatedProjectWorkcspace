@@ -106,6 +106,10 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("if([409,422,502].includes(error.status))pendingChatRequest=null", JS)
         self.assertIn("'/v1/chat/test'", JS)
         self.assertIn('Ověřit bez uložení', HTML)
+        self.assertIn('binding_draft_state', JS)
+        self.assertIn('normalizeFingerprint', JS)
+        ollama_form = HTML.split('id="chat-backend-form"', 1)[1].split('</form>', 1)[0]
+        self.assertNotIn('pattern="[0-9a-f]{64}"', ollama_form)
         self.assertIn('Zadání a výběr zůstaly zachovány', JS)
         self.assertIn('Ollama vrátila neplatný formát výsledku úlohy',
                       Path('spikes/desktop_ui.py').read_text())

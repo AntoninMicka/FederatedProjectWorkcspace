@@ -129,6 +129,35 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(probe.call_args.args[0].model, 'other:latest')
         self.assertEqual(self.service.status()['binding'], before)
 
+    def test_invalid_binding_draft_survives_rejection_and_restart(self):
+        before = self.service.status()['binding']
+        candidate = dict(self.binding, revision='invalid-draft', boundary='private-network',
+                         endpoint='https://192.168.100.192:11443',
+                         target_id=str(uuid4()), tls_cert_sha256='unfinished-pin')
+        with self.assertRaises(ValueError):
+            self.service.configure(candidate)
+        status = self.service.status()
+        self.assertEqual(status['binding'], before)
+        self.assertEqual(status['binding_draft'], candidate)
+        self.assertEqual(status['binding_draft_state'], 'invalid')
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: FakeAdapter(runs, self.calls, self.error))
+        self.assertEqual(restarted.status()['binding_draft'], candidate)
+        self.assertEqual(restarted.status()['binding'], before)
+
+    def test_openssl_pin_draft_confirms_as_normalized_active_binding(self):
+        candidate = dict(self.binding, revision='lan', boundary='private-network',
+                         endpoint='https://192.168.100.192:11443',
+                         target_id=str(uuid4()),
+                         tls_cert_sha256='SHA256 Fingerprint=' + ':'.join(['CD'] * 32))
+        status = self.service.configure(candidate)
+        self.assertEqual(status['binding']['tls_cert_sha256'], 'cd' * 32)
+        self.assertEqual(status['binding_draft']['tls_cert_sha256'],
+                         candidate['tls_cert_sha256'])
+        self.assertEqual(status['binding_draft_state'], 'confirmed')
+
     def test_account_metric_failure_does_not_change_routing_or_chat_run(self):
         class UnavailableMetrics:
             def __init__(self, _root): pass

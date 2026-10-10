@@ -74,8 +74,12 @@ class ChatService:
         return threads, OllamaBindings(root), adapter
 
     def configure(self, value):
-        binding = BACKENDS.parse_binding(value)
         _, bindings, _ = self._stores()
+        # The bounded draft is non-authoritative and may remain invalid. Persist it first so
+        # a rejected confirmation or restart does not force the administrator to retype it.
+        if isinstance(value, dict) and value.get('adapter') == 'ollama':
+            bindings.save_draft(value)
+        binding = BACKENDS.parse_binding(value)
         bindings.save(binding)
         return self.status()
 
@@ -91,9 +95,22 @@ class ChatService:
             binding = bindings.load().serialize()
         except FileNotFoundError:
             binding = None
+        try:
+            draft = bindings.load_draft()
+        except FileNotFoundError:
+            draft = None
+        draft_state = None
+        if draft is not None:
+            try:
+                normalized_draft = BACKENDS.parse_binding(draft).serialize()
+            except ValueError:
+                draft_state = 'invalid'
+            else:
+                draft_state = 'confirmed' if normalized_draft == binding else 'valid-unconfirmed'
         rows = [self._with_external_history(row, node_id, user_id)
                 for row in threads.list(node_id, user_id)]
-        return {'binding': binding, 'threads': rows}
+        return {'binding': binding, 'binding_draft': draft,
+                'binding_draft_state': draft_state, 'threads': rows}
 
     def _with_external_history(self, thread, node_id, user_id):
         store = ExternalDispatches(self._root())

@@ -38,15 +38,22 @@ DOM. Projektová nastavení případně dostanou oddělenou, výslovně označen
 
 UI dál volá autentizované same-origin `/v1/chat/status` a
 `/v1/chat/configure`. Server zůstává autoritou validace `OllamaBinding` a
-`OllamaBindings.save` jedinou autoritou atomického node-local zápisu. Nevalidní
-požadavek, chyba zápisu nebo ztracená odpověď nesmí změnit hodnoty zobrazené jako
-potvrzené; UI znovu načte serverový stav nebo jasně ponechá výsledek jako
-nepotvrzený. Žádný Git/Workspace journal nevzniká, protože projektová data se
-nemění.
+`OllamaBindings.save` jedinou autoritou atomického node-local zápisu aktivního
+bindingu. Formulář má oddělený omezený `ollama-binding-draft.json`, který smí
+uchovat i nevalidní hodnoty bez credentials, aby je správce po odmítnutí nebo
+restartu nemusel vyplňovat znovu. `/v1/chat/configure` nejprve atomicky uloží
+koncept a teprve potom validuje a případně atomicky nahradí aktivní binding.
+Pád mezi zápisy proto může zanechat nový koncept se starým aktivním bindingem,
+nikdy ale neaktivuje nevalidní konfiguraci. Chyba zápisu nebo ztracená odpověď
+nesmí změnit hodnoty označené jako potvrzené; UI zobrazuje koncept výslovně jako
+neplatný či nepotvrzený. Žádný Git/Workspace journal nevzniká, protože projektová
+data se nemění a koncept není autoritou síťového dispatchu.
 
 `same-node` nadále znamená číselný loopback HTTP endpoint. `private-network`
 nadále vyžaduje číselnou privátní HTTPS adresu, stabilní ID cíle a SHA-256 pin
-certifikátu. Přesun formuláře nemění privacy autorizaci, nezavádí discovery,
+certifikátu. Pin přijímá také běžný OpenSSL fingerprint s prefixem, velkými
+písmeny a dvojtečkami a před aktivací jej normalizuje na 64 malých hex znaků.
+Přesun formuláře nemění privacy autorizaci, nezavádí discovery,
 fallback ani automatické testovací volání backendu.
 
 ## Reuse a hranice první verze
