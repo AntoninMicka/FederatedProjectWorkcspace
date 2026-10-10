@@ -49,7 +49,10 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   chyby externího providera; nikdy nespouštět fallback automaticky.
   Výsledek: lokální workflow po známém i neznámém selhání zachová vstupy, zahodí
   pouze identitu neúspěšného requestu a další kliknutí vytvoří vědomě nový run;
-  externí preview a externí provider zůstávají oddělené.
+  externí preview a externí provider zůstávají oddělené. LAN orchestrace a
+  `local-only` se nově odmítnou přímo ve formuláři; server pro bezpečný uzavřený
+  seznam validačních chyb vrací konkrétní nápravu, zatímco neznámé interní
+  detaily dál nezveřejňuje.
 - [ ] [in progress] **F-M3-OLLAMA-ROBUST-01-D — Restart, souběh a závěrečná
   akceptace (cílová úroveň: PoC validated).** Ověřit pomalou odpověď, chybný
   JSON, chybějící model, chybný/rotovaný certifikát, pád před a po durable
@@ -58,7 +61,7 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   dokumentaci, odkazy, finální diff a omezení skutečného LAN ověření.
   Automatizované ověření 2026-10-10: cílené testy transportu, desktopového UI,
   webového RBAC a balení prošly; úplná sada `python3 -m unittest discover -s
-  tests -v` po poslední změně prošla 441 testy, 27 testů bylo záměrně přeskočeno
+  tests -v` po poslední změně prošla 442 testy, 27 testů bylo záměrně přeskočeno
   kvůli chybějícímu
   nativnímu Qt/WebEngine či libgit2 prostředí. Živý read-only dotaz stejného uzlu
   na `http://127.0.0.1:11434/api/tags` prošel a našel nakonfigurovaný model.

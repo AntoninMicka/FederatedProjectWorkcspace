@@ -8,12 +8,43 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
+from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+
+
+CHAT_VALIDATION_ERRORS = {
+    'Orchestration requires same-node Ollama': (
+        'Režim Orchestrace vyžaduje Ollamu na stejném uzlu. Pro Ollamu v privátní síti '
+        'zvolte Brainstorming a nové vlákno.'),
+    'local-only requires same-node execution': (
+        'Obsah „Jen na tomto počítači“ nelze odeslat Ollamě v privátní síti. Zvolte '
+        'jinou úroveň soukromí nebo backend na stejném uzlu.'),
+    'Project changed before chat dispatch': (
+        'Projekt se od otevření změnil. Znovu jej otevřete a požadavek spusťte jako nový běh.'),
+    'Project changed before routed task': (
+        'Projekt se od otevření změnil. Znovu jej otevřete a požadavek spusťte jako nový běh.'),
+    'Project changed during context preparation': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Project changed after context preparation': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Project changed during dispatch authorization': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Chat mode cannot change inside an existing thread': (
+        'Režim nelze změnit uvnitř existujícího vlákna. Založte nové vlákno.'),
+    'Chat thread changed during context preparation': (
+        'Vlákno se během přípravy změnilo. Načtěte jeho aktuální stav a spusťte nový běh.'),
+    'Selected chat message is unavailable': (
+        'Vybraná zpráva už není v aktuálním vlákně dostupná. Obnovte výběr kontextu.'),
+    'Selected chat thread is unavailable': (
+        'Vybrané vlákno už není dostupné. Založte nové vlákno nebo obnovte výběr kontextu.'),
+    'Selected messages must use thread order': (
+        'Vybrané zprávy nejsou v aktuálním pořadí vlákna. Obnovte výběr kontextu.'),
+}
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1316,6 +1347,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration'?null:model};
+ if(adapter==='ollama' && chatBinding.boundary==='private-network'){
+  if(mode==='orchestration'){
+   chatOperationStatus.textContent='Orchestrace vyžaduje Ollamu na stejném uzlu. Pro síťovou Ollamu zvolte Brainstorming a nové vlákno.';return;}
+  if(document.querySelector('#chat-privacy').value==='local-only'){
+   chatOperationStatus.textContent='Obsah Jen na tomto počítači nelze odeslat Ollamě v privátní síti.';return;}
+ }
  if(mode==='brainstorming' && adapter==='openai-responses'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
@@ -2088,7 +2125,12 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
-        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            if isinstance(exc, ValidationError) and self.path in {
+                    '/v1/chat/send', '/v1/tasks/route'}:
+                message = CHAT_VALIDATION_ERRORS.get(str(exc))
+                if message is not None:
+                    return self.reply(422, {'error': message})
             if self.path == '/v1/external/propose':
                 return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
                                        'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})

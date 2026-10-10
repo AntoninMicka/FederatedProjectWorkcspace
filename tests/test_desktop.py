@@ -13,11 +13,41 @@ import unittest
 from spikes.desktop import provider_key_url, request_policy
 from spikes.desktop_ui import DesktopHandler, HTML, JS
 from spikes.local_api import running_api
+from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_chat_validation_returns_only_actionable_allowlisted_reason(self):
+        driver = test_local_api.LocalAPITests()
+        request = {key: None for key in (
+            'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
+            'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
+            'content', 'privacy', 'created_at', 'run_choice')}
+        cases = (
+            ('Orchestration requires same-node Ollama',
+             'Režim Orchestrace vyžaduje Ollamu na stejném uzlu.'),
+            ('Project changed before chat dispatch',
+             'Projekt se od otevření změnil.'),
+            ('private path /secret must not leak',
+             'Chat požadavek nelze provést.'),
+        )
+        for reason, expected in cases:
+            class Service:
+                def send(self, **_request):
+                    raise ValidationError(reason)
+            with self.subTest(reason=reason), running_api(
+                    'http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                response = driver.request(server, path='/v1/chat/send',
+                                          body=json.dumps(request).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 422 ', head)
+            message = json.loads(body)['error']
+            self.assertIn(expected, message)
+            self.assertNotIn('/secret', message)
+
     def test_ollama_diagnostic_response_distinguishes_failed_and_unknown(self):
         driver = test_local_api.LocalAPITests()
         cases = ((OllamaResponseError('pin', code='tls-pin-mismatch'), 502,
@@ -157,6 +187,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("mode==='brainstorming' && adapter==='openai-responses'", JS)
         self.assertIn("mode==='brainstorming' && adapter==='ollama'", JS)
         self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
+        self.assertIn("chatBinding.boundary==='private-network'", JS)
+        self.assertIn("mode==='orchestration'", JS)
+        self.assertIn("value==='local-only'", JS)
         self.assertIn('selected_artifact_ids:[]', JS)
         self.assertIn('run_choice:runChoice', JS)
 
