@@ -63,15 +63,15 @@ WEB_HTML = WEB_HTML.replace(
 <p id="notebooklm-status" role="status"></p></details>
 <p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>''')
 WEB_HTML = WEB_HTML.replace(
-    '<button id="back-projects" class="back-button">',
-    '''<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
+    '<div id="project-view" hidden>',
+    '''<div id="project-view" hidden>
+<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
 <form id="web-source-import-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
 <label>Název <input name="title" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
 <label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
-<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>
-<button id="back-projects" class="back-button">''')
+<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>''')
 # A separate asset preserves the desktop/native authentication contract.
 WEB_JS = '''let accessKey='';
 const originalFetch=window.fetch.bind(window);

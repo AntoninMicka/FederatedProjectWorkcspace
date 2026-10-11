@@ -52,6 +52,16 @@ dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
   záložky; jejich nadpisy, stav, tablist, globální nastavení a informace o uzlu
   zůstávají na místě. Jediné tlačítko „Seznam projektů“ bylo přesunuto nahoru
   před záložky a na mobilu zavírá drawer se standardní obnovou focusu.
+- [x] [completed] **F-M2-CHAT-03-G — Webová inicializace po přesunu navigace
+  (PoC validated; ad-hoc regresní oprava 2026-10-11).** Hlášení ze skutečného
+  Turris deploymentu odhalilo, že webová transformace stále vkládala formulář
+  importu podle již přesunutého tlačítka `back-projects`. Chybějící formulář
+  ukončil JavaScript na registraci listeneru a katalog zůstal na „Načítám
+  projekty…“, přestože persistentní Git projekty, chatová SQLite data i
+  autentizované HTTPS API byly zdravé. Import se nyní vkládá podle stabilního
+  kontejneru projektového pohledu; strukturální test hlídá právě jednu instanci
+  formuláře a skutečný WebEngine login → katalog průchod regresi reprodukoval
+  před opravou a po opravě prošel.
 
 Crash kontrakt: preview je read-only; confirm nejprve durable uloží přesný plán.
 Pád před commitem nemění uživatelský stav. Po commitu marker uzamkne vlákno a
@@ -71,8 +81,16 @@ testy přeskočeny**. Následné UI ověření
 OK, 27 volitelných native/package/live testů přeskočeno**. Běh vypsal známé
 neblokující `ResourceWarning` na neuzavřená testovací SQLite spojení.
 
+Po regresní opravě webové inicializace prošel znovu cílený běh 32 testů se
+4 volitelnými skipy, samostatný skutečný WebEngine login → katalog smoke test
+1/1 a následná úplná sada **450 testů OK, 27 volitelných testů přeskočeno**.
+Skutečný Turris měl před opravou potvrzená neporušená data a funkční API; nový
+release s opravou na zařízení zatím nasazen ani uživatelsky potvrzen nebyl.
+
 Omezení: skutečný klikací Qt/WebEngine průchod lifecycle panelem ani novou
-sidebar záložkou nebyl proveden; UI má strukturální a HTTP/API regresní testy.
+sidebar záložkou nebyl proveden; login a načtení katalogu byly po opravě
+ověřeny skutečným WebEngine testem a zbytek UI má strukturální a HTTP/API
+regresní testy.
 Aplikace předpokládá jeden backendový proces a její HTTP server serializuje
 požadavky; nekooperující přímý zapisovač do node-local SQLite stores není
 součástí tohoto PoC. Požadavek na orchestration přes explicitní private-network

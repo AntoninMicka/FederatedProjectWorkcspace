@@ -104,6 +104,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="workflow-tab"', WEB_HTML)
         self.assertIn('Projekt z archivu (NotebookLM notebook)', WEB_HTML)
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
+        self.assertEqual(WEB_HTML.count('id="web-source-import-form"'), 1)
+        self.assertIn('<div id="project-view" hidden>\n<details id="web-source-import">', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
