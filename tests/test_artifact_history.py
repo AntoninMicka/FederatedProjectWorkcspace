@@ -4,11 +4,9 @@
 """History must read committed versions without touching drafts, refs or pending work."""
 from contextlib import closing
 import json
-import os
 from pathlib import Path
 import sqlite3
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -163,56 +161,11 @@ class HistoryTests(unittest.TestCase):
         with patch.object(self.history.artifacts, 'workspace', return_value=ws), patch.object(ws.git, 'head', side_effect=head):
             with self.assertRaises(StaleIndex): self.history.list(self.id, self.entity, self.second)
 
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires native Qt history dialog')
-    def test_native_history_preserves_draft_and_displays_readonly_versions(self):
-        script = '''
-import sys,time
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
-from spikes.artifacts import Artifacts
-from spikes.desktop_editor import EditorDialog
-from spikes.desktop_history import HistoryDialog
-app=QApplication([])
-def idle(dialog):
-    end=time.monotonic()+15
-    while dialog.busy and time.monotonic()<end:
-        app.processEvents();time.sleep(.01)
-    assert not dialog.busy, dialog.status.text()
-editor=EditorDialog(Artifacts(sys.argv[1]),sys.argv[2],todo=True)
-editor.show();idle(editor)
-editor.body.setPlainText('LOCAL DRAFT <img src=x>')
-checked=[]
-def history_test():
-    dialog=app.activeModalWidget()
-    if not isinstance(dialog,HistoryDialog) or dialog.busy:
-        QTimer.singleShot(20,history_test);return
-    try:
-        assert dialog.newer.count()==2
-        dialog.compare_button.click();idle(dialog)
-        assert '- [x] Task' in dialog.body.toPlainText(),dialog.status.text()
-        assert 'metadata.json' in dialog.diff.toPlainText()
-        assert 'Second' in dialog.metadata.toPlainText()
-        assert all(w.isReadOnly() for w in (dialog.body,dialog.metadata,dialog.diff,dialog.info))
-        dialog.newer.setCurrentIndex(1)
-        assert not dialog.body.toPlainText()
-        dialog.compare_button.click();idle(dialog)
-        assert '- [ ] Task' in dialog.body.toPlainText()
-        def fail(*args): raise RuntimeError('Changed HEAD')
-        dialog.service.compare=fail
-        dialog.compare_button.click();idle(dialog)
-        assert not dialog.body.toPlainText() and not dialog.diff.toPlainText()
-        assert 'Changed HEAD' in dialog.status.text()
-        checked.append(True)
-    finally: dialog.reject()
-QTimer.singleShot(20,history_test)
-editor.history_button.click()
-assert checked and editor.dirty and editor.body.toPlainText()=='LOCAL DRAFT <img src=x>'
-editor.dirty=False;editor.close()
-print('history verified')
-'''
-        before = self.projection()
-        result = subprocess.run([sys.executable, '-c', script, str(self.node), self.id],
-                                capture_output=True, text=True, timeout=40)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('history verified', result.stdout)
-        self.assertEqual(self.projection(), before)
+    def test_network_history_rejects_local_only_snapshot(self):
+        local_id = str(uuid4())
+        head = self.artifacts.save(dict(project_id=self.id, artifact_id=local_id,
+            base_head=self.second, title='Local', body='secret', new=True),
+            str(uuid4()), privacy='local-only')['commit_id']
+        network_history = ArtifactHistory(self.node, network=True)
+        with self.assertRaisesRegex(ValidationError, 'local-only'):
+            network_history.list(self.id, self.entity, head)

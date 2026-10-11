@@ -15,6 +15,7 @@ from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
+from spikes.project_creation_actions import ProjectCreationActions
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
@@ -51,7 +52,7 @@ def main():
     parser.add_argument('--node', help='Local node.json containing authorized project registrations.')
     parser.add_argument('--smoke', action='store_true', help='Run real WebEngine click test and exit.')
     parser.add_argument('--screenshot', help='Save the rendered window during --smoke.')
-    parser.add_argument('--smoke-create', metavar='NEW_DIRECTORY', help='During --smoke, create a project through the native dialog.')
+    parser.add_argument('--smoke-create', metavar='NEW_DIRECTORY', help='During --smoke, create a project through the shared form and native location capability.')
     parser.add_argument('--smoke-project', help='During --smoke, open this registered ID and verify rendered rows.')
     parser.add_argument('--smoke-crash', action='store_true', help='Kill renderer during --smoke; expect exit 1.')
     args = parser.parse_args()
@@ -74,7 +75,6 @@ def main():
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
         from spikes.desktop_transfer import TransferDialog
-        from spikes.desktop_import import ImportDialog
         from spikes.desktop_notebooklm_import import NotebookLMImportDialog
         from spikes.notebooklm_project_import import NotebookLMProjectImport
         from spikes.network_backend import NetworkBackend
@@ -104,7 +104,9 @@ def main():
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
-            return main_frame and requested == server.origin + '/'
+            return main_frame and requested in {
+                server.origin + '/', server.origin + '/#create-main-todo',
+                server.origin + '/#choose-project-location'}
 
         def createWindow(self, kind):
             return None
@@ -144,6 +146,8 @@ def main():
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)
         server.publication_cms = PublicationCms(server.chat_service.state_dir)
+        server.project_creation_actions = ProjectCreationActions(
+            node_path, desktop_locations=True)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -276,32 +280,6 @@ def main():
             dialog.deleteLater()
         transfer_button.clicked.connect(transfer_project)
         editor_toolbar.addWidget(transfer_button)
-        import_button = QPushButton('Importovat zdroj…')
-        import_open = False
-        def import_source():
-            nonlocal import_open
-            if controller.busy or import_open:
-                return
-            import_open = True
-            def selected(project_id):
-                nonlocal import_open
-                try:
-                    if view.closing:
-                        return
-                    if not project_id:
-                        QMessageBox.information(window, 'Import zdroje', 'Nejprve otevřete projekt.')
-                        return
-                    dialog = ImportDialog(node_path, project_id, window)
-                    dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
-                    dialog.exec()
-                    if dialog.worker:
-                        dialog.worker.wait()
-                    dialog.deleteLater()
-                finally:
-                    import_open = False
-            page.runJavaScript('activeProject?.id || null', 0, selected)
-        import_button.clicked.connect(import_source)
-        editor_toolbar.addWidget(import_button)
         editor_open = False
         def edit_selected(todo=False):
             nonlocal editor_open
@@ -336,6 +314,19 @@ def main():
             if url.toString() == server.origin + '/#create-main-todo':
                 page.runJavaScript("history.replaceState(null, '', '/');")
                 edit_selected(True)
+            elif url.toString() == server.origin + '/#choose-project-location':
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                def choose_project_location(request):
+                    if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
+                        return
+                    folder = QFileDialog.getExistingDirectory(
+                        window, 'Existující prázdná složka projektu',
+                        str(controller.service.default_projects_root()))
+                    if folder:
+                        result = server.project_creation_actions.register_location(
+                            folder, request['operation_id'])
+                        page.runJavaScript('setProjectCreationLocation(' + json.dumps(result) + ')')
+                page.runJavaScript('projectCreationPickerRequest()', 0, choose_project_location)
         page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok
@@ -539,7 +530,7 @@ def main():
             if args.smoke_create:
                 script = """(()=>{
                   if(document.querySelector('#project-view').hidden ||
-                     document.querySelector('#project-title').textContent!=='Nový projekt z dialogu' ||
+                     document.querySelector('#project-title').textContent!=='Nový projekt ze společného formuláře' ||
                      !document.querySelector('#project-commit').textContent) return null;
                   const imageTab=document.querySelector('#image-tab');imageTab.click();
                   if(document.querySelector('#image-panel').hidden ||
@@ -559,8 +550,24 @@ def main():
                     print("desktop measure: ui ready", flush=True)
                     page.runJavaScript("document.querySelector('#increment').click()")
                     if args.smoke_create:
-                        controller.smoke = ('Nový projekt z dialogu', args.smoke_create)
-                        QTimer.singleShot(0, controller.button.click)
+                        operation = str(uuid4())
+                        location = server.project_creation_actions.register_location(
+                            args.smoke_create, operation)
+                        bootstrap = """(()=>{
+                          const title='Nový projekt ze společného formuláře';
+                          document.querySelector('#new-project-title').value=title;
+                          projectCreationAttempt={title,operation_id:OPERATION};
+                          setProjectCreationLocation(LOCATION);
+                          document.querySelector('#create-project').requestSubmit();
+                          const confirm=setInterval(()=>{
+                            if(!projectCreationPlan)return;
+                            clearInterval(confirm);
+                            document.querySelector('#project-create-confirm-check').click();
+                            document.querySelector('#project-create-confirm').click();
+                          },50);
+                        })()""".replace('OPERATION', json.dumps(operation)).replace(
+                            'LOCATION', json.dumps(location))
+                        page.runJavaScript(bootstrap)
             view.loadFinished.connect(loaded)
         else:
             view.loadFinished.connect(lambda ok: None if ok else QMessageBox.warning(

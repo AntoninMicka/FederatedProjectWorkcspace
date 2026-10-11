@@ -4,15 +4,17 @@ SPDX-License-Identifier: MPL-2.0
 -->
 # Import původních zdrojů
 
-Otevřete projekt a v desktopové liště zvolte **Importovat zdroj…**. Vyberte
-Markdown (.md), PNG, JPEG nebo PDF do 16 MiB, vyplňte název/popisek/štítky a
-privacy. Před potvrzením nevzniká artefakt. Potvrzení ukáže původní basename,
-privacy a SHA-256 vybraných bajtů. Úplná lokální cesta se do metadat nepřenáší.
+Otevřete projekt, přepněte levý panel na **Podklady** a zvolte **Importovat
+zdroj**. Desktopový WebEngine i webová varianta otevřou stejnou samostatnou
+stránku. Systémový/browserový picker vybere Markdown (.md), PNG, JPEG nebo PDF
+do 16 MiB; formulář přijímá název, popis, štítky, doložený čas vzniku,
+předchozí verzi a privacy. Před potvrzením nevzniká artefakt a úplná lokální
+cesta se do metadat nepřenáší.
 
-Ve webové variantě otevřete projekt a rozbalte **Importovat zdroj do projektu**.
-Browser odešle přes autentizované HTTPS přesné bajty, basename, SHA-256 a
-vyplněná metadata; server znovu ověří typ, hash i limit 16 MiB. Import smí
-provést editor, project-admin nebo správce uzlu. Reader/reviewer se odmítne.
+Klient odešle přes chráněný same-origin endpoint přesné bajty, basename,
+SHA-256 a vyplněná metadata; server znovu ověří typ, hash i limit 16 MiB. Na
+webu smí import provést editor, project-admin nebo správce uzlu.
+Reader/reviewer se odmítne.
 Síťový import nenabízí `local-only`, protože takový obsah nesmí vstoupit přes
 webovou hranici a následně by znepřístupnil projekt v network režimu.
 
@@ -35,14 +37,15 @@ výchozí a kandidátní strom před přípravou journalu i před commitem. Prvn
 přenos navíc kontroluje každý přechod převzaté historie; změnu původních bajtů,
 identity, basename nebo import provenance pod stejným UUID odmítne.
 
-V importním dialogu lze volitelně vybrat předchozí zdroj. Nový import pak dostane
-nové UUID a vztah `supersedes`; předchozí artefakt se nemění. Dialog upozorní na
-již existující zdroje se shodným SHA-256, ale neslučuje je automaticky. Programová
+Na importní stránce lze volitelně vybrat předchozí zdroj. Nový import pak dostane
+nové UUID a vztah `supersedes`; předchozí artefakt se nemění. Shodné bajty se
+automaticky neslučují a každý vědomě potvrzený nový operation ID může vytvořit
+samostatný projektový význam. Programová
 operace `Sources.edit_metadata` dovoluje pouze `title`, `description`, `tags`,
 `relations`, `source_url` a `privacy`; uvolnění privacy vyžaduje samostatný
 autorizační příznak. Zpřísnění privacy běžnou editací povoleno je.
 
-Importní dialog nabízí samostatné volitelné pole **Doložený čas vzniku zdroje
+Importní stránka nabízí samostatné volitelné pole **Doložený čas vzniku zdroje
 (UTC)** ve formátu RFC3339, například `2024-05-10T14:30:00Z`. Tento údaj se uloží
 jako `source_created_at`; čas importu vznikne automaticky a může být pozdější.
 Nevyplněný čas vzniku se neodhaduje z času souboru, importu ani Git commitu.
@@ -64,7 +67,7 @@ ID. Obsah a sidecar se validují jako výsledný snapshot ještě před přípra
 journalu.
 
 Před commitem je rozpracovaný soubor/metadatová dvojice řízena journalem;
-native načtení projektu ji může dokončit. Po commitu je Git autorita a index
+nové načtení projektu ji může dokončit. Po commitu je Git autorita a index
 se obnovuje z přijatého HEAD. Cizí změny se nesmějí přepsat. Retry používá stejné
 UUID, stejné zachycené bajty a operation ID; nečte při retry znovu externí soubor.
 Zavření či načtení nejsou rollback připravené operace. Po restartu/načtení

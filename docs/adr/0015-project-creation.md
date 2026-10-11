@@ -9,7 +9,17 @@ Stav: přijato pro M1-02, omezený Linux PoC. Doplňuje inicializaci, kterou ADR
 
 ## Vstup a lokální autorita
 
-Nativní Qt dialog přijímá název a novou nebo existující prázdnou cílovou složku. Renderer ani web nedostávají most pro libovolné serverové cesty; webové vytvoření používá pouze serverem určený kořen. Služba vytváření je nezávislá na Qt. Native controller při potvrzení přidělí operation UUID; opakování stejného ID/parametrů vrací stejný receipt, jiné parametry se odmítají. Jeden uzel má jeden neblokující procesní flock a nejvýše jednu nedokončenou operaci. Druhý klient dostane busy/pending chybu. Ztráta odpovědi neznamená nový pokus s novým ID: při restartu se obnoví uložená operace.
+Web i desktop používají společný formulář s odděleným náhledem a potvrzením.
+Náhled váže název, přesný cíl, volbu výchozího rodiče a operation UUID serverovým
+digestem. Web používá pouze serverem určený kořen a nemůže dodat cestu ani
+desktopovou capability. Desktop může systémovým Qt pickerem vybrat existující
+prázdnou cílovou složku; native obal předá rendereru neprůhledný in-process token
+vázaný na jedinou operaci a přesný výsledek pickeru, nikoli obecný filesystemový
+most. Služba vytváření zůstává nezávislá na Qt. Opakování stejného ID/parametrů
+vrací stejný receipt, jiné parametry se odmítají. Jeden uzel má jeden neblokující
+procesní flock a nejvýše jednu nedokončenou operaci. Druhý klient dostane
+busy/pending chybu. Ztráta odpovědi neznamená nový pokus s novým ID: při restartu
+se obnoví uložená operace.
 
 Výchozí konfigurace je `$XDG_STATE_HOME/federated-workspace/node.json` (jinak `~/.local/state/federated-workspace/node.json`). Pouhé zobrazení bez registrace nic nevytváří; první potvrzené vytvoření založí lokální konfiguraci. `--node` ji explicitně nahrazuje. Vedle ní je soukromý adresář operací s SQLite journalem, odděleným od projektového journalu i obnovitelného indexu. Drží lokální author UUID a receipts; není v projektovém Gitu. Author UUID není Node UUID ani síťová identita. Node ID i project ID jsou stabilní a nevznikají znovu při recovery.
 
@@ -54,7 +64,14 @@ Do projektu jde pouze `project.json` a počáteční Git commit s explicitním l
 
 ## Běh a omezení
 
-GUI má jedinou pracovní úlohu mimo Qt event loop; při běhu zakáže další vytvoření a běžné zavření je do dokončení zakázané. Obnova dříve potvrzené operace se při restartu spustí automaticky, chyba se zobrazí v nativním okně. Worker má celkový deadline pro aplikační kroky a Git subprocessy; timeout zachová pending operaci. Zámek je neblokující a SQLite čekání omezené. Nejde o preempci libovolného blokujícího filesystemového syscallu ani důkaz výpadku napájení.
+Potvrzené vytvoření provádí jediný backendový proces přes uzavřený endpoint;
+ztráta HTTP odpovědi zachová operation ID i journal pro shodný retry nebo startup
+recovery. Nativní controller dál mimo Qt event loop obsluhuje obnovu a ostatní
+desktop-only operace. Obnova dříve potvrzené operace se při restartu spustí
+automaticky, chyba se zobrazí v nativním okně. Služba má celkový deadline pro
+aplikační kroky a Git subprocessy; timeout zachová pending operaci. Zámek je
+neblokující a SQLite čekání omezené. Nejde o preempci libovolného blokujícího
+filesystemového syscallu ani důkaz výpadku napájení.
 
 Tím je vymezen mutující lifecycle potřebný pro M1-02 a
 F-M1-PROJECT-LOCATION-01. Webové vytvoření a import mají uzavřené konkrétní
@@ -64,4 +81,9 @@ všichni kooperující klienti. Nezavádí se nový framework, Git adapter ani d
 backendový proces. Reuse: konfigurační validátory, Git, Workspace a fsync/flock
 vzor stávajícího journalu; uzlový journal má jiný lifecycle než projektové změny.
 
-Ověření: `tests/test_project_creation.py` prochází procesními pády na všech uvedených checkpointech, native dialogem i skutečným běžným startem s automatickou obnovou. Test `.deb` ověřuje vytvoření a zachování dat po odinstalaci. Aktuální výsledky a zbylá omezení drží [WORK_LOG](../../WORK_LOG.md).
+Ověření: `tests/test_project_creation.py` prochází procesními pády na všech
+uvedených checkpointech a běžným startem s automatickou obnovou;
+`tests/test_project_creation_actions.py` ověřuje preview digest, webovou hranici,
+desktopovou capability a idempotentní receipt. Volitelný WebEngine smoke prochází
+společným formulářem. Test `.deb` ověřuje vytvoření a zachování dat po
+odinstalaci. Aktuální výsledky a zbylá omezení drží [WORK_LOG](../../WORK_LOG.md).

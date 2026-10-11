@@ -7,7 +7,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty, hlavní TODO projektu a prohlížení historie/diffů uložených dokumentů.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu; společný webový frontend zobrazuje historii/diffy uložených dokumentů ve webu i desktopovém obalu.
 
 ## Desktop
 
@@ -15,7 +15,15 @@ Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M
 ./run.sh desktop
 ```
 
-V horní liště klikněte na **Nový projekt…**, zadejte název a novou nebo existující prázdnou cílovou složku a potvrďte **Vytvořit a otevřít**. Aplikace připraví Git, projektová metadata, lokální stav a registraci; po restartu projekt zůstane dostupný. JSON není nutné psát ručně. Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, jinak `~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json` vybere jiný uzel.
+Na stránce **Projekty** zadejte název, připravte přesný náhled a potvrďte
+**Vytvořit a otevřít projekt**. Stejný formulář používá web i desktop. Desktop
+navíc může systémovým pickerem vybrat existující prázdnou cílovou složku;
+renderer dostane pouze token pro tuto jednu volbu, nikoli obecný přístup k
+filesystemu. Aplikace připraví Git, projektová metadata, lokální stav a
+registraci; po restartu projekt zůstane dostupný. JSON není nutné psát ručně.
+Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, jinak
+`~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json`
+vybere jiný uzel.
 
 [Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující neprázdná nebo změněná cílová složka se nepřepisuje. Vyberte projekt a použijte **Dokumenty…** nebo **Úkoly projektu…**; změny potvrďte tlačítkem **Uložit**. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 

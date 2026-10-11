@@ -9,9 +9,9 @@ Stav: přijato pro M1-04, lokální Linux PoC. Navazuje na [čtení projektu](00
 
 ## Rozsah a reuse
 
-Nativní tlačítko Historie v editoru otevře modalitu se seznamem commitů a výběrem dvou verzí. Zobrazí původní Markdown, metadata vybrané verze, autora/datum/zprávu commitu a textový diff uložených souborů. Přejmenování souboru uvnitř artefaktu patří do historie stejného UUID. Rozepsaný text se do historie neposílá ani se při jejím otevření/uzavření nemění; dosud neuložený nový dokument historii nemá.
+Akce Historie v per-document menu seznamu Podkladů otevře alternativní samostatnou stránku dokumentu se seznamem commitů a výběrem dvou verzí; její zavření vrátí náhled stejného dokumentu. Zobrazí původní Markdown, metadata vybrané verze, autora/datum/zprávu commitu a textový diff uložených souborů. Přejmenování souboru uvnitř artefaktu patří do historie stejného UUID. Rozepsaný text se do historie neposílá ani se při jejím otevření/uzavření nemění; dosud neuložený nový dokument historii nemá.
 
-Služba `ArtifactHistory` adaptuje autorizovaný přístup Artifacts/Projects ke Workspace, Git wrapper, validaci projektového commitu a sdílenou funkci document. Qt viewer reuse EditorWorker a QPlainTextEdit, bez HTML rendereru, nové knihovny nebo HTTP endpointu. Existující katalog neposkytuje důvod nahrazovat lokální Git cestu cizí komponentou.
+Služba `ArtifactHistory` adaptuje autorizovaný přístup Artifacts/Projects ke Workspace, Git wrapper, validaci projektového commitu a sdílenou funkci document. Společný HTML/JavaScript frontend ji používá přes dva úzce typované endpointy pro seznam a porovnání; všechna data vkládá pouze přes `textContent`. Síťový adaptér navíc nad validovaným aktuálním snapshotem odmítá `local-only`. Nevznikla nová knihovna, storage ani obecný Git endpoint. Existující katalog neposkytuje důvod nahrazovat lokální Git cestu cizí komponentou.
 
 ## Čtecí kontrakt
 
@@ -27,6 +27,6 @@ Porovnání přijímá pouze úplné hash ID commitů a znovu ověří jejich do
 
 Hranice ADR 0014 se nemění. Konstrukce Workspace smí inicializovat lokální journal/index/lock; historie netvoří projektové operace, nezapisuje obsah, nemění HEAD, staging ani node identitu. Pending operace se pouze odmítne. Pád během čtení nevyžaduje novou recovery proceduru; další načtení zopakuje validaci. Nejde o rozšíření záruk při výpadku napájení ani o produkční Git sandbox (V-06).
 
-Dialog má jeden worker mimo Qt event loop; během čtení blokuje další požadavek a běžné zavření. Textové widgety jsou pouze pro čtení. Změna výběru a nový požadavek vymažou předchozí obsah, chyba tedy nevydává starou verzi za novou. Historie nepřidává tlačítko pro checkout/reset/revert a nezasahuje do editorového draftu. PoC limit těla dokumentu zůstává 1 MiB. SQLite čekání a Git deadline nepředstavují preempci libovolného blokujícího filesystemového syscallu.
+Frontend dovolí jen jeden aktuální request token; změna výběru a nový požadavek vymažou předchozí obsah, takže pozdní odpověď ani chyba nevydává starou verzi za novou. Výstupy jsou pouze pro čtení. Historie nepřidává tlačítko pro checkout/reset/revert a nezasahuje do editorového draftu. PoC limit těla dokumentu zůstává 1 MiB. SQLite čekání, HTTP timeout a Git deadline nepředstavují preempci libovolného blokujícího filesystemového syscallu.
 
-Ověření drží [testy historie](../../tests/test_artifact_history.py); aktuální výsledek celé sady, Qt a omezení jsou v [WORK_LOG](../../WORK_LOG.md).
+Ověření drží [testy historie](../../tests/test_artifact_history.py) a společných HTTP adaptérů; aktuální stav aktivní dávky a omezení jsou v [TODO](../../TODO.md).

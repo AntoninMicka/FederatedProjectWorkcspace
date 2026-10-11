@@ -172,7 +172,8 @@ class Workspace:
                 raise StaleIndex('Project changed while rebuilding index')
             require(view == projection(files, entities, commit),
                     'Index differs from validated commit')
-            rows = [(id_, item['metadata']['title']) for id_, item in view['entities'].items()]
+            rows = [(id_, item['metadata']['title'], item['metadata']['kind'])
+                    for id_, item in view['entities'].items()]
             if artifact_id is not None:
                 prefix = f'artifacts/{artifact_id}/'
                 entries = {p: raw for p, raw in files.items() if p.startswith(prefix)}
@@ -189,7 +190,8 @@ class Workspace:
                 raise StaleIndex('HEAD changed while opening project; retry')
             artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
             return dict(id=project_id, title=meta['title'], commit_id=commit, main_todo=todo,
-                        artifacts=[dict(id=id_, title=title) for id_, title in rows if id_ in artifact_ids])
+                        artifacts=[dict(id=id_, title=title, kind=kind)
+                                   for id_, title, kind in rows if id_ in artifact_ids])
 
     def receipt(self, operation_id):
         with self.journal.lock(), self.journal.connect() as db:

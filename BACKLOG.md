@@ -22,22 +22,17 @@ F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
 `F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50 a `F-M2-CHAT-03` PR #51.
-`WEB-RUNTIME-01` je lokálně akceptované na větvi
-`feature/web-runtime-01-service-wiring` a čeká na jediný PR do `develop`;
-níže jsou tři navazující dávky.
+`WEB-RUNTIME-01` bylo doručeno PR #52 jako merge commit `7bb4f5e`.
+`UX-UNIFIED-01` má splněnou feature akceptaci na větvi
+`feature/ux-unified-01-shared-frontend`; její evidence je ve WORK_LOG, ale
+doručení jediného PR do `develop` zatím není doložené. Prozatímní backlogová ID
+`UX-UNIFIED-02A/02B` byla sloučena do dokončených `UX-UNIFIED-01-E/F` a nejsou
+samostatnými feature. Uživatel zvolil jako nejbližší navazující dávku
+`UX-UNIFIED-02D`; musí začít na vlastní větvi z aktuálního `develop` až po
+začlenění UX-UNIFIED-01. Dříve schválená Ollama orchestrace, output router a
+NotebookLM unifikace zůstávají zachované jako samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **UX-UNIFIED-01 — Jednotný webový a desktopový frontend shell
-  (cílová úroveň: designed → PoC validated).** Podle roadmapy 12A odstranit
-  skládání webového HTML/JavaScriptu pomocí textových transformací desktopové
-  varianty. Společné obrazovky a workflow mají jediný zdroj assetů; webový a
-  desktopový adaptér dodají pouze explicitní bootstrap, autentizaci/transport
-  a capability dostupné na daném uzlu. Inventarizovat existující Qt/PySide
-  dialogy, ponechat je jen u doložených desktop-only OS/lifecycle funkcí a
-  společné capability směrovat přes sdílený WebEngine frontend. Akceptace
-  zahrne webový i desktopový login/bootstrap, katalog, otevření projektu,
-  bezpečné chování chybějící capability a regresi proti chybějícím DOM prvkům.
 
 - [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
   Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**
@@ -59,6 +54,25 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
   preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
   pluginy, měnit modely/bindingy nebo oslabit oprávnění.
+
+- [ ] [planned] **UX-UNIFIED-02C — Společný NotebookLM import (cílová úroveň:
+  implemented → PoC validated).** Po předchozích krocích převést existující
+  preview/plan/confirm workflow na jednu stránku a společné autorizované API.
+  Vyřešit bounded upload nebo jednorázovou desktopovou capability pro picker;
+  renderer nesmí získat obecné právo číst lokální cestu. Zachovat operation ID,
+  importní plán, potvrzení, recovery, webové RBAC a zákaz `local-only` přes
+  síťovou hranici. Po paritě odstranit `NotebookLMImportDialog`.
+
+- [ ] [planned] **UX-UNIFIED-02D — Společný editor dokumentu a TODO (cílová
+  úroveň: implemented → PoC validated; uživatelem zvoleno jako další dávka
+  2026-10-11).** Existující dokument už má ve společném UI načtení,
+  editaci/přejmenování, uložení, potvrzené smazání, historii a Kopírovat ID.
+  Zbývá společné vytvoření nového dokumentu a vytvoření/úprava hlavního TODO,
+  dirty-draft ochrana při opuštění stránky a odstranění zbylého obecného Qt
+  `EditorDialog`. Reuse stávajícího `Artifacts`/Workspace kontraktu musí
+  zachovat expected HEAD, stabilní operation ID, journal/receipt, konflikt,
+  restart před/po Git CAS, RBAC/privacy a bezpečné textové vykreslení.
+  Systémový lifecycle WebEngine zůstává desktop-only.
 
 ## Zjištěné mezery a navazující ověření
 

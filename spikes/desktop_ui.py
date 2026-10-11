@@ -6,15 +6,19 @@ import json
 import sqlite3
 import subprocess
 
+from spikes.artifact_history import ArtifactHistory
+from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
-from spikes.metadata import ValidationError
+from spikes.metadata import MAX_FILE, ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
+from spikes.source_import import Sources
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 
 
 CHAT_VALIDATION_ERRORS = {
@@ -49,7 +53,10 @@ CHAT_VALIDATION_ERRORS = {
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
-<body><button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
+<body data-runtime="pending"><section id="login"><h1>Projektový workspace</h1>
+<form id="login-form"><label>Přístupový klíč <input id="access-key" type="password" required autocomplete="off"></label>
+<button>Přihlásit</button><p id="login-status" role="status"></p></form></section>
+<button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
 <button id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci" hidden></button>
 <aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
 <div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
@@ -65,21 +72,48 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
-<h2>Podklady</h2><p id="sidebar-artifact-status" role="status"></p>
+<h2>Podklady</h2><button id="open-source-import" type="button">Importovat zdroj</button>
+<p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
-<h3>Zařazené</h3><ul id="sidebar-assigned-chats" aria-label="Zařazené chaty"></ul>
-<h3>Nezařazené</h3><ul id="sidebar-unassigned-chats" aria-label="Nezařazené chaty"></ul></div></div>
+<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button">Nové vlákno</button>
+<button id="chat-open-settings" type="button">Nastavení backendu</button></div>
+<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
-<div class="node-note">Na tomto počítači<br>Zkušební verze</div></aside>
+<button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
 <main><div id="project-home">
 <header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
 <div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
 <h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
 <p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
 <div id="project-cards" aria-label="Seznam projektů"></div>
-<p class="home-help">Nový projekt vytvoříte tlačítkem v horní liště.</p>
+<form id="create-project" aria-label="Vytvořit projekt">
+<label for="new-project-title">Název nového projektu</label>
+<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
+<button id="create-project-btn">Připravit vytvoření</button></div>
+<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
+<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
+<p id="project-location-label">Použije se výchozí místní umístění.</p>
+<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
+<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
+<pre id="project-create-details"></pre>
+<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
+<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
+<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
+<p id="create-project-status" role="status"> </p></form>
+<details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
+<p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
+<label>Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
+<button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
+<label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
+<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
+<pre id="notebooklm-preview" hidden></pre>
+<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
+<button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
+<p id="notebooklm-status" role="status"></p></details>
+<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
 </div>
@@ -195,8 +229,53 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
 </section>
-<div id="administration-host"></div>
+'''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
+</div>
+<div id="source-import-view" hidden>
+<header><span class="badge">Podklady projektu</span><span>Původní bajty a doložená metadata</span></header>
+<div class="page-heading"><div class="eyebrow">IMPORT ZDROJE</div><h1>Importovat zdroj</h1>
+<p>Zdroj se uloží jako neměnný podklad. Nová verze se importuje jako nový zdroj.</p></div>
+<form id="source-import-form" class="standalone-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
+<label>Název <input name="title" maxlength="200" required></label>
+<label>Popis <textarea name="description" rows="3"></textarea></label>
+<label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
+<label>Doložený čas vzniku zdroje (UTC) <input name="source_created_at" maxlength="27" placeholder="např. 2024-05-10T14:30:00Z"></label>
+<label>Navazuje na předchozí zdroj <select name="supersedes" id="source-import-supersedes"><option value="">Samostatný zdroj</option></select></label>
+<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="source-import-local-only" value="local-only">Pouze lokální</option><option value="public">Veřejné</option></select></label>
+<p>Markdown, PNG, JPEG a PDF do 16 MiB. Čas importu se uloží automaticky; čas vzniku vyplňte jen tehdy, když jej zdroj dokládá.</p>
+<label class="confirm"><input name="confirmed" type="checkbox" required> Potvrzuji import původních bajtů, zvolená metadata a soukromí.</label>
+<div class="form-actions"><button type="submit">Importovat původní bajty</button><button id="source-import-back" class="secondary-button" type="button">Zpět do projektu</button></div>
+<p id="source-import-status" role="status" aria-live="polite"></p></form>
+</div>
+<div id="history-view" hidden>
+<header><span class="badge">Historie artefaktu</span><span>Uložené Git verze · pouze pro čtení</span></header>
+<div class="page-heading"><div class="eyebrow">HISTORIE DOKUMENTU</div><h1 id="history-title">Historie</h1>
+<p>Porovnání čte pouze verze dosažitelné z otevřeného HEAD a nemění projekt ani rozepsanou práci.</p></div>
+<section class="standalone-form history-form" aria-label="Historie dokumentu">
+<p id="history-status" role="status" aria-live="polite"></p>
+<div class="history-choices"><label>Starší / výchozí verze <select id="history-older"></select></label>
+<label>Zobrazená verze <select id="history-newer"></select></label></div>
+<div class="form-actions"><button id="history-compare" type="button">Zobrazit a porovnat</button>
+<button id="history-close" class="secondary-button" type="button">Zavřít historii</button></div>
+<h2>Obsah zobrazené verze</h2><pre id="history-body"></pre>
+<details><summary>Technické údaje</summary><pre id="history-metadata"></pre></details>
+<details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
+<details><summary>Záznam uložení</summary><pre id="history-info"></pre></details>
+</section></div>
+<div id="artifact-editor-view" hidden>
+<header><span class="badge">Dokument</span><span>Existující uložený Markdown</span></header>
+<div class="page-heading"><div class="eyebrow">UPRAVIT DOKUMENT</div><h1 id="artifact-editor-heading">Dokument</h1></div>
+<form id="artifact-editor-form" class="standalone-form"><label>Název <input name="title" maxlength="200" required></label>
+<label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
+<label>Popis <textarea name="description" rows="3"></textarea></label>
+<label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
+<label>Obsah <textarea name="body" rows="18" maxlength="1048576" required></textarea></label>
+<div class="form-actions"><button type="submit">Uložit</button><button id="artifact-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
+<p id="artifact-editor-status" role="status" aria-live="polite"></p></form>
+<section id="artifact-delete-preview" class="standalone-form deletion-preview" hidden><h2>Připravit smazání</h2>
+<pre id="artifact-delete-details"></pre><label class="confirm"><input id="artifact-delete-confirm" type="checkbox"> Potvrzuji odstranění dokumentu z aktuální verze projektu. Git historie zůstane zachovaná.</label>
+<div class="form-actions"><button id="artifact-delete-run" type="button" disabled>Odstranit dokument</button><button id="artifact-delete-cancel" class="secondary-button" type="button">Zrušit</button></div></section>
 </div>
 <div id="project-view" hidden>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
@@ -219,12 +298,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
-<button id="chat-open-settings" class="secondary-button" type="button">Otevřít nastavení backendu</button>
-<button id="chat-new-thread" type="button">Nové vlákno</button>
-<button id="chat-archive-thread" class="secondary-button" type="button" disabled>Archivovat</button>
-<button id="chat-delete-thread" class="secondary-button" type="button" disabled>Připravit smazání</button>
-<span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
-<button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
 <section id="chat-delete-preview" class="deletion-preview" hidden aria-label="Náhled smazání vlákna">
 <h3>Co bude odstraněno z tohoto uzlu</h3><pre id="chat-delete-details"></pre>
 <label class="confirm"><input id="chat-delete-confirm" type="checkbox"> Rozumím, že lokální stav bude odstraněn, ale publikované Git artefakty zůstanou zachované.</label>
@@ -372,22 +445,33 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#todo-tree{list-style:none;padding:0;margin:14px 0}
 #sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
 #sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
 #sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
-.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px}.sidebar-artifact-title{font-size:13px}
-#sidebar-chats h3{font-size:11px;color:#8faabc;text-transform:uppercase;letter-spacing:.06em;margin:18px 8px 6px}
+.sidebar-artifact-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-artifact-main{min-width:0}.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px;overflow-wrap:anywhere}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
+.sidebar-chat-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
+.sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
+.sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
+.sidebar-chat-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.sidebar-chat-row>.sidebar-chat-open{min-width:0}.sidebar-chat-menu{position:relative;margin-top:4px}
+.sidebar-chat-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}
+.sidebar-chat-menu>summary::-webkit-details-marker{display:none}.sidebar-chat-menu>summary:hover,.sidebar-chat-menu[open]>summary{background:#274154}
+.sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
+#sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
+#sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
+.sidebar-artifact-menu{position:relative;margin-top:4px}.sidebar-artifact-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-artifact-menu>summary::-webkit-details-marker{display:none}.sidebar-artifact-menu>summary:hover,.sidebar-artifact-menu[open]>summary{background:#274154}.sidebar-artifact-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}#sidebar-artifacts .sidebar-artifact-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}#sidebar-artifacts .sidebar-artifact-menu-items button:hover{background:#dfecea}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
 #sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-project-tools>[role="tabpanel"]:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list{flex:1}
-#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto minmax(0,1fr)}
+#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
@@ -406,7 +490,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
@@ -439,6 +523,34 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 '''
+CSS += ADMIN_CSS + '''
+body[data-runtime="pending"]{visibility:hidden}
+body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
+body[data-runtime="desktop"] #notebooklm-import{display:none!important}
+body[data-runtime="server"] #create-main-todo,body[data-runtime="server"] #todo-help{display:none!important}
+body[data-runtime="server"]:not(.authenticated)>aside,
+body[data-runtime="server"]:not(.authenticated)>main,
+body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-toggle,
+body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display:none}
+body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
+#login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
+#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
+#create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
+#source-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+.standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
+.standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
+.standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
+.history-form{max-width:1100px}.history-choices{display:grid;grid-template-columns:1fr 1fr;gap:14px}.history-form pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.history-form details{margin-top:14px}
+#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
+@media(max-width:600px){
+ #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
+ .project-create-row{flex-direction:column}.project-create-row button,#new-project-title{width:100%}
+ .standalone-form,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
+ .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{width:100%}
+ #notebooklm-import button,.standalone-form button{width:100%;margin-top:6px}
+ #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+}'''
 JS = '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
@@ -460,6 +572,9 @@ const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
+const sourceImportView=document.querySelector('#source-import-view');
+const historyView=document.querySelector('#history-view');
+const artifactEditorView=document.querySelector('#artifact-editor-view');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -488,7 +603,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -515,12 +630,27 @@ function renderSidebarArtifacts(items){
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
-  const row=document.createElement('li');
+  const row=document.createElement('li');row.className='sidebar-artifact-row';
+  const main=document.createElement('div');main.className='sidebar-artifact-main';
   const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
   const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
- row.append(title,id);sidebarArtifacts.append(row);
+  main.append(title,id);row.append(main);
+  if(item.kind==='document'){
+   const menu=document.createElement('details');menu.className='sidebar-artifact-menu';
+   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce dokumentu ${item.title}`);trigger.textContent='⋮';
+   const actions=document.createElement('div');actions.className='sidebar-artifact-menu-items';actions.setAttribute('role','menu');
+   function action(label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('role','menuitem');button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await callback();});actions.append(button);}
+   action('Upravit / přejmenovat',()=>openArtifactEditor(item));
+   const history=document.createElement('button');history.type='button';history.textContent='Zobrazit historii';history.setAttribute('role','menuitem');
+   history.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();});
+   actions.append(history);
+   action('Připravit smazání',()=>openArtifactEditor(item,true));
+   action('Kopírovat ID',async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID dokumentu bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID dokumentu: ${item.id}`;}});
+   menu.append(trigger,actions);row.append(menu);
+  }
+  sidebarArtifacts.append(row);
  }
  renderSummarySources();
  renderWorkflowSources();
@@ -538,7 +668,7 @@ function renderTodo(todo){
  document.querySelector('#todo-help').hidden=!todo;
  todoTree.replaceChildren();
  document.querySelector('#todo-title').textContent=todo?.title || '';
- if(!todo){todoStatus.textContent='Založte seznam a mějte úkoly projektu po ruce.';return;}
+ if(!todo){todoStatus.textContent='Projekt zatím nemá hlavní seznam úkolů.';return;}
  if(todo.status!=='ready'){todoStatus.textContent='Hlavní seznam úkolů nelze zobrazit v tomto formátu nebo velikosti.';return;}
  todoStatus.textContent=todo.total ? `${todo.completed} z ${todo.total} hotovo` : 'Zatím bez úkolů.';
  if(todo.truncated) todoStatus.textContent+=' Zobrazeno prvních 1000 položek.';
@@ -570,9 +700,12 @@ function clearProject(){
  document.querySelector('#chat-delete-preview').hidden=true;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
- document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
+ document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
  settingsView.hidden=true;
+ sourceImportView.hidden=true;
+ historyView.hidden=true;
+ artifactEditorView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
@@ -591,6 +724,106 @@ async function projectRequest(path,body,timeout=60000){
   error.outcome=result.outcome;error.retry=result.retry;throw error;}
  return result;
 }
+const sourceImportForm=document.querySelector('#source-import-form');
+const sourceImportStatus=document.querySelector('#source-import-status');
+let sourceImportAttempt=null;
+function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
+function closeSourceImport(){
+ sourceImportView.hidden=true;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
+ else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+}
+function openSourceImport(){
+ if(!activeProject)return;
+ const predecessors=document.querySelector('#source-import-supersedes');predecessors.replaceChildren();
+ const standalone=document.createElement('option');standalone.value='';standalone.textContent='Samostatný zdroj';predecessors.append(standalone);
+ for(const item of currentArtifacts.filter(item=>item.kind==='source')){
+  const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.id}`;predecessors.append(option);
+ }
+ sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ sourceImportForm.elements.file.focus();
+}
+document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
+document.querySelector('#source-import-back').addEventListener('click',closeSourceImport);
+sourceImportForm.elements.file.addEventListener('change',event=>{
+ const file=event.currentTarget.files[0];if(file&&!sourceImportForm.elements.title.value)sourceImportForm.elements.title.value=file.name.replace(/\\.[^.]+$/,'');
+ sourceImportAttempt=null;
+});
+sourceImportForm.addEventListener('input',()=>{sourceImportAttempt=null;});
+sourceImportForm.addEventListener('submit',async event=>{
+ event.preventDefault();const fields=new FormData(sourceImportForm);const file=fields.get('file');
+ if(!activeProject || !(file instanceof File) || !file.size){sourceImportStatus.textContent='Vyberte otevřený projekt a soubor.';return;}
+ if(file.size>16777216){sourceImportStatus.textContent='Soubor přesahuje limit 16 MiB.';return;}
+ const button=sourceImportForm.querySelector('button[type="submit"]');button.disabled=true;sourceImportStatus.textContent='Importuji…';
+ try{
+  const signature=JSON.stringify([activeProject.id,activeProject.head,file.name,file.size,file.lastModified,
+   fields.get('title'),fields.get('description'),fields.get('tags'),fields.get('source_created_at'),fields.get('supersedes'),fields.get('privacy')]);
+  if(!sourceImportAttempt || sourceImportAttempt.signature!==signature){
+   const raw=await file.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',raw);
+   const source={project_id:activeProject.id,artifact_id:crypto.randomUUID(),base_head:activeProject.head,
+    filename:file.name,title:String(fields.get('title')||'').trim(),description:String(fields.get('description')||''),
+    tags:String(fields.get('tags')||'').split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean),privacy:String(fields.get('privacy')),
+    created_at:new Date().toISOString(),content:bytesBase64(raw),sha256:[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join(''),
+    source_url:null,source_author:null,source_created_at:String(fields.get('source_created_at')||'').trim()||null,source_revision:null};
+   const supersedes=String(fields.get('supersedes')||'');if(supersedes)source.supersedes=supersedes;
+   sourceImportAttempt={signature,request:{operation_id:crypto.randomUUID(),source}};
+  }
+  const result=await projectRequest('/v1/sources/import',sourceImportAttempt.request,120000);
+  const projectId=result.id;sourceImportAttempt=null;sourceImportForm.reset();await openRegisteredProject(projectId);
+  sidebarArtifactStatus.textContent='Zdroj byl importován beze změny původních bajtů.';
+ }catch(error){sourceImportStatus.textContent=error.message;}finally{button.disabled=false;}
+});
+const artifactEditorForm=document.querySelector('#artifact-editor-form');
+const artifactEditorStatus=document.querySelector('#artifact-editor-status');
+let artifactEditorItem=null,artifactEditorAttempt=null,artifactDeletePreview=null,artifactDeleteOperation=null;
+function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
+async function closeArtifactEditor(){
+ artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(artifactEditorItem)await openPreview(artifactEditorItem.id);}
+}
+async function openArtifactEditor(item,deleteMode=false){
+ if(!activeProject||item.kind!=='document')return;
+ await openPreview(item.id);if(selectedArtifact!==item.id)return;
+ const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ artifactEditorStatus.textContent='Načítám uložený dokument…';
+ try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head});
+  if(activeProject!==project||artifactEditorItem!==item)return;
+  const doc=result.document,meta=doc.metadata;document.querySelector('#artifact-editor-heading').textContent=doc.title;
+  artifactEditorForm.elements.title.value=doc.title;artifactEditorForm.elements.filename.value=meta.file;
+  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body;
+  artifactEditorStatus.textContent='Uložená verze je připravena k úpravě.';
+  if(deleteMode)await prepareArtifactDeletion();else artifactEditorForm.elements.title.focus();
+ }catch(error){artifactEditorStatus.textContent=error.message;}
+}
+artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;});
+artifactEditorForm.addEventListener('submit',async event=>{
+ event.preventDefault();if(!activeProject||!artifactEditorItem)return;const fields=new FormData(artifactEditorForm),button=artifactEditorForm.querySelector('button[type="submit"]');
+ const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:false,filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
+ const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
+ button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
+ try{const id=artifactEditorItem.id,projectId=activeProject.id;await projectRequest('/v1/artifacts/editor/save',artifactEditorAttempt,120000);artifactEditorAttempt=null;await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}
+ catch(error){artifactEditorStatus.textContent=error.message;}finally{button.disabled=false;}
+});
+async function prepareArtifactDeletion(){
+ if(!activeProject||!artifactEditorItem)return;hideArtifactDeletion();artifactEditorStatus.textContent='Připravuji přesný náhled smazání…';
+ try{artifactDeletePreview=await projectRequest('/v1/artifacts/delete/preview',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head});
+  artifactDeleteOperation=crypto.randomUUID();
+  document.querySelector('#artifact-delete-details').textContent=`Dokument: ${artifactDeletePreview.title}\nID: ${artifactDeletePreview.artifact_id}\nVýchozí commit: ${artifactDeletePreview.base_head}`;
+  document.querySelector('#artifact-delete-preview').hidden=false;artifactEditorStatus.textContent='Smazání čeká na výslovné potvrzení.';
+ }catch(error){artifactEditorStatus.textContent=error.message;}
+}
+document.querySelector('#artifact-delete-confirm').addEventListener('change',event=>{document.querySelector('#artifact-delete-run').disabled=!(event.currentTarget.checked&&artifactDeletePreview);});
+document.querySelector('#artifact-delete-cancel').addEventListener('click',hideArtifactDeletion);
+document.querySelector('#artifact-delete-run').addEventListener('click',async event=>{
+ if(!artifactDeletePreview||!document.querySelector('#artifact-delete-confirm').checked)return;event.currentTarget.disabled=true;artifactEditorStatus.textContent='Odstraňuji dokument…';
+ try{const projectId=activeProject.id;await projectRequest('/v1/artifacts/delete/confirm',{project_id:projectId,artifact_id:artifactDeletePreview.artifact_id,base_head:artifactDeletePreview.base_head,preview_sha256:artifactDeletePreview.preview_sha256,operation_id:artifactDeleteOperation},120000);artifactEditorItem=null;artifactDeleteOperation=null;await openRegisteredProject(projectId);previewStatus.textContent='Dokument byl odstraněn. Git historie zůstala zachovaná.';}
+ catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
+document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -605,12 +838,12 @@ async function openRegisteredProject(projectId){
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
-  projectView.hidden=false;document.querySelector('#project-home').hidden=true;
+  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   await loadChat();
   selectSidebarTab(document.querySelector('#artifacts-tab'));
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
-   'Vyberte podklad ze seznamu vlevo.' : 'Zatím tu nejsou žádné podklady. První dokument vytvoříte tlačítkem Dokumenty v horní liště.';
+   'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
 }
 function renderProjectCatalog(items){
@@ -641,6 +874,78 @@ async function loadProjects(selectedId=null){
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 document.querySelector('#back-projects').addEventListener('click',()=>loadProjects());
+
+const projectCreateForm=document.querySelector('#create-project');
+const createStatus=document.querySelector('#create-project-status');
+const projectCreatePreview=document.querySelector('#project-create-preview');
+let projectCreationAttempt=null,projectCreationPlan=null,projectCreationLocation=null;
+function resetProjectCreationPreview(message=''){
+ projectCreationPlan=null;projectCreatePreview.hidden=true;
+ document.querySelector('#project-create-confirm-check').checked=false;
+ document.querySelector('#project-create-confirm').disabled=true;
+ if(message)createStatus.textContent=message;
+}
+function creationAttempt(title){
+ if(!projectCreationAttempt||projectCreationAttempt.title!==title){
+  projectCreationAttempt={title,operation_id:crypto.randomUUID()};projectCreationLocation=null;
+  document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+  document.querySelector('#clear-project-location').hidden=true;
+  document.querySelector('#remember-project-parent-row').hidden=true;
+ }
+ return projectCreationAttempt;
+}
+window.projectCreationPickerRequest=()=>{
+ const title=document.querySelector('#new-project-title').value.trim();
+ if(!title){createStatus.textContent='Nejprve zadejte název projektu.';return null;}
+ const attempt=creationAttempt(title);resetProjectCreationPreview('Vyberte existující prázdnou cílovou složku.');
+ return {title:attempt.title,operation_id:attempt.operation_id};
+};
+window.setProjectCreationLocation=result=>{
+ if(!result||!projectCreationAttempt||result.operation_id!==projectCreationAttempt.operation_id)return;
+ projectCreationLocation=result;document.querySelector('#project-location-label').textContent=`Vybrané umístění: ${result.location_label}`;
+ document.querySelector('#clear-project-location').hidden=false;
+ document.querySelector('#remember-project-parent-row').hidden=false;
+ resetProjectCreationPreview('Umístění bylo vybráno. Připravte přesný náhled.');
+};
+document.querySelector('#choose-project-location').addEventListener('click',()=>{
+ if(window.projectCreationPickerRequest())location.hash='choose-project-location';
+});
+document.querySelector('#clear-project-location').addEventListener('click',()=>{
+ projectCreationLocation=null;document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+ document.querySelector('#clear-project-location').hidden=true;document.querySelector('#remember-project-parent-row').hidden=true;
+ document.querySelector('#remember-project-parent').checked=false;resetProjectCreationPreview('Použije se výchozí umístění uzlu.');
+});
+document.querySelector('#new-project-title').addEventListener('input',()=>{
+ projectCreationAttempt=null;projectCreationLocation=null;resetProjectCreationPreview();
+ document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+ document.querySelector('#clear-project-location').hidden=true;document.querySelector('#remember-project-parent-row').hidden=true;
+});
+projectCreateForm.addEventListener('submit',async event=>{
+ event.preventDefault();const title=document.querySelector('#new-project-title').value.trim();
+ if(!title){createStatus.textContent='Zadejte název projektu.';return;}
+ const attempt=creationAttempt(title),button=document.querySelector('#create-project-btn');button.disabled=true;
+ createStatus.textContent='Připravuji přesný náhled…';
+ try{projectCreationPlan=await projectRequest('/v1/projects/create/preview',{
+   title,operation_id:attempt.operation_id,
+   location_capability:projectCreationLocation?.location_capability||null,
+   remember_parent:Boolean(projectCreationLocation&&document.querySelector('#remember-project-parent').checked)});
+  document.querySelector('#project-create-details').textContent=`Název: ${projectCreationPlan.title}\nCíl: ${projectCreationPlan.target_label}\nID operace: ${projectCreationPlan.operation_id}`;
+  document.querySelector('#project-create-confirm-check').checked=false;document.querySelector('#project-create-confirm').disabled=true;
+  projectCreatePreview.hidden=false;createStatus.textContent='Náhled je připraven k potvrzení.';
+ }catch(error){resetProjectCreationPreview(error.message);}finally{button.disabled=false;}
+});
+document.querySelector('#project-create-confirm-check').addEventListener('change',event=>{
+ document.querySelector('#project-create-confirm').disabled=!(event.currentTarget.checked&&projectCreationPlan);
+});
+document.querySelector('#project-create-cancel').addEventListener('click',()=>resetProjectCreationPreview('Náhled byl zrušen.'));
+document.querySelector('#project-create-confirm').addEventListener('click',async event=>{
+ if(!projectCreationPlan||!document.querySelector('#project-create-confirm-check').checked)return;
+ event.currentTarget.disabled=true;createStatus.textContent='Vytvářím projekt…';
+ try{const result=await projectRequest('/v1/projects/create/confirm',{plan:projectCreationPlan},120000);
+  const title=result.title;projectCreationAttempt=null;projectCreationPlan=null;projectCreationLocation=null;projectCreateForm.reset();projectCreatePreview.hidden=true;
+  createStatus.textContent=`Projekt „${title}“ byl vytvořen.`;await loadProjects(result.id);
+ }catch(error){createStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
 
 """
 
@@ -685,7 +990,7 @@ for(const [index,tab] of settingsTabs.entries()){
 async function openSettings(){
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -876,6 +1181,60 @@ async function openPreview(id,page=1){
   previewStatus.textContent=result.message || (result.format==='pdf'?'Stránka '+page+' · uložená verze':'Uložená verze · pouze pro čtení');
  }catch(error){if(request===previewRequest){previewStatus.textContent=error.message;}}
 }
+const historyStatus=document.querySelector('#history-status');
+const historyOlder=document.querySelector('#history-older');
+const historyNewer=document.querySelector('#history-newer');
+const historyCompare=document.querySelector('#history-compare');
+let historyVersions=[],historyRequest=0;
+function clearHistoryResult(){
+ for(const id of ['history-body','history-metadata','history-diff','history-info'])document.getElementById(id).textContent='';
+}
+function closeHistory(){
+ ++historyRequest;historyView.hidden=true;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
+ else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+}
+async function openHistory(){
+ if(!activeProject||!selectedArtifact)return;
+ const project=activeProject,artifactId=selectedArtifact,request=++historyRequest;
+ historyVersions=[];historyOlder.replaceChildren();historyNewer.replaceChildren();clearHistoryResult();
+ document.querySelector('#history-title').textContent=`Historie · ${document.querySelector('#preview-title').textContent||artifactId}`;
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;projectView.hidden=true;historyView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ historyCompare.disabled=true;historyStatus.textContent='Načítám historii…';
+ try{
+  const result=await projectRequest('/v1/artifacts/history/list',{project_id:project.id,artifact_id:artifactId,expected_head:project.head});
+  if(request!==historyRequest||activeProject!==project||selectedArtifact!==artifactId)return;
+  historyVersions=result.versions;
+  for(const [index,row] of historyVersions.entries()){
+   const summary=(row.message.split(/\\r?\\n/,1)[0]||'(bez zprávy)').slice(0,100);
+   const suffix=!row.available?' · neplatná/nepodporovaná verze':row.deleted?' · smazáno':'';
+   const label=`${row.commit_id.slice(0,10)} · ${row.date} · ${row.author} · ${summary}${suffix}`;
+   for(const select of [historyOlder,historyNewer]){const option=document.createElement('option');option.value=String(index);option.textContent=label;option.disabled=!row.available;select.append(option);}
+  }
+  historyNewer.value='0';historyOlder.value=String(Math.min(1,historyVersions.length-1));
+  historyCompare.disabled=!historyVersions.some(row=>row.available);
+  historyStatus.textContent=(historyVersions.length?'Vyberte verze a zobrazte porovnání.':'Dokument nemá dostupnou historii.')+(result.truncated?' Zobrazeno nejnovějších 100 záznamů.':'');
+ }catch(error){if(request===historyRequest){historyStatus.textContent=error.message;}}
+}
+for(const select of [historyOlder,historyNewer])select.addEventListener('change',clearHistoryResult);
+historyCompare.addEventListener('click',async()=>{
+ const project=activeProject,artifactId=selectedArtifact;
+ const older=historyVersions[Number(historyOlder.value)],newer=historyVersions[Number(historyNewer.value)];
+ if(!project||!artifactId||!older?.available||!newer?.available)return;
+ const request=++historyRequest;clearHistoryResult();historyCompare.disabled=true;historyStatus.textContent='Načítám uložené verze…';
+ try{
+  const result=await projectRequest('/v1/artifacts/history/compare',{project_id:project.id,artifact_id:artifactId,expected_head:project.head,older:older.commit_id,newer:newer.commit_id});
+  if(request!==historyRequest||activeProject!==project||selectedArtifact!==artifactId)return;
+  document.querySelector('#history-body').textContent=result.after?result.after.body:'Dokument v této verzi neexistuje.';
+  document.querySelector('#history-metadata').textContent=result.after?JSON.stringify(result.after.metadata,null,2):'';
+  document.querySelector('#history-diff').textContent=result.diff||'Vybrané verze nemají rozdíly v souborech dokumentu.';
+  document.querySelector('#history-info').textContent=`${newer.commit_id}\n${newer.date}\n${newer.author} <${newer.email}>\n\n${newer.message}`;
+  historyStatus.textContent='Uložená verze · pouze pro čtení.';
+ }catch(error){if(request===historyRequest)historyStatus.textContent=error.message;}
+ finally{if(request===historyRequest)historyCompare.disabled=false;}
+});
+document.querySelector('#history-close').addEventListener('click',closeHistory);
 document.querySelector('#pdf-show').addEventListener('click',()=>{
  const input=document.querySelector('#pdf-page');
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));
@@ -938,9 +1297,6 @@ function renderChat(thread){
   }
  }
  renderTaskOutcomes();
- document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
- document.querySelector('#chat-archive-thread').disabled=!thread || thread.status==='archived';
- document.querySelector('#chat-delete-thread').disabled=!thread;
  const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
  document.querySelector('#chat-submit').disabled=composerDisabled;
  document.querySelector('#external-propose-button').disabled=composerDisabled;
@@ -948,11 +1304,19 @@ function renderChat(thread){
 }
 function renderThreadList(threads){
  knownThreads=threads;
- const assigned=document.querySelector('#sidebar-assigned-chats');
- const unassigned=document.querySelector('#sidebar-unassigned-chats');
- assigned.replaceChildren();unassigned.replaceChildren();
- for(const thread of threads){
-  const row=document.createElement('li'),button=document.createElement('button');button.type='button';
+ const tree=document.querySelector('#sidebar-chat-tree');tree.replaceChildren();
+ const assigned=threads.filter(thread=>thread.project_id!==null);
+ const unassigned=threads.filter(thread=>thread.project_id===null);
+ function branch(label,branchThreads){
+  if(!branchThreads.length)return;
+  const root=document.createElement('li');root.className='sidebar-chat-branch';root.setAttribute('role','treeitem');root.setAttribute('aria-expanded','true');
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-chat-branch-toggle';toggle.textContent=`${label} (${branchThreads.length})`;
+  const group=document.createElement('ul');group.setAttribute('role','group');
+  toggle.addEventListener('click',()=>{const expanded=root.getAttribute('aria-expanded')==='true';root.setAttribute('aria-expanded',String(!expanded));});
+  root.append(toggle,group);tree.append(root);
+  for(const thread of branchThreads){
+  const row=document.createElement('li'),button=document.createElement('button');button.type='button';row.setAttribute('role','treeitem');
+  row.className='sidebar-chat-row';button.className='sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
   button.textContent=`${thread.classification} · ${thread.status}`;
@@ -960,10 +1324,25 @@ function renderThreadList(threads){
   const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
   meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
   button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
-  row.append(button);(thread.project_id===null?unassigned:assigned).append(row);
+  const menu=document.createElement('details');menu.className='sidebar-chat-menu';
+  const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce chatu ${thread.classification}`);trigger.textContent='⋮';
+  const items=document.createElement('div');items.className='sidebar-chat-menu-items';items.setAttribute('role','menu');
+  function action(label,callback,disabled=false){
+   const item=document.createElement('button');item.type='button';item.textContent=label;item.disabled=disabled;item.setAttribute('role','menuitem');
+   item.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;
+    if(activeThread?.thread_id!==thread.thread_id)await openStoredThread(thread.thread_id);
+    if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
+   items.append(item);
+  }
+  action('Archivovat',archiveActiveThread,thread.status==='archived');
+  action('Připravit smazání',prepareActiveThreadDeletion);
+  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
+  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!thread.messages.length);
+  menu.append(trigger,items);row.append(button,menu);group.append(row);
+  }
  }
- const assignedCount=threads.filter(thread=>thread.project_id!==null).length;
- const unassignedCount=threads.length-assignedCount;
+ branch('Zařazené',assigned);branch('Nezařazené',unassigned);
+ const assignedCount=assigned.length,unassignedCount=unassigned.length;
  document.querySelector('#sidebar-chat-status').textContent=threads.length?
   `${assignedCount} zařazených · ${unassignedCount} nezařazených`:'Zatím tu nejsou žádné uložené chaty.';
 }
@@ -1090,17 +1469,17 @@ async function openStoredThread(threadId){
   chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
-document.querySelector('#chat-archive-thread').addEventListener('click',async()=>{
- if(!activeThread)return;
+async function archiveActiveThread(button){
+ if(!activeThread)return;if(button)button.disabled=true;
  try{const archived=await projectRequest('/v1/chat/archive',{
    thread_id:activeThread.thread_id,expected_revision:activeThread.revision});
   activeThread=archived;const index=knownThreads.findIndex(item=>item.thread_id===archived.thread_id);
   if(index>=0)knownThreads[index]=archived;renderThreadList(knownThreads);renderChat(archived);
   chatOperationStatus.textContent='Vlákno bylo archivováno a zůstává lokálně uložené.';
- }catch(error){chatOperationStatus.textContent=error.message;}
-});
-document.querySelector('#chat-delete-thread').addEventListener('click',async()=>{
- if(!activeThread)return;chatOperationStatus.textContent='Připravuji přesný rozsah smazání…';
+ }catch(error){chatOperationStatus.textContent=error.message;if(button)button.disabled=false;}
+}
+async function prepareActiveThreadDeletion(button){
+ if(!activeThread)return;if(button)button.disabled=true;chatOperationStatus.textContent='Připravuji přesný rozsah smazání…';
  try{const preview=await projectRequest('/v1/chat/delete/preview',{thread_id:activeThread.thread_id});
   pendingThreadDeletion={preview,operation_id:crypto.randomUUID()};
   document.querySelector('#chat-delete-details').textContent=JSON.stringify({
@@ -1111,8 +1490,8 @@ document.querySelector('#chat-delete-thread').addEventListener('click',async()=>
   document.querySelector('#chat-delete-run').disabled=true;
   chatOperationStatus.textContent=preview.blockers.length?
    'Smazání blokuje aktivní nebo neznámý účinek.':'Zkontrolujte rozsah a potvrďte smazání.';
- }catch(error){chatOperationStatus.textContent=error.message;}
-});
+ }catch(error){chatOperationStatus.textContent=error.message;if(button)button.disabled=false;}
+}
 document.querySelector('#chat-delete-confirm').addEventListener('change',event=>{
  document.querySelector('#chat-delete-run').disabled=!event.currentTarget.checked ||
   !pendingThreadDeletion || pendingThreadDeletion.preview.blockers.length>0;
@@ -1579,8 +1958,6 @@ async function runChatRecord(button,action){
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{button.disabled=false;}
 }
-document.querySelector('#chat-save-snapshot').addEventListener('click',event=>runChatRecord(event.currentTarget,'snapshot'));
-document.querySelector('#chat-save-output').addEventListener('click',event=>runChatRecord(event.currentTarget,'output'));
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
 });
@@ -1972,17 +2349,23 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
  }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 refreshImageAdapter();
-loadProjects();
+if(window.workspaceAutoStart!==false)loadProjects();
 """
+JS += ADMIN_JS
+DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
-          '/app.js': ('text/javascript; charset=utf-8', JS)}
+          '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}
 
 
 class DesktopHandler(Handler):
     assets = ASSETS
-    max_body = 1152 * 1024
+    max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
-        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
+        '/v1/projects/create/preview', '/v1/projects/create/confirm',
+        '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+        '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
+        '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
+        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -2187,12 +2570,63 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
                 return self.reply(200, {'projects': projects.catalog()})
+            if self.path == '/v1/projects/create/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.project_creation_actions.preview(request))
+            if (self.path == '/v1/projects/create/confirm' and isinstance(request, dict)
+                    and set(request) == {'plan'}):
+                receipt = self.server.project_creation_actions.confirm(request['plan'])
+                self.server.projects = Projects(projects.node_path,
+                    network=getattr(projects, 'network', False))
+                return self.reply(200, receipt)
+            if (self.path == '/v1/sources/import' and isinstance(request, dict)
+                    and set(request) == {'operation_id', 'source'}
+                    and isinstance(request['source'], dict)):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                receipt = Sources(node).import_source(request['source'], request['operation_id'])
+                return self.reply(200, {'id': request['source'].get('project_id'),
+                                        'commit_id': receipt['commit_id']})
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))
             if (self.path == '/v1/artifacts/preview' and isinstance(request, dict)
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))
+            if (self.path == '/v1/artifacts/history/list' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                history = ArtifactHistory(node, network=getattr(projects, 'network', False))
+                return self.reply(200, history.list(**request))
+            if (self.path == '/v1/artifacts/history/compare' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'artifact_id', 'expected_head', 'older', 'newer'}):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                history = ArtifactHistory(node, network=getattr(projects, 'network', False))
+                return self.reply(200, history.compare(**request))
+            if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                actions = ArtifactActions(node, network=getattr(projects, 'network', False))
+                if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                    return self.reply(200, actions.open(**request))
+                if (self.path == '/v1/artifacts/editor/save' and isinstance(request, dict)
+                        and set(request) == {'operation_id', 'document'}
+                        and isinstance(request['document'], dict)):
+                    return self.reply(200, actions.save(request['document'], request['operation_id']))
+                if (self.path == '/v1/artifacts/delete/preview' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                    return self.reply(200, actions.deletion_preview(**request))
+                if (self.path == '/v1/artifacts/delete/confirm' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'base_head',
+                                             'preview_sha256', 'operation_id'}):
+                    return self.reply(200, actions.delete(**request))
+                return self.send_error(400)
             return self.send_error(400)
         except UnknownRun as exc:
             return self.reply(409, {'error': 'Výsledek lokálního LLM běhu není známý. Původní '
@@ -2265,6 +2699,14 @@ class DesktopHandler(Handler):
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
                            'Chat požadavek nelze provést. Ověřte backend, projekt, výběr kontextu a lokální stav.')
                 return self.reply(422, {'error': message})
+            if self.path == '/v1/sources/import':
+                return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
+            if self.path.startswith('/v1/projects/create/'):
+                return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
+            if self.path.startswith('/v1/artifacts/history/'):
+                return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
+            if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
+                return self.reply(422, {'error': 'Akci dokumentu nelze provést. Ověřte aktuální verzi, metadata, vztahy a recovery stav projektu.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

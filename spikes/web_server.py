@@ -12,14 +12,13 @@ import stat
 import sqlite3
 import subprocess
 from http.server import HTTPServer
-from uuid import uuid4
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.chat_service import ChatService
 from spikes.project_creation import CreationConflict, ProjectCreation
+from spikes.project_creation_actions import ProjectCreationActions
 from spikes.projects import Projects
-from spikes.administration import Administration, AccessDenied, identifier
-from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
+from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
@@ -31,52 +30,13 @@ from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 
-HTML = HTML.replace('<div id="administration-host"></div>', ADMIN_HTML)
-CSS += ADMIN_CSS
-JS = JS.removesuffix('loadProjects();\n') + ADMIN_JS
-
-LOGIN = '''<section id="login"><h1>Projektový workspace</h1>
-<form id="login-form"><label>Přístupový klíč <input id="access-key" type="password" required autocomplete="off"></label>
-<button>Přihlásit</button><p id="login-status" role="status"></p></form></section>'''
-WEB_HTML = HTML.replace('<body>', '<body>' + LOGIN).replace(
-    '<div class="node-note">', '<button id="logout">Odhlásit</button><div class="node-note">').replace(
-    'Na tomto počítači', 'Na serveru').replace(
-    'Nový projekt vytvoříte tlačítkem v horní liště.',
-    'Projekt můžete vytvořit bez desktopové aplikace.')
-WEB_HTML = WEB_HTML.replace(
-    '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>',
-    '<form id="create-project" aria-label="Vytvořit projekt">'
-    '<label for="new-project-title">Název nového projektu</label>'
-    '<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">'
-    '<button id="create-project-btn">Vytvořit projekt</button></div>'
-    '<p id="create-project-status" role="status"> </p></form>'
-    '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>')
-WEB_HTML = WEB_HTML.replace(
-    '<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>',
-    '''<details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
-<p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto serveru. Import je dostupný pouze správci uzlu.</p>
-<label>Takeout TGZ na serveru <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
-<button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
-<label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
-<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
-<button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
-<pre id="notebooklm-preview" hidden></pre>
-<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
-<button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
-<p id="notebooklm-status" role="status"></p></details>
-<p class="home-help">Projekt můžete vytvořit bez desktopové aplikace.</p>''')
-WEB_HTML = WEB_HTML.replace(
-    '<div id="project-view" hidden>',
-    '''<div id="project-view" hidden>
-<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
-<form id="web-source-import-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
-<label>Název <input name="title" maxlength="200" required></label>
-<label>Popis <textarea name="description" rows="3"></textarea></label>
-<label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
-<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
-<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>''')
-# A separate asset preserves the desktop/native authentication contract.
-WEB_JS = '''let accessKey='';
+# The shell is shared byte-for-byte. This explicit bootstrap is the only web
+# variant: it provides browser authentication and enables server capabilities.
+WEB_HTML = HTML
+WEB_CSS = CSS
+WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=false;
+document.querySelector('#source-import-local-only').disabled=true;
+let accessKey='';
 const originalFetch=window.fetch.bind(window);
 window.fetch=(path,options={})=>{
  const url=new URL(path,location.href);
@@ -101,8 +61,6 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
-const projectCreateForm=document.querySelector('#create-project');
-const createStatus=document.querySelector('#create-project-status');
 const notebookImport=document.querySelector('#notebooklm-import');
 const notebookStatus=document.querySelector('#notebooklm-status');
 const notebookSelection=document.querySelector('#notebooklm-selection');
@@ -142,62 +100,10 @@ document.querySelector('#notebooklm-run').addEventListener('click',async event=>
   notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';notebookPlan=null;await loadProjects(result.id);
  }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
-let creationAttempt=null;
-projectCreateForm.addEventListener('submit',async(event)=>{
- event.preventDefault();
- const title=document.querySelector('#new-project-title').value.trim();
- if(!title){createStatus.textContent='Zadejte název projektu.';return;}
- createStatus.textContent='Vytvářím...';
- if(!creationAttempt || creationAttempt.title!==title)creationAttempt={title,operation_id:crypto.randomUUID()};
- document.querySelector('#create-project-btn').disabled=true;
- try{
-  const response=await fetch('/v1/projects/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(creationAttempt)});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error || 'Projekt se nepodařilo vytvořit.');
-  createStatus.textContent=`Projekt „${result.title}“ vytvořen.`;
-  document.querySelector('#new-project-title').value='';creationAttempt=null;
-  await loadProjects(result.id);
- }catch(error){createStatus.textContent=error.message || 'Projekt se nepodařilo vytvořit.';}
- finally{document.querySelector('#create-project-btn').disabled=false;}
-});
 window.addEventListener('pagehide',()=>{accessKey='';});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 document.querySelector('#logout').addEventListener('click',()=>{accessKey='';location.reload();});
-const webImportForm=document.querySelector('#web-source-import-form');
-let webImportAttempt=null;
-function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
-webImportForm.addEventListener('submit',async event=>{
- event.preventDefault();const status=document.querySelector('#web-source-import-status');const fields=new FormData(webImportForm);
- const file=fields.get('file');if(!activeProject || !(file instanceof File) || !file.size){status.textContent='Vyberte otevřený projekt a soubor.';return;}
- if(file.size>16777216){status.textContent='Soubor přesahuje limit 16 MiB.';return;}
- const button=webImportForm.querySelector('button');button.disabled=true;status.textContent='Importuji…';
- try{const signature=JSON.stringify([activeProject.id,activeProject.head,file.name,file.size,file.lastModified,fields.get('title'),fields.get('description'),fields.get('tags'),fields.get('privacy')]);
-   if(!webImportAttempt || webImportAttempt.signature!==signature){const raw=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',raw);const source={project_id:activeProject.id,artifact_id:crypto.randomUUID(),base_head:activeProject.head,
-   filename:file.name,title:String(fields.get('title')||'').trim(),description:String(fields.get('description')||''),
-   tags:String(fields.get('tags')||'').split(/\\r?\\n/).map(v=>v.trim()).filter(Boolean),privacy:String(fields.get('privacy')),
-   created_at:new Date().toISOString(),content:bytesBase64(raw),sha256:[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join(''),
-   source_url:null,source_author:null,source_created_at:null,source_revision:null};webImportAttempt={signature,request:{operation_id:crypto.randomUUID(),source}};}
-   const result=await projectRequest('/v1/sources/import',webImportAttempt.request,120000);
-   status.textContent='Zdroj byl importován.';webImportAttempt=null;webImportForm.reset();await openRegisteredProject(result.id);
- }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
-});
-''' + JS.removesuffix('loadProjects();\n').replace(
-    'createTodo.hidden=!!todo;', 'createTodo.hidden=true;').replace(
-    'Založte seznam a mějte úkoly projektu po ruce.', 'Projekt zatím nemá hlavní seznam úkolů.').replace(
-    'První dokument vytvoříte tlačítkem Dokumenty v horní liště.', 'Dokumenty vytvoříte v desktopové aplikaci.')
-WEB_CSS = CSS + '''body:not(.authenticated)>aside,body:not(.authenticated)>main,body:not(.authenticated)>#mobile-sidebar-toggle,body:not(.authenticated)>#mobile-sidebar-backdrop{display:none}
-body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
-#login input{padding:12px;margin:12px}#create-main-todo,#todo-help{display:none!important}
-.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}#web-source-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#web-source-import label{display:block;margin:9px 0}#web-source-import input,#web-source-import textarea,#web-source-import select{max-width:100%;padding:8px}#web-source-import textarea{width:100%}
-#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}#notebooklm-import label{display:block;margin:9px 0}#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}#notebooklm-archive{width:min(680px,100%)}#notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
-@media(max-width:600px){
- #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
- .project-create-row{flex-direction:column}.project-create-row button,#new-project-title{width:100%}
- #web-source-import,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
- #web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{width:100%}
- #notebooklm-import button,#web-source-import button{width:100%;margin-top:6px}
- #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
-}'''
+''' + JS
 ASSETS = {'/': ('text/html; charset=utf-8', WEB_HTML),
           '/app.css': ('text/css; charset=utf-8', WEB_CSS),
           '/app.js': ('text/javascript; charset=utf-8', WEB_JS)}
@@ -221,7 +127,7 @@ def secret(path):
 
 class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session',
+    post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
                                                '/v1/notebooklm/preview', '/v1/notebooklm/plan',
@@ -282,23 +188,6 @@ class WebHandler(DesktopHandler):
             self.reply(200, {'id': source['project_id'], 'commit_id': receipt['commit_id']})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
-
-    def _create_project(self, request):
-        if not isinstance(request, dict) or not {'title'} <= set(request) <= {'title', 'operation_id'} or not isinstance(request['title'], str):
-            return self.send_error(400)
-        title = request['title']
-        try:
-            root = self._default_projects_root()
-            root.mkdir(mode=0o700, exist_ok=True)
-            operation_id = request.get('operation_id', str(uuid4()))
-            identifier(operation_id)
-            target = root / f'projekt-{operation_id}'
-            creator = ProjectCreation(self.server.node)
-            receipt = creator.create(title, target, operation_id)
-            self.server.projects = Projects(self.server.node, network=True)
-            self.reply(200, receipt)
-        except (ValueError, CreationConflict, OSError, sqlite3.Error, subprocess.SubprocessError):
-            self.reply(422, {'error': 'Projekt se nepodařilo vytvořit. Ověřte název a dostupnost úložiště.'})
 
     def dispatch(self, request):
         if self.path in {'/v1/chat/configure', '/v1/chat/test'} \
@@ -439,13 +328,22 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/publication-cms/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-        if self.path in {'/v1/projects/open', '/v1/artifacts/preview'}:
+        if self.path in {'/v1/projects/open', '/v1/artifacts/preview',
+                         '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+                         '/v1/artifacts/editor/open', '/v1/artifacts/delete/preview'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
                 return self.send_error(403)
-        if self.path == '/v1/projects/create':
+        if self.path == '/v1/artifacts/editor/save':
+            document = request.get('document') if isinstance(request, dict) else None
+            if not isinstance(document, dict) or not self._can_write(document.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/artifacts/delete/confirm':
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+        if self.path.startswith('/v1/projects/create/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-            return self._create_project(request)
+            return super().dispatch(request)
         if self.path == '/v1/sources/import':
             return self._import_source(request)
         return super().dispatch(request)
@@ -500,6 +398,8 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.token, server.counter = token, 0
     server.projects = Projects(node, network=True)
     server.node = node
+    server.project_creation_actions = ProjectCreationActions(
+        node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.chat_service = ChatService(node, server.projects)
     server.media_service = MediaService(node, server.projects,
         state_dir=server.chat_service.state_dir)

@@ -13,15 +13,35 @@ Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu na
 
 ## Vytvoření nového projektu
 
-Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové nebo existující prázdné složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a práva. Volba **Použít tuto nadřazenou složku jako výchozí** uloží rodiče do lokální konfigurace uzlu a použije jej při příštím dialogu i pro webové vytvoření. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
+Spusťte `./run.sh desktop` (z instalovaného balíku
+`federated-workspace-poc`). Na společné stránce **Projekty** vyplňte název.
+Výchozí vytvoření použije lokálně nakonfigurovaný kořen. Chcete-li přesný jiný
+cíl, zvolte **Vybrat existující prázdnou složku…**; otevře se systémový picker.
+Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a
+práva. Volba **Používat rodiče vybrané složky jako výchozí umístění** uloží
+rodiče do lokální konfigurace uzlu a použije jej pro další výchozí vytvoření.
+Nejprve stiskněte **Připravit vytvoření**, zkontrolujte název, přesný cíl a ID
+operace a až potom potvrďte **Vytvořit a otevřít projekt**.
 
 Cílová složka může být nová nebo již existující, ale existující musí být váš prázdný adresář bez symlinků; obsah, `.git` nebo souběžná změna se odmítnou bez přepsání. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte tlačítkem **Dokumenty…**.
 
 Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
 
-V průběhu vytváření je další vytvoření a běžné zavření okna dočasně zakázané; po dokončení lze okno zavřít. Při násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví. Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu; nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky `.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
+Po potvrzení běží jediná uzamčená backendová operace. Při ztrátě odpovědi lze
+potvrdit stejný plán znovu; stejné operation ID vrátí tentýž receipt. Při
+násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví.
+Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se
+mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu;
+nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní
+pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky
+`.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
 
 Kontrakt, idempotence a hranice recovery: [ADR 0015](adr/0015-project-creation.md). Jde o lokální Linux PoC, nikoli produkční správu identit nebo úplné recovery po výpadku napájení.
+
+Webová varianta používá stejný formulář, ale cílovou cestu ani desktopový
+capability token od prohlížeče nepřijímá. Náhled i potvrzení směřují pouze pod
+správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
+`<adresář node.json>/projects`) a vytvoření je dostupné jen správci uzlu.
 
 ## Načtení existujícího projektu a oprava cesty
 
@@ -63,7 +83,18 @@ Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je se
 
 ## Markdown editor a checklisty
 
-Otevřete projekt a klikněte na **Dokumenty…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. V záložce **Popis a štítky** lze upravit popis a štítky (jeden na řádek); uložená metadata včetně původu, autora a data vytvoření jsou také vidět pouze pro čtení. Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
+Existující Markdown dokument upravíte v záložce **Podklady** přes jeho menu
+`⋮` → **Upravit / přejmenovat**. Společná stránka dovolí změnit název, obsah,
+název `.md` souboru, popis a štítky; **Zavřít editor** vrátí náhled dokumentu.
+Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se
+uloží společně do Gitu. Nový dokument zatím vytvoříte desktopovým tlačítkem
+**Dokumenty…** → **Nový dokument**.
+
+Stejné menu nabízí **Kopírovat ID** a **Připravit smazání**. Smazání nejprve
+zobrazí dokument, ID a výchozí commit a vyžaduje checkbox i druhé potvrzovací
+tlačítko. Git historie zůstane zachovaná; dokument s příchozími vztahy backend
+odmítne. Webový čtenář smí náhled zobrazit, ale uložit či smazat může jen editor,
+project-admin nebo správce uzlu.
 
 Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat úkol**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
 
@@ -79,11 +110,23 @@ Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložt
 
 ## Historie dokumentu
 
-V Markdown editoru vyberte uložený dokument a klikněte na **Historie…**. Seznam verzí uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
+V záložce **Podklady** otevřete akční menu uloženého Markdown dokumentu a
+klikněte na **Zobrazit historii**. Samostatná společná stránka ve webu i desktopu
+uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí
+verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
 
-Záložky ukazují původní obsah zobrazené verze, její metadata, rozdíl uložených souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v obou seznamech vybrat stejný commit. Rozepsaný text zůstává v editoru zachovaný a historie jej neukládá ani nepřepisuje. U nového dosud neuloženého dokumentu je tlačítko historie nedostupné.
+Stránka ukazuje původní obsah zobrazené verze, její metadata, rozdíl uložených
+souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v
+obou seznamech vybrat stejný commit. Rozepsaný text editoru zůstává mimo
+požadavek a historie jej neukládá ani nepřepisuje. Nový dosud neuložený dokument
+v podkladech není, a proto nemá vstup do historie.
 
-Historie je pouze pro čtení. Při změně projektu nebo pending operaci dialog zobrazí chybu; zavřete historii a použijte obnovu/nové načtení editoru, po zachování rozepsaného textu. Neplatné starší verze jsou označené a nelze je zobrazit jako validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí. Podrobnosti: [ADR 0017](adr/0017-artifact-history.md).
+Historie je pouze pro čtení. Při změně projektu nebo pending operaci stránka
+zobrazí chybu; vraťte se do projektu a znovu jej načtěte, případně nejprve
+dokončete obnovu. Neplatné starší verze jsou označené a nelze je zobrazit jako
+validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí.
+Tlačítko **Zavřít historii** vrátí přímo náhled stejného dokumentu. Podrobnosti:
+[ADR 0017](adr/0017-artifact-history.md).
 
 ## Existující data
 
@@ -284,8 +327,8 @@ historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git hi
 
 ## Import původních zdrojů
 
-Desktopová lišta nabízí **Importovat zdroj…** pro otevřený projekt. Webová
-varianta má po otevření projektu rozbalovací **Importovat zdroj do projektu**;
-zápis vyžaduje roli editor/project-admin nebo správce uzlu.
+V záložce **Podklady** nabízí desktop i web stejné tlačítko **Importovat zdroj**,
+které otevře samostatnou společnou stránku; webový zápis vyžaduje roli
+editor/project-admin nebo správce uzlu.
 [Podporované soubory, zachování bajtů, privacy a recovery](native-source-import.md).
 Po úspěchu se zdroj objeví v Podkladech; nativní editor jeho obsah nemění.
