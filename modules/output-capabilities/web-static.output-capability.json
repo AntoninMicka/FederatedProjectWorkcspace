@@ -1,0 +1,72 @@
+{
+  "capability_id": "renderer.web-static",
+  "capability_version": "1.0",
+  "confirmations": [
+    "before-execution"
+  ],
+  "cost_class": "local-compute",
+  "description": "Compile explicitly ordered project sections into a static web bundle without publishing it.",
+  "display_name": "Static project web renderer",
+  "execution_boundary": "same-process",
+  "inputs": [
+    {
+      "format": "markdown-section",
+      "max_items": 64,
+      "mime_types": [
+        "text/markdown"
+      ],
+      "min_items": 1,
+      "port_id": "sections",
+      "schema": "module://workspace.output.web/schemas/ordered-sections-v1.json"
+    }
+  ],
+  "instruction_examples": [
+    "Sestav webovou stránku z vybraných podkladů v určeném pořadí.",
+    "Připrav statický webový náhled metodiky, dat, grafů a závěru."
+  ],
+  "instruction_templates": [],
+  "kind": "renderer",
+  "limits": {
+    "max_input_bytes": 16777216,
+    "max_output_bytes": 33554432,
+    "max_sections": 64
+  },
+  "module": {
+    "id": "workspace.output.web",
+    "version": "1.0.0"
+  },
+  "output": {
+    "format": "static-site-bundle",
+    "mime_types": [
+      "application/x.fpw-static-site+json"
+    ],
+    "port_id": "site",
+    "schema": "module://workspace.output.web/schemas/static-site-bundle-v1.json"
+  },
+  "output_kind": "web",
+  "permissions": [
+    "artifact.read",
+    "output.compile"
+  ],
+  "preview_required": true,
+  "privacy": [
+    "public",
+    "project",
+    "confidential",
+    "local-only"
+  ],
+  "provenance_required": true,
+  "required_backend_capabilities": [],
+  "required_roles": [],
+  "schema_version": 1,
+  "side_effect": "local",
+  "supported_intents": [
+    "render.web-static"
+  ],
+  "templates": [],
+  "unsupported_uses": [
+    "Publishing or deploying the generated bundle.",
+    "Discovering project artifacts that were not explicitly selected.",
+    "Executing scripts embedded in source artifacts."
+  ]
+}

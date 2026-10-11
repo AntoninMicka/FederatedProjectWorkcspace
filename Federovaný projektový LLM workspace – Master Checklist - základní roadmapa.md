@@ -196,24 +196,28 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
 
-**Stav: plánovaný návrh, neimplementováno.** Web, prezentace, obrázek, report ani
-jiný výstupní modul nemají být pro Ollamu či jiný planner známé pouze textem v
-globálním promptu. Každý výstupní renderer a integrovaný nástroj poskytne
-verzovaný, validovaný a staticky načitatelný capability descriptor. Descriptor
-je vstup deterministického aplikačního routeru; není executable pluginem,
-oprávněním ke spuštění ani náhradou aplikační validace.
+**Stav: descriptor a fail-closed katalog lokálně PoC validated; read-only DAG a
+execution neimplementovány.** F-M4-OUTPUT-ROUTER-01-A dodává uzavřený v1
+kontrakt, statický katalog a první descriptor `renderer.web-static`; hranice a
+reuse zaznamenává [ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
+prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
+jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
+integrovaný nástroj poskytne verzovaný, validovaný a staticky načitatelný
+capability descriptor. Descriptor je vstup deterministického aplikačního
+routeru; není executable pluginem, oprávněním ke spuštění ani náhradou aplikační
+validace.
 
-- [ ] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
+- [x] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
   podporované záměry a příklady pokynů (např. „vygeneruj prezentaci na téma…“),
   výslovně nepodporované použití, vstupní a výstupní schéma/MIME, formát
   výsledku, dostupné šablony s verzí a hashem, požadované role a backendové
   capability, limity, privacy/execution boundary, oprávnění, cost/side-effect
   třídu, provenance a potřebu preview či lidského potvrzení.
-- [ ] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
+- [x] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
   očekávaným strukturovaným výstupem, nikoli jako skrytý volný text vložený
   pluginem do libovolného požadavku. Node-local binding modelu, endpoint,
   credentials a runtime dostupnost zůstávají oddělené od přenosného descriptoru.
-- [ ] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
+- [x] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
   transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
   graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
   ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
