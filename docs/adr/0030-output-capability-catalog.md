@@ -6,8 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0030 — Deklarativní katalog výstupních capability
 
 Datum: 2026-10-11. Stav: přijato pro development PoC; descriptor a statický
-katalog implementuje F-M4-OUTPUT-ROUTER-01-A, read-only plan/step DAG a jeho
-planner boundary zůstávají v dalších úkolech stejné dávky.
+katalog implementuje F-M4-OUTPUT-ROUTER-01-A a read-only plan/step DAG
+F-M4-OUTPUT-ROUTER-01-B. Planner boundary zůstává v posledním úkolu stejné
+dávky.
 
 ## Rozhodnutí
 
@@ -47,15 +48,47 @@ První descriptor `renderer.web-static` popisuje pouze lokální kompilaci
 explicitně seřazených Markdown sekcí do statického webového bundle. Nepublikuje,
 nehledá skrytě další projektové artefakty a nespouští skripty ze vstupů.
 
+## Read-only kompoziční plán
+
+Plán v1 je uzavřený dokument s kanonickým UUID plánu, projektu a kroků, přesným
+Git commitem a odkazem na samostatně dodanou důvěryhodnou policy. Reference
+policy váže její ID, revizi a SHA-256 kanonických bajtů. Plán proto nemůže
+rozšířit seznam capability, permissions, privacy tříd, execution boundaries,
+cost tříd nebo side effects změnou vlastní deklarace.
+
+Každý krok odkazuje přesné `(capability_id, capability_version)` a váže vstupní
+porty na jednu z těchto explicitních referencí:
+
+- projektový artefakt s artifact ID, commitem, bezpečnou cestou, blob ID,
+  SHA-256, velikostí a typovým kontraktem;
+- dříve materializovaný výstup s ID a hashem zdrojového plánu, step ID,
+  output portem, SHA-256, velikostí a typovým kontraktem;
+- pojmenovanou hranu z výstupního portu jiného kroku.
+
+Schéma, MIME a formát musí přesně vyhovět oběma portům a počet vazeb cardinality
+descriptoru. Hrana dědí privacy producenta, krok nejpřísnější privacy svých
+vstupů a celý plán nejpřísnější privacy všech zdrojů a kroků. Každá hrana má
+právě jednu cílovou vazbu, každý deklarovaný snapshot zdroje se skutečně použije
+a graf musí být acyklický. Neznámá capability nebo verze, změněný hash policy,
+oslabení privacy, nepovolené oprávnění či hranice a nekompatibilní port se
+odmítnou bez fallbacku. Projektový artefakt s commitem
+odlišným od plánu se rovněž odmítne; ověření plánu proti aktuálnímu HEAD a
+skutečným bajtům zdrojů provede až aplikační revalidace před execution.
+
+Validace plán pouze parsuje a porovnává s katalogem a policy. Nečte obsah
+artefaktů, neověřuje runtime dostupnost, nevybírá binding/model, nedispatchuje
+krok a nevytváří materializaci. Aplikační revalidace nedůvěryhodného návrhu
+planneru a vysvětlení volby patří F-M4-OUTPUT-ROUTER-01-C.
+
 ## Persistence, recovery a návaznost
 
-Tato část pouze čte verzované descriptor soubory a validuje je v paměti.
+Tato část pouze čte verzované descriptor soubory a validuje plán v paměti.
 Nezapisuje projektový Git, obnovitelný index ani node-local journal, takže pád
-nezanechá nedokončenou operaci. Budoucí plan/step DAG může descriptor pouze
-odkazovat přes přesné ID/verzi a musí jej znovu ověřit. Execution, Context
-Manifesty, materializované výstupy, receipts, `unknown`, retry/recovery,
-publikace a UI potvrzení patří F-M4-OUTPUT-ROUTER-02 a nemohou být odvozena ze
-samotné přítomnosti descriptoru.
+nezanechá nedokončenou operaci. Plan/step DAG descriptor pouze odkazuje přes
+přesné ID/verzi a při každé validaci jej znovu ověří. Execution, Context
+Manifesty, vznik nových materializovaných výstupů, receipts, `unknown`,
+retry/recovery, publikace a UI potvrzení patří F-M4-OUTPUT-ROUTER-02 a nemohou
+být odvozena ze samotné přítomnosti descriptoru nebo platného plánu.
 
 ## Reuse
 

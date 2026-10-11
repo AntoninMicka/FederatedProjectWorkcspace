@@ -36,10 +36,14 @@ capability a read-only kompoziční plán**.
   a výslovně nepovoluje publikaci, runtime discovery ani spuštění skriptů.
   Cílené ověření: 10 testů OK, 1 přeskočený kvůli omezení loopback socketu;
   úplná sada: 470 testů OK, 25 přeskočených volitelných environmentálních testů.
-- [ ] [planned] **F-M4-OUTPUT-ROUTER-01-B — Read-only plan/step DAG
-  (implemented).** Validovat stabilní plan/step ID, acykličnost, přesně typované
-  hrany, explicitní artefaktové/materializované vstupy, capability revize,
-  privacy a policy bez dispatch nebo fallbacku.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-01-B — Read-only plan/step DAG
+  (implemented / locally PoC validated).** Uzavřený plán v1 váže kanonická
+  plan/step/source/edge ID, přesný project commit, artifact a materializované
+  snapshoty, typované porty a acyklické hrany. Samostatně dodaná policy je
+  připnutá ID, revizí a hashem; přesná capability verze, permissions, privacy,
+  execution boundary, cost a side-effect se ověřují bez dispatch, backend
+  selection nebo fallbacku. Cílené ověření katalogu a plánů: 8 testů OK;
+  úplná sada: 474 testů OK, 25 přeskočených volitelných environmentálních testů.
 - [ ] [planned] **F-M4-OUTPUT-ROUTER-01-C — Planner boundary a dokumentace
   (PoC validated).** Vymezit nedůvěryhodný strukturovaný návrh planneru,
   aplikační revalidaci, vysvětlení volby/alternativ a navazující execution

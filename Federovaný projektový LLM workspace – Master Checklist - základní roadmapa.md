@@ -196,10 +196,12 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
 
-**Stav: descriptor a fail-closed katalog lokálně PoC validated; read-only DAG a
-execution neimplementovány.** F-M4-OUTPUT-ROUTER-01-A dodává uzavřený v1
-kontrakt, statický katalog a první descriptor `renderer.web-static`; hranice a
-reuse zaznamenává [ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
+**Stav: descriptor, fail-closed katalog a read-only DAG lokálně PoC validated;
+planner boundary a execution neimplementovány.** F-M4-OUTPUT-ROUTER-01-A/B
+dodává uzavřený v1 kontrakt, statický katalog, první descriptor
+`renderer.web-static` a validaci typovaného acyklického plánu proti samostatné
+policy; hranice a reuse zaznamenává
+[ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
 prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
 jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
 integrovaný nástroj poskytne verzovaný, validovaný a staticky načitatelný
@@ -225,7 +227,7 @@ validace.
   návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
   capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
   model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.
-- [ ] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
+- [x] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
   stabilním plan/step ID. Každá hrana předává explicitní artefakt nebo zmrazený
   materializovaný výstup s formátem, schématem, privacy, revizí a hashem; skryté
   sdílení celé konverzace nebo projektu není dovoleno.
