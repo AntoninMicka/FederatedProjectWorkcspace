@@ -55,6 +55,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
 <div id="sidebar-project-tools" hidden>
+<button id="back-projects" class="sidebar-back" type="button">← Seznam projektů</button>
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
 <button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">Úkoly</button>
 <button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button>
@@ -342,14 +343,13 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
-<button id="back-projects" class="back-button">← Zpět na seznam projektů</button>
 </div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 #mobile-sidebar-toggle,#mobile-sidebar-backdrop{display:none}
-aside{width:238px;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:auto}
-.brand{font-weight:750;letter-spacing:2px;color:white;margin-bottom:32px}.global-nav{margin-top:auto;background:#176b60;text-align:left}.node-note{font-size:11px;line-height:1.8;padding-top:18px;color:#9eb5c7}
+aside{width:238px;height:100vh;min-height:0;box-sizing:border-box;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:hidden}
+.brand{flex:none;font-weight:750;letter-spacing:2px;color:white;margin-bottom:24px}.global-nav{flex:none;margin-top:auto;background:#176b60;text-align:left}.node-note{flex:none;font-size:11px;line-height:1.8;padding-top:18px;color:#9eb5c7}
 main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
 .badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
 h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
@@ -382,6 +382,12 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
+#sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#sidebar-project-tools>[role="tabpanel"]:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list{flex:1}
+#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto minmax(0,1fr)}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
@@ -412,7 +418,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
  #mobile-sidebar-backdrop{display:block;position:fixed;z-index:45;inset:0;width:100%;height:100%;border:0;border-radius:0;background:#07131fa8;padding:0}
  #mobile-sidebar-backdrop:hover{background:#07131fa8}
- aside{position:fixed;z-index:50;inset:0 auto 0 0;width:min(88vw,360px);max-width:calc(100vw - 48px);padding:68px 18px 24px;transform:translateX(-105%);transition:transform .18s ease;box-shadow:8px 0 24px #07131f45}
+ aside{position:fixed;z-index:50;inset:0 auto 0 0;width:min(88vw,360px);height:100vh;height:100dvh;max-width:calc(100vw - 48px);padding:68px 18px 24px;transform:translateX(-105%);transition:transform .18s ease;box-shadow:8px 0 24px #07131f45}
  body.mobile-sidebar-open aside{transform:translateX(0)}
  main{width:100%;min-height:100vh;min-height:100dvh;padding:68px 14px 24px;overflow:visible}
  header,.project-header{align-items:flex-start;flex-direction:column}.project-header details{max-width:100%}
@@ -482,7 +488,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-settings,#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];

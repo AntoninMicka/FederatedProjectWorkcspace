@@ -777,7 +777,10 @@ Odděluje zařazená a nezařazená vlákna a u každého rozlišuje vlastníka,
 přiřazený projekt, režim a stav `active`/`archived`. Načtení existujícího vlákna
 a založení nového jsou dvě vědomé UI akce; aplikace po otevření projektu sama
 nevybere poslední vlákno. Výběr v mobilním draweru přepne hlavní panel na chat
-a navigaci zavře při zachování obvyklé obnovy focusu tlačítkem draweru.
+a navigaci zavře při zachování obvyklé obnovy focusu tlačítkem draweru. Sidebar
+má pevnou výšku a sám se neposouvá; scroll patří jednotlivým seznamům v
+dostupném prostoru panelu. Návrat na seznam projektů je pevná akce nahoře před
+záložkami, nikoli prvek na konci hlavního projektového obsahu.
 Archivované vlákno a vlákno přiřazené jinému projektu je v daném projektu pouze
 pro čtení. Archivace odmítne rozpracovaný turn a používá očekávanou revizi.
 

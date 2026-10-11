@@ -45,6 +45,13 @@ dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
   navigace tablistu se odvozuje od skutečného počtu záložek. Nově vytvořené,
   archivované, odstraněné i dodatečně zařazené vlákno aktualizuje skupiny bez
   znovunačtení projektu.
+- [x] [completed] **F-M2-CHAT-03-F — Pevný sidebar a návrat k projektům
+  (implemented; změna akceptace 2026-10-11).** Samotný sidebar má pevnou výšku
+  viewportu a nesroluje se. V dostupném prostoru se samostatně s overscroll
+  containmentem posouvají pouze seznamy projektů a obsahové seznamy aktuální
+  záložky; jejich nadpisy, stav, tablist, globální nastavení a informace o uzlu
+  zůstávají na místě. Jediné tlačítko „Seznam projektů“ bylo přesunuto nahoru
+  před záložky a na mobilu zavírá drawer se standardní obnovou focusu.
 
 Crash kontrakt: preview je read-only; confirm nejprve durable uloží přesný plán.
 Pád před commitem nemění uživatelský stav. Po commitu marker uzamkne vlákno a
@@ -60,7 +67,7 @@ tests.test_chat_service tests.test_desktop -q` — **68 testů OK, 2 volitelné
 testy přeskočeny**. Následné UI ověření
 `python3 -m unittest tests.test_desktop tests.test_web_server -q` prošlo:
 **32 testů OK, 4 volitelné testy přeskočeny**. Úplná sada
-`python3 -m unittest discover -s tests -q` po poslední změně prošla: **450 testů
+`python3 -m unittest discover -s tests -q` po poslední sidebar změně prošla: **450 testů
 OK, 27 volitelných native/package/live testů přeskočeno**. Běh vypsal známé
 neblokující `ResourceWarning` na neuzavřená testovací SQLite spojení.
 
