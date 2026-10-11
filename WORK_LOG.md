@@ -9,7 +9,8 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka na větvi `feature/f-m2-chat-03-thread-lifecycle`, založené z `develop`
 `9ea0fb0` po začlenění F-M3-OLLAMA-ROBUST-01 jako PR #50, doplnila vědomý
-lifecycle lokálně perzistentních chatových vláken. Dosažená úroveň je **PoC
+lifecycle lokálně perzistentních chatových vláken. Po uživatelské změně
+akceptace přidala seznam chatů do levého panelu. Dosažená úroveň je **PoC
 validated** a akceptační podmínky feature jsou splněné. Push, PR ani merge této
 dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
 
@@ -36,6 +37,14 @@ dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
   revizi/preview, aktivní a `unknown` blokace, opakování po všech sedmi
   potvrzených hranicích, automatickou obnovu přes `ChatService.status`,
   idempotentní receipt a nezměněný publikovaný Git snapshot.
+- [x] [completed] **F-M2-CHAT-03-E — Seznam chatů v levém panelu
+  (implemented; změna akceptace 2026-10-11).** Třetí přístupná sidebar záložka
+  „Chaty“ odděluje zařazená a nezařazená vlákna. Položka bezpečně textově uvádí
+  režim, stav, počet zpráv a vazbu k projektu; kliknutí je vědomé navázání,
+  přepne hlavní panel na chat a v mobilním draweru zavře navigaci. Klávesnicová
+  navigace tablistu se odvozuje od skutečného počtu záložek. Nově vytvořené,
+  archivované, odstraněné i dodatečně zařazené vlákno aktualizuje skupiny bez
+  znovunačtení projektu.
 
 Crash kontrakt: preview je read-only; confirm nejprve durable uloží přesný plán.
 Pád před commitem nemění uživatelský stav. Po commitu marker uzamkne vlákno a
@@ -45,21 +54,23 @@ operaci pouze čtenou a zachovanou autoritativní historií. „Úplné odstran�
 znamená úplné odstranění podporovaného aplikačního stavu, nikoli forenzní
 přepsání SQLite stránek nebo média.
 
-Závěrečné cílené ověření po poslední aplikační změně:
+Závěrečné lifecycle ověření:
 `python3 -m unittest tests.test_chat_threads tests.test_thread_lifecycle
 tests.test_chat_service tests.test_desktop -q` — **68 testů OK, 2 volitelné
-testy přeskočeny**. Úplná sada
-`python3 -m unittest discover -s tests -q` následně prošla: **450 testů OK,
-27 volitelných native/package/live testů přeskočeno**. Běh vypsal neblokující
-`ResourceWarning` na neuzavřená testovací SQLite spojení ve starších testech.
+testy přeskočeny**. Následné UI ověření
+`python3 -m unittest tests.test_desktop tests.test_web_server -q` prošlo:
+**32 testů OK, 4 volitelné testy přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -q` po poslední změně prošla: **450 testů
+OK, 27 volitelných native/package/live testů přeskočeno**. Běh vypsal známé
+neblokující `ResourceWarning` na neuzavřená testovací SQLite spojení.
 
-Omezení: skutečný klikací Qt/WebEngine průchod novým lifecycle panelem nebyl
-proveden; UI má strukturální a HTTP/API regresní testy. Aplikace předpokládá
-jeden backendový proces a její HTTP server serializuje požadavky; nekooperující
-přímý zapisovač do node-local SQLite stores není součástí tohoto PoC. Požadavek
-na orchestration přes explicitní private-network Ollamu byl předán jako
-samostatná feature `F-M3-OLLAMA-ORCH-LAN-01` do BACKLOG; současný režim stále
-vyžaduje `same-node`.
+Omezení: skutečný klikací Qt/WebEngine průchod lifecycle panelem ani novou
+sidebar záložkou nebyl proveden; UI má strukturální a HTTP/API regresní testy.
+Aplikace předpokládá jeden backendový proces a její HTTP server serializuje
+požadavky; nekooperující přímý zapisovač do node-local SQLite stores není
+součástí tohoto PoC. Požadavek na orchestration přes explicitní private-network
+Ollamu zůstává samostatnou feature `F-M3-OLLAMA-ORCH-LAN-01` v BACKLOG;
+současný režim stále vyžaduje `same-node`.
 
 ## F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu — 2026-10-11
 

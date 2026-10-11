@@ -57,14 +57,19 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-project-tools" hidden>
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
 <button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">Úkoly</button>
-<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button></div>
+<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button>
+<button id="chats-tab" role="tab" aria-controls="sidebar-chats" aria-selected="false" tabindex="-1">Chaty</button></div>
 <div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
 <h2>Podklady</h2><p id="sidebar-artifact-status" role="status"></p>
-<ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div></div>
+<ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
+<div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
+<h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
+<h3>Zařazené</h3><ul id="sidebar-assigned-chats" aria-label="Zařazené chaty"></ul>
+<h3>Nezařazené</h3><ul id="sidebar-unassigned-chats" aria-label="Nezařazené chaty"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
 <div class="node-note">Na tomto počítači<br>Zkušební verze</div></aside>
 <main><div id="project-home">
@@ -215,9 +220,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
 <button id="chat-open-settings" class="secondary-button" type="button">Otevřít nastavení backendu</button>
 <button id="chat-new-thread" type="button">Nové vlákno</button>
-<label for="chat-thread-list">Uložená vlákna</label><select id="chat-thread-list">
-<option value="">Vyberte vlákno k navázání</option></select>
-<button id="chat-open-thread" class="secondary-button" type="button">Otevřít vybrané</button>
 <button id="chat-archive-thread" class="secondary-button" type="button" disabled>Archivovat</button>
 <button id="chat-delete-thread" class="secondary-button" type="button" disabled>Připravit smazání</button>
 <span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
@@ -370,11 +372,14 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
-#sidebar-project-list button,#sidebar-artifact-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
-#sidebar-project-list button:hover,#sidebar-artifact-list button:hover{background:#274154}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
+#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
 #sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px}.sidebar-artifact-title{font-size:13px}
+#sidebar-chats h3{font-size:11px;color:#8faabc;text-transform:uppercase;letter-spacing:.06em;margin:18px 8px 6px}
+#sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
+.sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
@@ -477,7 +482,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-settings,#sidebar-project-list button,#sidebar-artifact-list button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-settings,#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -491,7 +496,9 @@ function selectSidebarTab(selected){
 for(const [index,tab] of sidebarTabs.entries()){
  tab.addEventListener('click',()=>selectSidebarTab(tab));
  tab.addEventListener('keydown',event=>{
-  const next={ArrowRight:(index+1)%2,ArrowLeft:(index+1)%2,Home:0,End:1}[event.key];
+  const next={ArrowRight:(index+1)%sidebarTabs.length,
+   ArrowLeft:(index-1+sidebarTabs.length)%sidebarTabs.length,
+   Home:0,End:sidebarTabs.length-1}[event.key];
   if(next===undefined) return;
   event.preventDefault();selectSidebarTab(sidebarTabs[next]);sidebarTabs[next].focus();
  });
@@ -595,7 +602,7 @@ async function openRegisteredProject(projectId){
   projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   await loadChat();
-  selectSidebarTab(sidebarTabs[1]);
+  selectSidebarTab(document.querySelector('#artifacts-tab'));
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Zatím tu nejsou žádné podklady. První dokument vytvoříte tlačítkem Dokumenty v horní liště.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
@@ -934,12 +941,30 @@ function renderChat(thread){
  document.querySelector('#external-preview-button').disabled=composerDisabled;
 }
 function renderThreadList(threads){
- knownThreads=threads;const select=document.querySelector('#chat-thread-list');select.replaceChildren();
- const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte vlákno k navázání';select.append(empty);
- for(const thread of threads){const option=document.createElement('option');option.value=thread.thread_id;
-  const project=thread.project_id===null?'nepřiřazené':thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
-  option.textContent=`${thread.classification} · ${thread.status} · ${project} · ${thread.messages.length} zpráv`;
-  select.append(option);}
+ knownThreads=threads;
+ const assigned=document.querySelector('#sidebar-assigned-chats');
+ const unassigned=document.querySelector('#sidebar-unassigned-chats');
+ assigned.replaceChildren();unassigned.replaceChildren();
+ for(const thread of threads){
+  const row=document.createElement('li'),button=document.createElement('button');button.type='button';
+  button.dataset.threadId=thread.thread_id;
+  button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
+  button.textContent=`${thread.classification} · ${thread.status}`;
+  const meta=document.createElement('small');meta.className='sidebar-chat-meta';
+  const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
+  meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
+  button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
+  row.append(button);(thread.project_id===null?unassigned:assigned).append(row);
+ }
+ const assignedCount=threads.filter(thread=>thread.project_id!==null).length;
+ const unassignedCount=threads.length-assignedCount;
+ document.querySelector('#sidebar-chat-status').textContent=threads.length?
+  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:'Zatím tu nejsou žádné uložené chaty.';
+}
+function rememberThread(thread){
+ const index=knownThreads.findIndex(item=>item.thread_id===thread.thread_id);
+ if(index<0)knownThreads.unshift(thread);else knownThreads[index]=thread;
+ renderThreadList(knownThreads);return thread;
 }
 function renderRunUsage(report){
  if(!report || report.status!=='available'){chatRunUsage.hidden=true;return;}
@@ -1038,25 +1063,27 @@ async function prepareTaskExternal(projection){
 }
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
- taskOutcomes=[];renderChat(null);draft.value='';
+ taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
  chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
   'Nové vlákno · nejprve nastavte backend.';
  draft.focus();
 });
-document.querySelector('#chat-open-thread').addEventListener('click',async()=>{
- const id=document.querySelector('#chat-thread-list').value;
- const thread=knownThreads.find(item=>item.thread_id===id);
+async function openStoredThread(threadId){
+ ++chatSelectionRevision;pendingChatRequest=null;pendingThreadDeletion=null;
+ document.querySelector('#chat-delete-preview').hidden=true;
+ const thread=knownThreads.find(item=>item.thread_id===threadId);
  if(!thread){chatOperationStatus.textContent='Vyberte uložené vlákno.';return;}
  activeTaskThreadId=thread.thread_id;activeThread=thread;
  document.querySelector('#chat-mode').value=thread.classification;refreshChatModeControls();
+ selectMainTab(document.querySelector('#chat-tab'));renderThreadList(knownThreads);
  try{const tasks=thread.project_id ? await projectRequest('/v1/tasks/list',{
    project_id:thread.project_id,thread_id:thread.thread_id}) : {outcomes:[]};
   taskOutcomes=tasks.outcomes;renderChat(thread);
   chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
-});
+}
 document.querySelector('#chat-archive-thread').addEventListener('click',async()=>{
  if(!activeThread)return;
  try{const archived=await projectRequest('/v1/chat/archive',{
@@ -1232,9 +1259,9 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
  if(mode==='orchestration' && activeThread?.classification==='brainstorming'){
   try{activeThread=await projectRequest('/v1/chat/orchestration',{
     source_thread_id:activeThread.thread_id,thread_id:crypto.randomUUID(),created_at:new Date().toISOString()});
-   activeTaskThreadId=activeThread.thread_id;taskOutcomes=[];renderChat(activeThread);
+   activeTaskThreadId=activeThread.thread_id;taskOutcomes=[];renderChat(activeThread);rememberThread(activeThread);
   }catch(error){event.currentTarget.value='brainstorming';chatOperationStatus.textContent=error.message;}
- }else{activeThread=null;activeTaskThreadId=crypto.randomUUID();taskOutcomes=[];renderChat(null);}
+ }else{activeThread=null;activeTaskThreadId=crypto.randomUUID();taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);}
  refreshChatModeControls();
 });
 async function loadChat(){
@@ -1243,8 +1270,8 @@ async function loadChat(){
   const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   if(selectionRevision!==chatSelectionRevision)return;
-  renderThreadList([...result.threads].reverse());
   activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
+  renderThreadList([...result.threads].reverse());
   chatOperationStatus.textContent=result.threads.length?
    'Vyberte uložené vlákno k vědomému navázání, nebo založte nové.':'Založte nové vlákno.';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
@@ -1403,7 +1430,7 @@ document.querySelector('#external-confirm').addEventListener('click',async event
     const result=await projectRequest('/v1/external/confirm',
      {approval_id:preview.approval_id,preview_sha256:preview.preview_sha256,
       approved:true,privacy:preview.privacy},210000);
-    activeThread=result.thread;renderChat(result.thread);renderRunUsage(result.usage_report);draft.value='';
+    activeThread=result.thread;renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);draft.value='';
    }
   pendingExternalPreview=null;
   document.querySelector('#external-preview').hidden=true;
@@ -1449,7 +1476,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    await externalStreamRequest(pendingChatRequest,delta=>{chatStream.textContent+=delta;}) :
    await projectRequest('/v1/external/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
    chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent='Externí odpověď byla přijata.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
@@ -1473,7 +1500,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   try{
    const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
    chatOperationStatus.textContent='Odpověď je připravena.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
@@ -1522,7 +1549,7 @@ async function assignActiveThread(){
  if(activeThread.project_id===activeProject.id)return activeThread;
  const assigned=await projectRequest('/v1/chat/assign',{project_id:activeProject.id,
   thread_id:activeThread.thread_id,expected_revision:activeThread.revision});
- renderChat(assigned);return assigned;
+ renderChat(assigned);rememberThread(assigned);return assigned;
 }
 async function runChatRecord(button,action){
  button.disabled=true;chatOperationStatus.textContent='Připravuji projektový záznam…';

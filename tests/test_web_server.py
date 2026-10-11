@@ -114,7 +114,11 @@ class WebTests(unittest.TestCase):
         self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
-        self.assertIn("#sidebar-artifact-list button'))closeMobileSidebar()", WEB_JS)
+        self.assertIn("#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar()",
+                      WEB_JS)
+        self.assertIn('id="chats-tab"', WEB_HTML)
+        self.assertIn('id="sidebar-assigned-chats"', WEB_HTML)
+        self.assertIn('id="sidebar-unassigned-chats"', WEB_HTML)
         self.assertIn('@media(max-width:640px)', WEB_CSS)
         self.assertIn('max-width:calc(100vw - 48px)', WEB_CSS)
         self.assertIn('grid-template-columns:minmax(0,1fr)', WEB_CSS)

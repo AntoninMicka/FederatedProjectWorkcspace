@@ -772,9 +772,12 @@ manifestu součástí durable request digestu.
 
 ### Správa a úplné aplikační odstranění vlákna — F-M2-CHAT-03
 
-Seznam vláken rozlišuje vlastníka, přiřazený nebo nepřiřazený projekt, režim a
-stav `active`/`archived`. Načtení existujícího vlákna a založení nového jsou dvě
-vědomé UI akce; aplikace po otevření projektu sama nevybere poslední vlákno.
+Seznam vláken je samostatná třetí záložka levého panelu vedle úkolů a podkladů.
+Odděluje zařazená a nezařazená vlákna a u každého rozlišuje vlastníka,
+přiřazený projekt, režim a stav `active`/`archived`. Načtení existujícího vlákna
+a založení nového jsou dvě vědomé UI akce; aplikace po otevření projektu sama
+nevybere poslední vlákno. Výběr v mobilním draweru přepne hlavní panel na chat
+a navigaci zavře při zachování obvyklé obnovy focusu tlačítkem draweru.
 Archivované vlákno a vlákno přiřazené jinému projektu je v daném projektu pouze
 pro čtení. Archivace odmítne rozpracovaný turn a používá očekávanou revizi.
 
