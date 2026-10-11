@@ -795,7 +795,16 @@ nenahrazují.
 
 # 12A. Desktopová aplikace jako uzel sítě
 
-- [ ] Sdílet aplikační jádro a UI s webovou/serverovou variantou.
+- [ ] Sjednotit webovou/serverovou a desktopovou aplikaci nad jedním sdíleným
+  frontendem a stejnými uživatelskými workflow. Varianty smějí mít odlišný
+  bootstrap, autentizovaný transport, balení a capability dostupné jen na
+  konkrétním uzlu, nikoli paralelní implementace stejné obrazovky nebo
+  dodatečné skládání webového HTML/JavaScriptu z desktopové varianty.
+- [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
+  funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
+  lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat
+  společný frontend i v desktopovém WebEngine obalu; případná výjimka vyžaduje
+  konkrétní zdůvodnění hranice a samostatné ověření obou variant.
 - [ ] Přibalit lokální backend pro správu projektů, Git operace, metadata a federaci.
 - [ ] Umožnit založení a editaci lokálního projektu bez dostupnosti jiného uzlu.
 - [ ] Ukládat projektové repozitáře a stav uzlu do persistentního uživatelského adresáře.
@@ -938,7 +947,8 @@ Aktualizace 2026-09-20: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [ ] Metadata.
 - [ ] Git history.
 - [ ] Web UI.
-- [ ] Desktopové balení se spuštěním lokálního uzlu a sdíleným UI.
+- [ ] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
+  podle sekce 12A; Qt/PySide ponechat pouze pro desktop-only integrační funkce.
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování a indexu drží WORK_LOG, odstranění [TODO](TODO.md).
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
