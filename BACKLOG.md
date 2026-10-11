@@ -28,21 +28,11 @@ jeho evidence je ve WORK_LOG. Prozatímní backlogová ID
 `UX-UNIFIED-02A/02B` byla sloučena do dokončených `UX-UNIFIED-01-E/F` a nejsou
 samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 `0ce9cb7`; evidence je ve WORK_LOG a další feature zatím nebyla aktivována.
-Dříve schválená Ollama orchestrace, output router a NotebookLM unifikace
-zůstávají zachované jako samostatné feature.
+`F-M3-OLLAMA-ORCH-LAN-01` je feature-akceptovaná na vlastní větvi, evidence je
+ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR. Output router
+a NotebookLM unifikace zůstávají zachované jako samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
-  Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**
-  Umožnit explicitně zvolenému a TLS připnutému `private-network` Ollama
-  bindingu provádět orchestraci. Výběr nebo změna cíle vytvoří nový Context
-  Manifest a nový run; nesmí fungovat jako implicitní fallback. `local-only`
-  vstupy zůstávají zakázané, dokud neproběhne samostatná explicitní oprávněná
-  reklasifikace, a LAN endpoint se nesmí vydávat za `same-node`. Akceptace
-  pokryje RBAC/privacy revalidaci, změnu bindingu po preview, restart,
-  nedostupnost/pin mismatch, `unknown` síťový účinek a absenci automatického
-  přepnutí na jiný cíl.
 
 - [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
   capability a kompoziční router (cílová úroveň: designed → PoC validated).**

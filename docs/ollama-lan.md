@@ -153,6 +153,14 @@ projektová data ani Context Manifest a nemění poslední potvrzený binding. T
 **Uložit backend** atomicky publikuje node-local konfiguraci mimo projektový
 Git. Test dostupnosti není souhlas s odesláním konkrétního projektu.
 
+Potvrzený `private-network` binding lze použít také v režimu **Orchestrace**.
+Každý nový orchestrační request nese jeho přesné `binding_id` a revizi; backend
+je před sestavením Context Manifestu porovná s aktuální konfigurací. Pokud se
+mezitím změnil endpoint, model, cíl, pin nebo revize, požadavek se odmítne a UI
+zachová zadání pro vědomý nový běh. Síťový binding se nikdy nepřeznačí na
+`same-node`, obsah `local-only` se neodešle a nedostupnost neaktivuje jiný model
+ani provider.
+
 ## Diagnostika a nový pokus
 
 Workspace rozlišuje alespoň nedostupný endpoint, timeout při spojení, chybu TLS,
@@ -169,7 +177,8 @@ novými identitami. Nedochází ke skrytému přepnutí na externího providera.
 ## Hranice současné akceptace
 
 Automatické testy používají řízený transport a ověřují pin před requestem,
-restart journalu, jednotlivé chybové kategorie a zákaz opakování `unknown` runu.
+restart konfigurace a journalu, přesný orchestrační výběr bindingu, změnu revize,
+privacy, jednotlivé chybové kategorie a zákaz opakování `unknown` runu.
 Dokud není zvlášť zaznamenán živý test na skutečném LAN serveru, nejde o důkaz
 firewallu, konkrétní reverse proxy, certifikačního procesu ani dostupnosti po
 restartu fyzického stroje.

@@ -666,8 +666,10 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
 - [x] Režimy chatu jsou `orchestration` a `brainstorming` — F-M3-CHAT-MODES-01,
   PR #40.
-  Orchestrace používá výhradně lokální `same-node` LLM a explicitní artefaktový
-  kontext pro přípravu kontextu/dat, kompilaci návrhu artefaktu a filtraci;
+  Původní dávka používala výhradně lokální `same-node` LLM; navazující
+  F-M3-OLLAMA-ORCH-LAN-01 povolila také explicitně vybranou TLS připnutou
+  `private-network` Ollamu. Explicitní artefaktový kontext slouží pro přípravu
+  kontextu/dat, kompilaci návrhu artefaktu a filtraci;
   LLM pouze navrhuje, deterministický orchestrátor vykonává autorizované akce.
   Brainstorming dovoluje pro každý běh vybrat libovolný policy-povolený model,
   ale může přijmout explicitně připravený textový/chatový kontext; nesmí přijmout
@@ -685,7 +687,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   Streamované delty nejsou durable finální odpověď a přerušený síťový účinek se
   nesmí automaticky opakovat.
 - [x] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03 lokálně PoC validated: nové/navázané vlákno je vědomá volba; samostatná záložka Chaty v pevném levém panelu odděluje zařazená a nezařazená vlákna a zachovává aktivní/archivovaný stav. Scrollují jen vnitřní seznamy a návrat k projektům zůstává nahoře. Potvrzené smazání koordinovaně odstraní podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable journal a idempotentní recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií; „úplné“ není příslib forenzního přepsání média. Evidence je ve WORK_LOG; dávka byla doručena PR #51.
-- [ ] **F-M3-OLLAMA-ORCH-LAN-01:** rozšířit orchestration režim o explicitně zvolenou TLS připnutou `private-network` Ollamu. LAN cíl zůstává odlišný od `same-node`, vyžaduje nový Context Manifest/run a nesmí být implicitním fallbackem; `local-only` data zůstávají bez samostatné oprávněné reklasifikace zakázaná.
+- [x] **F-M3-OLLAMA-ORCH-LAN-01 lokálně PoC validated:** orchestration přijímá explicitně zvolenou TLS připnutou `private-network` Ollamu. Request váže přesné binding ID/revizi a změna před dispatch se odmítne; LAN cíl zůstává odlišný od `same-node`, každý vědomý pokus má nový Context Manifest/run, `local-only` se odmítá a `unknown` se bez fallbacku automaticky neopakuje. Automatické testy jsou uzavřené ve WORK_LOG; živá LAN/TLS/firewall akceptace nebyla provedena.
 
 ---
 

@@ -5,6 +5,41 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou Ollamu — 2026-10-11
+
+Dávka na větvi `feature/f-m3-ollama-orch-lan-01`, založené z `develop`
+`3f34fa7`, rozšířila orchestration režim o explicitně vybraný TLS připnutý
+`private-network` Ollama binding. Dosažená úroveň je **implemented / lokálně PoC
+validated** a akceptační podmínky dávky jsou splněné. PR do `develop` dosud
+nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-A — Inventura, reuse a kontrakt
+  (designed).** Reuse/adaptuje se jediný `OllamaBinding`, TLS pinning/probe,
+  `ChatRunChoice`, `ContextBuilder`, `OllamaRuns` a task router. Nevznikl druhý
+  transport, backend pool, implicitní fallback ani nový persistentní store.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-B — Backendová režimová policy
+  (PoC validated).** LAN orchestrace vyžaduje přesné `binding_id` a revizi
+  aktuálního potvrzeného bindingu. Chybějící či stale výběr a změna konfigurace
+  během přípravy kontextu se odmítnou před dispatch; `ContextBuilder` dál
+  odmítá `local-only`. Každý vědomý nový pokus má nové manifest/run ID a
+  durable `unknown` se automaticky neopakuje.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-C — Společné web/desktop UI
+  (implemented).** Renderer posílá pro orchestration přesnou identitu bindingu,
+  zobrazuje model, skutečnou boundary a endpoint a neblokuje potvrzenou LAN
+  Ollamu. Při změně cíle nebo privacy odmítnutí zachová zadání pro vědomý nový
+  běh; nevybírá náhradní model ani provider.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-D — Restart, regrese a dokumentace
+  (PoC validated).** Cílená sada režimové policy, služby a rendereru prošla
+  **59 testů OK, 2 přeskočeny** v prostředí s povoleným loopbackem. Nové testy
+  pokrývají LAN běh, restart, stale a souběžně změněný binding, `local-only` a
+  durable `unknown` bez druhého transportu. Úplná sada po poslední změně kódu
+  prošla **463 testů OK, 25 přeskočeno**; JavaScript prošel `node --check`.
+
+Omezení: automatické testy používají řízený transport. Skutečný LAN Ollama
+server, TLS reverse proxy, certifikátový pin, firewall a dostupnost po restartu
+fyzického stroje nebyly v této dávce živě ověřeny. Známé neblokující
+`ResourceWarning` testovacích SQLite spojení zůstaly beze změny.
+
 ## UX-UNIFIED-02D — Společný editor dokumentu a TODO — 2026-10-11
 
 Dávka na větvi `feature/ux-unified-02d-document-todo-editor`, založené z

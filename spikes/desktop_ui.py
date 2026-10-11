@@ -22,9 +22,11 @@ from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 
 
 CHAT_VALIDATION_ERRORS = {
-    'Orchestration requires same-node Ollama': (
-        'Režim Orchestrace vyžaduje Ollamu na stejném uzlu. Pro Ollamu v privátní síti '
-        'zvolte Brainstorming a nové vlákno.'),
+    'Private-network orchestration requires explicit Ollama binding selection': (
+        'Orchestrace přes privátní síť vyžaduje explicitně vybraný aktuální backend. '
+        'Obnovte stav a spusťte nový běh.'),
+    'Selected orchestration binding changed': (
+        'Vybraný orchestrační backend se změnil. Zkontrolujte nový cíl a spusťte nový běh.'),
     'local-only requires same-node execution': (
         'Obsah „Jen na tomto počítači“ nelze odeslat Ollamě v privátní síti. Zvolte '
         'jinou úroveň soukromí nebo backend na stejném uzlu.'),
@@ -1481,7 +1483,7 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
- chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
+ chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBindingLabel(chatBinding)}` :
   'Nové vlákno · nejprve nastavte backend.';
  draft.focus();
 });
@@ -1540,6 +1542,10 @@ document.querySelector('#chat-delete-run').addEventListener('click',async event=
   chatOperationStatus.textContent='Lokální vlákno a jeho podporovaný navázaný stav byly odstraněny. Git historie zůstala zachovaná.';
  }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
+function chatBindingLabel(binding){
+ const boundary=binding.boundary==='private-network'?'Privátní síť':'Stejný počítač';
+ return `${binding.model} · ${boundary} · ${binding.endpoint}`;
+}
 function fillBinding(binding,draft=null,draftState=null){
  chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
  if(candidate){fields.boundary.value=candidate.boundary;fields.endpoint.value=candidate.endpoint;
@@ -1547,10 +1553,10 @@ function fillBinding(binding,draft=null,draftState=null){
   fields.tls_cert_sha256.value=candidate.tls_cert_sha256 || '';
  }
  if(binding){
-  chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
+  chatStatus.textContent=`Backend: ${chatBindingLabel(binding)}`;
   settingsBackendStatus.textContent=draftState && draftState!=='confirmed' ?
-   `Aktivní je ${binding.model} · ${binding.boundary}; formulář obsahuje ${draftState==='invalid'?'neplatný':'nepotvrzený'} uložený koncept.` :
-   `Nastaven backend ${binding.model} · ${binding.boundary}.`;
+   `Aktivní je ${chatBindingLabel(binding)}; formulář obsahuje ${draftState==='invalid'?'neplatný':'nepotvrzený'} uložený koncept.` :
+   `Nastaven backend ${chatBindingLabel(binding)}.`;
   if(!document.querySelector('#workflow-creator-model').value)document.querySelector('#workflow-creator-model').value=binding.model;
   if(!document.querySelector('#workflow-opponent-model').value)document.querySelector('#workflow-opponent-model').value=binding.model;
  }else{
@@ -1867,9 +1873,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration'?null:model};
+ if(mode==='orchestration'){
+  runChoice.binding_id=chatBinding.binding_id;runChoice.binding_revision=chatBinding.revision;
+ }
  if(adapter==='ollama' && chatBinding.boundary==='private-network'){
-  if(mode==='orchestration'){
-   chatOperationStatus.textContent='Orchestrace vyžaduje Ollamu na stejném uzlu. Pro síťovou Ollamu zvolte Brainstorming a nové vlákno.';return;}
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Obsah Jen na tomto počítači nelze odeslat Ollamě v privátní síti.';return;}
  }

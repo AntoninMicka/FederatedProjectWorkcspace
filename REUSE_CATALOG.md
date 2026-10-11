@@ -145,6 +145,13 @@ přesný Target, Context Manifest a privacy boundary. Soukromá inventura byla
 zohledněna pouze srovnávacím posouzením; žádný kód ani její neveřejné detaily se
 nepřenášejí. Provozní topologie a omezení: [Ollama v LAN](docs/ollama-lan.md).
 
+F-M3-OLLAMA-ORCH-LAN-01 **reuse/adaptuje** tentýž potvrzený `OllamaBinding`,
+TLS pinning/probe, `ChatRunChoice`, `ContextBuilder`, `OllamaRuns` a task router.
+LAN orchestrace nepřidává transport, backend pool ani druhou konfiguraci: request
+váže přesné binding ID a revizi a stávající privacy autorizace odmítne
+`local-only`. Automatický fallback a automatický retry `unknown` se odmítají,
+protože by změnily schválený target nebo zopakovaly neurčitý síťový účinek.
+
 F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
 soukromá inventura obsahuje obecné backendové capability, textový a obrazový
 adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context

@@ -26,8 +26,10 @@ class DesktopTests(unittest.TestCase):
             'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
             'content', 'privacy', 'created_at', 'run_choice')}
         cases = (
-            ('Orchestration requires same-node Ollama',
-             'Režim Orchestrace vyžaduje Ollamu na stejném uzlu.'),
+            ('Private-network orchestration requires explicit Ollama binding selection',
+             'Orchestrace přes privátní síť vyžaduje explicitně vybraný aktuální backend.'),
+            ('Selected orchestration binding changed',
+             'Vybraný orchestrační backend se změnil.'),
             ('Project changed before chat dispatch',
              'Projekt se od otevření změnil.'),
             ('private path /secret must not leak',
@@ -257,6 +259,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/chat/send',pendingChatRequest,210000)", JS)
         self.assertIn("chatBinding.boundary==='private-network'", JS)
         self.assertIn("mode==='orchestration'", JS)
+        self.assertIn('runChoice.binding_id=chatBinding.binding_id', JS)
+        self.assertIn('runChoice.binding_revision=chatBinding.revision', JS)
+        self.assertNotIn('Orchestrace vyžaduje Ollamu na stejném uzlu', JS)
         self.assertIn("value==='local-only'", JS)
         self.assertIn('selected_artifact_ids:[]', JS)
         self.assertIn('run_choice:runChoice', JS)

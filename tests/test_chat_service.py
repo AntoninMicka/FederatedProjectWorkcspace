@@ -13,6 +13,7 @@ from spikes.chat_service import ChatService
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import read_config
+from spikes.context_builder import ContextBuilder
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
@@ -270,6 +271,86 @@ class ChatServiceTests(unittest.TestCase):
         thread = next(row for row in service.status()['threads']
                       if row['thread_id'] == request['thread_id'])
         self.assertEqual(thread['classification'], 'brainstorming')
+
+    def test_private_network_orchestration_requires_exact_binding_and_survives_restart(self):
+        outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'LAN answer'}
+        calls = []
+        def transport(binding, raw):
+            calls.append((binding.serialize(), json.loads(raw)))
+            return {'model': binding.model, 'response': json.dumps(outcome)}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs:
+                OllamaAdapter(runs, transport=transport))
+        lan = dict(self.binding, revision='lan-orchestration',
+                   boundary='private-network', endpoint='https://10.0.0.2:11443',
+                   target_id=str(uuid4()), tls_cert_sha256='a' * 64)
+        service.configure(lan)
+        choice = {'mode': 'orchestration', 'adapter': 'ollama', 'model': None,
+                  'binding_id': lan['binding_id'], 'binding_revision': lan['revision']}
+        request = self.route_request(run_choice=choice)
+        result = service.task_route(request)
+        self.assertEqual(result['outcome'], outcome)
+        self.assertEqual((result['boundary'], calls[0][0]['endpoint']),
+                         ('private-network', lan['endpoint']))
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs:
+                OllamaAdapter(runs, transport=lambda *_: self.fail('must not resend')))
+        self.assertEqual(restarted.task_route(request), result)
+        self.assertEqual(len(calls), 1)
+
+        stale = self.route_request(run_choice=choice)
+        changed = dict(lan, revision='lan-orchestration-two')
+        service.configure(changed)
+        with self.assertRaisesRegex(ValueError, 'binding changed'):
+            service.task_route(stale)
+        missing = self.route_request(run_choice={
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None})
+        with self.assertRaisesRegex(ValueError, 'explicit'):
+            service.task_route(missing)
+        local_only = self.route_request(privacy='local-only', run_choice={
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None,
+            'binding_id': changed['binding_id'],
+            'binding_revision': changed['revision']})
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            service.task_route(local_only)
+        self.assertEqual(len(calls), 1)
+
+        race_request = self.route_request(run_choice={
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None,
+            'binding_id': changed['binding_id'],
+            'binding_revision': changed['revision']})
+        changed_again = dict(changed, revision='lan-orchestration-three')
+        prepare = ContextBuilder.prepare
+        def change_after_prepare(builder, *args, **kwargs):
+            prepared = prepare(builder, *args, **kwargs)
+            service.configure(changed_again)
+            return prepared
+        with patch.object(ContextBuilder, 'prepare', change_after_prepare), \
+                self.assertRaisesRegex(ValueError, 'binding changed'):
+            service.task_route(race_request)
+        self.assertEqual(len(calls), 1)
+
+    def test_private_network_orchestration_unknown_is_durable_without_retry(self):
+        calls = []
+        def unavailable(*_args):
+            calls.append(1)
+            raise TimeoutError('lost LAN response')
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs:
+                OllamaAdapter(runs, transport=unavailable))
+        lan = dict(self.binding, revision='lan-unknown', boundary='private-network',
+                   endpoint='https://10.0.0.3:11443', target_id=str(uuid4()),
+                   tls_cert_sha256='b' * 64)
+        service.configure(lan)
+        request = self.route_request(run_choice={
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None,
+            'binding_id': lan['binding_id'], 'binding_revision': lan['revision']})
+        with self.assertRaises(UnknownRun):
+            service.task_route(request)
+        with self.assertRaises(UnknownRun):
+            service.task_route(request)
+        self.assertEqual(calls, [1])
 
     def test_external_task_normalizes_only_matching_redundant_focus_id(self):
         request = self.route_request()
