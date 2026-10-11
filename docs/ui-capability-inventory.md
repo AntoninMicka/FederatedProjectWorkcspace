@@ -53,13 +53,17 @@ používají stejné `Artifacts` transakce. Kopírování ID je lokální UI akc
 Vytvoření nového dokumentu a hlavního TODO zatím zůstává v Qt editoru, takže
 jeho úplné odstranění čeká na pozdější paritu těchto dvou vstupů.
 
+Vytvoření projektu je nyní také společné: stránka Projekty vyžaduje serverový
+náhled a potvrzení, zatímco Qt zůstává pouze systémovým pickerem přesné prázdné
+složky. Picker vydá omezenou in-process capability vázanou na operation ID;
+web nikdy nepřijímá cestu ani tento token a používá nakonfigurovaný projects
+root. Původní `CreationDialog` a jeho paralelní toolbar vstup byly odstraněny.
+
 Následující existující Qt dialogy nejsou desktop-only z principu a nesmějí být
-dále rozšiřovány jako paralelní UI: vytvoření projektu, import NotebookLM a
-zbývající vytvoření dokumentu/TODO. Jejich backendové
-služby zůstávají znovupoužitelné. V této dávce byl sjednocen shell, import
-zdroje a historie; úplné převedení zbývajících starších desktopových vstupů na
-společné autorizované HTTP workflow vyžaduje samostatné mutující API a recovery
-kontrakt a není vydáváno za dokončené.
+dále rozšiřovány jako paralelní UI: import NotebookLM a zbývající vytvoření
+dokumentu/TODO. Jejich backendové služby zůstávají znovupoužitelné. Úplné
+převedení těchto starších vstupů vyžaduje společné autorizované HTTP workflow a
+recovery kontrakt a není vydáváno za dokončené.
 
 ## Ověřovací kontrakt
 

@@ -455,7 +455,7 @@ ProjectCreation(sys.argv[1]).create('První projekt', sys.argv[2], sys.argv[3],
         self.assertFalse(self.node.exists())
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
-    def test_native_dialog_creates_opens_and_reopens_after_restart(self):
+    def test_shared_desktop_form_creates_opens_and_reopens_after_restart(self):
         run = subprocess.run([sys.executable, '-m', 'spikes.desktop', '--node', str(self.node),
                               '--smoke', '--smoke-create', str(self.root)],
                              capture_output=True, text=True, timeout=30)

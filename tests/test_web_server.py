@@ -61,6 +61,16 @@ class WebTests(unittest.TestCase):
         conn.close()
         return code, data, response_headers
 
+    def create_project(self, title, operation_id=None, headers=None):
+        operation_id = operation_id or str(uuid4())
+        code, data, _ = self.request(path='/v1/projects/create/preview', headers=headers,
+            body=json.dumps({'title': title, 'operation_id': operation_id,
+                             'location_capability': None, 'remember_parent': False}))
+        if code != 200:
+            return code, data, {}
+        return self.request(path='/v1/projects/create/confirm', headers=headers,
+                            body=json.dumps({'plan': json.loads(data)}))
+
     def notebook_archive(self):
         path = self.root / 'notebooklm.tgz'
         with tarfile.open(path, 'w:gz') as bundle:
@@ -76,8 +86,8 @@ class WebTests(unittest.TestCase):
                               ({'Sec-Fetch-Site':'cross-site'},403)]:
             self.assertEqual(self.request(headers=headers)[0], code)
         self.assertEqual(self.request(headers={'Origin':'https://'+self.authority})[0],200)
-        self.assertEqual(self.request(path='/v1/projects/create', body='{}')[0], 400)
-        code, data, _ = self.request(path='/v1/projects/create', body=json.dumps({'title':'Nový projekt'}))
+        self.assertEqual(self.request(path='/v1/projects/create/preview', body='{}')[0], 422)
+        code, data, _ = self.create_project('Nový projekt')
         self.assertEqual(code, 200)
         created = json.loads(data)
         code, catalog, _ = self.request(body='{"details":true}')
@@ -120,14 +130,17 @@ class WebTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", WEB_JS)
         self.assertIn('id="artifact-editor-view" hidden', WEB_HTML)
         self.assertIn("projectRequest('/v1/artifacts/editor/save'", WEB_JS)
+        self.assertIn('id="project-create-preview"', WEB_HTML)
+        self.assertIn("projectRequest('/v1/projects/create/preview'", WEB_JS)
+        self.assertIn("projectRequest('/v1/projects/create/confirm'", WEB_JS)
+        self.assertNotIn("fetch('/v1/projects/create'", WEB_JS)
         self.assertIn("querySelector('#source-import-local-only').disabled=true", WEB_JS)
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
     def test_inherited_feature_routes_have_complete_web_runtime_wiring(self):
-        self.assertEqual(self.request(path='/v1/projects/create',
-                                     body='{"title":"Runtime wiring"}')[0], 200)
+        self.assertEqual(self.create_project('Runtime wiring')[0], 200)
         shared = self.server.chat_service.state_dir
         services = (
             ('summary', self.server.summary_service),
@@ -175,7 +188,7 @@ class WebTests(unittest.TestCase):
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):
         from uuid import uuid4
-        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Restricted"}')
+        _, data, _ = self.create_project('Restricted')
         project = json.loads(data)['id']
         def admin(request):
             return self.request(path='/v1/administration', body=json.dumps(request))
@@ -201,7 +214,7 @@ class WebTests(unittest.TestCase):
             body=json.dumps({'run_id':str(uuid4())}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/send-stream',
             body='{}', headers=headers)[0], 403)
-        self.assertEqual(self.request(path='/v1/projects/create', body='{"title":"Denied"}', headers=headers)[0], 403)
+        self.assertEqual(self.create_project('Denied', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/notebooklm/preview',
             body='{"archive_path":"/tmp/denied.tgz"}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
@@ -233,7 +246,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(headers=headers)[0],401)
 
     def test_shared_history_routes_list_and_compare_committed_document(self):
-        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"History"}')
+        _, data, _ = self.create_project('History')
         project = json.loads(data)['id']
         artifacts = Artifacts(self.root/'node.json'); view = Projects(self.root/'node.json').open(project)
         artifact = main_todo_id(project)
@@ -270,9 +283,13 @@ class WebTests(unittest.TestCase):
 
     def test_create_retries_have_one_receipt_and_project(self):
         from uuid import uuid4
-        body=json.dumps({'title':'Retry', 'operation_id':str(uuid4())})
-        first=self.request(path='/v1/projects/create',body=body)
-        second=self.request(path='/v1/projects/create',body=body)
+        operation=str(uuid4())
+        code,data,_=self.request(path='/v1/projects/create/preview',body=json.dumps({
+            'title':'Retry','operation_id':operation,'location_capability':None,
+            'remember_parent':False}))
+        self.assertEqual(code,200);body=json.dumps({'plan':json.loads(data)})
+        first=self.request(path='/v1/projects/create/confirm',body=body)
+        second=self.request(path='/v1/projects/create/confirm',body=body)
         self.assertEqual(first[0],200);self.assertEqual(second[0],200)
         self.assertEqual(json.loads(first[1]),json.loads(second[1]))
         self.assertEqual(len(json.loads(self.request()[1])['projects']),1)
@@ -302,7 +319,7 @@ class WebTests(unittest.TestCase):
 
     def test_web_import_preserves_bytes_and_retries_one_operation(self):
         from uuid import uuid4
-        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Web import"}')
+        _, data, _ = self.create_project('Web import')
         project = json.loads(data)
         raw = b'# Evidence\n' + b'x' * 70000
         source = request_from_bytes(project['id'], project['commit_id'], 'evidence.md', raw,
@@ -322,7 +339,7 @@ class WebTests(unittest.TestCase):
 
     def test_web_import_rejects_local_only(self):
         from uuid import uuid4
-        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"Privacy"}')
+        _, data, _ = self.create_project('Privacy')
         project = json.loads(data)
         source = request_from_bytes(project['id'], project['commit_id'], 'private.md', b'private',
                                     'Private', '', [], 'local-only')
@@ -415,7 +432,7 @@ sys.exit(app.exec())
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_mobile_browser_import_catalog_preview_and_keyboard_drawer(self):
         title = 'Český projekt s velmi dlouhým názvem ' + 'bez-mezer-' * 14
-        _, data, _ = self.request(path='/v1/projects/create', body=json.dumps({'title': title}))
+        _, data, _ = self.create_project(title)
         project = json.loads(data)
         source = request_from_bytes(project['id'], project['commit_id'], 'mobile.md',
                                     b'# Mobilni nahled\nBezpecny text.', 'Mobilní podklad',

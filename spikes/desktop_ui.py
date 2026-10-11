@@ -91,7 +91,16 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <form id="create-project" aria-label="Vytvořit projekt">
 <label for="new-project-title">Název nového projektu</label>
 <div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
-<button id="create-project-btn">Vytvořit projekt</button></div>
+<button id="create-project-btn">Připravit vytvoření</button></div>
+<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
+<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
+<p id="project-location-label">Použije se výchozí místní umístění.</p>
+<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
+<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
+<pre id="project-create-details"></pre>
+<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
+<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
+<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="create-project-status" role="status"> </p></form>
 <details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
 <p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
@@ -517,7 +526,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
 body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
-body[data-runtime="desktop"] #create-project,body[data-runtime="desktop"] #notebooklm-import{display:none!important}
+body[data-runtime="desktop"] #notebooklm-import{display:none!important}
 body[data-runtime="server"] #create-main-todo,body[data-runtime="server"] #todo-help{display:none!important}
 body[data-runtime="server"]:not(.authenticated)>aside,
 body[data-runtime="server"]:not(.authenticated)>main,
@@ -526,6 +535,7 @@ body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
+#create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
 #source-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -864,6 +874,78 @@ async function loadProjects(selectedId=null){
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 document.querySelector('#back-projects').addEventListener('click',()=>loadProjects());
+
+const projectCreateForm=document.querySelector('#create-project');
+const createStatus=document.querySelector('#create-project-status');
+const projectCreatePreview=document.querySelector('#project-create-preview');
+let projectCreationAttempt=null,projectCreationPlan=null,projectCreationLocation=null;
+function resetProjectCreationPreview(message=''){
+ projectCreationPlan=null;projectCreatePreview.hidden=true;
+ document.querySelector('#project-create-confirm-check').checked=false;
+ document.querySelector('#project-create-confirm').disabled=true;
+ if(message)createStatus.textContent=message;
+}
+function creationAttempt(title){
+ if(!projectCreationAttempt||projectCreationAttempt.title!==title){
+  projectCreationAttempt={title,operation_id:crypto.randomUUID()};projectCreationLocation=null;
+  document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+  document.querySelector('#clear-project-location').hidden=true;
+  document.querySelector('#remember-project-parent-row').hidden=true;
+ }
+ return projectCreationAttempt;
+}
+window.projectCreationPickerRequest=()=>{
+ const title=document.querySelector('#new-project-title').value.trim();
+ if(!title){createStatus.textContent='Nejprve zadejte název projektu.';return null;}
+ const attempt=creationAttempt(title);resetProjectCreationPreview('Vyberte existující prázdnou cílovou složku.');
+ return {title:attempt.title,operation_id:attempt.operation_id};
+};
+window.setProjectCreationLocation=result=>{
+ if(!result||!projectCreationAttempt||result.operation_id!==projectCreationAttempt.operation_id)return;
+ projectCreationLocation=result;document.querySelector('#project-location-label').textContent=`Vybrané umístění: ${result.location_label}`;
+ document.querySelector('#clear-project-location').hidden=false;
+ document.querySelector('#remember-project-parent-row').hidden=false;
+ resetProjectCreationPreview('Umístění bylo vybráno. Připravte přesný náhled.');
+};
+document.querySelector('#choose-project-location').addEventListener('click',()=>{
+ if(window.projectCreationPickerRequest())location.hash='choose-project-location';
+});
+document.querySelector('#clear-project-location').addEventListener('click',()=>{
+ projectCreationLocation=null;document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+ document.querySelector('#clear-project-location').hidden=true;document.querySelector('#remember-project-parent-row').hidden=true;
+ document.querySelector('#remember-project-parent').checked=false;resetProjectCreationPreview('Použije se výchozí umístění uzlu.');
+});
+document.querySelector('#new-project-title').addEventListener('input',()=>{
+ projectCreationAttempt=null;projectCreationLocation=null;resetProjectCreationPreview();
+ document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
+ document.querySelector('#clear-project-location').hidden=true;document.querySelector('#remember-project-parent-row').hidden=true;
+});
+projectCreateForm.addEventListener('submit',async event=>{
+ event.preventDefault();const title=document.querySelector('#new-project-title').value.trim();
+ if(!title){createStatus.textContent='Zadejte název projektu.';return;}
+ const attempt=creationAttempt(title),button=document.querySelector('#create-project-btn');button.disabled=true;
+ createStatus.textContent='Připravuji přesný náhled…';
+ try{projectCreationPlan=await projectRequest('/v1/projects/create/preview',{
+   title,operation_id:attempt.operation_id,
+   location_capability:projectCreationLocation?.location_capability||null,
+   remember_parent:Boolean(projectCreationLocation&&document.querySelector('#remember-project-parent').checked)});
+  document.querySelector('#project-create-details').textContent=`Název: ${projectCreationPlan.title}\nCíl: ${projectCreationPlan.target_label}\nID operace: ${projectCreationPlan.operation_id}`;
+  document.querySelector('#project-create-confirm-check').checked=false;document.querySelector('#project-create-confirm').disabled=true;
+  projectCreatePreview.hidden=false;createStatus.textContent='Náhled je připraven k potvrzení.';
+ }catch(error){resetProjectCreationPreview(error.message);}finally{button.disabled=false;}
+});
+document.querySelector('#project-create-confirm-check').addEventListener('change',event=>{
+ document.querySelector('#project-create-confirm').disabled=!(event.currentTarget.checked&&projectCreationPlan);
+});
+document.querySelector('#project-create-cancel').addEventListener('click',()=>resetProjectCreationPreview('Náhled byl zrušen.'));
+document.querySelector('#project-create-confirm').addEventListener('click',async event=>{
+ if(!projectCreationPlan||!document.querySelector('#project-create-confirm-check').checked)return;
+ event.currentTarget.disabled=true;createStatus.textContent='Vytvářím projekt…';
+ try{const result=await projectRequest('/v1/projects/create/confirm',{plan:projectCreationPlan},120000);
+  const title=result.title;projectCreationAttempt=null;projectCreationPlan=null;projectCreationLocation=null;projectCreateForm.reset();projectCreatePreview.hidden=true;
+  createStatus.textContent=`Projekt „${title}“ byl vytvořen.`;await loadProjects(result.id);
+ }catch(error){createStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
 
 """
 
@@ -2279,6 +2361,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
+        '/v1/projects/create/preview', '/v1/projects/create/confirm',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
@@ -2487,6 +2570,14 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
                 return self.reply(200, {'projects': projects.catalog()})
+            if self.path == '/v1/projects/create/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.project_creation_actions.preview(request))
+            if (self.path == '/v1/projects/create/confirm' and isinstance(request, dict)
+                    and set(request) == {'plan'}):
+                receipt = self.server.project_creation_actions.confirm(request['plan'])
+                self.server.projects = Projects(projects.node_path,
+                    network=getattr(projects, 'network', False))
+                return self.reply(200, receipt)
             if (self.path == '/v1/sources/import' and isinstance(request, dict)
                     and set(request) == {'operation_id', 'source'}
                     and isinstance(request['source'], dict)):
@@ -2610,6 +2701,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': message})
             if self.path == '/v1/sources/import':
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
+            if self.path.startswith('/v1/projects/create/'):
+                return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
             if self.path.startswith('/v1/artifacts/history/'):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):

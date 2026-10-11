@@ -266,7 +266,7 @@ Cílový probe **adaptuje** scénář z `tests/test_workspace.py` a dvojici obsa
 
 M1-01 **adaptuje** konfiguraci v1, Workspace/Index a autentizovaný lokální handler. Služba Projects pouze propojuje existující validaci a koordinované čtení; nepřebírá cizí storage/API framework. UI používá stávající PySide obal a bezpečné textové vykreslení. Soukromá inventura nepřidává pro tento omezený krok potřebnou komponentu; žádný externí kód nebyl kopírován. Kontrakt: [ADR 0014](docs/adr/0014-project-read.md).
 
-M1-02 **adaptuje** Git, Workspace, konfigurační validátory a fsync/flock vzor journalu. Nový uzlový journal řídí inicializaci a registraci (odlišný lifecycle od změn artefaktů); neslouží jako druhý projektový index. **Reuse** nativních Qt dialogů zachovává jeden aplikační proces a neotevírá rendereru mutující API. Přenos cizího frameworku ani komponenty z lokální inventury není pro tento kontrakt potřebný. [ADR 0015](docs/adr/0015-project-creation.md).
+M1-02 **adaptuje** Git, Workspace, konfigurační validátory a fsync/flock vzor journalu. Nový uzlový journal řídí inicializaci a registraci (odlišný lifecycle od změn artefaktů); neslouží jako druhý projektový index. Dávka UX-UNIFIED-01 znovu používá tuto doménovou službu a její receipt/recovery ve společném preview/confirm adaptéru; Qt zůstává pouze systémovým pickerem, který vydá přesnou operation-scoped capability. Přenos cizího frameworku ani komponenty z lokální inventury není pro tento kontrakt potřebný. [ADR 0015](docs/adr/0015-project-creation.md).
 
 F-M1-PROJECT-LOCATION-01 **reuse/adaptuje** `ProjectCreation.register`, jeho
 uzlový operation journal, validaci `Projects` a immutable `Sources` →

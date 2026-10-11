@@ -13,15 +13,35 @@ Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu na
 
 ## Vytvoření nového projektu
 
-Spusťte `./run.sh desktop` (z instalovaného balíku `federated-workspace-poc`). V horní nativní liště zvolte **Nový projekt…**. Vyplňte název a absolutní cestu nové nebo existující prázdné složky, případně vyberte jejího rodiče tlačítkem **Vybrat nadřazenou složku…**. Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a práva. Volba **Použít tuto nadřazenou složku jako výchozí** uloží rodiče do lokální konfigurace uzlu a použije jej při příštím dialogu i pro webové vytvoření. Název projektu je popisek; název cílové složky lze upravit nezávisle. Klikněte na **Vytvořit a otevřít**.
+Spusťte `./run.sh desktop` (z instalovaného balíku
+`federated-workspace-poc`). Na společné stránce **Projekty** vyplňte název.
+Výchozí vytvoření použije lokálně nakonfigurovaný kořen. Chcete-li přesný jiný
+cíl, zvolte **Vybrat existující prázdnou složku…**; otevře se systémový picker.
+Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a
+práva. Volba **Používat rodiče vybrané složky jako výchozí umístění** uloží
+rodiče do lokální konfigurace uzlu a použije jej pro další výchozí vytvoření.
+Nejprve stiskněte **Připravit vytvoření**, zkontrolujte název, přesný cíl a ID
+operace a až potom potvrďte **Vytvořit a otevřít projekt**.
 
 Cílová složka může být nová nebo již existující, ale existující musí být váš prázdný adresář bez symlinků; obsah, `.git` nebo souběžná změna se odmítnou bez přepsání. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte tlačítkem **Dokumenty…**.
 
 Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
 
-V průběhu vytváření je další vytvoření a běžné zavření okna dočasně zakázané; po dokončení lze okno zavřít. Při násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví. Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu; nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky `.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
+Po potvrzení běží jediná uzamčená backendová operace. Při ztrátě odpovědi lze
+potvrdit stejný plán znovu; stejné operation ID vrátí tentýž receipt. Při
+násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví.
+Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se
+mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu;
+nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní
+pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky
+`.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
 
 Kontrakt, idempotence a hranice recovery: [ADR 0015](adr/0015-project-creation.md). Jde o lokální Linux PoC, nikoli produkční správu identit nebo úplné recovery po výpadku napájení.
+
+Webová varianta používá stejný formulář, ale cílovou cestu ani desktopový
+capability token od prohlížeče nepřijímá. Náhled i potvrzení směřují pouze pod
+správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
+`<adresář node.json>/projects`) a vytvoření je dostupné jen správci uzlu.
 
 ## Načtení existujícího projektu a oprava cesty
 

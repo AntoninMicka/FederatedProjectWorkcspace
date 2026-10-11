@@ -46,13 +46,18 @@ RBAC a privacy hranice jednotlivých backendových operací se nemění.
   journal a receipt; smazání navíc váže potvrzení na serverový preview digest.
   Web dovolí zápis jen rolím editor/project-admin a správcům, desktop zachovává
   lokální autoritu uzlu.
-- [ ] [planned] **UX-UNIFIED-01-F — Společné vytvoření projektu (cílová úroveň:
-  implemented → PoC validated).** Převést desktop na společný formulář a jednu
-  autorizovanou adaptaci `ProjectCreation`. Zachovat přesný preview, potvrzení,
-  stabilní operation ID, idempotentní receipt a recovery. Web smí použít pouze
-  nakonfigurovaný projects root; vlastní lokální adresář zůstane omezenou
-  jednorázovou desktopovou capability systémového pickeru. Po paritě odstranit
-  Qt `CreationDialog` a paralelní toolbar workflow.
+- [x] [completed] **UX-UNIFIED-01-F — Společné vytvoření projektu (implemented /
+  PoC validated).** Web i desktop používají společný formulář s backendem
+  vydaným přesným preview plánem a odděleným potvrzením. Stabilní operation ID,
+  idempotentní receipt, journal a startup recovery dál řídí `ProjectCreation`.
+  Webový adaptér odvozuje cíl výhradně z nakonfigurovaného projects root a RBAC
+  jej omezuje na správce. Desktopový systémový picker vydává pouze opaque
+  in-process capability svázanou s přesným cílem a operation ID; stejná
+  capability zůstává použitelná pro shodný retry, nikoli pro jinou operaci.
+  Potvrzení přijme jen plán vydaný stejnou backendovou instancí a znovu ověří
+  jeho digest i cíl. Qt `CreationDialog` a tlačítko paralelního vytvoření v
+  toolbaru byly odstraněny; nativní controller zůstává pro recovery a ostatní
+  desktop-only operace.
 - [ ] [planned] **UX-UNIFIED-01-G — Závěrečné předání.** Po dokončení E/F
   zopakovat relevantní cílené testy, úplnou sadu, `git diff --check`, přesunout
   evidenci do WORK_LOG a připravit jediný PR do `develop`. Skutečný WebEngine,
@@ -72,13 +77,13 @@ nahrazovat paralelním stavem.
 
 ### Dosavadní ověření
 
-Po rozšíření kroku E prošla syntaktická kontrola společného JavaScriptu pomocí
-`node --check`. Cílená sada dokumentových akcí, Artifacts, deletion, desktopu a
-web serveru prošla: **65 testů OK, 8 volitelných přeskočeno**. Úplná
-sada prošla: **453 testů OK, 25 volitelných native/package/live testů
-přeskočeno**. Známé neblokující `ResourceWarning` testovacích SQLite spojení
-zůstaly beze změny. Skutečný Qt/WebEngine průchod a Turris/LXC deployment nebyly
-provedeny. Po změně F budou výsledky znovu nahrazeny aktuálním ověřením.
+Po kroku F prošel `node --check` pro společný i výsledný webový JavaScript.
+Cílená sada nového adaptéru, doménového vytvoření, desktopu a web serveru prošla:
+**64 testů OK, 6 volitelných přeskočeno**. Úplná sada po poslední změně prošla:
+**458 testů OK, 25 volitelných native/package/live testů přeskočeno**. Známé
+neblokující `ResourceWarning` testovacích SQLite spojení zůstaly beze změny.
+Skutečný Qt/WebEngine průchod společným formulářem a Turris/LXC deployment nebyly
+provedeny.
 
 ### K předání do backlogu
 

@@ -12,13 +12,13 @@ import stat
 import sqlite3
 import subprocess
 from http.server import HTTPServer
-from uuid import uuid4
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.chat_service import ChatService
 from spikes.project_creation import CreationConflict, ProjectCreation
+from spikes.project_creation_actions import ProjectCreationActions
 from spikes.projects import Projects
-from spikes.administration import Administration, AccessDenied, identifier
+from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
@@ -61,8 +61,6 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
-const projectCreateForm=document.querySelector('#create-project');
-const createStatus=document.querySelector('#create-project-status');
 const notebookImport=document.querySelector('#notebooklm-import');
 const notebookStatus=document.querySelector('#notebooklm-status');
 const notebookSelection=document.querySelector('#notebooklm-selection');
@@ -102,24 +100,6 @@ document.querySelector('#notebooklm-run').addEventListener('click',async event=>
   notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';notebookPlan=null;await loadProjects(result.id);
  }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
-let creationAttempt=null;
-projectCreateForm.addEventListener('submit',async(event)=>{
- event.preventDefault();
- const title=document.querySelector('#new-project-title').value.trim();
- if(!title){createStatus.textContent='Zadejte název projektu.';return;}
- createStatus.textContent='Vytvářím...';
- if(!creationAttempt || creationAttempt.title!==title)creationAttempt={title,operation_id:crypto.randomUUID()};
- document.querySelector('#create-project-btn').disabled=true;
- try{
-  const response=await fetch('/v1/projects/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(creationAttempt)});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error || 'Projekt se nepodařilo vytvořit.');
-  createStatus.textContent=`Projekt „${result.title}“ vytvořen.`;
-  document.querySelector('#new-project-title').value='';creationAttempt=null;
-  await loadProjects(result.id);
- }catch(error){createStatus.textContent=error.message || 'Projekt se nepodařilo vytvořit.';}
- finally{document.querySelector('#create-project-btn').disabled=false;}
-});
 window.addEventListener('pagehide',()=>{accessKey='';});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 document.querySelector('#logout').addEventListener('click',()=>{accessKey='';location.reload();});
@@ -147,7 +127,7 @@ def secret(path):
 
 class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
-    post_paths = DesktopHandler.post_paths | {'/v1/projects/create', '/v1/administration', '/v1/session',
+    post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
                                                '/v1/notebooklm/preview', '/v1/notebooklm/plan',
@@ -208,23 +188,6 @@ class WebHandler(DesktopHandler):
             self.reply(200, {'id': source['project_id'], 'commit_id': receipt['commit_id']})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
-
-    def _create_project(self, request):
-        if not isinstance(request, dict) or not {'title'} <= set(request) <= {'title', 'operation_id'} or not isinstance(request['title'], str):
-            return self.send_error(400)
-        title = request['title']
-        try:
-            root = self._default_projects_root()
-            root.mkdir(mode=0o700, exist_ok=True)
-            operation_id = request.get('operation_id', str(uuid4()))
-            identifier(operation_id)
-            target = root / f'projekt-{operation_id}'
-            creator = ProjectCreation(self.server.node)
-            receipt = creator.create(title, target, operation_id)
-            self.server.projects = Projects(self.server.node, network=True)
-            self.reply(200, receipt)
-        except (ValueError, CreationConflict, OSError, sqlite3.Error, subprocess.SubprocessError):
-            self.reply(422, {'error': 'Projekt se nepodařilo vytvořit. Ověřte název a dostupnost úložiště.'})
 
     def dispatch(self, request):
         if self.path in {'/v1/chat/configure', '/v1/chat/test'} \
@@ -377,10 +340,10 @@ class WebHandler(DesktopHandler):
         if self.path == '/v1/artifacts/delete/confirm':
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
-        if self.path == '/v1/projects/create':
+        if self.path.startswith('/v1/projects/create/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-            return self._create_project(request)
+            return super().dispatch(request)
         if self.path == '/v1/sources/import':
             return self._import_source(request)
         return super().dispatch(request)
@@ -435,6 +398,8 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     server.token, server.counter = token, 0
     server.projects = Projects(node, network=True)
     server.node = node
+    server.project_creation_actions = ProjectCreationActions(
+        node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.chat_service = ChatService(node, server.projects)
     server.media_service = MediaService(node, server.projects,
         state_dir=server.chat_service.state_dir)
