@@ -26,8 +26,8 @@ F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `UX-UNIFIED-01` bylo doručeno PR #53 jako konsolidovaný merge commit `571b430`;
 jeho evidence je ve WORK_LOG. Prozatímní backlogová ID
 `UX-UNIFIED-02A/02B` byla sloučena do dokončených `UX-UNIFIED-01-E/F` a nejsou
-samostatnými feature. `UX-UNIFIED-02D` je feature-akceptovaná na vlastní větvi,
-evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR.
+samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
+`0ce9cb7`; evidence je ve WORK_LOG a další feature zatím nebyla aktivována.
 Dříve schválená Ollama orchestrace, output router a NotebookLM unifikace
 zůstávají zachované jako samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
@@ -175,7 +175,53 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 
 ## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
 
-- [ ] [planned] **F-M5-TRUST-01 — Profily federace a branch policy (cílová úroveň: designed).** Rozšířit peer registry o capability profil `unspecified` / `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner`, oddělený od `pending` / `approved` / `revoked`. Profily nejsou pořadí důvěry: první může federovat uživatele a jejich projektové role; `same-company` jen data a vzdálené identity pro provenance/audit bez převzetí účtů či rolí; `trusted-partner` vybraná data konkrétním příjemcům; `holding-partner` vybraná data také celé ověřené společnosti; `partner` jen chat a uživatelem explicitně odeslaný či sdílený obsah. Desktop má s běžným peerem nejvýše `same-company`; výhradně peer přímo založený z desktopu může mít se zakládajícím desktopem jednu neměnným podepsaným původem doloženou `same-company-same-team` vazbu. Založený peer ji nesmí delegovat ani navázat s jiným uzlem a ve všech ostatních vztazích se posuzuje jako desktop. Pro `trusted-partner` a `holding-partner` určit aktivního místního styčného uživatele přijímajícího uzlu, který auditovatelně přiděluje práva k převzatým datům místním uživatelům pouze jako podmnožinu origin ACL, privacy, akcí a exportních omezení. Uzavřít verzovanou policy pro project UUID, ref/branch, mapované uživatele nebo organizačního příjemce, styčného uživatele, povolené privacy a akce včetně `export`. Akceptace: žádný profil ani přijetí dat samo neudělí přístup; oba uzly schválí přesný scope; vzdálená identita se mimo platnou zakládající `same-company-same-team` vazbu nestane lokálním účtem a její role se nesynchronizují; druhá, tranzitivní, importovaná nebo dodatečně povýšená same-team vazba se odmítne; revokace a nové schválení nezmění zakladatele; organizační grant používá ověřené, časově vymezené a verzované členství; změna, downgrade nebo revokace má nové ID/verzi; výměna či deaktivace styčného uživatele zachová audit, zabrání novým grantům a dovolí bezpečné odebrání existujících; pokus styčného uživatele rozšířit origin práva se odmítne; neznámá policy fail-closed; credentials, session, vzdálené přihlášení a `local-only` jsou vždy odmítnuty.
+- [ ] [planned] **F-M5-TRUST-01 — Profily federace a branch policy (cílová
+  úroveň: designed).** Rozšířit peer registry o capability profil `unspecified` /
+  `same-company-same-team` / `same-company` / `trusted-partner` /
+  `holding-partner` / `partner`, oddělený od `pending` / `approved` / `revoked`.
+  Profily nejsou pořadí důvěry: první může federovat uživatele a jejich projektové
+  role; `same-company` jen data a vzdálené identity pro provenance/audit bez
+  převzetí účtů či rolí; `trusted-partner` vybraná data konkrétním příjemcům;
+  `holding-partner` vybraná data také celé ověřené společnosti; `partner` jen
+  chat a uživatelem explicitně odeslaný či sdílený obsah.
+
+  Rozlišit dva neměnné původy nasazení serveru. Server instalovaný desktopovou
+  aplikací je osobní uzel právě jednoho uživatele a jednoho vlastnického
+  aplikačního účtu; druhý lokální uživatel se odmítne. Více serverů přímo
+  instalovaných stejným desktopem pro stejného vlastníka tvoří podepsanou
+  deployment skupinu a mohou mít `same-company-same-team` vazby mezi desktopem
+  i navzájem jako primární a záložní uzly. Každý server má vlastní node identity
+  a klíč. Členství ve skupině není tranzitivní ani delegovatelné: osobní server
+  nesmí vydat, importovat nebo přepsat desktopový doklad původu, přidat další
+  uzel ani změnit vlastníka. Server instalovaný z CLI osobní omezení nemá, může
+  hostit více lokálních uživatelů a federovat s dalšími servery podle běžně
+  schválených profilů a policies. Do skupiny se automaticky nezařadí a nemůže
+  být na osobní uzel dodatečně povýšen pouhou policy. Ve všech vztazích mimo
+  platnou deployment skupinu zůstává osobní server omezen jako desktop, tedy
+  nejvýše `same-company`.
+
+  Pro `trusted-partner` a `holding-partner` určit aktivního místního styčného
+  uživatele přijímajícího uzlu, který auditovatelně přiděluje práva k převzatým
+  datům místním uživatelům pouze jako podmnožinu origin ACL, privacy, akcí a
+  exportních omezení. Uzavřít verzovanou policy pro project UUID, ref/branch,
+  mapované uživatele nebo organizačního příjemce, styčného uživatele, povolené
+  privacy a akce včetně `export`.
+
+  Akceptace: žádný profil, společný původ ani přijetí dat samo neudělí přístup
+  nebo nespustí replikaci; oba uzly schválí přesný scope; vzdálená identita se
+  mimo platnou `same-company-same-team` skupinu nestane lokálním účtem a její
+  role se nesynchronizují. Doklad původu váže stabilní identitu instalujícího
+  desktopu, kvalifikovanou identitu jediného vlastníka, deployment group ID a
+  konkrétní node ID/veřejný klíč osobního serveru. Cross-owner, cross-desktop,
+  tranzitivní, importovaná, klonovaná nebo dodatečně povýšená same-team vazba se
+  odmítne; revokace uzlu ani nové schválení nezmění původ, vlastníka či skupinu.
+  Ztráta/rotace desktopové autority a obnova jejího zálohovaného klíče mají
+  explicitní fail-closed lifecycle. Organizační grant používá ověřené, časově
+  vymezené a verzované členství; změna, downgrade nebo revokace má nové ID/verzi;
+  výměna či deaktivace styčného uživatele zachová audit, zabrání novým grantům a
+  dovolí bezpečné odebrání existujících; pokus styčného uživatele rozšířit origin
+  práva se odmítne; neznámá policy fail-closed; credentials, session, vzdálené
+  přihlášení a `local-only` jsou vždy odmítnuty.
 
 - [ ] [planned] **F-M5-TRANSFER-01 — Privacy-aware přenos celé historie (cílová úroveň: PoC validated).** Nahradit public-only omezení prvního bundle přenosu autorizací všech objektů dosažitelných z vybraného refu podle F-M5-TRUST-01 a portable ACL ADR 0021. Jde o přímou návaznost na odmítnutí `project` entity v historickém commitu oznámené 2026-09-17. Akceptace: `project` data projdou pouze s oboustranně platným branch/project grantem a mapováním; confidential vyžaduje explicitní policy; local-only, nepokrytý předek, skrytý další ref, změněný HEAD, revokace a neúplný manifest se odmítnou před odesláním; příjem znovu ověří stejný obsah a práva.
 

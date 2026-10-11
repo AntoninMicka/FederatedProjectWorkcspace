@@ -10,8 +10,8 @@ SPDX-License-Identifier: MPL-2.0
 Dávka na větvi `feature/ux-unified-02d-document-todo-editor`, založené z
 `develop` `571b430` po doručení UX-UNIFIED-01 jako PR #53, dokončila společný
 editor pro server i desktop. Dosažená úroveň je **implemented / PoC validated**
-a akceptační podmínky jsou splněné. PR do `develop` dosud nebyl vytvořen ani
-sloučen.
+a akceptační podmínky jsou splněné. Dávka byla následně doručena do `develop`
+jako PR #54, merge commit `0ce9cb7`.
 
 - [x] [completed] **UX-UNIFIED-02D-A — Inventura, reuse a recovery kontrakt
   (designed).** Existující `ArtifactActions`, `Artifacts`, Workspace journal,
