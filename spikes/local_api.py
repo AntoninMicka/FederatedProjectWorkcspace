@@ -58,6 +58,13 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(auth.encode('utf-8'),
                                    ('Bearer ' + self.server.token).encode())
 
+    def request_authority(self):
+        authority = self.single('Host')
+        return authority if authority == self.server.authority else None
+
+    def request_origin(self, authority):
+        return self.server.origin if authority == self.server.authority else None
+
     def dispatch(self, request):
         if request != {'action': 'increment'}:
             return self.send_error(400)
@@ -65,12 +72,13 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {'value': self.server.counter})
 
     def do_POST(self):
-        if self.single('Host') != self.server.authority:
+        authority = self.request_authority()
+        if authority is None:
             return self.send_error(403)
         origin = self.headers.get_all('Origin', [])
         # Missing Origin is reserved for token-authenticated native clients.
         # null/file origins and foreign browser origins are not accepted.
-        if origin and origin != [self.server.origin]:
+        if origin and origin != [self.request_origin(authority)]:
             return self.send_error(403)
         auth = self.single('Authorization') or ''
         if not self.authorized(auth):

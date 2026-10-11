@@ -2,15 +2,38 @@
 # SPDX-License-Identifier: MPL-2.0
 """Generate the opt-in Debian LXC viewer installation; secrets are never bundled."""
 import ipaddress
+import re
 import shlex
 
 
-def install_script(release, lan, *, update_only=False):
+def validate_hostname(hostname):
+    if hostname is None:
+        return None
+    if (not isinstance(hostname, str) or len(hostname) > 253
+            or hostname.endswith('.') or '.' not in hostname):
+        raise ValueError('Expected a DNS hostname such as workspace.example.internal')
+    labels = hostname.split('.')
+    if any(not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', label)
+           for label in labels):
+        raise ValueError('Expected a DNS hostname such as workspace.example.internal')
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        return hostname.lower()
+    raise ValueError('DNS hostname must not be an IP address')
+
+
+def install_script(release, lan, *, hostname=None, update_only=False):
     network = ipaddress.ip_network(lan)
     if network.version != 4 or not network.is_private or network.prefixlen < 8:
         raise ValueError('Expected private IPv4 LAN')
     if len(release) != 32 or any(c not in '0123456789abcdef' for c in release):
         raise ValueError('Invalid release')
+    hostname = validate_hostname(hostname)
+    hostname_preflight = ''
+    if hostname:
+        hostname_preflight = f'''command -v openssl >/dev/null 2>&1 || {{ echo 'openssl is required for DNS certificate validation' >&2; exit 1; }}
+openssl x509 -in "$config/tls.crt" -noout -checkhost {hostname} >/dev/null 2>&1 || {{ echo 'TLS certificate does not cover configured DNS hostname' >&2; exit 1; }}'''
     preparation = '''
 missing=""
 for package in python3 python3-venv git ca-certificates poppler-utils; do
@@ -46,6 +69,7 @@ for command in python3 git pdftoppm runuser; do
 done
 python3 -c 'import sys,venv; assert sys.version_info >= (3,11)'
 '''
+    hostname_option = f' --hostname {hostname}' if hostname else ''
     unit = f'''# SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 [Unit]
@@ -55,7 +79,7 @@ After=network.target
 User=federated-workspace
 Group=federated-workspace
 WorkingDirectory=/opt/federated-workspace/current
-ExecStart=/opt/federated-workspace/current/.venv/bin/python -m spikes.web_server --lan {network} --cert /etc/federated-workspace/tls.crt --key /etc/federated-workspace/tls.key --token-file /var/lib/federated-workspace/access-key --node /var/lib/federated-workspace/node.json
+ExecStart=/opt/federated-workspace/current/.venv/bin/python -m spikes.web_server --lan {network} --cert /etc/federated-workspace/tls.crt --key /etc/federated-workspace/tls.key --token-file /var/lib/federated-workspace/access-key --node /var/lib/federated-workspace/node.json{hostname_option}
 Restart=on-failure
 UMask=0077
 NoNewPrivileges=true
@@ -76,6 +100,7 @@ config=/etc/federated-workspace
 unit=/etc/systemd/system/federated-workspace.service
 {preflight}
 [ -f "$config/tls.crt" ] && [ -f "$config/tls.key" ] && [ -f "$config/ca.crt" ] || {{ echo 'Provision TLS certificate, key and CA first' >&2; exit 1; }}
+{hostname_preflight}
 [ ! -L "$base" ] && [ ! -L "$base/releases" ]
 mkdir -p "$base/releases"
 [ ! -L "$base/web-deploy.lock" ]

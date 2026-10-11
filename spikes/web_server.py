@@ -164,6 +164,17 @@ class WebHandler(DesktopHandler):
         self.server.authority = f'{ip}:{port}'
         self.server.origin = 'https://' + self.server.authority
 
+    def request_authority(self):
+        authority = self.single('Host')
+        if authority == self.server.authority:
+            return authority
+        if self.server.hostname and authority == f'{self.server.hostname}:{self.server.server_port}':
+            return authority
+        return None
+
+    def request_origin(self, authority):
+        return 'https://' + authority
+
     def _default_projects_root(self):
         return (ProjectCreation(self.server.node).configured_projects_root()
                 or Path(self.server.node).parent / 'projects')
@@ -349,7 +360,7 @@ class WebHandler(DesktopHandler):
         return super().dispatch(request)
 
     def do_GET(self):
-        if self.single('Host') != self.server.authority:
+        if self.request_authority() is None:
             return self.send_error(403)
         if self.path not in ASSETS:
             return self.send_error(404)
@@ -381,11 +392,29 @@ class WebServer(HTTPServer):
             raise OSError('Connection rejected') from None
 
 
-def make_server(bind, port, lan, cert, key, token_file, node):
+def validate_hostname(hostname):
+    if hostname is None:
+        return None
+    if (not isinstance(hostname, str) or len(hostname) > 253
+            or hostname.endswith('.') or '.' not in hostname):
+        raise ValueError('Expected a DNS hostname such as workspace.example.internal')
+    labels = hostname.split('.')
+    if any(not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?', label)
+           for label in labels):
+        raise ValueError('Expected a DNS hostname such as workspace.example.internal')
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        return hostname.lower()
+    raise ValueError('DNS hostname must not be an IP address')
+
+
+def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     network = ipaddress.ip_network(lan)
     if network.version != 4 or network.prefixlen < 8 or not network.is_private:
         raise ValueError('Specify a private IPv4 LAN subnet')
     ipaddress.IPv4Address(bind)
+    hostname = validate_hostname(hostname)
     token = secret(token_file)
     creator = ProjectCreation(node)
     if creator.database.exists():
@@ -395,6 +424,7 @@ def make_server(bind, port, lan, cert, key, token_file, node):
     tls.load_cert_chain(cert, key)
     server = WebServer((bind, port), WebHandler)
     server.tls, server.allowed_network = tls, network
+    server.hostname = hostname
     server.token, server.counter = token, 0
     server.projects = Projects(node, network=True)
     server.node = node
@@ -426,8 +456,10 @@ def main():
     parser.add_argument('--port', type=int, default=8443)
     for option in ('lan', 'cert', 'key', 'token-file', 'node'):
         parser.add_argument('--' + option, required=True)
+    parser.add_argument('--hostname')
     args = parser.parse_args()
-    with make_server(args.bind, args.port, args.lan, args.cert, args.key, args.token_file, args.node) as server:
+    with make_server(args.bind, args.port, args.lan, args.cert, args.key,
+                     args.token_file, args.node, hostname=args.hostname) as server:
         try:
             server.serve_forever()
         except KeyboardInterrupt:
