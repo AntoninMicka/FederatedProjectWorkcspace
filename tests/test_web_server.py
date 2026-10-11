@@ -12,6 +12,7 @@ import tempfile
 import threading
 import tarfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.web_server import make_server, secret, WEB_HTML, WEB_CSS, WEB_JS
@@ -108,6 +109,29 @@ class WebTests(unittest.TestCase):
         self.assertIn('<div id="project-view" hidden>\n<details id="web-source-import">', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
+
+    def test_inherited_feature_routes_have_complete_web_runtime_wiring(self):
+        self.assertEqual(self.request(path='/v1/projects/create',
+                                     body='{"title":"Runtime wiring"}')[0], 200)
+        shared = self.server.chat_service.state_dir
+        services = (
+            ('summary', self.server.summary_service),
+            ('extraction', self.server.extraction_service),
+            ('metadata-suggestions', self.server.metadata_suggestion_service),
+        )
+        for name, service in services:
+            self.assertEqual(service.state_dir, shared)
+            self.assertEqual(service.chat_state_dir, shared)
+            code, data, _ = self.request(path=f'/v1/{name}/status', body='{}')
+            self.assertEqual(code, 200)
+            self.assertEqual(json.loads(data)['tasks'], [])
+            for action in ('preview', 'publish'):
+                with self.subTest(service=name, action=action), patch.object(
+                        service, action, return_value={'service': name, 'action': action}):
+                    code, data, _ = self.request(
+                        path=f'/v1/{name}/{action}', body='{}')
+                    self.assertEqual(code, 200)
+                    self.assertEqual(json.loads(data), {'service': name, 'action': action})
 
     def test_mobile_layout_has_accessible_drawer_and_bounded_priority_flows(self):
         self.assertIn('id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar"', WEB_HTML)

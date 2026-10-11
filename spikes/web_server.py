@@ -25,6 +25,9 @@ from spikes.source_import import Sources
 from spikes.media_service import MediaService
 from spikes.notebooklm_project_import import NotebookLMProjectImport
 from spikes.role_workflow_service import RoleWorkflowService
+from spikes.summary_service import SummaryService
+from spikes.extraction_service import ExtractionService
+from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 
@@ -502,6 +505,15 @@ def make_server(bind, port, lan, cert, key, token_file, node):
         state_dir=server.chat_service.state_dir)
     server.role_workflow_service = RoleWorkflowService(node, server.projects,
         state_dir=server.chat_service.state_dir)
+    server.summary_service = SummaryService(node, server.projects,
+        state_dir=server.chat_service.state_dir,
+        chat_state_dir=server.chat_service.state_dir)
+    server.extraction_service = ExtractionService(node, server.projects,
+        state_dir=server.chat_service.state_dir,
+        chat_state_dir=server.chat_service.state_dir)
+    server.metadata_suggestion_service = MetadataSuggestionService(node, server.projects,
+        state_dir=server.chat_service.state_dir,
+        chat_state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.notebooklm_import = NotebookLMProjectImport(node)
     server.administration = Administration(node)

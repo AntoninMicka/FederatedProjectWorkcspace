@@ -5,14 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru — 2026-10-11
+
+Dávka na větvi `feature/web-runtime-01-service-wiring`, založené z `develop`
+`7339336` po začlenění F-M2-CHAT-03 jako PR #51, opravila potvrzenou runtime
+mezeru webového serveru. Dosažená úroveň je **implemented / PoC validated** a
+akceptační podmínky jsou lokálně splněné. Push, PR ani merge této dávky zatím
+nebyly provedeny; cílem jediného PR zůstává `develop`.
+
+- [x] [completed] **WEB-RUNTIME-01-A — Inventura a reuse runtime wiring
+  (designed).** Desktop již používal `SummaryService`, `ExtractionService` a
+  `MetadataSuggestionService` nad společným `ChatService.state_dir`; webový
+  handler vystavoval jejich endpointy bez odpovídajících atributů serveru.
+  Reuse tohoto wiring nevyžadoval nový framework, store ani ADR.
+- [x] [completed] **WEB-RUNTIME-01-B — Webový service wiring (implemented).**
+  `make_server()` inicializuje stejné tři služby, sdílí s nimi chat state root
+  a zachovává jejich oddělené task tabulky, backendové run záznamy a stávající
+  Workspace publication lifecycle.
+- [x] [completed] **WEB-RUNTIME-01-C — Regrese zděděných endpointů
+  (PoC validated).** Skutečný HTTPS `WebServer` ověřuje reálný `status` a
+  routing `preview`/`publish` pro summary, extraction a metadata suggestions;
+  všech devět endpointů má runtime službu a shodnou state-dir vazbu s desktopem.
+- [x] [completed] **WEB-RUNTIME-01-D — Závěrečné předání.** Stav PR #51 byl
+  opraven v TODO/BACKLOG/roadmapě, tato dávka byla archivována a navazující
+  pořadí připravuje UX-UNIFIED-01, F-M3-OLLAMA-ORCH-LAN-01 a
+  F-M4-OUTPUT-ROUTER-01 jako samostatné feature.
+
+Nevznikla nová operace přes persistentní vrstvy ani nová crash boundary.
+Konstruktory pouze vážou existující služby; jejich durable task journals,
+backendové run stavy a potvrzené Workspace publikace zachovávají dosavadní
+recovery kontrakty.
+
+Ověření po finální změně: cílená sada
+`python3 -m unittest tests.test_web_server tests.test_summary_service
+tests.test_extraction_service tests.test_metadata_suggestion_service -q`
+prošla: **40 testů OK, 2 volitelné WebEngine testy přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -v` prošla: **451 testů OK,
+27 volitelných native/package/live testů přeskočeno**; známé neblokující
+`ResourceWarning` na testovací SQLite spojení zůstaly beze změny.
+
+Omezení: opravený release nebyl nasazen na skutečný Turris/LXC a endpointy tam
+nebyly znovu uživatelsky ověřeny. Lokální HTTPS regrese není důkaz živého
+deploymentu. Obecná unifikace webového a desktopového frontendu je samostatná
+navazující dávka UX-UNIFIED-01.
+
 ## F-M2-CHAT-03 — Správa a restartová akceptace lokálních vláken — 2026-10-11
 
 Dávka na větvi `feature/f-m2-chat-03-thread-lifecycle`, založené z `develop`
 `9ea0fb0` po začlenění F-M3-OLLAMA-ROBUST-01 jako PR #50, doplnila vědomý
 lifecycle lokálně perzistentních chatových vláken. Po uživatelské změně
 akceptace přidala seznam chatů do levého panelu. Dosažená úroveň je **PoC
-validated** a akceptační podmínky feature jsou splněné. Push, PR ani merge této
-dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
+validated** a akceptační podmínky feature jsou splněné. Dávka byla začleněna
+do `develop` jako PR #51, merge commit `7339336`.
 
 - [x] [completed] **F-M2-CHAT-03-A — Inventura, reuse a recovery kontrakt
   (designed).** ADR 0008 a reuse katalog vymezují vlastníka, read-only preview,
@@ -160,9 +204,10 @@ testy neměnilo.
 Omezení: přístup na LAN proxy je založen na firewallovém omezení a připnutém
 certifikátu, nikoli na aplikačním Basic Auth či mTLS. Konkrétní pravidla
 firewallu spravuje hostitel mimo Workspace Git. Streamování lokální Ollama
-odpovědi a sjednocení neúplného webového runtime wiring byly předány jako
-samostatné budoucí dávky `F-M3-OLLAMA-STREAM-01` a `WEB-RUNTIME-01` v BACKLOG;
-nejsou skrytou součástí této akceptované feature.
+odpovědi bylo předáno jako samostatná budoucí dávka
+`F-M3-OLLAMA-STREAM-01` v BACKLOG; sjednocení webového runtime wiring bylo
+později dokončeno v dávce `WEB-RUNTIME-01` evidované výše. Ani jedna změna
+nebyla skrytou součástí této akceptované feature.
 
 ## UX-MOBILE-01 — Responzivní web pro telefon — 2026-10-09
 
