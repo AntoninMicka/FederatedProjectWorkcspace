@@ -10,7 +10,7 @@ usage() {
     cat <<'HELP'
 Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
-  deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--regen-tls] [--reset]
+  deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--web-hostname DNS_NAME] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
   package-deb [--output SOUBOR] [--version VERZE]  Sestaví instalační .deb.
   package-desktop [--output SOUBOR]  Sestaví zdrojový balíček desktopového PoC.

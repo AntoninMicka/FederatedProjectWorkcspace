@@ -15,7 +15,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from spikes.web_server import make_server, secret, WEB_HTML, WEB_CSS, WEB_JS
+from spikes.web_server import make_server, secret, validate_hostname, WEB_HTML, WEB_CSS, WEB_JS
 from spikes.desktop_ui import HTML as SHARED_HTML, CSS as SHARED_CSS, JS as SHARED_JS
 from spikes.projects import Projects
 from spikes.artifacts import Artifacts, main_todo_id
@@ -27,6 +27,14 @@ from tests.test_notebooklm_import import valid_members
 
 
 class WebTests(unittest.TestCase):
+    def test_dns_hostname_validation_is_fail_closed(self):
+        self.assertEqual(validate_hostname('Workspace.Cacke.Internal'),
+                         'workspace.cacke.internal')
+        for hostname in ('workspace', '192.168.100.20', '*.cacke.internal',
+                         'bad..cacke.internal'):
+            with self.subTest(hostname=hostname), self.assertRaises(ValueError):
+                validate_hostname(hostname)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -40,11 +48,13 @@ class WebTests(unittest.TestCase):
         self.token_file = self.root/'token'
         self.token_file.write_text(self.token); self.token_file.chmod(0o600)
         self.server = make_server('127.0.0.1', 0, '192.168.100.0/24', self.cert, self.key,
-                                  self.token_file, self.root/'node.json')
+                                  self.token_file, self.root/'node.json',
+                                  hostname='workspace.cacke.internal')
         self.thread = threading.Thread(target=self.server.serve_forever)
         self.thread.start()
         self.addCleanup(self.stop)
         self.authority = f'127.0.0.1:{self.server.server_port}'
+        self.dns_authority = f'workspace.cacke.internal:{self.server.server_port}'
         self.context = ssl.create_default_context(cafile=self.cert)
 
     def stop(self):
@@ -86,6 +96,11 @@ class WebTests(unittest.TestCase):
                               ({'Sec-Fetch-Site':'cross-site'},403)]:
             self.assertEqual(self.request(headers=headers)[0], code)
         self.assertEqual(self.request(headers={'Origin':'https://'+self.authority})[0],200)
+        self.assertEqual(self.request(headers={'Host':self.dns_authority,
+            'Origin':'https://'+self.dns_authority})[0], 200)
+        self.assertEqual(self.request(headers={'Host':self.dns_authority,
+            'Origin':'https://'+self.authority})[0], 403)
+        self.assertEqual(self.request('GET', '/', headers={'Host':self.dns_authority})[0], 200)
         self.assertEqual(self.request(path='/v1/projects/create/preview', body='{}')[0], 422)
         code, data, _ = self.create_project('Nový projekt')
         self.assertEqual(code, 200)

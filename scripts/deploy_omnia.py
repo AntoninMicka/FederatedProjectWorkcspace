@@ -14,21 +14,26 @@ import uuid
 
 if __package__:
     from .license_files import license_files
-    from .install_web import install_script as web_install_script
+    from .install_web import install_script as web_install_script, validate_hostname
 else:
     from license_files import license_files
-    from install_web import install_script as web_install_script
+    from install_web import install_script as web_install_script, validate_hostname
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def remote_tls_bootstrap_script(lan, regenerate=False):
+def remote_tls_bootstrap_script(lan, hostname=None, regenerate=False):
+    hostname = validate_hostname(hostname)
+    dns_name = shlex.quote(hostname or '')
     if regenerate:
         condition_block = 'echo "Regenerating TLS artifacts on request"'
     else:
         condition_block = ('if [ -s /etc/federated-workspace/ca.crt ] && [ -s /etc/federated-workspace/tls.crt ] && [ -s /etc/federated-workspace/tls.key ]; then\n'
                           '  if openssl verify -CAfile /etc/federated-workspace/ca.crt /etc/federated-workspace/tls.crt >/dev/null 2>&1; then\n'
-                          '    tls_san_ok=$(openssl x509 -in /etc/federated-workspace/tls.crt -noout -text | tr \"\\n\" \" \" | grep -q "IP Address:127.0.0.1"; echo $?)\n'
+                          '    tls_san_ok=0\n'
+                          '    openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkip 127.0.0.1 >/dev/null 2>&1 || tls_san_ok=1\n'
+                          '    if [ -n "$ip" ]; then openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkip "$ip" >/dev/null 2>&1 || tls_san_ok=1; fi\n'
+                          '    if [ -n "$dns_name" ]; then openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkhost "$dns_name" >/dev/null 2>&1 || tls_san_ok=1; fi\n'
                           '    ca_constraints_ok=$(openssl x509 -in /etc/federated-workspace/ca.crt -noout -text | tr \"\\n\" \" \" | grep -q "X509v3 Basic Constraints:.*CA:TRUE"; echo $?)\n'
                           '    ca_key_usage_ok=$(openssl x509 -in /etc/federated-workspace/ca.crt -noout -text | tr \"\\n\" \" \" | grep -q "X509v3 Key Usage:.*Certificate Sign"; echo $?)\n'
                           '    if [ "$tls_san_ok" -eq 0 ] && [ "$ca_constraints_ok" -eq 0 ] && [ "$ca_key_usage_ok" -eq 0 ]; then\n'
@@ -39,12 +44,13 @@ def remote_tls_bootstrap_script(lan, regenerate=False):
                           '  echo "Existing TLS artifacts invalid or outdated; regenerating"\n'
                           'fi')
     return f'''ensure_tls() {{
+ip="$(ip -4 -o addr show scope global | awk '/inet / {{print $4}}' | cut -d/ -f1 | awk '/^(10\\.|127\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/ {{print $1; exit}}')"
+dns_name={dns_name}
 {condition_block}
 command -v openssl >/dev/null 2>&1 || {{ echo "openssl is required for auto TLS setup" >&2; exit 1; }}
 mkdir -p /etc/federated-workspace
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-ip="$(ip -4 -o addr show scope global | awk '/inet / {{print $4}}' | cut -d/ -f1 | awk '/^(10\\.|127\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.)/ {{print $1; exit}}')"
 cat > "$tmp/ca.cnf" <<'EOF'
 [ req ]
 distinguished_name = dn
@@ -69,6 +75,9 @@ IP.1 = 127.0.0.1
 EOF
 if [ -n "$ip" ]; then
   echo "IP.2 = $ip" >> "$tmp/server.ext"
+fi
+if [ -n "$dns_name" ]; then
+  echo "DNS.1 = $dns_name" >> "$tmp/server.ext"
 fi
 openssl req -new -nodes -newkey rsa:3072 -keyout "$tmp/tls.key" -out "$tmp/tls.csr" -subj "/CN=Federated Workspace Viewer" >/dev/null 2>&1
 openssl x509 -req -in "$tmp/tls.csr" -CA "$tmp/ca.crt" -CAkey "$tmp/ca.key" -CAcreateserial -out "$tmp/tls.crt" -days 825 -sha256 -extfile "$tmp/server.ext" -extensions server_ext >/dev/null 2>&1
@@ -187,10 +196,13 @@ def bundle(root):
     return stream.getvalue(), [str(p.relative_to(root)) for p in files]
 
 
-def remote_script(container, release, *, lan=None, force_tls=False, update_only=False):
+def remote_script(container, release, *, lan=None, hostname=None, force_tls=False, update_only=False):
     # Both interpolated values have been validated/generated locally.
-    command = web_install_script(release, lan, update_only=update_only) if lan else install_script(release)
-    web_tls = f'\n{remote_tls_bootstrap_script(lan, regenerate=force_tls)}\n' if lan and not update_only else ''
+    hostname = validate_hostname(hostname)
+    if hostname and not lan:
+        raise ValueError('DNS hostname requires HTTPS web mode')
+    command = web_install_script(release, lan, hostname=hostname, update_only=update_only) if lan else install_script(release)
+    web_tls = f'\n{remote_tls_bootstrap_script(lan, hostname, regenerate=force_tls)}\n' if lan and not update_only else ''
     web_exec = f'{web_tls}sh -c {shlex.quote(command)}'
     return f'''set -eu
 awk '$2 == "/srv" && $3 == "btrfs" {{found=1}} END {{exit !found}}' /proc/mounts || {{ echo 'SSD /srv not mounted as Btrfs' >&2; exit 1; }}
@@ -238,6 +250,7 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Show plan without SSH or writes')
     parser.add_argument('--retries', type=int, default=3, help='Deployment retry count on failure')
     parser.add_argument('--web-lan', help='Opt in to HTTPS viewer; allowed private IPv4 client subnet')
+    parser.add_argument('--web-hostname', help='Exact DNS hostname for the HTTPS certificate and web origin')
     parser.add_argument('--regen-tls', action='store_true', help='Force TLS regeneration in container (web mode only)')
     parser.add_argument('--reset', action='store_true', help='Discard web rollback snapshot and stop service; does not restore previous release')
     parser.add_argument('--recover', action='store_true', help='Restore interrupted web deployment in LXC without deploying new software')
@@ -249,6 +262,8 @@ def main():
         parser.error('invalid container name')
     if args.regen_tls and not args.web_lan:
         parser.error('--regen-tls requires --web-lan')
+    if args.web_hostname and not args.web_lan:
+        parser.error('--web-hostname requires --web-lan')
     if (args.update_only or args.recover) and not args.web_lan:
         parser.error('--update-only and --recover require --web-lan')
     if sum((args.reset, args.recover, args.update_only)) > 1:
@@ -258,7 +273,9 @@ def main():
     payload, files = bundle(ROOT)
     release = uuid.uuid4().hex
     try:
-        command = remote_script(args.container, release, lan=args.web_lan, force_tls=args.regen_tls, update_only=args.update_only)
+        command = remote_script(args.container, release, lan=args.web_lan,
+                                hostname=args.web_hostname, force_tls=args.regen_tls,
+                                update_only=args.update_only)
     except ValueError as error:
         parser.error(str(error))
     if args.reset:
@@ -287,6 +304,8 @@ def main():
         if not args.web_lan:
             return
         base = shlex.join(['./run.sh', 'deploy-omnia', args.host, '--container', args.container, '--web-lan', args.web_lan])
+        if args.web_hostname:
+            base += ' ' + shlex.join(['--web-hostname', args.web_hostname])
         print('Deployment failed. Preserve the error output and diagnose before resetting.')
         print('Restore previous release/service from the recovery snapshot: ' + base + ' --recover')
         print('If dependencies or configuration are missing, retry without --update-only.')
@@ -305,7 +324,8 @@ def main():
                 return recover_result.returncode
             # Each attempt owns a new immutable release; incomplete ones remain diagnostic evidence.
             command = remote_script(args.container, uuid.uuid4().hex, lan=args.web_lan,
-                                    force_tls=args.regen_tls, update_only=args.update_only)
+                                    hostname=args.web_hostname, force_tls=args.regen_tls,
+                                    update_only=args.update_only)
             print(f'Attempt {attempt}/{args.retries}: retrying deployment')
         # Ignore broken/implicit client proxy config; retain known-host verification and ssh-agent.
         result = run_ssh(args.host, command, payload)

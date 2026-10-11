@@ -9,9 +9,11 @@ Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lightt
 
 ## Příprava
 
-Určete privátní IPv4 subnet klientů a kontejneru. Příklady používají dokumentační placeholdery `ROUTER` a `LAN_SUBNET`; dosaďte skutečné hodnoty. Výchozí kontejner je `workspace-m0`. Serverový port je 8443, routerový helper používá pouze `127.0.0.1:8846`. Přístup přes IPv6 a DNS jméno zatím není implementovaný.
+Určete privátní IPv4 subnet klientů a kontejneru. Příklady používají dokumentační placeholdery `ROUTER`, `LAN_SUBNET` a volitelný `DNS_NAME`; dosaďte skutečné hodnoty. Výchozí kontejner je `workspace-m0`. Serverový port je 8443, routerový helper používá pouze `127.0.0.1:8846`. Přístup přes IPv6 není implementovaný. Přímý přístup přes jedno přesné DNS jméno lze zapnout pomocí `--web-hostname`, například `workspace.cacke.internal`; DNS záznam musí na LXC ukazovat samostatně, deploy jej nevytváří.
 
-V kontejneru je potřeba mít `/etc/federated-workspace/tls.crt` (certifikát a případný řetězec), `tls.key` a `ca.crt` (důvěryhodná CA pro instalační healthcheck). Pokud chybí, `deploy-omnia --web-lan` je umí vytvořit automaticky (včetně `keyUsage` a `subjectAltName`, včetně `127.0.0.1`). Certifikát musí být důvěryhodný pro klientské prohlížeče a zahrnovat IP adresy, které může tento kontejner dostat. Lze použít vlastní LAN CA a certifikát se SAN pro vyhrazený DHCP pool; změna mimo SAN vyžaduje obnovu certifikátu a restart služby. Nepoužívejte vypnutí ověřování TLS. `deploy-omnia --web-lan` navíc automaticky přenáší veřejný CA certifikát z kontejneru na router do `/etc/federated-workspace-ca.pem`; soukromý TLS klíč zůstává v LXC.
+V kontejneru je potřeba mít `/etc/federated-workspace/tls.crt` (certifikát a případný řetězec), `tls.key` a `ca.crt` (důvěryhodná CA pro instalační healthcheck). Pokud chybí, `deploy-omnia --web-lan` je umí vytvořit automaticky (včetně `keyUsage` a `subjectAltName`). Certifikát vždy obsahuje loopback a zjištěnou privátní IPv4 LXC; při `--web-hostname DNS_NAME` také `DNS:DNS_NAME`. Existující certifikát se znovu použije jen tehdy, když pokrývá požadovanou IP i DNS autoritu. Certifikát musí být důvěryhodný pro klientské prohlížeče. Lze použít vlastní LAN CA a certifikát se stejnými SAN; změna mimo SAN vyžaduje obnovu certifikátu a restart služby. Nepoužívejte vypnutí ověřování TLS. `deploy-omnia --web-lan` navíc automaticky přenáší veřejný CA certifikát z kontejneru na router do `/etc/federated-workspace-ca.pem`; soukromý TLS klíč zůstává v LXC.
+
+Automatický bootstrap neuchovává soukromý klíč lokální CA. Pokud musí certifikát kvůli nové IP nebo DNS SAN vytvořit znovu, vytvoří také novou CA; její veřejný certifikát je nutné znovu důvěryhodně nainstalovat do klientů. TLS změna proběhne před aplikačním rollback snapshotem a tento snapshot ji nevrací.
 
 Prohlížeč vyžaduje náhodný přístupový klíč aplikace. První instalace jej vygeneruje v `/var/lib/federated-workspace/access-key` (0600); správce jej přečte uvnitř LXC a předá oprávněnému operátorovi mimo URL. Restart ani upgrade klíč nemění. Pro odvolání přístupu správce bezpečně nahradí soubor novým náhodným klíčem alespoň 32 bajtů, zachová vlastnictví/mód a restartuje službu. Klíč neopravňuje k práci přes SSH.
 
@@ -21,6 +23,13 @@ Nejdřív zkontrolujte plán z checkoutu:
 
 ```sh
 ./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --dry-run
+```
+
+Pro přístup přes IP i DNS použijte stejné DNS jméno při každém běžném i
+application-only nasazení:
+
+```sh
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --web-hostname DNS_NAME --dry-run
 ```
 
 Po přípravě TLS a schválení nasazení spusťte stejný příkaz bez `--dry-run`. Vyžaduje ověřený SSH host key. Balík obsahuje pouze zdroje a veřejné licenční podklady; lokální konfigurace a projekty se nekopírují. Bez `--web-lan` zůstává původní headless demo.
@@ -126,28 +135,34 @@ Ověřte otevření dlaždice a přihlášení, skutečný projekt/náhled, změ
 ssh root@ROUTER "cat /etc/turris-version ; lxc list --format csv -n : name,state,ipv4"
 ```
 
-2) Připravte TLS materiály a certifikáty (při `--web-lan` se doplní automaticky; ověřte, že SAN obsahuje cílové IP klienta/routeru).
+2) Připravte TLS materiály a certifikáty (při `--web-lan` se doplní automaticky; s `--web-hostname DNS_NAME` ověřte IP i DNS SAN).
 3) Proveďte simulovaný nasazení:
 
 ```sh
-./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --dry-run
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --web-hostname DNS_NAME --dry-run
 ```
 
 4) Pokud je plán čistý, proveďte produkční deploy:
 
 ```sh
-./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --web-hostname DNS_NAME
 ```
 
 Při problémové situaci použijte:
 
 ```sh
 ./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --reset
-./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --regen-tls
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --web-hostname DNS_NAME --regen-tls
 ```
 
 `--reset` vyčistí `web-rollback` a znovu načte čistý stav deploymentu.
 `--regen-tls` vynutí nové `/etc/federated-workspace/ca.crt`, `tls.crt`, `tls.key` před deployem.
+Po nasazení ověřte obě identity certifikátu:
+
+```sh
+openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkip LXC_IP
+openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkhost DNS_NAME
+```
 
 5) Na routeru proveďte deployment kontrol a reálné scénáře:
 
@@ -200,7 +215,7 @@ ten nyní přeskočí apt, pokud jsou všechny požadované balíky již nainsta
 Při přerušeném nasazení preferujte skutečnou obnovu:
 
 ```sh
-./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --recover
+./run.sh deploy-omnia root@ROUTER --container workspace-m0 --web-lan LAN_SUBNET --web-hostname DNS_NAME --recover
 ```
 
 Obnova se provede v LXC a vrátí předchozí current, unit a enabled/active stav.

@@ -5,13 +5,13 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0020 — HTTPS náhled v LXC a dynamický vstup z routeru
 
-Datum: 2026-09-10. Stav: přijato pro development PoC, implemented; cílové restartové ověření otevřené v [M1-07](../../TODO.md).
+Datum: 2026-09-10. Stav: přijato pro development PoC, implemented; cílové restartové ověření otevřené v [M1-07](../../BACKLOG.md).
 
 ## Rozsah a rozhodnutí
 
 ADR 0013 ponechává serverový framework otevřený. Pro první LAN náhled adaptujeme existující stdlib HTTP handler, sdílené HTML/JS a Projects. Jeden Python proces v LXC obsluhuje HTTPS, bez Qt a nových pip závislostí. Toto rozhodnutí nevybírá produkční server ani neuzavírá Gate M1. Původní rozsah uměl katalog, hlavní TODO a náhledy; pozdější sjednocený frontend doplnil webové vytvoření projektu, chat a read-only historii přes samostatně autorizované služby. Nativní editor zůstává desktopový, dokud nedosáhne společná varianta parity.
 
-Server vyžaduje TLS certifikát/klíč a explicitní privátní IPv4 subnet klientů. Loopback je povolen pro healthcheck. Host se porovnává se skutečnou cílovou IP a portem socketu, Origin s HTTPS originem; proxy hlavičky nemění autoritu. URL s DNS jménem zatím není podporovaná. Přístupový klíč je náhodných alespoň 32 bajtů, uložený mimo projektový Git, v souboru 0600 vlastněném účtem služby. Ve webu zůstává pouze v paměti stránky, odesílá se v Authorization přes HTTPS; nepoužívá se URL, cookies ani localStorage. Odhlášení načte čistou stránku. Nejde o víceuživatelské RBAC: klíč zpřístupňuje registrované projekty včetně project/confidential pro jednoho důvěryhodného operátora.
+Server vyžaduje TLS certifikát/klíč a explicitní privátní IPv4 subnet klientů. Loopback je povolen pro healthcheck. Výchozí Host se porovnává se skutečnou cílovou IP a portem socketu, Origin s HTTPS originem; proxy hlavičky nemění autoritu. Rozšíření M1-LXC-DNS-TLS-01 dovoluje jednu explicitně nakonfigurovanou DNS autoritu na stejném portu. Certifikát musí obsahovat aktuální IP i toto DNS jméno v SAN a handler přijme pouze číselnou autoritu socketu nebo přesné nakonfigurované `DNS:port` s odpovídajícím HTTPS Originem. Wildcard, odvození z požadavku a proxy hlavičky se nepoužívají. Přístupový klíč je náhodných alespoň 32 bajtů, uložený mimo projektový Git, v souboru 0600 vlastněném účtem služby. Ve webu zůstává pouze v paměti stránky, odesílá se v Authorization přes HTTPS; nepoužívá se URL, cookies ani localStorage. Odhlášení načte čistou stránku. Nejde o víceuživatelské RBAC: klíč zpřístupňuje registrované projekty včetně project/confidential pro jednoho důvěryhodného operátora.
 
 Síťový režim odmítne celý projekt obsahující local-only entitu. Katalog skryje i jeho ID/název. Otevření a náhled kontrolují privacy nad stejným validovaným commitem pod stávajícím zámkem, před vrácením dat. Desktopové čtení se nemění. Automatická reklasifikace neexistuje.
 
@@ -64,3 +64,18 @@ Při retry se použije nové release ID; neúplná vydání zůstávají pro dia
 Reset není obnova a nezapíná se automaticky: zahazuje snapshot a zastavuje
 službu. Chybový výstup tuto hranici výslovně pojmenuje a nabídne recovery příkaz.
 Implementováno, bez nového testového ověření; stav drží M1-AH-09 v TODO.
+
+## Rozšíření 2026-10-11: IP a DNS identita certifikátu
+
+Stávající shellový TLS bootstrap a stdlib HTTPS handler se adaptují bez nového
+serverového frameworku. `--web-hostname` přijímá jediné validované ASCII DNS
+jméno, předává je do DNS SAN i služby a nemění DNS ani firewall. Bootstrap
+ověřuje loopback, aktuální privátní IPv4 a případné DNS SAN před opětovným
+použitím certifikátu. Protože soukromý klíč automatické lokální CA není po
+bootstrapu uchováván, nutná regenerace serverového certifikátu vytvoří i novou
+CA a vyžaduje obnovení důvěry klientů.
+
+Crash boundaries se nemění: TLS vzniká před aplikačním release/current
+snapshotem a není jeho součástí. Přerušené nebo neúplné TLS podklady se nesmějí
+vydávat za úspěšnou instalaci; další běžný deploy je ověří a znovu vytvoří.
+`--recover` vrací aplikační current, unit a stav služby, nikoli předchozí CA.

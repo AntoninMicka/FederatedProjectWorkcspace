@@ -82,6 +82,34 @@ class DeployTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 deploy_omnia.main()
 
+    def test_web_hostname_is_validated_and_added_to_tls_and_service(self):
+        script = deploy_omnia.remote_script(
+            'workspace-m0', 'a' * 32, lan='192.168.100.0/24',
+            hostname='Workspace.Cacke.Internal')
+        self.assertIn('DNS.1 = $dns_name', script)
+        self.assertIn('dns_name=workspace.cacke.internal', script)
+        self.assertIn('-checkhost "$dns_name"', script)
+        self.assertIn('--hostname workspace.cacke.internal', script)
+        self.assertIn('-checkip "$ip"', script)
+        self.assertIn('-checkhost workspace.cacke.internal', script)
+        subprocess.run(['sh', '-n'], input=script.encode(), check=True)
+
+        for hostname in ('workspace', '192.168.100.20', '*.cacke.internal',
+                         '-bad.cacke.internal', 'bad..cacke.internal'):
+            with self.subTest(hostname=hostname), self.assertRaises(ValueError):
+                deploy_omnia.remote_script(
+                    'workspace-m0', 'a' * 32, lan='192.168.100.0/24',
+                    hostname=hostname)
+
+        with self.assertRaises(ValueError):
+            deploy_omnia.remote_script(
+                'workspace-m0', 'a' * 32, hostname='workspace.cacke.internal')
+
+        with patch('sys.argv', ['deploy', 'root@example.invalid',
+                                '--web-hostname', 'workspace.cacke.internal']):
+            with self.assertRaises(SystemExit):
+                deploy_omnia.main()
+
     def test_failed_install_preserves_previous_release(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

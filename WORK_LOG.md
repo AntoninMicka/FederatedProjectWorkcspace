@@ -5,6 +5,42 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## M1-LXC-DNS-TLS-01 — HTTPS přístup přes IP i DNS jméno — 2026-10-11
+
+Dávka na větvi `feature/m1-lxc-dns-tls`, založené z `develop` `f8bc5b7`,
+rozšířila přímý LXC HTTPS přístup o jednu explicitní DNS autoritu vedle IP.
+Dosažená úroveň je **implemented / lokálně PoC validated** a lokální
+akceptační podmínky dávky jsou splněné. PR do `develop` dosud nebyl vytvořen
+ani sloučen.
+
+- [x] [completed] **M1-LXC-DNS-TLS-01-A — Konfigurace a generování certifikátu
+  (implemented).** `deploy-omnia --web-hostname` přijímá validované ASCII DNS
+  jméno a generuje serverový certifikát s DNS SAN vedle loopback a aktuální
+  privátní IPv4 LXC. Před opětovným použitím certifikátu kontroluje obě IP a
+  DNS; instalační preflight odmítne certifikát bez požadovaného DNS SAN také v
+  application-only režimu.
+- [x] [completed] **M1-LXC-DNS-TLS-01-B — Přesná DNS autorita webu
+  (implemented).** Systemd unit předává stejné jméno HTTPS serveru. Handler
+  přijme pouze skutečnou číselnou autoritu socketu nebo přesné nakonfigurované
+  `DNS:port` a u mutací vyžaduje odpovídající HTTPS Origin. Cizí Host, cizí
+  Origin, wildcard a proxy hlavičky zůstávají odmítnuté.
+- [x] [completed] **M1-LXC-DNS-TLS-01-C — Ověření a dokumentace (PoC
+  validated).** Testy ověřují validaci jména, generované SAN/unit plány,
+  shellovou syntaxi, IP/DNS Host a Origin i regrese lokálního API a routerového
+  vstupu. Po poslední změně kódu prošla úplná sada **466 testů OK,
+  25 přeskočeno**; Python moduly a shell prošly syntaktickou kontrolou a
+  `git diff --check` byl čistý.
+
+Reuse/adaptuje stávající TLS bootstrap, stdlib HTTPS handler a ADR 0020
+release/rollback. Soukromá inventura byla zohledněna bez přenosu externího
+kódu. TLS zůstává před aplikační rollback hranicí: automatická regenerace kvůli
+novému SAN vytvoří novou lokální CA a vyžaduje obnovu důvěry klientů.
+
+Omezení: na skutečném LXC nebyl v této dávce certifikát vydán ani ověřen přes
+`openssl -checkip`/`-checkhost` a doménovou URL. DNS záznam, klientská důvěra,
+firewall a routerová dlaždice se neměnily; cílová akceptace zůstává u M1-07-C v
+BACKLOG.
+
 ## F-M3-OLLAMA-ORCH-LAN-01-FIX1 — Viditelný LAN orchestrační cíl — 2026-10-11
 
 Dávka na větvi `fix/f-m3-ollama-lan-silent-composer`, založené z `develop`
@@ -12,7 +48,8 @@ Dávka na větvi `fix/f-m3-ollama-lan-silent-composer`, založené z `develop`
 zamykal adapter na potvrzenou Ollamu, ale vždy ji označil jako „Lokální Ollama“
 a nezobrazil, že binding míří do privátní sítě. Dosažená úroveň je
 **implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
-splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+splněné. Dávka byla následně doručena do `develop` jako PR #57, merge commit
+`f8bc5b7`.
 
 - [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-A — Přesný cíl v composeru
   (implemented).** Adapter se podle potvrzeného bindingu označí „Ollama v
