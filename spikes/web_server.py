@@ -366,8 +366,16 @@ class WebHandler(DesktopHandler):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
         if self.path in {'/v1/projects/open', '/v1/artifacts/preview',
-                         '/v1/artifacts/history/list', '/v1/artifacts/history/compare'}:
+                         '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+                         '/v1/artifacts/editor/open', '/v1/artifacts/delete/preview'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/artifacts/editor/save':
+            document = request.get('document') if isinstance(request, dict) else None
+            if not isinstance(document, dict) or not self._can_write(document.get('project_id')):
+                return self.send_error(403)
+        if self.path == '/v1/artifacts/delete/confirm':
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
         if self.path == '/v1/projects/create':
             if not self.server.administration.is_admin(self.actor):

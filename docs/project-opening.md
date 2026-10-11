@@ -63,7 +63,18 @@ Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je se
 
 ## Markdown editor a checklisty
 
-Otevřete projekt a klikněte na **Dokumenty…**. V dialogu vyberte existující dokument nebo **Nový dokument**, vyplňte název a text a stiskněte **Uložit**. V záložce **Popis a štítky** lze upravit popis a štítky (jeden na řádek); uložená metadata včetně původu, autora a data vytvoření jsou také vidět pouze pro čtení. Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se uloží společně do Gitu. Rozpracovaný text před uložením existuje pouze v okně.
+Existující Markdown dokument upravíte v záložce **Podklady** přes jeho menu
+`⋮` → **Upravit / přejmenovat**. Společná stránka dovolí změnit název, obsah,
+název `.md` souboru, popis a štítky; **Zavřít editor** vrátí náhled dokumentu.
+Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se
+uloží společně do Gitu. Nový dokument zatím vytvoříte desktopovým tlačítkem
+**Dokumenty…** → **Nový dokument**.
+
+Stejné menu nabízí **Kopírovat ID** a **Připravit smazání**. Smazání nejprve
+zobrazí dokument, ID a výchozí commit a vyžaduje checkbox i druhé potvrzovací
+tlačítko. Git historie zůstane zachovaná; dokument s příchozími vztahy backend
+odmítne. Webový čtenář smí náhled zobrazit, ale uložit či smazat může jen editor,
+project-admin nebo správce uzlu.
 
 Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat úkol**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
 

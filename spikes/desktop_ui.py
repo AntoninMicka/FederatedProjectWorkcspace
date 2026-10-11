@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 
 from spikes.artifact_history import ArtifactHistory
+from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.metadata import MAX_FILE, ValidationError
@@ -253,6 +254,20 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
 <details><summary>Záznam uložení</summary><pre id="history-info"></pre></details>
 </section></div>
+<div id="artifact-editor-view" hidden>
+<header><span class="badge">Dokument</span><span>Existující uložený Markdown</span></header>
+<div class="page-heading"><div class="eyebrow">UPRAVIT DOKUMENT</div><h1 id="artifact-editor-heading">Dokument</h1></div>
+<form id="artifact-editor-form" class="standalone-form"><label>Název <input name="title" maxlength="200" required></label>
+<label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
+<label>Popis <textarea name="description" rows="3"></textarea></label>
+<label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
+<label>Obsah <textarea name="body" rows="18" maxlength="1048576" required></textarea></label>
+<div class="form-actions"><button type="submit">Uložit</button><button id="artifact-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
+<p id="artifact-editor-status" role="status" aria-live="polite"></p></form>
+<section id="artifact-delete-preview" class="standalone-form deletion-preview" hidden><h2>Připravit smazání</h2>
+<pre id="artifact-delete-details"></pre><label class="confirm"><input id="artifact-delete-confirm" type="checkbox"> Potvrzuji odstranění dokumentu z aktuální verze projektu. Git historie zůstane zachovaná.</label>
+<div class="form-actions"><button id="artifact-delete-run" type="button" disabled>Odstranit dokument</button><button id="artifact-delete-cancel" class="secondary-button" type="button">Zrušit</button></div></section>
+</div>
 <div id="project-view" hidden>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
@@ -511,7 +526,7 @@ body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
-#source-import-view,#history-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#source-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
 .standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
@@ -549,6 +564,7 @@ const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
 const sourceImportView=document.querySelector('#source-import-view');
 const historyView=document.querySelector('#history-view');
+const artifactEditorView=document.querySelector('#artifact-editor-view');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -615,9 +631,14 @@ function renderSidebarArtifacts(items){
    const menu=document.createElement('details');menu.className='sidebar-artifact-menu';
    const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce dokumentu ${item.title}`);trigger.textContent='⋮';
    const actions=document.createElement('div');actions.className='sidebar-artifact-menu-items';actions.setAttribute('role','menu');
+   function action(label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('role','menuitem');button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await callback();});actions.append(button);}
+   action('Upravit / přejmenovat',()=>openArtifactEditor(item));
    const history=document.createElement('button');history.type='button';history.textContent='Zobrazit historii';history.setAttribute('role','menuitem');
    history.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();});
-   actions.append(history);menu.append(trigger,actions);row.append(menu);
+   actions.append(history);
+   action('Připravit smazání',()=>openArtifactEditor(item,true));
+   action('Kopírovat ID',async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID dokumentu bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID dokumentu: ${item.id}`;}});
+   menu.append(trigger,actions);row.append(menu);
   }
   sidebarArtifacts.append(row);
  }
@@ -674,6 +695,7 @@ function clearProject(){
  settingsView.hidden=true;
  sourceImportView.hidden=true;
  historyView.hidden=true;
+ artifactEditorView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
@@ -709,7 +731,7 @@ function openSourceImport(){
   const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.id}`;predecessors.append(option);
  }
  sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
- document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
  sourceImportForm.elements.file.focus();
 }
@@ -743,6 +765,55 @@ sourceImportForm.addEventListener('submit',async event=>{
   sidebarArtifactStatus.textContent='Zdroj byl importován beze změny původních bajtů.';
  }catch(error){sourceImportStatus.textContent=error.message;}finally{button.disabled=false;}
 });
+const artifactEditorForm=document.querySelector('#artifact-editor-form');
+const artifactEditorStatus=document.querySelector('#artifact-editor-status');
+let artifactEditorItem=null,artifactEditorAttempt=null,artifactDeletePreview=null,artifactDeleteOperation=null;
+function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
+async function closeArtifactEditor(){
+ artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(artifactEditorItem)await openPreview(artifactEditorItem.id);}
+}
+async function openArtifactEditor(item,deleteMode=false){
+ if(!activeProject||item.kind!=='document')return;
+ await openPreview(item.id);if(selectedArtifact!==item.id)return;
+ const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ artifactEditorStatus.textContent='Načítám uložený dokument…';
+ try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head});
+  if(activeProject!==project||artifactEditorItem!==item)return;
+  const doc=result.document,meta=doc.metadata;document.querySelector('#artifact-editor-heading').textContent=doc.title;
+  artifactEditorForm.elements.title.value=doc.title;artifactEditorForm.elements.filename.value=meta.file;
+  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body;
+  artifactEditorStatus.textContent='Uložená verze je připravena k úpravě.';
+  if(deleteMode)await prepareArtifactDeletion();else artifactEditorForm.elements.title.focus();
+ }catch(error){artifactEditorStatus.textContent=error.message;}
+}
+artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;});
+artifactEditorForm.addEventListener('submit',async event=>{
+ event.preventDefault();if(!activeProject||!artifactEditorItem)return;const fields=new FormData(artifactEditorForm),button=artifactEditorForm.querySelector('button[type="submit"]');
+ const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:false,filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
+ const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
+ button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
+ try{const id=artifactEditorItem.id,projectId=activeProject.id;await projectRequest('/v1/artifacts/editor/save',artifactEditorAttempt,120000);artifactEditorAttempt=null;await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}
+ catch(error){artifactEditorStatus.textContent=error.message;}finally{button.disabled=false;}
+});
+async function prepareArtifactDeletion(){
+ if(!activeProject||!artifactEditorItem)return;hideArtifactDeletion();artifactEditorStatus.textContent='Připravuji přesný náhled smazání…';
+ try{artifactDeletePreview=await projectRequest('/v1/artifacts/delete/preview',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head});
+  artifactDeleteOperation=crypto.randomUUID();
+  document.querySelector('#artifact-delete-details').textContent=`Dokument: ${artifactDeletePreview.title}\nID: ${artifactDeletePreview.artifact_id}\nVýchozí commit: ${artifactDeletePreview.base_head}`;
+  document.querySelector('#artifact-delete-preview').hidden=false;artifactEditorStatus.textContent='Smazání čeká na výslovné potvrzení.';
+ }catch(error){artifactEditorStatus.textContent=error.message;}
+}
+document.querySelector('#artifact-delete-confirm').addEventListener('change',event=>{document.querySelector('#artifact-delete-run').disabled=!(event.currentTarget.checked&&artifactDeletePreview);});
+document.querySelector('#artifact-delete-cancel').addEventListener('click',hideArtifactDeletion);
+document.querySelector('#artifact-delete-run').addEventListener('click',async event=>{
+ if(!artifactDeletePreview||!document.querySelector('#artifact-delete-confirm').checked)return;event.currentTarget.disabled=true;artifactEditorStatus.textContent='Odstraňuji dokument…';
+ try{const projectId=activeProject.id;await projectRequest('/v1/artifacts/delete/confirm',{project_id:projectId,artifact_id:artifactDeletePreview.artifact_id,base_head:artifactDeletePreview.base_head,preview_sha256:artifactDeletePreview.preview_sha256,operation_id:artifactDeleteOperation},120000);artifactEditorItem=null;artifactDeleteOperation=null;await openRegisteredProject(projectId);previewStatus.textContent='Dokument byl odstraněn. Git historie zůstala zachovaná.';}
+ catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
+document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -757,7 +828,7 @@ async function openRegisteredProject(projectId){
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
-  sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
+  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   await loadChat();
   selectSidebarTab(document.querySelector('#artifacts-tab'));
@@ -837,7 +908,7 @@ for(const [index,tab] of settingsTabs.entries()){
 async function openSettings(){
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -2209,6 +2280,8 @@ class DesktopHandler(Handler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+        '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
+        '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
@@ -2443,6 +2516,26 @@ class DesktopHandler(Handler):
                     return self.send_error(400)
                 history = ArtifactHistory(node, network=getattr(projects, 'network', False))
                 return self.reply(200, history.compare(**request))
+            if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                actions = ArtifactActions(node, network=getattr(projects, 'network', False))
+                if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                    return self.reply(200, actions.open(**request))
+                if (self.path == '/v1/artifacts/editor/save' and isinstance(request, dict)
+                        and set(request) == {'operation_id', 'document'}
+                        and isinstance(request['document'], dict)):
+                    return self.reply(200, actions.save(request['document'], request['operation_id']))
+                if (self.path == '/v1/artifacts/delete/preview' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                    return self.reply(200, actions.deletion_preview(**request))
+                if (self.path == '/v1/artifacts/delete/confirm' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'base_head',
+                                             'preview_sha256', 'operation_id'}):
+                    return self.reply(200, actions.delete(**request))
+                return self.send_error(400)
             return self.send_error(400)
         except UnknownRun as exc:
             return self.reply(409, {'error': 'Výsledek lokálního LLM běhu není známý. Původní '
@@ -2519,6 +2612,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
             if self.path.startswith('/v1/artifacts/history/'):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
+            if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):
+                return self.reply(422, {'error': 'Akci dokumentu nelze provést. Ověřte aktuální verzi, metadata, vztahy a recovery stav projektu.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

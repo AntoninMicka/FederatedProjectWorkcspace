@@ -95,3 +95,16 @@ souborové změny a atomickou publikaci relačního indexu. Aktuální akceptaci
 omezení drží [F-M1-DELETE-01/M1-08](../../WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). Dílčí backendové ověření odstranění
 a blokování příchozího vztahu je součástí uzavřené indexní dávky
 [F-M1-INDEX-01](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15).
+
+## Společné akce existujícího dokumentu — UX-UNIFIED-01-E
+
+Webový i desktopový shell otevírá z per-document menu stejnou stránku pro
+editaci/přejmenování a potvrzené smazání. Úzce typované endpointy nepřijímají
+filesystemovou cestu; čtení je vázané na project ID, artifact ID a expected
+HEAD. Uložení předává stávající `Artifacts.save` úplný požadavek a stabilní
+operation ID. Smazání nejprve vrátí textový náhled s digestem svázaným s
+projektem, dokumentem a base HEAD a potvrzení jej znovu ověří před
+`Artifacts.delete`. Retry po receipt neprovádí novou mutaci. Webové čtení
+zachovává project membership a síťovou `local-only` kontrolu; zápis vyžaduje
+editor/project-admin nebo správce uzlu. Nová storage ani recovery hranice
+nevzniká. Vytvoření nového dokumentu a hlavního TODO zatím zůstává v Qt dialogu.

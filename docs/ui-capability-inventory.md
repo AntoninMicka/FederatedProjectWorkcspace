@@ -47,9 +47,15 @@ Podkladů. Web i desktop používají stejné HEAD-bound endpointy
 `ArtifactHistory`; server navíc fail-closed odmítá projekt obsahující
 `local-only`. Původní Qt `HistoryDialog` byl po dosažení parity odstraněn.
 
+Akční menu existujícího dokumentu dále otevírá společnou stránku pro editaci
+obsahu, názvu, souboru, popisu a štítků a potvrzené smazání; obě varianty
+používají stejné `Artifacts` transakce. Kopírování ID je lokální UI akce.
+Vytvoření nového dokumentu a hlavního TODO zatím zůstává v Qt editoru, takže
+jeho úplné odstranění čeká na pozdější paritu těchto dvou vstupů.
+
 Následující existující Qt dialogy nejsou desktop-only z principu a nesmějí být
 dále rozšiřovány jako paralelní UI: vytvoření projektu, import NotebookLM a
-editor dokumentu/TODO. Jejich backendové
+zbývající vytvoření dokumentu/TODO. Jejich backendové
 služby zůstávají znovupoužitelné. V této dávce byl sjednocen shell, import
 zdroje a historie; úplné převedení zbývajících starších desktopových vstupů na
 společné autorizované HTTP workflow vyžaduje samostatné mutující API a recovery

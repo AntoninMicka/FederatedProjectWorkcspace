@@ -118,6 +118,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="history-view" hidden', WEB_HTML)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", WEB_JS)
+        self.assertIn('id="artifact-editor-view" hidden', WEB_HTML)
+        self.assertIn("projectRequest('/v1/artifacts/editor/save'", WEB_JS)
         self.assertIn("querySelector('#source-import-local-only').disabled=true", WEB_JS)
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
@@ -188,6 +190,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         history_request = {'project_id':project, 'artifact_id':str(uuid4()), 'expected_head':'0'*40}
         self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/artifacts/editor/open', body=json.dumps(history_request), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
@@ -206,6 +209,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
         self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 409)
+        self.assertEqual(self.request(path='/v1/artifacts/editor/open', body=json.dumps(history_request), headers=headers)[0], 409)
+        self.assertEqual(self.request(path='/v1/artifacts/editor/save', body=json.dumps({
+            'operation_id':str(uuid4()), 'document':{'project_id':project}}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/artifacts/delete/confirm', body=json.dumps({
+            'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/workflows/status', body=json.dumps({
@@ -242,6 +250,23 @@ class WebTests(unittest.TestCase):
         self.assertEqual(code, 200); result = json.loads(data)
         self.assertEqual(result['after']['body'], '- [x] One\n')
         self.assertIn('+- [x] One', result['diff'])
+        editor_request = {'project_id':project, 'artifact_id':artifact, 'expected_head':second}
+        code, data, _ = self.request(path='/v1/artifacts/editor/open', body=json.dumps(editor_request))
+        self.assertEqual(code, 200); opened = json.loads(data)
+        document = dict(project_id=project, artifact_id=artifact, base_head=second,
+            title='Renamed', body='- [x] Edited\n', new=False, filename='renamed.md',
+            metadata={'description':'Edited', 'tags':['web']})
+        code, data, _ = self.request(path='/v1/artifacts/editor/save', body=json.dumps({
+            'operation_id':str(uuid4()), 'document':document}))
+        self.assertEqual(code, 200); edited_head = json.loads(data)['commit_id']
+        code, data, _ = self.request(path='/v1/artifacts/delete/preview', body=json.dumps({
+            'project_id':project, 'artifact_id':artifact, 'expected_head':edited_head}))
+        self.assertEqual(code, 200); deletion = json.loads(data)
+        code, data, _ = self.request(path='/v1/artifacts/delete/confirm', body=json.dumps({
+            'project_id':project, 'artifact_id':artifact, 'base_head':edited_head,
+            'preview_sha256':deletion['preview_sha256'], 'operation_id':str(uuid4())}))
+        self.assertEqual(code, 200)
+        self.assertEqual(Projects(self.root/'node.json').open(project)['artifacts'], [])
 
     def test_create_retries_have_one_receipt_and_project(self):
         from uuid import uuid4

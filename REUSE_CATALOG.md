@@ -278,7 +278,7 @@ bezpečné odstranění projektu. Webový upload je jediný bounded endpoint nad
 stejným importním kontraktem, ne obecný filesystemový most, nová databáze nebo
 další framework.
 
-M1-03 **adaptuje** Workspace transakce o stabilní ID/digest požadavku, Projects o sdílený autorizovaný přístup a nativní Qt widgets o Markdown editor/checklist panel. **Reuse** Git/Index, metadatových validátorů a lokálního autora z ProjectCreation. Hlavní TODO používá rezervované UUIDv5 uvnitř existujícího schématu; nová storage ani cizí editor nejsou potřeba. [ADR 0016](docs/adr/0016-markdown-editor.md).
+M1-03/UX-UNIFIED-01-E **adaptuje** Workspace transakce o stabilní ID/digest požadavku, Projects o sdílený autorizovaný přístup a editor existujícího dokumentu o společnou stránku a úzce typované HTTP adaptéry. **Reuse** Artifacts save/delete, Git/Index, journal/receipt, metadatové validátory a lokálního autora z ProjectCreation; potvrzené smazání přidává pouze preview digest, ne nový zápisový mechanismus. Hlavní TODO používá rezervované UUIDv5 uvnitř existujícího schématu; nová storage ani cizí editor nejsou potřeba. Vytvoření dokumentu/TODO zůstává do úplné parity nativní. [ADR 0016](docs/adr/0016-markdown-editor.md).
 
 M1-03a **reuse/adapt**: společné čisté Markdown funkce z editoru přesunuty do `spikes/markdown_documents.py`, čtení TODO rozšiřuje existující Workspace snapshot a autentizovaný projektový přehled. HTML details/summary poskytují sbalitelné větve bez nové knihovny, parseru nebo mutujícího endpointu. [Kontrakt](docs/adr/0016-markdown-editor.md).
 
