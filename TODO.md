@@ -65,10 +65,9 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   kvůli chybějícímu
   nativnímu Qt/WebEngine či libgit2 prostředí. Živý read-only dotaz stejného uzlu
   na `http://127.0.0.1:11434/api/tags` prošel a našel nakonfigurovaný model.
-  Zbývá provozní akceptace proti skutečnému druhému LAN stroji: HTTPS proxy,
-  firewall, pin, generační běh a dostupnost po restartu Ollamy/stroje. Bez adresy
-  a certifikátu cílového serveru tyto body nejsou ověřené a dávka není připravena
-  k předání PR.
+  Zbývá provozní akceptace proti skutečnému druhému LAN stroji: firewallové
+  omezení a dostupnost po restartu Ollamy/stroje. Tyto body nejsou ověřené a
+  dávka není připravena k předání PR.
   Průběžná živá kontrola 2026-10-10 zjistila Docker Ollamu na hostu
   `192.168.100.192`, funkční TLS proxy `:11443` a úspěšný model catalog přes její
   LAN adresu. Současný leaf certifikát však pokrývá pouze localhost a starý
@@ -77,16 +76,19 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   obnovit s IP SAN, řízeně znovu vytvořit kontejnery tak, aby `11434` zůstal na
   loopbacku, omezit `11443` na zdrojovou IP Omnie a provést dotaz i generaci
   skutečně z Omnie. Existující SSH host key routeru je známý, ale unattended
-  přihlášení nemá autorizovaný klíč; na routeru proto zatím nebyl spuštěn žádný
-  příkaz ani provedena změna.
+  přihlášení nemá autorizovaný klíč; živá diagnostika a deploy proto proběhly
+  pouze po interaktivním přihlášení operátora.
   První skutečný `--update-only` pokus z Omnie vytvořil izolované release, ale
   jednorázový healthcheck po jedné sekundě třikrát našel odmítnuté HTTPS a
   neodlišil pomalý start ARMv7 od trvalého selhání; rollback vrátil předchozí
   `current`, persistentní identitu a data nezměnil. Instalátor nyní čeká až 45
   sekund na skutečný HTTPS listener, při selhání vypíše stav a journal před
   rollbackem a návratový kód readiness
-  chyby automaticky neopakuje. Cílených 10 testů a shell syntaxe prošly; nový
-  deploy na Omnii po opravě zatím proveden nebyl.
+  chyby automaticky neopakuje. Cílených 10 testů a shell syntaxe prošly. Dne
+  2026-10-11 uživatel potvrdil, že opravený `--update-only` deploy a následná
+  dostupnost webové služby na Omnii fungují. Následně potvrdil i skutečnou
+  odpověď modelu z Workspace na Omnii přes nakonfigurovanou LAN Ollamu. Tato
+  evidence nedokládá firewallové omezení ani restartovou akceptaci.
 - [x] [completed] **F-M3-OLLAMA-ROBUST-01-E — Tolerantní fingerprint a
   neaktivní koncept nastavení (cílová úroveň: implemented; ad-hoc požadavek
   uživatele 2026-10-10).** Přijmout běžný OpenSSL SHA-256 fingerprint, před
@@ -109,6 +111,18 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   Samostatná feature má sjednotit runtime wiring desktopu a webu a regresně
   ověřit všechny vystavené endpointy. Tento problém nezpůsobil odmítnutí portu
   během update healthchecku a nepatří do Ollama dávky.
+
+- [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
+  lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
+  2026-10-11).** Adaptovat existující SSE/stream UI externího providera pro
+  Ollama NDJSON bez sloučení provider kontraktů. UI má průběžně rozlišit
+  přípravu kontextu, připojování, čekání na první token, generování a dokončení.
+  Částečný text zůstane pouze dočasnou projekcí; autoritativní assistant zpráva
+  a usage vzniknou až po validním koncovém rámci. Přerušení po dispatch hranici
+  musí zůstat durable `unknown`, nesmí publikovat torzo ani spustit automatický
+  retry. Akceptace zahrne fragmentované NDJSON rámce, bounded velikost, timeout
+  prvního tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý
+  nový běh, restart a přístupnost `aria-live` bez zahlcení čtečky.
 
 Basic Auth nebo mTLS pro LAN proxy vyžadují samostatný credential lifecycle;
 současný binding credentials záměrně nepřijímá a tato dávka jej bez doložené
