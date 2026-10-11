@@ -5,30 +5,31 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
-## F-M3-OLLAMA-ORCH-LAN-01-FIX1 — Tichá blokace composeru u LAN orchestrace — 2026-10-11
+## F-M3-OLLAMA-ORCH-LAN-01-FIX1 — Viditelný LAN orchestrační cíl — 2026-10-11
 
 Dávka na větvi `fix/f-m3-ollama-lan-silent-composer`, založené z `develop`
-`a9207c5`, opravila tichý read-only stav společného web/desktop chat composeru.
-Dosažená úroveň je **implemented / lokálně PoC validated** a akceptační
-podmínky dávky jsou splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+`a9207c5`, opravila zavádějící společné web/desktop UI. Režim orchestrace
+zamykal adapter na potvrzenou Ollamu, ale vždy ji označil jako „Lokální Ollama“
+a nezobrazil, že binding míří do privátní sítě. Dosažená úroveň je
+**implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
+splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
 
-- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-A — Viditelný důvod blokace
-  (implemented).** Jedna funkce nyní odvozuje read-only stav a společně řídí
-  chat i pokročilé externí akce. Archivované vlákno a vlákno jiného projektu
-  zobrazí konkrétní důvod i cestu přes existující tlačítko Nové vlákno nad
-  seznamem chatů. Autorizační hranice se nezměnila a nevzniklo automatické
-  větvení historie.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-A — Přesný cíl v composeru
+  (implemented).** Adapter se podle potvrzeného bindingu označí „Ollama v
+  privátní síti“ nebo „Ollama na tomto uzlu“. Samostatný živý stav ukáže model,
+  skutečnou hranici a endpoint; bez bindingu přímo vyžádá jeho nastavení.
+  Backend dál dostává přesné `binding_id` a `binding_revision`; privacy, TLS pin
+  ani dispatch kontrakt se nezměnily.
 - [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-B — Regresní pokrytí
-  (PoC validated).** Cílené čtyři testy rendereru prošly a ověřují oba read-only
-  důvody, cestu k novému vláknu i zachování přesné identity LAN bindingu.
+  (PoC validated).** Tři cílené testy rendereru prošly a ověřují LAN označení,
+  přesný zobrazený cíl i zachování identity bindingu.
 - [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-C — Závěrečné ověření.** Po
   poslední změně kódu prošla úplná sada **464 testů OK, 25 přeskočeno**;
   JavaScript prošel syntaktickou kontrolou přes Node.js a `git diff --check`
   byl čistý.
 
-Omezení: nebyl proveden nový deploy ani skutečný browserový průchod na Turrisu.
-Nasazený frontend před opravou byl živě pouze read-only ověřen jako verze z PR
-#56. LAN/TLS transport ani jeho autorizační kontrakt tento hotfix nemění.
+Omezení: oprava dosud nebyla nasazena ani ručně přijata v prohlížeči na Turrisu.
+Živě bylo před opravou pouze ověřeno, že server obsluhuje frontend z PR #56.
 
 ## F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou Ollamu — 2026-10-11
 

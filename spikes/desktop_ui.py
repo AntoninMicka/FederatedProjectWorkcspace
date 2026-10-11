@@ -394,6 +394,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Orchestrace</option><option value="brainstorming">Brainstorming</option></select>
 <label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
 <label for="chat-run-model">Model běhu</label><input id="chat-run-model" maxlength="128" list="external-models">
+<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <details id="task-artifacts"><summary>Doplňující podklady</summary>
 <fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
@@ -1286,22 +1287,6 @@ let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=nul
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
-function threadWriteBlock(){
- if(!activeThread)return '';
- if(activeThread.status!=='active')return 'Archivované vlákno je pouze pro čtení. Pro pokračování zvolte Nové vlákno nad seznamem chatů.';
- if(activeThread.project_id!==null && activeThread.project_id!==activeProject?.id)
-  return 'Vlákno patří jinému projektu a je zde pouze pro čtení. Pro pokračování zvolte Nové vlákno nad seznamem chatů.';
- return '';
-}
-function refreshComposerActions(announce=false){
- const block=threadWriteBlock();
- const disabled=!activeProject || !draft.value.trim() || Boolean(block);
- document.querySelector('#chat-submit').disabled=disabled;
- document.querySelector('#external-propose-button').disabled=disabled;
- document.querySelector('#external-preview-button').disabled=disabled;
- if(announce && block)chatOperationStatus.textContent=block;
- return disabled;
-}
 async function externalStreamRequest(request,onDelta){
  const response=await fetch('/v1/external/send-stream',{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
@@ -1345,7 +1330,10 @@ function renderChat(thread){
   }
  }
  renderTaskOutcomes();
- refreshComposerActions();
+ const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
+ document.querySelector('#chat-submit').disabled=composerDisabled;
+ document.querySelector('#external-propose-button').disabled=composerDisabled;
+ document.querySelector('#external-preview-button').disabled=composerDisabled;
 }
 function renderThreadList(threads){
  knownThreads=threads;
@@ -1511,8 +1499,7 @@ async function openStoredThread(threadId){
  try{const tasks=thread.project_id ? await projectRequest('/v1/tasks/list',{
    project_id:thread.project_id,thread_id:thread.thread_id}) : {outcomes:[]};
   taskOutcomes=tasks.outcomes;renderChat(thread);
-  const block=threadWriteBlock();
-  chatOperationStatus.textContent=block || 'Navázáno na aktivní uložené vlákno.';
+  chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 async function archiveActiveThread(button){
@@ -1676,10 +1663,18 @@ function refreshChatModeControls(){
  const adapter=document.querySelector('#chat-run-adapter');
  const model=document.querySelector('#chat-run-model');
  const artifacts=document.querySelector('#task-artifacts');
+ const ollamaOption=adapter.querySelector('option[value="ollama"]');
+ const target=document.querySelector('#chat-orchestration-target');
+ const lan=chatBinding?.boundary==='private-network';
+ ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
   adapter.value='ollama';adapter.disabled=true;model.value=chatBinding?.model || '';model.disabled=true;
+  target.hidden=false;target.textContent=chatBinding ?
+   `Orchestrace použije ${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
+   'Orchestrace vyžaduje nejprve nastavit Ollama backend.';
   artifacts.hidden=false;
  }else{
+  target.hidden=true;target.textContent='';
   adapter.disabled=false;model.disabled=false;artifacts.hidden=true;
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
   if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
@@ -1765,7 +1760,10 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
- refreshComposerActions(true);
+ const disabled=!activeProject || !draft.value.trim() || !threadWritable();
+ document.querySelector('#chat-submit').disabled=disabled;
+ document.querySelector('#external-propose-button').disabled=disabled;
+ document.querySelector('#external-preview-button').disabled=disabled;
 });
 async function showExternalPreview(request){
  chatOperationStatus.textContent='Připravuji přesný externí náhled…';
