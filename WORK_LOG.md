@@ -5,13 +5,38 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-OLLAMA-ORCH-LAN-01-FIX1 — Tichá blokace composeru u LAN orchestrace — 2026-10-11
+
+Dávka na větvi `fix/f-m3-ollama-lan-silent-composer`, založené z `develop`
+`a9207c5`, opravila tichý read-only stav společného web/desktop chat composeru.
+Dosažená úroveň je **implemented / lokálně PoC validated** a akceptační
+podmínky dávky jsou splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-A — Viditelný důvod blokace
+  (implemented).** Jedna funkce nyní odvozuje read-only stav a společně řídí
+  chat i pokročilé externí akce. Archivované vlákno a vlákno jiného projektu
+  zobrazí konkrétní důvod i cestu přes existující tlačítko Nové vlákno nad
+  seznamem chatů. Autorizační hranice se nezměnila a nevzniklo automatické
+  větvení historie.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-B — Regresní pokrytí
+  (PoC validated).** Cílené čtyři testy rendereru prošly a ověřují oba read-only
+  důvody, cestu k novému vláknu i zachování přesné identity LAN bindingu.
+- [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-FIX1-C — Závěrečné ověření.** Po
+  poslední změně kódu prošla úplná sada **464 testů OK, 25 přeskočeno**;
+  JavaScript prošel syntaktickou kontrolou přes Node.js a `git diff --check`
+  byl čistý.
+
+Omezení: nebyl proveden nový deploy ani skutečný browserový průchod na Turrisu.
+Nasazený frontend před opravou byl živě pouze read-only ověřen jako verze z PR
+#56. LAN/TLS transport ani jeho autorizační kontrakt tento hotfix nemění.
+
 ## F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou Ollamu — 2026-10-11
 
 Dávka na větvi `feature/f-m3-ollama-orch-lan-01`, založené z `develop`
 `3f34fa7`, rozšířila orchestration režim o explicitně vybraný TLS připnutý
 `private-network` Ollama binding. Dosažená úroveň je **implemented / lokálně PoC
-validated** a akceptační podmínky dávky jsou splněné. PR do `develop` dosud
-nebyl vytvořen ani sloučen.
+validated** a akceptační podmínky dávky jsou splněné. Dávka byla následně
+doručena do `develop` jako PR #56, merge commit `a9207c5`.
 
 - [x] [completed] **F-M3-OLLAMA-ORCH-LAN-01-A — Inventura, reuse a kontrakt
   (designed).** Reuse/adaptuje se jediný `OllamaBinding`, TLS pinning/probe,

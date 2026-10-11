@@ -1286,6 +1286,22 @@ let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=nul
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
+function threadWriteBlock(){
+ if(!activeThread)return '';
+ if(activeThread.status!=='active')return 'Archivované vlákno je pouze pro čtení. Pro pokračování zvolte Nové vlákno nad seznamem chatů.';
+ if(activeThread.project_id!==null && activeThread.project_id!==activeProject?.id)
+  return 'Vlákno patří jinému projektu a je zde pouze pro čtení. Pro pokračování zvolte Nové vlákno nad seznamem chatů.';
+ return '';
+}
+function refreshComposerActions(announce=false){
+ const block=threadWriteBlock();
+ const disabled=!activeProject || !draft.value.trim() || Boolean(block);
+ document.querySelector('#chat-submit').disabled=disabled;
+ document.querySelector('#external-propose-button').disabled=disabled;
+ document.querySelector('#external-preview-button').disabled=disabled;
+ if(announce && block)chatOperationStatus.textContent=block;
+ return disabled;
+}
 async function externalStreamRequest(request,onDelta){
  const response=await fetch('/v1/external/send-stream',{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
@@ -1329,10 +1345,7 @@ function renderChat(thread){
   }
  }
  renderTaskOutcomes();
- const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
- document.querySelector('#chat-submit').disabled=composerDisabled;
- document.querySelector('#external-propose-button').disabled=composerDisabled;
- document.querySelector('#external-preview-button').disabled=composerDisabled;
+ refreshComposerActions();
 }
 function renderThreadList(threads){
  knownThreads=threads;
@@ -1498,7 +1511,8 @@ async function openStoredThread(threadId){
  try{const tasks=thread.project_id ? await projectRequest('/v1/tasks/list',{
    project_id:thread.project_id,thread_id:thread.thread_id}) : {outcomes:[]};
   taskOutcomes=tasks.outcomes;renderChat(thread);
-  chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
+  const block=threadWriteBlock();
+  chatOperationStatus.textContent=block || 'Navázáno na aktivní uložené vlákno.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 async function archiveActiveThread(button){
@@ -1751,10 +1765,7 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
- const disabled=!activeProject || !draft.value.trim() || !threadWritable();
- document.querySelector('#chat-submit').disabled=disabled;
- document.querySelector('#external-propose-button').disabled=disabled;
- document.querySelector('#external-preview-button').disabled=disabled;
+ refreshComposerActions(true);
 });
 async function showExternalPreview(request){
  chatOperationStatus.textContent='Připravuji přesný externí náhled…';

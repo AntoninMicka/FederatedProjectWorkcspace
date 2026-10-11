@@ -273,6 +273,14 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 
+    def test_read_only_thread_explains_disabled_composer_and_new_thread_recovery(self):
+        self.assertIn("function threadWriteBlock()", JS)
+        self.assertIn('Archivované vlákno je pouze pro čtení.', JS)
+        self.assertIn('Vlákno patří jinému projektu a je zde pouze pro čtení.', JS)
+        self.assertIn('Pro pokračování zvolte Nové vlákno nad seznamem chatů.', JS)
+        self.assertIn('refreshComposerActions(true)', JS)
+        self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
+
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
         from spikes.desktop_management import ASSETS, DESKTOP_BOOTSTRAP
