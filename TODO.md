@@ -66,8 +66,8 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   nativnímu Qt/WebEngine či libgit2 prostředí. Živý read-only dotaz stejného uzlu
   na `http://127.0.0.1:11434/api/tags` prošel a našel nakonfigurovaný model.
   Zbývá provozní akceptace proti skutečnému druhému LAN stroji: firewallové
-  omezení a dostupnost po restartu Ollamy/stroje. Tyto body nejsou ověřené a
-  dávka není připravena k předání PR.
+  omezení přístupu na TLS proxy pouze na povolený zdroj. Tento bod není ověřený
+  a dávka není připravena k předání PR.
   Průběžná živá kontrola 2026-10-10 zjistila Docker Ollamu na hostu
   `192.168.100.192`, funkční TLS proxy `:11443` a úspěšný model catalog přes její
   LAN adresu. Současný leaf certifikát však pokrývá pouze localhost a starý
@@ -88,7 +88,13 @@ nevzniká projektový Git zápis ani distribuovaná transakce.
   2026-10-11 uživatel potvrdil, že opravený `--update-only` deploy a následná
   dostupnost webové služby na Omnii fungují. Následně potvrdil i skutečnou
   odpověď modelu z Workspace na Omnii přes nakonfigurovanou LAN Ollamu. Tato
-  evidence nedokládá firewallové omezení ani restartovou akceptaci.
+  evidence nedokládá firewallové omezení.
+  Po restartu AI hostitele 2026-10-11 byly uživatelsky potvrzeny kompletně
+  naběhlé služby a skutečná odpověď modelu. Následná lokální kontrola doložila
+  aktivní systemd jednotky Open WebUI, ComfyUI a TLS proxy, zdravý kontejner
+  `open-webui`, Open WebUI API `0.12.0` a dostupný katalog modelů přes loopback.
+  Restartová dostupnost AI hostitele je tím ověřena; nejde však o důkaz
+  zdrojového omezení portu `11443` firewallem.
 - [x] [completed] **F-M3-OLLAMA-ROBUST-01-E — Tolerantní fingerprint a
   neaktivní koncept nastavení (cílová úroveň: implemented; ad-hoc požadavek
   uživatele 2026-10-10).** Přijmout běžný OpenSSL SHA-256 fingerprint, před
