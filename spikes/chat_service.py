@@ -367,6 +367,8 @@ class ChatService:
                 request['content'].encode(), request['privacy']),), conversation=conversation,
             task=TaskInstruction('task-router', 'task-router-v1', instruction,
                                  request['message_id']))
+        require(choice.resolve(ollama=bindings.load()) == binding,
+                'Selected orchestration binding changed')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
         role = ROLES.resolve('task-router', 'task-router-v1')
@@ -976,6 +978,8 @@ class ChatService:
                 and tuple(item['message_id'] for item in current['messages']) ==
                     tuple(item['message_id'] for item in thread['messages']),
                 'Chat thread changed during context preparation')
+        require(choice.resolve(ollama=bindings.load()) == binding,
+                'Selected orchestration binding changed')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
         threads.bind_run(turn_id=turn_id, node_id=node_id, user_id=user_id, run_id=run_id,

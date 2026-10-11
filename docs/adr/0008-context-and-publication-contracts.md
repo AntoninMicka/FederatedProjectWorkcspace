@@ -715,22 +715,27 @@ nový zápis, nikoli tiše odstraňovat starší kontext. Projektový snapshot �
 odvozený artefakt a jeho retence patří do F-M2-CHAT-02 a běžného Workspace
 lifecycle a odstraněním lokálního vlákna se nemění.
 
-### Režimy konverzace a přechody — plánovaný F-M3-CHAT-MODES-01
+### Režimy konverzace a přechody — F-M3-CHAT-MODES-01 a F-M3-OLLAMA-ORCH-LAN-01
 
 Chat rozlišuje dva účely, které nejsou task rolemi: `orchestration` a
-`brainstorming`. Orchestrace používá výhradně binding s boundary `same-node` a
-lokální model; může přes Context Builder získat explicitně vybrané projektové
-artefakty pro přípravu kontextu, dat pro další zpracování, kompilaci návrhu
-artefaktu a filtraci. Model pouze navrhuje akce; jejich provedení zůstává v
-deterministickém aplikačním orchestrátoru. Brainstorming dovoluje zvolit pro
-každý nový běh libovolný jinak povolený binding a model a smí obsahovat
-explicitně připravený textový/chatový kontext. Jeho Context Manifest však nesmí
-obsahovat projektový artefakt, jeho bajty ani automaticky odvozený artifact
-context.
+`brainstorming`. Orchestrace používá potvrzený Ollama binding s boundary
+`same-node` nebo explicitně vybraný TLS připnutý `private-network`; může přes
+Context Builder získat explicitně vybrané projektové artefakty pro přípravu
+kontextu, dat pro další zpracování, kompilaci návrhu artefaktu a filtraci. LAN
+cíl zůstává síťovou hranicí a nesmí přijmout `local-only`. Model pouze navrhuje
+akce; jejich provedení zůstává v deterministickém aplikačním orchestrátoru.
+Brainstorming dovoluje zvolit pro každý nový běh libovolný jinak povolený
+binding a model a smí obsahovat explicitně připravený textový/chatový kontext.
+Jeho Context Manifest však nesmí obsahovat projektový artefakt, jeho bajty ani
+automaticky odvozený artifact context.
 
-Výběr běhu je uzavřený objekt `{mode, adapter, model}`. Orchestrace přijímá jen
-adapter `ollama`, nepřijímá model z requestu a načte přesný nakonfigurovaný
-`same-node` binding. Brainstorming vyžaduje explicitní model a smí vybrat
+Výběr běhu je uzavřený objekt `{mode, adapter, model}` a pro orchestration může
+navíc nést `{binding_id, binding_revision}`. Orchestrace přijímá jen adapter
+`ollama`, nepřijímá model z requestu a načte přesný potvrzený binding. Pro
+`private-network` jsou ID a revize povinné a musí se shodovat s aktuální
+konfigurací; UI je posílá i pro `same-node`. Chybějící LAN výběr nebo změněný
+binding se odmítne před přípravou kontextu a vyžaduje nový manifest/run, nikdy
+automatický fallback. Brainstorming vyžaduje explicitní model a smí vybrat
 nakonfigurovaný Ollama nebo OpenAI Responses adapter. Základní binding se
 nemění: služba vytvoří pro běh odvozenou immutable revizi zahrnující hash
 vybraného modelu a zachová endpoint, target i credential revision. Manifest a
@@ -811,12 +816,13 @@ Workspace journal se nepoužije: žádný projektový zápis zde nevzniká a pro
 Git je naopak záměrně read-only zachovaná historie. Nová externí databáze,
 message queue ani background retence nejsou potřeba.
 
-Navazující požadavek `F-M3-OLLAMA-ORCH-LAN-01` má v samostatné feature povolit
-orchestration také přes explicitně zvolený TLS připnutý `private-network`
-Ollama binding. Současná implementace nadále vyžaduje `same-node`; plánovaná
-změna nesmí vydávat LAN za lokální proces, zavést implicitní fallback ani
-odeslat `local-only` data bez samostatné oprávněné reklasifikace. Každá změna
-cíle vyžaduje nový Context Manifest a run.
+`F-M3-OLLAMA-ORCH-LAN-01` rozšířil orchestration také na explicitně zvolený TLS
+připnutý `private-network` Ollama binding. LAN se nevydává za lokální proces;
+`local-only` odmítá `ContextBuilder` a změnu binding ID nebo revize režimová
+policy odmítne před dispatch. Každý vědomý nový pokus používá nový Context
+Manifest a run; durable `unknown` se automaticky neopakuje a žádný jiný backend
+se nevybírá jako fallback. Automatické testy používají řízený transport; živý
+LAN/TLS/firewall průchod zůstává samostatnou cílovou akceptací.
 
 ## Projektové přiřazení, otisk a odvozený Markdown — F-M2-CHAT-02
 

@@ -22,18 +22,29 @@ class ChatModePolicyTests(unittest.TestCase):
             target_id='api.openai.com', credential_ref='credential:test',
             credential_revision=1, max_output_tokens=4096, timeout_seconds=180))
 
-    def test_orchestration_requires_configured_same_node_model(self):
+    def test_orchestration_accepts_exact_same_node_or_private_network_binding(self):
         choice = ChatRunChoice.parse(
             {'mode': 'orchestration', 'adapter': 'ollama', 'model': None})
         self.assertIs(choice.resolve(ollama=self.ollama), self.ollama)
         private = OllamaBinding.parse(dict(self.ollama.serialize(),
             boundary='private-network', endpoint='https://192.168.1.2:11434',
             target_id=str(uuid4()), tls_cert_sha256='a' * 64))
-        with self.assertRaisesRegex(ValidationError, 'same-node'):
+        with self.assertRaisesRegex(ValidationError, 'explicit'):
             choice.resolve(ollama=private)
+        selected = ChatRunChoice.parse({'mode': 'orchestration', 'adapter': 'ollama',
+            'model': None, 'binding_id': private.binding_id,
+            'binding_revision': private.revision})
+        self.assertIs(selected.resolve(ollama=private), private)
+        changed = OllamaBinding.parse(dict(private.serialize(), revision='private-two'))
+        with self.assertRaisesRegex(ValidationError, 'binding changed'):
+            selected.resolve(ollama=changed)
         for value in (
             {'mode': 'orchestration', 'adapter': 'openai-responses', 'model': None},
             {'mode': 'orchestration', 'adapter': 'ollama', 'model': 'other'},
+            {'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3',
+             'binding_id': private.binding_id, 'binding_revision': private.revision},
+            {'mode': 'orchestration', 'adapter': 'ollama', 'model': None,
+             'binding_id': None, 'binding_revision': private.revision},
         ):
             with self.assertRaises(ValidationError):
                 ChatRunChoice.parse(value)

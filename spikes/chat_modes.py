@@ -4,7 +4,7 @@
 from dataclasses import dataclass
 import hashlib
 
-from spikes.metadata import require
+from spikes.metadata import require, uuid
 from spikes.ollama_backend import OllamaBinding
 from spikes.openai_backend import OpenAIBinding
 
@@ -26,26 +26,48 @@ class ChatRunChoice:
     mode: str
     adapter_id: str
     model: str | None
+    binding_id: str | None = None
+    binding_revision: str | None = None
 
     @classmethod
     def parse(cls, value):
-        require(isinstance(value, dict) and set(value) == {'mode', 'adapter', 'model'},
+        core = {'mode', 'adapter', 'model'}
+        selected = core | {'binding_id', 'binding_revision'}
+        require(isinstance(value, dict) and frozenset(value) in {frozenset(core),
+                                                                 frozenset(selected)},
                 'Unknown or missing chat run choice field')
         require(value['mode'] in MODES and value['adapter'] in ADAPTERS,
                 'Unsupported chat mode or adapter')
         if value['mode'] == 'orchestration':
             require(value['adapter'] == 'ollama' and value['model'] is None,
-                    'Orchestration fixes the configured local model')
+                    'Orchestration fixes the configured Ollama model')
+            if set(value) == selected:
+                binding_id = value['binding_id']
+                revision = value['binding_revision']
+                uuid(binding_id)
+                require(isinstance(revision, str) and revision.strip() == revision
+                        and bool(revision) and len(revision.encode('utf-8')) <= 128,
+                        'Invalid orchestration binding revision')
+            else:
+                binding_id = revision = None
         else:
+            require(set(value) == core,
+                    'Brainstorming cannot select an orchestration binding')
             _model(value['model'])
-        return cls(value['mode'], value['adapter'], value['model'])
+            binding_id = revision = None
+        return cls(value['mode'], value['adapter'], value['model'], binding_id, revision)
 
     def resolve(self, *, ollama, openai=None):
         """Return an immutable run binding without changing saved configuration."""
         require(isinstance(ollama, OllamaBinding), 'Configured Ollama binding is required')
         if self.mode == 'orchestration':
-            require(ollama.boundary == 'same-node',
-                    'Orchestration requires same-node Ollama')
+            if ollama.boundary == 'private-network':
+                require(self.binding_id is not None,
+                        'Private-network orchestration requires explicit Ollama binding selection')
+            if self.binding_id is not None:
+                require((self.binding_id, self.binding_revision) ==
+                        (ollama.binding_id, ollama.revision),
+                        'Selected orchestration binding changed')
             return ollama
         base = ollama if self.adapter_id == 'ollama' else openai
         expected = OllamaBinding if self.adapter_id == 'ollama' else OpenAIBinding
