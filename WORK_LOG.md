@@ -5,13 +5,56 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-01 — Jednotný webový a desktopový frontend shell — 2026-10-11
+
+Dávka na větvi `feature/ux-unified-01-shared-frontend`, založené z `develop`
+`7bb4f5e` po merge WEB-RUNTIME-01 jako PR #52, sjednotila frontendový shell bez
+změny autority projektových dat nebo persistentních recovery hranic. Dosažená
+úroveň je **designed / implemented / PoC validated** a lokální akceptační
+podmínky dávky jsou splněné. Push, PR ani merge této dávky dosud nebyly
+provedeny; cílem jediného PR zůstává `develop`.
+
+- [x] [completed] **UX-UNIFIED-01-A — Jeden zdroj shellu.** Webový server i
+  desktopový WebEngine servírují byte-for-byte shodné `HTML` a `CSS` z
+  `spikes/desktop_ui.py`. Správa uzlu i serverové create/import prvky jsou
+  součástí společného DOM; `web_server.py` ani `desktop_management.py` už
+  neskládají varianty řetězci `.replace(...)`.
+- [x] [completed] **UX-UNIFIED-01-B — Explicitní adaptéry.** Serverový
+  JavaScript přidává pouze same-origin bearer login, session/RBAC a serverové
+  capability před společný aplikační kód. Desktopový bootstrap používá
+  procesní token WebEngine interceptoru a odemyká capability single-user uzlu.
+  Neautentizovaný server ani nepodporované desktopové server-only vstupy se
+  nezobrazí.
+- [x] [completed] **UX-UNIFIED-01-C — Qt/PySide inventura.** Hranice je
+  popsána v `docs/ui-capability-inventory.md`. OS file picker, lokální procesy,
+  LXC/network lifecycle, askpass a lifecycle okna zůstávají desktop-only.
+  Starší Qt create/import/editor/history workflow nejsou takto označena a
+  jejich řízená migrace je předána jako `UX-UNIFIED-02`; tato dávka ji
+  nepravdivě neprohlašuje za hotovou.
+
+Nevznikla nová persistentní operace. Změna vybírá statické assety a viditelnost
+capability ještě před uživatelskou akcí; stávající backendové operation ID,
+journaly, Git/SQLite recovery a RBAC zůstaly beze změny.
+
+Ověření po poslední změně kódu: cílená sada
+`python3 -m unittest tests.test_web_server tests.test_desktop -q` prošla:
+**33 testů OK, 4 volitelné Qt/WebEngine testy přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -v` prošla: **451 testů OK,
+27 volitelných native/package/live testů přeskočeno**. Známé neblokující
+`ResourceWarning` na testovací SQLite spojení zůstaly beze změny.
+
+Omezení: skutečný Qt/WebEngine smoke nebyl v tomto běhu aktivován a změna nebyla
+nasazena na Turris/LXC. Lokální HTTP/HTTPS regrese není platformní ani živá
+device akceptace. Původní široký bod roadmapy 12A zůstává otevřený do migrace
+starších společných Qt workflow.
+
 ## WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru — 2026-10-11
 
 Dávka na větvi `feature/web-runtime-01-service-wiring`, založené z `develop`
 `7339336` po začlenění F-M2-CHAT-03 jako PR #51, opravila potvrzenou runtime
 mezeru webového serveru. Dosažená úroveň je **implemented / PoC validated** a
-akceptační podmínky jsou lokálně splněné. Push, PR ani merge této dávky zatím
-nebyly provedeny; cílem jediného PR zůstává `develop`.
+akceptační podmínky jsou splněné. Dávka byla začleněna do `develop` jako PR #52,
+merge commit `7bb4f5e`.
 
 - [x] [completed] **WEB-RUNTIME-01-A — Inventura a reuse runtime wiring
   (designed).** Desktop již používal `SummaryService`, `ExtractionService` a

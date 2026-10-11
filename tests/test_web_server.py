@@ -16,6 +16,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.web_server import make_server, secret, WEB_HTML, WEB_CSS, WEB_JS
+from spikes.desktop_ui import HTML as SHARED_HTML, CSS as SHARED_CSS, JS as SHARED_JS
 from spikes.projects import Projects
 from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
@@ -94,6 +95,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/../node.json')[0],404)
         self.assertNotIn('localStorage', WEB_JS)
         self.assertFalse(WEB_JS.endswith('loadProjects();\n'))
+        self.assertEqual(WEB_HTML, SHARED_HTML)
+        self.assertEqual(WEB_CSS, SHARED_CSS)
+        self.assertTrue(WEB_JS.endswith(SHARED_JS))
+        self.assertIn("document.body.dataset.runtime='server'", WEB_JS)
+        self.assertIn('window.workspaceAutoStart=false', WEB_JS)
         self.assertIn('id="settings-users-tab"', WEB_HTML)
         self.assertIn('id="settings-cms-tab"', WEB_HTML)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
@@ -153,7 +159,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('max-width:calc(100vw - 48px)', WEB_CSS)
         self.assertIn('grid-template-columns:minmax(0,1fr)', WEB_CSS)
         self.assertIn('overflow-x:auto;overscroll-behavior-x:contain', WEB_CSS)
-        self.assertIn('body:not(.authenticated)>#mobile-sidebar-toggle', WEB_CSS)
+        self.assertIn('body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-toggle', WEB_CSS)
         self.assertIn('#notebooklm-preview{max-height:50vh;max-width:100%', WEB_CSS)
 
     def test_individual_keys_membership_rotation_and_revocation_over_https(self):

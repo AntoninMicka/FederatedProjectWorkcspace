@@ -800,6 +800,10 @@ nenahrazují.
   bootstrap, autentizovaný transport, balení a capability dostupné jen na
   konkrétním uzlu, nikoli paralelní implementace stejné obrazovky nebo
   dodatečné skládání webového HTML/JavaScriptu z desktopové varianty.
+  - [x] `UX-UNIFIED-01` odstranilo textové transformace assetů a lokálně
+    PoC validovalo společný HTML/CSS shell s explicitním webovým a desktopovým
+    bootstrapem; evidence je ve [WORK_LOG](WORK_LOG.md). Široký bod zůstává
+    otevřený pro migraci starších společných Qt workflow v `UX-UNIFIED-02`.
 - [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
   funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
   lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat

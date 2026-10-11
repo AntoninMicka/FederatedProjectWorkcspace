@@ -22,22 +22,11 @@ F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
 `F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50 a `F-M2-CHAT-03` PR #51.
-`WEB-RUNTIME-01` je lokálně akceptované na větvi
-`feature/web-runtime-01-service-wiring` a čeká na jediný PR do `develop`;
-níže jsou tři navazující dávky.
+`WEB-RUNTIME-01` bylo doručeno PR #52 jako merge commit `7bb4f5e`.
+`UX-UNIFIED-01` je lokálně akceptované a v TODO čeká na doručení jediného PR;
+níže jsou jeho navazující dávky v dříve schváleném pořadí.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **UX-UNIFIED-01 — Jednotný webový a desktopový frontend shell
-  (cílová úroveň: designed → PoC validated).** Podle roadmapy 12A odstranit
-  skládání webového HTML/JavaScriptu pomocí textových transformací desktopové
-  varianty. Společné obrazovky a workflow mají jediný zdroj assetů; webový a
-  desktopový adaptér dodají pouze explicitní bootstrap, autentizaci/transport
-  a capability dostupné na daném uzlu. Inventarizovat existující Qt/PySide
-  dialogy, ponechat je jen u doložených desktop-only OS/lifecycle funkcí a
-  společné capability směrovat přes sdílený WebEngine frontend. Akceptace
-  zahrne webový i desktopový login/bootstrap, katalog, otevření projektu,
-  bezpečné chování chybějící capability a regresi proti chybějícím DOM prvkům.
 
 - [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
   Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**
@@ -59,6 +48,17 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
   preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
   pluginy, měnit modely/bindingy nebo oslabit oprávnění.
+
+- [ ] [planned] **UX-UNIFIED-02 — Migrace starších společných Qt workflow
+  (cílová úroveň: implemented → PoC validated).** Navazuje na sdílený shell
+  UX-UNIFIED-01, ale nemění schválené pořadí Ollama orchestrace a output routeru.
+  Vytvoření projektu, NotebookLM import, import zdroje, editor/TODO a historie
+  nejsou desktop-only; převést je po reviewovatelných krocích na společné
+  autorizované HTTP workflow se zachováním operation ID, journalu, potvrzení a
+  recovery. Nativní file picker smí zůstat pouze jako lokální výběr vstupu a
+  nesmí znovu zavést paralelní obrazovku. Akceptace zahrne desktopový i webový
+  průchod, restartové hranice, bezpečné chybění capability a odstranění
+  nahrazených Qt vstupů.
 
 ## Zjištěné mezery a navazující ověření
 

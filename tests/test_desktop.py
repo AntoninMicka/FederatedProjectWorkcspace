@@ -223,11 +223,13 @@ class DesktopTests(unittest.TestCase):
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
-        from spikes.desktop_management import ASSETS
+        from spikes.desktop_management import ASSETS, DESKTOP_BOOTSTRAP
         desktop_html = ASSETS['/'][1]
         self.assertIn('id="backend-metrics"', desktop_html)
-        self.assertNotIn('id="backend-metrics" hidden', desktop_html)
-        self.assertNotIn('id="backend-metrics-indicator" hidden', desktop_html)
+        self.assertEqual(desktop_html, HTML)
+        self.assertEqual(ASSETS['/app.css'][1], CSS)
+        self.assertEqual(ASSETS['/app.js'][1], DESKTOP_BOOTSTRAP + JS)
+        self.assertIn("'backend-metrics','backend-metrics-indicator'", DESKTOP_BOOTSTRAP)
         self.assertIn('#backend-metrics-indicator{position:fixed', ASSETS['/app.css'][1])
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)
         self.assertIn('id="settings-view"', HTML)

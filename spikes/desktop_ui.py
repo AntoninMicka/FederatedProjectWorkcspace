@@ -15,6 +15,7 @@ from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnkno
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 
 
 CHAT_VALIDATION_ERRORS = {
@@ -49,7 +50,10 @@ CHAT_VALIDATION_ERRORS = {
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Projektový workspace</title><link rel="stylesheet" href="/app.css">
-<body><button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
+<body data-runtime="pending"><section id="login"><h1>Projektový workspace</h1>
+<form id="login-form"><label>Přístupový klíč <input id="access-key" type="password" required autocomplete="off"></label>
+<button>Přihlásit</button><p id="login-status" role="status"></p></form></section>
+<button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
 <button id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci" hidden></button>
 <aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
 <div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
@@ -72,14 +76,30 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h3>Zařazené</h3><ul id="sidebar-assigned-chats" aria-label="Zařazené chaty"></ul>
 <h3>Nezařazené</h3><ul id="sidebar-unassigned-chats" aria-label="Nezařazené chaty"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
-<div class="node-note">Na tomto počítači<br>Zkušební verze</div></aside>
+<button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
 <main><div id="project-home">
 <header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
 <div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
 <h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
 <p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
 <div id="project-cards" aria-label="Seznam projektů"></div>
-<p class="home-help">Nový projekt vytvoříte tlačítkem v horní liště.</p>
+<form id="create-project" aria-label="Vytvořit projekt">
+<label for="new-project-title">Název nového projektu</label>
+<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
+<button id="create-project-btn">Vytvořit projekt</button></div>
+<p id="create-project-status" role="status"> </p></form>
+<details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
+<p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
+<label>Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
+<button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
+<label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
+<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
+<pre id="notebooklm-preview" hidden></pre>
+<label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
+<button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
+<p id="notebooklm-status" role="status"></p></details>
+<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
 </div>
@@ -195,10 +215,17 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
 </section>
-<div id="administration-host"></div>
+'''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
 <div id="project-view" hidden>
+<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
+<form id="web-source-import-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
+<label>Název <input name="title" maxlength="200" required></label>
+<label>Popis <textarea name="description" rows="3"></textarea></label>
+<label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
+<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
@@ -439,6 +466,32 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 '''
+CSS += ADMIN_CSS + '''
+body[data-runtime="pending"]{visibility:hidden}
+body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
+body[data-runtime="desktop"] #create-project,body[data-runtime="desktop"] #notebooklm-import,
+body[data-runtime="desktop"] #web-source-import{display:none!important}
+body[data-runtime="server"] #create-main-todo,body[data-runtime="server"] #todo-help{display:none!important}
+body[data-runtime="server"]:not(.authenticated)>aside,
+body[data-runtime="server"]:not(.authenticated)>main,
+body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-toggle,
+body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display:none}
+body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
+#login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
+#new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
+#web-source-import,#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#web-source-import label,#notebooklm-import label{display:block;margin:9px 0}
+#web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
+#web-source-import textarea{width:100%}#notebooklm-archive{width:min(680px,100%)}
+#notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
+@media(max-width:600px){
+ #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
+ .project-create-row{flex-direction:column}.project-create-row button,#new-project-title{width:100%}
+ #web-source-import,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
+ #web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{width:100%}
+ #notebooklm-import button,#web-source-import button{width:100%;margin-top:6px}
+ #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+}'''
 JS = '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
@@ -538,7 +591,7 @@ function renderTodo(todo){
  document.querySelector('#todo-help').hidden=!todo;
  todoTree.replaceChildren();
  document.querySelector('#todo-title').textContent=todo?.title || '';
- if(!todo){todoStatus.textContent='Založte seznam a mějte úkoly projektu po ruce.';return;}
+ if(!todo){todoStatus.textContent='Projekt zatím nemá hlavní seznam úkolů.';return;}
  if(todo.status!=='ready'){todoStatus.textContent='Hlavní seznam úkolů nelze zobrazit v tomto formátu nebo velikosti.';return;}
  todoStatus.textContent=todo.total ? `${todo.completed} z ${todo.total} hotovo` : 'Zatím bez úkolů.';
  if(todo.truncated) todoStatus.textContent+=' Zobrazeno prvních 1000 položek.';
@@ -610,7 +663,7 @@ async function openRegisteredProject(projectId){
   await loadChat();
   selectSidebarTab(document.querySelector('#artifacts-tab'));
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
-   'Vyberte podklad ze seznamu vlevo.' : 'Zatím tu nejsou žádné podklady. První dokument vytvoříte tlačítkem Dokumenty v horní liště.';
+   'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
 }
 function renderProjectCatalog(items){
@@ -1972,10 +2025,12 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
  }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 refreshImageAdapter();
-loadProjects();
+if(window.workspaceAutoStart!==false)loadProjects();
 """
+JS += ADMIN_JS
+DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
 ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
-          '/app.js': ('text/javascript; charset=utf-8', JS)}
+          '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}
 
 
 class DesktopHandler(Handler):
