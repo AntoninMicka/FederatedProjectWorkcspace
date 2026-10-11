@@ -21,32 +21,23 @@ po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
-`F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50. `F-M2-CHAT-03` je lokálně
-akceptované na větvi `feature/f-m2-chat-03-thread-lifecycle` a čeká na jediný
-PR do `develop`; další dávka proto zatím není aktivovaná.
+`F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50 a `F-M2-CHAT-03` PR #51.
+`WEB-RUNTIME-01` je lokálně akceptované na větvi
+`feature/web-runtime-01-service-wiring` a čeká na jediný PR do `develop`;
+níže jsou tři navazující dávky.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
-  capability a kompoziční router (cílová úroveň: designed → PoC validated).**
-  Podle roadmapy 2E.1 nejprve dodat verzovaný statický descriptor pro renderery
-  a nástroje, fail-closed katalog a read-only typovaný plan/step DAG bez
-  spuštění. Navazující execution skládá explicitní artefakty a materializované
-  mezivýstupy, například účetní data → schválený Julia skript → tabulka/graf →
-  prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
-  preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
-  pluginy, měnit modely/bindingy nebo oslabit oprávnění.
-
-- [ ] [planned] **WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru
-  (cílová úroveň: implemented).** Živý journal LXC instance během
-  F-M3-OLLAMA-ROBUST-01 doložil `AttributeError`, protože `WebServer`
-  neinicializuje `summary_service`, ačkoli zděděný handler její endpointy
-  obsluhuje; stejnou statickou mezeru mají extraction a metadata suggestions.
-  Sjednotit runtime wiring desktopu a webu a regresně ověřit všechny skutečně
-  vystavené endpointy. Problém nezpůsobil pomalý start HTTPS během update
-  healthchecku a není zpětně součástí Ollama dávky.
-
-## Zjištěné mezery a navazující ověření
+- [ ] [planned] **UX-UNIFIED-01 — Jednotný webový a desktopový frontend shell
+  (cílová úroveň: designed → PoC validated).** Podle roadmapy 12A odstranit
+  skládání webového HTML/JavaScriptu pomocí textových transformací desktopové
+  varianty. Společné obrazovky a workflow mají jediný zdroj assetů; webový a
+  desktopový adaptér dodají pouze explicitní bootstrap, autentizaci/transport
+  a capability dostupné na daném uzlu. Inventarizovat existující Qt/PySide
+  dialogy, ponechat je jen u doložených desktop-only OS/lifecycle funkcí a
+  společné capability směrovat přes sdílený WebEngine frontend. Akceptace
+  zahrne webový i desktopový login/bootstrap, katalog, otevření projektu,
+  bezpečné chování chybějící capability a regresi proti chybějícím DOM prvkům.
 
 - [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
   Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**
@@ -58,6 +49,18 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   pokryje RBAC/privacy revalidaci, změnu bindingu po preview, restart,
   nedostupnost/pin mismatch, `unknown` síťový účinek a absenci automatického
   přepnutí na jiný cíl.
+
+- [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
+  capability a kompoziční router (cílová úroveň: designed → PoC validated).**
+  Podle roadmapy 2E.1 nejprve dodat verzovaný statický descriptor pro renderery
+  a nástroje, fail-closed katalog a read-only typovaný plan/step DAG bez
+  spuštění. Navazující execution skládá explicitní artefakty a materializované
+  mezivýstupy, například účetní data → schválený Julia skript → tabulka/graf →
+  prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
+  preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
+  pluginy, měnit modely/bindingy nebo oslabit oprávnění.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
   lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
