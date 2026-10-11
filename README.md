@@ -82,6 +82,9 @@ výsledku do projektového Gitu je třetí samostatná akce.
 
 Workflow nepoužívá fallback ani automatický retry neurčitého providerového
 účinku. Stav `unknown` vyžaduje vědomě nový workflow s novými identitami.
+Ollamu na jiném stroji lze připojit pouze jako explicitní `private-network`
+backend přes HTTPS a připnutý certifikát; přípravu serveru, pin a diagnostiku
+popisuje [návod pro Ollamu v LAN](docs/ollama-lan.md).
 Opakovatelný živý smoke proti same-node Ollamě je opt-in:
 
 ```sh

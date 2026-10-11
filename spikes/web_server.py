@@ -298,6 +298,9 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Projekt se nepodařilo vytvořit. Ověřte název a dostupnost úložiště.'})
 
     def dispatch(self, request):
+        if self.path in {'/v1/chat/configure', '/v1/chat/test'} \
+                and not self.server.administration.is_admin(self.actor):
+            return self.send_error(403)
         if self.path == '/v1/session':
             if request != {}:
                 return self.send_error(400)

@@ -953,8 +953,8 @@ Aktualizace 2026-09-20: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 
 ## Milestone M2 – Local AI
 
-- [x] Ollama backend — lokální PoC adapteru váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; živá služba a produkční provoz zůstávají neověřené.
-- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — lokální PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. Skutečný LAN/TLS endpoint nebyl ověřen.
+- [x] Ollama backend — PoC adapter váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; F-M3-OLLAMA-ROBUST-01 navíc živě ověřilo lokální službu, restart hostitele a odpověď modelu. Jde o PoC validated, nikoli obecný produkční provoz.
+- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. F-M3-OLLAMA-ROBUST-01 živě ověřilo LAN/TLS katalog a modelovou odpověď z Workspace na Omnii, restart AI hostitele a zdrojové firewallové omezení portu proxy; evidence je ve WORK_LOG a doručení PR zůstává otevřené.
 - [x] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu — F-M2-CHAT-01, PR #29.
 - [x] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty — F-M2-CHAT-02, PR #30.
 - [x] Summarizer — F-M2-SUMMARY-01 lokálně PoC validated a začleněn PR #31: explicitní artifact/message výběr, same-node preview, potvrzená recovery-safe publikace a desktopové API/UI.

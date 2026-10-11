@@ -21,7 +21,8 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(first, build(ROOT))
         with tarfile.open(fileobj=io.BytesIO(first), mode='r:gz') as archive:
             names = archive.getnames()
-            for name in ('docs/project-opening.md', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
+            for name in ('docs/project-opening.md', 'docs/ollama-lan.md',
+                         'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
                 self.assertIn(PREFIX + '/' + name, names)
             self.assertIn(PREFIX + '/modules/publication-experiment-registry.module.json', names)
             self.assertIn(PREFIX + '/modules/publication-experiment-registry.source.json', names)

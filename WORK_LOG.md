@@ -5,14 +5,81 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu — 2026-10-11
+
+Dávka na větvi `feature/f-m3-ollama-robust-01`, založené z `develop`
+`2c9b1b2` po začlenění UX-MOBILE-01 jako PR #49, rozšířila lokální Ollama běh
+o přesnou diagnostiku, bezpečné private-network připojení, vědomý nový pokus a
+provozní LAN/restartovou akceptaci. Dosažená úroveň je **PoC validated** a
+všechny akceptační podmínky dávky jsou splněné. Jediný PR do `develop` zatím
+nebyl vytvořen; push ani merge nebyly provedeny.
+
+Node-local `ollama-binding.json` zůstává autoritou konfigurace a
+`ollama-runs.sqlite` autoritou stavu dispatchu. Před prvním síťovým bajtem je
+durable `dispatching`; nejistota po této hranici končí `unknown` bez
+automatického retry. Známé odmítnutí před odesláním nebo validovaná chyba končí
+`failed`. Vědomý nový pokus používá nové run ID a zachované vstupy. Do
+projektového Gitu se neukládají credentials, binding ani rozpracovaný běh.
+
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-A — Kontrakt chyb, LAN onboarding
+  a reuse (designed).** `docs/ollama-lan.md`, ADR-0008 a reuse katalog vymezují
+  topologii Workspace → HTTPS proxy → loopback Ollama, numerickou privátní
+  adresu, stabilní target ID, pin certifikátu, firewall, rotaci pinu a obnovu po
+  restartu. Basic Auth ani mTLS nebyly bez samostatného credential lifecycle
+  zavedeny.
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-B — Diagnostika transportu a
+  healthcheck (implemented).** Provider-neutral diagnostika rozlišuje
+  nedostupnost, timeout, TLS/pin, HTTP, přerušenou či příliš velkou odpověď a
+  neplatný JSON/Ollama envelope. Read-only test kandidátního bindingu používá
+  omezený `GET /api/tags`, neposílá projektová data a nepotvrzuje konfiguraci.
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-C — Vědomý nový pokus a UI
+  (implemented).** Lokální workflow zachová draft a výběr kontextu, zobrazí
+  bezpečnou konkrétní diagnostiku a nový run vytvoří pouze explicitní akcí.
+  Externí preview/provider zůstává oddělený; LAN orchestrace a `local-only` se
+  odmítnou před dispatch a žádný fallback se nespouští automaticky.
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-D — Restart, souběh a závěrečná
+  akceptace (PoC validated).** Testy pokryly pomalou a neplatnou odpověď,
+  chybějící model, chybný pin, pád před i po durable hranici, restart, souběh,
+  vědomý nový run a zákaz `local-only` na LAN. Skutečný Workspace na Omnii
+  získal katalog i odpověď modelu přes připnutou LAN TLS Ollamu. Opravený
+  `--update-only` deploy čeká na HTTPS readiness až 45 sekund, při selhání
+  vypíše stav/journal a bezpečně vrátí předchozí release. Uživatel potvrdil
+  úspěšný deploy, webovou službu a modelovou odpověď. Po restartu AI hostitele
+  byly aktivní Open WebUI, ComfyUI a TLS proxy, kontejner `open-webui` byl
+  healthy, Open WebUI API `0.12.0` a katalog modelů dostupné; uživatel potvrdil
+  skutečnou odpověď modelu. Následný firewallový test potvrdil očekávané
+  zdrojové omezení přístupu na port `11443`.
+- [x] [completed] **F-M3-OLLAMA-ROBUST-01-E — Tolerantní fingerprint a
+  neaktivní koncept nastavení (implemented; ad-hoc požadavek uživatele).** Běžný
+  OpenSSL SHA-256 fingerprint se kanonizuje. Omezený koncept se ukládá atomicky
+  v samostatném node-local souboru s módem 0600, přežije restart, neobsahuje
+  credentials a nemění ani nepoužívá poslední platný binding.
+
+Závěrečné ověření po poslední aplikační změně: cílené transportní, UI, deploy,
+RBAC a packaging testy prošly. Úplná sada
+`python3 -m unittest discover -s tests -v` byla nejprve spuštěna v omezeném
+sandboxu, kde 36 lokálních HTTP/HTTPS testů selhalo pouze na zákazu socketu
+`PermissionError: [Errno 1] Operation not permitted`. Stejná sada následně v
+povoleném prostředí prošla: **443 testů OK, 27 volitelných native/package/live
+testů přeskočeno**. Běh vypsal neblokující `ResourceWarning` na neuzavřená
+testovací SQLite spojení. Dokumentační předání po tomto běhu aplikační kód ani
+testy neměnilo.
+
+Omezení: přístup na LAN proxy je založen na firewallovém omezení a připnutém
+certifikátu, nikoli na aplikačním Basic Auth či mTLS. Konkrétní pravidla
+firewallu spravuje hostitel mimo Workspace Git. Streamování lokální Ollama
+odpovědi a sjednocení neúplného webového runtime wiring byly předány jako
+samostatné budoucí dávky `F-M3-OLLAMA-STREAM-01` a `WEB-RUNTIME-01` v BACKLOG;
+nejsou skrytou součástí této akceptované feature.
+
 ## UX-MOBILE-01 — Responzivní web pro telefon — 2026-10-09
 
 Dávka na větvi `feature/ux-mobile-01-responsive-web`, založené z
 `develop` `519dce8` po merge PR #48, přizpůsobila jediné stávající sdílené
 HTML/CSS/JS úzkému dotykovému viewportu. Dosažená úroveň je PoC validated
 a všechny akceptační podmínky dávky jsou splněné. Evidence byla při
-závěrečném předání přesunuta z TODO. Jediný PR do `develop` zatím nebyl
-vytvořen; push ani merge nebyly provedeny.
+závěrečném předání přesunuta z TODO. Dávka byla začleněna do `develop` jako
+PR #49, merge commit `2c9b1b2`.
 
 - [x] [completed] **UX-MOBILE-01-A — Mobilní navigace a layout
   (implemented).** Původní pevný levý sloupec nahradil na viewportu do 640 px

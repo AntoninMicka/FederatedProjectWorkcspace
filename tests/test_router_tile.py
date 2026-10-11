@@ -145,7 +145,7 @@ class RouterTests(unittest.TestCase):
             binary=root/'bin'; binary.mkdir()
             commands={
                 'apt-get':'exit 0', 'id':'exit 0', 'chown':'exit 0', 'runuser':'exit 0',
-                'systemctl':'exit 0',
+                'systemctl':'exit 0', 'journalctl':'exit 0', 'sleep':'exit 0',
                 'install':'for last; do :; done; mkdir -p "$last"',
                 'python3':'''if [ "$1" = -m ]; then
 mkdir -p "$3/bin"
@@ -162,7 +162,8 @@ else exit 7; fi'''}
             with tarfile.open(fileobj=stream,mode='w:gz'): pass
             result=subprocess.run(['sh','-c',script],input=stream.getvalue(),capture_output=True,
                                   env=dict(os.environ,PATH=str(binary)+':'+os.environ['PATH']))
-            self.assertEqual(result.returncode,7,result.stderr)
+            self.assertEqual(result.returncode,70,result.stderr)
             self.assertEqual(os.readlink(base/'current'),'releases/old')
             self.assertEqual(unit.read_text(),'old unit')
             self.assertTrue((base/'web-rollback'/'previous').exists())
+            self.assertIn(b'did not expose HTTPS within 45 seconds', result.stderr)

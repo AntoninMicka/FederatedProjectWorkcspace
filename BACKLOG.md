@@ -20,13 +20,13 @@ F-M3-EXTERNAL-01 je po PR #36 uzavřen ve WORK_LOG. F-M1-PROJECT-LOCATION-01 je
 po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
-`IMP-02` bylo doručeno PR #48. Přijaté `UX-MOBILE-01` je archivované ve
-WORK_LOG a v [TODO](TODO.md) čeká na doručení jediného PR do `develop`;
-další dávka zatím není aktivovaná.
+`IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
+`F-M3-OLLAMA-ROBUST-01` splnilo akceptaci na své feature větvi a čeká na
+doručení jediného PR do `develop`; evidence je ve WORK_LOG a čekací stav v
+[TODO](TODO.md). Níže zůstávají tři další připravené dávky.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu (cílová úroveň: PoC validated).** Rozlišit nedostupnost Ollamy, timeout, přerušený transport, neplatný strukturovaný výstup a durable `unknown` stav; zobrazit konkrétní diagnostiku a bezpečnou možnost nového vědomého pokusu bez ztráty zadání, výběru kontextu nebo již připraveného externího preview. Automaticky neopakovat běh s neznámým výsledkem ani neprovádět skrytý fallback. Akceptace zahrne restart aplikace/Ollamy, pomalou odpověď, chybný JSON, pád před/po durable přechodech, souběh a oddělení chyby lokálního routeru od chyby externího providera.
 - [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
   vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
   cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
@@ -54,7 +54,28 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
   pluginy, měnit modely/bindingy nebo oslabit oprávnění.
 
+- [ ] [planned] **WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru
+  (cílová úroveň: implemented).** Živý journal LXC instance během
+  F-M3-OLLAMA-ROBUST-01 doložil `AttributeError`, protože `WebServer`
+  neinicializuje `summary_service`, ačkoli zděděný handler její endpointy
+  obsluhuje; stejnou statickou mezeru mají extraction a metadata suggestions.
+  Sjednotit runtime wiring desktopu a webu a regresně ověřit všechny skutečně
+  vystavené endpointy. Problém nezpůsobil pomalý start HTTPS během update
+  healthchecku a není zpětně součástí Ollama dávky.
+
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
+  lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
+  2026-10-11).** Adaptovat existující SSE/stream UI externího providera pro
+  Ollama NDJSON bez sloučení provider kontraktů. UI průběžně rozliší přípravu
+  kontextu, připojování, čekání na první token, generování a dokončení. Částečný
+  text zůstane dočasnou projekcí; autoritativní assistant zpráva a usage
+  vzniknou až po validním koncovém rámci. Přerušení po dispatch hranici zůstane
+  durable `unknown`, nesmí publikovat torzo ani spustit automatický retry.
+  Akceptace zahrne fragmentované NDJSON rámce, bounded velikost, timeout prvního
+  tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý nový běh,
+  restart a přístupnost `aria-live` bez zahlcení čtečky.
 
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG

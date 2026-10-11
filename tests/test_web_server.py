@@ -138,6 +138,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(json.loads(self.request(headers=headers)[1])['projects'], [])
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/media/openai/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/publication-cms/status', headers=headers)[0], 403)

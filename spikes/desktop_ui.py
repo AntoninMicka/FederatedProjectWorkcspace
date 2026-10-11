@@ -8,12 +8,43 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
+from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+
+
+CHAT_VALIDATION_ERRORS = {
+    'Orchestration requires same-node Ollama': (
+        'Režim Orchestrace vyžaduje Ollamu na stejném uzlu. Pro Ollamu v privátní síti '
+        'zvolte Brainstorming a nové vlákno.'),
+    'local-only requires same-node execution': (
+        'Obsah „Jen na tomto počítači“ nelze odeslat Ollamě v privátní síti. Zvolte '
+        'jinou úroveň soukromí nebo backend na stejném uzlu.'),
+    'Project changed before chat dispatch': (
+        'Projekt se od otevření změnil. Znovu jej otevřete a požadavek spusťte jako nový běh.'),
+    'Project changed before routed task': (
+        'Projekt se od otevření změnil. Znovu jej otevřete a požadavek spusťte jako nový běh.'),
+    'Project changed during context preparation': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Project changed after context preparation': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Project changed during dispatch authorization': (
+        'Projekt se během přípravy kontextu změnil. Znovu jej otevřete a spusťte nový běh.'),
+    'Chat mode cannot change inside an existing thread': (
+        'Režim nelze změnit uvnitř existujícího vlákna. Založte nové vlákno.'),
+    'Chat thread changed during context preparation': (
+        'Vlákno se během přípravy změnilo. Načtěte jeho aktuální stav a spusťte nový běh.'),
+    'Selected chat message is unavailable': (
+        'Vybraná zpráva už není v aktuálním vlákně dostupná. Obnovte výběr kontextu.'),
+    'Selected chat thread is unavailable': (
+        'Vybrané vlákno už není dostupné. Založte nové vlákno nebo obnovte výběr kontextu.'),
+    'Selected messages must use thread order': (
+        'Vybrané zprávy nejsou v aktuálním pořadí vlákna. Obnovte výběr kontextu.'),
+}
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -62,9 +93,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
 <label>Model <input name="model" placeholder="gemma3" required></label>
 <label>ID cíle <input name="target_id" value="local-process" required></label>
-<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" pattern="[0-9a-f]{64}"></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
+<button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
-<small>Privátní síť vyžaduje číselnou HTTPS adresu a připnutý certifikát. Tajné klíče se zde nezobrazují.</small>
+<small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
 <hr><h2>Lokální obrazový backend ComfyUI</h2>
 <p id="settings-comfy-status" role="status">Načítám nastavení ComfyUI…</p>
 <form id="comfy-backend-form">
@@ -527,12 +559,15 @@ function clearProject(){
 }
 async function projectRequest(path,body,timeout=60000){
  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
-  body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+ body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
  const result=await response.json();
  if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
-  error.status=response.status;throw error;}
+  error.status=response.status;error.diagnostic=result.diagnostic;
+  error.outcome=result.outcome;error.retry=result.retry;throw error;}
  return result;
 }
+function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
+ ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
 async function openRegisteredProject(projectId){
  ++catalogRequest;
@@ -982,23 +1017,29 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
   'Nové vlákno · nejprve nastavte backend.';
  draft.focus();
 });
-function fillBinding(binding){
- chatBinding=binding;const fields=chatForm.elements;
- if(binding){fields.boundary.value=binding.boundary;fields.endpoint.value=binding.endpoint;
-  fields.model.value=binding.model;fields.target_id.value=binding.target_id;
-  fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
+function fillBinding(binding,draft=null,draftState=null){
+ chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
+ if(candidate){fields.boundary.value=candidate.boundary;fields.endpoint.value=candidate.endpoint;
+  fields.model.value=candidate.model;fields.target_id.value=candidate.target_id;
+  fields.tls_cert_sha256.value=candidate.tls_cert_sha256 || '';
+ }
+ if(binding){
   chatStatus.textContent=`Backend: ${binding.model} · ${binding.boundary}`;
-  settingsBackendStatus.textContent=`Nastaven backend ${binding.model} · ${binding.boundary}.`;
+  settingsBackendStatus.textContent=draftState && draftState!=='confirmed' ?
+   `Aktivní je ${binding.model} · ${binding.boundary}; formulář obsahuje ${draftState==='invalid'?'neplatný':'nepotvrzený'} uložený koncept.` :
+   `Nastaven backend ${binding.model} · ${binding.boundary}.`;
   if(!document.querySelector('#workflow-creator-model').value)document.querySelector('#workflow-creator-model').value=binding.model;
   if(!document.querySelector('#workflow-opponent-model').value)document.querySelector('#workflow-opponent-model').value=binding.model;
  }else{
   chatStatus.textContent='Backend zatím není nastaven.';
-  settingsBackendStatus.textContent='Backend zatím není nastaven.';
+  settingsBackendStatus.textContent=draft ? 'Formulář obsahuje uložený nepotvrzený koncept.' :
+   'Backend zatím není nastaven.';
  }
  refreshChatModeControls();
 }
 async function loadBackendBinding(){
- try{const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+ try{const result=await projectRequest('/v1/chat/status',{});
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -1118,7 +1159,8 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  try{
-  const result=await projectRequest('/v1/chat/status',{});fillBinding(result.binding);
+  const result=await projectRequest('/v1/chat/status',{});
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   const active=[...result.threads].reverse().filter(item=>item.status==='active');
   const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
   if(selectionRevision!==chatSelectionRevision)return;
@@ -1132,15 +1174,31 @@ async function loadChat(){
   renderChat(activeThread);
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
-chatForm.addEventListener('submit',async event=>{
- event.preventDefault();const fields=chatForm.elements;
+function backendCandidate(){
+ const fields=chatForm.elements;
  const boundary=fields.boundary.value;
  const binding={schema_version:1,binding_id:chatBinding?.binding_id || crypto.randomUUID(),
   revision:crypto.randomUUID(),adapter:'ollama',boundary,endpoint:fields.endpoint.value.trim(),
   model:fields.model.value.trim(),target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim()};
- if(boundary==='private-network')binding.tls_cert_sha256=fields.tls_cert_sha256.value.trim();
+ if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
+ return binding;
+}
+function normalizeFingerprint(value){return value.trim()
+ .replace(/^sha256\\s*fingerprint\\s*=\\s*/i,'').replaceAll(':','').toLowerCase();}
+document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
+ try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
+  settingsBackendStatus.textContent=result.model_available ?
+   `Ollama je dostupná a model ${result.model} je připraven.` :
+   `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
+ }catch(error){settingsBackendStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+chatForm.addEventListener('submit',async event=>{
+ event.preventDefault();const binding=backendCandidate();
  settingsBackendStatus.textContent='Ukládám backend…';
- try{const result=await projectRequest('/v1/chat/configure',binding);fillBinding(result.binding);
+ try{const result=await projectRequest('/v1/chat/configure',binding);
+  fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
  catch(error){
   const message=error.message;const reloaded=await loadBackendBinding();
@@ -1289,6 +1347,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration'?null:model};
+ if(adapter==='ollama' && chatBinding.boundary==='private-network'){
+  if(mode==='orchestration'){
+   chatOperationStatus.textContent='Orchestrace vyžaduje Ollamu na stejném uzlu. Pro síťovou Ollamu zvolte Brainstorming a nové vlákno.';return;}
+  if(document.querySelector('#chat-privacy').value==='local-only'){
+   chatOperationStatus.textContent='Obsah Jen na tomto počítači nelze odeslat Ollamě v privátní síti.';return;}
+ }
  if(mode==='brainstorming' && adapter==='openai-responses'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
@@ -1334,9 +1398,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    renderChat(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
    chatOperationStatus.textContent='Odpověď je připravena.';
   }catch(error){
-   if(error.status===422)pendingChatRequest=null;
-   chatOperationStatus.textContent=error.message+(error.status===422 ?
-    ' Zadání můžete po opravě zopakovat jako nový běh.' : '');
+   if([409,422,502].includes(error.status))pendingChatRequest=null;
+   chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
+    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
   }finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
    document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
   return;
@@ -1368,9 +1432,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    const projection=recovered.outcomes.find(item=>item.task_id===failed.task_id);
    if(projection){replaceTaskProjection(projection);pendingChatRequest=null;}
   }catch(_recoveryError){}
-  if(error.status===422)pendingChatRequest=null;
-  chatOperationStatus.textContent=error.message+(error.status===422 ?
-   ' Zadání můžete po opravě zopakovat jako nový běh.' : '');
+  if([409,422,502].includes(error.status))pendingChatRequest=null;
+  chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
+   ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
  }
  finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
@@ -1491,7 +1555,10 @@ document.querySelector('#workflow-creator-dispatch').addEventListener('click',as
  try{roleWorkflow=await projectRequest('/v1/workflows/creator/dispatch',{workflow_id:roleWorkflow.workflow_id,
    project_id:activeProject.id,approval_digest:step.approval_digest},210000);
   document.querySelector('#workflow-creator-preview').hidden=true;renderWorkflow();workflowStatus.textContent='Creator výstup je durable uložen. Připravte samostatný opponent handoff.';
- }catch(error){workflowStatus.textContent=error.message;}
+ }catch(error){
+  if([409,422,502].includes(error.status))resetWorkflowProjection();
+  workflowStatus.textContent=error.message+localRunRetryHint(error);
+ }
 });
 document.querySelector('#workflow-opponent-prepare').addEventListener('click',async event=>{
  if(!roleWorkflow)return;event.currentTarget.disabled=true;workflowStatus.textContent='Připravuji přesný opponent handoff…';
@@ -1505,7 +1572,10 @@ document.querySelector('#workflow-opponent-dispatch').addEventListener('click',a
  try{roleWorkflow=await projectRequest('/v1/workflows/opponent/dispatch',{workflow_id:roleWorkflow.workflow_id,
    project_id:activeProject.id,approval_digest:step.approval_digest},210000);
   document.querySelector('#workflow-opponent-preview').hidden=true;renderWorkflow();workflowStatus.textContent='Oponentura je durable uložená.';
- }catch(error){workflowStatus.textContent=error.message;}
+ }catch(error){
+  if([409,422,502].includes(error.status))resetWorkflowProjection();
+  workflowStatus.textContent=error.message+localRunRetryHint(error);
+ }
 });
 document.querySelector('#workflow-publish-button').addEventListener('click',async event=>{
  if(!roleWorkflow || !activeProject)return;const stepId=document.querySelector('#workflow-publish-step').value;
@@ -1576,7 +1646,10 @@ document.querySelector('#summary-generate').addEventListener('click',async event
   summaryPreview=result;pendingSummaryRequest=null;pendingSummaryPublish=null;renderSummary(result.response);
   document.querySelector('#summary-publish-controls').hidden=false;
   summaryStatus.textContent=`Náhled je připraven · soukromí: ${result.privacy}.`;
- }catch(error){summaryStatus.textContent=error.message;}
+ }catch(error){
+  if([409,422,502].includes(error.status))pendingSummaryRequest=null;
+  summaryStatus.textContent=error.message+localRunRetryHint(error);
+ }
  finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#summary-publish').addEventListener('click',async event=>{
@@ -1636,7 +1709,10 @@ document.querySelector('#extraction-generate').addEventListener('click',async ev
   extractionPreviewElement.textContent=JSON.stringify(JSON.parse(result.response),null,2);
   document.querySelector('#extraction-publish-controls').hidden=false;
   extractionStatus.textContent=`Náhled je připraven · soukromí: ${result.privacy}.`;
- }catch(error){extractionStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){
+  if([409,422,502].includes(error.status))pendingExtractionRequest=null;
+  extractionStatus.textContent=error.message+localRunRetryHint(error);
+ }finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#extraction-publish').addEventListener('click',async event=>{
  if(!extractionPreview || !activeProject)return;
@@ -1688,7 +1764,10 @@ document.querySelector('#metadata-generate').addEventListener('click',async even
   if(!result.diff.tags.suggested_additions.length)tags.textContent='Model nenavrhl žádný nový štítek.';
   document.querySelector('#metadata-diff').hidden=false;
   metadataStatus.textContent=`Návrh je připraven · soukromí: ${result.privacy}.`;
- }catch(error){metadataStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ }catch(error){
+  if([409,422,502].includes(error.status))pendingMetadataRequest=null;
+  metadataStatus.textContent=error.message+localRunRetryHint(error);
+ }finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#metadata-publish').addEventListener('click',async event=>{
  if(!metadataPreview || !activeProject)return;
@@ -1792,7 +1871,7 @@ class DesktopHandler(Handler):
     assets = ASSETS
     max_body = 1152 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
-        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/send',
+        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
         '/v1/chat/orchestration',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
@@ -1961,6 +2040,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
+            if self.path == '/v1/chat/test' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.test_binding(request))
             if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)
                     and set(request) == {'source_thread_id', 'thread_id', 'created_at'}):
                 return self.reply(200, self.server.chat_service.start_orchestration(**request))
@@ -1991,9 +2072,11 @@ class DesktopHandler(Handler):
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))
             return self.send_error(400)
-        except UnknownRun:
-            return self.reply(409, {'error': 'Výsledek běhu není známý. Vlákno bylo zachováno; '
-                                   'zkontrolujte stav před novým odesláním.'})
+        except UnknownRun as exc:
+            return self.reply(409, {'error': 'Výsledek lokálního LLM běhu není známý. Původní '
+                                   'run se nesmí opakovat; zadání lze vědomě odeslat jako nový běh.',
+                                   'diagnostic': exc.code, 'outcome': 'unknown',
+                                   'retry': 'new-run'})
         except OpenAIUnknownRun:
             return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
                                    'automaticky neopakujte; stav byl zachován.'})
@@ -2010,8 +2093,25 @@ class DesktopHandler(Handler):
         except CloudflareUnavailable:
             return self.reply(502, {'error': 'Cloudflare stav nyní nelze bezpečně načíst. '
                                    'Nebyla zahájena nová potvrzená změna.'})
-        except OllamaResponseError:
-            return self.reply(502, {'error': 'Lokální LLM požadavek selhal. Vlákno a stav běhu byly zachovány.'})
+        except OllamaResponseError as exc:
+            messages = {
+                'unavailable': 'Ollama endpoint není dostupný.',
+                'connect-timeout': 'Vypršel čas při navazování spojení s Ollamou.',
+                'tls-failed': 'TLS spojení s LAN Ollamou se nepodařilo ověřit.',
+                'tls-pin-mismatch': 'Certifikát LAN Ollamy neodpovídá uloženému SHA-256 otisku.',
+                'model-unavailable': 'Požadovaný model není na Ollama serveru dostupný.',
+                'api-incompatible': 'Endpoint neposkytuje podporované Ollama API.',
+                'overloaded': 'Ollama je přetížená a požadavek odmítla.',
+                'redirect-forbidden': 'Ollama endpoint vrátil zakázané přesměrování.',
+                'invalid-json': 'Ollama nevrátila platný JSON.',
+                'invalid-envelope': 'Ollama vrátila neplatný formát odpovědi.',
+                'response-too-large': 'Odpověď Ollamy překročila bezpečný limit.',
+                'access-denied': 'Ollama proxy požadavek odmítla.',
+                'healthcheck-unavailable': 'Test spojení s Ollamou byl přerušen.'}
+            return self.reply(502, {'error': messages.get(exc.code,
+                                   'Lokální LLM požadavek selhal.'),
+                                   'diagnostic': exc.code, 'outcome': 'failed',
+                                   'retry': 'new-run'})
         except OpenAIResponseError:
             if self.path == '/v1/external/models':
                 return self.reply(502, {'error': 'Seznam modelů externího provideru nelze načíst. '
@@ -2025,7 +2125,12 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
-        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+        except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            if isinstance(exc, ValidationError) and self.path in {
+                    '/v1/chat/send', '/v1/tasks/route'}:
+                message = CHAT_VALIDATION_ERRORS.get(str(exc))
+                if message is not None:
+                    return self.reply(422, {'error': message})
             if self.path == '/v1/external/propose':
                 return self.reply(422, {'error': 'Ollama nevrátila platný návrh externího volání. '
                                        'Zkuste návrh vytvořit znovu nebo použijte ruční externí náhled.'})

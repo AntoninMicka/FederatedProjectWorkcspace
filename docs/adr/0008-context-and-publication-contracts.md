@@ -54,6 +54,15 @@ vyžaduje nový explicitní run. U `private-network` se TLS spojení naváže a 
 certifikátu ověří ještě před odesláním requestu. Úspěšná odpověď je durable a
 opakované načtení stejného run ID ji vrátí bez dalšího volání.
 
+F-M3-OLLAMA-ROBUST-01 zachovává stejné crash hranice a doplňuje durable
+`error_code` do existujícího run journalu. Selhání connectu, TLS/pinu nebo
+jednoznačná HTTP/response chyba jsou `failed`; timeout či přerušený transport
+po zahájení generačního requestu jsou `unknown`. Read-only test kandidátního
+bindingu smí volat pouze `/api/tags`, neposílá Context Manifest ani projektová
+data a binding neukládá. UI smí po chybě zachovat původní draft a výběr, ale
+nový dispatch vznikne jen vědomou akcí s novými run identitami. Diagnostika
+nesmí spustit fallback ani oslabit schválenou execution boundary.
+
 Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Provider review a kontrakt uzavírá M3-UB-01-A; implementace obnovování a cache zůstává M3-UB-01-B.
 
 ### Usage a billing kontrakt v1
