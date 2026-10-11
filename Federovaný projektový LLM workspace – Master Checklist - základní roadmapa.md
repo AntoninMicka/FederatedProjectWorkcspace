@@ -805,7 +805,17 @@ nenahrazují.
     bootstrapem, společnou samostatnou stránku importu zdroje a strom chatů;
     původní Qt importní dialog byl odstraněn. Evidence je ve
     [WORK_LOG](WORK_LOG.md). Široký bod zůstává otevřený pro migraci zbývajících
-    starších společných Qt workflow v `UX-UNIFIED-02`.
+    starších společných Qt workflow v `UX-UNIFIED-02A` až `UX-UNIFIED-02D`.
+  - [ ] `UX-UNIFIED-02A`: jako první navazující samostatnou feature převést
+    read-only historii podporovaného artefaktu na společnou stránku nad
+    `ArtifactHistory`; zachovat HEAD-bound validaci, topologickou historii,
+    bezpečné textové zobrazení a nulové projektové zápisy. Po dosažení parity
+    odstranit Qt `HistoryDialog`.
+  - [ ] `UX-UNIFIED-02B`: poté převést vytvoření projektu na společný formulář
+    a recovery kontrakt `ProjectCreation`. Výchozí umístění a pokračování
+    operace jsou společné; systémový výběr vlastního adresáře smí zůstat pouze
+    omezenou desktopovou capability bez paralelního dialogového workflow a bez
+    přijetí libovolné cesty z rendereru.
 - [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
   funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
   lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat
