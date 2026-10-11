@@ -48,12 +48,10 @@ class EditorDialog(QDialog):
         self.documents = QComboBox()
         self.new_button = QPushButton('Nový dokument')
         self.todo_button = QPushButton('Hlavní seznam úkolů')
-        self.history_button = QPushButton('Historie…')
-        self.history_button.clicked.connect(self.history)
         self.reload_button = QPushButton('Znovu načíst')
         self.delete_button = QPushButton('Smazat dokument')
         self.delete_button.clicked.connect(self.delete_document)
-        for widget in (self.documents, self.new_button, self.todo_button, self.history_button, self.reload_button, self.delete_button):
+        for widget in (self.documents, self.new_button, self.todo_button, self.reload_button, self.delete_button):
             bar.addWidget(widget)
         layout.addLayout(bar)
         self.title = QLineEdit(); self.title.setMaxLength(200)
@@ -107,9 +105,8 @@ class EditorDialog(QDialog):
         self.checks.setEnabled(editable); self.add_check.setEnabled(editable)
         for widget in (self.documents, self.new_button, self.todo_button):
             widget.setEnabled(self.view is not None and not self.busy and self.pending is None)
-        self.history_button.setEnabled(not self.busy and self.pending is None and
-                                       self.current is not None and not self.current.get('new', False))
-        self.delete_button.setEnabled(self.history_button.isEnabled())
+        self.delete_button.setEnabled(not self.busy and self.pending is None and
+                                      self.current is not None and not self.current.get('new', False))
         self.reload_button.setEnabled(not self.busy)
         self.save_button.setEnabled(not self.busy and (self.pending is not None or (editable and self.dirty)))
         self.save_button.setText(('Zopakovat smazání' if self.pending_delete else 'Zopakovat uložení')
@@ -281,17 +278,6 @@ class EditorDialog(QDialog):
                              base_head=self.view['commit_id']), str(uuid4()))
         self.pending_delete = True
         self.save()
-
-    def history(self):
-        if self.busy or self.pending or not self.current or self.current.get('new', False):
-            return
-        from spikes.desktop_history import HistoryDialog
-        dialog = HistoryDialog(self.service.node_path, self.project_id, self.current['id'],
-                               self.view['commit_id'], self)
-        dialog.exec()
-        for worker in dialog.workers:
-            worker.wait()
-        dialog.deleteLater()
 
     def reload(self):
         if not self.busy and self.discard():

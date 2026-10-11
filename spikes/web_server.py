@@ -365,7 +365,8 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/publication-cms/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-        if self.path in {'/v1/projects/open', '/v1/artifacts/preview'}:
+        if self.path in {'/v1/projects/open', '/v1/artifacts/preview',
+                         '/v1/artifacts/history/list', '/v1/artifacts/history/compare'}:
             if not isinstance(request, dict) or not self.server.administration.allowed(self.actor, request.get('project_id')):
                 return self.send_error(403)
         if self.path == '/v1/projects/create':

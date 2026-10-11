@@ -9,7 +9,7 @@ Datum: 2026-09-10. Stav: přijato pro development PoC, implemented; cílové res
 
 ## Rozsah a rozhodnutí
 
-ADR 0013 ponechává serverový framework otevřený. Pro první LAN náhled adaptujeme existující stdlib HTTP handler, sdílené HTML/JS a Projects. Jeden Python proces v LXC obsluhuje HTTPS, bez Qt a nových pip závislostí. Toto rozhodnutí nevybírá produkční server ani neuzavírá Gate M1. Web umí katalog, hlavní TODO a náhledy; vytváření, editor a historie zůstávají nativní. Chat zachovává pouze lokální draft, bez LLM.
+ADR 0013 ponechává serverový framework otevřený. Pro první LAN náhled adaptujeme existující stdlib HTTP handler, sdílené HTML/JS a Projects. Jeden Python proces v LXC obsluhuje HTTPS, bez Qt a nových pip závislostí. Toto rozhodnutí nevybírá produkční server ani neuzavírá Gate M1. Původní rozsah uměl katalog, hlavní TODO a náhledy; pozdější sjednocený frontend doplnil webové vytvoření projektu, chat a read-only historii přes samostatně autorizované služby. Nativní editor zůstává desktopový, dokud nedosáhne společná varianta parity.
 
 Server vyžaduje TLS certifikát/klíč a explicitní privátní IPv4 subnet klientů. Loopback je povolen pro healthcheck. Host se porovnává se skutečnou cílovou IP a portem socketu, Origin s HTTPS originem; proxy hlavičky nemění autoritu. URL s DNS jménem zatím není podporovaná. Přístupový klíč je náhodných alespoň 32 bajtů, uložený mimo projektový Git, v souboru 0600 vlastněném účtem služby. Ve webu zůstává pouze v paměti stránky, odesílá se v Authorization přes HTTPS; nepoužívá se URL, cookies ani localStorage. Odhlášení načte čistou stránku. Nejde o víceuživatelské RBAC: klíč zpřístupňuje registrované projekty včetně project/confidential pro jednoho důvěryhodného operátora.
 

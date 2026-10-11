@@ -41,11 +41,16 @@ otevíranou z panelu Podklady. Používá stejný bounded endpoint, operation ID
 vstup byly odstraněny. HTML file input dál vyvolá platformní picker, ale
 nevytváří paralelní workflow.
 
+Historie podporovaného Markdown dokumentu je převedena na společnou read-only
+stránku otevřenou z náhledu. Web i desktop používají stejné HEAD-bound endpointy
+`ArtifactHistory`; server navíc fail-closed odmítá projekt obsahující
+`local-only`. Původní Qt `HistoryDialog` byl po dosažení parity odstraněn.
+
 Následující existující Qt dialogy nejsou desktop-only z principu a nesmějí být
-dále rozšiřovány jako paralelní UI: vytvoření projektu, import NotebookLM,
-editor dokumentu/TODO a historie artefaktu. Jejich backendové
-služby zůstávají znovupoužitelné. V této dávce byl sjednocen shell a serverové
-varianty create/import; úplné převedení zbývajících starších desktopových vstupů na
+dále rozšiřovány jako paralelní UI: vytvoření projektu, import NotebookLM a
+editor dokumentu/TODO. Jejich backendové
+služby zůstávají znovupoužitelné. V této dávce byl sjednocen shell, import
+zdroje a historie; úplné převedení zbývajících starších desktopových vstupů na
 společné autorizované HTTP workflow vyžaduje samostatné mutující API a recovery
 kontrakt a není vydáváno za dokončené.
 

@@ -23,47 +23,14 @@ F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
 `F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50 a `F-M2-CHAT-03` PR #51.
 `WEB-RUNTIME-01` bylo doručeno PR #52 jako merge commit `7bb4f5e`.
-`UX-UNIFIED-01` je po doplnění per-chat menu, společné stránky importu zdroje a
-stromu chatů lokálně akceptované a v TODO čeká na doručení jediného PR. Uživatel
-2026-10-11 určil jako první dvě dávky po jeho doručení společnou historii
-artefaktu a společné vytvoření projektu; dříve schválená Ollama orchestrace a
-output router zůstávají zachované jako následující samostatné feature.
+`UX-UNIFIED-01` bylo 2026-10-11 uživatelem znovu otevřeno: společná historie
+artefaktu a společné vytvoření projektu patří do téže dávky, větve a jediného
+PR jako ostatní unifikace UI. Prozatímní backlogová ID `UX-UNIFIED-02A/02B`
+jsou sloučena do aktuálních `UX-UNIFIED-01-E/F` v TODO a nejsou samostatnými
+feature. Dříve schválená Ollama orchestrace a output router zůstávají zachované
+jako následující samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **UX-UNIFIED-02A — Společná historie artefaktu (cílová úroveň:
-  implemented → PoC validated; větev `feature/ux-unified-02a-artifact-history`;
-  cíl PR `develop`).** Navázat na `UX-UNIFIED-01` a adaptovat existující
-  `ArtifactHistory` do jedné read-only stránky společného frontendu, otevřené
-  z vybraného podporovaného artefaktu. Společné autorizované endpointy svážou
-  seznam i porovnání s konkrétním project ID, artifact ID a očekávaným HEAD;
-  nevznikne projektový zápis, journal ani nová databáze. Zobrazit nejvýše 100
-  topologicky seřazených verzí, obsah podporovaného Markdown dokumentu,
-  technická metadata, diff uložených souborů a údaje commitu výhradně jako text.
-  Neplatná, nepodporovaná a smazaná verze musí zůstat explicitně označená a
-  nesmí se vydávat za aktuální obsah. Akceptace: shodný webový a desktopový
-  průchod, RBAC a privacy, foreign project/artifact, stale nebo pending projekt,
-  merge historie, truncation, odstraněná/neplatná verze, nulový diff, bezpečné
-  textové vykreslení a důkaz, že HEAD ani pracovní strom nebyly změněny. Po
-  dosažení parity odstranit Qt `HistoryDialog`; skutečný WebEngine a HTTPS
-  průchod ověřit odděleně od jednotkových testů.
-
-- [ ] [planned] **UX-UNIFIED-02B — Společné vytvoření projektu (cílová úroveň:
-  implemented → PoC validated; větev `feature/ux-unified-02b-project-creation`;
-  cíl PR `develop`).** Po `UX-UNIFIED-02A` převést desktop na existující
-  společný formulář a jednu autorizovanou adaptaci `ProjectCreation`. Název,
-  přesný cílový náhled, potvrzení, stabilní operation ID, idempotentní receipt a
-  pokračování přerušené operace budou společné pro web i desktop. Web používá
-  pouze správcem nakonfigurovaný projects root; nesmí přijmout libovolnou
-  serverovou cestu. Volba vlastního místního adresáře smí na desktopu zůstat
-  systémovým pickerem, ale společnému formuláři předá omezenou jednorázovou
-  capability/ověřený výsledek, nikoli obecné právo číst cestu z rendereru.
-  Akceptace: desktopový i webový happy path, RBAC, výchozí a desktopem vybrané
-  umístění, kolize názvu/cesty, neprázdná nebo nebezpečná cesta, zrušený picker,
-  stejný a změněný retry, pád ve všech stávajících `ProjectCreation` hranicích,
-  restart/recovery, právě jeden projekt a commit a aktualizovaný katalog bez
-  ztráty Node ID. Po dosažení parity odstranit Qt `CreationDialog` a paralelní
-  toolbar workflow; picker a lifecycle workeru mohou zůstat desktop-only.
 
 - [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
   Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**

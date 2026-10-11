@@ -227,7 +227,7 @@ dialog.save_button.click(); idle(dialog)
 assert not dialog.pending and not dialog.dirty, dialog.status.text()
 assert service.workspace(sys.argv[2]).receipt(operation)
 assert dialog.current['path'].endswith('/Moje poznámky.md')
-assert dialog.history_button.isEnabled()
+assert dialog.delete_button.isEnabled()
 dialog.close(); app.processEvents()
 dialog = EditorDialog(service, sys.argv[2]); dialog.show(); idle(dialog)
 assert dialog.filename.text() == 'Moje poznámky.md'

@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 
+from spikes.artifact_history import ArtifactHistory
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.metadata import MAX_FILE, ValidationError
@@ -237,6 +238,21 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button type="submit">Importovat původní bajty</button><button id="source-import-back" class="secondary-button" type="button">Zpět do projektu</button></div>
 <p id="source-import-status" role="status" aria-live="polite"></p></form>
 </div>
+<div id="history-view" hidden>
+<header><span class="badge">Historie artefaktu</span><span>Uložené Git verze · pouze pro čtení</span></header>
+<div class="page-heading"><div class="eyebrow">HISTORIE DOKUMENTU</div><h1 id="history-title">Historie</h1>
+<p>Porovnání čte pouze verze dosažitelné z otevřeného HEAD a nemění projekt ani rozepsanou práci.</p></div>
+<section class="standalone-form history-form" aria-label="Historie dokumentu">
+<p id="history-status" role="status" aria-live="polite"></p>
+<div class="history-choices"><label>Starší / výchozí verze <select id="history-older"></select></label>
+<label>Zobrazená verze <select id="history-newer"></select></label></div>
+<div class="form-actions"><button id="history-compare" type="button">Zobrazit a porovnat</button>
+<button id="history-back" class="secondary-button" type="button">Zpět do projektu</button></div>
+<h2>Obsah zobrazené verze</h2><pre id="history-body"></pre>
+<details><summary>Technické údaje</summary><pre id="history-metadata"></pre></details>
+<details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
+<details><summary>Záznam uložení</summary><pre id="history-info"></pre></details>
+</section></div>
 <div id="project-view" hidden>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
@@ -252,7 +268,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
-<h2 id="preview-title"></h2><div id="preview-content"></div>
+<h2 id="preview-title"></h2><button id="preview-history" type="button" hidden>Zobrazit historii</button><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
@@ -494,10 +510,11 @@ body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
-#source-import-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#source-import-view,#history-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
 .standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
+.history-form{max-width:1100px}.history-choices{display:grid;grid-template-columns:1fr 1fr;gap:14px}.history-form pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.history-form details{margin-top:14px}
 #notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 @media(max-width:600px){
@@ -530,6 +547,7 @@ const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
 const sourceImportView=document.querySelector('#source-import-view');
+const historyView=document.querySelector('#history-view');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -644,6 +662,7 @@ function clearProject(){
  document.querySelector('#project-home').hidden=false;
  settingsView.hidden=true;
  sourceImportView.hidden=true;
+ historyView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
@@ -679,7 +698,7 @@ function openSourceImport(){
   const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.id}`;predecessors.append(option);
  }
  sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
- document.querySelector('#project-home').hidden=true;settingsView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
  sourceImportForm.elements.file.focus();
 }
@@ -727,7 +746,7 @@ async function openRegisteredProject(projectId){
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
-  sourceImportView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
+  sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   await loadChat();
   selectSidebarTab(document.querySelector('#artifacts-tab'));
@@ -807,7 +826,7 @@ for(const [index,tab] of settingsTabs.entries()){
 async function openSettings(){
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -929,6 +948,7 @@ function clearPreview(){
  document.querySelector('#preview-title').textContent='';
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
+ document.querySelector('#preview-history').hidden=true;
  document.querySelector('#pdf-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
@@ -963,6 +983,7 @@ async function openPreview(id,page=1){
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
   if(request!==previewRequest || activeProject!==project)return;
   document.querySelector('#preview-title').textContent=result.metadata.title;
+  document.querySelector('#preview-history').hidden=!currentArtifacts.some(item=>item.id===id&&item.kind==='document');
   const metadata=document.querySelector('#preview-metadata');
   for(const [key,value] of Object.entries(result.metadata)){
    const entries=key==='import' ? [
@@ -998,6 +1019,61 @@ async function openPreview(id,page=1){
   previewStatus.textContent=result.message || (result.format==='pdf'?'Stránka '+page+' · uložená verze':'Uložená verze · pouze pro čtení');
  }catch(error){if(request===previewRequest){previewStatus.textContent=error.message;}}
 }
+const historyStatus=document.querySelector('#history-status');
+const historyOlder=document.querySelector('#history-older');
+const historyNewer=document.querySelector('#history-newer');
+const historyCompare=document.querySelector('#history-compare');
+let historyVersions=[],historyRequest=0;
+function clearHistoryResult(){
+ for(const id of ['history-body','history-metadata','history-diff','history-info'])document.getElementById(id).textContent='';
+}
+function closeHistory(){
+ ++historyRequest;historyView.hidden=true;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
+ else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+}
+async function openHistory(){
+ if(!activeProject||!selectedArtifact)return;
+ const project=activeProject,artifactId=selectedArtifact,request=++historyRequest;
+ historyVersions=[];historyOlder.replaceChildren();historyNewer.replaceChildren();clearHistoryResult();
+ document.querySelector('#history-title').textContent=`Historie · ${document.querySelector('#preview-title').textContent||artifactId}`;
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;projectView.hidden=true;historyView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ historyCompare.disabled=true;historyStatus.textContent='Načítám historii…';
+ try{
+  const result=await projectRequest('/v1/artifacts/history/list',{project_id:project.id,artifact_id:artifactId,expected_head:project.head});
+  if(request!==historyRequest||activeProject!==project||selectedArtifact!==artifactId)return;
+  historyVersions=result.versions;
+  for(const [index,row] of historyVersions.entries()){
+   const summary=(row.message.split(/\\r?\\n/,1)[0]||'(bez zprávy)').slice(0,100);
+   const suffix=!row.available?' · neplatná/nepodporovaná verze':row.deleted?' · smazáno':'';
+   const label=`${row.commit_id.slice(0,10)} · ${row.date} · ${row.author} · ${summary}${suffix}`;
+   for(const select of [historyOlder,historyNewer]){const option=document.createElement('option');option.value=String(index);option.textContent=label;option.disabled=!row.available;select.append(option);}
+  }
+  historyNewer.value='0';historyOlder.value=String(Math.min(1,historyVersions.length-1));
+  historyCompare.disabled=!historyVersions.some(row=>row.available);
+  historyStatus.textContent=(historyVersions.length?'Vyberte verze a zobrazte porovnání.':'Dokument nemá dostupnou historii.')+(result.truncated?' Zobrazeno nejnovějších 100 záznamů.':'');
+ }catch(error){if(request===historyRequest){historyStatus.textContent=error.message;}}
+}
+for(const select of [historyOlder,historyNewer])select.addEventListener('change',clearHistoryResult);
+historyCompare.addEventListener('click',async()=>{
+ const project=activeProject,artifactId=selectedArtifact;
+ const older=historyVersions[Number(historyOlder.value)],newer=historyVersions[Number(historyNewer.value)];
+ if(!project||!artifactId||!older?.available||!newer?.available)return;
+ const request=++historyRequest;clearHistoryResult();historyCompare.disabled=true;historyStatus.textContent='Načítám uložené verze…';
+ try{
+  const result=await projectRequest('/v1/artifacts/history/compare',{project_id:project.id,artifact_id:artifactId,expected_head:project.head,older:older.commit_id,newer:newer.commit_id});
+  if(request!==historyRequest||activeProject!==project||selectedArtifact!==artifactId)return;
+  document.querySelector('#history-body').textContent=result.after?result.after.body:'Dokument v této verzi neexistuje.';
+  document.querySelector('#history-metadata').textContent=result.after?JSON.stringify(result.after.metadata,null,2):'';
+  document.querySelector('#history-diff').textContent=result.diff||'Vybrané verze nemají rozdíly v souborech dokumentu.';
+  document.querySelector('#history-info').textContent=`${newer.commit_id}\n${newer.date}\n${newer.author} <${newer.email}>\n\n${newer.message}`;
+  historyStatus.textContent='Uložená verze · pouze pro čtení.';
+ }catch(error){if(request===historyRequest)historyStatus.textContent=error.message;}
+ finally{if(request===historyRequest)historyCompare.disabled=false;}
+});
+document.querySelector('#preview-history').addEventListener('click',openHistory);
+document.querySelector('#history-back').addEventListener('click',closeHistory);
 document.querySelector('#pdf-show').addEventListener('click',()=>{
  const input=document.querySelector('#pdf-page');
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));
@@ -2124,7 +2200,8 @@ class DesktopHandler(Handler):
     assets = ASSETS
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
-        '/v1/artifacts/preview', '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
+        '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -2344,6 +2421,20 @@ class DesktopHandler(Handler):
             if (self.path == '/v1/artifacts/preview' and isinstance(request, dict)
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))
+            if (self.path == '/v1/artifacts/history/list' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                history = ArtifactHistory(node, network=getattr(projects, 'network', False))
+                return self.reply(200, history.list(**request))
+            if (self.path == '/v1/artifacts/history/compare' and isinstance(request, dict)
+                    and set(request) == {'project_id', 'artifact_id', 'expected_head', 'older', 'newer'}):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                history = ArtifactHistory(node, network=getattr(projects, 'network', False))
+                return self.reply(200, history.compare(**request))
             return self.send_error(400)
         except UnknownRun as exc:
             return self.reply(409, {'error': 'Výsledek lokálního LLM běhu není známý. Původní '
@@ -2418,6 +2509,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': message})
             if self.path == '/v1/sources/import':
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
+            if self.path.startswith('/v1/artifacts/history/'):
+                return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

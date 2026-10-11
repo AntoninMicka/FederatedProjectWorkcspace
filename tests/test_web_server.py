@@ -18,6 +18,7 @@ from uuid import uuid4
 from spikes.web_server import make_server, secret, WEB_HTML, WEB_CSS, WEB_JS
 from spikes.desktop_ui import HTML as SHARED_HTML, CSS as SHARED_CSS, JS as SHARED_JS
 from spikes.projects import Projects
+from spikes.artifacts import Artifacts, main_todo_id
 from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
 from spikes.source_import import Sources, request_from_bytes
@@ -114,6 +115,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(WEB_HTML.count('id="source-import-form"'), 1)
         self.assertIn('<div id="source-import-view" hidden>', WEB_HTML)
         self.assertIn('id="open-source-import"', WEB_HTML)
+        self.assertIn('id="history-view" hidden', WEB_HTML)
+        self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
+        self.assertIn("projectRequest('/v1/artifacts/history/compare'", WEB_JS)
         self.assertIn("querySelector('#source-import-local-only').disabled=true", WEB_JS)
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
@@ -182,6 +186,8 @@ class WebTests(unittest.TestCase):
         headers = {'Authorization':'Bearer '+key}
         self.assertEqual(json.loads(self.request(headers=headers)[1])['projects'], [])
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 403)
+        history_request = {'project_id':project, 'artifact_id':str(uuid4()), 'expected_head':'0'*40}
+        self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
@@ -199,6 +205,7 @@ class WebTests(unittest.TestCase):
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
+        self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 409)
         self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/workflows/status', body=json.dumps({
@@ -216,6 +223,25 @@ class WebTests(unittest.TestCase):
                            'active':False, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code,200)
         self.assertEqual(self.request(headers=headers)[0],401)
+
+    def test_shared_history_routes_list_and_compare_committed_document(self):
+        _, data, _ = self.request(path='/v1/projects/create', body='{"title":"History"}')
+        project = json.loads(data)['id']
+        artifacts = Artifacts(self.root/'node.json'); view = Projects(self.root/'node.json').open(project)
+        artifact = main_todo_id(project)
+        first = artifacts.save(dict(project_id=project, artifact_id=artifact,
+            base_head=view['commit_id'], title='Tasks', body='- [ ] One\n', new=True), str(uuid4()))['commit_id']
+        second = artifacts.save(dict(project_id=project, artifact_id=artifact,
+            base_head=first, title='Tasks', body='- [x] One\n', new=False), str(uuid4()))['commit_id']
+        request = {'project_id':project, 'artifact_id':artifact, 'expected_head':second}
+        code, data, _ = self.request(path='/v1/artifacts/history/list', body=json.dumps(request))
+        self.assertEqual(code, 200); rows = json.loads(data)['versions']
+        self.assertEqual([row['commit_id'] for row in rows], [second, first])
+        request.update(older=first, newer=second)
+        code, data, _ = self.request(path='/v1/artifacts/history/compare', body=json.dumps(request))
+        self.assertEqual(code, 200); result = json.loads(data)
+        self.assertEqual(result['after']['body'], '- [x] One\n')
+        self.assertIn('+- [x] One', result['diff'])
 
     def test_create_retries_have_one_receipt_and_project(self):
         from uuid import uuid4

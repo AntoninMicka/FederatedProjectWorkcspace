@@ -804,14 +804,14 @@ nenahrazují.
     PoC validovalo společný HTML/CSS shell s explicitním webovým a desktopovým
     bootstrapem, společnou samostatnou stránku importu zdroje a strom chatů;
     původní Qt importní dialog byl odstraněn. Evidence je ve
-    [WORK_LOG](WORK_LOG.md). Široký bod zůstává otevřený pro migraci zbývajících
-    starších společných Qt workflow v `UX-UNIFIED-02A` až `UX-UNIFIED-02D`.
-  - [ ] `UX-UNIFIED-02A`: jako první navazující samostatnou feature převést
+    [TODO](TODO.md). Dávka byla na přání uživatele rozšířena a široký bod
+    zůstává otevřený pro její kroky E/F a pozdější migraci editoru/NotebookLM.
+  - [x] `UX-UNIFIED-01-E`: v téže feature větvi a jediném PR převést
     read-only historii podporovaného artefaktu na společnou stránku nad
     `ArtifactHistory`; zachovat HEAD-bound validaci, topologickou historii,
-    bezpečné textové zobrazení a nulové projektové zápisy. Po dosažení parity
-    odstranit Qt `HistoryDialog`.
-  - [ ] `UX-UNIFIED-02B`: poté převést vytvoření projektu na společný formulář
+    bezpečné textové zobrazení a nulové projektové zápisy; po dosažení parity
+    byl Qt `HistoryDialog` odstraněn.
+  - [ ] `UX-UNIFIED-01-F`: poté v téže dávce převést vytvoření projektu na společný formulář
     a recovery kontrakt `ProjectCreation`. Výchozí umístění a pokračování
     operace jsou společné; systémový výběr vlastního adresáře smí zůstat pouze
     omezenou desktopovou capability bez paralelního dialogového workflow a bez

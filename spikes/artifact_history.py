@@ -22,8 +22,9 @@ def commit_id(value):
 
 
 class ArtifactHistory:
-    def __init__(self, node_path, *, timeout=60):
+    def __init__(self, node_path, *, timeout=60, network=False):
         self.artifacts = Artifacts(node_path, timeout=timeout)
+        self.network = network
 
     @contextmanager
     def _read(self, project_id, artifact_id, expected_head):
@@ -40,6 +41,9 @@ class ArtifactHistory:
             committed_project(ws.git, head, project_id)
             files = ws.git.snapshot(head)
             entities = validate_snapshot(files)
+            if self.network:
+                require(all(item['privacy'] != 'local-only' for item in entities.values()),
+                        'Project contains local-only data')
             require(any(p.startswith(f'artifacts/{artifact_id}/') for p in files), 'Artifact is not in current project')
             document(files, entities, artifact_id)
             yield ws.git

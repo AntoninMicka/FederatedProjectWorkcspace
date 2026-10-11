@@ -79,11 +79,22 @@ Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložt
 
 ## Historie dokumentu
 
-V Markdown editoru vyberte uložený dokument a klikněte na **Historie…**. Seznam verzí uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
+V projektu otevřete uložený Markdown dokument v záložce **Podklady** a v náhledu
+klikněte na **Zobrazit historii**. Samostatná společná stránka ve webu i desktopu
+uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí
+verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
 
-Záložky ukazují původní obsah zobrazené verze, její metadata, rozdíl uložených souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v obou seznamech vybrat stejný commit. Rozepsaný text zůstává v editoru zachovaný a historie jej neukládá ani nepřepisuje. U nového dosud neuloženého dokumentu je tlačítko historie nedostupné.
+Stránka ukazuje původní obsah zobrazené verze, její metadata, rozdíl uložených
+souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v
+obou seznamech vybrat stejný commit. Rozepsaný text editoru zůstává mimo
+požadavek a historie jej neukládá ani nepřepisuje. Nový dosud neuložený dokument
+v podkladech není, a proto nemá vstup do historie.
 
-Historie je pouze pro čtení. Při změně projektu nebo pending operaci dialog zobrazí chybu; zavřete historii a použijte obnovu/nové načtení editoru, po zachování rozepsaného textu. Neplatné starší verze jsou označené a nelze je zobrazit jako validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí. Podrobnosti: [ADR 0017](adr/0017-artifact-history.md).
+Historie je pouze pro čtení. Při změně projektu nebo pending operaci stránka
+zobrazí chybu; vraťte se do projektu a znovu jej načtěte, případně nejprve
+dokončete obnovu. Neplatné starší verze jsou označené a nelze je zobrazit jako
+validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí.
+Podrobnosti: [ADR 0017](adr/0017-artifact-history.md).
 
 ## Existující data
 

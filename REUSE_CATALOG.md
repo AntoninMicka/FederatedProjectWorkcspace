@@ -282,7 +282,7 @@ M1-03 **adaptuje** Workspace transakce o stabilní ID/digest požadavku, Project
 
 M1-03a **reuse/adapt**: společné čisté Markdown funkce z editoru přesunuty do `spikes/markdown_documents.py`, čtení TODO rozšiřuje existující Workspace snapshot a autentizovaný projektový přehled. HTML details/summary poskytují sbalitelné větve bez nové knihovny, parseru nebo mutujícího endpointu. [Kontrakt](docs/adr/0016-markdown-editor.md).
 
-M1-04 **reuse/adapt**: ArtifactHistory používá autorizovaný Workspace, Git wrapper, validaci snapshotu a sdílený Markdown document reader. Qt historie reuse EditorWorker a readonly textové widgety. Git diff pracuje jen s adresářem vybraného UUID bez externích driverů; historické project.json používá stejný validátor se samostatným ověřením dnešní konfigurace. Žádná další storage/framework ani externí komponenta není potřebná. [ADR 0017](docs/adr/0017-artifact-history.md).
+M1-04/UX-UNIFIED-01-E **reuse/adapt**: ArtifactHistory používá autorizovaný Workspace, Git wrapper, validaci snapshotu a sdílený Markdown document reader. Společná read-only stránka a dva úzce typované endpointy nahradily Qt viewer; síťový adaptér přidal fail-closed `local-only` kontrolu. Git diff pracuje jen s adresářem vybraného UUID bez externích driverů; historické project.json používá stejný validátor se samostatným ověřením dnešní konfigurace. Žádná další storage/framework ani externí komponenta není potřebná. [ADR 0017](docs/adr/0017-artifact-history.md).
 
 M1-03b **reuse/adapt**: záložky levého panelu používají stejný `result.artifacts` a `main_todo` ze stávajícího projektového čtení. DOM textContent zachovává bezpečné vykreslení názvů/ID, ARIA záložky doplňují klávesnicové přepínání. Bez další knihovny, API, parseru nebo zápisové cesty.
 
