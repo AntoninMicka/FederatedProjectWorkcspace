@@ -199,6 +199,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="preview-history" type="button" hidden', HTML)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", JS)
+        self.assertIn("item.id===id&&item.kind==='document'", JS)
         self.assertIn("document.querySelector('#history-body').textContent", JS)
         self.assertNotIn('innerHTML=result.after', JS)
         self.assertTrue({'/v1/artifacts/history/list', '/v1/artifacts/history/compare'} <= DesktopHandler.post_paths)

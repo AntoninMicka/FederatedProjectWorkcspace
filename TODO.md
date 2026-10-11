@@ -35,7 +35,10 @@ RBAC a privacy hranice jednotlivých backendových operací se nemění.
   diff a commit pouze jako text. Web zachovává RBAC a fail-closed odmítá celý
   snapshot s `local-only`; foreign/stale/pending, deleted/invalid/truncated a
   nulový diff pokrývají service/HTTP testy. Qt `HistoryDialog` a jeho vstup v
-  editoru byly po paritě odstraněny; nevznikl zápis ani nový recovery stav.
+  editoru byly po paritě odstraněny. Následná UI regrese opravila projektovou
+  projekci o explicitní `kind`, aby se vstup historie skutečně zobrazil u
+  uložených dokumentů a zůstal skrytý u zdrojů; nevznikl zápis ani nový recovery
+  stav.
 - [ ] [planned] **UX-UNIFIED-01-F — Společné vytvoření projektu (cílová úroveň:
   implemented → PoC validated).** Převést desktop na společný formulář a jednu
   autorizovanou adaptaci `ProjectCreation`. Zachovat přesný preview, potvrzení,
@@ -59,8 +62,9 @@ nahrazovat paralelním stavem.
 ### Dosavadní ověření
 
 Po kroku E prošla syntaktická kontrola společného JavaScriptu pomocí
-`node --check`. Cílená sada `tests.test_artifact_history tests.test_desktop
-tests.test_web_server` prošla: **42 testů OK, 4 volitelné přeskočeny**. Úplná
+`node --check`. Po opravě vstupu historie cílená sada `tests.test_projects
+tests.test_artifact_history tests.test_desktop tests.test_web_server` prošla:
+**54 testů OK, 6 volitelných přeskočeno**. Úplná
 sada prošla: **452 testů OK, 25 volitelných native/package/live testů
 přeskočeno**. Známé neblokující `ResourceWarning` testovacích SQLite spojení
 zůstaly beze změny. Skutečný Qt/WebEngine průchod a Turris/LXC deployment nebyly
