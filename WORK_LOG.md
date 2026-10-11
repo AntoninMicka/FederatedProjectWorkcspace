@@ -9,37 +9,39 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka na větvi `feature/ux-unified-01-shared-frontend`, založené z `develop`
 `7bb4f5e` po merge WEB-RUNTIME-01 jako PR #52, sjednotila frontendový shell bez
-změny autority projektových dat nebo persistentních recovery hranic. Dosažená
-úroveň je **designed / implemented / PoC validated** a lokální akceptační
-podmínky dávky jsou splněné. Push, PR ani merge této dávky dosud nebyly
-provedeny; cílem jediného PR zůstává `develop`.
+změny autority projektových dat nebo persistentních recovery hranic. Po první
+lokální akceptaci byla na přání uživatele znovu otevřena a doplnila per-chat
+akční menu v sidebaru. Dosažená úroveň je **designed / implemented / PoC
+validated** a lokální akceptační podmínky jsou splněné. Push, PR ani merge této
+dávky dosud nebyly provedeny; cílem jediného PR zůstává `develop`.
 
-- [x] [completed] **UX-UNIFIED-01-A — Jeden zdroj shellu.** Webový server i
-  desktopový WebEngine servírují byte-for-byte shodné `HTML` a `CSS` z
-  `spikes/desktop_ui.py`. Správa uzlu i serverové create/import prvky jsou
-  součástí společného DOM; `web_server.py` ani `desktop_management.py` už
-  neskládají varianty řetězci `.replace(...)`.
-- [x] [completed] **UX-UNIFIED-01-B — Explicitní adaptéry.** Serverový
-  JavaScript přidává pouze same-origin bearer login, session/RBAC a serverové
-  capability před společný aplikační kód. Desktopový bootstrap používá
-  procesní token WebEngine interceptoru a odemyká capability single-user uzlu.
-  Neautentizovaný server ani nepodporované desktopové server-only vstupy se
-  nezobrazí.
+- [x] [completed] **UX-UNIFIED-01-A — Jeden zdroj shellu a explicitní
+  adaptéry.** Webový server i desktopový WebEngine servírují byte-for-byte
+  shodné HTML/CSS. Varianty přidávají pouze autentizační a capability bootstrap;
+  `web_server.py` ani `desktop_management.py` už neskládají DOM assety pomocí
+  `.replace(...)`. Pending runtime zůstává skrytý do volby adaptéru.
+- [x] [completed] **UX-UNIFIED-01-B — Per-chat akční menu.** „Nové vlákno“ a
+  „Nastavení backendu“ jsou nad zařazenými a nezařazenými seznamy. Každý řádek
+  chatu má vlastní přístupné menu pro archivaci, přípravu smazání, uložení
+  otisku a poslední odpovědi. Akce nejprve aktivuje konkrétní vlákno a teprve
+  potom použije stávající backendový lifecycle; neplatné akce se pro daný stav
+  nezobrazí. Původní globální akční tlačítka a osiřelé DOM reference byly
+  odstraněny.
 - [x] [completed] **UX-UNIFIED-01-C — Qt/PySide inventura.** Hranice je
   popsána v `docs/ui-capability-inventory.md`. OS file picker, lokální procesy,
   LXC/network lifecycle, askpass a lifecycle okna zůstávají desktop-only.
   Starší Qt create/import/editor/history workflow nejsou takto označena a
-  jejich řízená migrace je předána jako `UX-UNIFIED-02`; tato dávka ji
-  nepravdivě neprohlašuje za hotovou.
+  jejich řízená migrace je předána jako `UX-UNIFIED-02` za již schválenou
+  Ollama orchestraci a output router.
 
-Nevznikla nová persistentní operace. Změna vybírá statické assety a viditelnost
-capability ještě před uživatelskou akcí; stávající backendové operation ID,
-journaly, Git/SQLite recovery a RBAC zůstaly beze změny.
+Nevznikla nová persistentní operace. Menu používá stávající explicitní preview,
+operation ID, thread revision a potvrzení; journaly, Git/SQLite recovery a RBAC
+zůstaly beze změny.
 
 Ověření po poslední změně kódu: cílená sada
 `python3 -m unittest tests.test_web_server tests.test_desktop -q` prošla:
 **33 testů OK, 4 volitelné Qt/WebEngine testy přeskočeny**. Úplná sada
-`python3 -m unittest discover -s tests -v` prošla: **451 testů OK,
+`python3 -m unittest discover -s tests -q` prošla: **451 testů OK,
 27 volitelných native/package/live testů přeskočeno**. Známé neblokující
 `ResourceWarning` na testovací SQLite spojení zůstaly beze změny.
 

@@ -164,6 +164,21 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('id="back-projects" class="back-button"', HTML)
         self.assertIn('id="sidebar-assigned-chats"', HTML)
         self.assertIn('id="sidebar-unassigned-chats"', HTML)
+        sidebar_chats = HTML.split('id="sidebar-chats"', 1)[1].split('</div></div>', 1)[0]
+        self.assertLess(sidebar_chats.index('id="chat-new-thread"'),
+                        sidebar_chats.index('id="sidebar-assigned-chats"'))
+        self.assertLess(sidebar_chats.index('id="chat-open-settings"'),
+                        sidebar_chats.index('id="sidebar-assigned-chats"'))
+        self.assertNotIn('id="chat-archive-thread"', HTML)
+        self.assertNotIn('id="chat-delete-thread"', HTML)
+        self.assertNotIn('id="chat-record-actions"', HTML)
+        self.assertNotIn("querySelector('#chat-record-actions')", JS)
+        self.assertIn("action('Archivovat',archiveActiveThread", JS)
+        self.assertIn("action('Připravit smazání',prepareActiveThreadDeletion)", JS)
+        self.assertIn("action('Uložit otisk',button=>runChatRecord(button,'snapshot')", JS)
+        self.assertIn("action('Uložit poslední odpověď',button=>runChatRecord(button,'output')", JS)
+        self.assertIn("trigger.setAttribute('aria-label',`Akce chatu", JS)
+        self.assertIn('.sidebar-chat-menu-items{position:absolute', CSS)
         self.assertIn("openStoredThread(thread.thread_id)", JS)
         self.assertIn("function rememberThread(thread)", JS)
         self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)

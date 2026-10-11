@@ -23,8 +23,9 @@ F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
 `F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50 a `F-M2-CHAT-03` PR #51.
 `WEB-RUNTIME-01` bylo doručeno PR #52 jako merge commit `7bb4f5e`.
-`UX-UNIFIED-01` je lokálně akceptované a v TODO čeká na doručení jediného PR;
-níže jsou jeho navazující dávky v dříve schváleném pořadí.
+`UX-UNIFIED-01` je po doplnění per-chat menu lokálně akceptované a v TODO čeká
+na doručení jediného PR; níže jsou jeho navazující dávky v dříve schváleném
+pořadí.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 

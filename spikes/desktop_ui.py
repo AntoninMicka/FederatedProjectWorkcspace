@@ -73,6 +73,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
+<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button">Nové vlákno</button>
+<button id="chat-open-settings" type="button">Nastavení backendu</button></div>
 <h3>Zařazené</h3><ul id="sidebar-assigned-chats" aria-label="Zařazené chaty"></ul>
 <h3>Nezařazené</h3><ul id="sidebar-unassigned-chats" aria-label="Nezařazené chaty"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
@@ -246,12 +248,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
 <div id="chat-panel" role="tabpanel" aria-labelledby="chat-tab" hidden><h2>Chat</h2>
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
-<button id="chat-open-settings" class="secondary-button" type="button">Otevřít nastavení backendu</button>
-<button id="chat-new-thread" type="button">Nové vlákno</button>
-<button id="chat-archive-thread" class="secondary-button" type="button" disabled>Archivovat</button>
-<button id="chat-delete-thread" class="secondary-button" type="button" disabled>Připravit smazání</button>
-<span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
-<button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
 <section id="chat-delete-preview" class="deletion-preview" hidden aria-label="Náhled smazání vlákna">
 <h3>Co bude odstraněno z tohoto uzlu</h3><pre id="chat-delete-details"></pre>
 <label class="confirm"><input id="chat-delete-confirm" type="checkbox"> Rozumím, že lokální stav bude odstraněn, ale publikované Git artefakty zůstanou zachované.</label>
@@ -407,6 +403,14 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-chats h3{font-size:11px;color:#8faabc;text-transform:uppercase;letter-spacing:.06em;margin:18px 8px 6px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
+.sidebar-chat-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-chat-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+.sidebar-chat-row>.sidebar-chat-open{min-width:0}.sidebar-chat-menu{position:relative;margin-top:4px}
+.sidebar-chat-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}
+.sidebar-chat-menu>summary::-webkit-details-marker{display:none}.sidebar-chat-menu>summary:hover,.sidebar-chat-menu[open]>summary{background:#274154}
+.sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
+#sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
+#sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
 #sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
@@ -414,7 +418,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list{flex:1}
-#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto minmax(0,1fr)}
+#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr) auto minmax(0,1fr)}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
@@ -433,7 +437,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}#chat-record-actions button{padding:8px 12px;margin-left:6px;font-size:12px}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
@@ -623,7 +627,7 @@ function clearProject(){
  document.querySelector('#chat-delete-preview').hidden=true;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
- document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
+ document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
  settingsView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
@@ -991,9 +995,6 @@ function renderChat(thread){
   }
  }
  renderTaskOutcomes();
- document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
- document.querySelector('#chat-archive-thread').disabled=!thread || thread.status==='archived';
- document.querySelector('#chat-delete-thread').disabled=!thread;
  const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
  document.querySelector('#chat-submit').disabled=composerDisabled;
  document.querySelector('#external-propose-button').disabled=composerDisabled;
@@ -1006,6 +1007,7 @@ function renderThreadList(threads){
  assigned.replaceChildren();unassigned.replaceChildren();
  for(const thread of threads){
   const row=document.createElement('li'),button=document.createElement('button');button.type='button';
+  row.className='sidebar-chat-row';button.className='sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
   button.textContent=`${thread.classification} · ${thread.status}`;
@@ -1013,7 +1015,21 @@ function renderThreadList(threads){
   const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
   meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
   button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
-  row.append(button);(thread.project_id===null?unassigned:assigned).append(row);
+  const menu=document.createElement('details');menu.className='sidebar-chat-menu';
+  const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce chatu ${thread.classification}`);trigger.textContent='⋮';
+  const items=document.createElement('div');items.className='sidebar-chat-menu-items';items.setAttribute('role','menu');
+  function action(label,callback,disabled=false){
+   const item=document.createElement('button');item.type='button';item.textContent=label;item.disabled=disabled;item.setAttribute('role','menuitem');
+   item.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;
+    if(activeThread?.thread_id!==thread.thread_id)await openStoredThread(thread.thread_id);
+    if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
+   items.append(item);
+  }
+  action('Archivovat',archiveActiveThread,thread.status==='archived');
+  action('Připravit smazání',prepareActiveThreadDeletion);
+  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
+  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!thread.messages.length);
+  menu.append(trigger,items);row.append(button,menu);(thread.project_id===null?unassigned:assigned).append(row);
  }
  const assignedCount=threads.filter(thread=>thread.project_id!==null).length;
  const unassignedCount=threads.length-assignedCount;
@@ -1143,17 +1159,17 @@ async function openStoredThread(threadId){
   chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
-document.querySelector('#chat-archive-thread').addEventListener('click',async()=>{
- if(!activeThread)return;
+async function archiveActiveThread(button){
+ if(!activeThread)return;if(button)button.disabled=true;
  try{const archived=await projectRequest('/v1/chat/archive',{
    thread_id:activeThread.thread_id,expected_revision:activeThread.revision});
   activeThread=archived;const index=knownThreads.findIndex(item=>item.thread_id===archived.thread_id);
   if(index>=0)knownThreads[index]=archived;renderThreadList(knownThreads);renderChat(archived);
   chatOperationStatus.textContent='Vlákno bylo archivováno a zůstává lokálně uložené.';
- }catch(error){chatOperationStatus.textContent=error.message;}
-});
-document.querySelector('#chat-delete-thread').addEventListener('click',async()=>{
- if(!activeThread)return;chatOperationStatus.textContent='Připravuji přesný rozsah smazání…';
+ }catch(error){chatOperationStatus.textContent=error.message;if(button)button.disabled=false;}
+}
+async function prepareActiveThreadDeletion(button){
+ if(!activeThread)return;if(button)button.disabled=true;chatOperationStatus.textContent='Připravuji přesný rozsah smazání…';
  try{const preview=await projectRequest('/v1/chat/delete/preview',{thread_id:activeThread.thread_id});
   pendingThreadDeletion={preview,operation_id:crypto.randomUUID()};
   document.querySelector('#chat-delete-details').textContent=JSON.stringify({
@@ -1164,8 +1180,8 @@ document.querySelector('#chat-delete-thread').addEventListener('click',async()=>
   document.querySelector('#chat-delete-run').disabled=true;
   chatOperationStatus.textContent=preview.blockers.length?
    'Smazání blokuje aktivní nebo neznámý účinek.':'Zkontrolujte rozsah a potvrďte smazání.';
- }catch(error){chatOperationStatus.textContent=error.message;}
-});
+ }catch(error){chatOperationStatus.textContent=error.message;if(button)button.disabled=false;}
+}
 document.querySelector('#chat-delete-confirm').addEventListener('change',event=>{
  document.querySelector('#chat-delete-run').disabled=!event.currentTarget.checked ||
   !pendingThreadDeletion || pendingThreadDeletion.preview.blockers.length>0;
@@ -1632,8 +1648,6 @@ async function runChatRecord(button,action){
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{button.disabled=false;}
 }
-document.querySelector('#chat-save-snapshot').addEventListener('click',event=>runChatRecord(event.currentTarget,'snapshot'));
-document.querySelector('#chat-save-output').addEventListener('click',event=>runChatRecord(event.currentTarget,'output'));
 draft.addEventListener('keydown',event=>{
  if(event.key==='Enter' && !event.shiftKey && !event.isComposing){event.preventDefault();document.querySelector('#chat-composer').requestSubmit();}
 });
