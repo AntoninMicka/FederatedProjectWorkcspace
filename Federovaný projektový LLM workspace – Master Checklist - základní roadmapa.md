@@ -684,7 +684,8 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   Context Manifest; projektové artefakty a `local-only` zůstávají zakázané.
   Streamované delty nejsou durable finální odpověď a přerušený síťový účinek se
   nesmí automaticky opakovat.
-- [ ] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03: nové/navázané vlákno musí být vědomá volba, UI rozliší nepřiřazená a projektová vlákna, jejich archivaci a stav persistence. Potvrzené smazání koordinovaně odstraní všechny podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy bez osiřelých dat; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií a UI je před smazáním výslovně uvede. Ověřit více vláken jednoho projektu, oddělení projektů a uživatelů, souběh i restart na každé hranici; „úplné“ není příslib forenzního přepsání média.
+- [x] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03 lokálně PoC validated: nové/navázané vlákno je vědomá volba; samostatná záložka Chaty v pevném levém panelu odděluje zařazená a nezařazená vlákna a zachovává aktivní/archivovaný stav. Scrollují jen vnitřní seznamy a návrat k projektům zůstává nahoře. Potvrzené smazání koordinovaně odstraní podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable journal a idempotentní recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií; „úplné“ není příslib forenzního přepsání média. Evidence je ve WORK_LOG, dodání PR zatím neproběhlo.
+- [ ] **F-M3-OLLAMA-ORCH-LAN-01:** rozšířit orchestration režim o explicitně zvolenou TLS připnutou `private-network` Ollamu. LAN cíl zůstává odlišný od `same-node`, vyžaduje nový Context Manifest/run a nesmí být implicitním fallbackem; `local-only` data zůstávají bez samostatné oprávněné reklasifikace zakázaná.
 
 ---
 
@@ -794,7 +795,16 @@ nenahrazují.
 
 # 12A. Desktopová aplikace jako uzel sítě
 
-- [ ] Sdílet aplikační jádro a UI s webovou/serverovou variantou.
+- [ ] Sjednotit webovou/serverovou a desktopovou aplikaci nad jedním sdíleným
+  frontendem a stejnými uživatelskými workflow. Varianty smějí mít odlišný
+  bootstrap, autentizovaný transport, balení a capability dostupné jen na
+  konkrétním uzlu, nikoli paralelní implementace stejné obrazovky nebo
+  dodatečné skládání webového HTML/JavaScriptu z desktopové varianty.
+- [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
+  funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
+  lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat
+  společný frontend i v desktopovém WebEngine obalu; případná výjimka vyžaduje
+  konkrétní zdůvodnění hranice a samostatné ověření obou variant.
 - [ ] Přibalit lokální backend pro správu projektů, Git operace, metadata a federaci.
 - [ ] Umožnit založení a editaci lokálního projektu bez dostupnosti jiného uzlu.
 - [ ] Ukládat projektové repozitáře a stav uzlu do persistentního uživatelského adresáře.
@@ -937,7 +947,8 @@ Aktualizace 2026-09-20: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [ ] Metadata.
 - [ ] Git history.
 - [ ] Web UI.
-- [ ] Desktopové balení se spuštěním lokálního uzlu a sdíleným UI.
+- [ ] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
+  podle sekce 12A; Qt/PySide ponechat pouze pro desktop-only integrační funkce.
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování a indexu drží WORK_LOG, odstranění [TODO](TODO.md).
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
@@ -954,7 +965,7 @@ Aktualizace 2026-09-20: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 ## Milestone M2 – Local AI
 
 - [x] Ollama backend — PoC adapter váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; F-M3-OLLAMA-ROBUST-01 navíc živě ověřilo lokální službu, restart hostitele a odpověď modelu. Jde o PoC validated, nikoli obecný produkční provoz.
-- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. F-M3-OLLAMA-ROBUST-01 živě ověřilo LAN/TLS katalog a modelovou odpověď z Workspace na Omnii, restart AI hostitele a zdrojové firewallové omezení portu proxy; evidence je ve WORK_LOG a doručení PR zůstává otevřené.
+- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. F-M3-OLLAMA-ROBUST-01 živě ověřilo LAN/TLS katalog a modelovou odpověď z Workspace na Omnii, restart AI hostitele a zdrojové firewallové omezení portu proxy; evidence je ve WORK_LOG a dávka byla doručena PR #50.
 - [x] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu — F-M2-CHAT-01, PR #29.
 - [x] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty — F-M2-CHAT-02, PR #30.
 - [x] Summarizer — F-M2-SUMMARY-01 lokálně PoC validated a začleněn PR #31: explicitní artifact/message výběr, same-node preview, potvrzená recovery-safe publikace a desktopové API/UI.

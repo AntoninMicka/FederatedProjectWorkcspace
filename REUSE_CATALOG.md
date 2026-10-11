@@ -92,6 +92,15 @@ nebo content-addressed storage; editovatelný výstup zůstává běžný Markdo
 document. Obecné Git utility se nepřebírají, protože nenahrazují explicitní
 vlastněné cesty, expected HEAD, kandidátní validaci a recovery ADR 0003.
 
+F-M2-CHAT-03 **reuse/adaptuje** vlastnictví a revize `ChatThreads`, explicitní
+vazby `TaskOutcomes`/`ExternalDispatches` na backendové run journals a stávající
+bezpečný desktop/web panel. Nový omezený `ThreadLifecycle` journal koordinuje
+jen odstranění podporovaného node-local stavu a idempotentní obnovu; není
+projektovým indexem ani náhradou Workspace journalu. Publikované Git snapshoty
+a výstupy pouze inventarizuje a zachovává. Obecný cleanup framework, message
+queue ani externí databáze se nepřebírají, protože by nepřidaly přesný ownership,
+preview digest, fail-closed `unknown` hranici ani vazbu na zdejší schémata.
+
 F-M2-SUMMARY-01 **reuse/adaptuje** Context Builder a jeho dvoufázovou
 revalidaci, `OllamaBindings`/`OllamaAdapter`/`OllamaRuns`, Workspace a běžný
 Markdown document lifecycle. Backendově neutrální task/preview journal adaptuje

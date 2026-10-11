@@ -53,13 +53,18 @@ class ChatThreads:
             db.execute('BEGIN IMMEDIATE')
             tables = {row[0] for row in db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+            legacy_tables = {'schema_info', 'threads', 'messages', 'turns'}
+            current_tables = legacy_tables | {'deletions'}
             if not tables:
                 self._create(db)
             else:
-                require(tables == {'schema_info', 'threads', 'messages', 'turns'},
+                require(tables in (legacy_tables, current_tables),
                         'Unknown or incomplete chat schema')
                 row = db.execute('SELECT version FROM schema_info').fetchall()
-                require(row in ([(1,)], [(2,)], [(3,)]), 'Unsupported chat schema version')
+                require(row in ([(1,)], [(2,)], [(3,)], [(4,)]),
+                        'Unsupported chat schema version')
+                require(row != [(4,)] or tables == current_tables,
+                        'Unknown or incomplete chat schema')
                 self._validate_columns(db, version=row[0][0])
                 if row == [(1,)]:
                     db.execute('ALTER TABLE threads ADD COLUMN project_id TEXT')
@@ -84,6 +89,14 @@ class ChatThreads:
                         PRAGMA foreign_keys=ON;
                     ''')
                     self._validate_columns(db, version=3)
+                if row in ([(1,)], [(2,)], [(3,)]):
+                    if 'deletions' not in tables:
+                        db.execute('''CREATE TABLE deletions(
+                            thread_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE,
+                            node_id TEXT NOT NULL, user_id TEXT NOT NULL,
+                            preview_sha256 TEXT NOT NULL)''')
+                    db.execute('UPDATE schema_info SET version=4')
+                    self._validate_columns(db, version=4)
             db.commit()
             return closing(db)
         except Exception:
@@ -94,7 +107,7 @@ class ChatThreads:
     def _create(db):
         db.executescript('''
             CREATE TABLE schema_info(version INTEGER NOT NULL);
-            INSERT INTO schema_info VALUES(3);
+            INSERT INTO schema_info VALUES(4);
             CREATE TABLE threads(
                 thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 classification TEXT NOT NULL CHECK(classification IN ('brainstorming','orchestration')),
@@ -117,6 +130,10 @@ class ChatThreads:
                 state TEXT NOT NULL CHECK(state IN
                     ('prepared','run-bound','completed','failed','cancelled','unknown')),
                 error TEXT, manifest_id TEXT);
+            CREATE TABLE deletions(
+                thread_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE,
+                node_id TEXT NOT NULL, user_id TEXT NOT NULL,
+                preview_sha256 TEXT NOT NULL);
         ''')
 
     @staticmethod
@@ -132,12 +149,15 @@ class ChatThreads:
                       'assistant_message_id', 'state', 'error'] +
                      (['manifest_id'] if version >= 2 else []),
         }
+        if version >= 4:
+            expected['deletions'] = ['thread_id', 'operation_id', 'node_id', 'user_id',
+                                     'preview_sha256']
         for table, columns in expected.items():
             actual = [row[1] for row in db.execute(f'PRAGMA table_info({table})')]
             require(actual == columns, 'Unknown or incomplete chat schema')
 
     @staticmethod
-    def _owner(db, thread_id, node_id, user_id, *, active=False):
+    def _owner(db, thread_id, node_id, user_id, *, active=False, allow_deleting=False):
         for value in (thread_id, node_id, user_id):
             uuid(value)
         row = db.execute('SELECT node_id,user_id,status,classification,created_at,revision,'
@@ -153,8 +173,57 @@ class ChatThreads:
         if row[7] is not None:
             uuid(row[7])
         require(type(row[8]) is int and row[8] >= 0, 'Invalid assignment revision')
+        deleting = db.execute('SELECT 1 FROM deletions WHERE thread_id=?',
+                              (thread_id,)).fetchone()
+        require(allow_deleting or deleting is None, 'Chat thread deletion is in progress')
         require(not active or row[2] == 'active', 'Chat thread is archived')
         return row
+
+    def mark_deleting(self, *, thread_id, node_id, user_id, operation_id,
+                      preview_sha256, expected_revision):
+        uuid(operation_id)
+        require(type(expected_revision) is int and expected_revision >= 0,
+                'Invalid expected chat thread revision')
+        require(isinstance(preview_sha256, str) and len(preview_sha256) == 64,
+                'Invalid deletion preview digest')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            owner = self._owner(db, thread_id, node_id, user_id, allow_deleting=True)
+            require(owner[5] == expected_revision,
+                    'Chat thread changed before deletion lock')
+            row = db.execute('SELECT operation_id,node_id,user_id,preview_sha256 '
+                             'FROM deletions WHERE thread_id=?', (thread_id,)).fetchone()
+            expected = (operation_id, node_id, user_id, preview_sha256)
+            if row:
+                require(row == expected, 'Chat thread has a different deletion operation')
+            else:
+                require(db.execute('SELECT 1 FROM deletions WHERE operation_id=?',
+                                   (operation_id,)).fetchone() is None,
+                        'Deletion operation belongs to another thread')
+                db.execute('INSERT INTO deletions VALUES(?,?,?,?,?)',
+                           (thread_id,) + expected)
+            db.commit()
+
+    def delete_marked(self, *, thread_id, node_id, user_id, operation_id,
+                      preview_sha256):
+        for value in (thread_id, node_id, user_id, operation_id):
+            uuid(value)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            marker = db.execute('SELECT operation_id,node_id,user_id,preview_sha256 '
+                                'FROM deletions WHERE thread_id=?', (thread_id,)).fetchone()
+            thread = db.execute('SELECT node_id,user_id FROM threads WHERE thread_id=?',
+                                (thread_id,)).fetchone()
+            if marker is None and thread is None:
+                db.commit(); return
+            require(marker == (operation_id, node_id, user_id, preview_sha256)
+                    and thread == (node_id, user_id),
+                    'Chat thread deletion marker changed')
+            db.execute('DELETE FROM turns WHERE thread_id=?', (thread_id,))
+            db.execute('DELETE FROM messages WHERE thread_id=?', (thread_id,))
+            db.execute('DELETE FROM threads WHERE thread_id=?', (thread_id,))
+            db.execute('DELETE FROM deletions WHERE thread_id=?', (thread_id,))
+            db.commit()
 
     def create(self, *, thread_id, node_id, user_id, created_at,
                classification='brainstorming'):

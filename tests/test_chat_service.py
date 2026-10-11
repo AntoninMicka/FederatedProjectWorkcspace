@@ -791,6 +791,70 @@ class ChatServiceTests(unittest.TestCase):
                         if item['thread_id'] == result['thread']['thread_id'])
         self.assertEqual(archived['status'], 'archived')
 
+    def test_thread_archive_preview_and_delete_are_explicit_and_restart_safe(self):
+        result = self.service.send(**self.request())
+        thread = result['thread']
+        archived = self.service.archive_thread(
+            thread_id=thread['thread_id'], expected_revision=thread['revision'])
+        self.assertEqual(archived['status'], 'archived')
+        preview = self.service.delete_thread_preview(thread_id=thread['thread_id'])
+        self.assertEqual(preview['counts']['messages'], 2)
+        self.assertEqual(preview['blockers'], [])
+        operation_id = str(uuid4())
+        receipt = self.service.delete_thread(thread_id=thread['thread_id'],
+            operation_id=operation_id, expected_revision=preview['expected_revision'],
+            preview_sha256=preview['preview_sha256'])
+        self.assertEqual(receipt['state'], 'completed')
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.delete_thread(thread_id=thread['thread_id'],
+            operation_id=operation_id, expected_revision=preview['expected_revision'],
+            preview_sha256=preview['preview_sha256']), receipt)
+        self.assertFalse(any(item['thread_id'] == thread['thread_id']
+                             for item in restarted.status()['threads']))
+
+    def test_thread_delete_lists_and_preserves_published_git_snapshot(self):
+        result = self.service.send(**self.request())
+        thread = self.service.assign(project_id=ENTITY,
+            thread_id=result['thread']['thread_id'],
+            expected_revision=result['thread']['revision'])
+        snapshot_id = str(uuid4())
+        self.service.publish_snapshot({
+            'project_id': ENTITY, 'thread_id': thread['thread_id'],
+            'expected_thread_revision': thread['revision'], 'expected_head': self.git.head(),
+            'snapshot_id': snapshot_id, 'mode': 'full', 'title': 'Preserved chat',
+            'created_at': NOW, 'base_snapshot_id': None, 'base_snapshot_sha256': None},
+            str(uuid4()))
+        published_head = self.git.head()
+        preview = self.service.delete_thread_preview(thread_id=thread['thread_id'])
+        self.assertEqual(preview['published_artifacts'],
+                         [{'artifact_id': snapshot_id, 'kind': 'snapshot'}])
+        receipt = self.service.delete_thread(thread_id=thread['thread_id'],
+            operation_id=str(uuid4()), expected_revision=preview['expected_revision'],
+            preview_sha256=preview['preview_sha256'])
+        self.assertEqual(receipt['published_artifacts_preserved'],
+                         preview['published_artifacts'])
+        self.assertEqual(self.git.head(), published_head)
+        self.assertIn(f'artifacts/{snapshot_id}/snapshot.md',
+                      self.git.snapshot(published_head))
+
+    def test_status_recovers_confirmed_thread_delete_after_restart(self):
+        thread = self.service.send(**self.request())['thread']
+        preview = self.service.delete_thread_preview(thread_id=thread['thread_id'])
+        operation_id = str(uuid4())
+        def crash(stage):
+            if stage == 'approvals': raise RuntimeError(stage)
+        with self.assertRaisesRegex(RuntimeError, 'approvals'):
+            self.service.delete_thread(thread_id=thread['thread_id'],
+                operation_id=operation_id, expected_revision=preview['expected_revision'],
+                preview_sha256=preview['preview_sha256'], checkpoint=crash)
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        status = restarted.status()
+        self.assertEqual(status['thread_deletions'][0]['operation_id'], operation_id)
+        self.assertEqual(status['thread_deletions'][0]['state'], 'completed')
+        self.assertFalse(status['threads'])
+
     def test_followup_requires_explicit_ordered_selection(self):
         first = self.request(); result = self.service.send(**first)
         ids = [item['message_id'] for item in result['thread']['messages']]

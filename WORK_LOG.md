@@ -5,14 +5,106 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CHAT-03 — Správa a restartová akceptace lokálních vláken — 2026-10-11
+
+Dávka na větvi `feature/f-m2-chat-03-thread-lifecycle`, založené z `develop`
+`9ea0fb0` po začlenění F-M3-OLLAMA-ROBUST-01 jako PR #50, doplnila vědomý
+lifecycle lokálně perzistentních chatových vláken. Po uživatelské změně
+akceptace přidala seznam chatů do levého panelu. Dosažená úroveň je **PoC
+validated** a akceptační podmínky feature jsou splněné. Push, PR ani merge této
+dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
+
+- [x] [completed] **F-M2-CHAT-03-A — Inventura, reuse a recovery kontrakt
+  (designed).** ADR 0008 a reuse katalog vymezují vlastníka, read-only preview,
+  blokaci aktivních a `unknown` účinků, durable crash boundaries a zachování
+  již publikované Git historie. Adaptují existující `ChatThreads`,
+  `TaskOutcomes`, `ExternalDispatches`, backendové run journals a bezpečné
+  textové sdílené UI.
+- [x] [completed] **F-M2-CHAT-03-B — Koordinovaný backendový lifecycle
+  (implemented).** `thread-lifecycle.sqlite` durable váže operation ID,
+  očekávanou revizi a digest přesného plánu. Deletion marker uzamkne běžné
+  čtení a mutace vlákna; approval, task outcome, Ollama/OpenAI run a thread
+  stores se odstraňují po idempotentních krocích a stav po restartu automaticky
+  dokončí stejnou potvrzenou operaci. Omezený receipt neuchovává obsah zpráv.
+- [x] [completed] **F-M2-CHAT-03-C — Uživatelská správa vláken
+  (implemented).** Sdílené desktop/web API a UI umožňuje nové vlákno, vědomé
+  otevření, rozlišení projektových/nepřiřazených a aktivních/archivovaných
+  vláken, archivaci a dvoukrokové smazání. Preview vypíše lokální dopady a
+  zachované publikované snapshoty/výstupy; nedůvěryhodný obsah se vkládá pouze
+  přes `textContent`.
+- [x] [completed] **F-M2-CHAT-03-D — Restart, souběh a závěrečná akceptace
+  (PoC validated).** Testy pokrývají více vláken, oddělení vlastníků, stale
+  revizi/preview, aktivní a `unknown` blokace, opakování po všech sedmi
+  potvrzených hranicích, automatickou obnovu přes `ChatService.status`,
+  idempotentní receipt a nezměněný publikovaný Git snapshot.
+- [x] [completed] **F-M2-CHAT-03-E — Seznam chatů v levém panelu
+  (implemented; změna akceptace 2026-10-11).** Třetí přístupná sidebar záložka
+  „Chaty“ odděluje zařazená a nezařazená vlákna. Položka bezpečně textově uvádí
+  režim, stav, počet zpráv a vazbu k projektu; kliknutí je vědomé navázání,
+  přepne hlavní panel na chat a v mobilním draweru zavře navigaci. Klávesnicová
+  navigace tablistu se odvozuje od skutečného počtu záložek. Nově vytvořené,
+  archivované, odstraněné i dodatečně zařazené vlákno aktualizuje skupiny bez
+  znovunačtení projektu.
+- [x] [completed] **F-M2-CHAT-03-F — Pevný sidebar a návrat k projektům
+  (implemented; změna akceptace 2026-10-11).** Samotný sidebar má pevnou výšku
+  viewportu a nesroluje se. V dostupném prostoru se samostatně s overscroll
+  containmentem posouvají pouze seznamy projektů a obsahové seznamy aktuální
+  záložky; jejich nadpisy, stav, tablist, globální nastavení a informace o uzlu
+  zůstávají na místě. Jediné tlačítko „Seznam projektů“ bylo přesunuto nahoru
+  před záložky a na mobilu zavírá drawer se standardní obnovou focusu.
+- [x] [completed] **F-M2-CHAT-03-G — Webová inicializace po přesunu navigace
+  (PoC validated; ad-hoc regresní oprava 2026-10-11).** Hlášení ze skutečného
+  Turris deploymentu odhalilo, že webová transformace stále vkládala formulář
+  importu podle již přesunutého tlačítka `back-projects`. Chybějící formulář
+  ukončil JavaScript na registraci listeneru a katalog zůstal na „Načítám
+  projekty…“, přestože persistentní Git projekty, chatová SQLite data i
+  autentizované HTTPS API byly zdravé. Import se nyní vkládá podle stabilního
+  kontejneru projektového pohledu; strukturální test hlídá právě jednu instanci
+  formuláře a skutečný WebEngine login → katalog průchod regresi reprodukoval
+  před opravou a po opravě prošel.
+
+Crash kontrakt: preview je read-only; confirm nejprve durable uloží přesný plán.
+Pád před commitem nemění uživatelský stav. Po commitu marker uzamkne vlákno a
+journal se posouvá až po durable commitu každého podporovaného store. Opakování
+po pádu proto nemaže jiný nově naplánovaný rozsah. Projektový Git je po celou
+operaci pouze čtenou a zachovanou autoritativní historií. „Úplné odstranění“
+znamená úplné odstranění podporovaného aplikačního stavu, nikoli forenzní
+přepsání SQLite stránek nebo média.
+
+Závěrečné lifecycle ověření:
+`python3 -m unittest tests.test_chat_threads tests.test_thread_lifecycle
+tests.test_chat_service tests.test_desktop -q` — **68 testů OK, 2 volitelné
+testy přeskočeny**. Následné UI ověření
+`python3 -m unittest tests.test_desktop tests.test_web_server -q` prošlo:
+**32 testů OK, 4 volitelné testy přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -q` po poslední sidebar změně prošla: **450 testů
+OK, 27 volitelných native/package/live testů přeskočeno**. Běh vypsal známé
+neblokující `ResourceWarning` na neuzavřená testovací SQLite spojení.
+
+Po regresní opravě webové inicializace prošel znovu cílený běh 32 testů se
+4 volitelnými skipy, samostatný skutečný WebEngine login → katalog smoke test
+1/1 a následná úplná sada **450 testů OK, 27 volitelných testů přeskočeno**.
+Skutečný Turris měl před opravou potvrzená neporušená data a funkční API; nový
+release s opravou na zařízení zatím nasazen ani uživatelsky potvrzen nebyl.
+
+Omezení: skutečný klikací Qt/WebEngine průchod lifecycle panelem ani novou
+sidebar záložkou nebyl proveden; login a načtení katalogu byly po opravě
+ověřeny skutečným WebEngine testem a zbytek UI má strukturální a HTTP/API
+regresní testy.
+Aplikace předpokládá jeden backendový proces a její HTTP server serializuje
+požadavky; nekooperující přímý zapisovač do node-local SQLite stores není
+součástí tohoto PoC. Požadavek na orchestration přes explicitní private-network
+Ollamu zůstává samostatnou feature `F-M3-OLLAMA-ORCH-LAN-01` v BACKLOG;
+současný režim stále vyžaduje `same-node`.
+
 ## F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu — 2026-10-11
 
 Dávka na větvi `feature/f-m3-ollama-robust-01`, založené z `develop`
 `2c9b1b2` po začlenění UX-MOBILE-01 jako PR #49, rozšířila lokální Ollama běh
 o přesnou diagnostiku, bezpečné private-network připojení, vědomý nový pokus a
 provozní LAN/restartovou akceptaci. Dosažená úroveň je **PoC validated** a
-všechny akceptační podmínky dávky jsou splněné. Jediný PR do `develop` zatím
-nebyl vytvořen; push ani merge nebyly provedeny.
+všechny akceptační podmínky dávky jsou splněné. Dávka byla začleněna do
+`develop` jako PR #50, merge commit `9ea0fb0`.
 
 Node-local `ollama-binding.json` zůstává autoritou konfigurace a
 `ollama-runs.sqlite` autoritou stavu dispatchu. Před prvním síťovým bajtem je

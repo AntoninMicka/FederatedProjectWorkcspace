@@ -21,28 +21,11 @@ po PR #37, F-M3-CHAT-MODES-01 po PR #40, M3-UB-01 po PR #42 a
 F-M3-CHAT-DIRECT-01 po PR #44 a MOD-01-UI po PR #45 jsou uzavřené ve WORK_LOG.
 F-M3-MEDIA-01 je po PR #46 a F-M4-WORKFLOW-01 po PR #47 uzavřen ve WORK_LOG.
 `IMP-02` bylo doručeno PR #48 a `UX-MOBILE-01` PR #49.
-`F-M3-OLLAMA-ROBUST-01` splnilo akceptaci na své feature větvi a čeká na
-doručení jediného PR do `develop`; evidence je ve WORK_LOG a čekací stav v
-[TODO](TODO.md). Níže zůstávají tři další připravené dávky.
+`F-M3-OLLAMA-ROBUST-01` bylo doručeno PR #50. `F-M2-CHAT-03` je lokálně
+akceptované na větvi `feature/f-m2-chat-03-thread-lifecycle` a čeká na jediný
+PR do `develop`; další dávka proto zatím není aktivovaná.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M2-CHAT-03 — Správa a restartová akceptace lokálních
-  vláken (cílová úroveň: PoC validated).** Prověřit a v UI zpřístupnit životní
-  cyklus vláken: založení nového vlákna, vědomé navázání, seznam podle projektu
-  a nepřiřazených vláken, přiřazení/archivaci, zobrazení persistence a úplné
-  smazání lokálního vlákna. Mazání musí nejprve ukázat rozsah, vyžádat potvrzení,
-  odmítnout aktivní či `unknown` běh a koordinovaně odstranit zprávy, turns,
-  task outcomes, preview/approval a navázané lokální run záznamy bez osiřelých
-  dat; pád mezi více SQLite stores musí mít durable recovery a idempotentní
-  dokončení. Publikované Git otisky a artefakty se nemažou skrytě, ale preview
-  je předem uvede jako zachované historické výstupy. „Úplné“ znamená úplné z
-  podporovaného aplikačního stavu, nikoli garantovaný forenzní výmaz z média.
-  Ověřit restart desktopu, více vláken jednoho projektu, oddělení projektů a
-  uživatelů, souběžnou změnu i smazání před/po jednotlivých crash boundaries.
-  Autoritou pracovní historie zůstává node-local `chat-threads.sqlite` mimo Git
-  a obnovitelný projektový index; projektové Git artefakty vznikají jen
-  explicitním full/delta otiskem nebo publikací výstupu.
 
 - [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
   capability a kompoziční router (cílová úroveň: designed → PoC validated).**
@@ -64,6 +47,17 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   healthchecku a není zpětně součástí Ollama dávky.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M3-OLLAMA-ORCH-LAN-01 — Orchestrace přes privátní síťovou
+  Ollamu (cílová úroveň: PoC validated; uživatelský požadavek 2026-10-11).**
+  Umožnit explicitně zvolenému a TLS připnutému `private-network` Ollama
+  bindingu provádět orchestraci. Výběr nebo změna cíle vytvoří nový Context
+  Manifest a nový run; nesmí fungovat jako implicitní fallback. `local-only`
+  vstupy zůstávají zakázané, dokud neproběhne samostatná explicitní oprávněná
+  reklasifikace, a LAN endpoint se nesmí vydávat za `same-node`. Akceptace
+  pokryje RBAC/privacy revalidaci, změnu bindingu po preview, restart,
+  nedostupnost/pin mismatch, `unknown` síťový účinek a absenci automatického
+  přepnutí na jiný cíl.
 
 - [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
   lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek

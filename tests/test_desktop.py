@@ -11,7 +11,7 @@ import sys
 import unittest
 
 from spikes.desktop import provider_key_url, request_policy
-from spikes.desktop_ui import DesktopHandler, HTML, JS
+from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
@@ -152,7 +152,28 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
         self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
-        self.assertIn("projectRequest('/v1/tasks/list',{project_id:activeProject.id})", JS)
+        self.assertIn("projectRequest('/v1/tasks/list',{", JS)
+        self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
+        self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
+        self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
+        self.assertTrue({'/v1/chat/archive', '/v1/chat/delete/preview',
+                         '/v1/chat/delete/confirm'} <= DesktopHandler.post_paths)
+        self.assertNotIn('id="chat-thread-list"', HTML)
+        self.assertIn('id="chats-tab"', HTML)
+        self.assertIn('id="back-projects" class="sidebar-back"', HTML)
+        self.assertNotIn('id="back-projects" class="back-button"', HTML)
+        self.assertIn('id="sidebar-assigned-chats"', HTML)
+        self.assertIn('id="sidebar-unassigned-chats"', HTML)
+        self.assertIn("openStoredThread(thread.thread_id)", JS)
+        self.assertIn("function rememberThread(thread)", JS)
+        self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)
+        self.assertIn("End:sidebarTabs.length-1", JS)
+        self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
+        self.assertIn('flex-direction:column;overflow:hidden', CSS)
+        self.assertIn('#sidebar-project-tools>[role="tabpanel"]:not([hidden])', CSS)
+        self.assertIn('#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats', CSS)
+        self.assertIn('overflow-y:auto;overscroll-behavior:contain', CSS)
+        self.assertIn('id="chat-delete-preview"', HTML)
         self.assertIn("projectRequest('/v1/tasks/artifact'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/preview'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/confirm'", JS)
