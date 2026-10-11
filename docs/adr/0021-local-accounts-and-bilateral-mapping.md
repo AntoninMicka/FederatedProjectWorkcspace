@@ -7,6 +7,9 @@ SPDX-License-Identifier: MPL-2.0
 Datum: 2026-09-13. Stav: přijato; lokální účty a offline podpisový protokol
 implemented, portable ACL designed s vykonatelným validátorem; transport M5 otevřený.
 
+Doplnění 2026-10-11: osobní servery nasazené desktopem mohou tvořit omezenou
+záložní deployment skupinu; server nasazený z CLI zůstává obecný serverový uzel.
+
 ## Rozhodnutí
 
 Požadavek uživatele upřesňuje sekce 5A/6C roadmapy: sdílený uživatel federace
@@ -53,14 +56,39 @@ Profily `same-company-same-team`, `same-company`, `trusted-partner`,
 
 Desktop může mít s libovolným běžným peerem nejvýše `same-company`. Mapování
 kvalifikovaných identit je v této vazbě dovoleno pro provenance a ACL, ale
-neznamená převzetí účtu ani synchronizaci role. Výjimkou je peer vytvořený přímo
-z desktopu. Pouze dvojice zakládající desktop–jím založený peer může používat
-`same-company-same-team`; vznik musí doložit neměnná, oběma uzly podepsaná vazba
-původu. Založený peer smí mít právě jednu takovou vazbu, nesmí ji delegovat a
-pro všechny ostatní vztahy se posuzuje jako desktop, tedy nejvýše
-`same-company`. Existující běžný peer nelze změnou policy, importem ani novým
-schválením povýšit na založený peer. Revokace může vazbu ukončit, ale její
-opětovné schválení nesmí změnit zakladatele ani vytvořit další same-team hranu.
+neznamená převzetí účtu ani synchronizaci role. Způsob nasazení serveru je
+neměnnou součástí jeho původu:
+
+- server instalovaný desktopovou aplikací je osobní uzel právě jednoho
+  vlastníka a jednoho vlastnického aplikačního účtu; založení nebo převzetí
+  druhého lokálního uživatele se odmítne. Desktop může pro stejného vlastníka
+  přímo založit více serverů. Desktop a tyto servery tvoří jednu podepsanou
+  deployment skupinu a mohou mezi sebou používat `same-company-same-team`, aby
+  mohl jeden osobní server sloužit jako záloha jiného,
+- server instalovaný z CLI není omezen na jednoho uživatele. Je obecným
+  serverovým uzlem, může hostit více lokálních uživatelů a federovat s dalšími
+  servery podle explicitně schválených běžných profilů a policies. Do osobní
+  deployment skupiny se automaticky nezařazuje.
+
+Každý osobní server má vlastní node identity a klíč. Neměnný, kryptograficky
+ověřitelný doklad původu váže stabilní identitu instalujícího desktopu,
+kvalifikovanou identitu vlastníka, deployment group ID a konkrétní node ID a
+veřejný klíč serveru. Osobní server tento doklad nesmí vydat, delegovat,
+importovat, přepsat ani jím přidat další uzel; skupina nevzniká tranzitivně.
+Osobní výjimka pro `same-company-same-team` se povolí jen mezi členy se stejným
+desktopovým původem i vlastníkem. Ve všech ostatních vztazích se osobní server
+posuzuje jako desktop, tedy nejvýše `same-company`. Existující CLI server ani
+cizí osobní server nelze změnou policy, importem či novým schválením do skupiny
+povýšit.
+Revokace může člena odpojit, ale nové schválení nesmí změnit jeho původ,
+vlastníka ani skupinu. Rotace, ztráta a obnova desktopové podepisovací autority
+musí být explicitní a fail-closed; nově vygenerovaný klíč nesmí tiše převzít
+starou skupinu.
+
+Společný původ ani `same-company-same-team` samy neudělují projektový přístup a
+nespouštějí replikaci. Primární/záložní role, project/branch scope, privacy,
+origin ACL, akce a směr replikace vyžadují samostatnou oboustrannou policy.
+Credentials, session a možnost vzdáleného přihlášení zůstávají lokální.
 
 Pro `trusted-partner` a `holding-partner` policy povinně určuje právě jednoho
 aktivního místního styčného uživatele přijímajícího uzlu. Přijetí dat samo
