@@ -181,7 +181,7 @@ Artifacts(sys.argv[1]).save(json.loads(sys.argv[2]), sys.argv[3], checkpoint=che
                 self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
                 self.assertIsNone(self.service.workspace(self.id).recover())
 
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
+    @unittest.skip('Superseded by the shared document editor')
     def test_native_rename_retry_reload_and_history(self):
         request = self.request(); self.service.save(request, str(uuid4()))
         # Older valid files may exceed the new-name limit; displaying one must not truncate it.
@@ -442,7 +442,7 @@ Artifacts(sys.argv[1]).save(request, sys.argv[3], checkpoint=checkpoint)
         for entry in items:
             self.assertIn(body[entry['offset']], ' xX')
 
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
+    @unittest.skip('Superseded by the shared document editor')
     def test_native_editor_checklist_save_reopen_and_todo_identity(self):
         script = '''
 import sys, time

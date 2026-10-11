@@ -58,11 +58,11 @@ UI má záložky Obsah a Metadata. Popis je prostý text, štítky mají jeden �
 
 Crash boundaries ADR 0003 a výše uvedený recovery kontrakt se nemění: obsah a metadata procházejí společnou validací před přípravou journalu a jedním commitem. Limit metadat 64 KiB platí i po doplnění popisu/štítků. Stejný postup podporuje sidecar i frontmatter bez nového schématu či HTTP endpointu. Reuse/adapt stávající služby Artifacts, Workspace, validátorů a Qt widgetů; externí komponenta není pro tuto změnu potřeba. Výsledky ověření M1-05 drží [aktuální dávka TODO](../../TODO.md).
 
-## Vytvoření seznamu z levého panelu — M1-AH-04
+## Společné vytvoření dokumentu a hlavního seznamu — UX-UNIFIED-02D
 
-Popisky M1-AH-04 přejmenovávají záložku Metadata na Popis a štítky a oddělují technické údaje od běžných ovládacích textů. Chybějící hlavní TODO nabídne v záložce Úkoly tlačítko Vytvořit seznam úkolů. Existující, prázdný či nepodporovaný dokument stejného ID je nenabízí. Akce nastaví pouze fragment `#create-main-todo` na aktuální lokální stránce. Nativní obal přijímá výhradně přesnou URL vlastního originu, fragment ihned odstraní bez načtení stránky a otevře stávající EditorDialog pro aktuálně vybrané, službou znovu autorizované ID. Fragment nepřenáší cesty, text ani identitu projektu; nejde o HTTP endpoint. Filtr síťových požadavků se nerozšiřuje a souběžné otevření dialogu blokuje lokální příznak.
+Server i desktop používají jedinou stránku editoru ve sdíleném frontendu. Nový dokument se otevírá nad klientem vytvořeným stabilním UUID, hlavní TODO nad deterministickým `main_todo_id`; existující TODO se otevírá jako běžný document artefakt. Kliknutí samo nic nezapisuje. Save požadavek nese `base_head`, příznak `new` a stabilní `operation_id`; `ArtifactActions` před přípravou nového zápisu znovu autorizuje projekt a ověří aktuální HEAD. Vlastní zápis, journal, Git CAS, index a idempotentní receipt nadále zajišťují `Artifacts`/`Workspace` podle ADR 0003.
 
-Kliknutí samo nevytvoří dokument; potvrzení Uložit a recovery mají beze změny výše popsané hranice ADR 0003. Po uložení se obnoví projektový přehled a tlačítko zmizí. Reuse nativního editoru nevyžaduje novou knihovnu ani obecný bridge. Skutečný Qt/WebEngine test `tests/test_sidebar_editor.py` ověřuje otevření, zrušení bez vytvoření dokumentu, opakované otevření, uložení a obnovený seznam.
+Rozepsaný text je pouze paměť rendereru, nikoli durable recovery. Navigace a zavření stránky vyžádají potvrzení, pokud se formulář změnil nebo existuje neuzavřený pokus; odmítnutý zápis ponechá vstupy i stejné operation ID pro bezpečné opakování. Úspěšný zápis obnoví projekt z validovaného HEAD. Obecný Qt `EditorDialog`, jeho toolbarová tlačítka a fragment `#create-main-todo` byly po dosažení parity odstraněny; Qt zůstává jen pro desktop-only systémové capability.
 
 ## Přejmenování souboru dokumentu — M1-06
 

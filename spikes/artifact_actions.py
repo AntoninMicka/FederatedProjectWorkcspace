@@ -7,12 +7,14 @@ import json
 from spikes.artifact_history import ArtifactHistory
 from spikes.artifacts import Artifacts
 from spikes.metadata import require
+from spikes.projects import Projects
 
 
 class ArtifactActions:
     def __init__(self, node_path, *, network=False):
         self.history = ArtifactHistory(node_path, network=network)
         self.artifacts = Artifacts(node_path)
+        self.projects = Projects(node_path, network=network)
 
     def open(self, project_id, artifact_id, expected_head):
         result = self.history.compare(project_id, artifact_id, expected_head,
@@ -25,8 +27,13 @@ class ArtifactActions:
         # The read validates current network privacy before any web mutation.
         workspace = self.artifacts.workspace(request.get('project_id'))
         if workspace.receipt(operation_id) is None:
-            self.open(request.get('project_id'), request.get('artifact_id'),
-                      request.get('base_head'))
+            if request.get('new') is True:
+                project = self.projects.open(request.get('project_id'))
+                require(project['commit_id'] == request.get('base_head'),
+                        'Project changed; reopen editor')
+            else:
+                self.open(request.get('project_id'), request.get('artifact_id'),
+                          request.get('base_head'))
         receipt = self.artifacts.save(request, operation_id)
         return dict(project_id=request['project_id'], artifact_id=request['artifact_id'],
                     commit_id=receipt['commit_id'])

@@ -69,8 +69,6 @@ def main():
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
-        from spikes.desktop_editor import EditorDialog
-        from spikes.artifacts import Artifacts
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
@@ -105,8 +103,7 @@ def main():
                 QDesktopServices.openUrl(QUrl(external))
                 return False
             return main_frame and requested in {
-                server.origin + '/', server.origin + '/#create-main-todo',
-                server.origin + '/#choose-project-location'}
+                server.origin + '/', server.origin + '/#choose-project-location'}
 
         def createWindow(self, kind):
             return None
@@ -280,41 +277,9 @@ def main():
             dialog.deleteLater()
         transfer_button.clicked.connect(transfer_project)
         editor_toolbar.addWidget(transfer_button)
-        editor_open = False
-        def edit_selected(todo=False):
-            nonlocal editor_open
-            if controller.busy or editor_open:
-                return
-            editor_open = True
-            def selected(project_id):
-                nonlocal editor_open
-                if view.closing:
-                    editor_open = False
-                    return
-                if not project_id:
-                    editor_open = False
-                    QMessageBox.information(window, 'Dokumenty', 'Nejprve vyberte projekt.')
-                    return
-                try:
-                    dialog = EditorDialog(Artifacts(node_path), project_id, window, todo=todo)
-                    dialog.saved.connect(lambda id_: page.runJavaScript('loadProjects(' + json.dumps(id_) + ')'))
-                    dialog.exec()
-                    for worker in dialog.workers:
-                        worker.wait()
-                    dialog.deleteLater()
-                finally:
-                    editor_open = False
-            page.runJavaScript("activeProject?.id || null", 0, selected)
-        for label, todo in [('Dokumenty…', False), ('Úkoly projektu…', True)]:
-            button = QPushButton(label)
-            button.clicked.connect(lambda checked=False, todo=todo: edit_selected(todo))
-            editor_toolbar.addWidget(button)
         def native_action(url):
             # A same-document fragment never loads a route or exposes an HTTP writer.
-            if url.toString() == server.origin + '/#create-main-todo':
-                page.runJavaScript("history.replaceState(null, '', '/');")
-                edit_selected(True)
-            elif url.toString() == server.origin + '/#choose-project-location':
+            if url.toString() == server.origin + '/#choose-project-location':
                 page.runJavaScript("history.replaceState(null, '', '/');")
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
@@ -406,7 +371,8 @@ def main():
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
                   if(todoPanel.hidden || document.activeElement!==todoTab) return null;
                   const todo=expected.main_todo;
-                  if(document.querySelector('#create-main-todo').hidden!==!!todo) return null;
+                  const todoAction=document.querySelector('#create-main-todo');
+                  if(todoAction.hidden || todoAction.textContent!==(todo?'Upravit seznam úkolů':'Vytvořit seznam úkolů')) return null;
                   const tree=document.querySelector('#todo-tree');
                   if(!tree || tree.querySelector('img,script,a')) return null;
                   const todoRows=[...tree.querySelectorAll('li')];

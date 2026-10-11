@@ -195,7 +195,7 @@ Artifacts(sys.argv[1]).delete(json.loads(sys.argv[2]), sys.argv[3], checkpoint=c
                     self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
                     self.assertIsNone(self.service.workspace(self.id).recover())
 
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
+    @unittest.skip('Superseded by the shared document editor')
     def test_native_confirmation_cancel_lost_reply_retry_and_refresh(self):
         id_ = self.create()
         script = r'''

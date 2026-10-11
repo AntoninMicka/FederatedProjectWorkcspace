@@ -9,7 +9,7 @@ import tempfile
 import uuid
 
 from spikes.configuration import committed_project
-from spikes.markdown_documents import main_todo_view
+from spikes.markdown_documents import main_todo_id, main_todo_view
 from spikes.journal import Journal, RecoveryConflict, snapshot
 from spikes.metadata import require, validate_snapshot, validate_transition
 from spikes.storage import Git, Index, StaleIndex, projection
@@ -189,7 +189,8 @@ class Workspace:
             if self.git.head() != commit:
                 raise StaleIndex('HEAD changed while opening project; retry')
             artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
-            return dict(id=project_id, title=meta['title'], commit_id=commit, main_todo=todo,
+            return dict(id=project_id, title=meta['title'], commit_id=commit,
+                        main_todo_id=main_todo_id(project_id), main_todo=todo,
                         artifacts=[dict(id=id_, title=title, kind=kind)
                                    for id_, title, kind in rows if id_ in artifact_ids])
 

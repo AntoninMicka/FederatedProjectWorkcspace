@@ -25,7 +25,7 @@ Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, j
 `~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json`
 vybere jiný uzel.
 
-[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující neprázdná nebo změněná cílová složka se nepřepisuje. Vyberte projekt a použijte **Dokumenty…** nebo **Úkoly projektu…**; změny potvrďte tlačítkem **Uložit**. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující neprázdná nebo změněná cílová složka se nepřepisuje. V otevřeném projektu použijte v levém panelu **Podklady → Nový dokument** nebo v záložce **Úkoly** společnou akci vytvoření či úpravy hlavního seznamu; změny potvrďte tlačítkem **Uložit**. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
 
 Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
 
