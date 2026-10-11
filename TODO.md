@@ -30,15 +30,17 @@ RBAC a privacy hranice jednotlivých backendových operací se nemění.
   importní dialog byl po dosažení parity odstraněn.
 - [x] [completed] **UX-UNIFIED-01-E — Společná historie artefaktu (implemented
   / PoC validated).** Existující read-only `ArtifactHistory` obsluhuje jednu
-  stránku otevřenou z náhledu podporovaného dokumentu. HEAD-bound seznam a
+  alternativní stránku otevřenou z per-document menu v seznamu Podkladů;
+  zavření vrací náhled stejného dokumentu. HEAD-bound seznam a
   porovnání zobrazují nejvýše 100 topologicky seřazených verzí, obsah, metadata,
   diff a commit pouze jako text. Web zachovává RBAC a fail-closed odmítá celý
   snapshot s `local-only`; foreign/stale/pending, deleted/invalid/truncated a
   nulový diff pokrývají service/HTTP testy. Qt `HistoryDialog` a jeho vstup v
   editoru byly po paritě odstraněny. Následná UI regrese opravila projektovou
   projekci o explicitní `kind`, aby se vstup historie skutečně zobrazil u
-  uložených dokumentů a zůstal skrytý u zdrojů; nevznikl zápis ani nový recovery
-  stav.
+  uložených dokumentů a zůstal skrytý u zdrojů. Historie je nyní v akčním menu
+  konkrétního dokumentu a její zavření vrací jeho náhled; nevznikl zápis ani
+  nový recovery stav.
 - [ ] [planned] **UX-UNIFIED-01-F — Společné vytvoření projektu (cílová úroveň:
   implemented → PoC validated).** Převést desktop na společný formulář a jednu
   autorizovanou adaptaci `ProjectCreation`. Zachovat přesný preview, potvrzení,
@@ -69,5 +71,14 @@ sada prošla: **452 testů OK, 25 volitelných native/package/live testů
 přeskočeno**. Známé neblokující `ResourceWarning` testovacích SQLite spojení
 zůstaly beze změny. Skutečný Qt/WebEngine průchod a Turris/LXC deployment nebyly
 provedeny. Po změně F budou výsledky znovu nahrazeny aktuálním ověřením.
+
+### K předání do backlogu
+
+- **UX-UNIFIED-02D — Společný editor dokumentu a TODO:** při aktivaci zachovat
+  per-document menu jako vstup pro Upravit/přejmenovat a Připravit smazání;
+  smazání musí dál použít existující preview/potvrzení/recovery. Jako bezpečná
+  pomocná akce bez zápisu připadá v úvahu Kopírovat ID. Hromadné workflow
+  Souhrn, Extrakce a Metadata zůstávají v hlavních záložkách, protože mají
+  vlastní konfiguraci a mohou pracovat s více podklady.
 
 [Roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>) · [Backlog](BACKLOG.md) · [Historie](WORK_LOG.md) · [Pravidla](AGENTS.md)

@@ -153,7 +153,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
-        self.assertIn("#sidebar-artifact-list button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
+        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
         self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)

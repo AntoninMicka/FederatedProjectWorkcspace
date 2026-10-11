@@ -247,7 +247,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="history-choices"><label>Starší / výchozí verze <select id="history-older"></select></label>
 <label>Zobrazená verze <select id="history-newer"></select></label></div>
 <div class="form-actions"><button id="history-compare" type="button">Zobrazit a porovnat</button>
-<button id="history-back" class="secondary-button" type="button">Zpět do projektu</button></div>
+<button id="history-close" class="secondary-button" type="button">Zavřít historii</button></div>
 <h2>Obsah zobrazené verze</h2><pre id="history-body"></pre>
 <details><summary>Technické údaje</summary><pre id="history-metadata"></pre></details>
 <details><summary>Rozdíl uložených souborů</summary><pre id="history-diff"></pre></details>
@@ -268,7 +268,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
-<h2 id="preview-title"></h2><button id="preview-history" type="button" hidden>Zobrazit historii</button><div id="preview-content"></div>
+<h2 id="preview-title"></h2><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
 <input id="pdf-page" type="number" min="1" max="100" value="1"><button id="pdf-show">Zobrazit stránku</button></div>
 <details id="preview-details" hidden><summary>Podrobnosti</summary><dl id="preview-metadata"></dl></details></div>
@@ -425,7 +425,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
 #sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
 #sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
-.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px}.sidebar-artifact-title{font-size:13px}
+.sidebar-artifact-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-artifact-main{min-width:0}.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px;overflow-wrap:anywhere}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 .sidebar-chat-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button{padding:8px 6px;font-size:11px}
@@ -439,6 +439,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
 #sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
 #sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
+.sidebar-artifact-menu{position:relative;margin-top:4px}.sidebar-artifact-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-artifact-menu>summary::-webkit-details-marker{display:none}.sidebar-artifact-menu>summary:hover,.sidebar-artifact-menu[open]>summary{background:#274154}.sidebar-artifact-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}#sidebar-artifacts .sidebar-artifact-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}#sidebar-artifacts .sidebar-artifact-menu-items button:hover{background:#dfecea}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
 #sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
@@ -576,7 +577,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#open-source-import,#sidebar-project-list button,#sidebar-artifact-list button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -603,12 +604,22 @@ function renderSidebarArtifacts(items){
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
-  const row=document.createElement('li');
+  const row=document.createElement('li');row.className='sidebar-artifact-row';
+  const main=document.createElement('div');main.className='sidebar-artifact-main';
   const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
   const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
- row.append(title,id);sidebarArtifacts.append(row);
+  main.append(title,id);row.append(main);
+  if(item.kind==='document'){
+   const menu=document.createElement('details');menu.className='sidebar-artifact-menu';
+   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce dokumentu ${item.title}`);trigger.textContent='⋮';
+   const actions=document.createElement('div');actions.className='sidebar-artifact-menu-items';actions.setAttribute('role','menu');
+   const history=document.createElement('button');history.type='button';history.textContent='Zobrazit historii';history.setAttribute('role','menuitem');
+   history.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();});
+   actions.append(history);menu.append(trigger,actions);row.append(menu);
+  }
+  sidebarArtifacts.append(row);
  }
  renderSummarySources();
  renderWorkflowSources();
@@ -948,7 +959,6 @@ function clearPreview(){
  document.querySelector('#preview-title').textContent='';
  document.querySelector('#preview-metadata').replaceChildren();
  document.querySelector('#preview-details').hidden=true;
- document.querySelector('#preview-history').hidden=true;
  document.querySelector('#pdf-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
@@ -983,7 +993,6 @@ async function openPreview(id,page=1){
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
   if(request!==previewRequest || activeProject!==project)return;
   document.querySelector('#preview-title').textContent=result.metadata.title;
-  document.querySelector('#preview-history').hidden=!currentArtifacts.some(item=>item.id===id&&item.kind==='document');
   const metadata=document.querySelector('#preview-metadata');
   for(const [key,value] of Object.entries(result.metadata)){
    const entries=key==='import' ? [
@@ -1072,8 +1081,7 @@ historyCompare.addEventListener('click',async()=>{
  }catch(error){if(request===historyRequest)historyStatus.textContent=error.message;}
  finally{if(request===historyRequest)historyCompare.disabled=false;}
 });
-document.querySelector('#preview-history').addEventListener('click',openHistory);
-document.querySelector('#history-back').addEventListener('click',closeHistory);
+document.querySelector('#history-close').addEventListener('click',closeHistory);
 document.querySelector('#pdf-show').addEventListener('click',()=>{
  const input=document.querySelector('#pdf-page');
  if(input.reportValidity() && selectedArtifact)openPreview(selectedArtifact,Number(input.value));

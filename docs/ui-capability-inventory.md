@@ -42,7 +42,8 @@ vstup byly odstraněny. HTML file input dál vyvolá platformní picker, ale
 nevytváří paralelní workflow.
 
 Historie podporovaného Markdown dokumentu je převedena na společnou read-only
-stránku otevřenou z náhledu. Web i desktop používají stejné HEAD-bound endpointy
+alternativní stránku dokumentu, otevřenou z jeho akčního menu v seznamu
+Podkladů. Web i desktop používají stejné HEAD-bound endpointy
 `ArtifactHistory`; server navíc fail-closed odmítá projekt obsahující
 `local-only`. Původní Qt `HistoryDialog` byl po dosažení parity odstraněn.
 

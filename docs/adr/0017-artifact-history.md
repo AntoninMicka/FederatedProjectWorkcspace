@@ -9,7 +9,7 @@ Stav: přijato pro M1-04, lokální Linux PoC. Navazuje na [čtení projektu](00
 
 ## Rozsah a reuse
 
-Společné tlačítko Historie v náhledu dokumentu otevře samostatnou stránku se seznamem commitů a výběrem dvou verzí. Zobrazí původní Markdown, metadata vybrané verze, autora/datum/zprávu commitu a textový diff uložených souborů. Přejmenování souboru uvnitř artefaktu patří do historie stejného UUID. Rozepsaný text se do historie neposílá ani se při jejím otevření/uzavření nemění; dosud neuložený nový dokument historii nemá.
+Akce Historie v per-document menu seznamu Podkladů otevře alternativní samostatnou stránku dokumentu se seznamem commitů a výběrem dvou verzí; její zavření vrátí náhled stejného dokumentu. Zobrazí původní Markdown, metadata vybrané verze, autora/datum/zprávu commitu a textový diff uložených souborů. Přejmenování souboru uvnitř artefaktu patří do historie stejného UUID. Rozepsaný text se do historie neposílá ani se při jejím otevření/uzavření nemění; dosud neuložený nový dokument historii nemá.
 
 Služba `ArtifactHistory` adaptuje autorizovaný přístup Artifacts/Projects ke Workspace, Git wrapper, validaci projektového commitu a sdílenou funkci document. Společný HTML/JavaScript frontend ji používá přes dva úzce typované endpointy pro seznam a porovnání; všechna data vkládá pouze přes `textContent`. Síťový adaptér navíc nad validovaným aktuálním snapshotem odmítá `local-only`. Nevznikla nová knihovna, storage ani obecný Git endpoint. Existující katalog neposkytuje důvod nahrazovat lokální Git cestu cizí komponentou.
 

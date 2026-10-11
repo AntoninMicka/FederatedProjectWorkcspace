@@ -79,7 +79,7 @@ Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložt
 
 ## Historie dokumentu
 
-V projektu otevřete uložený Markdown dokument v záložce **Podklady** a v náhledu
+V záložce **Podklady** otevřete akční menu uloženého Markdown dokumentu a
 klikněte na **Zobrazit historii**. Samostatná společná stránka ve webu i desktopu
 uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí
 verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
@@ -94,7 +94,8 @@ Historie je pouze pro čtení. Při změně projektu nebo pending operaci strán
 zobrazí chybu; vraťte se do projektu a znovu jej načtěte, případně nejprve
 dokončete obnovu. Neplatné starší verze jsou označené a nelze je zobrazit jako
 validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí.
-Podrobnosti: [ADR 0017](adr/0017-artifact-history.md).
+Tlačítko **Zavřít historii** vrátí přímo náhled stejného dokumentu. Podrobnosti:
+[ADR 0017](adr/0017-artifact-history.md).
 
 ## Existující data
 
