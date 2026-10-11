@@ -129,7 +129,11 @@ class WebTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", WEB_JS)
         self.assertIn('id="artifact-editor-view" hidden', WEB_HTML)
-        self.assertIn("projectRequest('/v1/artifacts/editor/save'", WEB_JS)
+        self.assertIn('id="new-document"', WEB_HTML)
+        self.assertIn("projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document}", WEB_JS)
+        self.assertIn('new:Boolean(artifactEditorItem.new)', WEB_JS)
+        self.assertIn('function openMainTodoEditor()', WEB_JS)
+        self.assertIn("window.addEventListener('beforeunload'", WEB_JS)
         self.assertIn('id="project-create-preview"', WEB_HTML)
         self.assertIn("projectRequest('/v1/projects/create/preview'", WEB_JS)
         self.assertIn("projectRequest('/v1/projects/create/confirm'", WEB_JS)
@@ -272,6 +276,13 @@ class WebTests(unittest.TestCase):
         code, data, _ = self.request(path='/v1/artifacts/editor/save', body=json.dumps({
             'operation_id':str(uuid4()), 'document':document}))
         self.assertEqual(code, 200); edited_head = json.loads(data)['commit_id']
+        created = str(uuid4())
+        code, data, _ = self.request(path='/v1/artifacts/editor/save', body=json.dumps({
+            'operation_id':str(uuid4()), 'document':dict(project_id=project,
+                artifact_id=created, base_head=edited_head, title='New web document',
+                body='# New\n', new=True, filename='new.md', metadata={})}))
+        self.assertEqual(code, 200); edited_head = json.loads(data)['commit_id']
+        self.assertIn(created, {item['id'] for item in Projects(self.root/'node.json').open(project)['artifacts']})
         code, data, _ = self.request(path='/v1/artifacts/delete/preview', body=json.dumps({
             'project_id':project, 'artifact_id':artifact, 'expected_head':edited_head}))
         self.assertEqual(code, 200); deletion = json.loads(data)
@@ -279,7 +290,8 @@ class WebTests(unittest.TestCase):
             'project_id':project, 'artifact_id':artifact, 'base_head':edited_head,
             'preview_sha256':deletion['preview_sha256'], 'operation_id':str(uuid4())}))
         self.assertEqual(code, 200)
-        self.assertEqual(Projects(self.root/'node.json').open(project)['artifacts'], [])
+        self.assertEqual({item['id'] for item in Projects(self.root/'node.json').open(project)['artifacts']},
+                         {created})
 
     def test_create_retries_have_one_receipt_and_project(self):
         from uuid import uuid4
@@ -390,6 +402,65 @@ class WebTests(unittest.TestCase):
         with socket.create_connection(('127.0.0.1',self.server.server_port)) as sock:
             sock.sendall(b'GET / HTTP/1.0\r\n\r\n')
         self.assertEqual(self.request()[0],200)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_shared_editor_creates_document_todo_and_guards_draft(self):
+        _, data, _ = self.create_project('Shared editor')
+        project = json.loads(data)
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();phase=0;ticks=0
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+key=os.environ['WORKSPACE_SMOKE_KEY']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0:
+  phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1:
+  phase=2;run("document.querySelector('.project-card').click();")
+ elif phase==2:
+  phase=3;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+ elif phase==3:
+  phase=4;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='# Hlavní seznam úkolů\\n\\n- [ ] Ověřit editor\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+ elif phase==4:
+  phase=5;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
+ elif phase==5:
+  phase=6;run("window.confirm=()=>true;document.querySelector('#artifact-editor-close').click();")
+ elif phase==6: finish('shared editor smoke: document, TODO and draft guard OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>350: finish('shared editor smoke timeout at phase '+str(phase));return
+ checks={
+ 0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
+ 1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
+ 2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
+ 3:"(()=>{if(currentArtifacts.some(item=>item.title==='Sdílený dokument'))return'ready';const s=document.querySelector('#artifact-editor-status').textContent;return s&&s!=='Ukládám dokument…'?'FAIL: '+s:'waiting'})()",
+ 4:"document.querySelector('#todo-tree').textContent.includes('Ověřit editor')?'ready':'waiting'",
+ 5:"!artifactEditorView.hidden&&artifactEditorForm.elements.title.value==='Rozepsáno'?'ready':'FAIL: dirty draft was discarded'",
+ 6:"artifactEditorView.hidden?'ready':'waiting'"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(
+            os.environ, WORKSPACE_SMOKE_KEY=self.token,
+            WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
+            capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('shared editor smoke: document, TODO and draft guard OK', result.stdout)
+        opened = Projects(self.root/'node.json').open(project['id'])
+        self.assertEqual({item['title'] for item in opened['artifacts']},
+                         {'Sdílený dokument', 'Hlavní seznam úkolů'})
+        self.assertEqual(opened['main_todo']['items'][0]['title'], 'Ověřit editor')
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_login_catalog_and_logout(self):

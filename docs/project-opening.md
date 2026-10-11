@@ -7,7 +7,7 @@ SPDX-License-Identifier: MPL-2.0
 
 ## Přejmenování souboru dokumentu
 
-Otevřete **Dokumenty…**, vyberte dokument a v záložce **Popis a štítky** upravte **Název souboru (.md)**. Zadejte název bez složek s příponou `.md` (nejvýše 200 bajtů UTF-8). Potvrďte **Uložit**; zároveň můžete upravit text, titulek, popis i štítky. Titulek a název souboru jsou nezávislé. Historie, vazby přes identitu dokumentu i role hlavního seznamu úkolů zůstávají zachované. Ručně vložené odkazy na původní název souboru uvnitř textu upravte sami.
+V záložce **Podklady** otevřete menu dokumentu a zvolte **Upravit / přejmenovat**. V editoru upravte **Název souboru (.md)** bez složek a s příponou `.md` (nejvýše 200 bajtů UTF-8). Potvrďte **Uložit**; zároveň můžete upravit text, titulek, popis i štítky. Titulek a název souboru jsou nezávislé. Historie, vazby přes identitu dokumentu i role hlavního seznamu úkolů zůstávají zachované. Ručně vložené odkazy na původní název souboru uvnitř textu upravte sami.
 
 Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu načíst** pro obnovu připravené operace. Při konfliktu s cizí změnou se operace zastaví bez jejího přepsání. Podrobnosti a limity: [ADR 0016](adr/0016-markdown-editor.md#přejmenování-souboru-dokumentu--m1-06).
 
@@ -23,7 +23,7 @@ rodiče do lokální konfigurace uzlu a použije jej pro další výchozí vytvo
 Nejprve stiskněte **Připravit vytvoření**, zkontrolujte název, přesný cíl a ID
 operace a až potom potvrďte **Vytvořit a otevřít projekt**.
 
-Cílová složka může být nová nebo již existující, ale existující musí být váš prázdný adresář bez symlinků; obsah, `.git` nebo souběžná změna se odmítnou bez přepsání. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte tlačítkem **Dokumenty…**.
+Cílová složka může být nová nebo již existující, ale existující musí být váš prázdný adresář bez symlinků; obsah, `.git` nebo souběžná změna se odmítnou bez přepsání. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte v **Podklady → Nový dokument**.
 
 Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
 
@@ -88,7 +88,7 @@ Existující Markdown dokument upravíte v záložce **Podklady** přes jeho men
 název `.md` souboru, popis a štítky; **Zavřít editor** vrátí náhled dokumentu.
 Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se
 uloží společně do Gitu. Nový dokument zatím vytvoříte desktopovým tlačítkem
-**Dokumenty…** → **Nový dokument**.
+**Podklady** → **Nový dokument**.
 
 Stejné menu nabízí **Kopírovat ID** a **Připravit smazání**. Smazání nejprve
 zobrazí dokument, ID a výchozí commit a vyžaduje checkbox i druhé potvrzovací
@@ -98,7 +98,7 @@ project-admin nebo správce uzlu.
 
 Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat úkol**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
 
-**Úkoly projektu…** v horní liště otevře hlavní seznam projektu. Při prvním použití nabídne návrh, který vznikne až uložením. Stejné tlačítko vždy míří na stejný dokument, i když změníte jeho název. Vedle něj můžete mít další dokumenty s vlastními checklisty.
+Záložka **Úkoly** nabízí **Vytvořit seznam úkolů**, nebo u existujícího seznamu **Upravit seznam úkolů**. Při prvním použití otevře návrh, který vznikne až uložením. Akce vždy míří na stejný dokument, i když změníte jeho název. Vedle něj můžete mít další dokumenty s vlastními checklisty.
 
 Při chybě uložení text zůstane v okně a **Zopakovat uložení** použije původní požadavek. **Znovu načíst** načte aktuální projekt a dokončí připravený zápis; před opuštěním rozepsaného textu žádá potvrzení. Při souběžné změně projektu si text před opětovným načtením zkopírujte, automatické sloučení editor zatím neumí. Po pádu desktopu znovu otevřete editor daného projektu; potvrzené pending uložení se obnoví. Pouhé otevření webového přehledu pending zápis nedokončuje.
 
@@ -106,7 +106,7 @@ Levý panel má dvě záložky **Úkoly** a **Podklady**. Druhá zobrazuje názv
 
 Po otevření projektu je hlavní TODO také v levém panelu: názvy položek, stav zaškrtnutí a počet hotových úkolů. Odsazené checklisty tvoří podúkoly; větve lze sbalit a rozbalit. Checkboxy zde slouží jen pro čtení, úpravy dělejte v editoru. Přehled ukazuje uložený Git stav a po uložení v editoru se obnoví. Po externí změně se vraťte na seznam projektů a projekt znovu otevřete. Pokud hlavní seznam chybí, záložka **Úkoly** nabízí **Vytvořit seznam úkolů**. Tlačítko otevře editor s návrhem; dokument vznikne až po **Uložit**. Zavřením bez uložení se nevytvoří. Existující seznam bez úkolů i nepodporovaný formát mají vlastní hlášení; tlačítko vytvoření se u nich nenabízí. U velkého seznamu se zobrazí prvních 1000 položek s upozorněním.
 
-Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. Otevřete **Úkoly projektu…** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
+Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. V záložce **Úkoly** zvolte **Upravit seznam úkolů** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
 
 ## Historie dokumentu
 
@@ -205,7 +205,7 @@ print('./run.sh desktop --node ' + shlex.quote(str(node)))
 PY
 ```
 
-Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. Tlačítkem **Dokumenty…** otevřete a upravte poznámku; po uložení a restartu ověřte změněný obsah. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
+Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. V menu poznámky zvolte **Upravit / přejmenovat**; po uložení a restartu ověřte změněný obsah. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
 
 ## Hlavní panel a náhled artefaktu
 

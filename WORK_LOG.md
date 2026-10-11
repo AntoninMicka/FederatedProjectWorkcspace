@@ -5,14 +5,56 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-02D — Společný editor dokumentu a TODO — 2026-10-11
+
+Dávka na větvi `feature/ux-unified-02d-document-todo-editor`, založené z
+`develop` `571b430` po doručení UX-UNIFIED-01 jako PR #53, dokončila společný
+editor pro server i desktop. Dosažená úroveň je **implemented / PoC validated**
+a akceptační podmínky jsou splněné. PR do `develop` dosud nebyl vytvořen ani
+sloučen.
+
+- [x] [completed] **UX-UNIFIED-02D-A — Inventura, reuse a recovery kontrakt
+  (designed).** Existující `ArtifactActions`, `Artifacts`, Workspace journal,
+  Git CAS a receipt pokrývají nový i existující dokument. Nový zápis před
+  přípravou journalu znovu autorizuje projekt a ověří `base_head`; cizí HEAD,
+  pending operace a síťově nepřípustné `local-only` projekty selžou zavřeně.
+  Draft před potvrzením je výslovně jen volatilní stav rendereru.
+- [x] [completed] **UX-UNIFIED-02D-B — Vytvoření nového dokumentu
+  (PoC validated).** Záložka Podklady má společné tlačítko Nový dokument.
+  Renderer drží stabilní artifact/operation ID, přesný uzavřený save payload a
+  po úspěchu znovu načte validovaný projekt; retry stejné operace využije
+  receipt bez druhého commitu.
+- [x] [completed] **UX-UNIFIED-02D-C — Hlavní TODO (PoC validated).** Záložka
+  Úkoly společně vytváří chybějící seznam a upravuje existující přes
+  deterministické `main_todo_id`. Projektová projekce ID explicitně vrací a
+  nevznikla paralelní storage ani zvláštní zapisovací cesta.
+- [x] [completed] **UX-UNIFIED-02D-D — Dirty draft a odstranění Qt editoru
+  (PoC validated).** Změněný formulář i nezavřený pokus jsou chráněné při
+  zavření a navigaci; odmítnutý zápis zachová text i retry ID. Obecný Qt
+  `EditorDialog`, jeho toolbarové akce a fragment hlavního TODO byly odstraněny;
+  desktop-only systémové dialogy zůstaly beze změny.
+- [x] [completed] **UX-UNIFIED-02D-E — Závěrečné ověření a předání.** Cílené
+  doménové a HTTPS testy ověřily create, stale HEAD, receipt retry, RBAC,
+  editaci a smazání. Skutečný Qt/WebEngine klient přes HTTPS vytvořil běžný
+  dokument i hlavní TODO a ověřil zachování odmítnutého dirty draftu. Po
+  poslední opravě přesného `{operation_id, document}` payloadu prošla úplná
+  sada **461 testů OK, 25 volitelných testů přeskočeno**; výsledný JavaScript
+  prošel `node --check` a `git diff --check` byl čistý.
+
+Crash/recovery hranice zůstaly podle ADR 0003 a ADR 0016: před potvrzením není
+draft durable, po potvrzení journal vlastní záměr a bajty, Git commit je
+autoritativní, index lze obnovit z HEAD a receipt dělá retry idempotentní.
+Skutečný Turris/LXC deployment v této dávce proveden nebyl; browserová akceptace
+proběhla proti dočasnému lokálnímu HTTPS serveru a projektu.
+
 ## UX-UNIFIED-01 — Jednotný webový a desktopový frontend — 2026-10-11
 
 Dávka na větvi `feature/ux-unified-01-shared-frontend`, založené z `develop`
 `7bb4f5e`, dosáhla úrovně **implemented / PoC validated** a její feature
 akceptace je splněná. Jeden společný frontend nyní obsluhuje web i desktopový
 WebEngine; odlišné zůstávají pouze autentizační a přesně vymezené capability
-adaptéry. Doručení PR do `develop` dosud není doložené a zůstává samostatně
-otevřené.
+adaptéry. Dávka byla doručena do `develop` jako PR #53, konsolidovaný merge
+commit `571b430`.
 
 - [x] [completed] **UX-UNIFIED-01-A — Jeden zdroj shellu a explicitní adaptéry.**
   Web a desktop servírují shodné HTML/CSS bez textových transformací assetů.

@@ -70,7 +70,7 @@ def main_todo_view(files, entities, project_id):
     try:
         doc = document(files, entities, id_)
     except (ValidationError, UnicodeError):
-        return dict(status='unsupported', items=[])
+        return dict(id=id_, status='unsupported', items=[])
     items, ancestors = [], []
     parsed = checklist_items(doc['body'])
     for item in parsed[:1000]:
@@ -78,5 +78,5 @@ def main_todo_view(files, entities, project_id):
             ancestors.pop()
         items.append(dict(title=item['title'], checked=item['checked'], depth=len(ancestors)))
         ancestors.append(item['indent'])
-    return dict(status='ready', title=doc['title'], items=items, total=len(parsed),
+    return dict(id=id_, status='ready', title=doc['title'], items=items, total=len(parsed),
                 completed=sum(item['checked'] for item in parsed), truncated=len(parsed) > len(items))

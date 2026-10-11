@@ -72,7 +72,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
-<h2>Podklady</h2><button id="open-source-import" type="button">Importovat zdroj</button>
+<h2>Podklady</h2><div class="sidebar-artifact-primary-actions"><button id="new-document" type="button">Nový dokument</button>
+<button id="open-source-import" type="button">Importovat zdroj</button></div>
 <p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
@@ -264,8 +265,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details><summary>Záznam uložení</summary><pre id="history-info"></pre></details>
 </section></div>
 <div id="artifact-editor-view" hidden>
-<header><span class="badge">Dokument</span><span>Existující uložený Markdown</span></header>
-<div class="page-heading"><div class="eyebrow">UPRAVIT DOKUMENT</div><h1 id="artifact-editor-heading">Dokument</h1></div>
+<header><span class="badge">Dokument</span><span id="artifact-editor-mode">Uložený Markdown</span></header>
+<div class="page-heading"><div class="eyebrow" id="artifact-editor-eyebrow">UPRAVIT DOKUMENT</div><h1 id="artifact-editor-heading">Dokument</h1></div>
 <form id="artifact-editor-form" class="standalone-form"><label>Název <input name="title" maxlength="200" required></label>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
@@ -452,7 +453,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-artifact-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-artifact-main{min-width:0}.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px;overflow-wrap:anywhere}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-chat-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
 .sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
@@ -527,7 +528,6 @@ CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
 body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
 body[data-runtime="desktop"] #notebooklm-import{display:none!important}
-body[data-runtime="server"] #create-main-todo,body[data-runtime="server"] #todo-help{display:none!important}
 body[data-runtime="server"]:not(.authenticated)>aside,
 body[data-runtime="server"]:not(.authenticated)>main,
 body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-toggle,
@@ -603,7 +603,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -660,11 +660,9 @@ function renderSidebarArtifacts(items){
 }
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
-createTodo.addEventListener('click',()=>{
- if(activeProject && !createTodo.hidden)location.hash='create-main-todo';
-});
+createTodo.addEventListener('click',()=>openMainTodoEditor());
 function renderTodo(todo){
- createTodo.hidden=!!todo;
+ createTodo.hidden=false;createTodo.textContent=todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů';
  document.querySelector('#todo-help').hidden=!todo;
  todoTree.replaceChildren();
  document.querySelector('#todo-title').textContent=todo?.title || '';
@@ -693,6 +691,7 @@ function renderTodo(todo){
 }
 function clearProject(){
  ++viewRequest;
+ artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
@@ -734,7 +733,7 @@ function closeSourceImport(){
  else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
 }
 function openSourceImport(){
- if(!activeProject)return;
+ if(!activeProject||!canLeaveArtifactEditor())return;
  const predecessors=document.querySelector('#source-import-supersedes');predecessors.replaceChildren();
  const standalone=document.createElement('option');standalone.value='';standalone.textContent='Samostatný zdroj';predecessors.append(standalone);
  for(const item of currentArtifacts.filter(item=>item.kind==='source')){
@@ -777,14 +776,29 @@ sourceImportForm.addEventListener('submit',async event=>{
 });
 const artifactEditorForm=document.querySelector('#artifact-editor-form');
 const artifactEditorStatus=document.querySelector('#artifact-editor-status');
-let artifactEditorItem=null,artifactEditorAttempt=null,artifactDeletePreview=null,artifactDeleteOperation=null;
+let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null;
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
+function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
+function canLeaveArtifactEditor(){
+ if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
+ return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
+}
+function fillArtifactEditor(doc,isNew=false){
+ const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
+ document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
+ document.querySelector('#artifact-editor-eyebrow').textContent=isNew?'NOVÝ DOKUMENT':'UPRAVIT DOKUMENT';
+ artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
+ artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
+ artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
+}
 async function closeArtifactEditor(){
- artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;
- if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(artifactEditorItem)await openPreview(artifactEditorItem.id);}
+ if(!canLeaveArtifactEditor())return;
+ const item=artifactEditorItem;artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(item&&!item.new)await openPreview(item.id);}
 }
 async function openArtifactEditor(item,deleteMode=false){
  if(!activeProject||item.kind!=='document')return;
+ if(!artifactEditorView.hidden&&!canLeaveArtifactEditor())return;
  await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
@@ -792,20 +806,32 @@ async function openArtifactEditor(item,deleteMode=false){
  artifactEditorStatus.textContent='Načítám uložený dokument…';
  try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
-  const doc=result.document,meta=doc.metadata;document.querySelector('#artifact-editor-heading').textContent=doc.title;
-  artifactEditorForm.elements.title.value=doc.title;artifactEditorForm.elements.filename.value=meta.file;
-  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body;
+  fillArtifactEditor(result.document);
   artifactEditorStatus.textContent='Uložená verze je připravena k úpravě.';
   if(deleteMode)await prepareArtifactDeletion();else artifactEditorForm.elements.title.focus();
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
-artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;});
+function openNewArtifactEditor({todo=false}={}){
+ if(!activeProject||(!artifactEditorView.hidden&&!canLeaveArtifactEditor()))return;
+ const id=todo?activeProject.mainTodoId:crypto.randomUUID();
+ artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'# Hlavní seznam úkolů\\n\\n- [ ] První úkol\\n'}:{title:'',filename:'content.md',body:''},true);
+ artifactEditorStatus.textContent='Dokument vznikne až po uložení.';artifactEditorForm.elements.title.focus();
+}
+function openMainTodoEditor(){
+ if(!activeProject)return;const item=currentArtifacts.find(candidate=>candidate.id===activeProject.mainTodoId);
+ if(item)openArtifactEditor(item);else openNewArtifactEditor({todo:true});
+}
+document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
+artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 artifactEditorForm.addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject||!artifactEditorItem)return;const fields=new FormData(artifactEditorForm),button=artifactEditorForm.querySelector('button[type="submit"]');
- const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:false,filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
+ const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
- try{const id=artifactEditorItem.id,projectId=activeProject.id;await projectRequest('/v1/artifacts/editor/save',artifactEditorAttempt,120000);artifactEditorAttempt=null;await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}
+ try{const id=artifactEditorItem.id,projectId=activeProject.id;await projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document},120000);artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;await openRegisteredProject(projectId);await openPreview(id);previewStatus.textContent='Dokument byl uložen.';}
  catch(error){artifactEditorStatus.textContent=error.message;}finally{button.disabled=false;}
 });
 async function prepareArtifactDeletion(){
@@ -824,17 +850,19 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
 async function openRegisteredProject(projectId){
+ if(!canLeaveArtifactEditor())return;
  ++catalogRequest;
  clearProject();const request=viewRequest;
  projectStatus.textContent='Otevírám projekt…';
  try{
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
-  activeProject={id:projectId,head:result.commit_id};
+  activeProject={id:projectId,head:result.commit_id,mainTodoId:result.main_todo_id};
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
@@ -862,6 +890,7 @@ function renderProjectCatalog(items){
  document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
 }
 async function loadProjects(selectedId=null){
+ if(!canLeaveArtifactEditor())return;
  const request=++catalogRequest;
  clearProject();projectCards.replaceChildren();sidebarProjects.replaceChildren();
  projectStatus.textContent='Načítám projekty…';document.querySelector('#sidebar-project-status').textContent='Načítám projekty…';
@@ -988,6 +1017,7 @@ for(const [index,tab] of settingsTabs.entries()){
  });
 }
 async function openSettings(){
+ if(!canLeaveArtifactEditor())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
