@@ -14,11 +14,14 @@ from pathlib import Path
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
 from spikes.metadata import MAX_FILE, validate_snapshot
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.source_import import Sources, request_from_file
 from spikes.storage import Git
+from tests import test_local_api
 
 
 class SourceImportTests(unittest.TestCase):
@@ -99,6 +102,27 @@ class SourceImportTests(unittest.TestCase):
 
             open_view = self.sources.open(self.project_id)
             self.assertEqual(open_view['documents'], [])
+
+    def test_shared_desktop_endpoint_imports_local_only_with_same_operation(self):
+        path = self._write('desktop.md', b'# Local evidence\n')
+        source = request_from_file(self.project_id, self.git.head(), str(path), 'Local evidence',
+                                   'Desktop boundary', ['desktop'], 'local-only',
+                                   source_created_at='2020-01-02T03:04:05Z')
+        operation = str(uuid4())
+        body = json.dumps({'operation_id': operation, 'source': source}).encode()
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler, projects=self.projects) as server:
+            first = driver.request(server, path='/v1/sources/import', body=body)
+            second = driver.request(server, path='/v1/sources/import', body=body)
+        first_head, first_body = first.split(b'\r\n\r\n', 1)
+        second_head, second_body = second.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 200 ', first_head)
+        self.assertEqual(json.loads(first_body), json.loads(second_body))
+        imported_path = self.project_root / 'artifacts' / source['artifact_id'] / 'metadata.json'
+        imported = json.loads(imported_path.read_text())
+        self.assertEqual(imported['privacy'], 'local-only')
+        self.assertEqual(imported['import']['source_created_at'], '2020-01-02T03:04:05Z')
+        self.assertEqual(imported['import']['importer']['name'], 'workspace-native-import')
 
     def test_request_rejects_invalid_extension_or_too_large_file(self):
         unsupported = self._write('source.unsupported', b'abc')
@@ -241,37 +265,6 @@ Sources(sys.argv[1]).migrate_source(json.loads(sys.argv[2]),sys.argv[3],checkpoi
                 self.assertEqual(validate_snapshot(self.git.snapshot(self.git.head()))[artifact_id]['schema_version'], 2)
                 self.assertEqual(self.git.run('rev-list', '--count', import_commit + '..HEAD').stdout.strip(), '1')
                 self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
-
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt widgets')
-    def test_native_dialog_keeps_source_creation_separate_from_import_time(self):
-        path = self._write('dated.pdf', b'%PDF-1.7\ndated\n')
-        script = r'''
-import os,sys
-from PySide6.QtWidgets import QApplication,QLabel,QMessageBox
-import spikes.desktop_import as module
-from spikes.source_import import request_from_file
-module.ImportDialog.load=lambda self: None
-app=QApplication([])
-dialog=module.ImportDialog(sys.argv[1],sys.argv[2])
-dialog.view={'commit_id':sys.argv[4]}
-dialog.path.setText(sys.argv[3]);dialog.title.setText('Dated source')
-dialog.source_created_at.setText('2020-01-02T03:04:05Z')
-captured={}
-def make_request(*args,**kwargs):
-    captured.update(kwargs);return request_from_file(*args,**kwargs)
-module.request_from_file=make_request
-QMessageBox.exec=lambda self: QMessageBox.StandardButton.Cancel
-dialog.import_file()
-assert captured['source_created_at']=='2020-01-02T03:04:05Z',captured
-assert 'může být starší než import' in ' '.join(x.text() for x in dialog.findChildren(QLabel))
-assert dialog.pending is None
-sys.stdout.write('source/import times separated\n');sys.stdout.flush();os._exit(0)
-'''
-        result = subprocess.run([sys.executable, '-c', script, str(self.node), self.project_id,
-                                 str(path), self.git.head()], capture_output=True, text=True, timeout=20)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('source/import times separated', result.stdout)
-
 
 if __name__ == '__main__':
     unittest.main()

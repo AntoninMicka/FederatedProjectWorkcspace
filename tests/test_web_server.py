@@ -111,8 +111,11 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="workflow-tab"', WEB_HTML)
         self.assertIn('Projekt z archivu (NotebookLM notebook)', WEB_HTML)
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
-        self.assertEqual(WEB_HTML.count('id="web-source-import-form"'), 1)
-        self.assertIn('<div id="project-view" hidden>\n<details id="web-source-import">', WEB_HTML)
+        self.assertEqual(WEB_HTML.count('id="source-import-form"'), 1)
+        self.assertIn('<div id="source-import-view" hidden>', WEB_HTML)
+        self.assertIn('id="open-source-import"', WEB_HTML)
+        self.assertIn("querySelector('#source-import-local-only').disabled=true", WEB_JS)
+        self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
@@ -146,11 +149,10 @@ class WebTests(unittest.TestCase):
         self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
-        self.assertIn("#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar()",
+        self.assertIn("#sidebar-artifact-list button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
-        self.assertIn('id="sidebar-assigned-chats"', WEB_HTML)
-        self.assertIn('id="sidebar-unassigned-chats"', WEB_HTML)
+        self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
         self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)
         self.assertIn("item.setAttribute('role','menuitem')", WEB_JS)

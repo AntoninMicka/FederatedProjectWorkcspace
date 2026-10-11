@@ -16,7 +16,8 @@ smějí přidat pouze bootstrap autentizace a capability konkrétního uzlu.
   souhrny, extrakce, metadata, obrazové běhy, nastavení backendů, CMS a správa
   uzlu mají jediný DOM/CSS zdroj.
 - Serverový bootstrap v `spikes/web_server.py` přidává přihlášení přístupovým
-  klíčem, session/RBAC a serverové create/import capability.
+  klíčem, session/RBAC a serverové capability; společný import zdroje na webu
+  navíc fail-closed nepovolí `local-only`.
 - Desktopový bootstrap v `spikes/desktop_management.py` spoléhá na procesní
   token přidávaný WebEngine interceptorem a zpřístupní capability důvěryhodného
   single-user uzlu.
@@ -34,11 +35,17 @@ Qt zůstává oprávněný tam, kde je nutná integrace s lokálním OS nebo lif
 - systémový askpass a otevření schváleného odkazu v systémovém prohlížeči,
 - lifecycle okna, WebEngine procesu, signálů a bezpečného ukončení workerů.
 
+Import jednotlivého zdroje je převeden na společnou samostatnou stránku
+otevíranou z panelu Podklady. Používá stejný bounded endpoint, operation ID a
+`Sources`/Workspace recovery v obou variantách; původní Qt dialog a toolbar
+vstup byly odstraněny. HTML file input dál vyvolá platformní picker, ale
+nevytváří paralelní workflow.
+
 Následující existující Qt dialogy nejsou desktop-only z principu a nesmějí být
 dále rozšiřovány jako paralelní UI: vytvoření projektu, import NotebookLM,
-import zdroje, editor dokumentu/TODO a historie artefaktu. Jejich backendové
+editor dokumentu/TODO a historie artefaktu. Jejich backendové
 služby zůstávají znovupoužitelné. V této dávce byl sjednocen shell a serverové
-varianty create/import; úplné převedení těchto starších desktopových vstupů na
+varianty create/import; úplné převedení zbývajících starších desktopových vstupů na
 společné autorizované HTTP workflow vyžaduje samostatné mutující API a recovery
 kontrakt a není vydáváno za dokončené.
 

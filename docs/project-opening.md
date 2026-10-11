@@ -284,8 +284,8 @@ historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git hi
 
 ## Import původních zdrojů
 
-Desktopová lišta nabízí **Importovat zdroj…** pro otevřený projekt. Webová
-varianta má po otevření projektu rozbalovací **Importovat zdroj do projektu**;
-zápis vyžaduje roli editor/project-admin nebo správce uzlu.
+V záložce **Podklady** nabízí desktop i web stejné tlačítko **Importovat zdroj**,
+které otevře samostatnou společnou stránku; webový zápis vyžaduje roli
+editor/project-admin nebo správce uzlu.
 [Podporované soubory, zachování bajtů, privacy a recovery](native-source-import.md).
 Po úspěchu se zdroj objeví v Podkladech; nativní editor jeho obsah nemění.

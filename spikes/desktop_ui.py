@@ -8,11 +8,12 @@ import subprocess
 
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
-from spikes.metadata import ValidationError
+from spikes.metadata import MAX_FILE, ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
+from spikes.source_import import Sources
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
@@ -69,14 +70,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
 <div id="sidebar-artifacts" role="tabpanel" aria-labelledby="artifacts-tab" tabindex="0" hidden>
-<h2>Podklady</h2><p id="sidebar-artifact-status" role="status"></p>
+<h2>Podklady</h2><button id="open-source-import" type="button">Importovat zdroj</button>
+<p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
 <div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button">Nové vlákno</button>
 <button id="chat-open-settings" type="button">Nastavení backendu</button></div>
-<h3>Zařazené</h3><ul id="sidebar-assigned-chats" aria-label="Zařazené chaty"></ul>
-<h3>Nezařazené</h3><ul id="sidebar-unassigned-chats" aria-label="Nezařazené chaty"></ul></div></div>
+<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
 <button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
 <main><div id="project-home">
@@ -220,14 +221,23 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 '''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
-<div id="project-view" hidden>
-<details id="web-source-import"><summary>Importovat zdroj do projektu</summary>
-<form id="web-source-import-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
+<div id="source-import-view" hidden>
+<header><span class="badge">Podklady projektu</span><span>Původní bajty a doložená metadata</span></header>
+<div class="page-heading"><div class="eyebrow">IMPORT ZDROJE</div><h1>Importovat zdroj</h1>
+<p>Zdroj se uloží jako neměnný podklad. Nová verze se importuje jako nový zdroj.</p></div>
+<form id="source-import-form" class="standalone-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
 <label>Název <input name="title" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="2"></textarea></label>
-<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
-<button type="submit">Importovat původní bajty</button><p id="web-source-import-status" role="status"></p></form></details>
+<label>Doložený čas vzniku zdroje (UTC) <input name="source_created_at" maxlength="27" placeholder="např. 2024-05-10T14:30:00Z"></label>
+<label>Navazuje na předchozí zdroj <select name="supersedes" id="source-import-supersedes"><option value="">Samostatný zdroj</option></select></label>
+<label>Soukromí <select name="privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="source-import-local-only" value="local-only">Pouze lokální</option><option value="public">Veřejné</option></select></label>
+<p>Markdown, PNG, JPEG a PDF do 16 MiB. Čas importu se uloží automaticky; čas vzniku vyplňte jen tehdy, když jej zdroj dokládá.</p>
+<label class="confirm"><input name="confirmed" type="checkbox" required> Potvrzuji import původních bajtů, zvolená metadata a soukromí.</label>
+<div class="form-actions"><button type="submit">Importovat původní bajty</button><button id="source-import-back" class="secondary-button" type="button">Zpět do projektu</button></div>
+<p id="source-import-status" role="status" aria-live="polite"></p></form>
+</div>
+<div id="project-view" hidden>
 <header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
@@ -395,15 +405,17 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#todo-tree{list-style:none;padding:0;margin:14px 0}
 #sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
 #sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
 #sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px}.sidebar-artifact-title{font-size:13px}
-#sidebar-chats h3{font-size:11px;color:#8faabc;text-transform:uppercase;letter-spacing:.06em;margin:18px 8px 6px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 .sidebar-chat-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
+.sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
+.sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
 .sidebar-chat-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
 .sidebar-chat-row>.sidebar-chat-open{min-width:0}.sidebar-chat-menu{position:relative;margin-top:4px}
 .sidebar-chat-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}
@@ -416,9 +428,9 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-project-tools>[role="tabpanel"]:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-assigned-chats,#sidebar-unassigned-chats{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list{flex:1}
-#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr) auto minmax(0,1fr)}
+#sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
@@ -473,8 +485,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
 body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
-body[data-runtime="desktop"] #create-project,body[data-runtime="desktop"] #notebooklm-import,
-body[data-runtime="desktop"] #web-source-import{display:none!important}
+body[data-runtime="desktop"] #create-project,body[data-runtime="desktop"] #notebooklm-import{display:none!important}
 body[data-runtime="server"] #create-main-todo,body[data-runtime="server"] #todo-help{display:none!important}
 body[data-runtime="server"]:not(.authenticated)>aside,
 body[data-runtime="server"]:not(.authenticated)>main,
@@ -483,17 +494,18 @@ body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-backdrop{display
 body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
-#web-source-import,#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
-#web-source-import label,#notebooklm-import label{display:block;margin:9px 0}
-#web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
-#web-source-import textarea{width:100%}#notebooklm-archive{width:min(680px,100%)}
+#source-import-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+.standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
+.standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
+.standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
+#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 @media(max-width:600px){
  #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
  .project-create-row{flex-direction:column}.project-create-row button,#new-project-title{width:100%}
- #web-source-import,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
- #web-source-import input,#web-source-import textarea,#web-source-import select,#notebooklm-import input,#notebooklm-import select{width:100%}
- #notebooklm-import button,#web-source-import button{width:100%;margin-top:6px}
+ .standalone-form,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
+ .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{width:100%}
+ #notebooklm-import button,.standalone-form button{width:100%;margin-top:6px}
  #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 }'''
 JS = '''const button=document.querySelector('#increment');
@@ -517,6 +529,7 @@ const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
+const sourceImportView=document.querySelector('#source-import-view');
 const todoTree=document.querySelector('#todo-tree');
 const todoStatus=document.querySelector('#todo-status');
 const sidebarArtifacts=document.querySelector('#sidebar-artifact-list');
@@ -545,7 +558,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#open-source-import,#sidebar-project-list button,#sidebar-artifact-list button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -630,6 +643,7 @@ function clearProject(){
  document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
  settingsView.hidden=true;
+ sourceImportView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
@@ -648,6 +662,57 @@ async function projectRequest(path,body,timeout=60000){
   error.outcome=result.outcome;error.retry=result.retry;throw error;}
  return result;
 }
+const sourceImportForm=document.querySelector('#source-import-form');
+const sourceImportStatus=document.querySelector('#source-import-status');
+let sourceImportAttempt=null;
+function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
+function closeSourceImport(){
+ sourceImportView.hidden=true;
+ if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
+ else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+}
+function openSourceImport(){
+ if(!activeProject)return;
+ const predecessors=document.querySelector('#source-import-supersedes');predecessors.replaceChildren();
+ const standalone=document.createElement('option');standalone.value='';standalone.textContent='Samostatný zdroj';predecessors.append(standalone);
+ for(const item of currentArtifacts.filter(item=>item.kind==='source')){
+  const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.id}`;predecessors.append(option);
+ }
+ sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ sourceImportForm.elements.file.focus();
+}
+document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
+document.querySelector('#source-import-back').addEventListener('click',closeSourceImport);
+sourceImportForm.elements.file.addEventListener('change',event=>{
+ const file=event.currentTarget.files[0];if(file&&!sourceImportForm.elements.title.value)sourceImportForm.elements.title.value=file.name.replace(/\\.[^.]+$/,'');
+ sourceImportAttempt=null;
+});
+sourceImportForm.addEventListener('input',()=>{sourceImportAttempt=null;});
+sourceImportForm.addEventListener('submit',async event=>{
+ event.preventDefault();const fields=new FormData(sourceImportForm);const file=fields.get('file');
+ if(!activeProject || !(file instanceof File) || !file.size){sourceImportStatus.textContent='Vyberte otevřený projekt a soubor.';return;}
+ if(file.size>16777216){sourceImportStatus.textContent='Soubor přesahuje limit 16 MiB.';return;}
+ const button=sourceImportForm.querySelector('button[type="submit"]');button.disabled=true;sourceImportStatus.textContent='Importuji…';
+ try{
+  const signature=JSON.stringify([activeProject.id,activeProject.head,file.name,file.size,file.lastModified,
+   fields.get('title'),fields.get('description'),fields.get('tags'),fields.get('source_created_at'),fields.get('supersedes'),fields.get('privacy')]);
+  if(!sourceImportAttempt || sourceImportAttempt.signature!==signature){
+   const raw=await file.arrayBuffer(),digest=await crypto.subtle.digest('SHA-256',raw);
+   const source={project_id:activeProject.id,artifact_id:crypto.randomUUID(),base_head:activeProject.head,
+    filename:file.name,title:String(fields.get('title')||'').trim(),description:String(fields.get('description')||''),
+    tags:String(fields.get('tags')||'').split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean),privacy:String(fields.get('privacy')),
+    created_at:new Date().toISOString(),content:bytesBase64(raw),sha256:[...new Uint8Array(digest)].map(byte=>byte.toString(16).padStart(2,'0')).join(''),
+    source_url:null,source_author:null,source_created_at:String(fields.get('source_created_at')||'').trim()||null,source_revision:null};
+   const supersedes=String(fields.get('supersedes')||'');if(supersedes)source.supersedes=supersedes;
+   sourceImportAttempt={signature,request:{operation_id:crypto.randomUUID(),source}};
+  }
+  const result=await projectRequest('/v1/sources/import',sourceImportAttempt.request,120000);
+  const projectId=result.id;sourceImportAttempt=null;sourceImportForm.reset();await openRegisteredProject(projectId);
+  sidebarArtifactStatus.textContent='Zdroj byl importován beze změny původních bajtů.';
+ }catch(error){sourceImportStatus.textContent=error.message;}finally{button.disabled=false;}
+});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -662,7 +727,7 @@ async function openRegisteredProject(projectId){
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-commit').textContent=result.commit_id;
-  projectView.hidden=false;document.querySelector('#project-home').hidden=true;
+  sourceImportView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
   await loadChat();
   selectSidebarTab(document.querySelector('#artifacts-tab'));
@@ -742,7 +807,7 @@ for(const [index,tab] of settingsTabs.entries()){
 async function openSettings(){
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -1002,11 +1067,18 @@ function renderChat(thread){
 }
 function renderThreadList(threads){
  knownThreads=threads;
- const assigned=document.querySelector('#sidebar-assigned-chats');
- const unassigned=document.querySelector('#sidebar-unassigned-chats');
- assigned.replaceChildren();unassigned.replaceChildren();
- for(const thread of threads){
-  const row=document.createElement('li'),button=document.createElement('button');button.type='button';
+ const tree=document.querySelector('#sidebar-chat-tree');tree.replaceChildren();
+ const assigned=threads.filter(thread=>thread.project_id!==null);
+ const unassigned=threads.filter(thread=>thread.project_id===null);
+ function branch(label,branchThreads){
+  if(!branchThreads.length)return;
+  const root=document.createElement('li');root.className='sidebar-chat-branch';root.setAttribute('role','treeitem');root.setAttribute('aria-expanded','true');
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-chat-branch-toggle';toggle.textContent=`${label} (${branchThreads.length})`;
+  const group=document.createElement('ul');group.setAttribute('role','group');
+  toggle.addEventListener('click',()=>{const expanded=root.getAttribute('aria-expanded')==='true';root.setAttribute('aria-expanded',String(!expanded));});
+  root.append(toggle,group);tree.append(root);
+  for(const thread of branchThreads){
+  const row=document.createElement('li'),button=document.createElement('button');button.type='button';row.setAttribute('role','treeitem');
   row.className='sidebar-chat-row';button.className='sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
@@ -1029,10 +1101,11 @@ function renderThreadList(threads){
   action('Připravit smazání',prepareActiveThreadDeletion);
   action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
   action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!thread.messages.length);
-  menu.append(trigger,items);row.append(button,menu);(thread.project_id===null?unassigned:assigned).append(row);
+  menu.append(trigger,items);row.append(button,menu);group.append(row);
+  }
  }
- const assignedCount=threads.filter(thread=>thread.project_id!==null).length;
- const unassignedCount=threads.length-assignedCount;
+ branch('Zařazené',assigned);branch('Nezařazené',unassigned);
+ const assignedCount=assigned.length,unassignedCount=unassigned.length;
  document.querySelector('#sidebar-chat-status').textContent=threads.length?
   `${assignedCount} zařazených · ${unassignedCount} nezařazených`:'Zatím tu nejsou žádné uložené chaty.';
 }
@@ -2049,9 +2122,9 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
-    max_body = 1152 * 1024
+    max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
-        '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
+        '/v1/artifacts/preview', '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -2256,6 +2329,15 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
                 return self.reply(200, {'projects': projects.catalog()})
+            if (self.path == '/v1/sources/import' and isinstance(request, dict)
+                    and set(request) == {'operation_id', 'source'}
+                    and isinstance(request['source'], dict)):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                receipt = Sources(node).import_source(request['source'], request['operation_id'])
+                return self.reply(200, {'id': request['source'].get('project_id'),
+                                        'commit_id': receipt['commit_id']})
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))
@@ -2334,6 +2416,8 @@ class DesktopHandler(Handler):
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
                            'Chat požadavek nelze provést. Ověřte backend, projekt, výběr kontextu a lokální stav.')
                 return self.reply(422, {'error': message})
+            if self.path == '/v1/sources/import':
+                return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
             # Do not forward paths, Git stderr or configuration payloads to the renderer.
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})

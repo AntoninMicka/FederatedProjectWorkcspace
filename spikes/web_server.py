@@ -35,6 +35,7 @@ from spikes.publication_cms import PublicationCms
 WEB_HTML = HTML
 WEB_CSS = CSS
 WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=false;
+document.querySelector('#source-import-local-only').disabled=true;
 let accessKey='';
 const originalFetch=window.fetch.bind(window);
 window.fetch=(path,options={})=>{
@@ -122,24 +123,6 @@ projectCreateForm.addEventListener('submit',async(event)=>{
 window.addEventListener('pagehide',()=>{accessKey='';});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
 document.querySelector('#logout').addEventListener('click',()=>{accessKey='';location.reload();});
-const webImportForm=document.querySelector('#web-source-import-form');
-let webImportAttempt=null;
-function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
-webImportForm.addEventListener('submit',async event=>{
- event.preventDefault();const status=document.querySelector('#web-source-import-status');const fields=new FormData(webImportForm);
- const file=fields.get('file');if(!activeProject || !(file instanceof File) || !file.size){status.textContent='Vyberte otevřený projekt a soubor.';return;}
- if(file.size>16777216){status.textContent='Soubor přesahuje limit 16 MiB.';return;}
- const button=webImportForm.querySelector('button');button.disabled=true;status.textContent='Importuji…';
- try{const signature=JSON.stringify([activeProject.id,activeProject.head,file.name,file.size,file.lastModified,fields.get('title'),fields.get('description'),fields.get('tags'),fields.get('privacy')]);
-   if(!webImportAttempt || webImportAttempt.signature!==signature){const raw=await file.arrayBuffer();const digest=await crypto.subtle.digest('SHA-256',raw);const source={project_id:activeProject.id,artifact_id:crypto.randomUUID(),base_head:activeProject.head,
-   filename:file.name,title:String(fields.get('title')||'').trim(),description:String(fields.get('description')||''),
-   tags:String(fields.get('tags')||'').split(/\\r?\\n/).map(v=>v.trim()).filter(Boolean),privacy:String(fields.get('privacy')),
-   created_at:new Date().toISOString(),content:bytesBase64(raw),sha256:[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join(''),
-   source_url:null,source_author:null,source_created_at:null,source_revision:null};webImportAttempt={signature,request:{operation_id:crypto.randomUUID(),source}};}
-   const result=await projectRequest('/v1/sources/import',webImportAttempt.request,120000);
-   status.textContent='Zdroj byl importován.';webImportAttempt=null;webImportForm.reset();await openRegisteredProject(result.id);
- }catch(error){status.textContent=error.message;}finally{button.disabled=false;}
-});
 ''' + JS
 ASSETS = {'/': ('text/html; charset=utf-8', WEB_HTML),
           '/app.css': ('text/css; charset=utf-8', WEB_CSS),

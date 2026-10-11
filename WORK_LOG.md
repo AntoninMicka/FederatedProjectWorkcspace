@@ -11,7 +11,8 @@ Dávka na větvi `feature/ux-unified-01-shared-frontend`, založené z `develop`
 `7bb4f5e` po merge WEB-RUNTIME-01 jako PR #52, sjednotila frontendový shell bez
 změny autority projektových dat nebo persistentních recovery hranic. Po první
 lokální akceptaci byla na přání uživatele znovu otevřena a doplnila per-chat
-akční menu v sidebaru. Dosažená úroveň je **designed / implemented / PoC
+akční menu, společnou stránku importu zdroje a strom chatů v sidebaru. Dosažená
+úroveň je **designed / implemented / PoC
 validated** a lokální akceptační podmínky jsou splněné. Push, PR ani merge této
 dávky dosud nebyly provedeny; cílem jediného PR zůstává `develop`.
 
@@ -21,7 +22,8 @@ dávky dosud nebyly provedeny; cílem jediného PR zůstává `develop`.
   `web_server.py` ani `desktop_management.py` už neskládají DOM assety pomocí
   `.replace(...)`. Pending runtime zůstává skrytý do volby adaptéru.
 - [x] [completed] **UX-UNIFIED-01-B — Per-chat akční menu.** „Nové vlákno“ a
-  „Nastavení backendu“ jsou nad zařazenými a nezařazenými seznamy. Každý řádek
+  „Nastavení backendu“ jsou nad jedním stromem, který vytváří větve „Zařazené“
+  a „Nezařazené“ pouze tehdy, když obsahují vlákna. Každý řádek
   chatu má vlastní přístupné menu pro archivaci, přípravu smazání, uložení
   otisku a poslední odpovědi. Akce nejprve aktivuje konkrétní vlákno a teprve
   potom použije stávající backendový lifecycle; neplatné akce se pro daný stav
@@ -30,19 +32,29 @@ dávky dosud nebyly provedeny; cílem jediného PR zůstává `develop`.
 - [x] [completed] **UX-UNIFIED-01-C — Qt/PySide inventura.** Hranice je
   popsána v `docs/ui-capability-inventory.md`. OS file picker, lokální procesy,
   LXC/network lifecycle, askpass a lifecycle okna zůstávají desktop-only.
-  Starší Qt create/import/editor/history workflow nejsou takto označena a
-  jejich řízená migrace je předána jako `UX-UNIFIED-02` za již schválenou
-  Ollama orchestraci a output router.
+  Zbývající starší Qt workflow pro vytvoření projektu, NotebookLM,
+  editor/TODO a historii nejsou takto označena a jejich řízená migrace je
+  předána jako `UX-UNIFIED-02` za již schválenou Ollama orchestraci a output
+  router.
+- [x] [completed] **UX-UNIFIED-01-D — Společný import zdroje.** Tlačítko v
+  záložce Podklady otevře na webu i desktopu stejnou samostatnou stránku s
+  původními bajty, metadaty, doloženým časem vzniku a vazbou `supersedes`.
+  Desktopový handler používá stejnou `Sources`/Workspace operaci a dovolí
+  `local-only`; web zachovává RBAC a tuto privacy fail-closed odmítá. Původní
+  Qt `ImportDialog` a toolbar vstup byly odstraněny, platformní výběr souboru
+  zajišťuje WebEngine/browser file input.
 
 Nevznikla nová persistentní operace. Menu používá stávající explicitní preview,
-operation ID, thread revision a potvrzení; journaly, Git/SQLite recovery a RBAC
-zůstaly beze změny.
+operation ID, thread revision a potvrzení. Importní adaptér zachovává stejné
+expected HEAD, operation ID, journal, Git commit a idempotentní receipt jako
+`Sources.import_source`; journaly, Git/SQLite recovery a RBAC zůstaly beze změny.
 
-Ověření po poslední změně kódu: cílená sada
-`python3 -m unittest tests.test_web_server tests.test_desktop -q` prošla:
-**33 testů OK, 4 volitelné Qt/WebEngine testy přeskočeny**. Úplná sada
-`python3 -m unittest discover -s tests -q` prošla: **451 testů OK,
-27 volitelných native/package/live testů přeskočeno**. Známé neblokující
+Ověření po poslední změně kódu: syntaktická kontrola společného JavaScriptu
+`node --check` prošla. Cílená sada `python3 -m unittest tests.test_source_import
+tests.test_desktop tests.test_web_server -q` prošla: **42 testů OK, 4 volitelné
+Qt/WebEngine testy přeskočeny**. Úplná sada `python3 -m unittest discover -s
+tests -q` prošla: **451 testů OK, 26 volitelných native/package/live testů
+přeskočeno**. Známé neblokující
 `ResourceWarning` na testovací SQLite spojení zůstaly beze změny.
 
 Omezení: skutečný Qt/WebEngine smoke nebyl v tomto běhu aktivován a změna nebyla
