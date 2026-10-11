@@ -804,18 +804,20 @@ nenahrazují.
     PoC validovalo společný HTML/CSS shell s explicitním webovým a desktopovým
     bootstrapem, společnou samostatnou stránku importu zdroje a strom chatů;
     původní Qt importní dialog byl odstraněn. Evidence je ve
-    [TODO](TODO.md). Dávka byla na přání uživatele rozšířena a široký bod
-    zůstává otevřený pro její kroky E/F a pozdější migraci editoru/NotebookLM.
+    [WORK_LOG](WORK_LOG.md). Dávka byla na přání uživatele rozšířena o historii
+    a vytvoření projektu; široký bod zůstává otevřený už jen pro samostatnou
+    pozdější migraci zbytku editoru a NotebookLM.
   - [x] `UX-UNIFIED-01-E`: v téže feature větvi a jediném PR převést
     read-only historii podporovaného artefaktu na společnou stránku nad
     `ArtifactHistory`; zachovat HEAD-bound validaci, topologickou historii,
     bezpečné textové zobrazení a nulové projektové zápisy; po dosažení parity
     byl Qt `HistoryDialog` odstraněn.
-  - [ ] `UX-UNIFIED-01-F`: poté v téže dávce převést vytvoření projektu na společný formulář
-    a recovery kontrakt `ProjectCreation`. Výchozí umístění a pokračování
-    operace jsou společné; systémový výběr vlastního adresáře smí zůstat pouze
-    omezenou desktopovou capability bez paralelního dialogového workflow a bez
-    přijetí libovolné cesty z rendereru.
+  - [x] `UX-UNIFIED-01-F`: vytvoření projektu používá společný formulář,
+    backendem vydaný preview plán a recovery kontrakt `ProjectCreation`.
+    Výchozí umístění a pokračování operace jsou společné; systémový výběr
+    vlastního adresáře zůstal omezenou desktopovou capability bez paralelního
+    dialogového workflow a bez přijetí libovolné cesty z rendereru. Evidence je
+    ve [WORK_LOG](WORK_LOG.md).
 - [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
   funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
   lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat

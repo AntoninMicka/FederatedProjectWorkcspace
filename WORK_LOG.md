@@ -5,6 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-01 — Jednotný webový a desktopový frontend — 2026-10-11
+
+Dávka na větvi `feature/ux-unified-01-shared-frontend`, založené z `develop`
+`7bb4f5e`, dosáhla úrovně **implemented / PoC validated** a její feature
+akceptace je splněná. Jeden společný frontend nyní obsluhuje web i desktopový
+WebEngine; odlišné zůstávají pouze autentizační a přesně vymezené capability
+adaptéry. Doručení PR do `develop` dosud není doložené a zůstává samostatně
+otevřené.
+
+- [x] [completed] **UX-UNIFIED-01-A — Jeden zdroj shellu a explicitní adaptéry.**
+  Web a desktop servírují shodné HTML/CSS bez textových transformací assetů.
+- [x] [completed] **UX-UNIFIED-01-B — Per-chat akční menu a strom vláken.**
+  Zařazené a nezařazené chaty tvoří jeden strom; akce vlákna jsou v jeho menu a
+  primární Nové vlákno/Nastavení backendu zůstávají nad seznamem.
+- [x] [completed] **UX-UNIFIED-01-C — Qt/PySide inventura.** Hranice společného
+  UI a skutečně desktop-only integrací je v `docs/ui-capability-inventory.md`.
+- [x] [completed] **UX-UNIFIED-01-D — Společný import zdroje.** Samostatná
+  stránka používá `Sources`/Workspace operation ID, journal a receipt; původní
+  Qt importní dialog byl odstraněn.
+- [x] [completed] **UX-UNIFIED-01-E — Společná historie a akce dokumentu.**
+  Menu dokumentu otevírá HEAD-bound historii, editaci/přejmenování, potvrzené
+  smazání a Kopírovat ID. Qt `HistoryDialog` byl odstraněn; zápisy dál používají
+  `Artifacts`, expected HEAD, journal a idempotentní receipt.
+- [x] [completed] **UX-UNIFIED-01-F — Společné vytvoření projektu.** Formulář
+  vyžaduje backendem vydaný preview plán a potvrzení. Web používá pouze
+  nakonfigurovaný projects root a administrátorské RBAC; desktopový systémový
+  picker vydává operation-scoped in-process capability. Qt `CreationDialog` a
+  paralelní toolbar vstup byly odstraněny, `ProjectCreation` recovery zůstalo
+  autoritativní.
+- [x] [completed] **UX-UNIFIED-01-G — Závěrečné předání.** Dokončená evidence
+  byla přesunuta sem, navazující `UX-UNIFIED-02D` byl zpřesněn v BACKLOG a TODO
+  bylo vyčištěno na čekání na doručení jediného PR.
+
+Crash/recovery hranice nebyly nahrazeny UI stavem. Read-only historie a otevření
+editoru zůstávají HEAD-bound; dokumentové zápisy používají `Artifacts`/Workspace
+journal a projektové vytvoření uzlový journal `ProjectCreation`. Cizí HEAD,
+pracovní změna nebo změněný cíl se odmítají bez přepsání.
+
+Ověření po poslední aplikační změně: společný i výsledný webový JavaScript
+prošel `node --check`; cílená sada adaptéru vytvoření, doménové služby, desktopu
+a web serveru prošla **64 testů OK, 6 volitelných přeskočeno**. Úplná sada
+`python3 -m unittest discover -s tests -q` prošla **458 testů OK,
+25 volitelných native/package/live testů přeskočeno**. `git diff --check` byl
+čistý. Známé neblokující `ResourceWarning` testovacích SQLite spojení zůstaly
+beze změny.
+
+Omezení: skutečný Qt/WebEngine průchod společným vytvořením projektu, HTTPS a
+Turris/LXC deployment nebyly v této dávce provedeny. Vytvoření nového dokumentu
+a hlavního TODO a odstranění posledního obecného Qt `EditorDialog` jsou
+navazující samostatná feature `UX-UNIFIED-02D`; NotebookLM zůstává
+`UX-UNIFIED-02C`.
+
 ## WEB-RUNTIME-01 — Úplná inicializace služeb webového serveru — 2026-10-11
 
 Dávka na větvi `feature/web-runtime-01-service-wiring`, založené z `develop`
