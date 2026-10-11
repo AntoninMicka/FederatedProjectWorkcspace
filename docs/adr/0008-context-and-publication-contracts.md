@@ -708,12 +708,12 @@ samostatnými manifest inputs; v této dávce tím vlákno nevzniká jako projek
 artefakt ani nezískává trvalé přiřazení k projektu.
 
 V1 uchovává potvrzená vlákna, zprávy a turny bez automatického časového mazání.
-Archivace pouze skryje vlákno z běžného seznamu. Budoucí explicitní purge musí
-být oprávněná operace vlastníka, odmítnout aktivní či neurčitý run, auditovat
-rozsah a respektovat vazby na manifest/run; není součástí první implementace.
-Provozní limit nebo nedostatek místa musí odmítnout nový zápis, nikoli tiše
-odstraňovat starší kontext. Projektový snapshot či odvozený artefakt a jeho
-retence patří do F-M2-CHAT-02 a běžného Workspace lifecycle.
+Archivace pouze uzavře vlákno pro další zápis; zůstává vědomě dostupné v seznamu.
+Explicitní odstranění vlastníkem doplňuje F-M2-CHAT-03 podle samostatného
+recovery kontraktu níže. Provozní limit nebo nedostatek místa musí odmítnout
+nový zápis, nikoli tiše odstraňovat starší kontext. Projektový snapshot či
+odvozený artefakt a jeho retence patří do F-M2-CHAT-02 a běžného Workspace
+lifecycle a odstraněním lokálního vlákna se nemění.
 
 ### Režimy konverzace a přechody — plánovaný F-M3-CHAT-MODES-01
 
@@ -769,6 +769,48 @@ Ollama adapter z konverzačního payloadu deterministicky dekóduje přesné UTF
 bajty a sestaví čitelný transcript `User`/`Assistant`; interní JSON a Base64
 nepředává modelu jako uživatelský text. Odvozený request zůstává spolu s hashem
 manifestu součástí durable request digestu.
+
+### Správa a úplné aplikační odstranění vlákna — F-M2-CHAT-03
+
+Seznam vláken rozlišuje vlastníka, přiřazený nebo nepřiřazený projekt, režim a
+stav `active`/`archived`. Načtení existujícího vlákna a založení nového jsou dvě
+vědomé UI akce; aplikace po otevření projektu sama nevybere poslední vlákno.
+Archivované vlákno a vlákno přiřazené jinému projektu je v daném projektu pouze
+pro čtení. Archivace odmítne rozpracovaný turn a používá očekávanou revizi.
+
+Odstranění má read-only preview a samostatný confirm. Preview váže vlastníka,
+thread ID a revizi na SHA-256 kanonického plánu. Uvádí počty zpráv, turnů,
+task outcomes, approval/preview a navázaných Ollama/OpenAI run záznamů. Ze
+současného projektového HEAD navíc vypíše rozpoznané `fpw-chat-snapshot-v1` a
+`fpw-chat-output-v1`; tyto artefakty ani dřívější Git historie se nemažou.
+`prepared`, `run-bound`, `dispatching` a každý `unknown` účinek operaci blokují.
+„Úplné“ zde znamená odstranění podporovaného aplikačního stavu, nikoli
+forenzní přepsání SQLite stránek nebo média.
+
+`thread-lifecycle.sqlite` je autoritativní node-local journal potvrzeného
+odstranění. Nejprve durable uloží operation ID, vlastníka, preview digest a
+přesná ID plánovaných záznamů. Potom `chat-threads.sqlite` přidá deletion marker;
+běžné čtení a mutace označeného vlákna selžou zavřeně. Následují idempotentní
+commity approval, task outcome, backend run a nakonec thread/message/turn
+store. Journal se posune až po durable commitu daného kroku. Pád po commitu a
+před posunem journalu krok bezpečně zopakuje. Při restartu `ChatService.status`
+dokončí již potvrzenou nezablokovanou operaci; změna mezi potvrzením journalu a
+deletion markerem se znovu ověří a místo smazání skončí fail-closed. Receipt
+uchová pouze operation/thread ID, digest, počty a seznam zachovaných publikací,
+nikoli obsah zpráv.
+
+Reuse/adaptuje se existující striktní SQLite ownership, `synchronous=FULL`,
+stabilní UUID, task/approval/run vazba a bezpečné textové UI. Projektový
+Workspace journal se nepoužije: žádný projektový zápis zde nevzniká a projektový
+Git je naopak záměrně read-only zachovaná historie. Nová externí databáze,
+message queue ani background retence nejsou potřeba.
+
+Navazující požadavek `F-M3-OLLAMA-ORCH-LAN-01` má v samostatné feature povolit
+orchestration také přes explicitně zvolený TLS připnutý `private-network`
+Ollama binding. Současná implementace nadále vyžaduje `same-node`; plánovaná
+změna nesmí vydávat LAN za lokální proces, zavést implicitní fallback ani
+odeslat `local-only` data bez samostatné oprávněné reklasifikace. Každá změna
+cíle vyžaduje nový Context Manifest a run.
 
 ## Projektové přiřazení, otisk a odvozený Markdown — F-M2-CHAT-02
 

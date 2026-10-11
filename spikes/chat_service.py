@@ -33,6 +33,7 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
                                    OpenAIUnknownRun)
 from spikes.project_creation import ProjectCreation
 from spikes.task_outcomes import TaskOutcomes
+from spikes.thread_lifecycle import ThreadLifecycle
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
@@ -89,7 +90,9 @@ class ChatService:
         return OllamaAdapter.probe(binding)
 
     def status(self):
-        node_id, user_id = self._identity()
+        node_id, user_id = self._identity(); root = self._root()
+        recoveries = ThreadLifecycle(root, self.projects).recover_pending(
+            node_id=node_id, user_id=user_id)
         threads, bindings, _ = self._stores()
         try:
             binding = bindings.load().serialize()
@@ -110,7 +113,8 @@ class ChatService:
         rows = [self._with_external_history(row, node_id, user_id)
                 for row in threads.list(node_id, user_id)]
         return {'binding': binding, 'binding_draft': draft,
-                'binding_draft_state': draft_state, 'threads': rows}
+                'binding_draft_state': draft_state, 'threads': rows,
+                'thread_deletions': recoveries}
 
     def _with_external_history(self, thread, node_id, user_id):
         store = ExternalDispatches(self._root())
@@ -868,6 +872,29 @@ class ChatService:
 
     def assign(self, **request):
         return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
+
+    def archive_thread(self, *, thread_id, expected_revision):
+        uuid(thread_id)
+        require(type(expected_revision) is int and expected_revision >= 0,
+                'Invalid expected thread revision')
+        node_id, user_id = self._identity(); threads = ChatThreads(self._root())
+        current = threads.get(thread_id, node_id, user_id)
+        require(current['revision'] == expected_revision,
+                'Chat thread changed before archival')
+        return threads.archive(thread_id, node_id, user_id)
+
+    def delete_thread_preview(self, *, thread_id):
+        uuid(thread_id); node_id, user_id = self._identity()
+        return ThreadLifecycle(self._root(), self.projects).preview(
+            thread_id=thread_id, node_id=node_id, user_id=user_id)
+
+    def delete_thread(self, *, thread_id, operation_id, expected_revision,
+                      preview_sha256, checkpoint=lambda stage: None):
+        node_id, user_id = self._identity()
+        return ThreadLifecycle(self._root(), self.projects).confirm(
+            thread_id=thread_id, node_id=node_id, user_id=user_id,
+            operation_id=operation_id, expected_revision=expected_revision,
+            preview_sha256=preview_sha256, checkpoint=checkpoint)
 
     def start_orchestration(self, *, source_thread_id, thread_id, created_at):
         uuid(thread_id); timestamp(created_at)

@@ -5,14 +5,70 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CHAT-03 — Správa a restartová akceptace lokálních vláken — 2026-10-11
+
+Dávka na větvi `feature/f-m2-chat-03-thread-lifecycle`, založené z `develop`
+`9ea0fb0` po začlenění F-M3-OLLAMA-ROBUST-01 jako PR #50, doplnila vědomý
+lifecycle lokálně perzistentních chatových vláken. Dosažená úroveň je **PoC
+validated** a akceptační podmínky feature jsou splněné. Push, PR ani merge této
+dávky zatím nebyly provedeny; cílem jediného PR zůstává `develop`.
+
+- [x] [completed] **F-M2-CHAT-03-A — Inventura, reuse a recovery kontrakt
+  (designed).** ADR 0008 a reuse katalog vymezují vlastníka, read-only preview,
+  blokaci aktivních a `unknown` účinků, durable crash boundaries a zachování
+  již publikované Git historie. Adaptují existující `ChatThreads`,
+  `TaskOutcomes`, `ExternalDispatches`, backendové run journals a bezpečné
+  textové sdílené UI.
+- [x] [completed] **F-M2-CHAT-03-B — Koordinovaný backendový lifecycle
+  (implemented).** `thread-lifecycle.sqlite` durable váže operation ID,
+  očekávanou revizi a digest přesného plánu. Deletion marker uzamkne běžné
+  čtení a mutace vlákna; approval, task outcome, Ollama/OpenAI run a thread
+  stores se odstraňují po idempotentních krocích a stav po restartu automaticky
+  dokončí stejnou potvrzenou operaci. Omezený receipt neuchovává obsah zpráv.
+- [x] [completed] **F-M2-CHAT-03-C — Uživatelská správa vláken
+  (implemented).** Sdílené desktop/web API a UI umožňuje nové vlákno, vědomé
+  otevření, rozlišení projektových/nepřiřazených a aktivních/archivovaných
+  vláken, archivaci a dvoukrokové smazání. Preview vypíše lokální dopady a
+  zachované publikované snapshoty/výstupy; nedůvěryhodný obsah se vkládá pouze
+  přes `textContent`.
+- [x] [completed] **F-M2-CHAT-03-D — Restart, souběh a závěrečná akceptace
+  (PoC validated).** Testy pokrývají více vláken, oddělení vlastníků, stale
+  revizi/preview, aktivní a `unknown` blokace, opakování po všech sedmi
+  potvrzených hranicích, automatickou obnovu přes `ChatService.status`,
+  idempotentní receipt a nezměněný publikovaný Git snapshot.
+
+Crash kontrakt: preview je read-only; confirm nejprve durable uloží přesný plán.
+Pád před commitem nemění uživatelský stav. Po commitu marker uzamkne vlákno a
+journal se posouvá až po durable commitu každého podporovaného store. Opakování
+po pádu proto nemaže jiný nově naplánovaný rozsah. Projektový Git je po celou
+operaci pouze čtenou a zachovanou autoritativní historií. „Úplné odstranění“
+znamená úplné odstranění podporovaného aplikačního stavu, nikoli forenzní
+přepsání SQLite stránek nebo média.
+
+Závěrečné cílené ověření po poslední aplikační změně:
+`python3 -m unittest tests.test_chat_threads tests.test_thread_lifecycle
+tests.test_chat_service tests.test_desktop -q` — **68 testů OK, 2 volitelné
+testy přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -q` následně prošla: **450 testů OK,
+27 volitelných native/package/live testů přeskočeno**. Běh vypsal neblokující
+`ResourceWarning` na neuzavřená testovací SQLite spojení ve starších testech.
+
+Omezení: skutečný klikací Qt/WebEngine průchod novým lifecycle panelem nebyl
+proveden; UI má strukturální a HTTP/API regresní testy. Aplikace předpokládá
+jeden backendový proces a její HTTP server serializuje požadavky; nekooperující
+přímý zapisovač do node-local SQLite stores není součástí tohoto PoC. Požadavek
+na orchestration přes explicitní private-network Ollamu byl předán jako
+samostatná feature `F-M3-OLLAMA-ORCH-LAN-01` do BACKLOG; současný režim stále
+vyžaduje `same-node`.
+
 ## F-M3-OLLAMA-ROBUST-01 — Odolnost lokálního AI běhu — 2026-10-11
 
 Dávka na větvi `feature/f-m3-ollama-robust-01`, založené z `develop`
 `2c9b1b2` po začlenění UX-MOBILE-01 jako PR #49, rozšířila lokální Ollama běh
 o přesnou diagnostiku, bezpečné private-network připojení, vědomý nový pokus a
 provozní LAN/restartovou akceptaci. Dosažená úroveň je **PoC validated** a
-všechny akceptační podmínky dávky jsou splněné. Jediný PR do `develop` zatím
-nebyl vytvořen; push ani merge nebyly provedeny.
+všechny akceptační podmínky dávky jsou splněné. Dávka byla začleněna do
+`develop` jako PR #50, merge commit `9ea0fb0`.
 
 Node-local `ollama-binding.json` zůstává autoritou konfigurace a
 `ollama-runs.sqlite` autoritou stavu dispatchu. Před prvním síťovým bajtem je

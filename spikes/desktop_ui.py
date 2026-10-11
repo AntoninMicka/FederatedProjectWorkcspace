@@ -215,8 +215,18 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="chat-backend-status" role="status">Načítám stav lokálního backendu…</p>
 <button id="chat-open-settings" class="secondary-button" type="button">Otevřít nastavení backendu</button>
 <button id="chat-new-thread" type="button">Nové vlákno</button>
+<label for="chat-thread-list">Uložená vlákna</label><select id="chat-thread-list">
+<option value="">Vyberte vlákno k navázání</option></select>
+<button id="chat-open-thread" class="secondary-button" type="button">Otevřít vybrané</button>
+<button id="chat-archive-thread" class="secondary-button" type="button" disabled>Archivovat</button>
+<button id="chat-delete-thread" class="secondary-button" type="button" disabled>Připravit smazání</button>
 <span id="chat-record-actions" hidden><button id="chat-save-snapshot" type="button">Uložit otisk</button>
 <button id="chat-save-output" type="button">Uložit poslední odpověď</button></span>
+<section id="chat-delete-preview" class="deletion-preview" hidden aria-label="Náhled smazání vlákna">
+<h3>Co bude odstraněno z tohoto uzlu</h3><pre id="chat-delete-details"></pre>
+<label class="confirm"><input id="chat-delete-confirm" type="checkbox"> Rozumím, že lokální stav bude odstraněn, ale publikované Git artefakty zůstanou zachované.</label>
+<button id="chat-delete-run" type="button" disabled>Odstranit lokální vlákno</button>
+<button id="chat-delete-cancel" class="secondary-button" type="button">Zrušit</button></section>
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
@@ -381,7 +391,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
-#external-preview,#external-proposal{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
+#external-preview,#external-proposal,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,.deletion-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 #task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -543,6 +553,8 @@ function clearProject(){
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
+ knownThreads=[];pendingThreadDeletion=null;renderThreadList([]);
+ document.querySelector('#chat-delete-preview').hidden=true;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#chat-operation-status').textContent='';document.querySelector('#chat-record-actions').hidden=true;
@@ -866,8 +878,10 @@ const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 const chatStream=document.querySelector('#chat-stream');
 const chatRunUsage=document.querySelector('#chat-run-usage');
-let activeThread=null,chatBinding=null,externalBinding=null,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+function threadWritable(){return !activeThread || (activeThread.status==='active' &&
+ (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
 async function externalStreamRequest(request,onDelta){
  const response=await fetch('/v1/external/send-stream',{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
@@ -912,6 +926,20 @@ function renderChat(thread){
  }
  renderTaskOutcomes();
  document.querySelector('#chat-record-actions').hidden=!(thread?.messages?.length);
+ document.querySelector('#chat-archive-thread').disabled=!thread || thread.status==='archived';
+ document.querySelector('#chat-delete-thread').disabled=!thread;
+ const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
+ document.querySelector('#chat-submit').disabled=composerDisabled;
+ document.querySelector('#external-propose-button').disabled=composerDisabled;
+ document.querySelector('#external-preview-button').disabled=composerDisabled;
+}
+function renderThreadList(threads){
+ knownThreads=threads;const select=document.querySelector('#chat-thread-list');select.replaceChildren();
+ const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte vlákno k navázání';select.append(empty);
+ for(const thread of threads){const option=document.createElement('option');option.value=thread.thread_id;
+  const project=thread.project_id===null?'nepřiřazené':thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
+  option.textContent=`${thread.classification} · ${thread.status} · ${project} · ${thread.messages.length} zpráv`;
+  select.append(option);}
 }
 function renderRunUsage(report){
  if(!report || report.status!=='available'){chatRunUsage.hidden=true;return;}
@@ -1016,6 +1044,59 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBinding.model}` :
   'Nové vlákno · nejprve nastavte backend.';
  draft.focus();
+});
+document.querySelector('#chat-open-thread').addEventListener('click',async()=>{
+ const id=document.querySelector('#chat-thread-list').value;
+ const thread=knownThreads.find(item=>item.thread_id===id);
+ if(!thread){chatOperationStatus.textContent='Vyberte uložené vlákno.';return;}
+ activeTaskThreadId=thread.thread_id;activeThread=thread;
+ document.querySelector('#chat-mode').value=thread.classification;refreshChatModeControls();
+ try{const tasks=thread.project_id ? await projectRequest('/v1/tasks/list',{
+   project_id:thread.project_id,thread_id:thread.thread_id}) : {outcomes:[]};
+  taskOutcomes=tasks.outcomes;renderChat(thread);
+  chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
+ }catch(error){chatOperationStatus.textContent=error.message;}
+});
+document.querySelector('#chat-archive-thread').addEventListener('click',async()=>{
+ if(!activeThread)return;
+ try{const archived=await projectRequest('/v1/chat/archive',{
+   thread_id:activeThread.thread_id,expected_revision:activeThread.revision});
+  activeThread=archived;const index=knownThreads.findIndex(item=>item.thread_id===archived.thread_id);
+  if(index>=0)knownThreads[index]=archived;renderThreadList(knownThreads);renderChat(archived);
+  chatOperationStatus.textContent='Vlákno bylo archivováno a zůstává lokálně uložené.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+});
+document.querySelector('#chat-delete-thread').addEventListener('click',async()=>{
+ if(!activeThread)return;chatOperationStatus.textContent='Připravuji přesný rozsah smazání…';
+ try{const preview=await projectRequest('/v1/chat/delete/preview',{thread_id:activeThread.thread_id});
+  pendingThreadDeletion={preview,operation_id:crypto.randomUUID()};
+  document.querySelector('#chat-delete-details').textContent=JSON.stringify({
+   lokální_záznamy:preview.counts,blokace:preview.blockers,
+   zachované_Git_artefakty:preview.published_artifacts},null,2);
+  document.querySelector('#chat-delete-preview').hidden=false;
+  document.querySelector('#chat-delete-confirm').checked=false;
+  document.querySelector('#chat-delete-run').disabled=true;
+  chatOperationStatus.textContent=preview.blockers.length?
+   'Smazání blokuje aktivní nebo neznámý účinek.':'Zkontrolujte rozsah a potvrďte smazání.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+});
+document.querySelector('#chat-delete-confirm').addEventListener('change',event=>{
+ document.querySelector('#chat-delete-run').disabled=!event.currentTarget.checked ||
+  !pendingThreadDeletion || pendingThreadDeletion.preview.blockers.length>0;
+});
+document.querySelector('#chat-delete-cancel').addEventListener('click',()=>{
+ pendingThreadDeletion=null;document.querySelector('#chat-delete-preview').hidden=true;
+});
+document.querySelector('#chat-delete-run').addEventListener('click',async event=>{
+ if(!pendingThreadDeletion)return;event.currentTarget.disabled=true;
+ const {preview,operation_id}=pendingThreadDeletion;
+ try{await projectRequest('/v1/chat/delete/confirm',{thread_id:preview.thread_id,operation_id,
+   expected_revision:preview.expected_revision,preview_sha256:preview.preview_sha256});
+  knownThreads=knownThreads.filter(item=>item.thread_id!==preview.thread_id);
+  pendingThreadDeletion=null;activeTaskThreadId=null;taskOutcomes=[];
+  document.querySelector('#chat-delete-preview').hidden=true;renderThreadList(knownThreads);renderChat(null);
+  chatOperationStatus.textContent='Lokální vlákno a jeho podporovaný navázaný stav byly odstraněny. Git historie zůstala zachovaná.';
+ }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 function fillBinding(binding,draft=null,draftState=null){
  chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
@@ -1161,17 +1242,11 @@ async function loadChat(){
  try{
   const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
-  const active=[...result.threads].reverse().filter(item=>item.status==='active');
-  const tasks=activeProject ? await projectRequest('/v1/tasks/list',{project_id:activeProject.id}) : {outcomes:[]};
   if(selectionRevision!==chatSelectionRevision)return;
-  activeThread=active.find(item=>item.project_id===activeProject?.id) ||
-               active.find(item=>item.project_id===null) || null;
-  if(activeThread){document.querySelector('#chat-mode').value=activeThread.classification;
-   document.querySelector('#chat-run-adapter').value='ollama';
-   document.querySelector('#chat-run-model').value=chatBinding?.model || '';refreshChatModeControls();}
-  activeTaskThreadId=tasks.outcomes.at(-1)?.thread_id || activeThread?.thread_id || null;
-  taskOutcomes=tasks.outcomes.filter(item=>item.thread_id===activeTaskThreadId);
-  renderChat(activeThread);
+  renderThreadList([...result.threads].reverse());
+  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
+  chatOperationStatus.textContent=result.threads.length?
+   'Vyberte uložené vlákno k vědomému navázání, nebo založte nové.':'Založte nové vlákno.';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 function backendCandidate(){
@@ -1228,7 +1303,7 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
- const disabled=!activeProject || !draft.value.trim();
+ const disabled=!activeProject || !draft.value.trim() || !threadWritable();
  document.querySelector('#chat-submit').disabled=disabled;
  document.querySelector('#external-propose-button').disabled=disabled;
  document.querySelector('#external-preview-button').disabled=disabled;
@@ -1340,6 +1415,9 @@ document.querySelector('#external-confirm').addEventListener('click',async event
 });
 document.querySelector('#chat-composer').addEventListener('submit',async event=>{
  event.preventDefault();if(!activeProject || !draft.value.trim())return;
+ if(!threadWritable()){
+  chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
+ }
  selectMainTab(mainTabs[1]);
  if(!chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení backendu.';return;}
  const mode=document.querySelector('#chat-mode').value;
@@ -1872,7 +1950,8 @@ class DesktopHandler(Handler):
     max_body = 1152 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/artifacts/preview', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
-        '/v1/chat/orchestration',
+        '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
+        '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -2045,6 +2124,16 @@ class DesktopHandler(Handler):
             if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)
                     and set(request) == {'source_thread_id', 'thread_id', 'created_at'}):
                 return self.reply(200, self.server.chat_service.start_orchestration(**request))
+            if (self.path == '/v1/chat/archive' and isinstance(request, dict)
+                    and set(request) == {'thread_id', 'expected_revision'}):
+                return self.reply(200, self.server.chat_service.archive_thread(**request))
+            if (self.path == '/v1/chat/delete/preview' and isinstance(request, dict)
+                    and set(request) == {'thread_id'}):
+                return self.reply(200, self.server.chat_service.delete_thread_preview(**request))
+            if (self.path == '/v1/chat/delete/confirm' and isinstance(request, dict)
+                    and set(request) == {'thread_id', 'operation_id', 'expected_revision',
+                                         'preview_sha256'}):
+                return self.reply(200, self.server.chat_service.delete_thread(**request))
             if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) in ({
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',

@@ -167,7 +167,7 @@ class ChatThreadTests(unittest.TestCase):
             ChatThreads(self.state).connect()
         self.store.path.chmod(0o600)
         with sqlite3.connect(self.store.path) as db:
-            db.execute('UPDATE schema_info SET version=4')
+            db.execute('UPDATE schema_info SET version=5')
         with self.assertRaisesRegex(ValidationError, 'version'):
             ChatThreads(self.state).connect()
 
@@ -216,7 +216,7 @@ class ChatThreadTests(unittest.TestCase):
                                  manifest_id=manifest_id)
         self.assertEqual(turn['manifest_id'], manifest_id)
         with sqlite3.connect(self.store.path) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (3,))
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (4,))
 
 
 if __name__ == '__main__':
