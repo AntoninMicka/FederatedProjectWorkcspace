@@ -394,6 +394,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Orchestrace</option><option value="brainstorming">Brainstorming</option></select>
 <label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
 <label for="chat-run-model">Model běhu</label><input id="chat-run-model" maxlength="128" list="external-models">
+<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
 <label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
 <details id="task-artifacts"><summary>Doplňující podklady</summary>
 <fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
@@ -1662,10 +1663,18 @@ function refreshChatModeControls(){
  const adapter=document.querySelector('#chat-run-adapter');
  const model=document.querySelector('#chat-run-model');
  const artifacts=document.querySelector('#task-artifacts');
+ const ollamaOption=adapter.querySelector('option[value="ollama"]');
+ const target=document.querySelector('#chat-orchestration-target');
+ const lan=chatBinding?.boundary==='private-network';
+ ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
   adapter.value='ollama';adapter.disabled=true;model.value=chatBinding?.model || '';model.disabled=true;
+  target.hidden=false;target.textContent=chatBinding ?
+   `Orchestrace použije ${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
+   'Orchestrace vyžaduje nejprve nastavit Ollama backend.';
   artifacts.hidden=false;
  }else{
+  target.hidden=true;target.textContent='';
   adapter.disabled=false;model.disabled=false;artifacts.hidden=true;
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
   if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');

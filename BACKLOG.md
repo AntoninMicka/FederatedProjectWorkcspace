@@ -28,9 +28,11 @@ jeho evidence je ve WORK_LOG. Prozatímní backlogová ID
 `UX-UNIFIED-02A/02B` byla sloučena do dokončených `UX-UNIFIED-01-E/F` a nejsou
 samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 `0ce9cb7`; evidence je ve WORK_LOG a další feature zatím nebyla aktivována.
-`F-M3-OLLAMA-ORCH-LAN-01` je feature-akceptovaná na vlastní větvi, evidence je
-ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR. Output router
-a NotebookLM unifikace zůstávají zachované jako samostatné feature.
+`F-M3-OLLAMA-ORCH-LAN-01` bylo doručeno PR #56 jako merge commit `a9207c5`;
+evidence je ve WORK_LOG. Navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` je
+feature-akceptovaná na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na
+doručení jejího dosud nevytvořeného PR. Output router a NotebookLM unifikace
+zůstávají zachované jako samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
