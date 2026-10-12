@@ -5,10 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0030 — Deklarativní katalog výstupních capability
 
-Datum: 2026-10-11. Stav: přijato pro development PoC; descriptor a statický
-katalog implementuje F-M4-OUTPUT-ROUTER-01-A a read-only plan/step DAG
-F-M4-OUTPUT-ROUTER-01-B. Planner boundary zůstává v posledním úkolu stejné
-dávky.
+Datum: 2026-10-11. Stav: přijato a lokálně PoC validated pro descriptor,
+statický katalog, read-only plan/step DAG a aplikační review planner návrhu v
+F-M4-OUTPUT-ROUTER-01. Execution zůstává samostatnou navazující dávkou.
 
 ## Rozhodnutí
 
@@ -77,8 +76,30 @@ skutečným bajtům zdrojů provede až aplikační revalidace před execution.
 
 Validace plán pouze parsuje a porovnává s katalogem a policy. Nečte obsah
 artefaktů, neověřuje runtime dostupnost, nevybírá binding/model, nedispatchuje
-krok a nevytváří materializaci. Aplikační revalidace nedůvěryhodného návrhu
-planneru a vysvětlení volby patří F-M4-OUTPUT-ROUTER-01-C.
+krok a nevytváří materializaci.
+
+## Planner boundary a vysvětlení
+
+Planner smí vrátit pouze uzavřený návrh `propose-output-plan` s lidským účelem a
+plánem v1. Jeho text ani JSON nejsou autoritou. Aplikace při každém review znovu
+validuje celý plán proti aktuálnímu reviewovanému katalogu a samostatné policy,
+porovná project ID/HEAD a každý použitý artifact nebo materializovaný snapshot s
+autorizovaným aplikačním stavem. Plannerem přidané schválení, execution akce,
+vysvětlení, endpoint nebo jiné pole se odmítne.
+
+Vysvětlení jednotlivých kroků generuje deterministicky aplikace. Uvádí přesnou
+capability a verzi, typovou/policy/privacy bázi volby, execution boundary,
+cost/side-effect, potřebná potvrzení a pouze ty alternativy, které mají shodný
+vstupní i výstupní kontrakt a procházejí důvěryhodnou policy. Dostupnost runtime
+se z názvu capability neodhaduje.
+
+Výsledkem review je kanonický hash návrhu a plánu a handoff se stavem
+`not-authorized`. Handoff pouze vyjmenovává kontroly, které musí budoucí
+execution zopakovat: katalogové revize, policy hash, HEAD, autorizaci a bajty
+artefaktů, hashe materializací a privacy/port kontrakty. Neobsahuje credential,
+binding, model ani approval token a sám nesmí být přijat jako pokyn ke spuštění.
+Ruční ověření popisuje
+[checklist output routeru](../output-router-acceptance.md).
 
 ## Persistence, recovery a návaznost
 

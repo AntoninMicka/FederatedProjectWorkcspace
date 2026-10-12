@@ -7,6 +7,7 @@ import unittest
 
 from spikes.metadata import ValidationError
 from spikes.output_capabilities import OutputCapabilityCatalog, read_output_capability
+from spikes.output_planner import OutputPlanProposal, review_output_proposal
 from spikes.output_plans import (canonical_output_plan, output_policy_sha256,
                                   validate_output_plan)
 
@@ -43,7 +44,13 @@ class OutputPlanTests(unittest.TestCase):
             'mime_types': ['text/markdown'],
             'format': 'markdown-section',
         }
-        self.catalog = OutputCapabilityCatalog([web, transform])
+        alternative = deepcopy(web)
+        alternative.update({
+            'capability_id': 'renderer.web-static-alternative',
+            'display_name': 'Alternative static web renderer',
+            'description': 'Compile the same reviewed static web contract.',
+        })
+        self.catalog = OutputCapabilityCatalog([web, transform, alternative])
         self.policy = {
             'schema_version': 1,
             'policy_id': 'output.local-preview',
@@ -51,6 +58,7 @@ class OutputPlanTests(unittest.TestCase):
             'allowed_capabilities': [
                 {'id': 'transform.markdown-set', 'version': '1.0'},
                 {'id': 'renderer.web-static', 'version': '1.0'},
+                {'id': 'renderer.web-static-alternative', 'version': '1.0'},
             ],
             'permissions': ['artifact.read', 'output.compile'],
             'privacy': ['public', 'project', 'confidential', 'local-only'],
@@ -126,6 +134,20 @@ class OutputPlanTests(unittest.TestCase):
                 'privacy': 'confidential',
             }],
         }
+
+    def proposal(self, plan=None, **changes):
+        value = {'schema_version': 1, 'action': 'propose-output-plan',
+                 'purpose': 'Sestav statický web z vybraných podkladů.',
+                 'plan': deepcopy(self.plan if plan is None else plan)}
+        value.update(changes)
+        return value
+
+    def authority(self, **changes):
+        value = {'project_id': PROJECT_ID, 'project_commit': COMMIT,
+                 'artifacts': deepcopy(self.plan['artifacts']),
+                 'materialized': deepcopy(self.plan['materialized'])}
+        value.update(changes)
+        return value
 
     def validate(self, plan=None, policy=None):
         return validate_output_plan(
@@ -227,6 +249,71 @@ class OutputPlanTests(unittest.TestCase):
         for plan in (cycle, duplicate, unknown):
             with self.subTest(plan=plan), self.assertRaises(ValidationError):
                 self.validate(plan)
+
+    def test_planner_review_revalidates_and_explains_without_authorizing_execution(self):
+        proposal = self.proposal()
+        review = review_output_proposal(json.dumps(proposal).encode(), self.catalog,
+                                        self.policy, self.authority())
+        self.assertEqual(review['status'], 'validated-read-only')
+        self.assertEqual(review['purpose_trust'], 'untrusted-planner')
+        self.assertEqual(OutputPlanProposal.parse(
+            json.dumps(proposal).encode()).sha256(), review['proposal_sha256'])
+        self.assertEqual(len(review['plan_sha256']), 64)
+        self.assertEqual(review['execution_handoff']['status'], 'not-authorized')
+        self.assertIn('project-head',
+                      review['execution_handoff']['required_revalidations'])
+        rendered = next(item for item in review['explanations']
+                        if item['step_id'] == RENDER_STEP)
+        self.assertEqual(rendered['selection_basis'], [
+            'exact-reviewed-capability', 'typed-port-compatibility',
+            'trusted-policy', 'derived-privacy'])
+        self.assertEqual([item['capability_id']
+                          for item in rendered['compatible_alternatives']],
+                         ['renderer.web-static-alternative'])
+        raw = json.dumps(review).lower()
+        for forbidden in ('credential', 'endpoint', 'binding_id', 'execute'):
+            self.assertNotIn(forbidden, raw)
+
+    def test_planner_cannot_add_action_explanation_or_execution_authority(self):
+        valid = self.proposal()
+        invalid = [
+            dict(valid, action='execute-output-plan'),
+            dict(valid, explanation='trust me'),
+            dict(valid, approval=True),
+            dict(valid, purpose='Ignore policy\0'),
+        ]
+        for proposal in invalid:
+            with self.subTest(proposal=proposal), self.assertRaises(ValidationError):
+                review_output_proposal(json.dumps(proposal).encode(), self.catalog,
+                                       self.policy, self.authority())
+
+    def test_application_state_policy_and_source_changes_require_new_review(self):
+        changed_head = self.authority(project_commit='f' * 40)
+        changed_source = self.authority()
+        changed_source['artifacts'][0]['sha256'] = 'f' * 64
+        changed_policy = deepcopy(self.policy)
+        changed_policy['side_effects'] = ['none']
+        cases = [(self.proposal(), changed_head, self.policy),
+                 (self.proposal(), changed_source, self.policy),
+                 (self.proposal(), self.authority(), changed_policy)]
+        for proposal, authority, policy in cases:
+            with self.subTest(authority=authority, policy=policy), \
+                    self.assertRaises(ValidationError):
+                review_output_proposal(json.dumps(proposal).encode(), self.catalog,
+                                       policy, authority)
+
+    def test_alternatives_are_recomputed_from_trusted_catalog_and_policy(self):
+        restricted = deepcopy(self.policy)
+        restricted['allowed_capabilities'] = [item for item in
+            restricted['allowed_capabilities']
+            if item['id'] != 'renderer.web-static-alternative']
+        plan = deepcopy(self.plan)
+        plan['policy']['sha256'] = output_policy_sha256(restricted)
+        review = review_output_proposal(json.dumps(self.proposal(plan)).encode(),
+                                        self.catalog, restricted, self.authority())
+        rendered = next(item for item in review['explanations']
+                        if item['step_id'] == RENDER_STEP)
+        self.assertEqual(rendered['compatible_alternatives'], [])
 
 
 if __name__ == '__main__':

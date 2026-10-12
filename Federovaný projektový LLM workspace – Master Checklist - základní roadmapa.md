@@ -196,11 +196,11 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
 
-**Stav: descriptor, fail-closed katalog a read-only DAG lokálně PoC validated;
-planner boundary a execution neimplementovány.** F-M4-OUTPUT-ROUTER-01-A/B
+**Stav: descriptor, fail-closed katalog, read-only DAG a planner boundary
+lokálně PoC validated; execution neimplementován.** F-M4-OUTPUT-ROUTER-01
 dodává uzavřený v1 kontrakt, statický katalog, první descriptor
-`renderer.web-static` a validaci typovaného acyklického plánu proti samostatné
-policy; hranice a reuse zaznamenává
+`renderer.web-static`, validaci typovaného acyklického plánu proti samostatné
+policy a aplikační review nedůvěryhodného návrhu; hranice a reuse zaznamenává
 [ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
 prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
 jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
@@ -223,7 +223,7 @@ validace.
   transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
   graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
   ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
-- [ ] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
+- [x] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
   návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
   capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
   model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.

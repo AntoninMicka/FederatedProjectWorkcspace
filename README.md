@@ -128,6 +128,13 @@ Pád při publikaci se obnovuje stejným operation ID bez druhého providerovéh
 volání. Kontrakt a hranice popisuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md),
 ruční akceptaci [checklist obrazové capability](docs/image-generation-acceptance.md).
 
+Read-only output router používá staticky reviewovaný capability katalog a
+typovaný acyklický plán. Návrh planneru není oprávnění: aplikace jej znovu
+ověří proti přesné policy, HEAD a snapshotům zdrojů, sama odvodí vysvětlení a
+vrátí pouze handoff `not-authorized`. Bezpečný smoke a ruční kontroly obsahuje
+[checklist output routeru](docs/output-router-acceptance.md). Tato fáze nic
+nerenderuje ani nespouští; execution zůstává navazující feature.
+
 ## Spuštění storage experimentu
 
 Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a PyYAML 6.0.3. Spouštěcí wrapper [run.sh](run.sh):

@@ -31,9 +31,9 @@ samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 `F-M3-OLLAMA-ORCH-LAN-01` bylo doručeno PR #56 jako merge commit `a9207c5` a
 navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
 `M1-LXC-DNS-TLS-01` bylo doručeno PR #58 jako merge commit `916e5ec`. Evidence
-je ve WORK_LOG. Descriptor/katalog/read-only plán F-M4-OUTPUT-ROUTER-01 je
-aktivní výhradně v TODO; execution a NotebookLM unifikace zůstávají samostatné
-feature.
+je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` je feature-akceptovaná na vlastní větvi,
+evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR.
+Execution, NotebookLM unifikace a Ollama streaming zůstávají samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -53,8 +53,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   importní plán, potvrzení, recovery, webové RBAC a zákaz `local-only` přes
   síťovou hranici. Po paritě odstranit `NotebookLMImportDialog`.
 
-## Zjištěné mezery a navazující ověření
-
 - [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
   lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
   2026-10-11).** Adaptovat existující SSE/stream UI externího providera pro
@@ -66,6 +64,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   Akceptace zahrne fragmentované NDJSON rámce, bounded velikost, timeout prvního
   tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý nový běh,
   restart a přístupnost `aria-live` bez zahlcení čtečky.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
