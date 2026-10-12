@@ -236,7 +236,8 @@ class ChatServiceTests(unittest.TestCase):
             base_head=self.git.head(), title='Project context', body='exact artifact', new=True),
             str(uuid4()))
         request = self.route_request(expected_head=self.git.head(),
-                                     selected_artifact_ids=[artifact_id], privacy='confidential')
+            selected_artifact_ids=[artifact_id], privacy='confidential', run_choice={
+                'mode': 'orchestration', 'adapter': 'ollama', 'model': None})
         outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'answer'}
         calls = []
         def transport(binding, raw):
@@ -247,6 +248,9 @@ class ChatServiceTests(unittest.TestCase):
         result = service.task_route(request)
         self.assertEqual(result['outcome'], outcome)
         self.assertEqual(result['privacy'], 'confidential')
+        routed_thread = next(item for item in service.status()['threads']
+                             if item['thread_id'] == request['thread_id'])
+        self.assertEqual(routed_thread['project_id'], request['project_id'])
         self.assertIn('Source ' + artifact_id, calls[0]['prompt'])
         self.assertIn('Focus ID ' + request['message_id'], calls[0]['prompt'])
         self.assertIn('Choose artifact-draft', calls[0]['prompt'])
@@ -787,6 +791,7 @@ class ChatServiceTests(unittest.TestCase):
         result = self.service.send(**request)
         self.assertEqual([item['content'] for item in result['thread']['messages']],
                          ['First question', 'Assistant answer'])
+        self.assertEqual(result['thread']['project_id'], request['project_id'])
         self.assertEqual(result['target']['model'], 'gemma3')
         self.assertEqual([call[0] for call in self.calls], ['prepare', 'dispatch'])
         handoff = self.calls[0][1]
@@ -832,6 +837,7 @@ class ChatServiceTests(unittest.TestCase):
         record = first['request_record']
 
         self.assertEqual(first['turn']['state'], 'completed')
+        self.assertEqual(first['thread']['project_id'], request['project_id'])
         self.assertEqual(record, service.external_request({'run_id': request['run_id']}))
         self.assertEqual(record['provider_request']['model'], 'gpt-5.6-sol')
         self.assertFalse(record['provider_request']['stream'])
@@ -866,6 +872,7 @@ class ChatServiceTests(unittest.TestCase):
         result = service.external_send_stream(request, deltas.append)
         self.assertEqual(deltas, ['External ', 'answer'])
         self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+        self.assertEqual(result['thread']['project_id'], request['project_id'])
         self.assertTrue(result['request_record']['provider_request']['stream'])
 
     def test_service_starts_fresh_orchestration_after_brainstorm(self):
@@ -877,6 +884,7 @@ class ChatServiceTests(unittest.TestCase):
             thread_id=new_thread, created_at='2026-09-18T14:00:03Z')
         self.assertEqual((started['thread_id'], started['classification'], started['messages']),
                          (new_thread, 'orchestration', []))
+        self.assertEqual(started['project_id'], brainstorm['project_id'])
         archived = next(item for item in self.service.status()['threads']
                         if item['thread_id'] == result['thread']['thread_id'])
         self.assertEqual(archived['status'], 'archived')
@@ -985,6 +993,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual([item['role'] for item in result['thread']['messages']],
                          ['user', 'assistant'])
         self.assertEqual(result['thread']['messages'][-1]['content'], 'Assistant answer')
+        self.assertEqual(result['thread']['project_id'], request['project_id'])
         self.assertEqual(result['usage_report']['status'], 'available')
 
     def test_stale_project_and_local_only_lan_fail_before_dispatch(self):

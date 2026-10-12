@@ -26,6 +26,9 @@ dokud není ověřený HTTPS pin a síťová hranice.
   odpověď má při růstu zůstat ve viditelné části okna.
 - [ ] Po dokončení porovnejte průběžný text s uloženou assistant zprávou a
   zkontrolujte providerem vrácené počty tokenů a časy, pokud je model poskytl.
+- [ ] V bočním panelu otevřete **Chaty**. Nové vlákno musí být v části
+  **Zařazené** a označené jako chat tohoto právě otevřeného projektu; nesmí
+  skončit mezi nezařazenými chaty.
 - [ ] Restartujte aplikaci. Dokončená zpráva musí zůstat ve vlákně a stejný
   dokončený run se nesmí znovu odeslat.
 

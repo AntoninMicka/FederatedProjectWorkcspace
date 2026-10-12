@@ -1614,8 +1614,8 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
- chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBindingLabel(chatBinding)}` :
-  'Nové vlákno · nejprve nastavte backend.';
+ chatStatus.textContent=chatBinding ? `Nové vlákno pro projekt ${activeProject.title} · backend: ${chatBindingLabel(chatBinding)}` :
+  `Nové vlákno pro projekt ${activeProject.title} · nejprve nastavte backend.`;
  draft.focus();
 });
 async function openStoredThread(threadId){

@@ -43,8 +43,15 @@ perzistence, task role a změna externího OpenAI streamu.
   reasoning textu, udržuje rozepsanou odpověď ve viditelné části a nový HTTP
   test prokazuje flush delty před terminálním výsledkem. Cílená regrese po
   opravě prošla: **109 testů OK, 5 volitelných přeskočeno**; úplná sada:
-  **501 testů OK, 24 volitelných přeskočeno**. Zbývá opakovaná fyzická kontrola
+  **502 testů OK, 24 volitelných přeskočeno**. Zbývá opakovaná fyzická kontrola
   podle [checklistu](docs/ollama-streaming-acceptance.md).
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-E — Nové vlákno patří otevřenému
+  projektu (implemented).** Uživatelská oprava z fyzické akceptace: první
+  uložení přímého Ollama/OpenAI chatu i taskového chatu zapisuje `project_id`
+  otevřeného projektu atomicky se vznikem SQLite vlákna; navazující orchestrace
+  přiřazení zdědí. Pád nemůže zanechat samostatně vytvořené nezařazené vlákno a
+  staré nezařazené chaty se automaticky nepřesouvají. Cílená regrese chatového
+  lifecycle, služby a desktopu: **72 testů OK, 2 volitelné přeskočeny**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

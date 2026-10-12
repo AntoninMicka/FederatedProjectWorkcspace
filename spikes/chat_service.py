@@ -336,7 +336,8 @@ class ChatService:
             text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
         if thread is None and 'run_choice' in request:
             thread = threads.create(thread_id=request['thread_id'], node_id=node_id,
-                user_id=user_id, created_at=request['created_at'], classification=choice.mode)
+                user_id=user_id, created_at=request['created_at'], classification=choice.mode,
+                project_id=request['project_id'])
         if thread is not None and 'run_choice' in request:
             require(thread['classification'] == choice.mode,
                     'Chat mode cannot change inside an existing thread')
@@ -747,7 +748,7 @@ class ChatService:
                     'Chat thread changed after external preview')
         if thread is None:
             threads.create(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
-                           created_at=original['created_at'])
+                           created_at=original['created_at'], project_id=original['project_id'])
         if thread is None or thread['revision'] == expected_revision:
             threads.prepare_turn(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
                 turn_id=original['turn_id'], message_id=original['message_id'],
@@ -973,7 +974,8 @@ class ChatService:
         owned = {row['thread_id'] for row in threads.list(node_id, user_id)}
         if thread_id not in owned:
             threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
-                           created_at=created_at, classification=choice.mode)
+                           created_at=created_at, classification=choice.mode,
+                           project_id=project_id)
         stored = threads.get(thread_id, node_id, user_id)
         require(stored['classification'] == choice.mode,
                 'Chat mode cannot change inside an existing thread')

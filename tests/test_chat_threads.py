@@ -104,12 +104,18 @@ class ChatThreadTests(unittest.TestCase):
             self.store.prepare_turn(**self.prepare())
 
     def test_brainstorm_to_orchestration_archives_without_context(self):
+        project_id = str(uuid4())
+        self.store.assign_project(thread_id=self.thread_id, node_id=self.node_id,
+                                  user_id=self.user_id, project_id=project_id,
+                                  expected_revision=0)
         new_thread = str(uuid4())
         started = self.store.start_orchestration(
             source_thread_id=self.thread_id, thread_id=new_thread, node_id=self.node_id,
             user_id=self.user_id, created_at='2026-09-20T12:00:00Z')
         self.assertEqual((started['classification'], started['status'], started['messages']),
                          ('orchestration', 'active', []))
+        self.assertEqual((started['project_id'], started['assignment_revision']),
+                         (project_id, 1))
         source = self.store.get(self.thread_id, self.node_id, self.user_id)
         self.assertEqual(source['status'], 'archived')
         self.assertEqual(self.store.start_orchestration(
@@ -200,6 +206,17 @@ class ChatThreadTests(unittest.TestCase):
                 thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
                 project_id=str(uuid4()), expected_revision=1, checkpoint=crash)
         self.assertEqual(self.store.get(self.thread_id, self.node_id, self.user_id), assigned)
+
+    def test_create_can_atomically_bind_a_new_thread_to_project(self):
+        thread_id, project_id = str(uuid4()), str(uuid4())
+        request = dict(thread_id=thread_id, node_id=self.node_id, user_id=self.user_id,
+                       created_at='2026-09-20T12:00:02Z', project_id=project_id)
+        created = self.store.create(**request)
+        self.assertEqual((created['project_id'], created['assignment_revision'],
+                          created['revision']), (project_id, 1, 0))
+        self.assertEqual(self.store.create(**request), created)
+        with self.assertRaisesRegex(ValidationError, 'different request'):
+            self.store.create(**dict(request, project_id=str(uuid4())))
 
     def test_v1_store_migrates_and_run_manifest_is_durable(self):
         with sqlite3.connect(self.store.path) as db:

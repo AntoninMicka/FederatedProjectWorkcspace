@@ -353,6 +353,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("querySelectorAll('#task-artifact-list input:checked')", JS)
         self.assertIn("activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null", JS)
         self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
+        self.assertIn('Nové vlákno pro projekt ${activeProject.title}', JS)
         self.assertIn("++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID()", JS)
         self.assertIn('if(selectionRevision!==chatSelectionRevision)return', JS)
         self.assertIn("project_id:failed.project_id,thread_id:failed.thread_id", JS)
