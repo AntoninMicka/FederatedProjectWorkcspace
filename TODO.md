@@ -69,6 +69,15 @@ perzistence, task role a změna externího OpenAI streamu.
   **22 testů OK, 2 volitelné přeskočeny**; reálný offscreen Qt/WebEngine smoke:
   **OK**; úplná sada: **502 testů OK, 24 volitelných přeskočeno**. Zbývá
   fyzická kontrola obou režimů podle checklistu.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-H — Živý stav v oblasti zpráv
+  (implemented).** Opakovaná fyzická kontrola aktuálního checkoutu ukázala jen
+  finální výsledek. Živá karta byla umístěná až pod vysokým composerem, zatímco
+  výsledek se vykresloval ve scrollovatelné historii. Stav i rozepsaná odpověď
+  jsou nyní sourozenci historie chatu přímo v hlavním panelu; composer si
+  ponechává jen stručný operační stav. Izolovaný reálný Qt/WebEngine test
+  ověřil nenulový rozměr a průnik karty s viditelným viewportem: **OK**;
+  cílená desktopová sada: **22 testů OK, 2 volitelné přeskočeny**; úplná sada:
+  **502 testů OK, 24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

@@ -424,7 +424,22 @@ def main():
                             return
                         window.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
-            script = "document.querySelector('#count')?.textContent"
+            script = """(()=>{
+              document.querySelector('#project-home').hidden=true;
+              document.querySelector('#project-view').hidden=false;
+              const chatTab=document.querySelector('#chat-tab');chatTab.click();
+              if(!window.smokeChatProgress)window.smokeChatProgress=startChatProgress('Ollama testuje živý stav…');
+              const progress=document.querySelector('#chat-stream-status');
+              const progressRect=progress.getBoundingClientRect();
+              const viewportRect=document.querySelector('#main-panel-content').getBoundingClientRect();
+              if(progress.hidden || getComputedStyle(progress).display==='none' ||
+                 !document.querySelector('#chat-panel').contains(progress) ||
+                 !document.querySelector('#chat-stream-progress-text').textContent.includes('Ollama testuje živý stav') ||
+                 progressRect.width<=0 || progressRect.height<=0 ||
+                 progressRect.bottom<=viewportRect.top || progressRect.top>=viewportRect.bottom)return null;
+              window.smokeChatProgress.stop();window.smokeChatProgress=null;
+              return document.querySelector('#count')?.textContent;
+            })()"""
             if project_check:
                 script = """(()=>{
                   if(!document.querySelector('#project-view'))return null;

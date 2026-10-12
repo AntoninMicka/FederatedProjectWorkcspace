@@ -392,7 +392,13 @@ class DesktopTests(unittest.TestCase):
     def test_chat_progress_stays_with_prompt(self):
         from spikes.desktop_ui import HTML
         composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        chat_panel = HTML.split('<div id="chat-panel"', 1)[1].split('<div id="summary-panel"', 1)[0]
         self.assertIn('id="chat-operation-status"', composer)
+        self.assertNotIn('id="chat-stream-status"', composer)
+        self.assertIn('id="chat-stream-status"', chat_panel)
+        self.assertIn('id="chat-stream"', chat_panel)
+        self.assertGreater(chat_panel.index('id="chat-stream-status"'),
+                           chat_panel.index('id="chat-messages"'))
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 

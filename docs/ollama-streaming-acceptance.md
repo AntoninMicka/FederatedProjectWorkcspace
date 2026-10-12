@@ -20,7 +20,7 @@ dokud není ověřený HTTPS pin a síťová hranice.
   přípravu kontextu, připojování, čekání na první část, případné
   **Ollama přemýšlí…** a generování. Interní reasoning text se nezobrazuje ani
   neukládá. Dokud nezačne odpověď, musí být vidět animovaný indikátor a
-  průběžně rostoucí čas běhu.
+  průběžně rostoucí čas běhu přímo v historii zpráv nad composerem.
 - [ ] Text se má objevovat průběžně, ale v seznamu zpráv vznikne assistant
   zpráva až po dokončení. Stručný stav je oznamovaný přes `aria-live`; samotné
   přibývající části textu se čtečce neoznamují po každém tokenu. Rozepsaná

@@ -316,7 +316,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label class="confirm"><input id="chat-delete-confirm" type="checkbox"> Rozumím, že lokální stav bude odstraněn, ale publikované Git artefakty zůstanou zachované.</label>
 <button id="chat-delete-run" type="button" disabled>Odstranit lokální vlákno</button>
 <button id="chat-delete-cancel" class="secondary-button" type="button">Zrušit</button></section>
-<div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
+<div id="chat-messages" role="log" aria-label="Vaše zadání"></div>
+<div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
+<span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
+<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
@@ -420,9 +423,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
-<div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
-<span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
-<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
