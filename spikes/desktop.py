@@ -8,7 +8,7 @@ import os
 import signal
 import sys
 from urllib.parse import urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
 from spikes.administration import Administration
@@ -27,11 +27,29 @@ from spikes.publication_cms import PublicationCms
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
+NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
+                            'choose-notebooklm-target'})
 
 
 def provider_key_url(url):
     """Return an exact approved provider onboarding URL, never an arbitrary URL."""
     return url if url in PROVIDER_KEY_URLS else None
+
+
+def native_action_name(url, origin):
+    """Return an allowlisted one-shot action from an exact local page URL."""
+    parsed, expected = urlsplit(url), urlsplit(origin)
+    if (parsed.scheme, parsed.netloc, parsed.path, parsed.query) != (
+            expected.scheme, expected.netloc, '/', '') or parsed.username or parsed.password:
+        return None
+    parts = parsed.fragment.split('&')
+    if len(parts) != 2 or parts[0] not in NATIVE_ACTIONS or not parts[1].startswith('nonce='):
+        return None
+    try:
+        UUID(parts[1][len('nonce='):])
+    except (ValueError, AttributeError):
+        return None
+    return parts[0]
 
 
 def request_policy(url, initiator, method, origin):
@@ -101,10 +119,8 @@ def main():
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
-            return main_frame and requested in {
-                server.origin + '/', server.origin + '/#choose-project-location',
-                server.origin + '/#choose-notebooklm-archive',
-                server.origin + '/#choose-notebooklm-target'}
+            return main_frame and (requested == server.origin + '/'
+                                   or native_action_name(requested, server.origin) is not None)
 
         def createWindow(self, kind):
             return None
@@ -268,8 +284,11 @@ def main():
         editor_toolbar.addWidget(transfer_button)
         def native_action(url):
             # A same-document fragment never loads a route or exposes an HTTP writer.
-            if url.toString() == server.origin + '/#choose-project-location':
-                page.runJavaScript("history.replaceState(null, '', '/');")
+            action = native_action_name(url.toString(), server.origin)
+            if action is None:
+                return
+            page.runJavaScript("history.replaceState(null, '', '/');")
+            if action == 'choose-project-location':
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
                         return
@@ -281,15 +300,17 @@ def main():
                             folder, request['operation_id'])
                         page.runJavaScript('setProjectCreationLocation(' + json.dumps(result) + ')')
                 page.runJavaScript('projectCreationPickerRequest()', 0, choose_project_location)
-            elif url.toString() == server.origin + '/#choose-notebooklm-archive':
-                page.runJavaScript("history.replaceState(null, '', '/');")
+            elif action == 'choose-notebooklm-archive':
                 archive, _ = QFileDialog.getOpenFileName(
                     window, 'Google Takeout TGZ', '', 'TGZ (*.tgz *.tar.gz)')
                 if archive:
-                    result = server.notebooklm_import_actions.register_archive(archive)
-                    page.runJavaScript('setNotebookLMArchive(' + json.dumps(result) + ')')
-            elif url.toString() == server.origin + '/#choose-notebooklm-target':
-                page.runJavaScript("history.replaceState(null, '', '/');")
+                    try:
+                        result = server.notebooklm_import_actions.register_archive(archive)
+                        page.runJavaScript('setNotebookLMArchive(' + json.dumps(result) + ')')
+                    except (ValueError, OSError):
+                        page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
+                            'Vybraný archiv nelze použít. Zvolte existující běžný TGZ soubor.') + ')')
+            elif action == 'choose-notebooklm-target':
                 def choose_notebooklm_target(request):
                     if not isinstance(request, dict) or set(request) != {'operation_id'}:
                         return
@@ -297,9 +318,13 @@ def main():
                         window, 'Existující prázdná cílová složka projektu',
                         str(controller.service.default_projects_root()))
                     if folder:
-                        result = server.notebooklm_import_actions.register_target(
-                            folder, request['operation_id'])
-                        page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
+                        try:
+                            result = server.notebooklm_import_actions.register_target(
+                                folder, request['operation_id'])
+                            page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
+                        except (ValueError, OSError):
+                            page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
+                                'Vybranou složku nelze použít. Zvolte existující běžnou složku.') + ')')
                 page.runJavaScript('notebookLMTargetPickerRequest()', 0,
                                    choose_notebooklm_target)
         page.urlChanged.connect(native_action)

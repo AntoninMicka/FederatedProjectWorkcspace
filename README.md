@@ -46,7 +46,8 @@ Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vla
 
 ### Import celého projektu z osobního NotebookLM
 
-Google Takeout TGZ lze v desktopu otevřít přes **Importovat NotebookLM…**.
+Google Takeout TGZ lze v desktopu otevřít tlačítkem **Importovat NotebookLM**
+v levém panelu; import má vlastní stránku mimo přehled projektů.
 Nejdřív se zobrazí bounded read-only přehled všech projektů (v Takeoutu jsou
 uložené jako jednotlivé NotebookLM notebooky); potom se vybere právě jeden
 projekt, nová cílová složka a privacy. Projekt vznikne až po

@@ -33,8 +33,9 @@ navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
 `M1-LXC-DNS-TLS-01` bylo doručeno PR #58 jako merge commit `916e5ec`. Evidence
 je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
 `d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
-jako merge commit `1101d52`. `UX-UNIFIED-02C` je lokálně feature-akceptovaná
-na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud
+jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
+`436f4e6`. `UX-UNIFIED-02C-FIX1` je lokálně feature-akceptovaná na vlastní
+větvi, evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud
 nevytvořeného PR. Ollama streaming zůstává samostatnou feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.

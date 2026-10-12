@@ -59,8 +59,9 @@ složky. Picker vydá omezenou in-process capability vázanou na operation ID;
 web nikdy nepřijímá cestu ani tento token a používá nakonfigurovaný projects
 root. Původní `CreationDialog` a jeho paralelní toolbar vstup byly odstraněny.
 
-Import NotebookLM je nyní také společný: jedna stránka a stejné
-autorizované endpointy vedou preview, plán a potvrzení na webu i desktopu.
+Import NotebookLM je nyní také společný: samostatnou stránku vyvolá tlačítko v
+levém panelu a stejné autorizované endpointy vedou preview, plán a potvrzení na
+webu i desktopu.
 Web smí zadat jen server-local cestu a nepovoluje `local-only`; desktopový Qt
 shell vydá rendereru pouze náhodnou in-process capability pro jeden pickerem
 vybraný archiv a volitelný přesný cíl. Původní `NotebookLMImportDialog` a jeho

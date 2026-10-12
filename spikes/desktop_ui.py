@@ -64,6 +64,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
 <div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
+<button id="open-notebooklm-import" class="global-nav" type="button" hidden>Importovat NotebookLM</button>
 <div id="sidebar-project-tools" hidden>
 <button id="back-projects" class="sidebar-back" type="button">← Seznam projektů</button>
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
@@ -106,7 +107,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
 <button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="create-project-status" role="status"> </p></form>
-<details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
+<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
+<details class="diagnostics"><summary>Ověření spojení</summary>
+<button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
+</div>
+<div id="notebooklm-import-view" hidden>
+<header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
+<button id="notebooklm-import-back" type="button" class="back-button">← Zpět na projekty</button>
+<section id="notebooklm-import" class="standalone-form"><h1>Importovat celý projekt z NotebookLM</h1>
 <p class="notebooklm-server-source">Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
 <label class="notebooklm-server-source">Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
 <div class="notebooklm-desktop-source"><button id="notebooklm-choose-archive" type="button">Vybrat Takeout TGZ…</button>
@@ -120,11 +128,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <pre id="notebooklm-preview" hidden></pre>
 <label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
 <button id="notebooklm-run" type="button" disabled>Vytvořit a otevřít projekt</button>
-<p id="notebooklm-status" role="status"></p></details>
-<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
-<details class="diagnostics"><summary>Ověření spojení</summary>
-<button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
-</div>
+<p id="notebooklm-status" role="status"></p></section></div>
 <div id="settings-view" hidden>
 <header><span class="badge">Nastavení uzlu</span><span>Platí pro tento počítač</span></header>
 <div class="settings-heading"><div class="eyebrow">LOKÁLNÍ KONFIGURACE</div>
@@ -545,12 +549,12 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#source-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
 .standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
 .history-form{max-width:1100px}.history-choices{display:grid;grid-template-columns:1fr 1fr;gap:14px}.history-form pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.history-form details{margin-top:14px}
-#notebooklm-import{margin:16px 0;padding:14px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#notebooklm-import{margin:16px 0}
 #notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 @media(max-width:600px){
  #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
@@ -582,6 +586,7 @@ const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
 const sourceImportView=document.querySelector('#source-import-view');
+const notebookImportView=document.querySelector('#notebooklm-import-view');
 const historyView=document.querySelector('#history-view');
 const artifactEditorView=document.querySelector('#artifact-editor-view');
 const todoTree=document.querySelector('#todo-tree');
@@ -612,7 +617,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-notebooklm-import,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -712,6 +717,7 @@ function clearProject(){
  document.querySelector('#project-home').hidden=false;
  settingsView.hidden=true;
  sourceImportView.hidden=true;
+ notebookImportView.hidden=true;
  historyView.hidden=true;
  artifactEditorView.hidden=true;
  document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
@@ -946,7 +952,7 @@ window.setProjectCreationLocation=result=>{
  resetProjectCreationPreview('Umístění bylo vybráno. Připravte přesný náhled.');
 };
 document.querySelector('#choose-project-location').addEventListener('click',()=>{
- if(window.projectCreationPickerRequest())location.hash='choose-project-location';
+ if(window.projectCreationPickerRequest())requestNativeAction('choose-project-location');
 });
 document.querySelector('#clear-project-location').addEventListener('click',()=>{
  projectCreationLocation=null;document.querySelector('#project-location-label').textContent='Použije se výchozí místní umístění.';
@@ -989,6 +995,18 @@ const notebookStatus=document.querySelector('#notebooklm-status');
 const notebookSelection=document.querySelector('#notebooklm-selection');
 let notebookBundle=null,notebookPlan=null,notebookAttempt=null;
 let notebookArchiveCapability=null,notebookTargetCapability=null;
+function requestNativeAction(action){location.hash=`${action}&nonce=${crypto.randomUUID()}`;}
+function openNotebookLMImport(){
+ if(!canLeaveArtifactEditor())return;
+ clearProject();
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
+ sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;notebookImportView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
+ notebookStatus.textContent=notebookArchiveCapability?'Pokračujte načtením nebo výběrem projektu.':'Vyberte export Google Takeout.';
+}
+function closeNotebookLMImport(){notebookImportView.hidden=true;document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+document.querySelector('#open-notebooklm-import').addEventListener('click',openNotebookLMImport);
+document.querySelector('#notebooklm-import-back').addEventListener('click',closeNotebookLMImport);
 function notebookArchiveRequest(){
  return {archive_path:document.body.dataset.runtime==='server' ? document.querySelector('#notebooklm-archive').value.trim() : null,
   archive_capability:notebookArchiveCapability?.archive_capability||null};
@@ -1023,11 +1041,12 @@ window.setNotebookLMTarget=result=>{
  document.querySelector('#notebooklm-target-label').textContent=`Vybrané umístění: ${result.target_label}`;
  resetNotebookPlan('Cílové umístění bylo vybráno. Připravte přesný plán.');
 };
+window.setNotebookLMNativeError=message=>{notebookStatus.textContent=message||'Nativní výběr se nezdařil.';};
 document.querySelector('#notebooklm-choose-archive').addEventListener('click',()=>{
- location.hash='choose-notebooklm-archive';
+ requestNativeAction('choose-notebooklm-archive');
 });
 document.querySelector('#notebooklm-choose-target').addEventListener('click',()=>{
- if(window.notebookLMTargetPickerRequest())location.hash='choose-notebooklm-target';
+ if(window.notebookLMTargetPickerRequest())requestNativeAction('choose-notebooklm-target');
 });
 document.querySelector('#notebooklm-archive').addEventListener('input',()=>resetNotebookArchive());
 notebookSelection.addEventListener('change',()=>resetNotebookPlan('Výběr se změnil. Připravte nový plán.'));
@@ -1115,7 +1134,7 @@ async function openSettings(){
  if(!canLeaveArtifactEditor())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';

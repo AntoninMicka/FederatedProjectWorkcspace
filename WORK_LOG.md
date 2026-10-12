@@ -5,14 +5,45 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-02C-FIX1 — Samostatná stránka a spolehlivý picker — 2026-10-12
+
+Dávka na větvi `fix/ux-unified-02c-notebooklm-navigation`, založené z
+`develop` `436f4e6` po doručení UX-UNIFIED-02C v PR #61, reaguje na skutečnou
+uživatelskou akceptaci: import patří na samostatnou stránku a druhý nativní
+picker cílové složky se nevyvolal. Dosažená úroveň je **implemented / lokálně
+PoC validated** a akceptační podmínky dávky jsou splněné. PR do `develop` dosud
+nebyl vytvořen ani sloučen.
+
+- [x] [completed] **UX-UNIFIED-02C-FIX1-A — Samostatná stránka a navigace
+  (implemented).** Importní formulář byl odstraněn z domovské stránky projektů
+  a dostal vlastní view, vstup v levém panelu a návrat do katalogu. Desktopový
+  bootstrap tlačítko zpřístupní vždy, web pouze správci uzlu; mobilní drawer se
+  po volbě správně zavře.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-B — Nativní picker cíle
+  (implemented).** Všechny nativní pickery nyní při každém kliku používají nový
+  UUID nonce v přesně validovaném same-origin fragmentu, takže Qt vyvolá novou
+  událost i po dřívějším výběru archivu. Neplatný archiv nebo složka vypíšou
+  chybu ve stránce; renderer nadále nedostává lokální cestu.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-C — Regrese, dokumentace a předání
+  (PoC validated).** Test helperu odmítá chybějící/neplatný nonce, jiný origin,
+  path, query i neznámou akci. Reálný offscreen Qt/WebEngine smoke prošel pro
+  samostatnou mobilní stránku, plán a návrat do projektu. `py_compile`, kontrola
+  JavaScript syntaxe přes `node --check` a úplná sada prošly: **492 testů OK,
+  24 volitelných přeskočeno**. Ruční ověření pickeru je v
+  [checklistu](docs/notebooklm-import-acceptance.md).
+
+Oprava nemění importní parser, projektová data, endpointy, privacy, potvrzovaný
+plán ani `ProjectCreation` journal. Nezavádí persistentní capability ani novou
+crash boundary; pouze opravuje prezentaci a jednorázové nativní vyvolání.
+
 ## UX-UNIFIED-02C — Společný NotebookLM import — 2026-10-12
 
 Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z
 `develop` `1101d52` po doručení F-M4-OUTPUT-ROUTER-02 v PR #60, převedla
 existující NotebookLM preview → plán → potvrzení na jednu společnou stránku
 a autorizované API pro desktop i web. Dosažená úroveň je **implemented /
-lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR do
-`develop` dosud nebyl vytvořen ani sloučen.
+lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR #61 byl
+sloučen do `develop` jako merge commit `436f4e6`.
 
 - [x] [completed] **UX-UNIFIED-02C-A — Společná stránka a API
   (implemented).** HTML/CSS/JavaScript workflow je součástí sdíleného shellu;
