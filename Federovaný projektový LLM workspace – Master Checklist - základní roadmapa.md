@@ -1042,9 +1042,10 @@ OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený.
 capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
-feature i fyzickou desktopovou akceptaci na své větvi; PR do `develop` dosud
-nebyl vytvořen ani sloučen. Webové hledání, explicitní jazyk odpovědi a obecný
-workflow zůstávají samostatné navazující schopnosti. Gate M3 proto
+feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
+F-M3-SEARCH-01 je aktivní feature pro explicitní řízené hledání přes SearXNG;
+explicitní jazyk odpovědi a obecný workflow zůstávají samostatné navazující
+schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
@@ -1063,7 +1064,11 @@ není vydáván za celý uzavřený.
 - [x] Streamovaná odpověď Ollamy — F-M3-OLLAMA-STREAM-01 PoC validated na
   feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
   zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
-  UI dlouhé odpovědi. Evidence je ve WORK_LOG; doručení PR zůstává otevřené.
+  UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
+- [ ] Řízené webové hledání — F-M3-SEARCH-01 aktivní: explicitní SearXNG
+  binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
+  výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
+  tool callu, fallbacku nebo oslabení `local-only`.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation

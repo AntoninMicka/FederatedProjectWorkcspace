@@ -35,24 +35,12 @@ je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
 `d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
 jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 `436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
-merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` má
-2026-10-12 splněnou feature akceptaci a evidenci archivovanou ve WORK_LOG;
-její PR do `develop` dosud nebyl vytvořen ani sloučen. Další dávka se
-aktivuje až po doručení tohoto PR.
+merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
+doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
+`F-M3-SEARCH-01` je aktivní výhradně v TODO na větvi
+`feature/f-m3-search-01-searxng`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
-  (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
-  používaný Open WebUI jako explicitní search capability. Task router smí
-  navrhnout `web-search`, ale síťové volání provede až aplikace po policy/privacy
-  kontrole; nejde o skrytý Ollama tool call ani o externí-modelový dispatch.
-  Výsledek uchová dotaz, čas hledání, URL, titulky, bounded úryvky a provenance,
-  následná odpověď Ollamy dostane jen přesný Context Manifest. Akceptace zahrne
-  nedostupnou službu, timeout, neplatný JSON, nedůvěryhodný obsah/URL, nulové a
-  duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
-  oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
-  nebudou odvozeny pouze z dockerového názvu `searxng`.
 
 - [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
   (cílová úroveň: designed → PoC validated).** Oddělit pouhé

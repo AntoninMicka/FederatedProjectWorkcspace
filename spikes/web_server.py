@@ -160,7 +160,8 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
-        if self.path in {'/v1/chat/configure', '/v1/chat/test'} \
+        if self.path in {'/v1/chat/configure', '/v1/chat/test',
+                         '/v1/search/configure', '/v1/search/test'} \
                 and not self.server.administration.is_admin(self.actor):
             return self.send_error(403)
         if self.path == '/v1/session':
@@ -270,6 +271,12 @@ class WebHandler(DesktopHandler):
                          '/v1/external/request'}:
             # The current chat store is bound to the desktop/node identity. Do not
             # expose that history through a different web account identity.
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+        if self.path.startswith('/v1/tasks/search/'):
+            # Search task state currently uses the same node-local identity as
+            # desktop chat history. Do not let another web account confirm or
+            # inspect that identity's prepared disclosure.
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
         if self.path in {'/v1/chat/send', '/v1/chat/send-stream'}:

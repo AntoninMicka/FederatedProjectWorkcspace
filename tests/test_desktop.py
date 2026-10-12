@@ -21,6 +21,22 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_web_search_ui_requires_exact_preview_and_renders_sources_as_text(self):
+        self.assertIn('id="search-backend-form"', HTML)
+        self.assertIn('id="search-preview"', HTML)
+        self.assertIn('id="search-confirm-check"', HTML)
+        self.assertIn("projectRequest('/v1/search/test',searchCandidate(),65000)", JS)
+        self.assertIn("projectRequest('/v1/search/configure',searchCandidate())", JS)
+        self.assertIn("projectRequest('/v1/tasks/search/preview',request)", JS)
+        self.assertIn("projectRequest('/v1/tasks/search/confirm'", JS)
+        self.assertIn("outcome.kind==='web-search-answer'", JS)
+        self.assertIn('url.textContent=item.url', JS)
+        self.assertIn('snippet.textContent=item.snippet', JS)
+        self.assertNotIn('link.href=item.url', JS)
+        self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
+                         '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
+                        <= DesktopHandler.post_paths)
+
     def test_chat_validation_returns_only_actionable_allowlisted_reason(self):
         driver = test_local_api.LocalAPITests()
         request = {key: None for key in (

@@ -12,7 +12,7 @@ Dávka na větvi `feature/f-m3-ollama-stream-01`, založené z `develop`
 workspace NDJSON kanál. Dosažená úroveň je **PoC validated**. Uživatel po
 opakované fyzické kontrole potvrdil průběžné vykreslování, viditelný stav,
 dlouhou odpověď i autoscroll slovy „takhle je to dokonalé“. Feature akceptace
-je uzavřená; PR do `develop` dosud nebyl vytvořen ani sloučen.
+je uzavřená; dávka byla doručena do `develop` v PR #63 jako commit `5c3b565`.
 
 - [x] [completed] **F-M3-OLLAMA-STREAM-01-A — Kontrakt, reuse a crash
   boundaries (designed).** ADR 0008 a REUSE_CATALOG vymezily request digest,
@@ -58,7 +58,7 @@ JavaScript `node --check`, `git diff --check`, cílená desktopová sada
 a úplná sada **504 testů OK, 24 volitelných přeskočeno**. Omezení:
 automatický reconnect/retry, per-token perzistence a tokenový stream task
 routeru zůstávají mimo rozsah; živý webový průchod nebyl samostatně fyzicky
-akceptován. Doručení jediného PR do `develop` zůstává otevřené.
+akceptován.
 
 ## UX-UNIFIED-02C-FIX1 — Samostatná stránka a spolehlivý picker — 2026-10-12
 

@@ -54,11 +54,13 @@ class AITaskOutcome:
                     'Invalid artifact title')
             return cls(kind, _content(value['content'], 'artifact content'),
                        title, value['artifact_kind'])
-        if kind == 'external-request':
+        if kind in {'external-request', 'web-search'}:
             require(set(value) == {'schema_version', 'kind', 'purpose', 'query',
                                    'message_ids', 'artifact_ids'},
-                    'Unknown external request field')
-            return cls(kind, _content(value['query'], 'external query'),
+                    'Unknown external or search request field')
+            query_name = 'web search query' if kind == 'web-search' else 'external query'
+            query_limit = 4096 if kind == 'web-search' else MAX_OUTCOME_CONTENT
+            return cls(kind, _content(value['query'], query_name, query_limit),
                        purpose=_content(value['purpose'], 'external purpose', 2000),
                        message_ids=_ids(value['message_ids'], 'Message IDs'),
                        artifact_ids=_ids(value['artifact_ids'], 'Artifact IDs'))
