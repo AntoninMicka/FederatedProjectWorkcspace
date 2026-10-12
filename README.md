@@ -52,9 +52,11 @@ Nejdřív se zobrazí bounded read-only přehled všech projektů (v Takeoutu js
 uložené jako jednotlivé NotebookLM notebooky); potom se vybere právě jeden
 projekt, nová cílová složka a privacy. Projekt vznikne až po
 kontrole přesného plánu a explicitním potvrzení; samostatný řádek **Cíl
-projektu** vždy ukáže výslednou cestu plánu. Webová varianta je dostupná
-jen správci uzlu a přijímá absolutní cestu k TGZ, který už je bezpečně uložený
-na serveru; archiv se neposílá jako velký JSON přes prohlížeč.
+projektu** vždy ukáže výslednou cestu plánu. Desktop kontroluje prázdnost a
+bezpečná práva vybraného cíle už při výběru; u vlastní prázdné složky s příliš
+otevřenými právy nabídne po výslovném souhlasu změnu na `0700`. Webová varianta
+je dostupná jen správci uzlu a přijímá absolutní cestu k TGZ, který už je
+bezpečně uložený na serveru; archiv se neposílá jako velký JSON přes prohlížeč.
 
 Import zachová přesné Takeout bajty zdrojů, výstupů, chatu a discovered sources
 v oddělených neměnných artefaktech. Původní metadata jsou vratně uložena v

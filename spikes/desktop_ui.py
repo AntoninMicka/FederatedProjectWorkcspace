@@ -2885,6 +2885,16 @@ class DesktopHandler(Handler):
             if self.path.startswith('/v1/projects/create/'):
                 return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
             if self.path.startswith('/v1/notebooklm/'):
+                message = {
+                    'Directory must not be writable by other users':
+                        'Cílová složka má příliš otevřená práva. Nastavte jí práva 0700 a obnovte plán.',
+                    'Existující cílová složka musí být prázdná.':
+                        'Cílová složka už není prázdná. Vyberte jinou složku a obnovte plán.',
+                    'Cílový lokální stav již existuje.':
+                        'Pro tento cíl už existuje lokální stav. Zvolte jinou prázdnou složku.',
+                }.get(str(exc))
+                if message:
+                    return self.reply(422, {'error': message})
                 return self.reply(422, {'error': 'Import NotebookLM nelze provést. Obnovte náhled a ověřte archiv, výběr, privacy a cílové úložiště.'})
             if self.path.startswith('/v1/artifacts/history/'):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})

@@ -291,6 +291,7 @@ class NotebookLMProjectImportTests(unittest.TestCase):
                            'archive_capability': archive['archive_capability']}
         preview = actions.preview(preview_request)
         operation = str(uuid4())
+        self.target.mkdir(mode=0o700)
         target = actions.register_target(self.target, operation)
         plan = actions.plan(dict(preview_request,
             selection_digest=preview['notebooks'][0]['selection_digest'],
@@ -307,6 +308,7 @@ class NotebookLMProjectImportTests(unittest.TestCase):
         preview_request = {'archive_path': None,
                            'archive_capability': archive['archive_capability']}
         preview = desktop.preview(preview_request)
+        self.target.mkdir(mode=0o700)
         target = desktop.register_target(self.target, str(uuid4()))
         with self.assertRaises(ValueError):
             desktop.plan(dict(preview_request,
@@ -319,6 +321,16 @@ class NotebookLMProjectImportTests(unittest.TestCase):
         web = NotebookLMImportActions(self.node, projects_root=self.base / 'web-projects')
         with self.assertRaises(ValueError):
             web.preview(preview_request)
+
+    def test_desktop_target_rejects_unsafe_permissions_and_nonempty_directory_early(self):
+        actions = NotebookLMImportActions(self.node, desktop_capabilities=True)
+        unsafe = self.base / 'unsafe-target'; unsafe.mkdir(mode=0o700); unsafe.chmod(0o770)
+        with self.assertRaisesRegex(ValueError, 'Directory must not be writable by other users'):
+            actions.register_target(unsafe, str(uuid4()))
+        unsafe.chmod(0o700); (unsafe / 'foreign.txt').write_text('keep')
+        with self.assertRaisesRegex(ValueError, 'Existující cílová složka musí být prázdná'):
+            actions.register_target(unsafe, str(uuid4()))
+        self.assertEqual((unsafe / 'foreign.txt').read_text(), 'keep')
 
     def test_shared_actions_confirm_only_an_exact_plan_issued_by_same_instance(self):
         actions = NotebookLMImportActions(self.node, projects_root=self.base / 'projects')

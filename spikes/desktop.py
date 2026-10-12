@@ -5,7 +5,9 @@
 import argparse
 import json
 import os
+from pathlib import Path
 import signal
+import stat
 import sys
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -14,7 +16,7 @@ from spikes.desktop_management import ASSETS, DesktopManagementHandler as Deskto
 from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
-from spikes.project_creation import ProjectCreation, default_node_path
+from spikes.project_creation import CreationConflict, ProjectCreation, default_node_path
 from spikes.project_creation_actions import ProjectCreationActions
 from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.chat_service import ChatService
@@ -68,6 +70,32 @@ def native_action_name(url, origin):
     """Return only the action name for navigation policy checks."""
     request = native_action_request(url, origin)
     return request['action'] if request else None
+
+
+def repairable_target_mode(path):
+    """Return an unsafe mode only for an owned, empty, non-symlink directory."""
+    path = Path(path)
+    try:
+        info = path.lstat()
+        if (path.absolute() != path.resolve() or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.getuid() or any(path.iterdir())):
+            return None
+        mode = stat.S_IMODE(info.st_mode)
+        return mode if mode & 0o022 else None
+    except OSError:
+        return None
+
+
+def notebooklm_target_error(exc):
+    """Translate only known target validation failures without leaking internals."""
+    return {
+        'Directory must not be writable by other users':
+            'Cílová složka má příliš otevřená práva. Nastavte jí práva 0700 a vyberte ji znovu.',
+        'Existující cílová složka musí být prázdná.':
+            'Cílová složka musí být prázdná.',
+        'Expected owned directory':
+            'Cílová složka musí patřit uživateli, pod kterým běží aplikace.',
+    }.get(str(exc), 'Vybranou složku nelze použít. Zvolte existující prázdnou složku bez symlinků.')
 
 
 def request_policy(url, initiator, method, origin):
@@ -335,12 +363,23 @@ def main():
                     str(controller.service.default_projects_root()))
                 if folder:
                     try:
+                        unsafe_mode = repairable_target_mode(folder)
+                        if unsafe_mode is not None:
+                            answer = QMessageBox.question(
+                                window, 'Soukromí cílové složky',
+                                'Vybraná prázdná složka je zapisovatelná dalšími uživateli '
+                                f'(práva {unsafe_mode:04o}).\n\nNastavit bezpečná práva 0700 a použít ji?',
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No)
+                            if answer != QMessageBox.StandardButton.Yes:
+                                raise CreationConflict('Directory must not be writable by other users')
+                            os.chmod(folder, 0o700)
                         result = server.notebooklm_import_actions.register_target(
                             folder, request['operation_id'])
                         page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
-                    except (ValueError, OSError):
+                    except (ValueError, OSError) as exc:
                         page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
-                            'Vybranou složku nelze použít. Zvolte existující běžnou složku.') + ')')
+                            notebooklm_target_error(exc)) + ')')
         page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok

@@ -5,43 +5,6 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
-## UX-UNIFIED-02C-FIX1 — Samostatná stránka a spolehlivý picker — 2026-10-12
-
-Dávka na větvi `fix/ux-unified-02c-notebooklm-navigation`, založené z
-`develop` `436f4e6` po doručení UX-UNIFIED-02C v PR #61, reaguje na skutečnou
-uživatelskou akceptaci: import patří na samostatnou stránku a druhý nativní
-picker cílové složky se nevyvolal. Dosažená úroveň je **implemented / lokálně
-PoC validated** a akceptační podmínky dávky jsou splněné. PR do `develop` dosud
-nebyl vytvořen ani sloučen.
-
-- [x] [completed] **UX-UNIFIED-02C-FIX1-A — Samostatná stránka a navigace
-  (implemented).** Importní formulář byl odstraněn z domovské stránky projektů
-  a dostal vlastní view, vstup v levém panelu a návrat do katalogu. Desktopový
-  bootstrap tlačítko zpřístupní vždy, web pouze správci uzlu; mobilní drawer se
-  po volbě správně zavře.
-- [x] [completed] **UX-UNIFIED-02C-FIX1-B — Nativní picker cíle
-  (implemented).** Všechny nativní pickery při každém kliku používají nový UUID
-  nonce v přesně validovaném same-origin fragmentu. První oprava ponechala cíl
-  závislý na následném JavaScript callbacku; opakovaná uživatelská akceptace
-  doložila, že právě tato druhá fáze v reálném WebEngine dialog nevyvolá.
-- [x] [completed] **UX-UNIFIED-02C-FIX1-D — Přímé vyvolání a viditelný cíl
-  (implemented).** Operation ID cíle je nyní součástí striktně validované
-  jednorázové nativní akce a Qt otevře folder dialog přímo bez asynchronního
-  dotazu zpět do rendereru. Vybraná cesta se zobrazí ihned a výchozí výsledná
-  cesta po přípravě plánu ve zvýrazněném řádku **Cíl projektu**. Neplatný archiv
-  nebo složka vypíšou chybu ve stránce.
-- [x] [completed] **UX-UNIFIED-02C-FIX1-C — Regrese, dokumentace a předání
-  (PoC validated).** Test helperu odmítá chybějící/neplatný nonce, jiný origin,
-  path, query i neznámou akci. Reálný offscreen Qt/WebEngine smoke prošel pro
-  samostatnou mobilní stránku, plán a návrat do projektu. `py_compile`, kontrola
-  JavaScript syntaxe přes `node --check` a úplná sada prošly: **492 testů OK,
-  24 volitelných přeskočeno**. Ruční ověření pickeru je v
-  [checklistu](docs/notebooklm-import-acceptance.md).
-
-Oprava nemění importní parser, projektová data, endpointy, privacy, potvrzovaný
-plán ani `ProjectCreation` journal. Nezavádí persistentní capability ani novou
-crash boundary; pouze opravuje prezentaci a jednorázové nativní vyvolání.
-
 ## UX-UNIFIED-02C — Společný NotebookLM import — 2026-10-12
 
 Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z

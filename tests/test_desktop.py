@@ -10,7 +10,8 @@ import subprocess
 import sys
 import unittest
 
-from spikes.desktop import native_action_name, native_action_request, provider_key_url, request_policy
+from spikes.desktop import (native_action_name, native_action_request, notebooklm_target_error,
+                            provider_key_url, repairable_target_mode, request_policy)
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
@@ -113,6 +114,18 @@ class DesktopTests(unittest.TestCase):
                     f'{origin}/#unknown?nonce={nonce}'):
             with self.subTest(url=url):
                 self.assertIsNone(native_action_name(url, origin))
+
+    def test_notebooklm_target_permission_repair_is_narrow_and_errors_are_actionable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'target'; target.mkdir(mode=0o700); target.chmod(0o775)
+            self.assertEqual(repairable_target_mode(target), 0o775)
+            (target / 'keep').write_text('x')
+            self.assertIsNone(repairable_target_mode(target))
+        self.assertIn('0700', notebooklm_target_error(
+            ValueError('Directory must not be writable by other users')))
+        self.assertIn('prázdná', notebooklm_target_error(
+            ValueError('Existující cílová složka musí být prázdná.')))
 
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
