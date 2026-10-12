@@ -25,6 +25,9 @@ dokud není ověřený HTTPS pin a síťová hranice.
   zpráva až po dokončení. Stručný stav je oznamovaný přes `aria-live`; samotné
   přibývající části textu se čtečce neoznamují po každém tokenu. Rozepsaná
   odpověď má při růstu zůstat ve viditelné části okna.
+- [ ] Přepněte na **Orchestrace** a odešlete další úlohu. Ihned se musí objevit
+  časovaný stav **Ollama zpracovává orchestraci…**. Task router nadále vrátí
+  validovaný výsledek najednou; tento stav proto neoznačuje tokenový stream.
 - [ ] Po dokončení porovnejte průběžný text s uloženou assistant zprávou a
   zkontrolujte providerem vrácené počty tokenů a časy, pokud je model poskytl.
 - [ ] V bočním panelu otevřete **Chaty**. Nové vlákno musí být v části
@@ -46,8 +49,8 @@ dokud není ověřený HTTPS pin a síťová hranice.
 - [ ] U `private-network` bindingu ověřte správný TLS pin a odmítnutí
   `local-only`. Změna bindingu nebo jeho revize před dispatch se musí odmítnout.
 - [ ] Režim **Orchestrace**, task router a creator/opponent workflow mají nadále
-  používat svůj dosavadní celistvý providerový výsledek; tato dávka je tiše
-  nepřepíná na streaming.
+  používat svůj dosavadní celistvý providerový výsledek. Orchestrace během
+  čekání ukazuje časovaný živý stav, ale není označena jako tokenový stream.
 
 Automatická regrese pokrývá request digest, fragmentované NDJSON čtení, limity,
 neplatný finální rámec, přerušení, restart bez retry, finální durable výsledek a

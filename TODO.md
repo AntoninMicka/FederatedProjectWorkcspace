@@ -59,6 +59,16 @@ perzistence, task role a změna externího OpenAI streamu.
   obsah se nadále nezobrazuje ani neukládá. Cílená regrese: **72 testů OK,
   2 volitelné přeskočeny**; úplná sada zůstává **502 testů OK,
   24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-G — Viditelný průběh ve všech
+  Ollama režimech (implemented).** Fyzická kontrola odhalila, že výchozí režim
+  Orchestrace používá záměrně celistvý task-router výsledek a dřívější živý
+  prvek byl navíc jen CSS pseudoobsah. UI nyní používá skutečný stavový DOM
+  prvek, před dispatchí vynutí vykreslovací snímek a ukazuje čas běhu i pro
+  orchestrace. Tokenové delty zůstávají omezené na přímý Brainstorming;
+  interní reasoning text se nezobrazuje ani neukládá. Cílená desktopová sada:
+  **22 testů OK, 2 volitelné přeskočeny**; reálný offscreen Qt/WebEngine smoke:
+  **OK**; úplná sada: **502 testů OK, 24 volitelných přeskočeno**. Zbývá
+  fyzická kontrola obou režimů podle checklistu.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

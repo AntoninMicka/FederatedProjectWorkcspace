@@ -420,7 +420,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
-<p id="chat-stream-status" role="status" aria-live="polite" hidden></p>
+<div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
+<span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
 <div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
@@ -506,11 +507,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
-#chat-stream[data-progress]:empty{display:flex;align-items:center;gap:10px;min-height:24px;color:#304657}
-#chat-stream[data-progress]:empty::before{content:'';width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
-#chat-stream[data-progress]:empty::after{content:attr(data-progress);font-weight:600}
+#chat-stream-status.chat-live-progress{display:flex;align-items:center;gap:10px;min-height:52px;color:#304657;font-weight:600}
+.chat-progress-spinner{width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
 @keyframes chat-stream-spin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){#chat-stream[data-progress]:empty::before{animation:none;border-top-color:#afc3d8;background:#526ca4}}
+@media(prefers-reduced-motion:reduce){.chat-progress-spinner{animation:none;border-top-color:#afc3d8;background:#526ca4}}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
@@ -1408,13 +1408,26 @@ const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 const chatStream=document.querySelector('#chat-stream');
 const chatStreamStatus=document.querySelector('#chat-stream-status');
+const chatStreamProgressText=document.querySelector('#chat-stream-progress-text');
 const chatRunUsage=document.querySelector('#chat-run-usage');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,ollamaStreaming=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 let streamScrollPending=false;
 function keepChatStreamVisible(){
  if(streamScrollPending)return;streamScrollPending=true;
- requestAnimationFrame(()=>{streamScrollPending=false;chatStream.scrollIntoView({block:'nearest'});});
+ requestAnimationFrame(()=>{streamScrollPending=false;
+  (!chatStreamStatus.hidden?chatStreamStatus:chatStream).scrollIntoView({block:'nearest'});});
+}
+function startChatProgress(initialState){
+ let state=initialState,started=Date.now();chatStreamStatus.hidden=false;
+ const render=()=>{const seconds=Math.floor((Date.now()-started)/1000);
+  chatStreamProgressText.textContent=`${state} · ${seconds} s`;keepChatStreamVisible();};
+ const timer=setInterval(render,1000);render();
+ return {set(nextState){state=nextState;render();},stop(){clearInterval(timer);
+  chatStreamStatus.hidden=true;chatStreamProgressText.textContent='';}};
+}
+function waitForVisiblePaint(){
+ return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 }
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
@@ -2068,23 +2081,18 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   }
   const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám…';chatStream.textContent='';
-  chatStream.hidden=!ollamaStreaming;chatStreamStatus.hidden=!ollamaStreaming;
+  chatStream.hidden=!ollamaStreaming;
   const streamStates={preparing:'Připravuji kontext…',connecting:'Připojuji se k Ollamě…',
    'waiting-first-token':'Čekám na první část odpovědi…',thinking:'Ollama přemýšlí…',
    generating:'Ollama generuje odpověď…',
    completed:'Generování je dokončeno.'};
-  let liveStreamState=streamStates.preparing,liveStreamStarted=Date.now();
-  const renderLiveStreamState=()=>{const seconds=Math.floor((Date.now()-liveStreamStarted)/1000);
-   const visibleState=`${liveStreamState} · ${seconds} s`;chatStream.dataset.progress=visibleState;
-   chatStreamStatus.textContent=visibleState;keepChatStreamVisible();};
-  const liveStreamTimer=ollamaStreaming?setInterval(renderLiveStreamState,1000):null;
-  if(ollamaStreaming)renderLiveStreamState();else delete chatStream.dataset.progress;
+  const liveProgress=ollamaStreaming?startChatProgress(streamStates.preparing):null;
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
+   if(liveProgress)await waitForVisiblePaint();
    const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
     delta=>{chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
-     liveStreamState=streamStates[status] || 'Probíhá lokální AI běh…';
-     renderLiveStreamState();}) :
+     liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
@@ -2094,9 +2102,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
-  }finally{clearTimeout(thinking);if(liveStreamTimer)clearInterval(liveStreamTimer);
-   delete chatStream.dataset.progress;submit.disabled=!activeProject || !draft.value.trim();
-   chatStream.hidden=true;chatStreamStatus.hidden=true;
+  }finally{clearTimeout(thinking);if(liveProgress)liveProgress.stop();
+   submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
    document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
   return;
  }
@@ -2113,8 +2120,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString(),run_choice:runChoice};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
+ const liveProgress=startChatProgress('Ollama zpracovává orchestraci…');
  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
  try{
+  await waitForVisiblePaint();
   const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
   replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
@@ -2131,7 +2140,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
  }
- finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
+ finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
 });
 async function assignActiveThread(){
