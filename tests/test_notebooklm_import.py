@@ -13,6 +13,7 @@ from uuid import uuid4
 from spikes.metadata import ValidationError
 from spikes.notebooklm_import import NotebookLMTakeout, PARSER_REVISION, preview_takeout
 from spikes.notebooklm_project_import import NotebookLMProjectImport
+from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.project_creation import ProjectCreation, STAGES
 from spikes.projects import Projects
 from spikes.storage import Git
@@ -283,23 +284,68 @@ class NotebookLMProjectImportTests(unittest.TestCase):
                     'rev-list', '--count', 'HEAD').stdout.strip())
                 self.assertEqual(1, len(Projects(root / 'node.json').list()))
 
-    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1',
-                         'Requires real Qt widgets')
-    def test_native_dialog_requires_preview_plan_and_explicit_confirmation(self):
-        from PySide6.QtWidgets import QApplication, QDialog
-        from spikes.desktop_notebooklm_import import NotebookLMImportDialog
-        app = QApplication.instance() or QApplication([])
-        dialog = NotebookLMImportDialog(None, self.service, self.base)
-        dialog.archive.setText(str(self.archive_path)); dialog.root.setText(str(self.target))
-        dialog.load_preview()
-        self.assertTrue(dialog.notebook.isEnabled())
-        self.assertEqual(1, dialog.notebook.count())
-        dialog.validate()
-        self.assertIsNotNone(dialog.plan)
-        self.assertEqual(QDialog.DialogCode.Rejected, dialog.result())
-        dialog.confirm.setChecked(True); dialog.validate()
-        self.assertEqual(QDialog.DialogCode.Accepted, dialog.result())
-        dialog.deleteLater(); app.processEvents()
+    def test_shared_desktop_actions_use_exact_capabilities_and_allow_local_only(self):
+        actions = NotebookLMImportActions(self.node, desktop_capabilities=True)
+        archive = actions.register_archive(self.archive_path)
+        preview_request = {'archive_path': None,
+                           'archive_capability': archive['archive_capability']}
+        preview = actions.preview(preview_request)
+        operation = str(uuid4())
+        target = actions.register_target(self.target, operation)
+        plan = actions.plan(dict(preview_request,
+            selection_digest=preview['notebooks'][0]['selection_digest'],
+            privacy='local-only', operation_id=operation,
+            target_capability=target['target_capability']))
+        self.assertEqual(str(self.target), plan['target_root'])
+        receipt = actions.confirm(dict(preview_request, plan=plan))
+        self.assertEqual(receipt, actions.confirm(dict(preview_request, plan=plan)))
+        self.assertEqual('local-only', plan['privacy'])
+
+    def test_shared_actions_reject_cross_operation_target_and_wrong_path_boundary(self):
+        desktop = NotebookLMImportActions(self.node, desktop_capabilities=True)
+        archive = desktop.register_archive(self.archive_path)
+        preview_request = {'archive_path': None,
+                           'archive_capability': archive['archive_capability']}
+        preview = desktop.preview(preview_request)
+        target = desktop.register_target(self.target, str(uuid4()))
+        with self.assertRaises(ValueError):
+            desktop.plan(dict(preview_request,
+                selection_digest=preview['notebooks'][0]['selection_digest'],
+                privacy='project', operation_id=str(uuid4()),
+                target_capability=target['target_capability']))
+        with self.assertRaises(ValueError):
+            desktop.preview({'archive_path': str(self.archive_path),
+                             'archive_capability': None})
+        web = NotebookLMImportActions(self.node, projects_root=self.base / 'web-projects')
+        with self.assertRaises(ValueError):
+            web.preview(preview_request)
+
+    def test_shared_actions_confirm_only_an_exact_plan_issued_by_same_instance(self):
+        actions = NotebookLMImportActions(self.node, projects_root=self.base / 'projects')
+        request = {'archive_path': str(self.archive_path), 'archive_capability': None}
+        preview = actions.preview(request)
+        plan = actions.plan(dict(request,
+            selection_digest=preview['notebooks'][0]['selection_digest'],
+            privacy='project', operation_id=str(uuid4()), target_capability=None))
+        with self.assertRaises(ValueError):
+            actions.confirm(dict(request, plan=dict(plan, target_root=str(self.target))))
+        restarted = NotebookLMImportActions(self.node, projects_root=self.base / 'projects')
+        with self.assertRaises(ValueError):
+            restarted.confirm(dict(request, plan=plan))
+        self.assertFalse((self.base / 'projects').exists())
+
+    def test_desktop_default_target_uses_project_creation_default_root(self):
+        actions = NotebookLMImportActions(self.node, desktop_capabilities=True)
+        archive = actions.register_archive(self.archive_path)
+        request = {'archive_path': None,
+                   'archive_capability': archive['archive_capability']}
+        preview = actions.preview(request)
+        operation = str(uuid4())
+        plan = actions.plan(dict(request,
+            selection_digest=preview['notebooks'][0]['selection_digest'],
+            privacy='project', operation_id=operation, target_capability=None))
+        self.assertEqual(str(actions.creator.default_projects_root() /
+                             ('projekt-' + operation)), plan['target_root'])
 
 
 @unittest.skipUnless(os.environ.get('NOTEBOOKLM_TAKEOUT_SAMPLE'),

@@ -5,13 +5,51 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-02C — Společný NotebookLM import — 2026-10-12
+
+Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z
+`develop` `1101d52` po doručení F-M4-OUTPUT-ROUTER-02 v PR #60, převedla
+existující NotebookLM preview → plán → potvrzení na jednu společnou stránku
+a autorizované API pro desktop i web. Dosažená úroveň je **implemented /
+lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR do
+`develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **UX-UNIFIED-02C-A — Společná stránka a API
+  (implemented).** HTML/CSS/JavaScript workflow je součástí sdíleného shellu;
+  oba runtime používají stejné `/v1/notebooklm/preview`, `/plan` a `/confirm`.
+  Původní `NotebookLMImportDialog` a paralelní toolbar vstup byly odstraněny.
+- [x] [completed] **UX-UNIFIED-02C-B — Capability a RBAC hranice
+  (implemented).** Desktopový Qt picker vydává náhodnou in-process capability
+  pro jeden přesný archiv a volitelně jeden cíl svázaný s operation ID;
+  renderer nedostává lokální cestu. Web přijímá jen server-local cestu,
+  vyžaduje node admina a odmítá capability i `local-only`. Potvrzení přijme
+  jen nezměněný plán vydaný stejnou backendovou instancí.
+- [x] [completed] **UX-UNIFIED-02C-C — Recovery a parita
+  (PoC validated).** Adaptér reuseuje `NotebookLMProjectImport` a jediný
+  `ProjectCreation` journal; nepřidává DB, writer ani persistentní capability.
+  Retry stejné potvrzené operace vrací stejný receipt. Existující crash testy
+  všech durable hranic zachovaly jediný projekt a commit.
+- [x] [completed] **UX-UNIFIED-02C-D — Regrese, dokumentace a předání
+  (PoC validated).** Cílené testy pokryly exact capability, cross-operation
+  odmítnutí, vydaný plán, desktop `local-only`, webové RBAC a idempotentní
+  potvrzení. Reálný offscreen Qt/WebEngine smoke prošel pro desktopový shell i
+  mobilní serverový importní workflow. Úplná sada mimo socketově omezený
+  sandbox prošla: **491 testů OK, 24 volitelných přeskočeno**. Praktické kroky
+  jsou v [checklistu](docs/notebooklm-import-acceptance.md).
+
+Reuse/adaptuje parser, plán, immutable seed, duplicate detekci, bezpečné
+náhledy a `ProjectCreation` recovery z IMP-02 a capability vzor společného
+vytváření projektu. Nativní OS picker zůstává v Qt; workflow ani autorita se
+neduplikují. Omezení osobního Takeoutu, chybějící notes/původní binární
+bajty a oddělený budoucí Drive import se nemění.
+
 ## F-M4-OUTPUT-ROUTER-02 — Execution kompozičního plánu — 2026-10-12
 
 Dávka na větvi `feature/f-m4-output-router-02-execution`, založené z `develop`
 `d96fe7a`, dodala první explicitně potvrzené durable provedení typovaného output
 plánu a skutečný same-process `renderer.web-static@1.0`. Dosažená úroveň je
 **implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
-splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+splněné. PR #60 byl sloučen do `develop` jako `1101d52`.
 
 - [x] [completed] **F-M4-OUTPUT-ROUTER-02-A — Execution a recovery kontrakt
   (designed).** ADR 0030 odděluje Git vstupy, node-local SQLite journal a

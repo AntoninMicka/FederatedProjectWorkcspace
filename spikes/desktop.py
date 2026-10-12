@@ -16,6 +16,7 @@ from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation, default_node_path
 from spikes.project_creation_actions import ProjectCreationActions
+from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
@@ -73,8 +74,6 @@ def main():
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
         from spikes.desktop_transfer import TransferDialog
-        from spikes.desktop_notebooklm_import import NotebookLMImportDialog
-        from spikes.notebooklm_project_import import NotebookLMProjectImport
         from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
@@ -103,7 +102,9 @@ def main():
                 QDesktopServices.openUrl(QUrl(external))
                 return False
             return main_frame and requested in {
-                server.origin + '/', server.origin + '/#choose-project-location'}
+                server.origin + '/', server.origin + '/#choose-project-location',
+                server.origin + '/#choose-notebooklm-archive',
+                server.origin + '/#choose-notebooklm-target'}
 
         def createWindow(self, kind):
             return None
@@ -145,6 +146,8 @@ def main():
         server.publication_cms = PublicationCms(server.chat_service.state_dir)
         server.project_creation_actions = ProjectCreationActions(
             node_path, desktop_locations=True)
+        server.notebooklm_import_actions = NotebookLMImportActions(
+            node_path, desktop_capabilities=True)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
@@ -183,20 +186,6 @@ def main():
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         project_toolbar = controller.toolbar
-        notebooklm_button = QPushButton('Importovat NotebookLM…')
-        notebooklm_service = NotebookLMProjectImport(node_path)
-        def import_notebooklm():
-            if controller.busy:
-                return
-            dialog = NotebookLMImportDialog(window, notebooklm_service,
-                                            controller.service.default_projects_root())
-            accepted = dialog.exec() == dialog.DialogCode.Accepted
-            archive, plan = dialog.archive.text().strip(), dialog.plan
-            dialog.deleteLater()
-            if accepted:
-                controller.start(lambda: notebooklm_service.confirm(archive, plan))
-        notebooklm_button.clicked.connect(import_notebooklm)
-        project_toolbar.addWidget(notebooklm_button)
         register_button = QPushButton('Načíst projekt z umístění…')
         def register_project():
             if controller.busy:
@@ -292,6 +281,27 @@ def main():
                             folder, request['operation_id'])
                         page.runJavaScript('setProjectCreationLocation(' + json.dumps(result) + ')')
                 page.runJavaScript('projectCreationPickerRequest()', 0, choose_project_location)
+            elif url.toString() == server.origin + '/#choose-notebooklm-archive':
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                archive, _ = QFileDialog.getOpenFileName(
+                    window, 'Google Takeout TGZ', '', 'TGZ (*.tgz *.tar.gz)')
+                if archive:
+                    result = server.notebooklm_import_actions.register_archive(archive)
+                    page.runJavaScript('setNotebookLMArchive(' + json.dumps(result) + ')')
+            elif url.toString() == server.origin + '/#choose-notebooklm-target':
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                def choose_notebooklm_target(request):
+                    if not isinstance(request, dict) or set(request) != {'operation_id'}:
+                        return
+                    folder = QFileDialog.getExistingDirectory(
+                        window, 'Existující prázdná cílová složka projektu',
+                        str(controller.service.default_projects_root()))
+                    if folder:
+                        result = server.notebooklm_import_actions.register_target(
+                            folder, request['operation_id'])
+                        page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
+                page.runJavaScript('notebookLMTargetPickerRequest()', 0,
+                                   choose_notebooklm_target)
         page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok

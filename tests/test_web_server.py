@@ -235,7 +235,7 @@ class WebTests(unittest.TestCase):
             body='{}', headers=headers)[0], 403)
         self.assertEqual(self.create_project('Denied', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/notebooklm/preview',
-            body='{"archive_path":"/tmp/denied.tgz"}', headers=headers)[0], 403)
+            body='{"archive_path":"/tmp/denied.tgz","archive_capability":null}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)
@@ -324,25 +324,43 @@ class WebTests(unittest.TestCase):
     def test_admin_previews_plans_and_confirms_server_local_notebooklm_export(self):
         archive = self.notebook_archive()
         code, data, _ = self.request(path='/v1/notebooklm/preview',
-                                     body=json.dumps({'archive_path': str(archive)}))
+                                     body=json.dumps({'archive_path': str(archive),
+                                                      'archive_capability': None}))
         self.assertEqual(200, code)
         preview = json.loads(data)
         operation = str(uuid4())
-        request = {'archive_path': str(archive),
+        request = {'archive_path': str(archive), 'archive_capability': None,
                    'selection_digest': preview['notebooks'][0]['selection_digest'],
-                   'privacy': 'confidential', 'operation_id': operation}
+                   'privacy': 'confidential', 'operation_id': operation,
+                   'target_capability': None}
         code, data, _ = self.request(path='/v1/notebooklm/plan', body=json.dumps(request))
         self.assertEqual(200, code)
         plan = json.loads(data)
         self.assertEqual('confidential', plan['privacy'])
         self.assertIn(str(self.root / 'projects'), plan['target_root'])
-        body = json.dumps({'archive_path': str(archive), 'plan': plan})
+        body = json.dumps({'archive_path': str(archive), 'archive_capability': None,
+                           'plan': plan})
         first = self.request(path='/v1/notebooklm/confirm', body=body)
         second = self.request(path='/v1/notebooklm/confirm', body=body)
         self.assertEqual(200, first[0]); self.assertEqual(first, second)
         receipt = json.loads(first[1])
         self.assertEqual(plan['project_id'], receipt['id'])
         self.assertEqual(6, len(Projects(self.root / 'node.json').open(receipt['id'])['artifacts']))
+
+    def test_web_notebooklm_api_rejects_desktop_capabilities_and_local_only(self):
+        archive = self.notebook_archive()
+        self.assertEqual(422, self.request(path='/v1/notebooklm/preview', body=json.dumps({
+            'archive_path': None, 'archive_capability': str(uuid4())}))[0])
+        code, data, _ = self.request(path='/v1/notebooklm/preview', body=json.dumps({
+            'archive_path': str(archive), 'archive_capability': None}))
+        self.assertEqual(200, code)
+        preview = json.loads(data)
+        request = {'archive_path': str(archive), 'archive_capability': None,
+            'selection_digest': preview['notebooks'][0]['selection_digest'],
+            'privacy': 'local-only', 'operation_id': str(uuid4()),
+            'target_capability': None}
+        self.assertEqual(422, self.request(path='/v1/notebooklm/plan',
+                                           body=json.dumps(request))[0])
 
     def test_web_import_preserves_bytes_and_retries_one_operation(self):
         from uuid import uuid4
