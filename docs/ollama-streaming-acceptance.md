@@ -17,6 +17,11 @@ dokud není ověřený HTTPS pin a síťová hranice.
 - [ ] Po čistém spuštění neotvírejte Nastavení. Otevřete rovnou projekt a
   proveďte první Brainstorming běh; ve Spotřebě nesmí být `stream nebyl v UI
   zapnutý`.
+- [ ] Otevřete **Nastavení → AI backend**. Volba **Streamovat odpovědi Ollamy
+  v režimu Brainstorming** musí být zaškrtnutá a text pod ní musí uvádět
+  **Streamování je zapnuto**.
+- [ ] Volbu vypněte, zavřete Nastavení a po restartu ověřte, že zůstala
+  vypnutá. Poté ji znovu zapněte a pro další body ji ponechte zapnutou.
 - [ ] Spusťte desktop, otevřete projekt a v režimu **Brainstorming** vyberte
   **Ollama** a dostupný model.
 - [ ] Odešlete prompt, který vygeneruje několik odstavců. UI má postupně ukázat
@@ -28,6 +33,10 @@ dokud není ověřený HTTPS pin a síťová hranice.
   zpráva až po dokončení. Stručný stav je oznamovaný přes `aria-live`; samotné
   přibývající části textu se čtečce neoznamují po každém tokenu. Rozepsaná
   odpověď má při růstu zůstat ve viditelné části okna.
+- [ ] Použijte prompt s odpovědí delší než jedna obrazovka. Pohled musí
+  průběžně sledovat poslední přibývající řádek. Během generování
+  odscrollujte nahoru: aplikace vás nesmí vracet dolů. Po ručním návratu
+  na konec se automatické sledování musí obnovit.
 - [ ] Přepněte na **Orchestrace** a odešlete další úlohu. Ihned se musí objevit
   časovaný stav **Ollama zpracovává orchestraci…**. Task router nadále vrátí
   validovaný výsledek najednou; tento stav proto neoznačuje tokenový stream.

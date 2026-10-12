@@ -107,6 +107,26 @@ perzistence, task role a změna externího OpenAI streamu.
   Cílená desktopová sada: **23 testů OK, 2 volitelně přeskočeny**;
   skutečný Qt/WebEngine smoke: **OK**; úplná sada: **503 testů OK,
   24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-L — Viditelná volba streamování
+  (implemented).** Nastavení lokálního AI backendu
+  zobrazuje přepínač i textový stav zapnuto/vypnuto/nepodporováno. Volba je
+  uzlová, nesynchronizuje se do projektu a výchozí stav je zapnuto. Zápis
+  používá dočasný soubor, `fsync` a atomické nahrazení; pád tedy ponechá
+  buď původní, nebo novou celou hodnotu bez potřeby journal recovery.
+  Cílená chatová a desktopová sada: **63 testů OK, 2 volitelně
+  přeskočeny**; skutečný Qt/WebEngine smoke: **OK**; úplná sada:
+  **504 testů OK, 24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-M — Sledování konce dlouhé
+  odpovědi (implemented).** Původní
+  `scrollIntoView(nearest)` považoval dlouhý blok za viditelný, i když jeho
+  přibývající konec už byl pod viewportem. Stream nyní posouvá skutečný
+  scrollovací kontejner na jeho spodní hranu. Pokud uživatel odscrolluje
+  nahoru, automatické sledování se pozastaví; po ručním návratu ke konci se
+  znovu zapne.
+  Cílená desktopová sada: **23 testů OK, 2 volitelně přeskočeny**;
+  skutečný Qt/WebEngine smoke s 300řádkovou odpovědí, ručním odscrollováním
+  a opětovným sledováním konce: **OK**; úplná sada: **504 testů OK,
+  24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

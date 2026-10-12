@@ -139,6 +139,23 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(probe.call_args.args[0].model, 'other:latest')
         self.assertEqual(self.service.status()['binding'], before)
 
+    def test_streaming_preference_defaults_on_and_survives_restart(self):
+        self.assertEqual(self.service.status()['preferences'],
+                         {'schema_version': 1, 'streaming': True})
+        result = self.service.configure_preferences({'streaming': False})
+        self.assertEqual(result['preferences'],
+                         {'schema_version': 1, 'streaming': False})
+        path = self.chat_state / 'ollama-preferences.json'
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        with self.assertRaises(ValueError):
+            self.service.configure_preferences({'streaming': 'false'})
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: FakeAdapter(runs, self.calls, self.error))
+        self.assertEqual(restarted.status()['preferences'],
+                         {'schema_version': 1, 'streaming': False})
+
     def test_invalid_binding_draft_survives_rejection_and_restart(self):
         before = self.service.status()['binding']
         candidate = dict(self.binding, revision='invalid-draft', boundary='private-network',
@@ -1019,6 +1036,11 @@ class ChatServiceTests(unittest.TestCase):
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body)['binding']['model'], 'gemma3')
+            response = driver.request(server, path='/v1/chat/preferences',
+                                      body=b'{"streaming":false}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertFalse(json.loads(body)['preferences']['streaming'])
             response = driver.request(server, path='/v1/tasks/list',
                                       body=json.dumps({'project_id': ENTITY}).encode())
             head, body = response.split(b'\r\n\r\n', 1)

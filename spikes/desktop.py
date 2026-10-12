@@ -432,12 +432,31 @@ def main():
               const progress=document.querySelector('#chat-stream-status');
               const progressRect=progress.getBoundingClientRect();
               const viewportRect=document.querySelector('#main-panel-content').getBoundingClientRect();
-              if(progress.hidden || getComputedStyle(progress).display==='none' ||
-                 !document.querySelector('#chat-panel').contains(progress) ||
-                 !document.querySelector('#chat-stream-progress-text').textContent.includes('Ollama testuje živý stav') ||
-                 progressRect.width<=0 || progressRect.height<=0 ||
-                 progressRect.bottom<=viewportRect.top || progressRect.top>=viewportRect.bottom)return null;
+              const stream=document.querySelector('#chat-stream');
+              if(!window.smokeLongStreamStarted){
+                if(progress.hidden || getComputedStyle(progress).display==='none' ||
+                   !document.querySelector('#chat-panel').contains(progress) ||
+                   !document.querySelector('#chat-stream-progress-text').textContent.includes('Ollama testuje živý stav') ||
+                   progressRect.width<=0 || progressRect.height<=0 ||
+                   progressRect.bottom<=viewportRect.top || progressRect.top>=viewportRect.bottom)return null;
+                stream.hidden=false;stream.textContent=Array.from({length:300},(_,i)=>`Dlouhý řádek ${i}\\n`).join('');
+                keepChatStreamVisible();window.smokeLongStreamStarted=true;return null;
+              }
+              const owner=chatScrollOwner();
+              if(!window.smokeManualScrollStarted){
+                if(owner.scrollHeight-owner.scrollTop-owner.clientHeight>2)return null;
+                owner.scrollTop=0;updateChatAutoFollow();stream.textContent+='Přírůstek mimo pohled\\n';
+                keepChatStreamVisible();window.smokeManualScrollStarted=true;return null;
+              }
+              if(!window.smokeResumeStarted){
+                if(owner.scrollTop!==0 || streamAutoFollow)return null;
+                owner.scrollTop=owner.scrollHeight;updateChatAutoFollow();
+                stream.textContent+='Přírůstek po návratu na konec\\n';keepChatStreamVisible();
+                window.smokeResumeStarted=true;return null;
+              }
+              if(!streamAutoFollow || owner.scrollHeight-owner.scrollTop-owner.clientHeight>2)return null;
               window.smokeChatProgress.stop();window.smokeChatProgress=null;
+              stream.hidden=true;stream.textContent='';
               return document.querySelector('#count')?.textContent;
             })()"""
             if project_check:

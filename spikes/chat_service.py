@@ -89,6 +89,14 @@ class ChatService:
         binding = BACKENDS.parse_binding(value)
         return OllamaAdapter.probe(binding)
 
+    def configure_preferences(self, value):
+        require(isinstance(value, dict) and set(value) == {'streaming'}
+                and type(value['streaming']) is bool,
+                'Invalid Ollama preferences request')
+        _, bindings, _ = self._stores()
+        bindings.save_preferences({'schema_version': 1, 'streaming': value['streaming']})
+        return self.status()
+
     def status(self):
         node_id, user_id = self._identity(); root = self._root()
         recoveries = ThreadLifecycle(root, self.projects).recover_pending(
@@ -115,6 +123,7 @@ class ChatService:
         return {'binding': binding, 'binding_draft': draft,
                 'binding_draft_state': draft_state, 'threads': rows,
                 'thread_deletions': recoveries,
+                'preferences': bindings.load_preferences(),
                 'capabilities': {'streaming': True}}
 
     def _with_external_history(self, thread, node_id, user_id):

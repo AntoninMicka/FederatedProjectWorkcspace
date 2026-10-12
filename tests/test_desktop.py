@@ -264,6 +264,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("if([409,422,502].includes(error.status))pendingChatRequest=null", JS)
         self.assertIn("'/v1/chat/test'", JS)
         self.assertIn('Ověřit bez uložení', HTML)
+        self.assertIn('id="ollama-streaming-enabled" type="checkbox"', HTML)
+        self.assertIn('id="ollama-streaming-state" role="status"', HTML)
+        self.assertIn("projectRequest('/v1/chat/preferences',{streaming:requested})", JS)
+        self.assertIn("'Streamování je zapnuto.'", JS)
+        self.assertIn("'Streamování je vypnuto; odpověď se zobrazí až celá.'", JS)
         self.assertIn('binding_draft_state', JS)
         self.assertIn('normalizeFingerprint', JS)
         ollama_form = HTML.split('id="chat-backend-form"', 1)[1].split('</form>', 1)[0]
@@ -284,7 +289,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
-        self.assertTrue({'/v1/chat/archive', '/v1/chat/delete/preview',
+        self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
                          '/v1/chat/delete/confirm', '/v1/sources/import'} <= DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
@@ -407,15 +412,24 @@ class DesktopTests(unittest.TestCase):
                            chat_panel.index('id="chat-messages"'))
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
+        self.assertIn("mainPanelContent.addEventListener('scroll',updateChatAutoFollow", JS)
+        self.assertIn("window.addEventListener('scroll',updateChatAutoFollow", JS)
+        self.assertIn('owner.scrollTop=owner.scrollHeight', JS)
+        self.assertIn('if(!streamAutoFollow || streamScrollPending)return', JS)
+        self.assertNotIn("scrollIntoView({block:'nearest'})", JS)
 
     def test_project_chat_load_enables_streaming_without_opening_settings(self):
         load_chat = JS.split('async function loadChat(){', 1)[1].split('\n}', 1)[0]
         self.assertIn("projectRequest('/v1/chat/status',{})", load_chat)
         self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
-        self.assertIn('ollamaStreaming=result.capabilities?.streaming===true', load_chat)
+        self.assertIn('applyOllamaStreamingStatus(result)', load_chat)
         self.assertIn('externalStreaming=external.capabilities?.streaming===true', load_chat)
-        self.assertLess(load_chat.index('ollamaStreaming='),
+        self.assertLess(load_chat.index('applyOllamaStreamingStatus(result)'),
                         load_chat.index('if(selectionRevision!==chatSelectionRevision)return'))
+        status = JS.split('function applyOllamaStreamingStatus(result){', 1)[1].split('\n}', 1)[0]
+        self.assertIn('ollamaStreamingSupported=result.capabilities?.streaming===true', status)
+        self.assertIn('const enabled=result.preferences?.streaming!==false', status)
+        self.assertIn('ollamaStreaming=ollamaStreamingSupported&&enabled', status)
 
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)

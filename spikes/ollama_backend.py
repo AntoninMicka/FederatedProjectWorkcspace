@@ -140,6 +140,7 @@ class OllamaBindings:
                 'Binding state directory requires owned mode 0700')
         self.path = self.root / 'ollama-binding.json'
         self.draft_path = self.root / 'ollama-binding-draft.json'
+        self.preferences_path = self.root / 'ollama-preferences.json'
 
     def _save_json(self, path, value, temporary_prefix):
         raw = (json.dumps(value, ensure_ascii=False, sort_keys=True,
@@ -173,6 +174,10 @@ class OllamaBindings:
         self._validate_draft(value)
         self._save_json(self.draft_path, value, '.ollama-binding-draft-')
 
+    def save_preferences(self, value):
+        self._validate_preferences(value)
+        self._save_json(self.preferences_path, value, '.ollama-preferences-')
+
     def _load_json(self, path):
         flags = os.O_RDONLY | os.O_NOFOLLOW
         fd = os.open(path, flags)
@@ -199,6 +204,22 @@ class OllamaBindings:
         # Reuse the bounded, secret-free draft contract without requiring a valid binding.
         self._validate_draft(value)
         return value
+
+    def load_preferences(self):
+        try:
+            value = self._load_json(self.preferences_path)
+        except FileNotFoundError:
+            return {'schema_version': 1, 'streaming': True}
+        self._validate_preferences(value)
+        return value
+
+    @staticmethod
+    def _validate_preferences(value):
+        require(isinstance(value, dict)
+                and set(value) == {'schema_version', 'streaming'},
+                'Unknown or missing Ollama preference field')
+        require(value['schema_version'] == 1 and type(value['streaming']) is bool,
+                'Invalid Ollama preferences')
 
     @staticmethod
     def _validate_draft(value):
