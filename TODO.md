@@ -35,13 +35,16 @@ perzistence, task role a změna externího OpenAI streamu.
   UI ukazuje přípravu, připojování, čekání, generování a dokončení; stručný stav
   je `aria-live="polite"`, zatímco tokenová projekce je `aria-live="off"`.
 - [ ] [in progress] **F-M3-OLLAMA-STREAM-01-D — Regrese, dokumentace a předání
-  (PoC validated automaticky, čeká na fyzickou UI akceptaci).** Cílená regrese
-  backendu, služby, endpointu, UI a webových oprávnění prošla: **108 testů OK,
-  5 volitelných přeskočeno**. `py_compile`, `node --check`, živý Ollama smoke a
-  úplná sada prošly: **500 testů OK, 24 volitelných přeskočeno**; reálný
-  offscreen Qt/WebEngine smoke desktopového shellu také prošel. Zbývá v běžném
-  desktopu potvrdit průběžné zobrazení a finální zprávu podle
-  [checklistu](docs/ollama-streaming-acceptance.md).
+  (PoC validated automaticky, fyzická UI akceptace vrácena k opravě).** První
+  fyzická kontrola viděla až finální výsledek. Časovaná diagnostika 2026-10-12
+  potvrdila, že uložený model `gemma4` skutečně posílá NDJSON průběžně, ale
+  nejprve několik sekund pouze v poli `thinking`; následný text přišel v desítkách
+  samostatných delt. Oprava rozlišuje bezpečný stav přemýšlení bez zveřejnění
+  reasoning textu, udržuje rozepsanou odpověď ve viditelné části a nový HTTP
+  test prokazuje flush delty před terminálním výsledkem. Cílená regrese po
+  opravě prošla: **109 testů OK, 5 volitelných přeskočeno**; úplná sada:
+  **501 testů OK, 24 volitelných přeskočeno**. Zbývá opakovaná fyzická kontrola
+  podle [checklistu](docs/ollama-streaming-acceptance.md).
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

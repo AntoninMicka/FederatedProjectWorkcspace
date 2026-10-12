@@ -1406,6 +1406,11 @@ const chatStreamStatus=document.querySelector('#chat-stream-status');
 const chatRunUsage=document.querySelector('#chat-run-usage');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,ollamaStreaming=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+let streamScrollPending=false;
+function keepChatStreamVisible(){
+ if(streamScrollPending)return;streamScrollPending=true;
+ requestAnimationFrame(()=>{streamScrollPending=false;chatStream.scrollIntoView({block:'nearest'});});
+}
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
 async function streamRequest(path,request,onDelta,onStatus=()=>{}){
@@ -2055,13 +2060,15 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   chatOperationStatus.textContent='Odesílám…';chatStream.textContent='';
   chatStream.hidden=!ollamaStreaming;chatStreamStatus.hidden=!ollamaStreaming;
   const streamStates={preparing:'Připravuji kontext…',connecting:'Připojuji se k Ollamě…',
-   'waiting-first-token':'Čekám na první část odpovědi…',generating:'Ollama generuje odpověď…',
+   'waiting-first-token':'Čekám na první část odpovědi…',thinking:'Ollama přemýšlí…',
+   generating:'Ollama generuje odpověď…',
    completed:'Generování je dokončeno.'};
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
    const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
-    delta=>{chatStream.textContent+=delta;},status=>{
-     chatStreamStatus.textContent=streamStates[status] || 'Probíhá lokální AI běh…';}) :
+    delta=>{chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
+     chatStreamStatus.textContent=streamStates[status] || 'Probíhá lokální AI běh…';
+     keepChatStreamVisible();}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();

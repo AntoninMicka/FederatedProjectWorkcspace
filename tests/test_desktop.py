@@ -8,6 +8,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import threading
 import unittest
 
 from spikes.desktop import (native_action_name, native_action_request, notebooklm_target_error,
@@ -171,6 +172,46 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(events[0]['status'], 'preparing')
         self.assertEqual(server.chat_service.chat_request, request)
 
+    def test_chat_stream_flushes_delta_before_terminal_result(self):
+        release = threading.Event(); terminal = threading.Event()
+        class Service:
+            def send_stream(self, _request, on_delta, on_status):
+                on_status('preparing'); on_delta('průběžně')
+                if not release.wait(2):
+                    raise RuntimeError('test client did not observe the delta')
+                terminal.set()
+                return {'thread': {'messages': []}, 'state': 'succeeded'}
+
+        request = {'project_id': 'project', 'expected_head': 'head',
+            'thread_id': 'thread', 'turn_id': 'turn', 'message_id': 'message',
+            'run_id': 'run', 'manifest_id': 'manifest',
+            'assistant_message_id': 'assistant', 'selected_message_ids': [],
+            'content': 'text', 'privacy': 'project', 'created_at': 'now'}
+        body = json.dumps(request).encode()
+        try:
+            with running_api('http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                client = socket.create_connection(server.server_address, timeout=2)
+                self.addCleanup(client.close)
+                client.sendall((
+                    f'POST /v1/chat/send-stream HTTP/1.0\r\nHost: {server.authority}\r\n'
+                    f'Authorization: Bearer {server.token}\r\nContent-Type: application/json\r\n'
+                    f'Content-Length: {len(body)}\r\n\r\n').encode() + body)
+                response = client.makefile('rb')
+                self.assertIn(b' 200 ', response.readline())
+                while response.readline() != b'\r\n':
+                    pass
+                self.assertEqual(json.loads(response.readline()),
+                                 {'type': 'status', 'status': 'preparing'})
+                self.assertEqual(json.loads(response.readline()),
+                                 {'type': 'delta', 'delta': 'průběžně'})
+                self.assertFalse(terminal.is_set())
+                release.set()
+                self.assertEqual(json.loads(response.readline())['type'], 'result')
+                self.assertTrue(terminal.is_set())
+        finally:
+            release.set()
+
     def test_prompt_switches_to_chat_only_when_submitted(self):
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
@@ -197,6 +238,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("streamRequest('/v1/chat/send-stream'", JS)
         self.assertIn("event.type==='delta'", JS)
         self.assertIn("event.type==='status'", JS)
+        self.assertIn("thinking:'Ollama přemýšlí…'", JS)
+        self.assertIn('keepChatStreamVisible()', JS)
         self.assertIn('id="chat-stream-status" role="status" aria-live="polite"', HTML)
         self.assertIn('id="chat-stream" class="chat-message assistant" aria-live="off"', HTML)
         self.assertIn("projectRequest('/v1/external/request',{run_id:turn.run_id})", JS)

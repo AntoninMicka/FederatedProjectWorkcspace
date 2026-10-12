@@ -184,8 +184,11 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertEqual(calls, ['dispatch'])
 
     def test_http_stream_accepts_fragmented_ndjson_and_normalizes_final_frame(self):
-        frames = (b'{"model":"gemma3","created_at":"now","response":"A","done":false}\n'
-                  b'{"model":"gemma3","created_at":"later","response":"","done":true,'
+        frames = (b'{"model":"gemma3","created_at":"thinking","response":"",'
+                  b'"thinking":"reasoning","done":false}\n'
+                  b'{"model":"gemma3","created_at":"now","response":"A","done":false}\n'
+                  b'{"model":"gemma3","created_at":"later","response":"","thinking":"",'
+                  b'"done":true,'
                   b'"prompt_eval_count":4,"eval_count":1}\n')
         class Socket:
             def settimeout(self, value): self.timeout = value
@@ -209,8 +212,9 @@ class OllamaAdapterTests(unittest.TestCase):
             result = OllamaAdapter._http_stream_transport(
                 self.binding, b'{"stream":true}', deltas.append, statuses.append)
         self.assertEqual((deltas, result['response']), (['A'], 'A'))
+        self.assertNotIn('thinking', result)
         self.assertEqual((result['prompt_eval_count'], result['eval_count']), (4, 1))
-        self.assertEqual(statuses, ['waiting-first-token', 'generating'])
+        self.assertEqual(statuses, ['waiting-first-token', 'thinking', 'generating'])
 
     def test_stream_first_token_and_idle_timeouts_are_durable_unknown(self):
         class Socket:

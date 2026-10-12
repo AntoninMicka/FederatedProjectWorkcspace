@@ -11,13 +11,19 @@ dokud není ověřený HTTPS pin a síťová hranice.
 
 ## Běžný průchod
 
+- [ ] Ukončete případný dříve spuštěný desktop a spusťte aktuální checkout přes
+  `./run.sh desktop`. Již běžící proces si novou frontendovou implementaci
+  nenačte.
 - [ ] Spusťte desktop, otevřete projekt a v režimu **Brainstorming** vyberte
   **Ollama** a dostupný model.
 - [ ] Odešlete prompt, který vygeneruje několik odstavců. UI má postupně ukázat
-  přípravu kontextu, připojování, čekání na první část a generování.
+  přípravu kontextu, připojování, čekání na první část, případné
+  **Ollama přemýšlí…** a generování. Interní reasoning text se nezobrazuje ani
+  neukládá.
 - [ ] Text se má objevovat průběžně, ale v seznamu zpráv vznikne assistant
   zpráva až po dokončení. Stručný stav je oznamovaný přes `aria-live`; samotné
-  přibývající části textu se čtečce neoznamují po každém tokenu.
+  přibývající části textu se čtečce neoznamují po každém tokenu. Rozepsaná
+  odpověď má při růstu zůstat ve viditelné části okna.
 - [ ] Po dokončení porovnejte průběžný text s uloženou assistant zprávou a
   zkontrolujte providerem vrácené počty tokenů a časy, pokud je model poskytl.
 - [ ] Restartujte aplikaci. Dokončená zpráva musí zůstat ve vlákně a stejný

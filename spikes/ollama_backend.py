@@ -565,7 +565,8 @@ class OllamaAdapter:
             if connection.sock is not None:
                 connection.sock.settimeout(OLLAMA_FIRST_TOKEN_TIMEOUT)
             chunks = []
-            total = events = output_bytes = 0
+            total = events = response_bytes = 0
+            thinking_seen = False
             while True:
                 try:
                     raw = response.readline(MAX_STREAM_LINE + 1)
@@ -594,6 +595,7 @@ class OllamaAdapter:
                 if not (isinstance(frame, dict) and frame.get('model') == binding.model
                         and isinstance(frame.get('created_at'), str)
                         and isinstance(frame.get('response'), str)
+                        and isinstance(frame.get('thinking', ''), str)
                         and type(frame.get('done')) is bool and 'error' not in frame):
                     raise OllamaResponseError('Invalid Ollama stream envelope',
                                               code='invalid-stream-envelope')
@@ -611,8 +613,18 @@ class OllamaAdapter:
                     if ('done_reason' in frame and not isinstance(frame['done_reason'], str)):
                         raise OllamaResponseError('Invalid Ollama final stream reason',
                                                   code='invalid-stream-final')
-                    result = dict(frame); result['response'] = ''.join(chunks)
+                    result = dict(frame); result.pop('thinking', None)
+                    result['response'] = ''.join(chunks)
                     return result
+                thinking = frame.get('thinking', '')
+                if thinking:
+                    if connection.sock is not None:
+                        connection.sock.settimeout(OLLAMA_IDLE_TIMEOUT)
+                    if not chunks and not thinking_seen:
+                        on_status('thinking')
+                    thinking_seen = True
+                    # Reasoning remains private provider output. Its bytes are bounded by
+                    # the complete NDJSON limit above and are never exposed or persisted.
                 delta = frame['response']
                 if delta:
                     if connection.sock is not None:
@@ -620,8 +632,8 @@ class OllamaAdapter:
                     if not chunks:
                         on_status('generating')
                     chunks.append(delta)
-                    output_bytes += len(delta.encode())
-                    if output_bytes > MAX_STREAM_RESPONSE:
+                    response_bytes += len(delta.encode())
+                    if response_bytes > MAX_STREAM_RESPONSE:
                         raise OllamaResponseError('Ollama streamed text exceeds 16 MiB',
                                                   code='response-too-large')
                     on_delta(delta)
