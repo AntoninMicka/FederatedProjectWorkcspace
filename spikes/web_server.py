@@ -38,7 +38,7 @@ WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=fal
 document.querySelector('#source-import-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
 let accessKey='';
-const notebookImport=document.querySelector('#notebooklm-import');
+const notebookImportButton=document.querySelector('#open-notebooklm-import');
 const originalFetch=window.fetch.bind(window);
 window.fetch=(path,options={})=>{
  const url=new URL(path,location.href);
@@ -55,7 +55,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;notebookImport.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  projectCreateForm.hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.querySelector('#backend-metrics').hidden=!admin;

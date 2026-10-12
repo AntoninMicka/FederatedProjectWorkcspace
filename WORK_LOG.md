@@ -11,8 +11,8 @@ Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z
 `develop` `1101d52` po doručení F-M4-OUTPUT-ROUTER-02 v PR #60, převedla
 existující NotebookLM preview → plán → potvrzení na jednu společnou stránku
 a autorizované API pro desktop i web. Dosažená úroveň je **implemented /
-lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR do
-`develop` dosud nebyl vytvořen ani sloučen.
+lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR #61 byl
+sloučen do `develop` jako merge commit `436f4e6`.
 
 - [x] [completed] **UX-UNIFIED-02C-A — Společná stránka a API
   (implemented).** HTML/CSS/JavaScript workflow je součástí sdíleného shellu;
@@ -21,7 +21,8 @@ lokálně PoC validated** a akceptační podmínky dávky jsou splněné. PR do
 - [x] [completed] **UX-UNIFIED-02C-B — Capability a RBAC hranice
   (implemented).** Desktopový Qt picker vydává náhodnou in-process capability
   pro jeden přesný archiv a volitelně jeden cíl svázaný s operation ID;
-  renderer nedostává lokální cestu. Web přijímá jen server-local cestu,
+  renderer dostává cílovou cestu jen jako štítek a API přijímá capability,
+  nikoli libovolnou cestu. Web přijímá jen server-local cestu,
   vyžaduje node admina a odmítá capability i `local-only`. Potvrzení přijme
   jen nezměněný plán vydaný stejnou backendovou instancí.
 - [x] [completed] **UX-UNIFIED-02C-C — Recovery a parita

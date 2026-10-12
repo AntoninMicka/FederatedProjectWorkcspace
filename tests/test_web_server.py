@@ -137,6 +137,10 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="workflow-tab"', WEB_HTML)
         self.assertIn('Projekt z archivu (NotebookLM notebook)', WEB_HTML)
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
+        self.assertIn('id="open-notebooklm-import"', WEB_HTML)
+        self.assertIn('<div id="notebooklm-import-view" hidden>', WEB_HTML)
+        self.assertIn('id="notebooklm-destination"', WEB_HTML)
+        self.assertIn('notebookImportButton.hidden=!admin', WEB_JS)
         self.assertEqual(WEB_HTML.count('id="source-import-form"'), 1)
         self.assertIn('<div id="source-import-view" hidden>', WEB_HTML)
         self.assertIn('id="open-source-import"', WEB_HTML)
@@ -187,6 +191,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
+        self.assertIn("#back-projects,#open-notebooklm-import,#open-settings", WEB_JS)
         self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
@@ -195,7 +200,6 @@ class WebTests(unittest.TestCase):
         self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)
         self.assertIn("item.setAttribute('role','menuitem')", WEB_JS)
         self.assertIn('id="back-projects" class="sidebar-back"', WEB_HTML)
-        self.assertIn("#back-projects,#open-settings", WEB_JS)
         self.assertIn('flex-direction:column;overflow:hidden', WEB_CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', WEB_CSS)
         self.assertIn('@media(max-width:640px)', WEB_CSS)
@@ -563,7 +567,7 @@ def result(value):
  if phase==0:
   phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
  elif phase==1:
-  phase=2;run("document.querySelector('#notebooklm-import').open=true;document.querySelector('#notebooklm-archive').value="+json.dumps(archive)+";document.querySelector('#notebooklm-load').click();")
+  phase=2;run("document.querySelector('#open-notebooklm-import').click();document.querySelector('#notebooklm-archive').value="+json.dumps(archive)+";document.querySelector('#notebooklm-load').click();")
  elif phase==2:
   phase=3;run("document.querySelector('#notebooklm-plan').click();")
  elif phase==3:
@@ -588,8 +592,8 @@ def poll():
  checks={
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"(()=>{if(!document.body.classList.contains('authenticated')||document.querySelectorAll('.project-card').length!==1)return'waiting';if(innerWidth!==390)return'FAIL: wrong viewport '+innerWidth;if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: home overflow';const b=document.querySelector('#mobile-sidebar-toggle');if(getComputedStyle(b).display==='none'||parseFloat(getComputedStyle(b).minHeight)<44)return'FAIL: touch target';return'ready'})()",
- 2:"document.querySelector('#notebooklm-selection')&&!document.querySelector('#notebooklm-selection').disabled?'ready':'waiting'",
- 3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row');if(row.hidden)return'waiting';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
+ 2:"!document.querySelector('#notebooklm-import-view').hidden&&document.querySelector('#notebooklm-selection')&&!document.querySelector('#notebooklm-selection').disabled?'ready':'waiting'",
+ 3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row'),destination=document.querySelector('#notebooklm-destination');if(row.hidden)return'waiting';if(!destination.textContent.startsWith('/'))return'FAIL: target path missing';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
  4:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-artifact-list button')?'ready':'waiting'",
  5:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='true')return'waiting';if(s.inert)return'FAIL: open drawer inert';return'ready'})()",
  6:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='false')return'waiting';if(!s.inert)return'FAIL: closed drawer focusable';if(document.activeElement!==b)return'FAIL: drawer focus not restored';return'ready'})()",

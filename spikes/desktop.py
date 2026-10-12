@@ -5,16 +5,18 @@
 import argparse
 import json
 import os
+from pathlib import Path
 import signal
+import stat
 import sys
-from urllib.parse import urlsplit
-from uuid import uuid4
+from urllib.parse import parse_qs, urlsplit
+from uuid import UUID, uuid4
 
 from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
 from spikes.administration import Administration
 from spikes.local_api import running_api
 from spikes.projects import Projects
-from spikes.project_creation import ProjectCreation, default_node_path
+from spikes.project_creation import CreationConflict, ProjectCreation, default_node_path
 from spikes.project_creation_actions import ProjectCreationActions
 from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.chat_service import ChatService
@@ -27,11 +29,73 @@ from spikes.publication_cms import PublicationCms
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
+NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
+                            'choose-notebooklm-target'})
 
 
 def provider_key_url(url):
     """Return an exact approved provider onboarding URL, never an arbitrary URL."""
     return url if url in PROVIDER_KEY_URLS else None
+
+
+def native_action_request(url, origin):
+    """Return an allowlisted one-shot action and its strictly bounded payload."""
+    parsed, expected = urlsplit(url), urlsplit(origin)
+    if (parsed.scheme, parsed.netloc, parsed.path, parsed.query) != (
+            expected.scheme, expected.netloc, '/', '') or parsed.username or parsed.password:
+        return None
+    action, separator, query = parsed.fragment.partition('?')
+    if not separator or action not in NATIVE_ACTIONS:
+        return None
+    try:
+        fields = parse_qs(query, strict_parsing=True)
+        expected_fields = {'nonce', 'operation_id'} if action == 'choose-notebooklm-target' else {'nonce'}
+        if set(fields) != expected_fields or any(len(values) != 1 for values in fields.values()):
+            return None
+        nonce = fields['nonce'][0]
+        if str(UUID(nonce)) != nonce:
+            return None
+        request = {'action': action}
+        if action == 'choose-notebooklm-target':
+            operation_id = fields['operation_id'][0]
+            if str(UUID(operation_id)) != operation_id:
+                return None
+            request['operation_id'] = operation_id
+        return request
+    except (ValueError, AttributeError):
+        return None
+
+
+def native_action_name(url, origin):
+    """Return only the action name for navigation policy checks."""
+    request = native_action_request(url, origin)
+    return request['action'] if request else None
+
+
+def repairable_target_mode(path):
+    """Return an unsafe mode only for an owned, empty, non-symlink directory."""
+    path = Path(path)
+    try:
+        info = path.lstat()
+        if (path.absolute() != path.resolve() or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.getuid() or any(path.iterdir())):
+            return None
+        mode = stat.S_IMODE(info.st_mode)
+        return mode if mode & 0o022 else None
+    except OSError:
+        return None
+
+
+def notebooklm_target_error(exc):
+    """Translate only known target validation failures without leaking internals."""
+    return {
+        'Directory must not be writable by other users':
+            'Cílová složka má příliš otevřená práva. Nastavte jí práva 0700 a vyberte ji znovu.',
+        'Existující cílová složka musí být prázdná.':
+            'Cílová složka musí být prázdná.',
+        'Expected owned directory':
+            'Cílová složka musí patřit uživateli, pod kterým běží aplikace.',
+    }.get(str(exc), 'Vybranou složku nelze použít. Zvolte existující prázdnou složku bez symlinků.')
 
 
 def request_policy(url, initiator, method, origin):
@@ -101,10 +165,8 @@ def main():
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
-            return main_frame and requested in {
-                server.origin + '/', server.origin + '/#choose-project-location',
-                server.origin + '/#choose-notebooklm-archive',
-                server.origin + '/#choose-notebooklm-target'}
+            return main_frame and (requested == server.origin + '/'
+                                   or native_action_name(requested, server.origin) is not None)
 
         def createWindow(self, kind):
             return None
@@ -268,8 +330,12 @@ def main():
         editor_toolbar.addWidget(transfer_button)
         def native_action(url):
             # A same-document fragment never loads a route or exposes an HTTP writer.
-            if url.toString() == server.origin + '/#choose-project-location':
-                page.runJavaScript("history.replaceState(null, '', '/');")
+            request = native_action_request(url.toString(), server.origin)
+            if request is None:
+                return
+            action = request['action']
+            page.runJavaScript("history.replaceState(null, '', '/');")
+            if action == 'choose-project-location':
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
                         return
@@ -281,27 +347,39 @@ def main():
                             folder, request['operation_id'])
                         page.runJavaScript('setProjectCreationLocation(' + json.dumps(result) + ')')
                 page.runJavaScript('projectCreationPickerRequest()', 0, choose_project_location)
-            elif url.toString() == server.origin + '/#choose-notebooklm-archive':
-                page.runJavaScript("history.replaceState(null, '', '/');")
+            elif action == 'choose-notebooklm-archive':
                 archive, _ = QFileDialog.getOpenFileName(
                     window, 'Google Takeout TGZ', '', 'TGZ (*.tgz *.tar.gz)')
                 if archive:
-                    result = server.notebooklm_import_actions.register_archive(archive)
-                    page.runJavaScript('setNotebookLMArchive(' + json.dumps(result) + ')')
-            elif url.toString() == server.origin + '/#choose-notebooklm-target':
-                page.runJavaScript("history.replaceState(null, '', '/');")
-                def choose_notebooklm_target(request):
-                    if not isinstance(request, dict) or set(request) != {'operation_id'}:
-                        return
-                    folder = QFileDialog.getExistingDirectory(
-                        window, 'Existující prázdná cílová složka projektu',
-                        str(controller.service.default_projects_root()))
-                    if folder:
+                    try:
+                        result = server.notebooklm_import_actions.register_archive(archive)
+                        page.runJavaScript('setNotebookLMArchive(' + json.dumps(result) + ')')
+                    except (ValueError, OSError):
+                        page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
+                            'Vybraný archiv nelze použít. Zvolte existující běžný TGZ soubor.') + ')')
+            elif action == 'choose-notebooklm-target':
+                folder = QFileDialog.getExistingDirectory(
+                    window, 'Existující prázdná cílová složka projektu',
+                    str(controller.service.default_projects_root()))
+                if folder:
+                    try:
+                        unsafe_mode = repairable_target_mode(folder)
+                        if unsafe_mode is not None:
+                            answer = QMessageBox.question(
+                                window, 'Soukromí cílové složky',
+                                'Vybraná prázdná složka je zapisovatelná dalšími uživateli '
+                                f'(práva {unsafe_mode:04o}).\n\nNastavit bezpečná práva 0700 a použít ji?',
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No)
+                            if answer != QMessageBox.StandardButton.Yes:
+                                raise CreationConflict('Directory must not be writable by other users')
+                            os.chmod(folder, 0o700)
                         result = server.notebooklm_import_actions.register_target(
                             folder, request['operation_id'])
                         page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
-                page.runJavaScript('notebookLMTargetPickerRequest()', 0,
-                                   choose_notebooklm_target)
+                    except (ValueError, OSError) as exc:
+                        page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
+                            notebooklm_target_error(exc)) + ')')
         page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok

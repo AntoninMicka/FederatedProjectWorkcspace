@@ -10,7 +10,8 @@ import subprocess
 import sys
 import unittest
 
-from spikes.desktop import provider_key_url, request_policy
+from spikes.desktop import (native_action_name, native_action_request, notebooklm_target_error,
+                            provider_key_url, repairable_target_mode, request_policy)
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
@@ -74,14 +75,57 @@ class DesktopTests(unittest.TestCase):
         desktop = Path('spikes/desktop.py').read_text()
         self.assertNotIn('NotebookLMImportDialog', desktop)
         self.assertFalse(Path('spikes/desktop_notebooklm_import.py').exists())
-        self.assertIn("/#choose-notebooklm-archive", desktop)
+        self.assertIn("'choose-notebooklm-archive'", desktop)
         self.assertIn('register_archive(archive)', desktop)
         self.assertIn('register_target(', desktop)
+        self.assertIn('id="open-notebooklm-import"', HTML)
+        self.assertIn('<div id="notebooklm-import-view" hidden>', HTML)
         self.assertIn('id="notebooklm-import"', HTML)
+        self.assertIn("requestNativeAction('choose-notebooklm-target',request)", JS)
+        self.assertIn('setNotebookLMNativeError', JS)
+        self.assertNotIn("page.runJavaScript('notebookLMTargetPickerRequest()'", desktop)
+        self.assertIn('id="notebooklm-destination"', HTML)
+        self.assertIn("notebookPlan.target_root", JS)
         self.assertIn("projectRequest('/v1/notebooklm/preview'", JS)
         self.assertIn("projectRequest('/v1/notebooklm/plan'", JS)
         self.assertIn("projectRequest('/v1/notebooklm/confirm'", JS)
         self.assertIn('archive_capability:notebookArchiveCapability', JS)
+
+    def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
+        origin = 'http://127.0.0.1:4711'
+        nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
+        operation = 'fbd03ac3-0bcf-443b-b54e-8f66b969d229'
+        target_url = (f'{origin}/#choose-notebooklm-target?'
+                      f'operation_id={operation}&nonce={nonce}')
+        self.assertEqual(native_action_name(target_url, origin),
+            'choose-notebooklm-target')
+        self.assertEqual(native_action_request(target_url, origin),
+                         {'action': 'choose-notebooklm-target', 'operation_id': operation})
+        for action in ('choose-notebooklm-archive', 'choose-project-location'):
+            with self.subTest(action=action):
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?nonce={nonce}', origin), {'action': action})
+        for url in (f'{origin}/#choose-notebooklm-target?nonce={nonce}',
+                    f'{origin}/#choose-notebooklm-target?operation_id=invalid&nonce={nonce}',
+                    f'{origin}/#choose-notebooklm-target?operation_id={operation}&nonce=invalid',
+                    f'{origin}/other#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'{origin}/?x=1#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'http://localhost:4711/#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'{origin}/#unknown?nonce={nonce}'):
+            with self.subTest(url=url):
+                self.assertIsNone(native_action_name(url, origin))
+
+    def test_notebooklm_target_permission_repair_is_narrow_and_errors_are_actionable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / 'target'; target.mkdir(mode=0o700); target.chmod(0o775)
+            self.assertEqual(repairable_target_mode(target), 0o775)
+            (target / 'keep').write_text('x')
+            self.assertIsNone(repairable_target_mode(target))
+        self.assertIn('0700', notebooklm_target_error(
+            ValueError('Directory must not be writable by other users')))
+        self.assertIn('prázdná', notebooklm_target_error(
+            ValueError('Existující cílová složka musí být prázdná.')))
 
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
@@ -293,7 +337,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("'backend-metrics','backend-metrics-indicator'", DESKTOP_BOOTSTRAP)
         self.assertIn("getElementById('project-location-controls').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn('id="project-create-preview"', HTML)
-        self.assertIn("location.hash='choose-project-location'", JS)
+        self.assertIn("requestNativeAction('choose-project-location')", JS)
         self.assertNotIn('CreationDialog', Path('spikes/desktop_creation.py').read_text())
         self.assertIn('#backend-metrics-indicator{position:fixed', ASSETS['/app.css'][1])
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)

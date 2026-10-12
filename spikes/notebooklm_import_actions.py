@@ -5,7 +5,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from spikes.notebooklm_project_import import NotebookLMProjectImport
-from spikes.project_creation import ProjectCreation, check
+from spikes.project_creation import CreationConflict, ProjectCreation, check
+from spikes.projects import directory
 
 
 class NotebookLMImportActions:
@@ -35,6 +36,11 @@ class NotebookLMImportActions:
         root = Path(root)
         check(root.is_absolute() and root == root.resolve(),
               'Vybrané umístění musí být absolutní a nesmí vést přes symlink.')
+        try:
+            directory(root)
+        except ValueError as exc:
+            raise CreationConflict(str(exc)) from exc
+        check(not list(root.iterdir()), 'Existující cílová složka musí být prázdná.')
         token = str(uuid4())
         self._targets[token] = (operation_id, root)
         return {'target_capability': token, 'target_label': str(root),
