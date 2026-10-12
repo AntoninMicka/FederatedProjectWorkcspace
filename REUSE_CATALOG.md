@@ -244,6 +244,9 @@ Workspace/Journal/Index, standardní immutable source/snapshot artefakty a
 existující desktop/web autorizační hranice. `ProjectCreation` přijímá předem
 validovaný počáteční snapshot, uloží jej do vlastního durable stagingu a vytvoří
 jediný počáteční commit; nevzniká druhý Git writer ani importní databáze. Nový
+společný UI adaptér reuseuje stejnou službu a `ProjectCreation` journal; pouze
+rozlišuje server-local cestu od přesné desktopové in-process capability.
+Nevzniká druhý importér ani persistentní autorita. Nový
 stdlib parser je omezený na doložený osobní NotebookLM Google Takeout formát a
 HTML ukládá jako data; společný artifact preview z něj stdlib parserem odvozuje
 jen bounded Markdown a klient jej vykresluje vlastními DOM uzly přes

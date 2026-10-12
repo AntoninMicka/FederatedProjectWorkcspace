@@ -5,9 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0029 — Import osobního NotebookLM projektu z Google Takeout
 
-Datum: 2026-10-08. Stav: přijato; parser, seeded vytvoření a desktop/web tok jsou
-implementované. Izolovaný import největšího skutečného notebooku prošel;
-uživatelské vytvoření trvalého projektu přes UI zůstává otevřenou akceptací.
+Datum: 2026-10-08. Stav: přijato; parser, seeded vytvoření a společný
+desktop/web tok jsou implementované. Izolovaný import největšího skutečného
+notebooku i dřívější uživatelské vytvoření trvalého projektu prošly.
 
 ## Kontext a ověřený vstup
 
@@ -134,6 +134,18 @@ automatické stažení původních URL, vykreslení importovaného HTML ve WebEn
 spojování podle názvu, domyšlené artifact→source vztahy, obecný ETL framework,
 nová databáze a import všech notebooků bez jednotlivého preview/potvrzení.
 
+## Společné UI a autorizační hranice
+
+Feature `UX-UNIFIED-02C` nahradila nativní `NotebookLMImportDialog` jedinou
+stránkou a stejnými preview/plan/confirm endpointy pro oba runtime. Webový
+node-admin používá server-local cestu a nesmí zvolit `local-only`. Desktopový
+renderer cestu nezná: Qt picker vydá náhodnou, pouze v procesu platnou
+capability pro jeden přesný archiv a volitelně jeden přesný cíl svázaný s
+operation ID. Potvrdit lze pouze nezměněný plán vydaný stejnou instancí
+backendu. Capability ani plány nejsou novou persistentní autoritou; po restartu
+se znovu připraví preview, zatímco již potvrzenou operaci obnovuje stávající
+`ProjectCreation` journal.
+
 ## Ověření a otevřené hranice
 
 Syntetické testy pokrývají platný formát, traversal, linky, case-fold kolize,
@@ -142,8 +154,10 @@ archivu nebo selection digestu. Seeded import byl přerušen na každé durable
 hranici a recovery vždy skončilo jedním projektem a jedním commitem. Opt-in
 test nad soukromým TGZ importoval největší notebook (22 895 488 deklarovaných
 bajtů) do izolovaného uzlu, znovu jej otevřel a ověřil idempotentní receipt.
-Zbývá uživatelsky zvolit notebook a trvalou cílovou cestu přes skutečné UI a
-potvrdit běžné použití importovaných podkladů po restartu aplikace.
+Společné API a capability hranice pokrývají automatické testy; skutečný
+WebEngine smoke prošel pro společný serverový tok i desktopový shell.
+Opakovatelná ruční akceptace je v
+[checklistu](../notebooklm-import-acceptance.md).
 
 Google může Takeout formát změnit bez verzovaného veřejného schématu. Parser je
 proto fail-closed pro neznámý tvar a jeho revision je součástí manifestu.

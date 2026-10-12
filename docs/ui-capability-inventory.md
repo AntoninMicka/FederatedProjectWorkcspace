@@ -59,11 +59,17 @@ složky. Picker vydá omezenou in-process capability vázanou na operation ID;
 web nikdy nepřijímá cestu ani tento token a používá nakonfigurovaný projects
 root. Původní `CreationDialog` a jeho paralelní toolbar vstup byly odstraněny.
 
-Následující existující Qt dialogy nejsou desktop-only z principu a nesmějí být
-dále rozšiřovány jako paralelní UI: import NotebookLM a zbývající vytvoření
-dokumentu/TODO. Jejich backendové služby zůstávají znovupoužitelné. Úplné
-převedení těchto starších vstupů vyžaduje společné autorizované HTTP workflow a
-recovery kontrakt a není vydáváno za dokončené.
+Import NotebookLM je nyní také společný: jedna stránka a stejné
+autorizované endpointy vedou preview, plán a potvrzení na webu i desktopu.
+Web smí zadat jen server-local cestu a nepovoluje `local-only`; desktopový Qt
+shell vydá rendereru pouze náhodnou in-process capability pro jeden pickerem
+vybraný archiv a volitelný přesný cíl. Původní `NotebookLMImportDialog` a jeho
+toolbar vstup byly odstraněny. Autoritou zůstává `ProjectCreation` journal dle
+ADR 0029; HTTP adaptér nepřidává writer ani persistentní vrstvu.
+
+Zbývající vytvoření dokumentu/TODO není desktop-only z principu a jeho Qt
+dialog se nemá dále rozšiřovat jako paralelní UI. Úplné převedení vyžaduje
+společné autorizované HTTP workflow a recovery kontrakt.
 
 ## Ověřovací kontrakt
 

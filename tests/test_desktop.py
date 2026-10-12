@@ -70,16 +70,18 @@ class DesktopTests(unittest.TestCase):
             self.assertEqual((payload['diagnostic'], payload['outcome'], payload['retry']),
                              (diagnostic, outcome, 'new-run'))
 
-    def test_notebooklm_desktop_uses_native_two_step_dialog(self):
+    def test_notebooklm_desktop_uses_shared_page_and_exact_native_capabilities(self):
         desktop = Path('spikes/desktop.py').read_text()
-        dialog = Path('spikes/desktop_notebooklm_import.py').read_text()
-        self.assertIn("QPushButton('Importovat NotebookLM…')", desktop)
-        self.assertIn('NotebookLMImportDialog', desktop)
-        self.assertIn('service.preview', dialog)
-        self.assertIn('service.plan', dialog)
-        self.assertIn('service.confirm', desktop)
-        self.assertIn('Potvrzuji přesný notebook', dialog)
-        self.assertIn('setReadOnly(True)', dialog)
+        self.assertNotIn('NotebookLMImportDialog', desktop)
+        self.assertFalse(Path('spikes/desktop_notebooklm_import.py').exists())
+        self.assertIn("/#choose-notebooklm-archive", desktop)
+        self.assertIn('register_archive(archive)', desktop)
+        self.assertIn('register_target(', desktop)
+        self.assertIn('id="notebooklm-import"', HTML)
+        self.assertIn("projectRequest('/v1/notebooklm/preview'", JS)
+        self.assertIn("projectRequest('/v1/notebooklm/plan'", JS)
+        self.assertIn("projectRequest('/v1/notebooklm/confirm'", JS)
+        self.assertIn('archive_capability:notebookArchiveCapability', JS)
 
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:

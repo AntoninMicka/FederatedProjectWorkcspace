@@ -15,14 +15,14 @@ from http.server import HTTPServer
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.chat_service import ChatService
-from spikes.project_creation import CreationConflict, ProjectCreation
+from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
 from spikes.projects import Projects
 from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
 from spikes.source_import import Sources
 from spikes.media_service import MediaService
-from spikes.notebooklm_project_import import NotebookLMProjectImport
+from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.role_workflow_service import RoleWorkflowService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
@@ -36,7 +36,9 @@ WEB_HTML = HTML
 WEB_CSS = CSS
 WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=false;
 document.querySelector('#source-import-local-only').disabled=true;
+document.querySelector('#notebooklm-local-only').disabled=true;
 let accessKey='';
+const notebookImport=document.querySelector('#notebooklm-import');
 const originalFetch=window.fetch.bind(window);
 window.fetch=(path,options={})=>{
  const url=new URL(path,location.href);
@@ -60,45 +62,6 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
   document.body.classList.add('authenticated');await loadProjects();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
-});
-const notebookImport=document.querySelector('#notebooklm-import');
-const notebookStatus=document.querySelector('#notebooklm-status');
-const notebookSelection=document.querySelector('#notebooklm-selection');
-let notebookBundle=null,notebookPlan=null;
-document.querySelector('#notebooklm-load').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;notebookStatus.textContent='Kontroluji archiv…';notebookPlan=null;
- try{const archive_path=document.querySelector('#notebooklm-archive').value.trim();
-  notebookBundle=await projectRequest('/v1/notebooklm/preview',{archive_path},120000);
-  notebookSelection.replaceChildren(...notebookBundle.notebooks.map(item=>{
-   const option=document.createElement('option');option.value=item.selection_digest;
-   option.textContent=`${item.title} · ${item.sources.length} zdrojů · ${item.artifacts.length} výstupů · ${item.chats.length} chatů`;
-   option.disabled=!item.importable;return option;}));
-  notebookSelection.disabled=false;document.querySelector('#notebooklm-plan').disabled=false;
-  notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} projektů NotebookLM. Vyberte právě jeden.`;
- }catch(error){notebookStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
-});
-document.querySelector('#notebooklm-plan').addEventListener('click',async()=>{
- try{notebookStatus.textContent='Připravuji plán…';const archive_path=document.querySelector('#notebooklm-archive').value.trim();
-  notebookPlan=await projectRequest('/v1/notebooklm/plan',{archive_path,
-   selection_digest:notebookSelection.value,privacy:document.querySelector('#notebooklm-privacy').value,
-   operation_id:crypto.randomUUID()},120000);
-  const summary={edice:'Personal NotebookLM / Google Takeout',vybrany_projekt:notebookPlan.title,
-   cil:notebookPlan.target_root,privacy:notebookPlan.privacy,polozky:notebookPlan.artifacts.length,
-   existujici_shodne_importy:notebookPlan.existing_imports,
-   varovani:notebookPlan.warnings,digest:notebookPlan.request_digest};
-  const output=document.querySelector('#notebooklm-preview');output.textContent=JSON.stringify(summary,null,2);output.hidden=false;
-  document.querySelector('#notebooklm-confirm-row').hidden=false;document.querySelector('#notebooklm-confirm').checked=false;
-  document.querySelector('#notebooklm-run').disabled=true;notebookStatus.textContent='Plán je připraven k potvrzení.';
- }catch(error){notebookStatus.textContent=error.message;}
-});
-document.querySelector('#notebooklm-confirm').addEventListener('change',event=>{
- document.querySelector('#notebooklm-run').disabled=!(event.currentTarget.checked&&notebookPlan);});
-document.querySelector('#notebooklm-run').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;notebookStatus.textContent='Importuji projekt…';
- try{const archive_path=document.querySelector('#notebooklm-archive').value.trim();
-  const result=await projectRequest('/v1/notebooklm/confirm',{archive_path,plan:notebookPlan},180000);
-  notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';notebookPlan=null;await loadProjects(result.id);
- }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 window.addEventListener('pagehide',()=>{accessKey='';});
 window.addEventListener('pageshow',event=>{if(event.persisted)location.reload();});
@@ -175,10 +138,6 @@ class WebHandler(DesktopHandler):
     def request_origin(self, authority):
         return 'https://' + authority
 
-    def _default_projects_root(self):
-        return (ProjectCreation(self.server.node).configured_projects_root()
-                or Path(self.server.node).parent / 'projects')
-
     def _can_write(self, project_id):
         if self.server.administration.is_admin(self.actor):
             return True
@@ -221,30 +180,7 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/notebooklm/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-            try:
-                if self.path == '/v1/notebooklm/preview' and isinstance(request, dict) \
-                        and set(request) == {'archive_path'}:
-                    return self.reply(200, self.server.notebooklm_import.preview(request['archive_path']))
-                if self.path == '/v1/notebooklm/plan' and isinstance(request, dict) \
-                        and set(request) == {'archive_path', 'selection_digest', 'privacy', 'operation_id'}:
-                    if request['privacy'] not in {'public', 'project', 'confidential'}:
-                        return self.reply(422, {'error': 'Webový import nepovoluje local-only obsah.'})
-                    root = self._default_projects_root(); root.mkdir(mode=0o700, exist_ok=True)
-                    target = root / f'projekt-{request["operation_id"]}'
-                    result = self.server.notebooklm_import.plan(
-                        request['archive_path'], request['selection_digest'], target,
-                        request['privacy'], request['operation_id'])
-                    return self.reply(200, result)
-                if self.path == '/v1/notebooklm/confirm' and isinstance(request, dict) \
-                        and set(request) == {'archive_path', 'plan'}:
-                    result = self.server.notebooklm_import.confirm(
-                        request['archive_path'], request['plan'],
-                        author_id=self.actor.get('id') or ProjectCreation(self.server.node).author_id())
-                    self.server.projects = Projects(self.server.node, network=True)
-                    return self.reply(200, result)
-                return self.send_error(400)
-            except (ValueError, CreationConflict, OSError, sqlite3.Error, subprocess.SubprocessError):
-                return self.reply(422, {'error': 'Import NotebookLM nelze provést. Obnovte náhled a ověřte cestu, obsah a cílové úložiště.'})
+            return super().dispatch(request)
         if self.path.startswith('/v1/backend-metrics/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -445,7 +381,8 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
         state_dir=server.chat_service.state_dir,
         chat_state_dir=server.chat_service.state_dir)
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
-    server.notebooklm_import = NotebookLMProjectImport(node)
+    server.notebooklm_import_actions = NotebookLMImportActions(
+        node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.administration = Administration(node)
     return server
 

@@ -15,6 +15,7 @@ from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
 from spikes.projects import Projects
+from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
@@ -106,11 +107,15 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="create-project-status" role="status"> </p></form>
 <details id="notebooklm-import"><summary>Importovat celý projekt z NotebookLM</summary>
-<p>Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
-<label>Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
+<p class="notebooklm-server-source">Zadejte absolutní cestu k TGZ souboru uloženému na tomto uzlu. Import je dostupný pouze správci uzlu.</p>
+<label class="notebooklm-server-source">Takeout TGZ na uzlu <input id="notebooklm-archive" type="text" autocomplete="off" placeholder="/srv/import/takeout.tgz"></label>
+<div class="notebooklm-desktop-source"><button id="notebooklm-choose-archive" type="button">Vybrat Takeout TGZ…</button>
+<p id="notebooklm-archive-label">Archiv zatím nebyl vybrán.</p></div>
 <button id="notebooklm-load" type="button">Načíst bezpečný přehled</button>
 <label>Projekt z archivu (NotebookLM notebook) <select id="notebooklm-selection" disabled></select></label>
-<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="public">Veřejné</option></select></label>
+<label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="notebooklm-local-only" value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
+<div class="notebooklm-desktop-source"><button id="notebooklm-choose-target" type="button">Vybrat prázdnou cílovou složku…</button>
+<p id="notebooklm-target-label">Použije se výchozí umístění projektů.</p></div>
 <button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
 <pre id="notebooklm-preview" hidden></pre>
 <label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
@@ -529,8 +534,9 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 '''
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
-body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout,
-body[data-runtime="desktop"] #notebooklm-import{display:none!important}
+body[data-runtime="desktop"]>#login,body[data-runtime="desktop"] #logout{display:none!important}
+body[data-runtime="desktop"] .notebooklm-server-source,
+body[data-runtime="server"] .notebooklm-desktop-source{display:none!important}
 body[data-runtime="server"]:not(.authenticated)>aside,
 body[data-runtime="server"]:not(.authenticated)>main,
 body[data-runtime="server"]:not(.authenticated)>#mobile-sidebar-toggle,
@@ -977,6 +983,92 @@ document.querySelector('#project-create-confirm').addEventListener('click',async
   const title=result.title;projectCreationAttempt=null;projectCreationPlan=null;projectCreationLocation=null;projectCreateForm.reset();projectCreatePreview.hidden=true;
   createStatus.textContent=`Projekt „${title}“ byl vytvořen.`;await loadProjects(result.id);
  }catch(error){createStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
+
+const notebookStatus=document.querySelector('#notebooklm-status');
+const notebookSelection=document.querySelector('#notebooklm-selection');
+let notebookBundle=null,notebookPlan=null,notebookAttempt=null;
+let notebookArchiveCapability=null,notebookTargetCapability=null;
+function notebookArchiveRequest(){
+ return {archive_path:document.body.dataset.runtime==='server' ? document.querySelector('#notebooklm-archive').value.trim() : null,
+  archive_capability:notebookArchiveCapability?.archive_capability||null};
+}
+function resetNotebookPlan(message=''){
+ notebookPlan=null;document.querySelector('#notebooklm-preview').hidden=true;
+ document.querySelector('#notebooklm-confirm-row').hidden=true;document.querySelector('#notebooklm-confirm').checked=false;
+ document.querySelector('#notebooklm-run').disabled=true;
+ if(message)notebookStatus.textContent=message;
+}
+function resetNotebookArchive(message=''){
+ notebookBundle=null;notebookAttempt=null;notebookTargetCapability=null;
+ notebookSelection.replaceChildren();notebookSelection.disabled=true;
+ document.querySelector('#notebooklm-plan').disabled=true;
+ document.querySelector('#notebooklm-target-label').textContent='Použije se výchozí umístění projektů.';
+ resetNotebookPlan(message);
+}
+window.setNotebookLMArchive=result=>{
+ if(!result?.archive_capability)return;
+ notebookArchiveCapability=result;
+ document.querySelector('#notebooklm-archive-label').textContent=`Vybraný archiv: ${result.archive_label}`;
+ resetNotebookArchive('Archiv byl vybrán. Načtěte bezpečný přehled.');
+};
+window.notebookLMTargetPickerRequest=()=>{
+ if(!notebookBundle){notebookStatus.textContent='Nejprve načtěte bezpečný přehled archivu.';return null;}
+ if(!notebookAttempt)notebookAttempt={operation_id:crypto.randomUUID()};
+ return {operation_id:notebookAttempt.operation_id};
+};
+window.setNotebookLMTarget=result=>{
+ if(!result||!notebookAttempt||result.operation_id!==notebookAttempt.operation_id)return;
+ notebookTargetCapability=result;
+ document.querySelector('#notebooklm-target-label').textContent=`Vybrané umístění: ${result.target_label}`;
+ resetNotebookPlan('Cílové umístění bylo vybráno. Připravte přesný plán.');
+};
+document.querySelector('#notebooklm-choose-archive').addEventListener('click',()=>{
+ location.hash='choose-notebooklm-archive';
+});
+document.querySelector('#notebooklm-choose-target').addEventListener('click',()=>{
+ if(window.notebookLMTargetPickerRequest())location.hash='choose-notebooklm-target';
+});
+document.querySelector('#notebooklm-archive').addEventListener('input',()=>resetNotebookArchive());
+notebookSelection.addEventListener('change',()=>resetNotebookPlan('Výběr se změnil. Připravte nový plán.'));
+document.querySelector('#notebooklm-privacy').addEventListener('change',()=>resetNotebookPlan('Privacy se změnila. Připravte nový plán.'));
+document.querySelector('#notebooklm-load').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;notebookStatus.textContent='Kontroluji archiv…';resetNotebookPlan();
+ try{notebookBundle=await projectRequest('/v1/notebooklm/preview',notebookArchiveRequest(),120000);
+  notebookSelection.replaceChildren(...notebookBundle.notebooks.map(item=>{
+   const option=document.createElement('option');option.value=item.selection_digest;
+   option.textContent=`${item.title} · ${item.sources.length} zdrojů · ${item.artifacts.length} výstupů · ${item.chats.length} chatů`;
+   option.disabled=!item.importable;return option;}));
+  notebookAttempt=null;notebookTargetCapability=null;
+  notebookSelection.disabled=false;document.querySelector('#notebooklm-plan').disabled=false;
+  notebookStatus.textContent=`Nalezeno ${notebookBundle.notebooks.length} projektů NotebookLM. Vyberte právě jeden.`;
+ }catch(error){resetNotebookArchive(error.message);}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#notebooklm-plan').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;
+ try{notebookStatus.textContent='Připravuji plán…';
+  if(!notebookAttempt)notebookAttempt={operation_id:crypto.randomUUID()};
+  notebookPlan=await projectRequest('/v1/notebooklm/plan',{...notebookArchiveRequest(),
+   selection_digest:notebookSelection.value,privacy:document.querySelector('#notebooklm-privacy').value,
+   operation_id:notebookAttempt.operation_id,target_capability:notebookTargetCapability?.target_capability||null},120000);
+  const summary={edice:'Personal NotebookLM / Google Takeout',vybrany_projekt:notebookPlan.title,
+   cil:notebookPlan.target_root,privacy:notebookPlan.privacy,polozky:notebookPlan.artifacts.length,
+   existujici_shodne_importy:notebookPlan.existing_imports,
+   varovani:notebookPlan.warnings,digest:notebookPlan.request_digest};
+  const output=document.querySelector('#notebooklm-preview');output.textContent=JSON.stringify(summary,null,2);output.hidden=false;
+  document.querySelector('#notebooklm-confirm-row').hidden=false;document.querySelector('#notebooklm-confirm').checked=false;
+  document.querySelector('#notebooklm-run').disabled=true;notebookStatus.textContent='Plán je připraven k potvrzení.';
+ }catch(error){resetNotebookPlan(error.message);}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#notebooklm-confirm').addEventListener('change',event=>{
+ document.querySelector('#notebooklm-run').disabled=!(event.currentTarget.checked&&notebookPlan);});
+document.querySelector('#notebooklm-run').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;notebookStatus.textContent='Importuji projekt…';
+ try{const result=await projectRequest('/v1/notebooklm/confirm',{
+   ...notebookArchiveRequest(),plan:notebookPlan},180000);
+  notebookStatus.textContent='Projekt byl vytvořen jedním počátečním commitem.';
+  notebookPlan=null;await loadProjects(result.id);
+ }catch(error){notebookStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 
 """
@@ -2408,6 +2500,7 @@ class DesktopHandler(Handler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
+        '/v1/notebooklm/preview', '/v1/notebooklm/plan', '/v1/notebooklm/confirm',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
@@ -2624,6 +2717,21 @@ class DesktopHandler(Handler):
                 self.server.projects = Projects(projects.node_path,
                     network=getattr(projects, 'network', False))
                 return self.reply(200, receipt)
+            if self.path == '/v1/notebooklm/preview':
+                return self.reply(200, self.server.notebooklm_import_actions.preview(request))
+            if self.path == '/v1/notebooklm/plan':
+                return self.reply(200, self.server.notebooklm_import_actions.plan(request))
+            if self.path == '/v1/notebooklm/confirm':
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                actor = getattr(self, 'actor', {}) or {}
+                author = actor.get('id') or ProjectCreation(node).author_id()
+                receipt = self.server.notebooklm_import_actions.confirm(
+                    request, author_id=author)
+                self.server.projects = Projects(node,
+                    network=getattr(projects, 'network', False))
+                return self.reply(200, receipt)
             if (self.path == '/v1/sources/import' and isinstance(request, dict)
                     and set(request) == {'operation_id', 'source'}
                     and isinstance(request['source'], dict)):
@@ -2749,6 +2857,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
             if self.path.startswith('/v1/projects/create/'):
                 return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
+            if self.path.startswith('/v1/notebooklm/'):
+                return self.reply(422, {'error': 'Import NotebookLM nelze provést. Obnovte náhled a ověřte archiv, výběr, privacy a cílové úložiště.'})
             if self.path.startswith('/v1/artifacts/history/'):
                 return self.reply(422, {'error': 'Historii nelze zobrazit. Ověřte dokument, oprávnění a aktuální verzi projektu.'})
             if self.path.startswith(('/v1/artifacts/editor/', '/v1/artifacts/delete/')):

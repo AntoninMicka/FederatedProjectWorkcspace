@@ -32,20 +32,12 @@ samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
 `M1-LXC-DNS-TLS-01` bylo doručeno PR #58 jako merge commit `916e5ec`. Evidence
 je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
-`d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` je lokálně
-feature-akceptovaná na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na
-doručení jejího dosud nevytvořeného PR. NotebookLM unifikace a Ollama streaming
-zůstávají samostatné feature.
+`d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
+jako merge commit `1101d52`. `UX-UNIFIED-02C` je lokálně feature-akceptovaná
+na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud
+nevytvořeného PR. Ollama streaming zůstává samostatnou feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **UX-UNIFIED-02C — Společný NotebookLM import (cílová úroveň:
-  implemented → PoC validated).** Po předchozích krocích převést existující
-  preview/plan/confirm workflow na jednu stránku a společné autorizované API.
-  Vyřešit bounded upload nebo jednorázovou desktopovou capability pro picker;
-  renderer nesmí získat obecné právo číst lokální cestu. Zachovat operation ID,
-  importní plán, potvrzení, recovery, webové RBAC a zákaz `local-only` přes
-  síťovou hranici. Po paritě odstranit `NotebookLMImportDialog`.
 
 - [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
   lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
@@ -71,10 +63,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
   nebudou odvozeny pouze z dockerového názvu `searxng`.
 
-## Zjištěné mezery a navazující ověření
-
 - [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
-  (cílová úroveň: designed → PoC validated; pozdější priorita).** Oddělit pouhé
+  (cílová úroveň: designed → PoC validated).** Oddělit pouhé
   odregistrování, odstranění lokálního odvozeného stavu, přesun repozitáře do
   obnovitelného koše a definitivní výmaz. Před každou variantou zobrazit přesné
   cesty a dopady na chatová vlákna, sdílené/cross-project reference, credentials,
@@ -85,6 +75,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   zmizely vzdálené či dříve sdílené revize. Omezené odregistrování
   doslova chybějícího rootu dodané ve F-M1-PROJECT-LOCATION-01 nemaže stav
   ani data a tuto samostatnou feature neuzavírá.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
