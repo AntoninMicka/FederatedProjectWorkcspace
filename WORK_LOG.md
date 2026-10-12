@@ -5,6 +5,54 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog a read-only kompoziční plán — 2026-10-11
+
+Dávka na větvi `feature/f-m4-output-router-01`, založené z `develop` `916e5ec`,
+dodala staticky reviewovaný output capability katalog, read-only plan/step DAG
+a aplikační review nedůvěryhodného planner návrhu. Dosažená úroveň je
+**implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
+splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M4-OUTPUT-ROUTER-01-A — Descriptor a fail-closed katalog
+  (implemented / locally PoC validated).** Uzavřený v1 descriptor nese přesné
+  capability/module revize, typované porty, šablonové hashe, role/backend
+  požadavky, privacy, hranice, permissions, cost/side-effect a potvrzení.
+  Statický katalog odmítá neznámá pole a verze, duplicity, symlinky, cizí
+  schémata a node-local konfiguraci. První `renderer.web-static` descriptor je
+  pouze lokální kompilace bez publikace, discovery nebo spuštění skriptů.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-01-B — Read-only plan/step DAG
+  (implemented / locally PoC validated).** Plán v1 váže kanonická ID, přesný
+  project commit, artifact a existující materializované snapshoty, typované
+  porty a acyklické hrany. Samostatně dodaná policy je připnutá ID, revizí a
+  hashem; přesná capability verze, permissions, privacy, execution boundary,
+  cost a side-effect se ověřují bez dispatch, backend selection nebo fallbacku.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-01-C — Planner boundary a dokumentace
+  (PoC validated).** Uzavřený `propose-output-plan` je pouze nedůvěryhodný
+  návrh. Aplikace znovu ověří katalog, policy, HEAD a přesné trusted source
+  snapshoty, sama vytvoří vysvětlení a kompatibilní alternativy a vrátí pouze
+  handoff `not-authorized`. Plannerem přidané approval/execution pole se odmítne.
+  Read-only smoke připne skutečný Git blob `README.md`, odmítne změněný SHA-256
+  a ověří nezměněný pracovní strom; uživatelský checklist je v
+  `docs/output-router-acceptance.md`.
+
+Ověření po poslední změně kódu: cílená sada katalogu, DAG a planner boundary
+**12 testů OK**; read-only smoke prošel se stavem `validated-read-only`,
+`not-authorized`, odmítnutým pozměněným zdrojem a nezměněným worktree; úplná
+sada **478 testů OK, 25 přeskočeno**. Python moduly prošly `py_compile` a
+`git diff --check` byl čistý. Přeskočené testy vyžadují volitelný reálný
+Qt/WebEngine, privátní vzorek nebo zvláštní prostředí.
+
+Reuse/adaptuje bounded JSON parser, validační primitiva modulového manifestu,
+provider-neutral role/capability kontrakty ADR 0008 a explicitní artefaktové
+předání F-M4-WORKFLOW-01. Nevznikl nový plugin framework, runtime discovery ani
+persistentní vrstva. Validace pouze čte a pracuje v paměti; pád nezanechá
+rozpracovanou operaci.
+
+Omezení: není integrován skutečný Ollama planner, UI, renderer execution,
+runtime dostupnost, Context Manifest jednotlivých kroků, materializace, receipt,
+`unknown` recovery ani publikace. Validní plán není approval. Tyto schopnosti
+zůstávají ve F-M4-OUTPUT-ROUTER-02 v BACKLOG; checklist je výslovně nedokládá.
+
 ## M1-LXC-DNS-TLS-01 — HTTPS přístup přes IP i DNS jméno — 2026-10-11
 
 Dávka na větvi `feature/m1-lxc-dns-tls`, založené z `develop` `f8bc5b7`,

@@ -28,23 +28,22 @@ jeho evidence je ve WORK_LOG. Prozatímní backlogová ID
 `UX-UNIFIED-02A/02B` byla sloučena do dokončených `UX-UNIFIED-01-E/F` a nejsou
 samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 `0ce9cb7`; evidence je ve WORK_LOG a další feature zatím nebyla aktivována.
-`F-M3-OLLAMA-ORCH-LAN-01` bylo doručeno PR #56 jako merge commit `a9207c5`;
-evidence je ve WORK_LOG. Navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` je
-feature-akceptovaná na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na
-doručení jejího dosud nevytvořeného PR. Output router a NotebookLM unifikace
-zůstávají zachované jako samostatné feature.
+`F-M3-OLLAMA-ORCH-LAN-01` bylo doručeno PR #56 jako merge commit `a9207c5` a
+navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
+`M1-LXC-DNS-TLS-01` bylo doručeno PR #58 jako merge commit `916e5ec`. Evidence
+je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` je feature-akceptovaná na vlastní větvi,
+evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR.
+Execution, NotebookLM unifikace a Ollama streaming zůstávají samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
-- [ ] [planned] **F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog výstupních
-  capability a kompoziční router (cílová úroveň: designed → PoC validated).**
-  Podle roadmapy 2E.1 nejprve dodat verzovaný statický descriptor pro renderery
-  a nástroje, fail-closed katalog a read-only typovaný plan/step DAG bez
-  spuštění. Navazující execution skládá explicitní artefakty a materializované
+- [ ] [planned] **F-M4-OUTPUT-ROUTER-02 — Execution kompozičního plánu
+  (cílová úroveň: designed → PoC validated; navazuje na
+  F-M4-OUTPUT-ROUTER-01).** Skládat explicitní artefakty a materializované
   mezivýstupy, například účetní data → schválený Julia skript → tabulka/graf →
-  prezentace, se samostatnými Context Manifest/run contracty, privacy, receipts,
-  preview a potvrzeními. Ollama smí plán navrhnout, nikoli sama spouštět
-  pluginy, měnit modely/bindingy nebo oslabit oprávnění.
+  prezentace, se samostatnými Context Manifest/run kontrakty, privacy,
+  receipts, preview, potvrzeními a recovery. `unknown`, stale nebo nevalidní
+  krok zastaví závislé kroky bez automatického retry či skrytého fallbacku.
 
 - [ ] [planned] **UX-UNIFIED-02C — Společný NotebookLM import (cílová úroveň:
   implemented → PoC validated).** Po předchozích krocích převést existující
@@ -53,8 +52,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   renderer nesmí získat obecné právo číst lokální cestu. Zachovat operation ID,
   importní plán, potvrzení, recovery, webové RBAC a zákaz `local-only` přes
   síťovou hranici. Po paritě odstranit `NotebookLMImportDialog`.
-
-## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
   lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
@@ -67,6 +64,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   Akceptace zahrne fragmentované NDJSON rámce, bounded velikost, timeout prvního
   tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý nový běh,
   restart a přístupnost `aria-live` bez zahlcení čtečky.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG

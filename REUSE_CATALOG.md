@@ -152,6 +152,14 @@ váže přesné binding ID a revizi a stávající privacy autorizace odmítne
 `local-only`. Automatický fallback a automatický retry `unknown` se odmítají,
 protože by změnily schválený target nebo zopakovaly neurčitý síťový účinek.
 
+F-M4-OUTPUT-ROUTER-01 **adaptuje** bounded JSON parser a validační primitiva
+`module_manifest`, přesné role/backend capability z ADR 0008 a explicitní
+artefaktové předání F-M4-WORKFLOW-01. Output descriptor je samostatná statická
+deklarace pro deterministický router, nikoli executable plugin nebo náhrada
+module API manifestu. Runtime discovery, nový plugin framework a externí kód se
+odmítají jako nepotřebné pro read-only katalog a plán. Kontrakt a hranice:
+[ADR 0030](docs/adr/0030-output-capability-catalog.md).
+
 F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
 soukromá inventura obsahuje obecné backendové capability, textový a obrazový
 adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context

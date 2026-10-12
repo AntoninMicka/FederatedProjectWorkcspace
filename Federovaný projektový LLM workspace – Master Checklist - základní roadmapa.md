@@ -196,32 +196,38 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
 
-**Stav: plánovaný návrh, neimplementováno.** Web, prezentace, obrázek, report ani
-jiný výstupní modul nemají být pro Ollamu či jiný planner známé pouze textem v
-globálním promptu. Každý výstupní renderer a integrovaný nástroj poskytne
-verzovaný, validovaný a staticky načitatelný capability descriptor. Descriptor
-je vstup deterministického aplikačního routeru; není executable pluginem,
-oprávněním ke spuštění ani náhradou aplikační validace.
+**Stav: descriptor, fail-closed katalog, read-only DAG a planner boundary
+lokálně PoC validated; execution neimplementován.** F-M4-OUTPUT-ROUTER-01
+dodává uzavřený v1 kontrakt, statický katalog, první descriptor
+`renderer.web-static`, validaci typovaného acyklického plánu proti samostatné
+policy a aplikační review nedůvěryhodného návrhu; hranice a reuse zaznamenává
+[ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
+prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
+jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
+integrovaný nástroj poskytne verzovaný, validovaný a staticky načitatelný
+capability descriptor. Descriptor je vstup deterministického aplikačního
+routeru; není executable pluginem, oprávněním ke spuštění ani náhradou aplikační
+validace.
 
-- [ ] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
+- [x] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
   podporované záměry a příklady pokynů (např. „vygeneruj prezentaci na téma…“),
   výslovně nepodporované použití, vstupní a výstupní schéma/MIME, formát
   výsledku, dostupné šablony s verzí a hashem, požadované role a backendové
   capability, limity, privacy/execution boundary, oprávnění, cost/side-effect
   třídu, provenance a potřebu preview či lidského potvrzení.
-- [ ] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
+- [x] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
   očekávaným strukturovaným výstupem, nikoli jako skrytý volný text vložený
   pluginem do libovolného požadavku. Node-local binding modelu, endpoint,
   credentials a runtime dostupnost zůstávají oddělené od přenosného descriptoru.
-- [ ] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
+- [x] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
   transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
   graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
   ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
-- [ ] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
+- [x] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
   návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
   capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
   model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.
-- [ ] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
+- [x] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
   stabilním plan/step ID. Každá hrana předává explicitní artefakt nebo zmrazený
   materializovaný výstup s formátem, schématem, privacy, revizí a hashem; skryté
   sdílení celé konverzace nebo projektu není dovoleno.
