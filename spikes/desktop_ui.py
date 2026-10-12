@@ -1854,8 +1854,13 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  try{
-  const result=await projectRequest('/v1/chat/status',{});
+  const [result,external]=await Promise.all([
+   projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{})]);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  ollamaStreaming=result.capabilities?.streaming===true;
+  externalBinding=external.binding;
+  externalStreaming=external.capabilities?.streaming===true;
+  fillExternalModels(external.model_catalog);
   if(selectionRevision!==chatSelectionRevision)return;
   activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
   renderThreadList([...result.threads].reverse());

@@ -98,6 +98,15 @@ perzistence, task role a změna externího OpenAI streamu.
   pěti půlsekundovými rámci; reálný app smoke: **OK**; cílená desktopová sada:
   **22 testů OK, 2 volitelné přeskočeny**; úplná sada: **502 testů OK,
   24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-K — Capability při studeném startu
+  (implemented).** Viditelná telemetrie fyzického běhu konečně doložila
+  `stream nebyl v UI zapnutý`. `loadChat()` při otevření projektu načetl binding,
+  ale nepřevzal capability; ta se nastavovala pouze po návštěvě Nastavení.
+  Otevření projektu nyní načte Ollama i OpenAI capability ještě před povolením
+  práce s chatem, takže čistý start volí stream endpoint bez skrytého mezikroku.
+  Cílená desktopová sada: **23 testů OK, 2 volitelně přeskočeny**;
+  skutečný Qt/WebEngine smoke: **OK**; úplná sada: **503 testů OK,
+  24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

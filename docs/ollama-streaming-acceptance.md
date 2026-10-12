@@ -14,6 +14,9 @@ dokud není ověřený HTTPS pin a síťová hranice.
 - [ ] Ukončete případný dříve spuštěný desktop a spusťte aktuální checkout přes
   `./run.sh desktop`. Již běžící proces si novou frontendovou implementaci
   nenačte.
+- [ ] Po čistém spuštění neotvírejte Nastavení. Otevřete rovnou projekt a
+  proveďte první Brainstorming běh; ve Spotřebě nesmí být `stream nebyl v UI
+  zapnutý`.
 - [ ] Spusťte desktop, otevřete projekt a v režimu **Brainstorming** vyberte
   **Ollama** a dostupný model.
 - [ ] Odešlete prompt, který vygeneruje několik odstavců. UI má postupně ukázat

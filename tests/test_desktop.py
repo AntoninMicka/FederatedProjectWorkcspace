@@ -408,6 +408,15 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
 
+    def test_project_chat_load_enables_streaming_without_opening_settings(self):
+        load_chat = JS.split('async function loadChat(){', 1)[1].split('\n}', 1)[0]
+        self.assertIn("projectRequest('/v1/chat/status',{})", load_chat)
+        self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
+        self.assertIn('ollamaStreaming=result.capabilities?.streaming===true', load_chat)
+        self.assertIn('externalStreaming=external.capabilities?.streaming===true', load_chat)
+        self.assertLess(load_chat.index('ollamaStreaming='),
+                        load_chat.index('if(selectionRevision!==chatSelectionRevision)return'))
+
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
