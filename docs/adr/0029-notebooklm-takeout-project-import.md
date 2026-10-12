@@ -139,9 +139,10 @@ nová databáze a import všech notebooků bez jednotlivého preview/potvrzení.
 Feature `UX-UNIFIED-02C` nahradila nativní `NotebookLMImportDialog` jedinou
 stránkou a stejnými preview/plan/confirm endpointy pro oba runtime. Webový
 node-admin používá server-local cestu a nesmí zvolit `local-only`. Desktopový
-renderer cestu nezná: Qt picker vydá náhodnou, pouze v procesu platnou
-capability pro jeden přesný archiv a volitelně jeden přesný cíl svázaný s
-operation ID. Potvrdit lze pouze nezměněný plán vydaný stejnou instancí
+Qt picker vydá náhodnou, pouze v procesu platnou capability pro jeden přesný
+archiv a volitelně jeden přesný cíl svázaný s operation ID. Cesta cíle se smí
+vrátit rendereru jako zobrazovací štítek, ale do API se předává jen capability,
+nikoli rendererem zvolená cesta. Potvrdit lze pouze nezměněný plán vydaný stejnou instancí
 backendu. Capability ani plány nejsou novou persistentní autoritou; po restartu
 se znovu připraví preview, zatímco již potvrzenou operaci obnovuje stávající
 `ProjectCreation` journal.

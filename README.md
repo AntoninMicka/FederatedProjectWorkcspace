@@ -51,7 +51,8 @@ v levém panelu; import má vlastní stránku mimo přehled projektů.
 Nejdřív se zobrazí bounded read-only přehled všech projektů (v Takeoutu jsou
 uložené jako jednotlivé NotebookLM notebooky); potom se vybere právě jeden
 projekt, nová cílová složka a privacy. Projekt vznikne až po
-kontrole přesného plánu a explicitním potvrzení. Webová varianta je dostupná
+kontrole přesného plánu a explicitním potvrzení; samostatný řádek **Cíl
+projektu** vždy ukáže výslednou cestu plánu. Webová varianta je dostupná
 jen správci uzlu a přijímá absolutní cestu k TGZ, který už je bezpečně uložený
 na serveru; archiv se neposílá jako velký JSON přes prohlížeč.
 

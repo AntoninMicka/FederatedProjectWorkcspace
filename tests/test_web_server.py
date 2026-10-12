@@ -139,6 +139,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
         self.assertIn('id="open-notebooklm-import"', WEB_HTML)
         self.assertIn('<div id="notebooklm-import-view" hidden>', WEB_HTML)
+        self.assertIn('id="notebooklm-destination"', WEB_HTML)
         self.assertIn('notebookImportButton.hidden=!admin', WEB_JS)
         self.assertEqual(WEB_HTML.count('id="source-import-form"'), 1)
         self.assertIn('<div id="source-import-view" hidden>', WEB_HTML)
@@ -592,7 +593,7 @@ def poll():
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"(()=>{if(!document.body.classList.contains('authenticated')||document.querySelectorAll('.project-card').length!==1)return'waiting';if(innerWidth!==390)return'FAIL: wrong viewport '+innerWidth;if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: home overflow';const b=document.querySelector('#mobile-sidebar-toggle');if(getComputedStyle(b).display==='none'||parseFloat(getComputedStyle(b).minHeight)<44)return'FAIL: touch target';return'ready'})()",
  2:"!document.querySelector('#notebooklm-import-view').hidden&&document.querySelector('#notebooklm-selection')&&!document.querySelector('#notebooklm-selection').disabled?'ready':'waiting'",
- 3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row');if(row.hidden)return'waiting';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
+ 3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row'),destination=document.querySelector('#notebooklm-destination');if(row.hidden)return'waiting';if(!destination.textContent.startsWith('/'))return'FAIL: target path missing';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
  4:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-artifact-list button')?'ready':'waiting'",
  5:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='true')return'waiting';if(s.inert)return'FAIL: open drawer inert';return'ready'})()",
  6:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='false')return'waiting';if(!s.inert)return'FAIL: closed drawer focusable';if(document.activeElement!==b)return'FAIL: drawer focus not restored';return'ready'})()",

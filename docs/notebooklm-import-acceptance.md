@@ -18,9 +18,11 @@ Workspace projekt.
   souboru; nesmí dostat jeho lokální cestu. Poté načtěte bezpečný přehled.
 - [ ] Vyberte právě jeden notebook, privacy a zvolte **Vybrat prázdnou cílovou
   složku…**. Systémový picker se musí otevřít i po předchozím pickeru archivu;
-  po výběru se zobrazí pouze bezpečný štítek cíle. Zrušení pickeru nesmí změnit
+  po výběru se zobrazí přesná cesta potvrzená systémovým pickerem. Zrušení pickeru nesmí změnit
   plán. Neplatná složka musí vypsat chybu ve stránce. Desktop má nabízet i
   **Jen na tomto počítači**.
+- [ ] Zkontrolujte zvýrazněný řádek **Cíl projektu**. Po ručním výběru má cestu
+  ukázat hned; při výchozím umístění se přesná cesta doplní přípravou plánu.
 - [ ] Připravte plán a zkontrolujte název, přesný cíl, privacy, počet položek,
   varování, shodné existující importy a digest.
 - [ ] Bez zaškrtnutí potvrzení nesmí jít import spustit. Po potvrzení se má

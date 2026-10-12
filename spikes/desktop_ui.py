@@ -124,6 +124,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>Soukromí <select id="notebooklm-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="notebooklm-local-only" value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <div class="notebooklm-desktop-source"><button id="notebooklm-choose-target" type="button">Vybrat prázdnou cílovou složku…</button>
 <p id="notebooklm-target-label">Použije se výchozí umístění projektů.</p></div>
+<p class="destination-callout"><strong>Cíl projektu:</strong> <span id="notebooklm-destination">Přesná cesta se zobrazí po přípravě plánu.</span></p>
 <button id="notebooklm-plan" type="button" disabled>Připravit přesný plán</button>
 <pre id="notebooklm-preview" hidden></pre>
 <label id="notebooklm-confirm-row" class="confirm" hidden><input id="notebooklm-confirm" type="checkbox"> Potvrzuji vybraný projekt, cílovou cestu, privacy a uvedené limity.</label>
@@ -555,6 +556,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 .standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
 .history-form{max-width:1100px}.history-choices{display:grid;grid-template-columns:1fr 1fr;gap:14px}.history-form pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.history-form details{margin-top:14px}
 #notebooklm-import{margin:16px 0}
+.destination-callout{padding:10px 12px;border-left:4px solid #16796b;background:#edf8f6;overflow-wrap:anywhere}
 #notebooklm-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 @media(max-width:600px){
  #login{margin:5vh 12px;padding:18px}#login input{display:block;width:100%;margin:8px 0 14px}
@@ -995,7 +997,9 @@ const notebookStatus=document.querySelector('#notebooklm-status');
 const notebookSelection=document.querySelector('#notebooklm-selection');
 let notebookBundle=null,notebookPlan=null,notebookAttempt=null;
 let notebookArchiveCapability=null,notebookTargetCapability=null;
-function requestNativeAction(action){location.hash=`${action}&nonce=${crypto.randomUUID()}`;}
+function requestNativeAction(action,payload={}){
+ const fields=new URLSearchParams({...payload,nonce:crypto.randomUUID()});location.hash=`${action}?${fields}`;
+}
 function openNotebookLMImport(){
  if(!canLeaveArtifactEditor())return;
  clearProject();
@@ -1022,6 +1026,7 @@ function resetNotebookArchive(message=''){
  notebookSelection.replaceChildren();notebookSelection.disabled=true;
  document.querySelector('#notebooklm-plan').disabled=true;
  document.querySelector('#notebooklm-target-label').textContent='Použije se výchozí umístění projektů.';
+ document.querySelector('#notebooklm-destination').textContent='Přesná cesta se zobrazí po přípravě plánu.';
  resetNotebookPlan(message);
 }
 window.setNotebookLMArchive=result=>{
@@ -1039,6 +1044,7 @@ window.setNotebookLMTarget=result=>{
  if(!result||!notebookAttempt||result.operation_id!==notebookAttempt.operation_id)return;
  notebookTargetCapability=result;
  document.querySelector('#notebooklm-target-label').textContent=`Vybrané umístění: ${result.target_label}`;
+ document.querySelector('#notebooklm-destination').textContent=result.target_label;
  resetNotebookPlan('Cílové umístění bylo vybráno. Připravte přesný plán.');
 };
 window.setNotebookLMNativeError=message=>{notebookStatus.textContent=message||'Nativní výběr se nezdařil.';};
@@ -1046,7 +1052,8 @@ document.querySelector('#notebooklm-choose-archive').addEventListener('click',()
  requestNativeAction('choose-notebooklm-archive');
 });
 document.querySelector('#notebooklm-choose-target').addEventListener('click',()=>{
- if(window.notebookLMTargetPickerRequest())requestNativeAction('choose-notebooklm-target');
+ const request=window.notebookLMTargetPickerRequest();
+ if(request)requestNativeAction('choose-notebooklm-target',request);
 });
 document.querySelector('#notebooklm-archive').addEventListener('input',()=>resetNotebookArchive());
 notebookSelection.addEventListener('change',()=>resetNotebookPlan('Výběr se změnil. Připravte nový plán.'));
@@ -1070,6 +1077,7 @@ document.querySelector('#notebooklm-plan').addEventListener('click',async event=
   notebookPlan=await projectRequest('/v1/notebooklm/plan',{...notebookArchiveRequest(),
    selection_digest:notebookSelection.value,privacy:document.querySelector('#notebooklm-privacy').value,
    operation_id:notebookAttempt.operation_id,target_capability:notebookTargetCapability?.target_capability||null},120000);
+  document.querySelector('#notebooklm-destination').textContent=notebookPlan.target_root;
   const summary={edice:'Personal NotebookLM / Google Takeout',vybrany_projekt:notebookPlan.title,
    cil:notebookPlan.target_root,privacy:notebookPlan.privacy,polozky:notebookPlan.artifacts.length,
    existujici_shodne_importy:notebookPlan.existing_imports,

@@ -10,7 +10,7 @@ import subprocess
 import sys
 import unittest
 
-from spikes.desktop import native_action_name, provider_key_url, request_policy
+from spikes.desktop import native_action_name, native_action_request, provider_key_url, request_policy
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
@@ -80,8 +80,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="open-notebooklm-import"', HTML)
         self.assertIn('<div id="notebooklm-import-view" hidden>', HTML)
         self.assertIn('id="notebooklm-import"', HTML)
-        self.assertIn("requestNativeAction('choose-notebooklm-target')", JS)
+        self.assertIn("requestNativeAction('choose-notebooklm-target',request)", JS)
         self.assertIn('setNotebookLMNativeError', JS)
+        self.assertNotIn("page.runJavaScript('notebookLMTargetPickerRequest()'", desktop)
+        self.assertIn('id="notebooklm-destination"', HTML)
+        self.assertIn("notebookPlan.target_root", JS)
         self.assertIn("projectRequest('/v1/notebooklm/preview'", JS)
         self.assertIn("projectRequest('/v1/notebooklm/plan'", JS)
         self.assertIn("projectRequest('/v1/notebooklm/confirm'", JS)
@@ -90,15 +93,24 @@ class DesktopTests(unittest.TestCase):
     def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
         origin = 'http://127.0.0.1:4711'
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
-        self.assertEqual(native_action_name(
-            f'{origin}/#choose-notebooklm-target&nonce={nonce}', origin),
+        operation = 'fbd03ac3-0bcf-443b-b54e-8f66b969d229'
+        target_url = (f'{origin}/#choose-notebooklm-target?'
+                      f'operation_id={operation}&nonce={nonce}')
+        self.assertEqual(native_action_name(target_url, origin),
             'choose-notebooklm-target')
-        for url in (f'{origin}/#choose-notebooklm-target',
-                    f'{origin}/#choose-notebooklm-target&nonce=invalid',
-                    f'{origin}/other#choose-notebooklm-target&nonce={nonce}',
-                    f'{origin}/?x=1#choose-notebooklm-target&nonce={nonce}',
-                    f'http://localhost:4711/#choose-notebooklm-target&nonce={nonce}',
-                    f'{origin}/#unknown&nonce={nonce}'):
+        self.assertEqual(native_action_request(target_url, origin),
+                         {'action': 'choose-notebooklm-target', 'operation_id': operation})
+        for action in ('choose-notebooklm-archive', 'choose-project-location'):
+            with self.subTest(action=action):
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?nonce={nonce}', origin), {'action': action})
+        for url in (f'{origin}/#choose-notebooklm-target?nonce={nonce}',
+                    f'{origin}/#choose-notebooklm-target?operation_id=invalid&nonce={nonce}',
+                    f'{origin}/#choose-notebooklm-target?operation_id={operation}&nonce=invalid',
+                    f'{origin}/other#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'{origin}/?x=1#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'http://localhost:4711/#choose-notebooklm-target?operation_id={operation}&nonce={nonce}',
+                    f'{origin}/#unknown?nonce={nonce}'):
             with self.subTest(url=url):
                 self.assertIsNone(native_action_name(url, origin))
 

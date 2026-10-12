@@ -7,7 +7,7 @@ import json
 import os
 import signal
 import sys
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
 from spikes.desktop_management import ASSETS, DesktopManagementHandler as DesktopHandler
@@ -36,20 +36,38 @@ def provider_key_url(url):
     return url if url in PROVIDER_KEY_URLS else None
 
 
-def native_action_name(url, origin):
-    """Return an allowlisted one-shot action from an exact local page URL."""
+def native_action_request(url, origin):
+    """Return an allowlisted one-shot action and its strictly bounded payload."""
     parsed, expected = urlsplit(url), urlsplit(origin)
     if (parsed.scheme, parsed.netloc, parsed.path, parsed.query) != (
             expected.scheme, expected.netloc, '/', '') or parsed.username or parsed.password:
         return None
-    parts = parsed.fragment.split('&')
-    if len(parts) != 2 or parts[0] not in NATIVE_ACTIONS or not parts[1].startswith('nonce='):
+    action, separator, query = parsed.fragment.partition('?')
+    if not separator or action not in NATIVE_ACTIONS:
         return None
     try:
-        UUID(parts[1][len('nonce='):])
+        fields = parse_qs(query, strict_parsing=True)
+        expected_fields = {'nonce', 'operation_id'} if action == 'choose-notebooklm-target' else {'nonce'}
+        if set(fields) != expected_fields or any(len(values) != 1 for values in fields.values()):
+            return None
+        nonce = fields['nonce'][0]
+        if str(UUID(nonce)) != nonce:
+            return None
+        request = {'action': action}
+        if action == 'choose-notebooklm-target':
+            operation_id = fields['operation_id'][0]
+            if str(UUID(operation_id)) != operation_id:
+                return None
+            request['operation_id'] = operation_id
+        return request
     except (ValueError, AttributeError):
         return None
-    return parts[0]
+
+
+def native_action_name(url, origin):
+    """Return only the action name for navigation policy checks."""
+    request = native_action_request(url, origin)
+    return request['action'] if request else None
 
 
 def request_policy(url, initiator, method, origin):
@@ -284,9 +302,10 @@ def main():
         editor_toolbar.addWidget(transfer_button)
         def native_action(url):
             # A same-document fragment never loads a route or exposes an HTTP writer.
-            action = native_action_name(url.toString(), server.origin)
-            if action is None:
+            request = native_action_request(url.toString(), server.origin)
+            if request is None:
                 return
+            action = request['action']
             page.runJavaScript("history.replaceState(null, '', '/');")
             if action == 'choose-project-location':
                 def choose_project_location(request):
@@ -311,22 +330,17 @@ def main():
                         page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
                             'Vybraný archiv nelze použít. Zvolte existující běžný TGZ soubor.') + ')')
             elif action == 'choose-notebooklm-target':
-                def choose_notebooklm_target(request):
-                    if not isinstance(request, dict) or set(request) != {'operation_id'}:
-                        return
-                    folder = QFileDialog.getExistingDirectory(
-                        window, 'Existující prázdná cílová složka projektu',
-                        str(controller.service.default_projects_root()))
-                    if folder:
-                        try:
-                            result = server.notebooklm_import_actions.register_target(
-                                folder, request['operation_id'])
-                            page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
-                        except (ValueError, OSError):
-                            page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
-                                'Vybranou složku nelze použít. Zvolte existující běžnou složku.') + ')')
-                page.runJavaScript('notebookLMTargetPickerRequest()', 0,
-                                   choose_notebooklm_target)
+                folder = QFileDialog.getExistingDirectory(
+                    window, 'Existující prázdná cílová složka projektu',
+                    str(controller.service.default_projects_root()))
+                if folder:
+                    try:
+                        result = server.notebooklm_import_actions.register_target(
+                            folder, request['operation_id'])
+                        page.runJavaScript('setNotebookLMTarget(' + json.dumps(result) + ')')
+                    except (ValueError, OSError):
+                        page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
+                            'Vybranou složku nelze použít. Zvolte existující běžnou složku.') + ')')
         page.urlChanged.connect(native_action)
         def project_loaded(ok):
             creation_result['loaded'] = ok

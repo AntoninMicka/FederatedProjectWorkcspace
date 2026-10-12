@@ -20,10 +20,16 @@ nebyl vytvořen ani sloučen.
   bootstrap tlačítko zpřístupní vždy, web pouze správci uzlu; mobilní drawer se
   po volbě správně zavře.
 - [x] [completed] **UX-UNIFIED-02C-FIX1-B — Nativní picker cíle
-  (implemented).** Všechny nativní pickery nyní při každém kliku používají nový
-  UUID nonce v přesně validovaném same-origin fragmentu, takže Qt vyvolá novou
-  událost i po dřívějším výběru archivu. Neplatný archiv nebo složka vypíšou
-  chybu ve stránce; renderer nadále nedostává lokální cestu.
+  (implemented).** Všechny nativní pickery při každém kliku používají nový UUID
+  nonce v přesně validovaném same-origin fragmentu. První oprava ponechala cíl
+  závislý na následném JavaScript callbacku; opakovaná uživatelská akceptace
+  doložila, že právě tato druhá fáze v reálném WebEngine dialog nevyvolá.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-D — Přímé vyvolání a viditelný cíl
+  (implemented).** Operation ID cíle je nyní součástí striktně validované
+  jednorázové nativní akce a Qt otevře folder dialog přímo bez asynchronního
+  dotazu zpět do rendereru. Vybraná cesta se zobrazí ihned a výchozí výsledná
+  cesta po přípravě plánu ve zvýrazněném řádku **Cíl projektu**. Neplatný archiv
+  nebo složka vypíšou chybu ve stránce.
 - [x] [completed] **UX-UNIFIED-02C-FIX1-C — Regrese, dokumentace a předání
   (PoC validated).** Test helperu odmítá chybějící/neplatný nonce, jiný origin,
   path, query i neznámou akci. Reálný offscreen Qt/WebEngine smoke prošel pro
@@ -52,7 +58,8 @@ sloučen do `develop` jako merge commit `436f4e6`.
 - [x] [completed] **UX-UNIFIED-02C-B — Capability a RBAC hranice
   (implemented).** Desktopový Qt picker vydává náhodnou in-process capability
   pro jeden přesný archiv a volitelně jeden cíl svázaný s operation ID;
-  renderer nedostává lokální cestu. Web přijímá jen server-local cestu,
+  renderer dostává cílovou cestu jen jako štítek a API přijímá capability,
+  nikoli libovolnou cestu. Web přijímá jen server-local cestu,
   vyžaduje node admina a odmítá capability i `local-only`. Potvrzení přijme
   jen nezměněný plán vydaný stejnou backendovou instancí.
 - [x] [completed] **UX-UNIFIED-02C-C — Recovery a parita

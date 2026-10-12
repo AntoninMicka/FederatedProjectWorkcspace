@@ -63,10 +63,12 @@ Import NotebookLM je nyní také společný: samostatnou stránku vyvolá tlač�
 levém panelu a stejné autorizované endpointy vedou preview, plán a potvrzení na
 webu i desktopu.
 Web smí zadat jen server-local cestu a nepovoluje `local-only`; desktopový Qt
-shell vydá rendereru pouze náhodnou in-process capability pro jeden pickerem
-vybraný archiv a volitelný přesný cíl. Původní `NotebookLMImportDialog` a jeho
+shell vydá náhodnou in-process capability pro jeden pickerem vybraný archiv a
+volitelný přesný cíl. Renderer dostane cestu cíle jen jako zobrazovací štítek;
+do API posílá capability a nemůže podstrčit vlastní cestu. Původní `NotebookLMImportDialog` a jeho
 toolbar vstup byly odstraněny. Autoritou zůstává `ProjectCreation` journal dle
-ADR 0029; HTTP adaptér nepřidává writer ani persistentní vrstvu.
+ADR 0029; HTTP adaptér nepřidává writer ani persistentní vrstvu. Výsledná cesta
+je uživateli viditelná v samostatném řádku cíle a znovu v potvrzovaném plánu.
 
 Zbývající vytvoření dokumentu/TODO není desktop-only z principu a jeho Qt
 dialog se nemá dále rozšiřovat jako paralelní UI. Úplné převedení vyžaduje
