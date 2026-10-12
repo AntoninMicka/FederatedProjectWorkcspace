@@ -52,6 +52,13 @@ perzistence, task role a změna externího OpenAI streamu.
   přiřazení zdědí. Pád nemůže zanechat samostatně vytvořené nezařazené vlákno a
   staré nezařazené chaty se automaticky nepřesouvají. Cílená regrese chatového
   lifecycle, služby a desktopu: **72 testů OK, 2 volitelné přeskočeny**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-F — Ruční zařazení a viditelný živý
+  běh (implemented).** Nezařazené vlákno má v nabídce explicitní akci pro
+  atomické přiřazení k otevřenému projektu. Prázdná průběžná odpověď během
+  `thinking` ukazuje animovaný indikátor, stav a uplynulý čas; interní reasoning
+  obsah se nadále nezobrazuje ani neukládá. Cílená regrese: **72 testů OK,
+  2 volitelné přeskočeny**; úplná sada zůstává **502 testů OK,
+  24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

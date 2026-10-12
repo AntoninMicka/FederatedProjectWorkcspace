@@ -19,7 +19,8 @@ dokud není ověřený HTTPS pin a síťová hranice.
 - [ ] Odešlete prompt, který vygeneruje několik odstavců. UI má postupně ukázat
   přípravu kontextu, připojování, čekání na první část, případné
   **Ollama přemýšlí…** a generování. Interní reasoning text se nezobrazuje ani
-  neukládá.
+  neukládá. Dokud nezačne odpověď, musí být vidět animovaný indikátor a
+  průběžně rostoucí čas běhu.
 - [ ] Text se má objevovat průběžně, ale v seznamu zpráv vznikne assistant
   zpráva až po dokončení. Stručný stav je oznamovaný přes `aria-live`; samotné
   přibývající části textu se čtečce neoznamují po každém tokenu. Rozepsaná
@@ -29,6 +30,8 @@ dokud není ověřený HTTPS pin a síťová hranice.
 - [ ] V bočním panelu otevřete **Chaty**. Nové vlákno musí být v části
   **Zařazené** a označené jako chat tohoto právě otevřeného projektu; nesmí
   skončit mezi nezařazenými chaty.
+- [ ] U staršího vlákna v části **Nezařazené** otevřete nabídku `⋮`, zvolte
+  **Zařadit do tohoto projektu** a ověřte jeho přesun do části **Zařazené**.
 - [ ] Restartujte aplikaci. Dokončená zpráva musí zůstat ve vlákně a stejný
   dokončený run se nesmí znovu odeslat.
 
