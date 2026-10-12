@@ -196,12 +196,13 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 
 ### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
 
-**Stav: descriptor, fail-closed katalog, read-only DAG a planner boundary
-lokálně PoC validated; execution neimplementován.** F-M4-OUTPUT-ROUTER-01
-dodává uzavřený v1 kontrakt, statický katalog, první descriptor
-`renderer.web-static`, validaci typovaného acyklického plánu proti samostatné
-policy a aplikační review nedůvěryhodného návrhu; hranice a reuse zaznamenává
-[ADR 0030](docs/adr/0030-output-capability-catalog.md). Web,
+**Stav: descriptor, fail-closed katalog, read-only DAG, planner boundary a první
+lokální durable execution `renderer.web-static@1.0` jsou PoC validated.**
+F-M4-OUTPUT-ROUTER-01/02 dodávají uzavřený v1 kontrakt, statický katalog,
+validaci typovaného acyklického plánu proti samostatné policy, aplikační review
+nedůvěryhodného návrhu, hash-bound preview/confirmation, node-local journal a
+atomickou materializaci mimo Git; hranice a reuse zaznamenává [ADR
+0030](docs/adr/0030-output-capability-catalog.md). Web,
 prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
 jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
 integrovaný nástroj poskytne verzovaný, validovaný a staticky načitatelný
@@ -236,11 +237,13 @@ validace.
   sestav prezentaci podle šablony Z“. Preview před spuštěním ukáže přesné zdroje,
   kroky, nástroje/modely, šablony, mezivýstupy, execution boundaries, očekávané
   externí účinky a místa samostatného potvrzení.
-- [ ] Každý krok má vlastní Context Manifest nebo deterministický run contract,
+- [x] Každý krok má vlastní Context Manifest nebo deterministický run contract,
   stav a receipt. `unknown`, stale vstup, zamítnutí či nevalidní výstup zastaví
   závislé kroky; router nesmí automaticky opakovat neurčitý externí účinek ani
   tajně zvolit jiný model, plugin nebo nástroj. Obnova naváže pouze na doložené
-  dokončené kroky a znovu ověří jejich hashe a oprávnění.
+  dokončené kroky a znovu ověří jejich hashe a oprávnění. PoC runtime tímto
+  dokládá pouze lokální `renderer.web-static@1.0`; Julia, LLM a externí účinky
+  potřebují vlastní adaptéry a journal kontrakty.
 - [ ] UI vysvětlí, proč byla capability navržena, které alternativy jsou
   kompatibilní a co uživatel potvrzuje. Uživatel může plán nebo konkrétní
   binding/model změnit před spuštěním; automatický výběr dostupného backendu
