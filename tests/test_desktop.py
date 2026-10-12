@@ -134,6 +134,12 @@ class DesktopTests(unittest.TestCase):
                 on_delta('první '); on_delta('část')
                 return {'thread': {'messages': []}, 'state': 'succeeded'}
 
+            def send_stream(self, request, on_delta, on_status):
+                self.chat_request = request
+                on_status('preparing'); on_delta('lokální '); on_delta('část')
+                on_status('completed')
+                return {'thread': {'messages': []}, 'state': 'succeeded'}
+
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler) as server:
             server.chat_service = Service()
@@ -148,6 +154,22 @@ class DesktopTests(unittest.TestCase):
             {'type': 'result', 'result': {
                 'thread': {'messages': []}, 'state': 'succeeded'}}])
         self.assertEqual(server.chat_service.request, {'run_id': 'test-run'})
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            request = {'project_id': 'project', 'expected_head': 'head',
+                'thread_id': 'thread', 'turn_id': 'turn', 'message_id': 'message',
+                'run_id': 'run', 'manifest_id': 'manifest',
+                'assistant_message_id': 'assistant', 'selected_message_ids': [],
+                'content': 'text', 'privacy': 'project', 'created_at': 'now'}
+            response = driver.request(server, path='/v1/chat/send-stream',
+                                      body=json.dumps(request).encode())
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 200 ', head)
+        events = [json.loads(line) for line in body.splitlines()]
+        self.assertEqual([event['type'] for event in events],
+                         ['status', 'delta', 'delta', 'status', 'result'])
+        self.assertEqual(events[0]['status'], 'preparing')
+        self.assertEqual(server.chat_service.chat_request, request)
 
     def test_prompt_switches_to_chat_only_when_submitted(self):
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
@@ -171,8 +193,12 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="external-proposal-messages"', HTML)
         self.assertIn('id="external-privacy-confirm"', HTML)
         self.assertIn("projectRequest('/v1/external/propose',request,210000)", JS)
-        self.assertIn("fetch('/v1/external/send-stream'", JS)
+        self.assertIn("streamRequest('/v1/external/send-stream'", JS)
+        self.assertIn("streamRequest('/v1/chat/send-stream'", JS)
         self.assertIn("event.type==='delta'", JS)
+        self.assertIn("event.type==='status'", JS)
+        self.assertIn('id="chat-stream-status" role="status" aria-live="polite"', HTML)
+        self.assertIn('id="chat-stream" class="chat-message assistant" aria-live="off"', HTML)
         self.assertIn("projectRequest('/v1/external/request',{run_id:turn.run_id})", JS)
         self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',

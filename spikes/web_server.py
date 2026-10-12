@@ -272,6 +272,9 @@ class WebHandler(DesktopHandler):
             # expose that history through a different web account identity.
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
+        if self.path in {'/v1/chat/send', '/v1/chat/send-stream'}:
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
         if self.path.startswith('/v1/publication-cms/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)

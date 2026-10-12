@@ -174,6 +174,13 @@ Původní `unknown` run se nikdy automaticky neopakuje. UI ponechá zadání a v
 kontextu a umožní uživateli tlačítkem **Zpracovat** vědomě vytvořit nový run s
 novými identitami. Nedochází ke skrytému přepnutí na externího providera.
 
+Přímý brainstorming používá bounded NDJSON streaming. Timeout prvního rámce,
+idle timeout nebo ztráta spojení po odeslání jsou rovněž `unknown`; průběžný
+text je jen UI projekce a nevytváří zprávu. Ruční ověření popisuje
+[checklist streamované Ollamy](ollama-streaming-acceptance.md). Orchestrace a
+role workflow zůstávají na celistvé odpovědi a jejich recovery kontrakt se
+nemění.
+
 ## Hranice současné akceptace
 
 Automatické testy používají řízený transport a ověřují pin před requestem,

@@ -420,7 +420,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
-<div id="chat-stream" class="chat-message assistant" aria-live="polite" hidden></div>
+<p id="chat-stream-status" role="status" aria-live="polite" hidden></p>
+<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -1401,13 +1402,14 @@ const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 const chatStream=document.querySelector('#chat-stream');
+const chatStreamStatus=document.querySelector('#chat-stream-status');
 const chatRunUsage=document.querySelector('#chat-run-usage');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,ollamaStreaming=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
-async function externalStreamRequest(request,onDelta){
- const response=await fetch('/v1/external/send-stream',{method:'POST',
+async function streamRequest(path,request,onDelta,onStatus=()=>{}){
+ const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
  if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
@@ -1415,11 +1417,15 @@ async function externalStreamRequest(request,onDelta){
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
+   else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='result')result=event.result;
    else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
+}
+async function externalStreamRequest(request,onDelta){
+ return streamRequest('/v1/external/send-stream',request,onDelta);
 }
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
@@ -1689,6 +1695,7 @@ function fillBinding(binding,draft=null,draftState=null){
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  ollamaStreaming=result.capabilities?.streaming===true;
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -2045,18 +2052,27 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     created_at:new Date().toISOString(),run_choice:runChoice};
   }
   const submit=document.querySelector('#chat-submit');submit.disabled=true;
-  chatOperationStatus.textContent='Odesílám…';
+  chatOperationStatus.textContent='Odesílám…';chatStream.textContent='';
+  chatStream.hidden=!ollamaStreaming;chatStreamStatus.hidden=!ollamaStreaming;
+  const streamStates={preparing:'Připravuji kontext…',connecting:'Připojuji se k Ollamě…',
+   'waiting-first-token':'Čekám na první část odpovědi…',generating:'Ollama generuje odpověď…',
+   completed:'Generování je dokončeno.'};
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
-   const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
+   const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
+    delta=>{chatStream.textContent+=delta;},status=>{
+     chatStreamStatus.textContent=streamStates[status] || 'Probíhá lokální AI běh…';}) :
+    await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
    chatOperationStatus.textContent='Odpověď je připravena.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
+   chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
   }finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
+   chatStream.hidden=true;chatStreamStatus.hidden=true;
    document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
   return;
  }
@@ -2531,7 +2547,8 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
-        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
+        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test',
+        '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -2716,13 +2733,43 @@ class DesktopHandler(Handler):
                     and set(request) == {'thread_id', 'operation_id', 'expected_revision',
                                          'preview_sha256'}):
                 return self.reply(200, self.server.chat_service.delete_thread(**request))
-            if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) in ({
+            chat_send_fields = ({
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
                     'content', 'privacy', 'created_at'}, {
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
-                    'content', 'privacy', 'created_at', 'run_choice'}):
+                    'content', 'privacy', 'created_at', 'run_choice'})
+            if (self.path == '/v1/chat/send-stream' and isinstance(request, dict)
+                    and set(request) in chat_send_fields):
+                self.close_connection = True
+                self.send_response_only(200)
+                self.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                def emit(value):
+                    self.wfile.write(json.dumps(value, ensure_ascii=False,
+                        separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
+                def emit_error(status, message):
+                    try: emit({'type': 'error', 'status': status, 'error': message})
+                    except OSError: pass
+                try:
+                    result = self.server.chat_service.send_stream(
+                        request, lambda delta: emit({'type': 'delta', 'delta': delta}),
+                        lambda status: emit({'type': 'status', 'status': status}))
+                    emit({'type': 'result', 'result': result})
+                except UnknownRun:
+                    emit_error(409, 'Výsledek lokálního LLM běhu není známý; '
+                               'původní run automaticky neopakujte.')
+                except OllamaResponseError:
+                    emit_error(502, 'Ollama stream nevrátil bezpečně použitelný výsledek.')
+                except (ValueError, OSError, sqlite3.Error):
+                    emit_error(422, 'Streamovaný chat požadavek nelze provést.')
+                return
+            if self.path == '/v1/chat/send' and isinstance(request, dict) \
+                    and set(request) in chat_send_fields:
                 return self.reply(200, self.server.chat_service.send(**request))
             if self.path == '/v1/chat/assign' and isinstance(request, dict) and set(request) == {
                     'project_id', 'thread_id', 'expected_revision'}:
@@ -2864,7 +2911,7 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             if isinstance(exc, ValidationError) and self.path in {
-                    '/v1/chat/send', '/v1/tasks/route'}:
+                    '/v1/chat/send', '/v1/chat/send-stream', '/v1/tasks/route'}:
                 message = CHAT_VALIDATION_ERRORS.get(str(exc))
                 if message is not None:
                     return self.reply(422, {'error': message})

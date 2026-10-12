@@ -82,6 +82,17 @@ NOTEBOOKLM_TAKEOUT_SAMPLE=/cesta/takeout.tgz \
   python3 -m unittest tests.test_notebooklm_import.ActualNotebookLMTakeoutTests -v
 ```
 
+### Streamovaný lokální chat
+
+Přímý brainstorming přes Ollamu zobrazuje odpověď průběžně a rozlišuje přípravu
+kontextu, připojování, čekání na první část, generování a dokončení. Průběžný
+text je pouze dočasná projekce; assistant zpráva a usage vzniknou až po
+validním finálním Ollama NDJSON rámci. Přerušený stream po dispatch hranici
+zůstane `unknown`, torzo se nepublikuje a aplikace stejný run automaticky
+nepřipojí ani neopakuje. Postup obsahuje
+[checklist streamované Ollamy](docs/ollama-streaming-acceptance.md), kontrakt
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
+
 ### Creator → opponent workflow (PoC)
 
 Po otevření projektu nabízí karta **Creator → opponent** řízený dvoukrokový

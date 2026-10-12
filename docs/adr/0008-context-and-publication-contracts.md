@@ -265,6 +265,40 @@ fallback ani převod částečného textu na výsledek nejsou dovoleny. Provider
 deklarované streaming capability použije dosavadní bounded celou odpověď se
 stejným request/run/history kontraktem.
 
+### Ollama NDJSON streaming — F-M3-OLLAMA-STREAM-01
+
+Přímý `brainstorming` tah přes explicitní Ollama binding může použít samostatný
+streamovaný transport `POST /api/generate` s `stream: true`. Podle
+[oficiálního Ollama API](https://docs.ollama.com/api/generate) přichází série
+JSON objektů po řádcích; průběžné rámce nesou text v `response` a `done:false`,
+poslední rámec má `done:true`, prázdné `response` a providerové statistiky.
+Implementace nesdílí parser s OpenAI SSE a nemění význam provider-neutral
+capability `generate-text`.
+
+Kanonický request včetně volby `stream` je součástí request digestu. Stejné run
+ID tedy nelze zaměnit mezi streamovaným a celistvým requestem. `OllamaRuns`
+zůstává jedinou autoritou: před otevřením transportu přechází run atomicky do
+`dispatching`; jednotlivé delty ani stavové události se neukládají. Teprve
+validní finální rámec se normalizuje tak, že jeho prázdné `response` nahradí
+přesně pořadově složený text, a celý výsledek včetně usage se jedním přechodem
+uloží jako `succeeded`. Assistant message vznikne až potom.
+
+Parser omezuje jeden NDJSON řádek na 1 MiB, počet rámců na 65 536 a celý stream
+i složený UTF-8 text na 16 MiB. Model, `created_at`, `response` a booleovský
+`done` musí být platné v každém rámci; providerová chyba, neplatný JSON,
+neshodný model, text ve finálním rámci nebo překročení limitu jsou doložené
+`failed`. Timeout spojení před odesláním je rovněž známé selhání. Timeout při
+čekání na první rámec, idle timeout, EOF před finálním rámcem, chyba klientského
+callbacku nebo jiné přerušení po dispatch hranici jsou `unknown`; torzo se
+nepublikuje a stejné run ID se po restartu nepřipojuje ani neopakuje.
+
+HTTP odpověď workspace směrem k UI je vlastní bounded NDJSON kanál se stavovými
+událostmi `preparing`, `connecting`, `waiting-first-token`, `generating` a
+`completed`, textovými deltami a jediným finálním výsledkem. Textová projekce
+je `aria-live="off"`; samostatný stručný stav je `aria-live="polite"`, aby
+čtečka neoznamovala každý token. Zavření klienta může přerušit callback, ale
+nemění je na potvrzené zrušení providerového běhu.
+
 Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)
 má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;

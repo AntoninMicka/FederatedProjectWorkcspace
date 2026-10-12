@@ -5,6 +5,31 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-UNIFIED-02C-FIX1 — Samostatná stránka a spolehlivý picker — 2026-10-12
+
+Dávka na větvi `fix/ux-unified-02c-notebooklm-navigation` opravila podle
+opakované fyzické akceptace samostatnou importní stránku, nativní picker cíle,
+viditelnou výslednou cestu a bezpečné přijetí cílové složky. Dosažená úroveň je
+**implemented / PoC validated**. Uživatel potvrdil skutečný import, vytvoření a
+otevření projektu; PR #62 byl sloučen do `develop` jako `4d2e32c`.
+
+- [x] [completed] **UX-UNIFIED-02C-FIX1-A/B/D — Navigace, nativní pickery a
+  viditelný cíl (implemented).** Import má vlastní stránku v levém panelu,
+  systémové pickery používají jednorázové přesně validované nativní akce a
+  ručně vybraná i výchozí cesta je součástí zobrazeného plánu.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-E — Bezpečná práva cíle
+  (PoC validated).** Vlastní prázdný cíl s režimem `0775` byl odmítnut ještě
+  před journalem a aplikace po explicitním souhlasu nabídla opravu na `0700`.
+  Neprázdný, cizí nebo symlinkový cíl se automaticky neopravuje. Fyzický import
+  po této opravě uživatel úspěšně dokončil.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-C — Regrese a předání
+  (PoC validated).** `py_compile`, `node --check` a úplná sada prošly:
+  **494 testů OK, 24 volitelných přeskočeno**. Izolovaný test skutečného
+  privátního Takeoutu prošel; finální fyzická akceptace potvrdila import.
+
+Oprava nepřidala persistentní vrstvu ani crash boundary a zachovala původní
+parser, data importu a jediný `ProjectCreation` journal.
+
 ## UX-UNIFIED-02C — Společný NotebookLM import — 2026-10-12
 
 Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z

@@ -237,6 +237,8 @@ class WebTests(unittest.TestCase):
             body=json.dumps({'run_id':str(uuid4())}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/send-stream',
             body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/send-stream',
+            body=json.dumps({'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.create_project('Denied', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/notebooklm/preview',
             body='{"archive_path":"/tmp/denied.tgz","archive_capability":null}', headers=headers)[0], 403)

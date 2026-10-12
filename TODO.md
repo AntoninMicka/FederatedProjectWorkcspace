@@ -3,39 +3,46 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — UX-UNIFIED-02C-FIX1
+# TODO — F-M3-OLLAMA-STREAM-01
 
-Feature dávka **UX-UNIFIED-02C-FIX1 — Samostatná stránka NotebookLM importu a
-spolehlivý nativní picker** pokračuje na větvi
-`fix/ux-unified-02c-notebooklm-navigation` proti `develop`. Uživatelská
-akceptace po předchozím předání odhalila další chybu před potvrzením importu,
-proto byla dávka znovu otevřena. Cílem PR zůstává `develop`; PR dosud nebyl
-vytvořen ani sloučen.
+Feature dávka **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
+lokálního AI běhu** je aktivní na větvi `feature/f-m3-ollama-stream-01`,
+založené z `develop` `4d2e32c`; cílem jediného PR je `develop`. Původní
+požadavek je veden v roadmapě M3 a v BACKLOG. Cílová úroveň je **PoC
+validated**.
 
-- [x] [completed] **UX-UNIFIED-02C-FIX1-A — Samostatná stránka a navigace
-  (implemented).** Import má vlastní stránku vyvolanou tlačítkem v levém panelu.
-- [x] [completed] **UX-UNIFIED-02C-FIX1-B — Nativní pickery
-  (implemented).** Archiv i cíl používají přesně validované jednorázové nativní
-  akce; folder dialog se otevírá přímo bez druhého asynchronního callbacku.
-- [x] [completed] **UX-UNIFIED-02C-FIX1-D — Viditelný cíl
-  (implemented).** Ručně vybraná i výchozí výsledná cesta se zobrazuje v řádku
-  **Cíl projektu** a je součástí potvrzovaného plánu.
-- [ ] [in progress] **UX-UNIFIED-02C-FIX1-E — Bezpečná práva cílové složky
-  (implemented, čeká na fyzickou akceptaci).** Ručně vybraný cíl byl prázdný a
-  vlastněný aktuálním uživatelem, ale režim `0775` správně zastavil
-  `ProjectCreation` ještě před zápisem do journalu. Výběr nyní validuje
-  existenci, vlastnictví, symlinky, prázdnost a práva před plánem. Pouze u
-  vlastní prázdné běžné složky nabídne výslovně potvrzenou opravu na `0700`;
-  odmítnutí nic nemění. Potvrzení plánu navíc vrací konkrétní bezpečnou chybu,
-  pokud se cíl mezitím změnil.
-- [ ] [in progress] **UX-UNIFIED-02C-FIX1-C — Regrese, dokumentace a předání
-  (PoC validated, čeká na fyzickou akceptaci).** `py_compile`, `node --check` a
-  úplná sada prošly: **494 testů OK, 24 volitelných přeskočeno**. Izolovaný test
-  skutečného privátního Takeoutu prošel a diagnostika se stejným uzlem, archivem
-  a cílem došla až těsně před vytvoření projektu. Zbývá v běžícím desktopu
-  potvrdit nabídku `0700`, znovu připravit plán a ověřit vytvoření i otevření
-  projektu podle [checklistu](docs/notebooklm-import-acceptance.md).
+Rozsah: adaptovat existující ephemerální stream UI pro Ollama `/api/generate`
+NDJSON, aniž by se slučoval providerový transport nebo vznikl druhý run
+journal. Autoritativní assistant zpráva a usage vzniknou až z validního
+koncového rámce. Mimo rozsah jsou automatický retry/reconnect, tokenová
+perzistence, task role a změna externího OpenAI streamu.
 
-Oprava nemění parser ani data importu. Před `ProjectCreation` pouze validuje
-vybraný existující cíl a případně po explicitním souhlasu mění jeho režim;
-nevzniká nová persistentní vrstva ani crash boundary.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-A — Kontrakt, reuse a crash
+  boundaries (designed).** ADR upřesňuje request digest, bounded NDJSON,
+  validaci finálního rámce, timeouty a přechody `dispatching` →
+  `succeeded`/`failed`/`unknown`. Řešení adaptuje `OllamaAdapter`, `OllamaRuns`
+  a existující UI NDJSON kanál; providerový SSE parser nekopíruje.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-B — Ollama stream transport
+  (PoC validated).** `stream:true` je součástí request digestu. Bounded NDJSON
+  parser skládá text pouze z validních průběžných rámců, přijme jediný finální
+  rámec a teprve potom uloží normalizovaný výsledek s usage. První-token a idle
+  timeout, předčasný EOF či ztráta callbacku jsou durable `unknown`; známý
+  neplatný rámec je `failed`. Živý smoke proti uloženému same-node modelu
+  `gemma4` vrátil tři delty, `stream-ok`, `done:true` a tokenové usage.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-C — Chat API a přístupné živé UI
+  (implemented).** Autorizovaný `/v1/chat/send-stream` posílá oddělené stavové,
+  textové a finální NDJSON události. Web vyžaduje write oprávnění k projektu.
+  UI ukazuje přípravu, připojování, čekání, generování a dokončení; stručný stav
+  je `aria-live="polite"`, zatímco tokenová projekce je `aria-live="off"`.
+- [ ] [in progress] **F-M3-OLLAMA-STREAM-01-D — Regrese, dokumentace a předání
+  (PoC validated automaticky, čeká na fyzickou UI akceptaci).** Cílená regrese
+  backendu, služby, endpointu, UI a webových oprávnění prošla: **108 testů OK,
+  5 volitelných přeskočeno**. `py_compile`, `node --check`, živý Ollama smoke a
+  úplná sada prošly: **500 testů OK, 24 volitelných přeskočeno**; reálný
+  offscreen Qt/WebEngine smoke desktopového shellu také prošel. Zbývá v běžném
+  desktopu potvrdit průběžné zobrazení a finální zprávu podle
+  [checklistu](docs/ollama-streaming-acceptance.md).
+
+Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
+chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož
+run ID neodešle druhý požadavek a UI nikdy nevydá částečný text za výsledek.

@@ -41,6 +41,15 @@ class FakeAdapter:
             raise self.error
         return {'model': binding.model, 'response': 'Assistant answer'}
 
+    def dispatch_stream(self, handoff, binding, on_delta, on_status):
+        self.calls.append(('dispatch-stream', handoff, binding))
+        if self.error:
+            raise self.error
+        on_status('connecting'); on_status('waiting-first-token')
+        on_status('generating'); on_delta('Assistant '); on_delta('answer')
+        return {'model': binding.model, 'response': 'Assistant answer', 'done': True,
+                'prompt_eval_count': 2, 'eval_count': 2}
+
 
 class FakeExternalAdapter:
     def __init__(self, runs, credentials, calls, error=None):
@@ -964,6 +973,19 @@ class ChatServiceTests(unittest.TestCase):
         turn = ChatThreads(self.chat_state).get_turn(request['turn_id'], self.node_id,
                                                        thread['user_id'])
         self.assertEqual(turn['state'], 'unknown')
+
+    def test_ollama_stream_is_ephemeral_until_the_final_message_is_completed(self):
+        request = self.request(run_choice={
+            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'gemma3'})
+        deltas = []; statuses = []
+        result = self.service.send_stream(request, deltas.append, statuses.append)
+        self.assertEqual(deltas, ['Assistant ', 'answer'])
+        self.assertEqual(statuses, ['preparing', 'connecting', 'waiting-first-token',
+                                    'generating', 'completed'])
+        self.assertEqual([item['role'] for item in result['thread']['messages']],
+                         ['user', 'assistant'])
+        self.assertEqual(result['thread']['messages'][-1]['content'], 'Assistant answer')
+        self.assertEqual(result['usage_report']['status'], 'available')
 
     def test_stale_project_and_local_only_lan_fail_before_dispatch(self):
         stale = self.request(expected_head='0' * 40)
