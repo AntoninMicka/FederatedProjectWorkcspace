@@ -695,6 +695,20 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   Context Manifest; projektové artefakty a `local-only` zůstávají zakázané.
   Streamované delty nejsou durable finální odpověď a přerušený síťový účinek se
   nesmí automaticky opakovat.
+- [x] Streamovaný přímý brainstorming přes Ollamu —
+  F-M3-OLLAMA-STREAM-01 PoC validated na feature větvi: bounded NDJSON delty
+  jsou pouze ephemerální projekce, durable assistant zpráva vzniká až po
+  validním finálním rámci a `unknown` běh se automaticky neopakuje. UI ukazuje
+  capability i uloženou volbu, telemetrii doručení a sleduje konec dlouhé
+  odpovědi s pozastavením při ručním odscrollování. Fyzickou desktopovou
+  akceptaci uživatel potvrdil; evidence je ve WORK_LOG, doručení PR do
+  `develop` dosud není uzavřené.
+- [ ] **F-M2-CHAT-LANGUAGE-01:** definovat explicitní provider-neutral jazyk
+  odpovědi a precedence uzel/projekt/vlákno/běh. Požadovaný BCP 47 jazyk má
+  být viditelný v UI a dohledatelný v Context Manifestu, provider requestu a
+  run provenance; první cílový scénář je čeština na Gemmě, která dnes
+  občas odpoví slovensky. Nedodržení modelem nesmí vést ke skrytému překladu
+  ani k nepravdivé garanci jazyka.
 - [x] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03 lokálně PoC validated: nové/navázané vlákno je vědomá volba; samostatná záložka Chaty v pevném levém panelu odděluje zařazená a nezařazená vlákna a zachovává aktivní/archivovaný stav. Scrollují jen vnitřní seznamy a návrat k projektům zůstává nahoře. Potvrzené smazání koordinovaně odstraní podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable journal a idempotentní recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií; „úplné“ není příslib forenzního přepsání média. Evidence je ve WORK_LOG; dávka byla doručena PR #51.
 - [x] **F-M3-OLLAMA-ORCH-LAN-01 lokálně PoC validated:** orchestration přijímá explicitně zvolenou TLS připnutou `private-network` Ollamu. Request váže přesné binding ID/revizi a změna před dispatch se odmítne; LAN cíl zůstává odlišný od `same-node`, každý vědomý pokus má nový Context Manifest/run, `local-only` se odmítá a `unknown` se bez fallbacku automaticky neopakuje. Automatické testy jsou uzavřené ve WORK_LOG; živá LAN/TLS/firewall akceptace nebyla provedena.
 
@@ -799,6 +813,11 @@ nenahrazují.
   desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
   UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
   [WORK_LOG](WORK_LOG.md).
+- [ ] **UX-FACELIFT-01:** po dodání uživatelského návrhu provést vizuální
+  facelift a přeuspořádání vybraných prvků. Do té doby nevytvářet
+  konkurenční redesign; následná feature musí zachovat jeden sdílený
+  web/desktop frontend, mobilní chování, klávesnicovou přístupnost a stávající
+  bezpečnostní a recovery hranice.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -1022,8 +1041,10 @@ dispatch s dohledatelným requestem a volitelným streamováním; živý desktop
 OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
 capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
-začleněná do `develop`. Webové hledání a obecný workflow zůstávají samostatné
-navazující schopnosti. Gate M3 proto
+začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
+feature i fyzickou desktopovou akceptaci na své větvi; PR do `develop` dosud
+nebyl vytvořen ani sloučen. Webové hledání, explicitní jazyk odpovědi a obecný
+workflow zůstávají samostatné navazující schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
@@ -1039,6 +1060,10 @@ není vydáván za celý uzavřený.
   acceptance; výjimka z dosavadního
   preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
   autorizaci a privacy kontrole.
+- [x] Streamovaná odpověď Ollamy — F-M3-OLLAMA-STREAM-01 PoC validated na
+  feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
+  zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
+  UI dlouhé odpovědi. Evidence je ve WORK_LOG; doručení PR zůstává otevřené.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation

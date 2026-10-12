@@ -5,6 +5,86 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav lokálního AI běhu — 2026-10-12
+
+Dávka na větvi `feature/f-m3-ollama-stream-01`, založené z `develop`
+`4d2e32c`, adaptovala existující Ollama adapter, jediný durable run journal a
+workspace NDJSON kanál. Dosažená úroveň je **PoC validated**. Uživatel po
+opakované fyzické kontrole potvrdil průběžné vykreslování, viditelný stav,
+dlouhou odpověď i autoscroll slovy „takhle je to dokonalé“. Feature akceptace
+je uzavřená; PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-A — Kontrakt, reuse a crash
+  boundaries (designed).** ADR 0008 a REUSE_CATALOG vymezily request digest,
+  limity NDJSON, finální validaci a přechody `dispatching` →
+  `succeeded`/`failed`/`unknown` bez druhého adapteru nebo run journalu.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-B/C — Ollama transport, API a
+  přístupné UI (PoC validated).** `/api/generate` s `stream:true` skládá
+  bounded delty, ale assistant zprávu a usage publikuje až po validním finálním
+  rámci. Autorizovaný `/v1/chat/send-stream` odděluje stavové, textové a
+  terminální události; reasoning text se nezobrazuje ani neukládá.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-D — Regrese, dokumentace a
+  předání (PoC validated).** Opakovaná fyzická akceptace skutečného modelu
+  potvrdila, že po počátečním `thinking` přichá text po deltách a UI jej
+  průběžně zobrazuje. Checklist rozlišuje tokenový stream brainstormingu od
+  celistvého výsledku task routeru.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-E/F — Projektové přiřazení vláken
+  (implemented).** Nový přímý i taskový chat se atomicky přiřadí otevřenému
+  projektu. Starší nezařazené vlákno lze explicitně přiřadit bez automatické
+  migrace ostatních chatů.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-G/H/I — Viditelný průběh v
+  historii zpráv (implemented).** Skutečný stavový DOM prvek, čas běhu a
+  streamovaný text jsou ve viditelné oblasti historie; Ollama i OpenAI přímý
+  chat používají stejnou projekci. Orchestrace ukazuje živý časovaný stav,
+  ale nevydává celistvý task-router výsledek za tokenový stream.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-J/K — Telemetrie a capability při
+  studeném startu (implemented).** Spotřeba běhu ukazuje zapnutí streamu,
+  počet textových delt, první text a celkový UI čas. Fyzická diagnostika
+  odhalila, že capability se dříve načetla až po otevření Nastavení; otevření
+  projektu ji nyní načte před prvním chatem.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-L — Viditelná volba streamování
+  (implemented).** Nastavení ukazuje zapnuto/vypnuto/nepodporováno. Uzlová
+  volba je výchozí zapnutá, atomicky uložená mimo projektový Git a přežije
+  restart; pád ponechá starou nebo novou celou hodnotu.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-M — Sledování konce dlouhé
+  odpovědi (PoC validated).** Autoscroll sleduje spodní hranu skutečného
+  kontejneru, pozastaví se při ručním odscrollování a po návratu na konec se
+  obnoví. Reálný Qt/WebEngine smoke ověřil 300řádkovou odpověď, ruční
+  odscrollování i opětovné sledování.
+
+Závěrečné ověření po poslední aplikační změně: Python kompilace,
+JavaScript `node --check`, `git diff --check`, cílená desktopová sada
+**23 testů OK, 2 volitelně přeskočeny**, skutečný Qt/WebEngine smoke **OK**
+a úplná sada **504 testů OK, 24 volitelných přeskočeno**. Omezení:
+automatický reconnect/retry, per-token perzistence a tokenový stream task
+routeru zůstávají mimo rozsah; živý webový průchod nebyl samostatně fyzicky
+akceptován. Doručení jediného PR do `develop` zůstává otevřené.
+
+## UX-UNIFIED-02C-FIX1 — Samostatná stránka a spolehlivý picker — 2026-10-12
+
+Dávka na větvi `fix/ux-unified-02c-notebooklm-navigation` opravila podle
+opakované fyzické akceptace samostatnou importní stránku, nativní picker cíle,
+viditelnou výslednou cestu a bezpečné přijetí cílové složky. Dosažená úroveň je
+**implemented / PoC validated**. Uživatel potvrdil skutečný import, vytvoření a
+otevření projektu; PR #62 byl sloučen do `develop` jako `4d2e32c`.
+
+- [x] [completed] **UX-UNIFIED-02C-FIX1-A/B/D — Navigace, nativní pickery a
+  viditelný cíl (implemented).** Import má vlastní stránku v levém panelu,
+  systémové pickery používají jednorázové přesně validované nativní akce a
+  ručně vybraná i výchozí cesta je součástí zobrazeného plánu.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-E — Bezpečná práva cíle
+  (PoC validated).** Vlastní prázdný cíl s režimem `0775` byl odmítnut ještě
+  před journalem a aplikace po explicitním souhlasu nabídla opravu na `0700`.
+  Neprázdný, cizí nebo symlinkový cíl se automaticky neopravuje. Fyzický import
+  po této opravě uživatel úspěšně dokončil.
+- [x] [completed] **UX-UNIFIED-02C-FIX1-C — Regrese a předání
+  (PoC validated).** `py_compile`, `node --check` a úplná sada prošly:
+  **494 testů OK, 24 volitelných přeskočeno**. Izolovaný test skutečného
+  privátního Takeoutu prošel; finální fyzická akceptace potvrdila import.
+
+Oprava nepřidala persistentní vrstvu ani crash boundary a zachovala původní
+parser, data importu a jediný `ProjectCreation` journal.
+
 ## UX-UNIFIED-02C — Společný NotebookLM import — 2026-10-12
 
 Dávka na větvi `feature/ux-unified-02c-notebooklm-import`, založené z

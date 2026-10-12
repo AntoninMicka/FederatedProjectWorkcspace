@@ -147,6 +147,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>Model <input name="model" placeholder="gemma3" required></label>
 <label>ID cíle <input name="target_id" value="local-process" required></label>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
+<label class="settings-toggle"><input id="ollama-streaming-enabled" type="checkbox" disabled> Streamovat odpovědi Ollamy v režimu Brainstorming</label>
+<p id="ollama-streaming-state" role="status" aria-live="polite">Načítám stav streamování…</p>
 <button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
@@ -316,7 +318,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label class="confirm"><input id="chat-delete-confirm" type="checkbox"> Rozumím, že lokální stav bude odstraněn, ale publikované Git artefakty zůstanou zachované.</label>
 <button id="chat-delete-run" type="button" disabled>Odstranit lokální vlákno</button>
 <button id="chat-delete-cancel" class="secondary-button" type="button">Zrušit</button></section>
-<div id="chat-messages" role="log" aria-label="Vaše zadání"></div></div>
+<div id="chat-messages" role="log" aria-label="Vaše zadání"></div>
+<div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
+<span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
+<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
@@ -420,7 +425,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-proposal-cancel" class="secondary-button" type="button">Zahodit návrh</button>
 </section></details>
 <p id="chat-operation-status" role="status" aria-live="polite"></p>
-<div id="chat-stream" class="chat-message assistant" aria-live="polite" hidden></div>
 <section id="external-preview" hidden aria-label="Náhled externího odeslání">
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
@@ -445,6 +449,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
+.settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
@@ -505,6 +510,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
+#chat-stream-status.chat-live-progress{display:flex;align-items:center;gap:10px;min-height:52px;color:#304657;font-weight:600}
+.chat-progress-spinner{width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
+@keyframes chat-stream-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.chat-progress-spinner{animation:none;border-top-color:#afc3d8;background:#526ca4}}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
@@ -1397,17 +1406,54 @@ const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
+const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
 const chatStream=document.querySelector('#chat-stream');
+const chatStreamStatus=document.querySelector('#chat-stream-status');
+const chatStreamProgressText=document.querySelector('#chat-stream-progress-text');
 const chatRunUsage=document.querySelector('#chat-run-usage');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
+const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+let streamScrollPending=false,streamAutoFollow=false;
+function chatScrollOwner(){
+ return getComputedStyle(mainPanelContent).overflowY==='visible' ?
+  document.scrollingElement : mainPanelContent;
+}
+function chatScrollNearBottom(){const owner=chatScrollOwner();
+ return owner.scrollHeight-owner.scrollTop-owner.clientHeight<=80;}
+function updateChatAutoFollow(){
+ if(!chatStream.hidden || !chatStreamStatus.hidden)streamAutoFollow=chatScrollNearBottom();
+}
+mainPanelContent.addEventListener('scroll',updateChatAutoFollow,{passive:true});
+window.addEventListener('scroll',updateChatAutoFollow,{passive:true});
+function keepChatStreamVisible(){
+ if(!streamAutoFollow || streamScrollPending)return;streamScrollPending=true;
+ requestAnimationFrame(()=>{streamScrollPending=false;if(!streamAutoFollow)return;
+  const owner=chatScrollOwner();owner.scrollTop=owner.scrollHeight;});
+}
+function finishChatAutoFollow(){
+ const follow=streamAutoFollow;streamAutoFollow=false;
+ if(follow)requestAnimationFrame(()=>{const owner=chatScrollOwner();owner.scrollTop=owner.scrollHeight;});
+}
+function startChatProgress(initialState){
+ let state=initialState,started=Date.now();streamAutoFollow=true;chatStreamStatus.hidden=false;
+ const render=()=>{const seconds=Math.floor((Date.now()-started)/1000);
+  chatStreamProgressText.textContent=`${state} · ${seconds} s`;keepChatStreamVisible();};
+ const timer=setInterval(render,1000);render();
+ return {set(nextState){state=nextState;render();},stop(){clearInterval(timer);
+  chatStreamStatus.hidden=true;chatStreamProgressText.textContent='';}};
+}
+function waitForVisiblePaint(){
+ return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+}
 function threadWritable(){return !activeThread || (activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
-async function externalStreamRequest(request,onDelta){
- const response=await fetch('/v1/external/send-stream',{method:'POST',
+async function streamRequest(path,request,onDelta,onStatus=()=>{}){
+ const response=await fetch(path,{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify(request)});
  if(!response.ok)throw Object.assign(new Error('Streamovaný požadavek byl odmítnut.'),{status:response.status});
  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
@@ -1415,11 +1461,15 @@ async function externalStreamRequest(request,onDelta){
   let newline;while((newline=buffer.indexOf('\\n'))>=0){const line=buffer.slice(0,newline);buffer=buffer.slice(newline+1);
    if(!line)continue;const event=JSON.parse(line);
    if(event.type==='delta' && typeof event.delta==='string')onDelta(event.delta);
+   else if(event.type==='status' && typeof event.status==='string')onStatus(event.status);
    else if(event.type==='result')result=event.result;
    else if(event.type==='error')throw Object.assign(new Error(event.error),{status:event.status});
    else throw new Error('Neplatná událost streamu.');}
   if(part.done)break;}
  if(buffer || !result)throw new Error('Stream skončil bez finální odpovědi.');return result;
+}
+async function externalStreamRequest(request,onDelta){
+ return streamRequest('/v1/external/send-stream',request,onDelta);
 }
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
@@ -1486,6 +1536,11 @@ function renderThreadList(threads){
     if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
    items.append(item);
   }
+  if(thread.project_id===null)action('Zařadit do tohoto projektu',async control=>{
+   control.disabled=true;chatOperationStatus.textContent='Zařazuji vlákno do otevřeného projektu…';
+   try{await assignActiveThread();chatOperationStatus.textContent='Vlákno bylo zařazeno do otevřeného projektu.';}
+   catch(error){control.disabled=false;chatOperationStatus.textContent=error.message;}
+  },thread.status==='archived');
   action('Archivovat',archiveActiveThread,thread.status==='archived');
   action('Připravit smazání',prepareActiveThreadDeletion);
   action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
@@ -1503,10 +1558,13 @@ function rememberThread(thread){
  if(index<0)knownThreads.unshift(thread);else knownThreads[index]=thread;
  renderThreadList(knownThreads);return thread;
 }
-function renderRunUsage(report){
+function renderRunUsage(report,delivery=null){
  if(!report || report.status!=='available'){chatRunUsage.hidden=true;return;}
  chatRunUsage.textContent='Spotřeba běhu: '+report.metrics
   .map(item=>`${item.name} ${item.value} ${item.unit}`).join(' · ');
+ if(delivery){chatRunUsage.textContent+=delivery.enabled ?
+  ` · stream ${delivery.deltas} částí · první text ${delivery.firstDeltaMs===null?'nepřišel':(delivery.firstDeltaMs/1000).toFixed(1)+' s'} · UI celkem ${(delivery.totalMs/1000).toFixed(1)} s` :
+  ' · stream nebyl v UI zapnutý';}
  chatRunUsage.hidden=false;
 }
 function renderTaskArtifactSources(){
@@ -1603,8 +1661,8 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
  document.querySelector('#chat-submit').disabled=true;
- chatStatus.textContent=chatBinding ? `Nové vlákno · backend: ${chatBindingLabel(chatBinding)}` :
-  'Nové vlákno · nejprve nastavte backend.';
+ chatStatus.textContent=chatBinding ? `Nové vlákno pro projekt ${activeProject.title} · backend: ${chatBindingLabel(chatBinding)}` :
+  `Nové vlákno pro projekt ${activeProject.title} · nejprve nastavte backend.`;
  draft.focus();
 });
 async function openStoredThread(threadId){
@@ -1686,9 +1744,20 @@ function fillBinding(binding,draft=null,draftState=null){
  }
  refreshChatModeControls();
 }
+function applyOllamaStreamingStatus(result){
+ ollamaStreamingSupported=result.capabilities?.streaming===true;
+ const enabled=result.preferences?.streaming!==false;
+ ollamaStreaming=ollamaStreamingSupported&&enabled;
+ ollamaStreamingToggle.checked=ollamaStreaming;
+ ollamaStreamingToggle.disabled=!ollamaStreamingSupported;
+ ollamaStreamingState.textContent=!ollamaStreamingSupported ?
+  'Streamování tento backend nepodporuje.' :
+  (ollamaStreaming?'Streamování je zapnuto.':'Streamování je vypnuto; odpověď se zobrazí až celá.');
+}
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  applyOllamaStreamingStatus(result);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -1816,8 +1885,13 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  try{
-  const result=await projectRequest('/v1/chat/status',{});
+  const [result,external]=await Promise.all([
+   projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{})]);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  applyOllamaStreamingStatus(result);
+  externalBinding=external.binding;
+  externalStreaming=external.capabilities?.streaming===true;
+  fillExternalModels(external.model_catalog);
   if(selectionRevision!==chatSelectionRevision)return;
   activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
   renderThreadList([...result.threads].reverse());
@@ -1844,6 +1918,15 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
    `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
  }catch(error){settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
+});
+ollamaStreamingToggle.addEventListener('change',async event=>{
+ const requested=event.currentTarget.checked;event.currentTarget.disabled=true;
+ ollamaStreamingState.textContent='Ukládám nastavení streamování…';
+ try{const result=await projectRequest('/v1/chat/preferences',{streaming:requested});
+  applyOllamaStreamingStatus(result);
+ }catch(error){event.currentTarget.checked=ollamaStreaming;
+  event.currentTarget.disabled=!ollamaStreamingSupported;
+  ollamaStreamingState.textContent=error.message;}
 });
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const binding=backendCandidate();
@@ -2019,19 +2102,27 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    selected_artifact_ids:[],content:draft.value.trim(),
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
    run_choice:runChoice};
-  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+ const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám do OpenAI…';
-  chatStream.textContent='';chatStream.hidden=!externalStreaming;
-  try{const result=externalStreaming ?
-   await externalStreamRequest(pendingChatRequest,delta=>{chatStream.textContent+=delta;}) :
+  chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
+  const liveProgress=externalStreaming?startChatProgress('Připojuji se k OpenAI…'):null;
+  let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
+  try{if(liveProgress)await waitForVisiblePaint();
+   const result=externalStreaming ?
+   await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
+    if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
+    liveProgress.set('OpenAI generuje odpověď…');chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
-   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent='Externí odpověď byla přijata.';
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
+    {enabled:externalStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
+   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=externalStreaming ?
+    `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatOperationStatus.textContent=error.message;
-  }finally{chatStream.hidden=true;submit.disabled=!activeProject || !draft.value.trim();}
+  }finally{if(liveProgress)liveProgress.stop();chatStream.hidden=true;
+   finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
   return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
@@ -2045,19 +2136,35 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     created_at:new Date().toISOString(),run_choice:runChoice};
   }
   const submit=document.querySelector('#chat-submit');submit.disabled=true;
-  chatOperationStatus.textContent='Odesílám…';
+  chatOperationStatus.textContent='Odesílám…';chatStream.textContent='';
+  chatStream.hidden=!ollamaStreaming;
+  const streamStates={preparing:'Připravuji kontext…',connecting:'Připojuji se k Ollamě…',
+   'waiting-first-token':'Čekám na první část odpovědi…',thinking:'Ollama přemýšlí…',
+   generating:'Ollama generuje odpověď…',
+   completed:'Generování je dokončeno.'};
+  const liveProgress=ollamaStreaming?startChatProgress(streamStates.preparing):null;
+  let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
-   const result=await projectRequest('/v1/chat/send',pendingChatRequest,210000);
+   if(liveProgress)await waitForVisiblePaint();
+   const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
+    delta=>{receivedDeltas+=1;if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
+     chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
+     liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
+    await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
-   chatOperationStatus.textContent='Odpověď je připravena.';
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
+    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.value='';draft.focus();
+   chatOperationStatus.textContent=ollamaStreaming ?
+    `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí.` : 'Odpověď je připravena.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
+   chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
-  }finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
-   document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
+  }finally{clearTimeout(thinking);if(liveProgress)liveProgress.stop();
+   submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
+   finishChatAutoFollow();}
   return;
  }
  if(!pendingChatRequest){
@@ -2073,8 +2180,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString(),run_choice:runChoice};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
+ const liveProgress=startChatProgress('Ollama zpracovává orchestraci…');
  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
  try{
+  await waitForVisiblePaint();
   const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
   replaceTaskProjection(result.projection);pendingChatRequest=null;draft.value='';draft.focus();
   chatOperationStatus.textContent=result.projection.temporary ?
@@ -2091,8 +2200,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
  }
- finally{clearTimeout(thinking);submit.disabled=!activeProject || !draft.value.trim();
-  document.querySelector('#main-panel-content').scrollTop=document.querySelector('#main-panel-content').scrollHeight;}
+ finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
+  finishChatAutoFollow();}
 });
 async function assignActiveThread(){
  if(!activeProject || !activeThread)throw new Error('Nejprve vytvořte chatové vlákno.');
@@ -2531,7 +2640,9 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
-        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure', '/v1/chat/test', '/v1/chat/send',
+        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure',
+        '/v1/chat/preferences', '/v1/chat/test',
+        '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
@@ -2701,6 +2812,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_external_cancel(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
+            if self.path == '/v1/chat/preferences' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_preferences(request))
             if self.path == '/v1/chat/test' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.test_binding(request))
             if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)
@@ -2716,13 +2829,43 @@ class DesktopHandler(Handler):
                     and set(request) == {'thread_id', 'operation_id', 'expected_revision',
                                          'preview_sha256'}):
                 return self.reply(200, self.server.chat_service.delete_thread(**request))
-            if self.path == '/v1/chat/send' and isinstance(request, dict) and set(request) in ({
+            chat_send_fields = ({
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
                     'content', 'privacy', 'created_at'}, {
                     'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
                     'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
-                    'content', 'privacy', 'created_at', 'run_choice'}):
+                    'content', 'privacy', 'created_at', 'run_choice'})
+            if (self.path == '/v1/chat/send-stream' and isinstance(request, dict)
+                    and set(request) in chat_send_fields):
+                self.close_connection = True
+                self.send_response_only(200)
+                self.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('X-Content-Type-Options', 'nosniff')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                def emit(value):
+                    self.wfile.write(json.dumps(value, ensure_ascii=False,
+                        separators=(',', ':')).encode() + b'\n'); self.wfile.flush()
+                def emit_error(status, message):
+                    try: emit({'type': 'error', 'status': status, 'error': message})
+                    except OSError: pass
+                try:
+                    result = self.server.chat_service.send_stream(
+                        request, lambda delta: emit({'type': 'delta', 'delta': delta}),
+                        lambda status: emit({'type': 'status', 'status': status}))
+                    emit({'type': 'result', 'result': result})
+                except UnknownRun:
+                    emit_error(409, 'Výsledek lokálního LLM běhu není známý; '
+                               'původní run automaticky neopakujte.')
+                except OllamaResponseError:
+                    emit_error(502, 'Ollama stream nevrátil bezpečně použitelný výsledek.')
+                except (ValueError, OSError, sqlite3.Error):
+                    emit_error(422, 'Streamovaný chat požadavek nelze provést.')
+                return
+            if self.path == '/v1/chat/send' and isinstance(request, dict) \
+                    and set(request) in chat_send_fields:
                 return self.reply(200, self.server.chat_service.send(**request))
             if self.path == '/v1/chat/assign' and isinstance(request, dict) and set(request) == {
                     'project_id', 'thread_id', 'expected_revision'}:
@@ -2864,7 +3007,7 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             if isinstance(exc, ValidationError) and self.path in {
-                    '/v1/chat/send', '/v1/tasks/route'}:
+                    '/v1/chat/send', '/v1/chat/send-stream', '/v1/tasks/route'}:
                 message = CHAT_VALIDATION_ERRORS.get(str(exc))
                 if message is not None:
                     return self.reply(422, {'error': message})

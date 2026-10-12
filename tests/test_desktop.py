@@ -8,6 +8,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import threading
 import unittest
 
 from spikes.desktop import (native_action_name, native_action_request, notebooklm_target_error,
@@ -134,6 +135,12 @@ class DesktopTests(unittest.TestCase):
                 on_delta('první '); on_delta('část')
                 return {'thread': {'messages': []}, 'state': 'succeeded'}
 
+            def send_stream(self, request, on_delta, on_status):
+                self.chat_request = request
+                on_status('preparing'); on_delta('lokální '); on_delta('část')
+                on_status('completed')
+                return {'thread': {'messages': []}, 'state': 'succeeded'}
+
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler) as server:
             server.chat_service = Service()
@@ -148,6 +155,62 @@ class DesktopTests(unittest.TestCase):
             {'type': 'result', 'result': {
                 'thread': {'messages': []}, 'state': 'succeeded'}}])
         self.assertEqual(server.chat_service.request, {'run_id': 'test-run'})
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            request = {'project_id': 'project', 'expected_head': 'head',
+                'thread_id': 'thread', 'turn_id': 'turn', 'message_id': 'message',
+                'run_id': 'run', 'manifest_id': 'manifest',
+                'assistant_message_id': 'assistant', 'selected_message_ids': [],
+                'content': 'text', 'privacy': 'project', 'created_at': 'now'}
+            response = driver.request(server, path='/v1/chat/send-stream',
+                                      body=json.dumps(request).encode())
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 200 ', head)
+        events = [json.loads(line) for line in body.splitlines()]
+        self.assertEqual([event['type'] for event in events],
+                         ['status', 'delta', 'delta', 'status', 'result'])
+        self.assertEqual(events[0]['status'], 'preparing')
+        self.assertEqual(server.chat_service.chat_request, request)
+
+    def test_chat_stream_flushes_delta_before_terminal_result(self):
+        release = threading.Event(); terminal = threading.Event()
+        class Service:
+            def send_stream(self, _request, on_delta, on_status):
+                on_status('preparing'); on_delta('průběžně')
+                if not release.wait(2):
+                    raise RuntimeError('test client did not observe the delta')
+                terminal.set()
+                return {'thread': {'messages': []}, 'state': 'succeeded'}
+
+        request = {'project_id': 'project', 'expected_head': 'head',
+            'thread_id': 'thread', 'turn_id': 'turn', 'message_id': 'message',
+            'run_id': 'run', 'manifest_id': 'manifest',
+            'assistant_message_id': 'assistant', 'selected_message_ids': [],
+            'content': 'text', 'privacy': 'project', 'created_at': 'now'}
+        body = json.dumps(request).encode()
+        try:
+            with running_api('http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                client = socket.create_connection(server.server_address, timeout=2)
+                self.addCleanup(client.close)
+                client.sendall((
+                    f'POST /v1/chat/send-stream HTTP/1.0\r\nHost: {server.authority}\r\n'
+                    f'Authorization: Bearer {server.token}\r\nContent-Type: application/json\r\n'
+                    f'Content-Length: {len(body)}\r\n\r\n').encode() + body)
+                response = client.makefile('rb')
+                self.assertIn(b' 200 ', response.readline())
+                while response.readline() != b'\r\n':
+                    pass
+                self.assertEqual(json.loads(response.readline()),
+                                 {'type': 'status', 'status': 'preparing'})
+                self.assertEqual(json.loads(response.readline()),
+                                 {'type': 'delta', 'delta': 'průběžně'})
+                self.assertFalse(terminal.is_set())
+                release.set()
+                self.assertEqual(json.loads(response.readline())['type'], 'result')
+                self.assertTrue(terminal.is_set())
+        finally:
+            release.set()
 
     def test_prompt_switches_to_chat_only_when_submitted(self):
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
@@ -171,8 +234,25 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="external-proposal-messages"', HTML)
         self.assertIn('id="external-privacy-confirm"', HTML)
         self.assertIn("projectRequest('/v1/external/propose',request,210000)", JS)
-        self.assertIn("fetch('/v1/external/send-stream'", JS)
+        self.assertIn("streamRequest('/v1/external/send-stream'", JS)
+        self.assertIn("streamRequest('/v1/chat/send-stream'", JS)
         self.assertIn("event.type==='delta'", JS)
+        self.assertIn("event.type==='status'", JS)
+        self.assertIn("thinking:'Ollama přemýšlí…'", JS)
+        self.assertIn('keepChatStreamVisible()', JS)
+        self.assertIn('startChatProgress', JS)
+        self.assertIn('await waitForVisiblePaint()', JS)
+        self.assertIn("startChatProgress('Ollama zpracovává orchestraci…')", JS)
+        self.assertIn("startChatProgress('Připojuji se k OpenAI…')", JS)
+        self.assertIn('Externí odpověď byla přijata průběžně (${receivedDeltas} částí).', JS)
+        self.assertIn('přijato ${receivedDeltas} průběžných částí.', JS)
+        self.assertIn('stream ${delivery.deltas} částí', JS)
+        self.assertIn("delivery.firstDeltaMs===null?'nepřišel'", JS)
+        self.assertIn("' · stream nebyl v UI zapnutý'", JS)
+        self.assertIn('.chat-progress-spinner', CSS)
+        self.assertIn('id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite"', HTML)
+        self.assertIn('id="chat-stream-progress-text"', HTML)
+        self.assertIn('id="chat-stream" class="chat-message assistant" aria-live="off"', HTML)
         self.assertIn("projectRequest('/v1/external/request',{run_id:turn.run_id})", JS)
         self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
@@ -184,6 +264,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("if([409,422,502].includes(error.status))pendingChatRequest=null", JS)
         self.assertIn("'/v1/chat/test'", JS)
         self.assertIn('Ověřit bez uložení', HTML)
+        self.assertIn('id="ollama-streaming-enabled" type="checkbox"', HTML)
+        self.assertIn('id="ollama-streaming-state" role="status"', HTML)
+        self.assertIn("projectRequest('/v1/chat/preferences',{streaming:requested})", JS)
+        self.assertIn("'Streamování je zapnuto.'", JS)
+        self.assertIn("'Streamování je vypnuto; odpověď se zobrazí až celá.'", JS)
         self.assertIn('binding_draft_state', JS)
         self.assertIn('normalizeFingerprint', JS)
         ollama_form = HTML.split('id="chat-backend-form"', 1)[1].split('</form>', 1)[0]
@@ -204,7 +289,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
-        self.assertTrue({'/v1/chat/archive', '/v1/chat/delete/preview',
+        self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
                          '/v1/chat/delete/confirm', '/v1/sources/import'} <= DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
@@ -224,6 +309,8 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('id="chat-record-actions"', HTML)
         self.assertNotIn("querySelector('#chat-record-actions')", JS)
         self.assertIn("action('Archivovat',archiveActiveThread", JS)
+        self.assertIn("action('Zařadit do tohoto projektu'", JS)
+        self.assertIn('await assignActiveThread()', JS)
         self.assertIn("action('Připravit smazání',prepareActiveThreadDeletion)", JS)
         self.assertIn("action('Uložit otisk',button=>runChatRecord(button,'snapshot')", JS)
         self.assertIn("action('Uložit poslední odpověď',button=>runChatRecord(button,'output')", JS)
@@ -284,6 +371,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("querySelectorAll('#task-artifact-list input:checked')", JS)
         self.assertIn("activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null", JS)
         self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
+        self.assertIn('Nové vlákno pro projekt ${activeProject.title}', JS)
         self.assertIn("++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID()", JS)
         self.assertIn('if(selectionRevision!==chatSelectionRevision)return', JS)
         self.assertIn("project_id:failed.project_id,thread_id:failed.thread_id", JS)
@@ -315,9 +403,33 @@ class DesktopTests(unittest.TestCase):
     def test_chat_progress_stays_with_prompt(self):
         from spikes.desktop_ui import HTML
         composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        chat_panel = HTML.split('<div id="chat-panel"', 1)[1].split('<div id="summary-panel"', 1)[0]
         self.assertIn('id="chat-operation-status"', composer)
+        self.assertNotIn('id="chat-stream-status"', composer)
+        self.assertIn('id="chat-stream-status"', chat_panel)
+        self.assertIn('id="chat-stream"', chat_panel)
+        self.assertGreater(chat_panel.index('id="chat-stream-status"'),
+                           chat_panel.index('id="chat-messages"'))
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
+        self.assertIn("mainPanelContent.addEventListener('scroll',updateChatAutoFollow", JS)
+        self.assertIn("window.addEventListener('scroll',updateChatAutoFollow", JS)
+        self.assertIn('owner.scrollTop=owner.scrollHeight', JS)
+        self.assertIn('if(!streamAutoFollow || streamScrollPending)return', JS)
+        self.assertNotIn("scrollIntoView({block:'nearest'})", JS)
+
+    def test_project_chat_load_enables_streaming_without_opening_settings(self):
+        load_chat = JS.split('async function loadChat(){', 1)[1].split('\n}', 1)[0]
+        self.assertIn("projectRequest('/v1/chat/status',{})", load_chat)
+        self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
+        self.assertIn('applyOllamaStreamingStatus(result)', load_chat)
+        self.assertIn('externalStreaming=external.capabilities?.streaming===true', load_chat)
+        self.assertLess(load_chat.index('applyOllamaStreamingStatus(result)'),
+                        load_chat.index('if(selectionRevision!==chatSelectionRevision)return'))
+        status = JS.split('function applyOllamaStreamingStatus(result){', 1)[1].split('\n}', 1)[0]
+        self.assertIn('ollamaStreamingSupported=result.capabilities?.streaming===true', status)
+        self.assertIn('const enabled=result.preferences?.streaming!==false', status)
+        self.assertIn('ollamaStreaming=ollamaStreamingSupported&&enabled', status)
 
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)

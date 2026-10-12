@@ -89,6 +89,14 @@ class ChatService:
         binding = BACKENDS.parse_binding(value)
         return OllamaAdapter.probe(binding)
 
+    def configure_preferences(self, value):
+        require(isinstance(value, dict) and set(value) == {'streaming'}
+                and type(value['streaming']) is bool,
+                'Invalid Ollama preferences request')
+        _, bindings, _ = self._stores()
+        bindings.save_preferences({'schema_version': 1, 'streaming': value['streaming']})
+        return self.status()
+
     def status(self):
         node_id, user_id = self._identity(); root = self._root()
         recoveries = ThreadLifecycle(root, self.projects).recover_pending(
@@ -114,7 +122,9 @@ class ChatService:
                 for row in threads.list(node_id, user_id)]
         return {'binding': binding, 'binding_draft': draft,
                 'binding_draft_state': draft_state, 'threads': rows,
-                'thread_deletions': recoveries}
+                'thread_deletions': recoveries,
+                'preferences': bindings.load_preferences(),
+                'capabilities': {'streaming': True}}
 
     def _with_external_history(self, thread, node_id, user_id):
         store = ExternalDispatches(self._root())
@@ -335,7 +345,8 @@ class ChatService:
             text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
         if thread is None and 'run_choice' in request:
             thread = threads.create(thread_id=request['thread_id'], node_id=node_id,
-                user_id=user_id, created_at=request['created_at'], classification=choice.mode)
+                user_id=user_id, created_at=request['created_at'], classification=choice.mode,
+                project_id=request['project_id'])
         if thread is not None and 'run_choice' in request:
             require(thread['classification'] == choice.mode,
                     'Chat mode cannot change inside an existing thread')
@@ -746,7 +757,7 @@ class ChatService:
                     'Chat thread changed after external preview')
         if thread is None:
             threads.create(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
-                           created_at=original['created_at'])
+                           created_at=original['created_at'], project_id=original['project_id'])
         if thread is None or thread['revision'] == expected_revision:
             threads.prepare_turn(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
                 turn_id=original['turn_id'], message_id=original['message_id'],
@@ -919,6 +930,31 @@ class ChatService:
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,
              content, privacy, created_at, run_choice=None):
+        return self._send(project_id=project_id, expected_head=expected_head,
+            thread_id=thread_id, turn_id=turn_id, message_id=message_id,
+            run_id=run_id, manifest_id=manifest_id,
+            assistant_message_id=assistant_message_id,
+            selected_message_ids=selected_message_ids, content=content,
+            privacy=privacy, created_at=created_at, run_choice=run_choice,
+            stream=False, on_delta=lambda _delta: None,
+            on_status=lambda _status: None)
+
+    def send_stream(self, request, on_delta, on_status=None):
+        require(isinstance(request, dict), 'Invalid Ollama stream request')
+        require(callable(on_delta), 'Ollama stream delta callback is required')
+        require(on_status is None or callable(on_status),
+                'Ollama stream status callback is invalid')
+        request = dict(request); request.setdefault('run_choice', None)
+        return self._send(**request, stream=True, on_delta=on_delta,
+                          on_status=on_status or (lambda _status: None))
+
+    def _send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
+              run_id, manifest_id, assistant_message_id, selected_message_ids,
+              content, privacy, created_at, run_choice, stream, on_delta, on_status):
+        require(type(stream) is bool and callable(on_delta) and callable(on_status),
+                'Invalid Ollama stream callbacks')
+        if stream:
+            on_status('preparing')
         for value in (project_id, thread_id, turn_id, message_id, run_id,
                       manifest_id, assistant_message_id):
             uuid(value)
@@ -941,11 +977,14 @@ class ChatService:
                                        'model': configured.model}))
         require(choice.adapter_id == 'ollama',
                 'External brainstorming requires preview and confirmation')
+        require(not stream or choice.mode == 'brainstorming',
+                'Ollama streaming is available only for direct brainstorming')
         binding = choice.resolve(ollama=configured)
         owned = {row['thread_id'] for row in threads.list(node_id, user_id)}
         if thread_id not in owned:
             threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
-                           created_at=created_at, classification=choice.mode)
+                           created_at=created_at, classification=choice.mode,
+                           project_id=project_id)
         stored = threads.get(thread_id, node_id, user_id)
         require(stored['classification'] == choice.mode,
                 'Chat mode cannot change inside an existing thread')
@@ -985,8 +1024,9 @@ class ChatService:
         threads.bind_run(turn_id=turn_id, node_id=node_id, user_id=user_id, run_id=run_id,
                          manifest_id=manifest_id)
         try:
-            adapter.prepare(handoff, binding)
-            response = adapter.dispatch(handoff, binding)
+            adapter.prepare(handoff, binding, stream=stream)
+            response = (adapter.dispatch_stream(handoff, binding, on_delta, on_status)
+                        if stream else adapter.dispatch(handoff, binding))
         except BackendUnknown as exc:
             threads.finish(turn_id=turn_id, node_id=node_id, user_id=user_id,
                            run_id=run_id, state='unknown', error=str(exc))
@@ -1005,6 +1045,12 @@ class ChatService:
                                      run_id=run_id, message_id=assistant_message_id,
                                      content=response['response'], privacy=output_privacy,
                                      created_at=now())
-        return {'thread': threads.get(thread_id, node_id, user_id), 'turn': completed,
-                'target': binding.serialize(),
-                'usage_report': run_usage('ollama', binding.binding_id, run_id, response)}
+        result = {'thread': threads.get(thread_id, node_id, user_id), 'turn': completed,
+                  'target': binding.serialize(),
+                  'usage_report': run_usage('ollama', binding.binding_id, run_id, response)}
+        if stream:
+            try:
+                on_status('completed')
+            except OSError:
+                pass
+        return result

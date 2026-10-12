@@ -226,22 +226,24 @@ class ChatThreads:
             db.commit()
 
     def create(self, *, thread_id, node_id, user_id, created_at,
-               classification='brainstorming'):
+               classification='brainstorming', project_id=None):
         for value in (thread_id, node_id, user_id):
             uuid(value)
+        if project_id is not None:
+            uuid(project_id)
         timestamp(created_at)
         require(classification in {'brainstorming', 'orchestration'}, 'Unsupported chat classification')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            row = db.execute('SELECT node_id,user_id,classification,created_at FROM threads '
+            row = db.execute('SELECT node_id,user_id,classification,created_at,project_id FROM threads '
                              'WHERE thread_id=?', (thread_id,)).fetchone()
-            request = (node_id, user_id, classification, created_at)
+            request = (node_id, user_id, classification, created_at, project_id)
             if row:
                 require(row == request, 'Thread ID belongs to a different request')
             else:
                 db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, classification, 'active',
-                            created_at, 0, 0, None, 0))
+                            created_at, 0, 0, project_id, 1 if project_id else 0))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
@@ -260,7 +262,8 @@ class ChatThreads:
             if existing:
                 require(existing == expected, 'Thread ID belongs to a different request')
             else:
-                source = self._owner(db, source_thread_id, node_id, user_id, active=True)
+                source = self._owner(db, source_thread_id, node_id, user_id)
+                require(source[2] == 'active', 'Chat thread is archived')
                 require(source[3] == 'brainstorming',
                         'Only a brainstorming thread can start orchestration')
                 blocked = db.execute("SELECT 1 FROM turns WHERE thread_id=? AND state IN "
@@ -271,7 +274,7 @@ class ChatThreads:
                            (source_thread_id,))
                 db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, 'orchestration', 'active',
-                            created_at, 0, 0, None, 0))
+                            created_at, 0, 0, source[7], 1 if source[7] else 0))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 

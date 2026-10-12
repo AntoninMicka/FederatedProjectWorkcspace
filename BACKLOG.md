@@ -34,23 +34,13 @@ navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
 je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
 `d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
 jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
-`436f4e6`. `UX-UNIFIED-02C-FIX1` je lokálně feature-akceptovaná na vlastní
-větvi, evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud
-nevytvořeného PR. Ollama streaming zůstává samostatnou feature.
+`436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
+merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` má
+2026-10-12 splněnou feature akceptaci a evidenci archivovanou ve WORK_LOG;
+její PR do `develop` dosud nebyl vytvořen ani sloučen. Další dávka se
+aktivuje až po doručení tohoto PR.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav
-  lokálního AI běhu (cílová úroveň: PoC validated; uživatelský požadavek
-  2026-10-11).** Adaptovat existující SSE/stream UI externího providera pro
-  Ollama NDJSON bez sloučení provider kontraktů. UI průběžně rozliší přípravu
-  kontextu, připojování, čekání na první token, generování a dokončení. Částečný
-  text zůstane dočasnou projekcí; autoritativní assistant zpráva a usage
-  vzniknou až po validním koncovém rámci. Přerušení po dispatch hranici zůstane
-  durable `unknown`, nesmí publikovat torzo ani spustit automatický retry.
-  Akceptace zahrne fragmentované NDJSON rámce, bounded velikost, timeout prvního
-  tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý nový běh,
-  restart a přístupnost `aria-live` bez zahlcení čtečky.
 
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
@@ -77,7 +67,43 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   doslova chybějícího rootu dodané ve F-M1-PROJECT-LOCATION-01 nemaže stav
   ani data a tuto samostatnou feature neuzavírá.
 
+- [ ] [planned] **IMP-01 — Explicitní jednorázový import z Google Drive
+  (cílová úroveň: implemented).** První praktický tok nabídne ruční výběr
+  jednoho či více souborů nebo jedné složky na osobním Drive a jejich import do
+  uživatelem zvoleného aktivního projektu s náhledem, privacy a provenance.
+  Běžné soubory stáhne v původních bajtech; Docs/Sheets/Slides exportuje do
+  explicitně uvedeného podporovaného formátu a transformaci nezamění za
+  původní obsah. Bez samostatného rozhodnutí neprochází celý Drive, nezapíná
+  průběžnou synchronizaci a nezapisuje zpět. Při aktivaci ověřit aktuální
+  oficiální OAuth scopes, picker, sdílené položky a limity; credentials zůstávají
+  mimo Git. Akceptace: binární i nativní dokument, doložený čas vzniku oddělený
+  od importu, exportní provenance, duplicita/nová revize, odvolaný přístup,
+  změna výběru po preview a recovery přerušeného přenosu bez částečného
+  publikování. Před zápisy popsat download/staging/Workspace crash boundaries
+  podle ADR 0003 a navázat na ADR 0023/0024. Jde o samostatnou feature po
+  doručení IMP-02, nikoli o rozšíření jeho větve.
+
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
+  (cílová úroveň: designed → PoC validated).** Požadavek uživatele po
+  fyzické akceptaci streamu: Gemma občas odpoví slovensky namísto česky.
+  Definovat provider-neutral jazykovou policy, její precedence mezi uzlem,
+  projektem, vláknem a jednotlivým během a explicitní BCP 47 identifikátor v
+  UI, Context Manifestu/provider requestu a run provenance. První akceptace
+  ověří výslovně zvolenou češtinu na reálné Gemmě, navázání vlákna,
+  změnu jazyka pro další běh a restart. Modelové nedodržení se nesmí tiše
+  překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
+  požadovaný jazyk a případnou odchylku.
+
+- [ ] [planned] **UX-FACELIFT-01 — Vizuální facelift a přeuspořádání prvků
+  (cílová úroveň: designed → implemented).** Uživatel dodá vlastní návrh
+  rozmístění; do té doby se nevymýšlí paralelní redesign. Následná feature
+  může upravit vizuální hierarchii a polohu vybraných prvků, ale zachová
+  jeden sdílený web/desktop frontend, mobilní layout, klávesnicovou
+  přístupnost, bezpečné textové vykreslení a existující RBAC/privacy a
+  recovery hranice. Před aktivací převést uživatelský návrh na konkrétní
+  obrazovky, mimo-rozsah a akceptační podmínky jednoho reviewovatelného PR.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
@@ -223,21 +249,6 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 
 Strategický rozsah drží sekce 3C master roadmapy; tyto úkoly nemění prioritu desktopového PoC.
 
-- [ ] [planned] **IMP-01 — Explicitní jednorázový import z Google Drive
-  (cílová úroveň: implemented).** První praktický tok nabídne ruční výběr
-  jednoho či více souborů nebo jedné složky na osobním Drive a jejich import do
-  uživatelem zvoleného aktivního projektu s náhledem, privacy a provenance.
-  Běžné soubory stáhne v původních bajtech; Docs/Sheets/Slides exportuje do
-  explicitně uvedeného podporovaného formátu a transformaci nezamění za
-  původní obsah. Bez samostatného rozhodnutí neprochází celý Drive, nezapíná
-  průběžnou synchronizaci a nezapisuje zpět. Při aktivaci ověřit aktuální
-  oficiální OAuth scopes, picker, sdílené položky a limity; credentials zůstávají
-  mimo Git. Akceptace: binární i nativní dokument, doložený čas vzniku oddělený
-  od importu, exportní provenance, duplicita/nová revize, odvolaný přístup,
-  změna výběru po preview a recovery přerušeného přenosu bez částečného
-  publikování. Před zápisy popsat download/staging/Workspace crash boundaries
-  podle ADR 0003 a navázat na ADR 0023/0024. Jde o samostatnou feature po
-  doručení IMP-02, nikoli o rozšíření jeho větve.
 - [ ] [planned] **IMP-03 — Import exportů konverzací (cílová úroveň: implemented).** Získat uživatelem schválené anonymizované vzorky ChatGPT a Gemini/Takeout, ověřit skutečnou strukturu a vytvořit lokální import s náhledem. Akceptace: role/pořadí/větvení podle dostupnosti, chybějící metadata, přílohy, opakovaný import a poškozený archiv; omezit velikost i rozbalení archivu, odmítnout traversal/symlinky a nevykonávat importované HTML. Generační API není předpokládaným zdrojem historie webového účtu.
 - [ ] [planned] **IMP-04 — Vstupní fronta a lokální LLM návrh zařazení (cílová úroveň: PoC validated).** Umožnit import bez aktivního projektu do soukromé lokální fronty a nad validovaným vstupem nabídnout návrh nuly, jednoho nebo více oprávněných cílových projektů. LLM je pouze lokální volitelný poradce; bez něj zůstává ruční zařazení. Akceptace: vysvětlení/confidence a navržená privacy, lidské potvrzení před prvním projektovým zápisem, nezařazení/odmítnutí, multi-project fan-out se samostatným stavem a idempotentním retry pro každý projekt, částečný úspěch bez tichého rollbacku commitů, pád před/po jednotlivých publikacích a žádný externí fallback pro `local-only`. Závisí na příslušném importéru, Workspace recovery a lokálním LLM/Context Manifest kontraktu.
 

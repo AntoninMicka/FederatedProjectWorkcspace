@@ -136,6 +136,115 @@ class OllamaAdapterTests(unittest.TestCase):
                                   lambda binding, request: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
 
+    def test_stream_success_is_durable_and_only_final_response_is_authoritative(self):
+        calls = []; deltas = []; statuses = []
+        def stream(binding, request, on_delta, on_status):
+            calls.append(json.loads(request)); on_status('waiting-first-token')
+            on_status('generating'); on_delta('první '); on_delta('část')
+            return {'model': binding.model, 'created_at': '2026-10-12T12:00:00Z',
+                    'response': 'první část', 'done': True,
+                    'prompt_eval_count': 3, 'eval_count': 2}
+        adapter = OllamaAdapter(OllamaRuns(self.state), stream_transport=stream)
+        result = adapter.dispatch_stream(
+            self.handoff, self.binding, deltas.append, statuses.append)
+        self.assertEqual((deltas, result['response']), (['první ', 'část'], 'první část'))
+        self.assertTrue(calls[0]['stream'])
+        self.assertEqual(statuses, ['connecting', 'waiting-first-token',
+                                    'generating'])
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['response'], result)
+        self.assertEqual(adapter.dispatch_stream(
+            self.handoff, self.binding, self.fail), result)
+        self.assertEqual(len(calls), 1)
+
+    def test_invalid_stream_after_delta_fails_without_persisting_partial_text(self):
+        def malformed(_binding, _request, on_delta, _on_status):
+            on_delta('torzo')
+            raise OllamaResponseError('Invalid Ollama NDJSON frame',
+                                      code='invalid-stream-json')
+        adapter = OllamaAdapter(OllamaRuns(self.state), stream_transport=malformed)
+        with self.assertRaises(OllamaResponseError):
+            adapter.dispatch_stream(self.handoff, self.binding, lambda _delta: None)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['response'], row['error_code']),
+                         ('failed', None, 'invalid-stream-json'))
+
+    def test_interrupted_stream_is_unknown_and_never_automatically_retried(self):
+        calls = []
+        def interrupted(_binding, _request, on_delta, _on_status):
+            calls.append('dispatch'); on_delta('torzo')
+            raise TimeoutError('idle')
+        adapter = OllamaAdapter(OllamaRuns(self.state), stream_transport=interrupted)
+        with self.assertRaises(UnknownRun):
+            adapter.dispatch_stream(self.handoff, self.binding, lambda _delta: None)
+        self.assertEqual(adapter.runs.get(self.handoff.run_id)['state'], 'unknown')
+        restarted = OllamaAdapter(OllamaRuns(self.state), stream_transport=lambda *_args:
+                                  self.fail('must not reconnect after restart'))
+        with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+            restarted.dispatch_stream(self.handoff, self.binding, lambda _delta: None)
+        self.assertEqual(calls, ['dispatch'])
+
+    def test_http_stream_accepts_fragmented_ndjson_and_normalizes_final_frame(self):
+        frames = (b'{"model":"gemma3","created_at":"thinking","response":"",'
+                  b'"thinking":"reasoning","done":false}\n'
+                  b'{"model":"gemma3","created_at":"now","response":"A","done":false}\n'
+                  b'{"model":"gemma3","created_at":"later","response":"","thinking":"",'
+                  b'"done":true,'
+                  b'"prompt_eval_count":4,"eval_count":1}\n')
+        class Socket:
+            def settimeout(self, value): self.timeout = value
+        class Response:
+            status = 200
+            def __init__(self): self.data = bytearray(frames)
+            def readline(self, limit):
+                if not self.data: return b''
+                newline = self.data.index(10) + 1
+                value = bytes(self.data[:newline]); del self.data[:newline]
+                return value
+        class Connection:
+            def __init__(self, *args, **kwargs): self.sock = Socket()
+            def connect(self): pass
+            def request(self, method, path, body=None, headers=None):
+                self.request_body = json.loads(body)
+            def getresponse(self): return Response()
+            def close(self): pass
+        deltas = []; statuses = []
+        with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+            result = OllamaAdapter._http_stream_transport(
+                self.binding, b'{"stream":true}', deltas.append, statuses.append)
+        self.assertEqual((deltas, result['response']), (['A'], 'A'))
+        self.assertNotIn('thinking', result)
+        self.assertEqual((result['prompt_eval_count'], result['eval_count']), (4, 1))
+        self.assertEqual(statuses, ['waiting-first-token', 'thinking', 'generating'])
+
+    def test_stream_first_token_and_idle_timeouts_are_durable_unknown(self):
+        class Socket:
+            def settimeout(self, value): self.timeout = value
+        class Response:
+            status = 200
+            def __init__(self, first): self.first = first
+            def readline(self, limit):
+                if self.first is not None:
+                    value = self.first; self.first = None; return value
+                raise TimeoutError('slow stream')
+        for first, code in ((None, 'first-token-timeout'),
+                            (b'{"model":"gemma3","created_at":"now",'
+                             b'"response":"A","done":false}\n', 'idle-timeout')):
+            with self.subTest(code=code):
+                handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'e' * 64,
+                                          self.binding.target(), b'{"context":"exact"}')
+                class Connection:
+                    def __init__(self, *args, **kwargs): self.sock = Socket()
+                    def connect(self): pass
+                    def request(self, *args, **kwargs): pass
+                    def getresponse(self): return Response(first)
+                    def close(self): pass
+                adapter = OllamaAdapter(OllamaRuns(self.state))
+                with patch('spikes.ollama_backend.http.client.HTTPConnection', Connection):
+                    with self.assertRaises(UnknownRun) as caught:
+                        adapter.dispatch_stream(handoff, self.binding, lambda _delta: None)
+                self.assertEqual(caught.exception.code, code)
+                self.assertEqual(adapter.runs.get(handoff.run_id)['state'], 'unknown')
+
     def test_concurrent_same_run_never_starts_second_transport(self):
         entered = threading.Event(); release = threading.Event(); calls = []
         def transport(binding, request):

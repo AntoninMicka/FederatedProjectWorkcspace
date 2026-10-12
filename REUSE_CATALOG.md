@@ -224,6 +224,15 @@ nedokládá kompatibilní streaming/recovery kontrakt ani licenci k převzetí, 
 se z ní nekopíruje kód. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#přímý-brainstorming-request-record-a-streaming--f-m3-chat-direct-01).
 
+F-M3-OLLAMA-STREAM-01 **reuse/adaptuje** `OllamaAdapter`, jediný
+`OllamaRuns` journal, přímý brainstormingový Context Manifest a existující
+workspace NDJSON kanál do UI. Providerový transport zůstává samostatný:
+Ollama `/api/generate` používá řádkové JSON rámce, nikoli OpenAI SSE, takže se
+SSE parser ani externí request store nekopírují. Nová závislost ani druhý run
+journal nevzniká; standardní knihovna zajišťuje HTTP/TLS a fragmentaci čtení,
+aplikace doplňuje vlastní limity, finální validaci a `unknown` hranici podle
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
+
 F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
 provider-neutral `RoleRegistry` a backend adapter/run journals, durable
 prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný

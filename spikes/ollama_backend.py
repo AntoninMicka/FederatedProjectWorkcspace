@@ -24,6 +24,11 @@ from spikes.metadata import require, uuid
 
 
 OLLAMA_GENERATE_TIMEOUT = 180
+OLLAMA_FIRST_TOKEN_TIMEOUT = 60
+OLLAMA_IDLE_TIMEOUT = 30
+MAX_STREAM_LINE = 1024 * 1024
+MAX_STREAM_EVENTS = 65536
+MAX_STREAM_RESPONSE = 16 * 1024 * 1024
 
 
 def normalize_tls_fingerprint(value):
@@ -135,6 +140,7 @@ class OllamaBindings:
                 'Binding state directory requires owned mode 0700')
         self.path = self.root / 'ollama-binding.json'
         self.draft_path = self.root / 'ollama-binding-draft.json'
+        self.preferences_path = self.root / 'ollama-preferences.json'
 
     def _save_json(self, path, value, temporary_prefix):
         raw = (json.dumps(value, ensure_ascii=False, sort_keys=True,
@@ -168,6 +174,10 @@ class OllamaBindings:
         self._validate_draft(value)
         self._save_json(self.draft_path, value, '.ollama-binding-draft-')
 
+    def save_preferences(self, value):
+        self._validate_preferences(value)
+        self._save_json(self.preferences_path, value, '.ollama-preferences-')
+
     def _load_json(self, path):
         flags = os.O_RDONLY | os.O_NOFOLLOW
         fd = os.open(path, flags)
@@ -194,6 +204,22 @@ class OllamaBindings:
         # Reuse the bounded, secret-free draft contract without requiring a valid binding.
         self._validate_draft(value)
         return value
+
+    def load_preferences(self):
+        try:
+            value = self._load_json(self.preferences_path)
+        except FileNotFoundError:
+            return {'schema_version': 1, 'streaming': True}
+        self._validate_preferences(value)
+        return value
+
+    @staticmethod
+    def _validate_preferences(value):
+        require(isinstance(value, dict)
+                and set(value) == {'schema_version', 'streaming'},
+                'Unknown or missing Ollama preference field')
+        require(value['schema_version'] == 1 and type(value['streaming']) is bool,
+                'Invalid Ollama preferences')
 
     @staticmethod
     def _validate_draft(value):
@@ -304,10 +330,11 @@ class OllamaRuns(BackendRuns):
 
 
 class OllamaAdapter:
-    def __init__(self, runs, transport=None):
+    def __init__(self, runs, transport=None, stream_transport=None):
         require(isinstance(runs, OllamaRuns), 'Ollama run store is required')
         self.runs = runs
         self.transport = transport or self._http_transport
+        self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
     def _prompt(payload):
@@ -400,13 +427,14 @@ class OllamaAdapter:
                                 role_id, role_revision)
 
     @staticmethod
-    def _request(handoff, binding, role=None, output_format='text'):
+    def _request(handoff, binding, role=None, output_format='text', *, stream=False):
         from spikes.context_builder import DispatchHandoff
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OllamaBinding),
                 'Authorized handoff and Ollama binding are required')
         require(handoff.target == binding.target(), 'Ollama binding differs from authorized target')
+        require(type(stream) is bool, 'Invalid Ollama streaming choice')
         body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
-                    stream=False)
+                    stream=stream)
         if output_format == 'json':
             body['format'] = 'json'
         request = json.dumps(body, sort_keys=True,
@@ -417,15 +445,28 @@ class OllamaAdapter:
         digest = hashlib.sha256(base + b'\0' + execution.canonical()).hexdigest()
         return request, digest, legacy_digest, execution
 
-    def prepare(self, handoff, binding, role=None, output_format='text'):
+    def prepare(self, handoff, binding, role=None, output_format='text', *, stream=False):
         _, digest, legacy_digest, execution = self._request(
-            handoff, binding, role, output_format)
+            handoff, binding, role, output_format, stream=stream)
         return self.runs.prepare(handoff.run_id, digest, legacy_digest, execution,
                                  handoff.manifest_sha256)
 
     def dispatch(self, handoff, binding, role=None, output_format='text'):
+        return self._dispatch(handoff, binding, role, output_format, False,
+                              lambda _delta: None, lambda _status: None)
+
+    def dispatch_stream(self, handoff, binding, on_delta, on_status=None,
+                        role=None, output_format='text'):
+        require(callable(on_delta), 'Ollama stream delta callback is required')
+        require(on_status is None or callable(on_status),
+                'Ollama stream status callback is invalid')
+        return self._dispatch(handoff, binding, role, output_format, True, on_delta,
+                              on_status or (lambda _status: None))
+
+    def _dispatch(self, handoff, binding, role, output_format, stream,
+                  on_delta, on_status):
         request, digest, legacy_digest, execution = self._request(
-            handoff, binding, role, output_format)
+            handoff, binding, role, output_format, stream=stream)
         row = self.runs.prepare(handoff.run_id, digest, legacy_digest, execution,
                                 handoff.manifest_sha256)
         if row['state'] == 'succeeded':
@@ -445,10 +486,13 @@ class OllamaAdapter:
             require(result.rowcount == 1, 'Ollama run state changed before dispatch')
             db.commit()
         try:
-            response = self.transport(binding, request)
-            if not (isinstance(response, dict) and response.get('model') == binding.model
-                    and isinstance(response.get('response'), str)):
-                raise OllamaResponseError('Invalid Ollama response', code='invalid-envelope')
+            if stream:
+                on_status('connecting')
+                response = self.stream_transport(
+                    binding, request, on_delta, on_status)
+            else:
+                response = self.transport(binding, request)
+            self._validate_response(response, binding)
         except OllamaResponseError as exc:
             with self.runs.connect() as db, db:
                 db.execute("UPDATE runs SET state='failed',error=?,error_code=? "
@@ -476,10 +520,149 @@ class OllamaAdapter:
         return response
 
     @staticmethod
+    def _validate_response(response, binding):
+        if not (isinstance(response, dict) and response.get('model') == binding.model
+                and isinstance(response.get('response'), str)
+                and response.get('done', True) is True):
+            raise OllamaResponseError('Invalid Ollama response', code='invalid-envelope')
+
+    @staticmethod
     def _http_transport(binding, request):
         return OllamaAdapter._json_transport(
             binding, 'POST', '/api/generate', request,
             timeout=OLLAMA_GENERATE_TIMEOUT, uncertain_after_send=True)
+
+    @staticmethod
+    def _http_stream_transport(binding, request, on_delta, on_status):
+        parsed = urlsplit(binding.endpoint)
+        if binding.boundary == 'same-node':
+            connection = http.client.HTTPConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_FIRST_TOKEN_TIMEOUT)
+        else:
+            connection = http.client.HTTPSConnection(
+                parsed.hostname, parsed.port, timeout=OLLAMA_FIRST_TOKEN_TIMEOUT,
+                context=ssl._create_unverified_context())
+        try:
+            try:
+                connection.connect()
+            except TimeoutError as exc:
+                raise OllamaResponseError('Ollama connection timed out',
+                                          code='connect-timeout') from exc
+            except ssl.SSLError as exc:
+                raise OllamaResponseError('Ollama TLS handshake failed',
+                                          code='tls-failed') from exc
+            except OSError as exc:
+                raise OllamaResponseError('Ollama endpoint is unavailable',
+                                          code='unavailable') from exc
+            if binding.tls_cert_sha256:
+                try:
+                    certificate = connection.sock.getpeercert(binary_form=True)
+                except (AttributeError, OSError, ssl.SSLError) as exc:
+                    raise OllamaResponseError('Ollama TLS certificate is unavailable',
+                                              code='tls-failed') from exc
+                if hashlib.sha256(certificate).hexdigest() != binding.tls_cert_sha256:
+                    raise OllamaResponseError('Ollama TLS certificate pin mismatch',
+                                              code='tls-pin-mismatch')
+            try:
+                connection.request('POST', '/api/generate', body=request,
+                                   headers={'Accept': 'application/x-ndjson',
+                                            'Content-Type': 'application/json'})
+                response = connection.getresponse()
+            except (TimeoutError, OSError, http.client.HTTPException) as exc:
+                raise _OllamaTransportUnknown(
+                    'Ollama stream was interrupted after dispatch',
+                    code='first-token-timeout' if isinstance(exc, TimeoutError)
+                    else 'transport-interrupted') from exc
+            if 300 <= response.status < 400:
+                raise OllamaResponseError('Ollama redirect is forbidden',
+                                          code='redirect-forbidden')
+            if response.status != 200:
+                codes = {400: 'request-rejected', 401: 'access-denied',
+                         403: 'access-denied', 404: 'model-unavailable',
+                         429: 'overloaded', 503: 'overloaded'}
+                raise OllamaResponseError(f'Ollama returned HTTP {response.status}',
+                                          code=codes.get(response.status, 'http-error'))
+            on_status('waiting-first-token')
+            if connection.sock is not None:
+                connection.sock.settimeout(OLLAMA_FIRST_TOKEN_TIMEOUT)
+            chunks = []
+            total = events = response_bytes = 0
+            thinking_seen = False
+            while True:
+                try:
+                    raw = response.readline(MAX_STREAM_LINE + 1)
+                except (TimeoutError, OSError, http.client.HTTPException) as exc:
+                    raise _OllamaTransportUnknown(
+                        'Ollama stream became idle or was interrupted',
+                        code='first-token-timeout' if events == 0 and isinstance(exc, TimeoutError)
+                        else 'idle-timeout' if isinstance(exc, TimeoutError)
+                        else 'transport-interrupted') from exc
+                if not raw:
+                    raise _OllamaTransportUnknown(
+                        'Ollama stream ended before the final frame',
+                        code='stream-incomplete')
+                if len(raw) > MAX_STREAM_LINE:
+                    raise OllamaResponseError('Ollama stream frame exceeds 1 MiB',
+                                              code='stream-frame-too-large')
+                total += len(raw); events += 1
+                if total > MAX_STREAM_RESPONSE or events > MAX_STREAM_EVENTS:
+                    raise OllamaResponseError('Ollama stream exceeds configured limits',
+                                              code='stream-too-large')
+                try:
+                    frame = json.loads(raw)
+                except (UnicodeError, ValueError) as exc:
+                    raise OllamaResponseError('Invalid Ollama NDJSON frame',
+                                              code='invalid-stream-json') from exc
+                if not (isinstance(frame, dict) and frame.get('model') == binding.model
+                        and isinstance(frame.get('created_at'), str)
+                        and isinstance(frame.get('response'), str)
+                        and isinstance(frame.get('thinking', ''), str)
+                        and type(frame.get('done')) is bool and 'error' not in frame):
+                    raise OllamaResponseError('Invalid Ollama stream envelope',
+                                              code='invalid-stream-envelope')
+                if frame['done']:
+                    if frame['response']:
+                        raise OllamaResponseError('Ollama final stream frame contains text',
+                                                  code='invalid-stream-final')
+                    numeric = ('total_duration', 'load_duration', 'prompt_eval_count',
+                               'prompt_eval_cached_count', 'prompt_eval_duration',
+                               'eval_count', 'eval_duration')
+                    if any(name in frame and (type(frame[name]) is not int
+                           or frame[name] < 0) for name in numeric):
+                        raise OllamaResponseError('Invalid Ollama final stream metrics',
+                                                  code='invalid-stream-final')
+                    if ('done_reason' in frame and not isinstance(frame['done_reason'], str)):
+                        raise OllamaResponseError('Invalid Ollama final stream reason',
+                                                  code='invalid-stream-final')
+                    result = dict(frame); result.pop('thinking', None)
+                    result['response'] = ''.join(chunks)
+                    return result
+                thinking = frame.get('thinking', '')
+                if thinking:
+                    if connection.sock is not None:
+                        connection.sock.settimeout(OLLAMA_IDLE_TIMEOUT)
+                    if not chunks and not thinking_seen:
+                        on_status('thinking')
+                    thinking_seen = True
+                    # Reasoning remains private provider output. Its bytes are bounded by
+                    # the complete NDJSON limit above and are never exposed or persisted.
+                delta = frame['response']
+                if delta:
+                    if connection.sock is not None:
+                        connection.sock.settimeout(OLLAMA_IDLE_TIMEOUT)
+                    if not chunks:
+                        on_status('generating')
+                    chunks.append(delta)
+                    response_bytes += len(delta.encode())
+                    if response_bytes > MAX_STREAM_RESPONSE:
+                        raise OllamaResponseError('Ollama streamed text exceeds 16 MiB',
+                                                  code='response-too-large')
+                    on_delta(delta)
+        finally:
+            try:
+                connection.close()
+            except OSError:
+                pass
 
     @staticmethod
     def _json_transport(binding, method, path, body=None, *, timeout, uncertain_after_send):
