@@ -35,8 +35,10 @@ je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
 `d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
 jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 `436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
-merge commit `4d2e32c`; evidence je ve WORK_LOG. Ollama streaming je aktivní
-samostatná feature v TODO.
+merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` má
+2026-10-12 splněnou feature akceptaci a evidenci archivovanou ve WORK_LOG;
+její PR do `develop` dosud nebyl vytvořen ani sloučen. Další dávka se
+aktivuje až po doručení tohoto PR.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -82,6 +84,26 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   doručení IMP-02, nikoli o rozšíření jeho větve.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
+  (cílová úroveň: designed → PoC validated).** Požadavek uživatele po
+  fyzické akceptaci streamu: Gemma občas odpoví slovensky namísto česky.
+  Definovat provider-neutral jazykovou policy, její precedence mezi uzlem,
+  projektem, vláknem a jednotlivým během a explicitní BCP 47 identifikátor v
+  UI, Context Manifestu/provider requestu a run provenance. První akceptace
+  ověří výslovně zvolenou češtinu na reálné Gemmě, navázání vlákna,
+  změnu jazyka pro další běh a restart. Modelové nedodržení se nesmí tiše
+  překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
+  požadovaný jazyk a případnou odchylku.
+
+- [ ] [planned] **UX-FACELIFT-01 — Vizuální facelift a přeuspořádání prvků
+  (cílová úroveň: designed → implemented).** Uživatel dodá vlastní návrh
+  rozmístění; do té doby se nevymýšlí paralelní redesign. Následná feature
+  může upravit vizuální hierarchii a polohu vybraných prvků, ale zachová
+  jeden sdílený web/desktop frontend, mobilní layout, klávesnicovou
+  přístupnost, bezpečné textové vykreslení a existující RBAC/privacy a
+  recovery hranice. Před aktivací převést uživatelský návrh na konkrétní
+  obrazovky, mimo-rozsah a akceptační podmínky jednoho reviewovatelného PR.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
