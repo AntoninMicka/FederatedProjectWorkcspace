@@ -2054,19 +2054,25 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    selected_artifact_ids:[],content:draft.value.trim(),
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
    run_choice:runChoice};
-  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+ const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám do OpenAI…';
   chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
-  try{const result=externalStreaming ?
-   await externalStreamRequest(pendingChatRequest,delta=>{chatStream.textContent+=delta;}) :
+  const liveProgress=externalStreaming?startChatProgress('Připojuji se k OpenAI…'):null;
+  let receivedDeltas=0;
+  try{if(liveProgress)await waitForVisiblePaint();
+   const result=externalStreaming ?
+   await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
+    liveProgress.set('OpenAI generuje odpověď…');chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
-   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent='Externí odpověď byla přijata.';
+   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=externalStreaming ?
+    `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatOperationStatus.textContent=error.message;
-  }finally{chatStream.hidden=true;submit.disabled=!activeProject || !draft.value.trim();}
+  }finally{if(liveProgress)liveProgress.stop();chatStream.hidden=true;
+   submit.disabled=!activeProject || !draft.value.trim();}
   return;
  }
  if(mode==='brainstorming' && adapter==='ollama'){
@@ -2087,16 +2093,18 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    generating:'Ollama generuje odpověď…',
    completed:'Generování je dokončeno.'};
   const liveProgress=ollamaStreaming?startChatProgress(streamStates.preparing):null;
+  let receivedDeltas=0;
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
    if(liveProgress)await waitForVisiblePaint();
    const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
-    delta=>{chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
+    delta=>{receivedDeltas+=1;chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
      liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
-   chatOperationStatus.textContent='Odpověď je připravena.';
+   chatOperationStatus.textContent=ollamaStreaming ?
+    `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí.` : 'Odpověď je připravena.';
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatStream.textContent='';

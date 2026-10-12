@@ -29,7 +29,9 @@ dokud není ověřený HTTPS pin a síťová hranice.
   časovaný stav **Ollama zpracovává orchestraci…**. Task router nadále vrátí
   validovaný výsledek najednou; tento stav proto neoznačuje tokenový stream.
 - [ ] Po dokončení porovnejte průběžný text s uloženou assistant zprávou a
-  zkontrolujte providerem vrácené počty tokenů a časy, pokud je model poskytl.
+  zkontrolujte hlášení `přijato N průběžných částí`. Hodnota vyšší než nula
+  potvrzuje textové delta události; dále zkontrolujte providerem vrácené počty
+  tokenů a časy, pokud je model poskytl.
 - [ ] V bočním panelu otevřete **Chaty**. Nové vlákno musí být v části
   **Zařazené** a označené jako chat tohoto právě otevřeného projektu; nesmí
   skončit mezi nezařazenými chaty.

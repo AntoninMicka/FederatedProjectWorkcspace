@@ -78,6 +78,16 @@ perzistence, task role a změna externího OpenAI streamu.
   ověřil nenulový rozměr a průnik karty s viditelným viewportem: **OK**;
   cílená desktopová sada: **22 testů OK, 2 volitelné přeskočeny**; úplná sada:
   **502 testů OK, 24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-I — Jednotný viditelný stream
+  providerů (implemented).** Read-only kontrola lokálních run journalů po třetí
+  fyzické zkoušce ukázala po sobě Ollama i OpenAI Brainstorming běh; poslední
+  pokus nebyl Ollama. OpenAI stream nyní používá stejnou viditelnou časovanou
+  kartu a scrollování jako Ollama. Obě větve po dokončení vypíšou počet
+  skutečně přijatých textových delt, aby fyzická akceptace rozlišila providerový
+  stream od pouhého finálního výsledku; obsah ani reasoning se neloguje.
+  Cílená desktopová sada: **22 testů OK, 2 volitelné přeskočeny**; reálný
+  Qt/WebEngine test viditelnosti: **OK**; úplná sada: **502 testů OK,
+  24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož
