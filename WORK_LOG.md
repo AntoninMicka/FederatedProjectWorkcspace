@@ -5,13 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-OUTPUT-ROUTER-02 — Execution kompozičního plánu — 2026-10-12
+
+Dávka na větvi `feature/f-m4-output-router-02-execution`, založené z `develop`
+`d96fe7a`, dodala první explicitně potvrzené durable provedení typovaného output
+plánu a skutečný same-process `renderer.web-static@1.0`. Dosažená úroveň je
+**implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
+splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M4-OUTPUT-ROUTER-02-A — Execution a recovery kontrakt
+  (designed).** ADR 0030 odděluje Git vstupy, node-local SQLite journal a
+  obnovitelnou immutable cache. Request, privátní preview a approval digest
+  vážou přesný plan/policy/catalog/HEAD i skutečné bajty; crash boundaries
+  rozlišují připravený, `dispatching`, doloženě materializovaný a `unknown` stav.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-02-B — Durable executor a web-static
+  renderer (implemented).** Topologický executor před každým krokem znovu
+  ověřuje HEAD, Git blob, dřívější materializace, policy, descriptor, privacy a
+  potvrzení. Mode-0600 SQLite drží manifesty a receipty; bounded generace se
+  publikuje atomicky v mode-0700 cache mimo Git. První renderer escapuje
+  nedůvěryhodný Markdown do script-free HTML a vrací bounded statický bundle.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-02-C — Preview, potvrzení a recovery
+  surface (implemented).** Aplikační service a CLI smoke oddělují prepare od
+  execute. Chybějící/stale/nevalidní vstup, neznámý adaptér a neurčitý krok
+  zastaví potomky bez fallbacku či retry. Explicitní reconciliation převezme
+  pouze úplnou generaci se shodným manifest hashem; jinak uzavře krok jako
+  durable `unknown`.
+- [x] [completed] **F-M4-OUTPUT-ROUTER-02-D — Regrese, dokumentace a předání
+  (PoC validated).** Execution smoke dokončil preview i krok, zachoval HEAD a
+  pracovní strom a neprovedl publikaci. Cílená sada pokryla potvrzení, stale
+  HEAD, změnu policy/descriptoru, materializovaný vstup, tampering, bezpečné
+  HTML, idempotenci, blokování potomků a pády před i po atomickém zveřejnění.
+  Úplná sada mimo socketově omezený sandbox prošla: **487 testů OK, 25
+  přeskočeno**. `py_compile` a `git diff --check` prošly bez chyby.
+
+Reuse/adaptuje přesný katalog a DAG F-M4-OUTPUT-ROUTER-01, durable
+journal/approval vzor F-M4-WORKFLOW-01 a atomickou generaci ADR 0018. Workspace
+se nepoužívá k zápisu cache, publication adaptéry se nezaměňují za renderer a
+ze soukromé inventury se nekopíroval kód. Nevznikl plugin framework, fronta ani
+nová runtime závislost.
+
+Omezení: PoC má jediný reviewovaný runtime adaptér `renderer.web-static@1.0` a
+CLI/service surface, nikoli plnou sekci Výstupy v desktop/web UI. Julia runner,
+LLM planner dispatch, prezentace, externí publikace, DNS/deploy a explicitní
+uložení výsledku jako projektového artefaktu nejsou součástí dávky. Volitelné
+reálné Qt/WebEngine a cílové zařízení nebyly touto lokální akceptací spuštěny.
+
 ## F-M4-OUTPUT-ROUTER-01 — Deklarativní katalog a read-only kompoziční plán — 2026-10-11
 
 Dávka na větvi `feature/f-m4-output-router-01`, založené z `develop` `916e5ec`,
 dodala staticky reviewovaný output capability katalog, read-only plan/step DAG
 a aplikační review nedůvěryhodného planner návrhu. Dosažená úroveň je
 **implemented / lokálně PoC validated** a akceptační podmínky dávky jsou
-splněné. PR do `develop` dosud nebyl vytvořen ani sloučen.
+splněné. PR #59 byl sloučen do `develop` jako merge commit `d96fe7a`.
 
 - [x] [completed] **F-M4-OUTPUT-ROUTER-01-A — Descriptor a fail-closed katalog
   (implemented / locally PoC validated).** Uzavřený v1 descriptor nese přesné
@@ -51,7 +96,8 @@ rozpracovanou operaci.
 Omezení: není integrován skutečný Ollama planner, UI, renderer execution,
 runtime dostupnost, Context Manifest jednotlivých kroků, materializace, receipt,
 `unknown` recovery ani publikace. Validní plán není approval. Tyto schopnosti
-zůstávají ve F-M4-OUTPUT-ROUTER-02 v BACKLOG; checklist je výslovně nedokládá.
+v době uzavření zůstávaly pro F-M4-OUTPUT-ROUTER-02; read-only checklist je
+výslovně nedokládá. Pozdější výsledek této dávky je evidován výše.
 
 ## M1-LXC-DNS-TLS-01 — HTTPS přístup přes IP i DNS jméno — 2026-10-11
 

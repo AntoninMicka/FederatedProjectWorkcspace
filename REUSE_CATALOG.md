@@ -160,6 +160,17 @@ module API manifestu. Runtime discovery, nový plugin framework a externí kód 
 odmítají jako nepotřebné pro read-only katalog a plán. Kontrakt a hranice:
 [ADR 0030](docs/adr/0030-output-capability-catalog.md).
 
+F-M4-OUTPUT-ROUTER-02 **reuse/adaptuje** přesný katalog a DAG z předchozí
+dávky, durable journal/approval vzor F-M4-WORKFLOW-01 a privátní atomickou
+generaci ADR 0018. Projektový `Workspace` zůstává pouze autoritou případné
+pozdější explicitní publikace; lokální materializaci nezapisuje do Gitu.
+Publication CMS/Cloudflare adaptéry se odmítají jako renderer, protože mají
+jiná oprávnění a externí účinky. Soukromá inventura nedokládá shodný execution,
+manifest, approval a `unknown` recovery kontrakt, proto se z ní nepřebírá kód.
+První přesný same-process renderer používá jen Python stdlib, bez plugin
+frameworku, fronty nebo další persistence. Rozhodnutí: [ADR
+0030](docs/adr/0030-output-capability-catalog.md#execution-persistence-a-recovery).
+
 F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
 soukromá inventura obsahuje obecné backendové capability, textový a obrazový
 adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context

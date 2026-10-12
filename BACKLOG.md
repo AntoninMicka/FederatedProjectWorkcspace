@@ -31,19 +31,13 @@ samostatnými feature. `UX-UNIFIED-02D` bylo doručeno PR #54 jako merge commit
 `F-M3-OLLAMA-ORCH-LAN-01` bylo doručeno PR #56 jako merge commit `a9207c5` a
 navazující `F-M3-OLLAMA-ORCH-LAN-01-FIX1` PR #57 jako merge commit `f8bc5b7`.
 `M1-LXC-DNS-TLS-01` bylo doručeno PR #58 jako merge commit `916e5ec`. Evidence
-je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` je feature-akceptovaná na vlastní větvi,
-evidence je ve WORK_LOG a TODO čeká na doručení jejího dosud nevytvořeného PR.
-Execution, NotebookLM unifikace a Ollama streaming zůstávají samostatné feature.
+je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
+`d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` je lokálně
+feature-akceptovaná na vlastní větvi, evidence je ve WORK_LOG a TODO čeká na
+doručení jejího dosud nevytvořeného PR. NotebookLM unifikace a Ollama streaming
+zůstávají samostatné feature.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M4-OUTPUT-ROUTER-02 — Execution kompozičního plánu
-  (cílová úroveň: designed → PoC validated; navazuje na
-  F-M4-OUTPUT-ROUTER-01).** Skládat explicitní artefakty a materializované
-  mezivýstupy, například účetní data → schválený Julia skript → tabulka/graf →
-  prezentace, se samostatnými Context Manifest/run kontrakty, privacy,
-  receipts, preview, potvrzeními a recovery. `unknown`, stale nebo nevalidní
-  krok zastaví závislé kroky bez automatického retry či skrytého fallbacku.
 
 - [ ] [planned] **UX-UNIFIED-02C — Společný NotebookLM import (cílová úroveň:
   implemented → PoC validated).** Po předchozích krocích převést existující
@@ -65,8 +59,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   tokenu i nečinnosti, ztrátu spojení, neplatný finální rámec, vědomý nový běh,
   restart a přístupnost `aria-live` bez zahlcení čtečky.
 
-## Zjištěné mezery a navazující ověření
-
 - [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
   (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
   používaný Open WebUI jako explicitní search capability. Task router smí
@@ -78,6 +70,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
   oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
   nebudou odvozeny pouze z dockerového názvu `searxng`.
+
+## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
   (cílová úroveň: designed → PoC validated; pozdější priorita).** Oddělit pouhé
