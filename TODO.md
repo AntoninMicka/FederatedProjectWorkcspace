@@ -88,6 +88,16 @@ perzistence, task role a změna externího OpenAI streamu.
   Cílená desktopová sada: **22 testů OK, 2 volitelné přeskočeny**; reálný
   Qt/WebEngine test viditelnosti: **OK**; úplná sada: **502 testů OK,
   24 volitelných přeskočeno**.
+- [x] [completed] **F-M3-OLLAMA-STREAM-01-J — Viditelná transportní telemetrie
+  (implemented).** Uživatelem předaný usage pro fyzický Ollama běh doložil
+  48,75 s celkem, z toho 41,37 s generování, ale dřívější počet delt zůstal v
+  jiném stavovém řádku. Zobrazená Spotřeba běhu nyní obsahuje i stav zapnutí
+  streamu, počet textových delt, čas první delty a celkový čas měřený ve
+  WebEngine. Telemetrie neobsahuje prompt, odpověď ani reasoning. Izolovaná
+  sonda na stejné instalaci Qt potvrdila průběžný Fetch/ReadableStream mezi
+  pěti půlsekundovými rámci; reálný app smoke: **OK**; cílená desktopová sada:
+  **22 testů OK, 2 volitelné přeskočeny**; úplná sada: **502 testů OK,
+  24 volitelných přeskočeno**.
 
 Akceptace: žádná delta sama nevytvoří zprávu ani durable úspěch; známá validní
 chyba je `failed`, ztracený stream po dispatch hranici `unknown`; retry téhož

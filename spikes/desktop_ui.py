@@ -1537,10 +1537,13 @@ function rememberThread(thread){
  if(index<0)knownThreads.unshift(thread);else knownThreads[index]=thread;
  renderThreadList(knownThreads);return thread;
 }
-function renderRunUsage(report){
+function renderRunUsage(report,delivery=null){
  if(!report || report.status!=='available'){chatRunUsage.hidden=true;return;}
  chatRunUsage.textContent='Spotřeba běhu: '+report.metrics
   .map(item=>`${item.name} ${item.value} ${item.unit}`).join(' · ');
+ if(delivery){chatRunUsage.textContent+=delivery.enabled ?
+  ` · stream ${delivery.deltas} částí · první text ${delivery.firstDeltaMs===null?'nepřišel':(delivery.firstDeltaMs/1000).toFixed(1)+' s'} · UI celkem ${(delivery.totalMs/1000).toFixed(1)} s` :
+  ' · stream nebyl v UI zapnutý';}
  chatRunUsage.hidden=false;
 }
 function renderTaskArtifactSources(){
@@ -2058,14 +2061,16 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   chatOperationStatus.textContent='Odesílám do OpenAI…';
   chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
   const liveProgress=externalStreaming?startChatProgress('Připojuji se k OpenAI…'):null;
-  let receivedDeltas=0;
+  let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
   try{if(liveProgress)await waitForVisiblePaint();
    const result=externalStreaming ?
    await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
+    if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
     liveProgress.set('OpenAI generuje odpověď…');chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
+    {enabled:externalStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
    chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=externalStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
@@ -2093,16 +2098,18 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    generating:'Ollama generuje odpověď…',
    completed:'Generování je dokončeno.'};
   const liveProgress=ollamaStreaming?startChatProgress(streamStates.preparing):null;
-  let receivedDeltas=0;
+  let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
   const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
   try{
    if(liveProgress)await waitForVisiblePaint();
    const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
-    delta=>{receivedDeltas+=1;chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
+    delta=>{receivedDeltas+=1;if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
+     chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
      liveProgress.set(streamStates[status] || 'Probíhá lokální AI běh…');}) :
     await projectRequest('/v1/chat/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
-   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report);pendingChatRequest=null;draft.value='';draft.focus();
+   renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
+    {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.value='';draft.focus();
    chatOperationStatus.textContent=ollamaStreaming ?
     `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí.` : 'Odpověď je připravena.';
   }catch(error){
