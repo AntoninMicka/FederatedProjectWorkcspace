@@ -1043,7 +1043,8 @@ capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
-F-M3-SEARCH-01 je aktivní feature pro explicitní řízené hledání přes SearXNG;
+F-M3-SEARCH-01 je na feature větvi PoC validated pro explicitní řízené hledání
+přes SearXNG a čeká na doručení jediného PR do `develop`;
 explicitní jazyk odpovědi a obecný workflow zůstávají samostatné navazující
 schopnosti. Gate M3 proto
 není vydáván za celý uzavřený.
@@ -1065,7 +1066,8 @@ není vydáván za celý uzavřený.
   feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
   zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
   UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
-- [ ] Řízené webové hledání — F-M3-SEARCH-01 aktivní: explicitní SearXNG
+- [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
+  explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
   výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
   tool callu, fallbacku nebo oslabení `local-only`.
@@ -1075,7 +1077,7 @@ není vydáván za celý uzavřený.
   provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
   providerů jsou PoC validated; PR #46 je sloučený do `develop`.
 - [ ] Provenance.
-- [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
+- [x] Řízené webové hledání — F-M3-SEARCH-01: konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
   navrhnout samostatný výstup `web-search`, ale nevolá síť ani nástroj přímo;
   aplikace před dispatch ověří privacy/policy a po návratu předá Ollamě pouze

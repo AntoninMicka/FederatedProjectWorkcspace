@@ -37,8 +37,9 @@ jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 `436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
 merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
 doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
-`F-M3-SEARCH-01` je aktivní výhradně v TODO na větvi
-`feature/f-m3-search-01-searxng`.
+`F-M3-SEARCH-01` má na větvi `feature/f-m3-search-01-searxng` uzavřenou
+feature akceptaci; evidence je ve WORK_LOG a čeká se na vytvoření a doručení
+jediného PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 

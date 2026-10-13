@@ -5,6 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG — 2026-10-13
+
+Dávka na větvi `feature/f-m3-search-01-searxng`, založené z `develop`
+`5c3b565`, přidala explicitně potvrzované webové hledání přes node-local
+SearXNG binding a následnou Ollama syntézu. Dosažená úroveň je **PoC
+validated**. Feature akceptace je uzavřená; jediný PR do `develop` dosud nebyl
+vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-SEARCH-01-A — Kontrakt, reuse a konfigurace
+  (designed).** ADR a reuse review vymezily explicitní binding, privacy,
+  bounded výsledky, nedůvěryhodný obsah a oddělení search runu od LLM runu.
+- [x] [completed] **F-M3-SEARCH-01-B — Bounded klient a durable search journal
+  (implemented).** Same-node/private-network transport validuje endpoint a
+  TLS pin, zakazuje redirect, omezuje odpověď, deduplikuje zdroje a drží
+  `prepared`/`dispatching`/`succeeded`/`failed`/`unknown` bez skrytého retry.
+- [x] [completed] **F-M3-SEARCH-01-C — Router, Context Manifest a syntéza
+  (implemented).** Uzavřený `web-search` outcome váže přesné vstupy, HEAD,
+  privacy a binding; bounded výsledky vstupují jako nedůvěryhodná data do
+  nového manifestu role `researcher-v1` a existujícího Ollama run journalu.
+- [x] [completed] **F-M3-SEARCH-01-D — Společné API a UI potvrzení
+  (implemented).** Desktop/web nastavení umí binding a probe; náhled zobrazuje
+  přesný dotaz, jazyk, endpoint, privacy a limit a až vědomé potvrzení spustí
+  hledání. Odpověď, URL, titulky a úryvky se vykreslují jako bezpečný text.
+- [x] [completed] **F-M3-SEARCH-01-E — Regrese, restart a fyzická akceptace
+  (PoC validated).** Uživatel dokončil celý desktopový tok preview → potvrzení
+  → SearXNG → Ollama. Dotaz na spojení Pardubice–Praha zobrazil syntézu a tři
+  zdroje včetně IDOS; výsledek potvrdil slovy „lepší :)“.
+- [x] [completed] **F-M3-SEARCH-01-F — Kompatibilita živého router outputu
+  (implemented).** Přesný prázdný `message_ids` tvar lokálního routeru se
+  bezpečně doplní aktuálním Focus ID; ostatní neplatné tvary zůstávají
+  fail-closed.
+- [x] [completed] **F-M3-SEARCH-01-G — Akční diagnostika chybějícího bindingu
+  (implemented).** Chybějící binding má samostatný `not-configured` stav;
+  před preview nevznikne prázdný journal a po preview lze vědomě obnovit přesný
+  binding bez síťového účinku nebo nového modelového běhu.
+- [x] [completed] **F-M3-SEARCH-01-H — Nezávislá kontrola webového dotazu
+  (implemented).** Search preview je mimo pevný composer v rolovací části
+  chatu a jeho bounded zobrazení už nezakrývá zadávací formulář.
+- [x] [completed] **F-M3-SEARCH-01-I — Explicitní jazyk SearXNG dotazu
+  (implemented).** Schvalovaný preview, durable request i HTTP query nesou
+  `language=cs-CZ`; tím se odstranila reálná nula výsledků způsobená CAPTCHA
+  při requestu bez jazyka.
+
+Závěrečné ověření po poslední aplikační změně: Python kompilace, JavaScript
+`node --check`, `git diff --check`, cílené regrese a úplná sada **517 testů OK,
+24 volitelných přeskočeno**. Izolovaný živý průchod původního dotazu na spojení
+Pardubice–Hradec Králové skončil `completed`, se 3 bounded zdroji a 988 znaky
+syntézy; projekt ani uživatelské vlákno nezměnil. Recovery po úspěšném hledání
+před syntézou znovu používá uložené výsledky i stejný Ollama run. Mimo rozsah
+zůstává automatické otevírání nalezených stránek, crawler/RAG, skrytý fallback
+a obecná jazyková policy odpovědí.
+
 ## F-M3-OLLAMA-STREAM-01 — Streamovaná odpověď a živý stav lokálního AI běhu — 2026-10-12
 
 Dávka na větvi `feature/f-m3-ollama-stream-01`, založené z `develop`
