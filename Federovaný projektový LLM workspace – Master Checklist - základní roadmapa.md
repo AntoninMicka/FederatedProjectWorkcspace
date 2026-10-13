@@ -1045,9 +1045,9 @@ začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
 F-M3-SEARCH-01 je na feature větvi PoC validated pro explicitní řízené hledání
 přes SearXNG a čeká na doručení jediného PR do `develop`;
-explicitní jazyk odpovědi a obecný workflow zůstávají samostatné navazující
-schopnosti. Gate M3 proto
-není vydáván za celý uzavřený.
+inteligentní iterace `F-M3-SEARCH-02`, volitelný automatický dispatch
+`F-M3-SEARCH-03`, explicitní jazyk odpovědi a obecný workflow zůstávají
+samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
@@ -1071,6 +1071,17 @@ není vydáván za celý uzavřený.
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
   výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
   tool callu, fallbacku nebo oslabení `local-only`.
+- [ ] Inteligentní iterativní hledání — F-M3-SEARCH-02: Ollama klasifikuje
+  každou bounded sadu výsledků jako `final`, `intermediate` nebo
+  `insufficient`, doloží úsudek konkrétními zdroji a může navrhnout další
+  bounded dotazy. Všechny mezivýsledky, hodnocení a návaznosti zůstávají
+  viditelné a durable; modelové `final` není garance pravdivosti.
+- [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
+  hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
+  s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
+  dotaz zkontrolovat/upravit, ihned odeslat nebo zrušit. Ztráta viditelnosti,
+  odpojení či restart odpočet fail-closed pozastaví; odeslaný síťový účinek
+  nelze odvolat a `unknown` se automaticky neopakuje.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
@@ -1085,6 +1096,22 @@ není vydáván za celý uzavřený.
   titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
   instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
   timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
+- [ ] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání:** nad výsledky
+  F-M3-SEARCH-01 přidat uzavřený evaluator/planner kontrakt s výsledkem
+  `final` / `intermediate` / `insufficient`, odkazy na použité source IDs,
+  omezeními a navrženými follow-up queries. Každé kolo musí mít vlastní přesný
+  Context Manifest, search/LLM run provenance a parent/child vazbu; UI zobrazí
+  i mezivýsledky a důvod pokračování. Orchestrátor vynutí uživatelsky viditelné
+  limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
+  změně privacy/policy/binding nebo `unknown` účinku.
+- [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
+  přidat per-search režim `manual` versus automatický s odloženým odesláním.
+  Každý automatický dotaz musí být před sítí viditelný spolu s přesným cílem,
+  privacy, kolem a budgetem a mít uživatelsky zvolený countdown 3–5 sekund.
+  Akce pause/review, edit, send-now a cancel jsou dostupné po celý countdown;
+  pause zastaví i další frontu. Fronta je durable a fail-closed při skrytí UI,
+  odpojení či restartu. Stav po dispatch respektuje stávající hranici
+  `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 

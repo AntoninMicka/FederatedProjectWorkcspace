@@ -74,6 +74,36 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
+- [ ] [planned] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání
+  (cílová úroveň: designed → PoC validated).** Navázat až po doručení
+  `F-M3-SEARCH-01`. Ollama nad každou bounded sadou výsledků vrátí uzavřené
+  hodnocení `final` / `intermediate` / `insufficient`, použité zdroje,
+  omezení a případné navazující dotazy. Označení `final` je modelový úsudek,
+  nikoli garance pravdivosti. UI zobrazí všechny mezivýsledky, jejich query,
+  zdroje, hodnocení a vazbu na další kolo; finální syntéza nesmí mezikroky
+  skrýt ani přepsat. Každé kolo má vlastní Context Manifest a durable vazbu
+  parent/child, znovu projde privacy/policy a používá bounded uživatelsky
+  viditelný limit kol, dotazů, výsledků a času. `unknown` search nebo LLM běh
+  se automaticky neopakuje a nalezené stránky se bez další schopnosti
+  automaticky neotevírají. Akceptace zahrne nedostatečné první výsledky,
+  užitečný mezivýsledek, rozporné zdroje, finální první kolo, vyčerpaný budget,
+  restart mezi koly a úplnou dohledatelnost každého modelového úsudku.
+
+- [ ] [planned] **F-M3-SEARCH-03 — Volitelný automatický dispatch s časem na
+  zásah (cílová úroveň: designed → PoC validated).** Nad iterativním workflow
+  `F-M3-SEARCH-02` nabídnout pro konkrétní hledání volbu ručního potvrzování
+  každého dotazu nebo automatického režimu. Automaticky navržený dotaz se
+  zobrazí s účelem, privacy, cílem, číslem kola a zbývajícím budgetem a odešle
+  se až po viditelném uživatelsky zvoleném odpočtu **3–5 sekund**. Během něj
+  musí jít automatiku pozastavit a dotaz zkontrolovat/upravit, ihned odeslat
+  nebo zrušit; pauza platí i pro další připravené dotazy. Ztráta viditelnosti
+  UI, odpojení klienta nebo restart odpočet fail-closed pozastaví a vyžádá nové
+  vědomé spuštění. Durable fronta odliší `queued`, `countdown`, `paused`,
+  `dispatching` a terminální stavy; po skutečném odeslání už dotaz nelze vzít
+  zpět a neurčitý výsledek se bez nového rozhodnutí neopakuje. Režim ani
+  odpočet nesmějí obejít RBAC, privacy, binding, limity nebo audit přesných
+  odeslaných bajtů.
+
 - [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
   (cílová úroveň: designed → PoC validated).** Požadavek uživatele po
   fyzické akceptaci streamu: Gemma občas odpoví slovensky namísto česky.
