@@ -340,6 +340,7 @@ class ChatServiceTests(unittest.TestCase):
         preview = service.task_search_preview(preview_request)
         self.assertEqual(preview['query'], outcome['query'])
         self.assertEqual(preview['privacy'], 'project')
+        self.assertEqual(preview['language'], 'cs-CZ')
         self.assertEqual(search_calls, [])
         confirm = {'task_id': route['task_id'], 'search_id': preview['search_id'],
                    'preview_sha256': preview['preview_sha256'], 'approved': True}

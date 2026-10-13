@@ -119,10 +119,10 @@ class WebSearchTests(unittest.TestCase):
         class Connection:
             def __init__(self, response=None, connect_error=None):
                 self.response, self.connect_error = response, connect_error
-                self.sock = None
+                self.sock = None; self.requests = []
             def connect(self):
                 if self.connect_error: raise self.connect_error
-            def request(self, *_args, **_kwargs): pass
+            def request(self, *args, **kwargs): self.requests.append((args, kwargs))
             def getresponse(self): return self.response
             def close(self): pass
 
@@ -138,6 +138,8 @@ class WebSearchTests(unittest.TestCase):
                     SearXNGAdapter, '_connection', return_value=(parsed, connection)):
                 with self.assertRaisesRegex(SearchResponseError, message):
                     SearXNGAdapter._http_transport(self.binding, 'public query')
+                if connection.response is not None:
+                    self.assertIn('language=cs-CZ', connection.requests[0][0][1])
 
 
 if __name__ == '__main__':

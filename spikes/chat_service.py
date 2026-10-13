@@ -35,7 +35,8 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
 from spikes.project_creation import ProjectCreation
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
-from spikes.web_search import (SearXNGAdapter, SearXNGBindings, SearXNGBinding,
+from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
+                               SearXNGBindings, SearXNGBinding,
                                SearchResponseError, SearchRuns)
 
 
@@ -528,10 +529,11 @@ class ChatService:
         binding = self._search_binding()
         search_request = dict(request, project_id=row['project_id'],
             query=outcome['query'], privacy=row['privacy'], created_at=original['created_at'],
-            expected_head=row['project_commit'])
+            expected_head=row['project_commit'], language=DEFAULT_SEARCH_LANGUAGE)
         preview = {'schema_version': 1, **request, 'query': outcome['query'],
                    'purpose': outcome['purpose'], 'privacy': row['privacy'],
                    'result_limit': binding.result_limit,
+                   'language': DEFAULT_SEARCH_LANGUAGE,
                    'binding': binding.serialize(),
                    'message_ids': outcome['message_ids'],
                    'artifact_ids': outcome['artifact_ids'],

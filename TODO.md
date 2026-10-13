@@ -86,6 +86,12 @@ odpovědi nevyvolá druhé modelové volání. Až potom se idempotentně uzavř
   chatového formuláře, kde rozbalený JSON vytlačil celý composer. Kontrola je
   v rolovací části chatu, dlouhý obsah má omezenou výšku a zadání zůstává
   dostupné; regrese kontroluje oddělené umístění obou prvků.
+- [x] [completed] **F-M3-SEARCH-01-I — Explicitní jazyk SearXNG dotazu
+  (cílová úroveň: implemented; původ: fyzická akceptace 2026-10-13).** Reálný
+  request bez jazyka skončil s nulou výsledků a diagnostikou `duckduckgo:
+  CAPTCHA`, zatímco stejný dotaz s `language=cs-CZ` vrátil deset výsledků.
+  Jazyk je nyní součástí přesného schvalovaného preview, durable requestu i
+  HTTP dotazu; transportní regrese ověřuje skutečný query parametr.
 
 ## Aktuální ověření a omezení — 2026-10-13
 
@@ -95,8 +101,9 @@ odpovědi nevyvolá druhé modelové volání. Až potom se idempotentně uzavř
   jsou bez chyby.
 - Izolovaný živý `scripts/searxng_search_smoke.py` prošel proti dostupnému
   SearXNG `127.0.0.1:8888` a Ollamě `127.0.0.1:11434`: stav `completed`, model
-  `gemma4:latest`, 3 bounded zdroje a 911 znaků syntézy. Stejný smoke nepoužil
-  projektová ani uživatelská data.
+  `gemma4:latest` a 3 bounded zdroje. Po opravě explicitního jazyka prošel i
+  původní dotaz `spoje z pardubic do hradec králové` se 3 zdroji a 988 znaky
+  syntézy. Smoke nepoužil projektová ani uživatelská data.
 - Po zjištění F doplnil stejný smoke volitelný skutečný task-router průchod.
   Přesný dotaz `vyhledej výsledky voleb podzim 2026` prošel s
   `--route-through-model` do stavu `completed`, se 3 bounded zdroji a 1 257

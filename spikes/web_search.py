@@ -25,6 +25,7 @@ MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_TITLE_BYTES = 1024
 MAX_SNIPPET_BYTES = 8192
 MAX_URL_BYTES = 8192
+DEFAULT_SEARCH_LANGUAGE = 'cs-CZ'
 
 
 def _canonical(value):
@@ -397,7 +398,8 @@ class SearXNGAdapter:
                 if hashlib.sha256(certificate).hexdigest() != binding.tls_cert_sha256:
                     raise SearchResponseError('SearXNG TLS certificate pin mismatch',
                                               code='tls-pin-mismatch')
-            path = '/search?' + urlencode({'q': query, 'format': 'json'})
+            path = '/search?' + urlencode({'q': query, 'format': 'json',
+                                            'language': DEFAULT_SEARCH_LANGUAGE})
             try:
                 connection.request('GET', path, headers={'Accept': 'application/json'})
                 response = connection.getresponse()
