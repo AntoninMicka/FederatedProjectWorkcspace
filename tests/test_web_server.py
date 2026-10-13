@@ -81,6 +81,36 @@ class WebTests(unittest.TestCase):
         return self.request(path='/v1/projects/create/confirm', headers=headers,
                             body=json.dumps({'plan': json.loads(data)}))
 
+    def test_admin_project_removal_routes_require_preview_and_restore_from_trash(self):
+        code, data, _ = self.create_project('Disposable project')
+        self.assertEqual(code, 200, data)
+        created = json.loads(data)
+        code, data, _ = self.request(path='/v1/projects/delete/preview', body=json.dumps({
+            'project_id': created['id'], 'mode': 'trash'}))
+        self.assertEqual(code, 200, data)
+        preview = json.loads(data)
+        self.assertEqual(preview['blockers'], [])
+        operation = str(uuid4())
+        code, data, _ = self.request(path='/v1/projects/delete/confirm', body=json.dumps({
+            'preview': preview, 'operation_id': operation}))
+        self.assertEqual(code, 200, data)
+        self.assertTrue(json.loads(data)['unregistered'])
+        code, data, _ = self.request(path='/v1/projects', body=json.dumps({'details': True}))
+        self.assertEqual(json.loads(data)['projects'], [])
+        code, data, _ = self.request(path='/v1/projects/delete/trash', body='{}')
+        self.assertEqual(code, 200, data)
+        self.assertEqual(json.loads(data)['projects'][0]['operation_id'], operation)
+        code, data, _ = self.request(path='/v1/projects/delete/restore/preview',
+            body=json.dumps({'operation_id': operation}))
+        self.assertEqual(code, 200, data)
+        restore_preview = json.loads(data)
+        code, data, _ = self.request(path='/v1/projects/delete/restore/confirm', body=json.dumps({
+            'preview': restore_preview, 'operation_id': str(uuid4())}))
+        self.assertEqual(code, 200, data)
+        self.assertTrue(json.loads(data)['restored'])
+        code, data, _ = self.request(path='/v1/projects', body=json.dumps({'details': True}))
+        self.assertEqual(json.loads(data)['projects'][0]['id'], created['id'])
+
     def notebook_archive(self):
         path = self.root / 'notebooklm.tgz'
         with tarfile.open(path, 'w:gz') as bundle:
@@ -244,6 +274,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/chat/send-stream',
             body=json.dumps({'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.create_project('Denied', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/projects/delete/preview', body=json.dumps({
+            'project_id': project, 'mode': 'trash'}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/notebooklm/preview',
             body='{"archive_path":"/tmp/denied.tgz","archive_capability":null}', headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],

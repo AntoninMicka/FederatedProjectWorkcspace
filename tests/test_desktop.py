@@ -49,6 +49,19 @@ class DesktopTests(unittest.TestCase):
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
                         <= DesktopHandler.post_paths)
 
+    def test_project_removal_ui_has_separate_preview_restore_and_purge_approvals(self):
+        self.assertIn('id="project-delete-panel"', HTML)
+        self.assertIn('id="project-trash-list"', HTML)
+        for path in ('/v1/projects/delete/preview', '/v1/projects/delete/confirm',
+                     '/v1/projects/delete/restore/preview',
+                     '/v1/projects/delete/restore/confirm',
+                     '/v1/projects/delete/purge/preview',
+                     '/v1/projects/delete/purge/confirm'):
+            self.assertIn(path, JS)
+        self.assertIn('Vzdálené a dříve sdílené kopie zůstanou zachovány.', JS)
+        self.assertIn('projectDeleteCheck.checked=false', JS)
+        self.assertNotIn("scrollIntoView({block:'nearest'})", JS)
+
     def test_chat_validation_returns_only_actionable_allowlisted_reason(self):
         driver = test_local_api.LocalAPITests()
         request = {key: None for key in (

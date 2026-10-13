@@ -18,6 +18,8 @@ from spikes.local_api import running_api
 from spikes.projects import Projects
 from spikes.project_creation import CreationConflict, ProjectCreation, default_node_path
 from spikes.project_creation_actions import ProjectCreationActions
+from spikes.project_deletion import ProjectDeletion
+from spikes.project_deletion_actions import ProjectDeletionActions
 from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
@@ -189,6 +191,10 @@ def main():
     app = QApplication([sys.argv[0]])
     app.setApplicationName('Projektový workspace')
     node_path = args.node or default_node_path()
+    try:
+        ProjectDeletion(node_path).recover()
+    except Exception as exc:
+        QMessageBox.warning(None, 'Odstranění projektu nebylo dokončeno', str(exc))
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
         server.chat_service = ChatService(node_path, server.projects)
@@ -208,6 +214,7 @@ def main():
         server.publication_cms = PublicationCms(server.chat_service.state_dir)
         server.project_creation_actions = ProjectCreationActions(
             node_path, desktop_locations=True)
+        server.project_deletion_actions = ProjectDeletionActions(node_path)
         server.notebooklm_import_actions = NotebookLMImportActions(
             node_path, desktop_capabilities=True)
         profile = QWebEngineProfile(app)  # unnamed => off the record

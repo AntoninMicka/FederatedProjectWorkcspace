@@ -1063,8 +1063,7 @@ capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
-F-M3-SEARCH-01 je na feature větvi PoC validated pro explicitní řízené hledání
-přes SearXNG a čeká na doručení jediného PR do `develop`;
+F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`;
 inteligentní iterace `F-M3-SEARCH-02`, volitelný automatický dispatch
 `F-M3-SEARCH-03`, explicitní jazyk odpovědi a obecný workflow zůstávají
 samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzavřený.

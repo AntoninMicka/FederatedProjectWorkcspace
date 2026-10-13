@@ -202,13 +202,17 @@ class ProjectCreation:
             try:
                 db.execute('PRAGMA synchronous=FULL')
                 version = db.execute('PRAGMA user_version').fetchone()[0]
-                check(version in (0, 1), 'Nepodporovaná verze journalu vytváření.')
+                check(version in (0, 1, 2), 'Nepodporovaná verze journalu operací projektu.')
                 db.executescript('''
                     CREATE TABLE IF NOT EXISTS local_author (id TEXT NOT NULL);
                     CREATE TABLE IF NOT EXISTS creations (
                         id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
                     CREATE UNIQUE INDEX IF NOT EXISTS one_pending_creation ON creations(done) WHERE done=0;
-                    PRAGMA user_version=1;
+                    CREATE TABLE IF NOT EXISTS project_deletions (
+                        id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
+                    CREATE UNIQUE INDEX IF NOT EXISTS one_pending_project_deletion
+                        ON project_deletions(done) WHERE done=0;
+                    PRAGMA user_version=2;
                 ''')
                 if db.execute('SELECT id FROM local_author').fetchone() is None:
                     db.execute('INSERT INTO local_author VALUES (?)', (str(uuid4()),))
@@ -226,6 +230,8 @@ class ProjectCreation:
                 return existing
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
             node = {'schema_version': 1, 'id': str(uuid4()), 'name': name, 'projects': []}
             parse_node(encoded(node), location=self.node_path)
             with tempfile.NamedTemporaryFile(dir=self.node_path.parent, delete=False) as handle:
@@ -330,6 +336,8 @@ class ProjectCreation:
                 return self._finish(db, record, deadline, checkpoint)
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
             existing_root = os.path.lexists(root)
             if existing_root:
                 try:
@@ -425,6 +433,8 @@ class ProjectCreation:
                 return self._finish(db, record, deadline, checkpoint)
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
             before, node = self._node()
             node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
             git, commit, meta = self._read_existing_project(root, deadline)
@@ -471,6 +481,8 @@ class ProjectCreation:
                 return self._finish(db, record, deadline, checkpoint)
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušenou operaci projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
             before, node = self._node()
             check(node is not None, 'Uzel zatím nemá registraci projektů.')
             binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
@@ -526,6 +538,8 @@ class ProjectCreation:
                 return self._finish(db, record, deadline, checkpoint)
             check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
                   'Nejprve dokončete přerušenou operaci projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
             before, node = self._node()
             check(node is not None, 'Uzel zatím nemá registraci projektů.')
             binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)

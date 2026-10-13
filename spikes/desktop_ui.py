@@ -94,6 +94,15 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
 <p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
 <div id="project-cards" aria-label="Seznam projektů"></div>
+<section id="project-delete-panel" class="creation-preview" hidden><h2 id="project-delete-title">Akce projektu</h2>
+<label id="project-delete-mode-row">Režim <select id="project-delete-mode"><option value="clear-derived">Obnovit odvozený index</option><option value="unregister">Pouze odregistrovat</option><option value="trash" selected>Přesunout do obnovitelného koše</option></select></label>
+<pre id="project-delete-details"></pre><p id="project-delete-blockers" role="alert"></p>
+<label class="confirm"><input id="project-delete-check" type="checkbox"> Potvrzuji přesný lokální rozsah této akce.</label>
+<div class="form-actions"><button id="project-delete-confirm" type="button" disabled>Provést potvrzenou akci</button>
+<button id="project-delete-cancel" type="button" class="secondary-button">Zrušit</button></div>
+<p id="project-delete-status" role="status"></p></section>
+<details id="project-trash"><summary>Obnovitelný koš projektů</summary><div id="project-trash-list"></div>
+<p id="project-trash-status" role="status"></p></details>
 <form id="create-project" aria-label="Vytvořit projekt">
 <label for="new-project-title">Název nového projektu</label>
 <div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
@@ -478,7 +487,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
  padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-#project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}
+#project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}.project-card-wrap{display:grid;gap:6px;min-width:0}.project-remove{justify-self:end;background:transparent;color:#8b3030;padding:7px 9px;font-size:12px}.project-remove:hover{background:#fff1f1}.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash{margin:18px 0}#project-trash-list{margin-top:8px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
 .project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
 .project-card .project-name{font-size:21px;line-height:1.4}.project-card .project-description{font-size:13px;color:#627183;font-weight:400;line-height:1.6}
@@ -927,17 +936,80 @@ async function openRegisteredProject(projectId){
 function renderProjectCatalog(items){
  projectCards.replaceChildren();sidebarProjects.replaceChildren();
  for(const item of items){
+  const wrap=document.createElement('div');wrap.className='project-card-wrap';
   const card=document.createElement('button');card.type='button';card.className='project-card';card.dataset.id=item.id;
   const name=document.createElement('span');name.className='project-name';name.textContent=item.title;
   const description=document.createElement('span');description.className='project-description';
   description.textContent=item.available ? (item.description.slice(0,240) || 'Prostor pro zdroje, poznámky a rozhodnutí.') : 'Projekt nelze načíst. Ověřte jeho umístění a konfiguraci.';
   const id=document.createElement('span');id.className='project-id';id.textContent=item.id;
   const action=document.createElement('span');action.className='project-action';action.textContent=item.available?'Otevřít projekt →':'Zkusit otevřít →';
-  card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));projectCards.append(card);
+  card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));
+  const remove=document.createElement('button');remove.type='button';remove.className='project-remove';remove.textContent='Správa odstranění…';
+  remove.addEventListener('click',()=>openProjectDeletion(item));wrap.append(card,remove);projectCards.append(wrap);
   const row=document.createElement('li');const compact=document.createElement('button');compact.type='button';compact.dataset.id=item.id;
   compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));row.append(compact);sidebarProjects.append(row);
  }
  document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
+}
+const projectDeletePanel=document.querySelector('#project-delete-panel');
+const projectDeleteMode=document.querySelector('#project-delete-mode');
+const projectDeleteCheck=document.querySelector('#project-delete-check');
+const projectDeleteConfirm=document.querySelector('#project-delete-confirm');
+let projectDeleteTarget=null,projectDeletePlan=null,projectDeleteKind=null;
+function deletionDetails(plan){
+ const lines=[plan.effect,`Projekt: ${plan.project_id}`,`HEAD: ${plan.head||'—'}`];
+ if(plan.root)lines.push(`Repozitář: ${plan.root}`);
+ if(plan.state_dir)lines.push(`Projektový stav: ${plan.state_dir}`);
+ if(plan.trash_path)lines.push(`Koš: ${plan.trash_path}`);
+ if(plan.dirty_worktree)lines.push('Pracovní strom obsahuje necommitnuté nebo nesledované soubory.');
+ if(plan.transfers?.length)lines.push(`Nedokončené přenosy: ${plan.transfers.length}`);
+ if(plan.administration)lines.push(`Účty projektu: ${plan.administration.memberships||0}; federační mapování: ${plan.administration.mappings||0}`);
+ lines.push(`Node-local záznamy: ${plan.node_records?.records||0} (zůstanou zachovány)`,'Vzdálené a dříve sdílené kopie zůstanou zachovány.');
+ return lines.join('\\n');
+}
+function showDeletionPlan(plan,kind){
+ projectDeletePlan=plan;projectDeleteKind=kind;projectDeleteCheck.checked=false;
+ document.querySelector('#project-delete-details').textContent=deletionDetails(plan);
+ const blockers=plan.blockers||[];document.querySelector('#project-delete-blockers').textContent=blockers.join('\\n');
+ projectDeleteCheck.disabled=Boolean(blockers.length);projectDeleteConfirm.disabled=true;
+ projectDeleteConfirm.textContent=kind==='purge'?'Definitivně vymazat':kind==='restore'?'Obnovit projekt':'Provést potvrzenou akci';
+ document.querySelector('#project-delete-status').textContent=blockers.length?'Akce je zablokovaná. Vyřešte uvedené vazby nebo operace.':'Náhled je připraven k potvrzení.';
+ projectDeletePanel.hidden=false;
+}
+async function refreshProjectDeletion(){
+ if(!projectDeleteTarget)return;projectDeletePlan=null;projectDeleteConfirm.disabled=true;
+ document.querySelector('#project-delete-status').textContent='Načítám přesný náhled…';
+ try{showDeletionPlan(await projectRequest('/v1/projects/delete/preview',{project_id:projectDeleteTarget.id,mode:projectDeleteMode.value}),'delete');}
+ catch(error){document.querySelector('#project-delete-status').textContent=error.message;}
+}
+function openProjectDeletion(item){
+ projectDeleteTarget=item;projectDeleteMode.value='trash';document.querySelector('#project-delete-mode-row').hidden=false;
+ document.querySelector('#project-delete-title').textContent=`Akce projektu: ${item.title}`;refreshProjectDeletion();
+}
+projectDeleteMode.addEventListener('change',refreshProjectDeletion);
+projectDeleteCheck.addEventListener('change',()=>{projectDeleteConfirm.disabled=!(projectDeleteCheck.checked&&projectDeletePlan&&!(projectDeletePlan.blockers||[]).length);});
+document.querySelector('#project-delete-cancel').addEventListener('click',()=>{projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;});
+projectDeleteConfirm.addEventListener('click',async()=>{
+ if(!projectDeletePlan||!projectDeleteCheck.checked)return;projectDeleteConfirm.disabled=true;
+ const path=projectDeleteKind==='restore'?'/v1/projects/delete/restore/confirm':projectDeleteKind==='purge'?'/v1/projects/delete/purge/confirm':'/v1/projects/delete/confirm';
+ try{await projectRequest(path,{preview:projectDeletePlan,operation_id:crypto.randomUUID()},120000);projectDeletePanel.hidden=true;projectDeletePlan=null;projectDeleteTarget=null;await loadProjects();}
+ catch(error){document.querySelector('#project-delete-status').textContent=error.message;projectDeleteConfirm.disabled=false;}
+});
+async function prepareTrashAction(item,kind){
+ document.querySelector('#project-delete-mode-row').hidden=true;document.querySelector('#project-delete-title').textContent=kind==='restore'?'Obnovit projekt z koše':'Definitivně vymazat projekt';
+ const path=kind==='restore'?'/v1/projects/delete/restore/preview':'/v1/projects/delete/purge/preview';
+ try{showDeletionPlan(await projectRequest(path,{operation_id:item.operation_id}),kind);}
+ catch(error){document.querySelector('#project-trash-status').textContent=error.message;}
+}
+async function loadProjectTrash(){
+ const list=document.querySelector('#project-trash-list');list.replaceChildren();
+ try{const result=await projectRequest('/v1/projects/delete/trash',{});for(const item of result.projects){
+   const row=document.createElement('div');row.className='trash-row';const label=document.createElement('code');label.textContent=`${item.project_id} · ${item.trash_path}`;
+   const restore=document.createElement('button');restore.type='button';restore.textContent='Připravit obnovu';restore.addEventListener('click',()=>prepareTrashAction(item,'restore'));
+   const purge=document.createElement('button');purge.type='button';purge.className='danger';purge.textContent='Připravit definitivní výmaz';purge.addEventListener('click',()=>prepareTrashAction(item,'purge'));
+   row.append(label,restore,purge);list.append(row);
+  }document.querySelector('#project-trash-status').textContent=result.projects.length?`Položek v koši: ${result.projects.length}`:'Koš je prázdný.';
+ }catch(error){document.querySelector('#project-trash-status').textContent=error.message;}
 }
 async function loadProjects(selectedId=null){
  if(!canLeaveArtifactEditor())return;
@@ -948,6 +1020,7 @@ async function loadProjects(selectedId=null){
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
+  await loadProjectTrash();
   projectStatus.textContent=result.projects.length ? 'Vyberte projekt.' : 'Zatím nemáte žádný projekt.';
   if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
@@ -2769,6 +2842,10 @@ class DesktopHandler(Handler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
+        '/v1/projects/delete/preview', '/v1/projects/delete/confirm',
+        '/v1/projects/delete/trash', '/v1/projects/delete/restore/preview',
+        '/v1/projects/delete/restore/confirm', '/v1/projects/delete/purge/preview',
+        '/v1/projects/delete/purge/confirm',
         '/v1/notebooklm/preview', '/v1/notebooklm/plan', '/v1/notebooklm/confirm',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
@@ -3032,6 +3109,26 @@ class DesktopHandler(Handler):
                 self.server.projects = Projects(projects.node_path,
                     network=getattr(projects, 'network', False))
                 return self.reply(200, receipt)
+            if self.path == '/v1/projects/delete/preview':
+                return self.reply(200, self.server.project_deletion_actions.preview(request))
+            if self.path == '/v1/projects/delete/confirm':
+                receipt = self.server.project_deletion_actions.confirm(request)
+                self.server.projects = Projects(projects.node_path,
+                    network=getattr(projects, 'network', False))
+                return self.reply(200, receipt)
+            if self.path == '/v1/projects/delete/trash' and request == {}:
+                return self.reply(200, self.server.project_deletion_actions.trash())
+            if self.path == '/v1/projects/delete/restore/preview':
+                return self.reply(200, self.server.project_deletion_actions.restore_preview(request))
+            if self.path == '/v1/projects/delete/restore/confirm':
+                receipt = self.server.project_deletion_actions.restore_confirm(request)
+                self.server.projects = Projects(projects.node_path,
+                    network=getattr(projects, 'network', False))
+                return self.reply(200, receipt)
+            if self.path == '/v1/projects/delete/purge/preview':
+                return self.reply(200, self.server.project_deletion_actions.purge_preview(request))
+            if self.path == '/v1/projects/delete/purge/confirm':
+                return self.reply(200, self.server.project_deletion_actions.purge_confirm(request))
             if self.path == '/v1/notebooklm/preview':
                 return self.reply(200, self.server.notebooklm_import_actions.preview(request))
             if self.path == '/v1/notebooklm/plan':
@@ -3195,6 +3292,8 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
             if self.path.startswith('/v1/projects/create/'):
                 return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
+            if self.path.startswith('/v1/projects/delete/'):
+                return self.reply(422, {'error': 'Akci projektu nelze provést. Obnovte náhled a ověřte blokující operace, vazby a lokální stav.'})
             if self.path.startswith('/v1/notebooklm/'):
                 message = {
                     'Directory must not be writable by other users':
