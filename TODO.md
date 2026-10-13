@@ -70,11 +70,27 @@ odpovědi nevyvolá druhé modelové volání. Až potom se idempotentně uzavř
   doplní aktuální Focus ID; cizí ID, další pole, prázdný externí request a
   ostatní neplatné tvary zůstávají fail-closed. Dokončení vyžadovalo cílenou
   regresi a živé zopakování původního veřejného dotazu přes router i search.
+- [x] [completed] **F-M3-SEARCH-01-G — Akční diagnostika chybějícího bindingu
+  (cílová úroveň: implemented; původ: fyzická akceptace 2026-10-13).** Druhý
+  fyzický průchod korektně připravil `web-search` i durable preview, ale před
+  potvrzením už node-local `searxng-binding.json` nebyl přítomný a UI skrylo
+  příčinu za obecnou chybou chatu. Preview i confirm nyní vracejí samostatný
+  `not-configured` stav s akčním UI: před preview otevře nastavení a po preview
+  lze vědomým tlačítkem obnovit přesný binding z kontrolovaného náhledu bez
+  nového modelového běhu. Chybějící binding před preview nevytvoří prázdný
+  search journal a chybějící binding po preview zachová search v bezpečném
+  stavu `prepared` bez síťového účinku.
+- [x] [completed] **F-M3-SEARCH-01-H — Nezávislá kontrola webového dotazu
+  (cílová úroveň: implemented; původ: fyzická akceptace 2026-10-13).** Přesný
+  search preview a jeho obnovovací akce už nejsou uvnitř pevného spodního
+  chatového formuláře, kde rozbalený JSON vytlačil celý composer. Kontrola je
+  v rolovací části chatu, dlouhý obsah má omezenou výšku a zadání zůstává
+  dostupné; regrese kontroluje oddělené umístění obou prvků.
 
 ## Aktuální ověření a omezení — 2026-10-13
 
 - Strict transport, binding, router, restart/reuse, lifecycle, API a bezpečné UI
-  regrese prošly. Úplná sada po poslední změně: **514 testů OK, 24 volitelných
+  regrese prošly. Úplná sada po poslední změně: **517 testů OK, 24 volitelných
   přeskočeno**. `python3 -m py_compile` pro dotčené moduly a `git diff --check`
   jsou bez chyby.
 - Izolovaný živý `scripts/searxng_search_smoke.py` prošel proti dostupnému

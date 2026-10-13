@@ -334,7 +334,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div>
 <div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
 <span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
-<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div></div>
+<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
+<button id="search-recovery" class="secondary-button" type="button" hidden>Nastavit SearXNG</button>
+<section id="search-preview" hidden aria-label="Náhled webového hledání">
+<h3>Přesný webový dotaz před odesláním</h3><pre id="search-preview-content"></pre>
+<label class="confirm"><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
+<button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
+<button id="search-cancel" class="secondary-button" type="button">Zrušit</button>
+</section></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
@@ -445,12 +452,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
-<section id="search-preview" hidden aria-label="Náhled webového hledání">
-<h3>Přesný webový dotaz před odesláním</h3><pre id="search-preview-content"></pre>
-<label><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
-<button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
-<button id="search-cancel" class="secondary-button" type="button">Zrušit</button>
-</section>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 </div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
@@ -525,7 +526,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
-#external-preview,#external-proposal,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,.deletion-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
+#external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 #task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -740,6 +741,7 @@ function clearProject(){
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
+ hideSearchRecovery();
  pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
  pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
  knownThreads=[];pendingThreadDeletion=null;renderThreadList([]);
@@ -1434,13 +1436,14 @@ const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
 const searchForm=document.querySelector('#search-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
+const searchRecovery=document.querySelector('#search-recovery');
 const chatStream=document.querySelector('#chat-stream');
 const chatStreamStatus=document.querySelector('#chat-stream-status');
 const chatStreamProgressText=document.querySelector('#chat-stream-progress-text');
 const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 let streamScrollPending=false,streamAutoFollow=false;
 function chatScrollOwner(){
@@ -1683,6 +1686,22 @@ async function cancelTaskProjection(taskId){
   chatOperationStatus.textContent='Návrh byl zahozen.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
+function hideSearchRecovery(){searchRecoveryBinding=null;searchRecovery.hidden=true;searchRecovery.disabled=false;}
+function offerSearchRecovery(error,binding=null){
+ if(error.retry!=='configure-search'){hideSearchRecovery();return;}
+ searchRecoveryBinding=binding;searchRecovery.textContent=binding ?
+  'Obnovit SearXNG z tohoto náhledu' : 'Otevřít nastavení SearXNG';
+ searchRecovery.hidden=false;searchRecovery.disabled=false;
+}
+searchRecovery.addEventListener('click',async()=>{
+ if(!searchRecoveryBinding){await openSettings();searchForm.elements.endpoint.focus();return;}
+ searchRecovery.disabled=true;chatOperationStatus.textContent='Obnovuji přesné nastavení SearXNG z kontrolovaného náhledu…';
+ try{const result=await projectRequest('/v1/search/configure',searchRecoveryBinding);
+  fillSearchBinding(result.binding);hideSearchRecovery();
+  document.querySelector('#search-confirm').disabled=!document.querySelector('#search-confirm-check').checked;
+  chatOperationStatus.textContent='Nastavení SearXNG bylo obnoveno. Dotaz můžete potvrdit znovu.';
+ }catch(error){chatOperationStatus.textContent=error.message;searchRecovery.disabled=false;}
+});
 async function prepareTaskExternal(projection){
  chatOperationStatus.textContent='Připravuji přesný externí náhled…';
  const request={task_id:projection.task_id,approval_id:crypto.randomUUID(),turn_id:crypto.randomUUID(),
@@ -1698,6 +1717,7 @@ async function prepareTaskExternal(projection){
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 async function prepareTaskSearch(projection){
+ hideSearchRecovery();
  chatOperationStatus.textContent='Připravuji přesný náhled webového dotazu…';
  const request={task_id:projection.task_id,search_id:crypto.randomUUID(),
   synthesis_run_id:crypto.randomUUID(),synthesis_manifest_id:crypto.randomUUID()};
@@ -1711,12 +1731,13 @@ async function prepareTaskSearch(projection){
   chatOperationStatus.textContent=preview.state==='unknown'?
    'Výsledek předchozího hledání není známý; automatické opakování je zakázané.' :
    'Zkontrolujte přesný dotaz, privacy a endpoint a potom jej potvrďte.';
- }catch(error){chatOperationStatus.textContent=error.message;}
+ }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);}
 }
 document.querySelector('#search-confirm-check').addEventListener('change',event=>{
  document.querySelector('#search-confirm').disabled=!event.currentTarget.checked || !pendingSearchPreview;
 });
 document.querySelector('#search-cancel').addEventListener('click',()=>{
+ hideSearchRecovery();
  pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
  document.querySelector('#search-confirm-check').checked=false;
 });
@@ -1730,9 +1751,11 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
   replaceTaskProjection(projection);pendingSearchPreview=null;
   document.querySelector('#search-preview').hidden=true;
   chatOperationStatus.textContent='Řízené hledání a syntéza jsou dokončené.';
- }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
+ }catch(error){chatOperationStatus.textContent=error.message;
+  offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
 });
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
+ hideSearchRecovery();
  ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
  taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
@@ -2016,7 +2039,8 @@ document.querySelector('#search-backend-test').addEventListener('click',async ev
 searchForm.addEventListener('submit',async event=>{
  event.preventDefault();settingsSearchStatus.textContent='Ukládám SearXNG binding…';
  try{const result=await projectRequest('/v1/search/configure',searchCandidate());
-  fillSearchBinding(result.binding);settingsSearchStatus.textContent=`SearXNG ${result.binding.endpoint} bylo uloženo.`;}
+  fillSearchBinding(result.binding);hideSearchRecovery();
+  settingsSearchStatus.textContent=`SearXNG ${result.binding.endpoint} bylo uloženo.`;}
  catch(error){settingsSearchStatus.textContent=error.message;}
 });
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
@@ -3100,7 +3124,9 @@ class DesktopHandler(Handler):
                                    'diagnostic': exc.code, 'outcome': 'unknown',
                                    'retry': 'new-search'})
         except SearchResponseError as exc:
-            messages = {'unavailable': 'SearXNG endpoint není dostupný.',
+            messages = {'not-configured': ('SearXNG není nakonfigurován. Otevřete Nastavení → '
+                                           'AI backend → Řízené webové hledání.'),
+                'unavailable': 'SearXNG endpoint není dostupný.',
                 'connect-timeout': 'Vypršel čas při spojování se SearXNG.',
                 'tls-failed': 'TLS spojení se SearXNG se nepodařilo ověřit.',
                 'tls-pin-mismatch': 'Certifikát SearXNG neodpovídá uloženému otisku.',
@@ -3109,10 +3135,12 @@ class DesktopHandler(Handler):
                 'response-invalid': 'SearXNG vrátilo neplatné nebo nebezpečné výsledky.',
                 'response-too-large': 'Odpověď SearXNG překročila bezpečný limit.',
                 'overloaded': 'SearXNG je přetížené.'}
-            return self.reply(502, {'error': messages.get(exc.code,
+            return self.reply(422 if exc.code == 'not-configured' else 502,
+                              {'error': messages.get(exc.code,
                                    'Webové hledání bezpečně selhalo.'),
                                    'diagnostic': exc.code, 'outcome': 'failed',
-                                   'retry': 'new-search'})
+                                   'retry': ('configure-search' if exc.code == 'not-configured'
+                                             else 'new-search')})
         except OllamaResponseError as exc:
             messages = {
                 'unavailable': 'Ollama endpoint není dostupný.',

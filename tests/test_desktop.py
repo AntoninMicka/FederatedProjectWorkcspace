@@ -17,16 +17,28 @@ from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
+from spikes.web_search import SearchResponseError
 from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
     def test_web_search_ui_requires_exact_preview_and_renders_sources_as_text(self):
+        composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        chat_panel = HTML.split('<div id="chat-panel"', 1)[1].split(
+            '<div id="summary-panel"', 1)[0]
         self.assertIn('id="search-backend-form"', HTML)
         self.assertIn('id="search-preview"', HTML)
+        self.assertIn('id="search-recovery"', HTML)
+        self.assertNotIn('id="search-preview"', composer)
+        self.assertNotIn('id="search-recovery"', composer)
+        self.assertIn('id="search-preview"', chat_panel)
+        self.assertIn('id="search-recovery"', chat_panel)
+        self.assertIn('#search-preview pre', CSS)
         self.assertIn('id="search-confirm-check"', HTML)
         self.assertIn("projectRequest('/v1/search/test',searchCandidate(),65000)", JS)
         self.assertIn("projectRequest('/v1/search/configure',searchCandidate())", JS)
+        self.assertIn("projectRequest('/v1/search/configure',searchRecoveryBinding)", JS)
+        self.assertIn("offerSearchRecovery(error,preview.binding)", JS)
         self.assertIn("projectRequest('/v1/tasks/search/preview',request)", JS)
         self.assertIn("projectRequest('/v1/tasks/search/confirm'", JS)
         self.assertIn("outcome.kind==='web-search-answer'", JS)
@@ -87,6 +99,21 @@ class DesktopTests(unittest.TestCase):
             payload = json.loads(body)
             self.assertEqual((payload['diagnostic'], payload['outcome'], payload['retry']),
                              (diagnostic, outcome, 'new-run'))
+
+    def test_missing_search_binding_has_actionable_diagnostic(self):
+        class Service:
+            def task_search_preview(self, _request):
+                raise SearchResponseError('missing', code='not-configured')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            response = driver.request(server, path='/v1/tasks/search/preview', body=b'{}')
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 422 ', head)
+        payload = json.loads(body)
+        self.assertEqual(payload['diagnostic'], 'not-configured')
+        self.assertEqual(payload['retry'], 'configure-search')
+        self.assertIn('Nastavení', payload['error'])
 
     def test_notebooklm_desktop_uses_shared_page_and_exact_native_capabilities(self):
         desktop = Path('spikes/desktop.py').read_text()

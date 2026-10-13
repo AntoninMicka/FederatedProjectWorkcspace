@@ -36,7 +36,7 @@ from spikes.project_creation import ProjectCreation
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
 from spikes.web_search import (SearXNGAdapter, SearXNGBindings, SearXNGBinding,
-                               SearchRuns)
+                               SearchResponseError, SearchRuns)
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
@@ -116,6 +116,13 @@ class ChatService:
         except FileNotFoundError:
             binding = None
         return {'binding': binding, 'capabilities': {'web_search': True}}
+
+    def _search_binding(self):
+        try:
+            return SearXNGBindings(self._root()).load()
+        except FileNotFoundError as exc:
+            raise SearchResponseError('SearXNG binding is not configured',
+                                      code='not-configured') from exc
 
     def status(self):
         node_id, user_id = self._identity(); root = self._root()
@@ -512,11 +519,13 @@ class ChatService:
         root = self._root(); node_id, user_id = self._identity()
         tasks = TaskOutcomes(root); row = tasks.get(request['task_id'], node_id, user_id)
         _, original, outcome, _ = self._search_task_context(row, node_id, user_id)
-        existing = SearchRuns(root).for_task(request['task_id'], node_id, user_id)
+        search_runs = SearchRuns(root)
+        existing = (search_runs.for_task(request['task_id'], node_id, user_id)
+                    if search_runs.path.exists() else None)
         if existing is not None:
             return dict(existing['preview'], preview_sha256=existing['preview_sha256'],
                         state=existing['state'])
-        binding = SearXNGBindings(root).load()
+        binding = self._search_binding()
         search_request = dict(request, project_id=row['project_id'],
             query=outcome['query'], privacy=row['privacy'], created_at=original['created_at'],
             expected_head=row['project_commit'])
@@ -528,7 +537,7 @@ class ChatService:
                    'artifact_ids': outcome['artifact_ids'],
                    'warning': ('Search query leaves the Workspace trust boundary. Results and '
                                'URLs are untrusted text and are not opened automatically.')}
-        prepared = SearchRuns(root).prepare(search_id=request['search_id'],
+        prepared = search_runs.prepare(search_id=request['search_id'],
             task_id=request['task_id'], node_id=node_id, user_id=user_id,
             project_id=row['project_id'], request=search_request, preview=preview,
             binding=binding)
@@ -559,7 +568,7 @@ class ChatService:
                 and search['node_id'] == node_id and search['user_id'] == user_id
                 and search['preview_sha256'] == request['preview_sha256'],
                 'Web search preview changed before confirmation')
-        search_binding = SearXNGBindings(root).load()
+        search_binding = self._search_binding()
         require(search['binding'] == search_binding.serialize(),
                 'SearXNG binding changed after preview')
         search_adapter = (self.search_adapter_factory(search_runs)
