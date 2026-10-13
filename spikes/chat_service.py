@@ -422,6 +422,13 @@ class ChatService:
                     value['message_ids'] = [request['message_id']]
                 if value.get('artifact_ids') is None:
                     value['artifact_ids'] = []
+                # Some local models correctly choose web-search and its bounded
+                # query but emit an empty message list despite the mandatory
+                # Focus ID. The only safe completion is the exact current
+                # focus; do not apply this to external requests or artifacts.
+                if (value.get('kind') == 'web-search'
+                        and value.get('message_ids') == []):
+                    value['message_ids'] = [request['message_id']]
             # Some small local models repeat the required focus UUID in one
             # redundant field. Normalize only that exact, verifiable shape;
             # the domain outcome remains closed and provider/tool fields fail.

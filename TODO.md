@@ -63,17 +63,28 @@ odpovědi nevyvolá druhé modelové volání. Až potom se idempotentně uzavř
   binding/HEAD, `local-only`, restart po hledání před syntézou a žádný
   automatický retry `unknown`; spustit cílené testy, syntaxe, úplnou sadu a
   skutečný SearXNG + Ollama průchod v dostupném desktopovém UI.
+- [x] [completed] **F-M3-SEARCH-01-F — Kompatibilita živého router outputu
+  (cílová úroveň: implemented; původ: fyzická akceptace 2026-10-13).** Živá
+  Ollama správně zvolila `web-search` a bounded dotaz, ale navzdory povinnému
+  Focus ID vrátila `message_ids: []`. Parser nyní pouze pro tento přesný tvar
+  doplní aktuální Focus ID; cizí ID, další pole, prázdný externí request a
+  ostatní neplatné tvary zůstávají fail-closed. Dokončení vyžadovalo cílenou
+  regresi a živé zopakování původního veřejného dotazu přes router i search.
 
 ## Aktuální ověření a omezení — 2026-10-13
 
 - Strict transport, binding, router, restart/reuse, lifecycle, API a bezpečné UI
-  regrese prošly. Úplná sada po poslední změně: **513 testů OK, 24 volitelných
+  regrese prošly. Úplná sada po poslední změně: **514 testů OK, 24 volitelných
   přeskočeno**. `python3 -m py_compile` pro dotčené moduly a `git diff --check`
   jsou bez chyby.
 - Izolovaný živý `scripts/searxng_search_smoke.py` prošel proti dostupnému
   SearXNG `127.0.0.1:8888` a Ollamě `127.0.0.1:11434`: stav `completed`, model
   `gemma4:latest`, 3 bounded zdroje a 911 znaků syntézy. Stejný smoke nepoužil
   projektová ani uživatelská data.
+- Po zjištění F doplnil stejný smoke volitelný skutečný task-router průchod.
+  Přesný dotaz `vyhledej výsledky voleb podzim 2026` prošel s
+  `--route-through-model` do stavu `completed`, se 3 bounded zdroji a 1 257
+  znaky syntézy; původní uživatelský projekt ani vlákno test neměnil.
 - Skutečný Qt/WebEngine start, autentizovaný fetch, interakce a restart prošly
   přes opt-in desktop smoke. Konkrétní celý search preview → potvrzení → výsledek
   ale ještě nebyl uživatelem fyzicky proklikán v desktopovém okně; proto zůstává

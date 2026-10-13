@@ -30,6 +30,8 @@ def main():
     parser.add_argument('--ollama-endpoint', default='http://127.0.0.1:11434')
     parser.add_argument('--model', default='gemma4:latest')
     parser.add_argument('--query', default='SearXNG official documentation')
+    parser.add_argument('--route-through-model', action='store_true',
+                        help='Ask the configured Ollama task router to produce web-search.')
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix='fpw-search-smoke-') as temporary:
         base = Path(temporary); project_root = base / 'project'; project_root.mkdir(mode=0o700)
@@ -66,11 +68,16 @@ def main():
         outcome = {'schema_version': 1, 'kind': 'web-search',
             'purpose': 'Live integration smoke', 'query': args.query,
             'message_ids': [message_id], 'artifact_ids': []}
-        node_owner, user_owner = service._identity()
-        TaskOutcomes(chat_state).prepare(node_id=node_owner, user_id=user_owner,
-            request=request, routed={'task_id': task_id, 'outcome': outcome,
-                'privacy': 'project', 'project_commit': git.head(),
-                'run_id': request['run_id'], 'manifest_id': request['manifest_id']})
+        if args.route_through_model:
+            routed = service.task_route(request)
+            if routed['outcome']['kind'] != 'web-search':
+                raise RuntimeError('Task router did not select web-search')
+        else:
+            node_owner, user_owner = service._identity()
+            TaskOutcomes(chat_state).prepare(node_id=node_owner, user_id=user_owner,
+                request=request, routed={'task_id': task_id, 'outcome': outcome,
+                    'privacy': 'project', 'project_commit': git.head(),
+                    'run_id': request['run_id'], 'manifest_id': request['manifest_id']})
         preview = service.task_search_preview({'task_id': task_id,
             'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
             'synthesis_manifest_id': str(uuid4())})

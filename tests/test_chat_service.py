@@ -539,6 +539,27 @@ class ChatServiceTests(unittest.TestCase):
                 'purpose': 'X', 'query': 'Y', 'message_ids': None,
                 'artifact_ids': [], 'provider': 'forbidden'})
 
+    def test_web_search_fills_only_the_empty_mandatory_focus_selection(self):
+        def routed_for(request, value):
+            service = ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(value)}))
+            return service.task_route(request)['outcome']
+
+        request = self.route_request()
+        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
+            'purpose': 'Aktuální veřejná fakta', 'query': 'výsledky voleb 2026',
+            'message_ids': [], 'artifact_ids': []})
+        self.assertEqual(outcome['message_ids'], [request['message_id']])
+        self.assertEqual(outcome['artifact_ids'], [])
+
+        external = self.route_request()
+        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
+            routed_for(external, {'schema_version': 1, 'kind': 'external-request',
+                'purpose': 'Externí model', 'query': 'dotaz',
+                'message_ids': [], 'artifact_ids': []})
+
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',
