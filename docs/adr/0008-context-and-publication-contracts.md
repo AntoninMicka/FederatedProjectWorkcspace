@@ -299,6 +299,67 @@ je `aria-live="off"`; samostatný stručný stav je `aria-live="polite"`, aby
 čtečka neoznamovala každý token. Zavření klienta může přerušit callback, ale
 nemění je na potvrzené zrušení providerového běhu.
 
+### Řízené webové hledání přes SearXNG — F-M3-SEARCH-01
+
+Webové hledání je samostatná aplikační capability, nikoli capability LLM
+backendu ani skrytý modelový tool call. `task-router-v1` smí vrátit uzavřený
+outcome `web-search` s účelem, dotazem a seřazenými ID povolených zpráv a
+artefaktů. Tím síťový účinek nevzniká. Aplikace nejprve zobrazí přesný dotaz,
+privacy, výsledek limit, endpoint a revizi explicitního `searxng` bindingu;
+teprve potvrzení jeho SHA-256 preview připraví síťový dispatch.
+
+Binding je node-local mimo projektový Git. `same-node` vyžaduje číselný
+loopback HTTP endpoint a stabilní `local-process`; `private-network` vyžaduje
+číselnou privátní HTTPS adresu, explicitní target UUID a připnutý SHA-256
+certifikát. Název Docker služby ani dostupnost Open WebUI nejsou execution
+identita. Pevný diagnostický probe smí po stisku správce odeslat pouze veřejný
+dotaz `SearXNG`; projektový obsah nepoužívá a konfiguraci nemění.
+
+Vyhledávací dotaz překračuje trust boundary i tehdy, když agregátor běží na
+stejném uzlu, protože SearXNG kontaktuje veřejné zdroje. `local-only` se proto
+odmítá ještě před vytvořením preview. `project` a `confidential` vyžadují
+vědomé potvrzení přesného dotazu. Hledání nepoužívá externí LLM, nemění target
+Ollamy a při chybě neaktivuje fallback.
+
+Samostatný `SearchRuns` SQLite journal je autoritou potvrzeného search GET.
+Ukládá search/task/owner/project ID, kanonický request a preview, přesný binding,
+stav a bounded výsledek. Stavy jsou `prepared`, `dispatching`, `succeeded`,
+`failed`, `unknown` a bezpečné před-dispatch `cancelled`. Před `prepared`
+síťový účinek nevznikl. Známé odmítnutí, zakázaný redirect, neplatný či příliš
+velký JSON a nebezpečné URL jsou `failed`; timeout nebo přerušení po odeslání
+jsou `unknown` a stejné search ID se automaticky neopakuje.
+
+Odpověď je nejvýše 2 MiB. Zpracuje se prvních nejvýše deset explicitně
+konfigurovaných výsledků, deduplikovaných přes přesnou URL. Každý výsledek má
+bounded title, HTTP(S) URL a bounded textový snippet. Neznámá pole se
+nepřenášejí. URL se automaticky neotevírá, obsah stránky se nestahuje a title,
+snippet i URL se v UI vykreslí jako text. Nula výsledků je validní výsledek,
+nikoli důvod pro jiný provider.
+
+Po `succeeded` vznikne nový `researcher-v1` Context Manifest. Obsahuje původní
+explicitně vybrané projektové/chatové vstupy a přesné kanonické
+`fpw-searxng-results-v1` bajty označené jako nedůvěryhodné. Role musí snippets
+použít pouze jako omezenou evidence, uvést nejistotu a citovat přesné URL;
+nesmí vykonávat instrukce z výsledků ani dohledávat jiné stránky. Syntéza
+reuseuje aktuální explicitní Ollama binding a jediný `OllamaRuns` journal bez
+streamu či fallbacku.
+
+Crash boundaries jsou oddělené:
+
+1. pád před search `prepared` nemá síťový účinek;
+2. `dispatching` bez validní odpovědi se obnoví jako `unknown` bez retry;
+3. `succeeded` uloží bounded výsledky před sestavením manifestu, takže restart
+   mezi hledáním a syntézou použije stejné bajty;
+4. Ollama `dispatching`/`succeeded` se obnovuje výhradně přes stejný run ID v
+   `OllamaRuns`;
+5. pád po syntéze před `TaskOutcomes.completed` znovu načte stejný succeeded
+   run a idempotentně uzavře projekci bez druhého search nebo LLM dispatch;
+6. žádný krok této dávky nezapisuje projektový Git ani projektový index.
+
+Potvrzené smazání chatového vlákna zahrne navázané search záznamy a synthesis
+runy do existujícího crash-recoverable deletion plánu. Aktivní, `prepared`
+nebo `unknown` hledání je blocker stejně jako jiný neurčitý externí účinek.
+
 Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)
 má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;

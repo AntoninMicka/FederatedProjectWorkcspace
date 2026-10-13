@@ -19,6 +19,7 @@ from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
+from spikes.web_search import SearchResponseError, SearchUnknown
 from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
 
 
@@ -152,6 +153,18 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
+<hr><h2>Řízené webové hledání</h2>
+<p id="settings-search-status" role="status" aria-live="polite">SearXNG zatím nebylo načteno.</p>
+<form id="search-backend-form">
+<label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
+<label>Endpoint <input name="endpoint" value="http://127.0.0.1:8888" required></label>
+<label>ID cíle <input name="target_id" value="local-process" required></label>
+<label>Maximum výsledků <input name="result_limit" type="number" min="1" max="10" value="3" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="60" value="15" required></label>
+<label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
+<button id="search-backend-test" type="button">Ověřit veřejným testovacím dotazem</button>
+<button type="submit">Uložit SearXNG</button></form>
+<small>Test odešle pouze pevný veřejný dotaz „SearXNG“. Projektová data se neodesílají. Skutečný dotaz se odešle až po kontrole přesného náhledu a potvrzení; obsah „Jen na tomto počítači“ se odmítne.</small>
 <hr><h2>Lokální obrazový backend ComfyUI</h2>
 <p id="settings-comfy-status" role="status">Načítám nastavení ComfyUI…</p>
 <form id="comfy-backend-form">
@@ -321,7 +334,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="chat-messages" role="log" aria-label="Vaše zadání"></div>
 <div id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite" hidden>
 <span class="chat-progress-spinner" aria-hidden="true"></span><span id="chat-stream-progress-text"></span></div>
-<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div></div>
+<div id="chat-stream" class="chat-message assistant" aria-live="off" hidden></div>
+<button id="search-recovery" class="secondary-button" type="button" hidden>Nastavit SearXNG</button>
+<section id="search-preview" hidden aria-label="Náhled webového hledání">
+<h3>Přesný webový dotaz před odesláním</h3><pre id="search-preview-content"></pre>
+<label class="confirm"><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
+<button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
+<button id="search-cancel" class="secondary-button" type="button">Zrušit</button>
+</section></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
 <p>Vyberte projektové podklady, nebo zprávy aktuálního chatu. Náhled se do projektu uloží až po potvrzení.</p>
@@ -452,6 +472,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
+.search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
  background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
  padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
@@ -505,7 +526,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
-#external-preview,#external-proposal,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,.deletion-preview pre{white-space:pre-wrap;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
+#external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 #task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:130px;overflow:auto}#task-artifact-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
 .prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -720,6 +741,9 @@ function clearProject(){
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
+ hideSearchRecovery();
+ pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
+ pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
  knownThreads=[];pendingThreadDeletion=null;renderThreadList([]);
  document.querySelector('#chat-delete-preview').hidden=true;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
@@ -1403,20 +1427,23 @@ document.querySelector('#pdf-show').addEventListener('click',()=>{
 const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
+const settingsSearchStatus=document.querySelector('#settings-search-status');
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
+const searchForm=document.querySelector('#search-backend-form');
 const chatOperationStatus=document.querySelector('#chat-operation-status');
+const searchRecovery=document.querySelector('#search-recovery');
 const chatStream=document.querySelector('#chat-stream');
 const chatStreamStatus=document.querySelector('#chat-stream-status');
 const chatStreamProgressText=document.querySelector('#chat-stream-progress-text');
 const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 let streamScrollPending=false,streamAutoFollow=false;
 function chatScrollOwner(){
@@ -1601,7 +1628,9 @@ function renderTaskOutcomes(){
   const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
   const heading=document.createElement('h3');
   heading.textContent=outcome.kind==='artifact-draft'?'Návrh artefaktu':
-   outcome.kind==='artifact-link'?'Vytvořený artefakt':'Externí volání';card.append(heading);
+   outcome.kind==='artifact-link'?'Vytvořený artefakt':
+   outcome.kind==='web-search'?'Návrh webového hledání':
+   outcome.kind==='web-search-answer'?'Odpověď z řízeného hledání':'Externí volání';card.append(heading);
   if(outcome.kind==='artifact-draft'){
    const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
    const body=document.createElement('pre');body.textContent=outcome.content;card.append(body);
@@ -1620,6 +1649,21 @@ function renderTaskOutcomes(){
    const actions=document.createElement('div');actions.className='task-actions';
    actions.append(taskButton('Zkontrolovat externí odeslání',()=>prepareTaskExternal(projection)),
                   taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='web-search'){
+   const purpose=document.createElement('p');purpose.textContent=outcome.purpose;card.append(purpose);
+   const query=document.createElement('pre');query.textContent=outcome.query;card.append(query);
+   const actions=document.createElement('div');actions.className='task-actions';
+   actions.append(taskButton('Zkontrolovat webový dotaz',()=>prepareTaskSearch(projection)),
+                  taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='web-search-answer'){
+   const answer=document.createElement('div');answer.className='chat-message assistant';
+   answer.textContent=outcome.content;card.append(answer);
+   const sources=document.createElement('ol');sources.className='search-sources';
+   for(const item of outcome.sources || []){const row=document.createElement('li'),link=document.createElement('strong');
+    link.textContent=item.title;const url=document.createElement('code');url.textContent=item.url;
+    const snippet=document.createElement('small');snippet.textContent=item.snippet;
+    row.append(link,url,snippet);sources.append(row);}card.append(sources);
+   const detail=document.createElement('small');detail.textContent=`SearXNG ${outcome.searched_at} · ${outcome.sources?.length || 0} zdrojů · ${outcome.model}`;card.append(detail);
   }else if(outcome.kind==='artifact-link'){
    const link=document.createElement('button');link.type='button';link.className='artifact-link';
    link.textContent=`${outcome.title} → ${outcome.artifact_id}`;
@@ -1642,6 +1686,22 @@ async function cancelTaskProjection(taskId){
   chatOperationStatus.textContent='Návrh byl zahozen.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
+function hideSearchRecovery(){searchRecoveryBinding=null;searchRecovery.hidden=true;searchRecovery.disabled=false;}
+function offerSearchRecovery(error,binding=null){
+ if(error.retry!=='configure-search'){hideSearchRecovery();return;}
+ searchRecoveryBinding=binding;searchRecovery.textContent=binding ?
+  'Obnovit SearXNG z tohoto náhledu' : 'Otevřít nastavení SearXNG';
+ searchRecovery.hidden=false;searchRecovery.disabled=false;
+}
+searchRecovery.addEventListener('click',async()=>{
+ if(!searchRecoveryBinding){await openSettings();searchForm.elements.endpoint.focus();return;}
+ searchRecovery.disabled=true;chatOperationStatus.textContent='Obnovuji přesné nastavení SearXNG z kontrolovaného náhledu…';
+ try{const result=await projectRequest('/v1/search/configure',searchRecoveryBinding);
+  fillSearchBinding(result.binding);hideSearchRecovery();
+  document.querySelector('#search-confirm').disabled=!document.querySelector('#search-confirm-check').checked;
+  chatOperationStatus.textContent='Nastavení SearXNG bylo obnoveno. Dotaz můžete potvrdit znovu.';
+ }catch(error){chatOperationStatus.textContent=error.message;searchRecovery.disabled=false;}
+});
 async function prepareTaskExternal(projection){
  chatOperationStatus.textContent='Připravuji přesný externí náhled…';
  const request={task_id:projection.task_id,approval_id:crypto.randomUUID(),turn_id:crypto.randomUUID(),
@@ -1656,7 +1716,46 @@ async function prepareTaskExternal(projection){
   chatOperationStatus.textContent='Externí požadavek je jen náhled. Zkontrolujte jej a potvrďte.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
+async function prepareTaskSearch(projection){
+ hideSearchRecovery();
+ chatOperationStatus.textContent='Připravuji přesný náhled webového dotazu…';
+ const request={task_id:projection.task_id,search_id:crypto.randomUUID(),
+  synthesis_run_id:crypto.randomUUID(),synthesis_manifest_id:crypto.randomUUID()};
+ try{const preview=projection.search_preview ||
+   await projectRequest('/v1/tasks/search/preview',request);
+  pendingSearchPreview={projection,preview};
+  document.querySelector('#search-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#search-preview').hidden=false;
+  document.querySelector('#search-confirm-check').checked=false;
+  document.querySelector('#search-confirm').disabled=true;
+  chatOperationStatus.textContent=preview.state==='unknown'?
+   'Výsledek předchozího hledání není známý; automatické opakování je zakázané.' :
+   'Zkontrolujte přesný dotaz, privacy a endpoint a potom jej potvrďte.';
+ }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);}
+}
+document.querySelector('#search-confirm-check').addEventListener('change',event=>{
+ document.querySelector('#search-confirm').disabled=!event.currentTarget.checked || !pendingSearchPreview;
+});
+document.querySelector('#search-cancel').addEventListener('click',()=>{
+ hideSearchRecovery();
+ pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
+ document.querySelector('#search-confirm-check').checked=false;
+});
+document.querySelector('#search-confirm').addEventListener('click',async event=>{
+ if(!pendingSearchPreview)return;event.currentTarget.disabled=true;
+ chatOperationStatus.textContent='SearXNG hledá a Ollama zpracovává bounded výsledky…';
+ const preview=pendingSearchPreview.preview;
+ try{const projection=await projectRequest('/v1/tasks/search/confirm',{
+   task_id:preview.task_id,search_id:preview.search_id,
+   preview_sha256:preview.preview_sha256,approved:true},210000);
+  replaceTaskProjection(projection);pendingSearchPreview=null;
+  document.querySelector('#search-preview').hidden=true;
+  chatOperationStatus.textContent='Řízené hledání a syntéza jsou dokončené.';
+ }catch(error){chatOperationStatus.textContent=error.message;
+  offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
+});
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
+ hideSearchRecovery();
  ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
  taskOutcomes=[];renderChat(null);renderThreadList(knownThreads);draft.value='';
  chatOperationStatus.textContent='';
@@ -1744,6 +1843,15 @@ function fillBinding(binding,draft=null,draftState=null){
  }
  refreshChatModeControls();
 }
+function fillSearchBinding(binding){
+ searchBinding=binding;const fields=searchForm.elements;
+ if(binding){fields.boundary.value=binding.boundary;fields.endpoint.value=binding.endpoint;
+  fields.target_id.value=binding.target_id;fields.result_limit.value=binding.result_limit;
+  fields.timeout_seconds.value=binding.timeout_seconds;
+  fields.tls_cert_sha256.value=binding.tls_cert_sha256 || '';
+  settingsSearchStatus.textContent=`SearXNG ${binding.boundary==='same-node'?'na tomto počítači':'v privátní síti'} · ${binding.endpoint} · nejvýše ${binding.result_limit} výsledků.`;
+ }else settingsSearchStatus.textContent='SearXNG zatím není nastaveno.';
+}
 function applyOllamaStreamingStatus(result){
  ollamaStreamingSupported=result.capabilities?.streaming===true;
  const enabled=result.preferences?.streaming!==false;
@@ -1757,6 +1865,7 @@ function applyOllamaStreamingStatus(result){
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
@@ -1888,6 +1997,7 @@ async function loadChat(){
   const [result,external]=await Promise.all([
    projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{})]);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
+  fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -1910,6 +2020,29 @@ function backendCandidate(){
 }
 function normalizeFingerprint(value){return value.trim()
  .replace(/^sha256\\s*fingerprint\\s*=\\s*/i,'').replaceAll(':','').toLowerCase();}
+function searchCandidate(){
+ const fields=searchForm.elements,boundary=fields.boundary.value;
+ const binding={schema_version:1,binding_id:searchBinding?.binding_id || crypto.randomUUID(),
+  revision:crypto.randomUUID(),adapter:'searxng',boundary,
+  endpoint:fields.endpoint.value.trim(),target_id:boundary==='same-node'?'local-process':fields.target_id.value.trim(),
+  result_limit:Number(fields.result_limit.value),timeout_seconds:Number(fields.timeout_seconds.value)};
+ if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
+ return binding;
+}
+document.querySelector('#search-backend-test').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;settingsSearchStatus.textContent='Odesílám pevný testovací dotaz „SearXNG“…';
+ try{const result=await projectRequest('/v1/search/test',searchCandidate(),65000);
+  settingsSearchStatus.textContent=`SearXNG je dostupné; test vrátil ${result.result_count} bounded výsledků. Uložené nastavení nebylo změněno.`;}
+ catch(error){settingsSearchStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+searchForm.addEventListener('submit',async event=>{
+ event.preventDefault();settingsSearchStatus.textContent='Ukládám SearXNG binding…';
+ try{const result=await projectRequest('/v1/search/configure',searchCandidate());
+  fillSearchBinding(result.binding);hideSearchRecovery();
+  settingsSearchStatus.textContent=`SearXNG ${result.binding.endpoint} bylo uloženo.`;}
+ catch(error){settingsSearchStatus.textContent=error.message;}
+});
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
@@ -2642,6 +2775,7 @@ class DesktopHandler(Handler):
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure',
         '/v1/chat/preferences', '/v1/chat/test',
+        '/v1/search/status', '/v1/search/configure', '/v1/search/test',
         '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
@@ -2652,6 +2786,7 @@ class DesktopHandler(Handler):
         '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
         '/v1/tasks/artifact', '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
+        '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/workflows/status', '/v1/workflows/prepare',
         '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/prepare',
@@ -2751,6 +2886,12 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/search/status' and request == {}:
+                return self.reply(200, self.server.chat_service.search_status())
+            if self.path == '/v1/search/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_search(request))
+            if self.path == '/v1/search/test' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.test_search(request))
             if self.path == '/v1/external/status' and request == {}:
                 return self.reply(200, self.server.chat_service.external_status())
             if self.path == '/v1/external/configure' and isinstance(request, dict):
@@ -2810,6 +2951,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_external_confirm(request))
             if self.path == '/v1/tasks/external/cancel' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_external_cancel(request))
+            if self.path == '/v1/tasks/search/preview' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_search_preview(request))
+            if self.path == '/v1/tasks/search/confirm' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.task_search_confirm(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/preferences' and isinstance(request, dict):
@@ -2973,6 +3118,29 @@ class DesktopHandler(Handler):
         except CloudflareUnavailable:
             return self.reply(502, {'error': 'Cloudflare stav nyní nelze bezpečně načíst. '
                                    'Nebyla zahájena nová potvrzená změna.'})
+        except SearchUnknown as exc:
+            return self.reply(409, {'error': 'Výsledek webového hledání není známý. Původní '
+                                   'search ID se nesmí automaticky opakovat; připravte nový dotaz.',
+                                   'diagnostic': exc.code, 'outcome': 'unknown',
+                                   'retry': 'new-search'})
+        except SearchResponseError as exc:
+            messages = {'not-configured': ('SearXNG není nakonfigurován. Otevřete Nastavení → '
+                                           'AI backend → Řízené webové hledání.'),
+                'unavailable': 'SearXNG endpoint není dostupný.',
+                'connect-timeout': 'Vypršel čas při spojování se SearXNG.',
+                'tls-failed': 'TLS spojení se SearXNG se nepodařilo ověřit.',
+                'tls-pin-mismatch': 'Certifikát SearXNG neodpovídá uloženému otisku.',
+                'redirect-forbidden': 'SearXNG vrátilo zakázané přesměrování.',
+                'invalid-json': 'SearXNG nevrátilo platný JSON.',
+                'response-invalid': 'SearXNG vrátilo neplatné nebo nebezpečné výsledky.',
+                'response-too-large': 'Odpověď SearXNG překročila bezpečný limit.',
+                'overloaded': 'SearXNG je přetížené.'}
+            return self.reply(422 if exc.code == 'not-configured' else 502,
+                              {'error': messages.get(exc.code,
+                                   'Webové hledání bezpečně selhalo.'),
+                                   'diagnostic': exc.code, 'outcome': 'failed',
+                                   'retry': ('configure-search' if exc.code == 'not-configured'
+                                             else 'new-search')})
         except OllamaResponseError as exc:
             messages = {
                 'unavailable': 'Ollama endpoint není dostupný.',
@@ -3017,7 +3185,7 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route':
                 return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else

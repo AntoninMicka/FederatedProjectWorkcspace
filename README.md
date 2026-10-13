@@ -93,6 +93,25 @@ nepřipojí ani neopakuje. Postup obsahuje
 [checklist streamované Ollamy](docs/ollama-streaming-acceptance.md), kontrakt
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
 
+### Řízené webové hledání
+
+V **Nastavení → AI backend → Řízené webové hledání** uložte explicitní SearXNG
+endpoint. Lokální instalace může používat například číselný loopback endpoint;
+Workspace neodvozuje adresu z názvu kontejneru. Test odešle pouze pevný veřejný
+dotaz `SearXNG` a binding neuloží.
+
+V režimu **Orchestrace** může task router navrhnout webové hledání. Samotný
+návrh nic neodesílá: zobrazí přesný dotaz, privacy, endpoint a limit. Teprve po
+zaškrtnutí potvrzení Workspace provede jeden bounded search, uloží jeho
+provenance a předá přesné výsledky Ollamě v novém Context Manifestu. URL ani
+stránky automaticky neotevírá. `local-only` dotaz je vždy odmítnut a neurčitý
+síťový výsledek se automaticky neopakuje. Praktická akceptace je v
+[checklistu SearXNG hledání](docs/searxng-search-acceptance.md).
+
+Izolovaný živý průchod s výchozími loopback endpointy lze ověřit příkazem
+`python3 scripts/searxng_search_smoke.py`; vytvoří pouze dočasný projekt, odešle
+veřejný dotaz a po skončení testovací stav odstraní.
+
 ### Creator → opponent workflow (PoC)
 
 Po otevření projektu nabízí karta **Creator → opponent** řízený dvoukrokový

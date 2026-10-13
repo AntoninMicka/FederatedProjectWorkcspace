@@ -18,6 +18,7 @@ BLOCKED_TURNS = {'prepared', 'run-bound', 'unknown'}
 BLOCKED_OUTCOMES = {'prepared'}
 BLOCKED_APPROVALS = {'prepared', 'unknown'}
 BLOCKED_RUNS = {'prepared', 'dispatching', 'unknown'}
+BLOCKED_SEARCHES = {'prepared', 'dispatching', 'unknown'}
 
 
 def _canonical(value):
@@ -97,6 +98,11 @@ class ThreadLifecycle:
             'SELECT task_id,state,run_id,result FROM outcomes '
             'WHERE thread_id=? AND node_id=? AND user_id=? ORDER BY task_id',
             (thread_id, node_id, user_id))
+        searches = []
+        for task_id, *_ in outcomes:
+            searches += self._rows('search-runs.sqlite',
+                'SELECT search_id,task_id,state,request_json FROM searches WHERE task_id=?',
+                (task_id,))
         approvals = []
         for approval_id, state, run_id, request in self._rows(
                 'external-dispatches.sqlite',
@@ -108,6 +114,10 @@ class ThreadLifecycle:
         run_ids = {turn['run_id'] for turn in thread['turns'] if turn['run_id']}
         run_ids.update(row[2] for row in outcomes if row[2])
         run_ids.update(row[2] for row in approvals if row[2])
+        for _, _, _, raw in searches:
+            value = self._json(raw)
+            if isinstance(value, dict) and isinstance(value.get('synthesis_run_id'), str):
+                run_ids.add(value['synthesis_run_id'])
         approval_ids = {row[0] for row in approvals}
         for _, _, _, result in outcomes:
             value = self._json(result)
@@ -134,13 +144,16 @@ class ThreadLifecycle:
                      for row in approvals if row[1] in BLOCKED_APPROVALS]
         blockers += [{'kind': 'backend-run', 'id': row['run_id'], 'state': row['state']}
                      for row in backend_runs if row['state'] in BLOCKED_RUNS]
+        blockers += [{'kind': 'web-search', 'id': row[0], 'state': row[2]}
+                     for row in searches if row[2] in BLOCKED_SEARCHES]
         plan = {'schema': 'fpw-thread-deletion-preview-v1', 'thread_id': thread_id,
             'node_id': node_id, 'user_id': user_id, 'expected_revision': thread['revision'],
             'project_id': thread['project_id'], 'status': thread['status'],
             'counts': {'messages': len(thread['messages']), 'turns': len(thread['turns']),
                        'task_outcomes': len(outcomes), 'approvals': len(approval_ids),
-                       'backend_runs': len(backend_runs)},
+                       'backend_runs': len(backend_runs), 'web_searches': len(searches)},
             'task_ids': sorted(row[0] for row in outcomes),
+            'search_ids': sorted(row[0] for row in searches),
             'approval_ids': sorted(approval_ids), 'run_ids': sorted(run_ids),
             'published_artifacts': self._published(thread['project_id'], thread_id),
             'published_git_history_preserved': True,
@@ -246,6 +259,8 @@ class ThreadLifecycle:
                              plan['approval_ids'])
             checkpoint('approvals'); self._advance(operation_id, 'marked', 'approvals'); stage = 'approvals'
         if stage == 'approvals':
+            self._delete_ids('search-runs.sqlite', 'searches', 'search_id',
+                             plan.get('search_ids', []))
             self._delete_ids('task-outcomes.sqlite', 'outcomes', 'task_id', plan['task_ids'])
             checkpoint('outcomes'); self._advance(operation_id, 'approvals', 'outcomes'); stage = 'outcomes'
         if stage == 'outcomes':

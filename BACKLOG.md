@@ -35,24 +35,13 @@ je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-01` bylo doručeno PR #59 jako merge commit
 `d96fe7a`; evidence je ve WORK_LOG. `F-M4-OUTPUT-ROUTER-02` bylo doručeno PR #60
 jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 `436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
-merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` má
-2026-10-12 splněnou feature akceptaci a evidenci archivovanou ve WORK_LOG;
-její PR do `develop` dosud nebyl vytvořen ani sloučen. Další dávka se
-aktivuje až po doručení tohoto PR.
+merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
+doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
+`F-M3-SEARCH-01` má na větvi `feature/f-m3-search-01-searxng` uzavřenou
+feature akceptaci; evidence je ve WORK_LOG a čeká se na vytvoření a doručení
+jediného PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG
-  (cílová úroveň: PoC validated).** Adaptovat existující lokální SearXNG
-  používaný Open WebUI jako explicitní search capability. Task router smí
-  navrhnout `web-search`, ale síťové volání provede až aplikace po policy/privacy
-  kontrole; nejde o skrytý Ollama tool call ani o externí-modelový dispatch.
-  Výsledek uchová dotaz, čas hledání, URL, titulky, bounded úryvky a provenance,
-  následná odpověď Ollamy dostane jen přesný Context Manifest. Akceptace zahrne
-  nedostupnou službu, timeout, neplatný JSON, nedůvěryhodný obsah/URL, nulové a
-  duplicitní výsledky, restart mezi hledáním a syntézou a zákaz automatického
-  oslabení `local-only`; endpoint a síťová hranice budou konfigurovatelné a
-  nebudou odvozeny pouze z dockerového názvu `searxng`.
 
 - [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
   (cílová úroveň: designed → PoC validated).** Oddělit pouhé
@@ -84,6 +73,65 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   doručení IMP-02, nikoli o rozšíření jeho větve.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání
+  (cílová úroveň: designed → PoC validated).** Navázat až po doručení
+  `F-M3-SEARCH-01`. Ollama nad každou bounded sadou výsledků vrátí uzavřené
+  hodnocení `final` / `intermediate` / `insufficient`, použité zdroje,
+  omezení a případné navazující dotazy. Označení `final` je modelový úsudek,
+  nikoli garance pravdivosti. UI zobrazí všechny mezivýsledky, jejich query,
+  zdroje, hodnocení a vazbu na další kolo; finální syntéza nesmí mezikroky
+  skrýt ani přepsat. Každé kolo má vlastní Context Manifest a durable vazbu
+  parent/child, znovu projde privacy/policy a používá bounded uživatelsky
+  viditelný limit kol, dotazů, výsledků a času. `unknown` search nebo LLM běh
+  se automaticky neopakuje a nalezené stránky se bez další schopnosti
+  automaticky neotevírají. Akceptace zahrne nedostatečné první výsledky,
+  užitečný mezivýsledek, rozporné zdroje, finální první kolo, vyčerpaný budget,
+  restart mezi koly a úplnou dohledatelnost každého modelového úsudku.
+
+- [ ] [planned] **F-M3-SEARCH-03 — Volitelný automatický dispatch s časem na
+  zásah (cílová úroveň: designed → PoC validated).** Nad iterativním workflow
+  `F-M3-SEARCH-02` a podle obecného kontraktu `F-M4-AUTONOMY-01` nabídnout pro
+  konkrétní hledání volbu ručního potvrzování každého dotazu nebo automatického
+  režimu. Jde o první vertikální použití obecné řízené autonomie. Automaticky
+  navržený dotaz se
+  zobrazí s účelem, privacy, cílem, číslem kola a zbývajícím budgetem a odešle
+  se až po viditelném uživatelsky zvoleném odpočtu **3–5 sekund**. Během něj
+  musí jít automatiku pozastavit a dotaz zkontrolovat/upravit, ihned odeslat
+  nebo zrušit; pauza platí i pro další připravené dotazy. Ztráta viditelnosti
+  UI, odpojení klienta nebo restart odpočet fail-closed pozastaví a vyžádá nové
+  vědomé spuštění. Durable fronta odliší `queued`, `countdown`, `paused`,
+  `dispatching` a terminální stavy; po skutečném odeslání už dotaz nelze vzít
+  zpět a neurčitý výsledek se bez nového rozhodnutí neopakuje. Režim ani
+  odpočet nesmějí obejít RBAC, privacy, binding, limity nebo audit přesných
+  odeslaných bajtů.
+
+- [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
+  (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
+  opt-in kontrakt pro všechny orchestrační akce, nikoli zvláštní automatiku
+  každého modulu. Registry akcí musí fail-closed deklarovat typ účinku,
+  potřebná oprávnění, privacy, vstupy, budget, zda je akce automatizovatelná a
+  jaké potvrzení vyžaduje; neznámá akce se nikdy automaticky nespustí. Uživatel
+  může pro konkrétní workflow zvolit ruční režim nebo bounded automatiku s
+  viditelnou frontou, mezivýsledky, globální pauzou a časem na zásah. LLM pouze
+  navrhuje plán a další akci; oprávnění a dispatch řídí deterministický
+  orchestrátor.
+
+  **Nepřekročitelná výjimka:** vytvoření každého uživatelsky adresovatelného
+  lokálního souboru, dokumentu nebo artefaktu vyžaduje explicitní schválení
+  uživatele nad přesným cílem, typem, obsahem/hash, privacy a provenance.
+  Countdown, předchozí souhlas s automatikou ani modelové označení `final`
+  toto potvrzení nenahrazují a schválení jednoho výstupu se nesmí zobecnit na
+  další. Interní journal/fronta nejsou obsahovým výstupem, ale zůstávají
+  node-local, bounded a recovery-safe. Existující přísnější pravidla pro
+  změnu, publikaci, odeslání nebo smazání se touto schopností neuvolňují.
+
+  Akceptace zahrne kombinovaný workflow s read-only analýzou, externím
+  dotazem, rolovým handoffem a návrhem artefaktu; povolené kroky mohou projít
+  automaticky, ale před vytvořením každého lokálního výstupu se fronta vždy
+  zastaví. Ověřit pause/resume, editaci plánu, změnu oprávnění či privacy,
+  vyčerpaný budget, neznámý typ akce, odpojení UI, restart v každém stavu,
+  souběžná workflow a `unknown` účinek bez automatického retry.
 
 - [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
   (cílová úroveň: designed → PoC validated).** Požadavek uživatele po

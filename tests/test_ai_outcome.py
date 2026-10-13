@@ -7,7 +7,7 @@ from spikes.ai_outcome import AITaskOutcome
 
 
 class AITaskOutcomeTests(unittest.TestCase):
-    def test_three_closed_variants_round_trip_long_content(self):
+    def test_closed_variants_round_trip_bounded_content(self):
         message_id, artifact_id = str(uuid4()), str(uuid4())
         values = [
             {'schema_version': 1, 'kind': 'direct-answer',
@@ -17,6 +17,9 @@ class AITaskOutcomeTests(unittest.TestCase):
              'content': 'x' * 100000},
             {'schema_version': 1, 'kind': 'external-request',
              'purpose': 'Aktuální rešerše', 'query': 'q' * 100000,
+             'message_ids': [message_id], 'artifact_ids': [artifact_id]},
+            {'schema_version': 1, 'kind': 'web-search',
+             'purpose': 'Aktuální veřejná rešerše', 'query': 'q' * 4096,
              'message_ids': [message_id], 'artifact_ids': [artifact_id]},
         ]
         for value in values:
@@ -36,6 +39,7 @@ class AITaskOutcomeTests(unittest.TestCase):
                    {'schema_version': 1, 'kind': 'artifact-draft',
                     'artifact_kind': 'executable', 'title': 'X', 'content': 'Y'},
                    {'schema_version': 1, 'kind': 'direct-answer', 'content': ''}]
+        invalid.append(dict(valid, kind='web-search', query='q' * 4097))
         for value in invalid:
             with self.subTest(value=value), self.assertRaises(ValueError):
                 AITaskOutcome.parse(value)

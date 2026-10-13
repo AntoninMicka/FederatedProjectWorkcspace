@@ -14,6 +14,7 @@ from spikes.ollama_backend import OllamaRuns
 from spikes.openai_backend import OpenAIRuns
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
+from spikes.web_search import SearXNGBinding, SearchRuns
 
 
 NOW = '2026-10-11T08:00:00Z'
@@ -42,7 +43,6 @@ class ThreadLifecycleTests(unittest.TestCase):
             db.execute('INSERT INTO runs(run_id,request_digest,state,response) VALUES(?,?,?,?)',
                        (run_id, 'a' * 64, 'succeeded', json.dumps({'response': 'Answer'})))
             db.commit()
-
         task_id, task_run, manifest_id = (str(uuid4()) for _ in range(3))
         request = {'task_id': task_id, 'thread_id': thread_id}
         outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'Task answer'}
@@ -55,6 +55,28 @@ class ThreadLifecycleTests(unittest.TestCase):
         with OllamaRuns(root).connect() as db:
             db.execute('INSERT INTO runs(run_id,request_digest,state,response) VALUES(?,?,?,?)',
                        (task_run, 'b' * 64, 'succeeded', json.dumps({'response': 'Task'})))
+            db.commit()
+        search_id, synthesis_run = str(uuid4()), str(uuid4())
+        search_binding = SearXNGBinding.parse({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'one', 'adapter': 'searxng',
+            'boundary': 'same-node', 'endpoint': 'http://127.0.0.1:8888',
+            'target_id': 'local-process', 'result_limit': 3, 'timeout_seconds': 15})
+        search_request = {'task_id': task_id, 'search_id': search_id,
+            'project_id': str(uuid4()), 'query': 'facts', 'privacy': 'project',
+            'created_at': NOW, 'synthesis_run_id': synthesis_run,
+            'synthesis_manifest_id': str(uuid4())}
+        search = SearchRuns(root); search.prepare(search_id=search_id,
+            task_id=task_id, node_id=node_id, user_id=user_id,
+            project_id=search_request['project_id'], request=search_request,
+            preview={'search_id': search_id}, binding=search_binding)
+        search.transition(search_id, 'prepared', 'dispatching')
+        search.transition(search_id, 'dispatching', 'succeeded', result={
+            'schema_version': 1, 'query': 'facts', 'searched_at': NOW,
+            'source': {}, 'results': []})
+        with OllamaRuns(root).connect() as db:
+            db.execute('INSERT INTO runs(run_id,request_digest,state,response) VALUES(?,?,?,?)',
+                       (synthesis_run, 'f' * 64, 'succeeded',
+                        json.dumps({'response': 'Synthesis'})))
             db.commit()
 
         approval_id, external_run = str(uuid4()), str(uuid4())
@@ -80,7 +102,8 @@ class ThreadLifecycleTests(unittest.TestCase):
         service = ThreadLifecycle(root, NoProjects())
         preview = service.preview(thread_id=thread_id, node_id=node_id, user_id=user_id)
         self.assertEqual(preview['counts'], {'messages': 2, 'turns': 1,
-            'task_outcomes': 1, 'approvals': 1, 'backend_runs': 3})
+            'task_outcomes': 1, 'approvals': 1, 'backend_runs': 4,
+            'web_searches': 1})
         self.assertEqual(preview['blockers'], [])
         self.assertTrue(preview['published_git_history_preserved'])
         operation_id = str(uuid4())
@@ -95,6 +118,7 @@ class ThreadLifecycleTests(unittest.TestCase):
             ChatThreads(root).get(thread_id, node_id, user_id)
         for filename, table in (('task-outcomes.sqlite', 'outcomes'),
                                 ('external-dispatches.sqlite', 'approvals'),
+                                ('search-runs.sqlite', 'searches'),
                                 ('ollama-runs.sqlite', 'runs'),
                                 ('openai-runs.sqlite', 'runs')):
             with sqlite3.connect(root / filename) as db:

@@ -233,6 +233,19 @@ journal nevzniká; standardní knihovna zajišťuje HTTP/TLS a fragmentaci čten
 aplikace doplňuje vlastní limity, finální validaci a `unknown` hranici podle
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
 
+F-M3-SEARCH-01 **reuse/adaptuje** uzavřený `AITaskOutcome`, task router,
+`ContextBuilder`, `TaskOutcomes`, jediný `OllamaAdapter`/`OllamaRuns` journal,
+atomický node-local binding vzor a společné desktop/web UI. Skutečný dostupný
+SearXNG JSON endpoint byl read-only ověřen pro pole `query` a `results` s
+`title`, `url` a `content`; nepřebírá se správa kontejneru, Open WebUI
+tool-calling ani jeho síťová konfigurace. Nový malý stdlib klient a samostatný
+search journal jsou nutné, protože search GET je jiný síťový účinek než LLM
+run. Obecný crawler, RAG/embedding databáze, stahovač stránek, provider SDK a
+automatický fallback se odmítají. Soukromá inventura neobsahuje komponentu se
+shodným preview/privacy/`unknown`/Context Manifest kontraktem; žádný její kód
+ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#řízené-webové-hledání-přes-searxng--f-m3-search-01).
+
 F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
 provider-neutral `RoleRegistry` a backend adapter/run journals, durable
 prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný

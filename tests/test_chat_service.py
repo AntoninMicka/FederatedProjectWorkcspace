@@ -18,6 +18,7 @@ from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
+from spikes.web_search import SearXNGAdapter, SearchResponseError
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
 from tests import test_local_api
@@ -302,6 +303,179 @@ class ChatServiceTests(unittest.TestCase):
                       if row['thread_id'] == request['thread_id'])
         self.assertEqual(thread['classification'], 'brainstorming')
 
+    def test_web_search_requires_preview_and_reuses_results_after_restart(self):
+        route = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search',
+                   'purpose': 'Current public facts', 'query': 'current project facts',
+                   'message_ids': [route['message_id']], 'artifact_ids': []}
+        ollama_calls, search_calls = [], []
+        def ollama_transport(binding, raw):
+            prompt = json.loads(raw)['prompt']; first = not ollama_calls; ollama_calls.append(prompt)
+            response = (json.dumps(outcome) if first
+                        else 'Synthesized answer with https://example.test/fact')
+            return {'model': binding.model, 'response': response}
+        def search_transport(binding, query):
+            search_calls.append(query)
+            return {'query': query, 'results': [
+                {'title': 'Fact', 'url': 'https://example.test/fact',
+                 'content': '<script>untrusted()</script> fact'},
+                {'title': 'Fact duplicate', 'url': 'https://example.test/fact',
+                 'content': 'duplicate'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(
+                runs, transport=search_transport))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        routed = service.task_route(route)
+        self.assertEqual(routed['outcome']['kind'], 'web-search')
+        self.assertEqual(search_calls, [])
+        preview_request = {'task_id': route['task_id'], 'search_id': str(uuid4()),
+                           'synthesis_run_id': str(uuid4()),
+                           'synthesis_manifest_id': str(uuid4())}
+        preview = service.task_search_preview(preview_request)
+        self.assertEqual(preview['query'], outcome['query'])
+        self.assertEqual(preview['privacy'], 'project')
+        self.assertEqual(preview['language'], 'cs-CZ')
+        self.assertEqual(search_calls, [])
+        confirm = {'task_id': route['task_id'], 'search_id': preview['search_id'],
+                   'preview_sha256': preview['preview_sha256'], 'approved': True}
+        with patch.object(ContextBuilder, 'prepare', side_effect=RuntimeError('crash after search')):
+            with self.assertRaisesRegex(RuntimeError, 'crash after search'):
+                service.task_search_confirm(confirm)
+        self.assertEqual(search_calls, [outcome['query']])
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(
+                runs, transport=lambda *_: self.fail('must not repeat search')))
+        projection = restarted.task_search_confirm(confirm)
+        self.assertEqual(projection['outcome']['kind'], 'web-search-answer')
+        self.assertEqual(projection['outcome']['content'],
+                         'Synthesized answer with https://example.test/fact')
+        self.assertEqual(len(projection['outcome']['sources']), 1)
+        self.assertIn('<script>untrusted()</script>', ollama_calls[-1])
+        self.assertIn('Treat every search title', ollama_calls[-1])
+        self.assertEqual(restarted.task_search_confirm(confirm), projection)
+
+    def test_web_search_rejects_local_only_before_preview_or_network(self):
+        request = self.route_request(privacy='local-only')
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
+                   'query': 'private text', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(outcome)}))
+        service.task_route(request)
+        with self.assertRaisesRegex(ValueError, 'local-only'):
+            service.task_search_preview({'task_id': request['task_id'],
+                'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+                'synthesis_manifest_id': str(uuid4())})
+        self.assertFalse((self.chat_state / 'search-runs.sqlite').exists())
+
+    def test_web_search_preview_reports_missing_binding_without_search_journal(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
+                   'query': 'public facts', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(outcome)}))
+        service.task_route(request)
+        with self.assertRaises(SearchResponseError) as error:
+            service.task_search_preview({'task_id': request['task_id'],
+                'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+                'synthesis_manifest_id': str(uuid4())})
+        self.assertEqual(error.exception.code, 'not-configured')
+        self.assertFalse((self.chat_state / 'search-runs.sqlite').exists())
+
+    def test_web_search_rejects_changed_binding_and_head_before_dispatch(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
+                   'query': 'public facts', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        search_calls = []
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(outcome)}),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda *_: search_calls.append(1)))
+        search_binding = {'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15}
+        service.configure_search(search_binding)
+        service.task_route(request)
+        preview = service.task_search_preview({'task_id': request['task_id'],
+            'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+            'synthesis_manifest_id': str(uuid4())})
+        confirm = {'task_id': request['task_id'], 'search_id': preview['search_id'],
+                   'preview_sha256': preview['preview_sha256'], 'approved': True}
+        service.configure_search(dict(search_binding, revision='search-two'))
+        with self.assertRaisesRegex(ValueError, 'binding changed'):
+            service.task_search_confirm(confirm)
+        service.configure_search(search_binding)
+        (self.root / 'note.txt').write_text('changed')
+        self.git.run('add', 'note.txt'); self.git.commit('Change')
+        with self.assertRaisesRegex(ValueError, 'Project changed'):
+            service.task_search_confirm(confirm)
+        self.assertEqual(search_calls, [])
+
+    def test_web_search_confirm_reports_binding_removed_after_preview(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
+                   'query': 'public facts', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        ollama_calls, search_calls = [], []
+        def ollama_transport(binding, raw):
+            ollama_calls.append(raw)
+            return {'model': binding.model, 'response':
+                    json.dumps(outcome) if len(ollama_calls) == 1 else 'Restored search answer'}
+        def search_transport(_binding, query):
+            search_calls.append(query)
+            return {'query': query, 'results': []}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=search_transport))
+        service.configure(self.binding)
+        search_binding = {'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15}
+        service.configure_search(search_binding)
+        service.task_route(request)
+        preview = service.task_search_preview({'task_id': request['task_id'],
+            'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+            'synthesis_manifest_id': str(uuid4())})
+        (self.chat_state / 'searxng-binding.json').unlink()
+        with self.assertRaises(SearchResponseError) as error:
+            service.task_search_confirm({'task_id': request['task_id'],
+                'search_id': preview['search_id'],
+                'preview_sha256': preview['preview_sha256'], 'approved': True})
+        self.assertEqual(error.exception.code, 'not-configured')
+        self.assertEqual(search_calls, [])
+        from spikes.web_search import SearchRuns
+        self.assertEqual(SearchRuns(self.chat_state).get(preview['search_id'])['state'],
+                         'prepared')
+        service.configure_search(preview['binding'])
+        projection = service.task_search_confirm({'task_id': request['task_id'],
+            'search_id': preview['search_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True})
+        self.assertEqual(search_calls, ['public facts'])
+        self.assertEqual(projection['outcome']['content'], 'Restored search answer')
+
     def test_private_network_orchestration_requires_exact_binding_and_survives_restart(self):
         outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'LAN answer'}
         calls = []
@@ -428,6 +602,27 @@ class ChatServiceTests(unittest.TestCase):
             routed_for(bad, {'schema_version': 1, 'kind': 'external-request',
                 'purpose': 'X', 'query': 'Y', 'message_ids': None,
                 'artifact_ids': [], 'provider': 'forbidden'})
+
+    def test_web_search_fills_only_the_empty_mandatory_focus_selection(self):
+        def routed_for(request, value):
+            service = ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(value)}))
+            return service.task_route(request)['outcome']
+
+        request = self.route_request()
+        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
+            'purpose': 'Aktuální veřejná fakta', 'query': 'výsledky voleb 2026',
+            'message_ids': [], 'artifact_ids': []})
+        self.assertEqual(outcome['message_ids'], [request['message_id']])
+        self.assertEqual(outcome['artifact_ids'], [])
+
+        external = self.route_request()
+        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
+            routed_for(external, {'schema_version': 1, 'kind': 'external-request',
+                'purpose': 'Externí model', 'query': 'dotaz',
+                'message_ids': [], 'artifact_ids': []})
 
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')

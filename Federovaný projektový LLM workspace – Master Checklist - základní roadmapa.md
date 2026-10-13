@@ -37,6 +37,10 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] Core orchestrace systému nesmí být závislá na dostupnosti LLM; deterministický aplikační orchestrátor musí fungovat i bez lokálního nebo externího modelu.
 - [ ] Konverzační orchestraci („orchestrator chat“) navrhnout jako volitelnou LLM vrstvu nad deterministickým aplikačním orchestrátorem.
 - [ ] Nedostupnost lokálního LLM nesmí způsobit tichý fallback na externího providera; změna execution boundary musí být explicitně povolená policy.
+- [ ] Budoucí autonomie orchestrace musí být vždy opt-in a řízená
+  explicitní policy. Vytvoření každého uživatelsky adresovatelného lokálního
+  souboru, dokumentu nebo artefaktu vyžaduje samostatné schválení konkrétního
+  výstupu; countdown ani obecný souhlas s automatickým režimem je nenahrazují.
 - [ ] Lokální Ollama používat primárně jako:
   - [ ] klasifikátor,
   - [ ] extraktor,
@@ -651,6 +655,22 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Každý krok musí mít explicitní vstupní artefakty.
 - [ ] Nepřenášet implicitně kompletní historii předchozí role.
 - [ ] Umožnit checkpoint člověka mezi jednotlivými rolemi.
+- [ ] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace:** všechny
+  orchestrační akce mohou používat společnou opt-in frontu a bounded
+  automatický režim pouze tehdy, když jejich uzavřený action registry záznam
+  výslovně dovoluje automatický dispatch. Každá položka fronty zobrazuje akci,
+  vstupy, účinek, cíl, privacy, oprávnění, budget a mezivýsledek; LLM pouze
+  navrhuje, deterministický orchestrátor autorizuje a vykonává.
+- [ ] Automatika musí mít viditelný stav, pause/resume/cancel, limity kroků,
+  času a nákladů a fail-closed recovery při změně oprávnění, privacy, vstupů,
+  ztrátě UI nebo restartu. Neznámá akce ani `unknown` účinek se automaticky
+  nespustí či neopakuje.
+- [ ] **Povinný lidský checkpoint pro lokální obsah:** vytvoření každého
+  uživatelsky adresovatelného lokálního souboru, dokumentu nebo artefaktu musí
+  uživatel samostatně schválit nad přesným cílem, typem, obsahem/hash, privacy
+  a provenance. Countdown ani obecný souhlas s automatikou toto potvrzení
+  nenahrazují. Interní bounded recovery journal není obsahovým výstupem;
+  stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
 
 ---
 
@@ -1042,10 +1062,12 @@ OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený.
 capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
-feature i fyzickou desktopovou akceptaci na své větvi; PR do `develop` dosud
-nebyl vytvořen ani sloučen. Webové hledání, explicitní jazyk odpovědi a obecný
-workflow zůstávají samostatné navazující schopnosti. Gate M3 proto
-není vydáván za celý uzavřený.
+feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
+F-M3-SEARCH-01 je na feature větvi PoC validated pro explicitní řízené hledání
+přes SearXNG a čeká na doručení jediného PR do `develop`;
+inteligentní iterace `F-M3-SEARCH-02`, volitelný automatický dispatch
+`F-M3-SEARCH-03`, explicitní jazyk odpovědi a obecný workflow zůstávají
+samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
@@ -1063,14 +1085,32 @@ není vydáván za celý uzavřený.
 - [x] Streamovaná odpověď Ollamy — F-M3-OLLAMA-STREAM-01 PoC validated na
   feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
   zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
-  UI dlouhé odpovědi. Evidence je ve WORK_LOG; doručení PR zůstává otevřené.
+  UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
+- [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
+  explicitní SearXNG
+  binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
+  výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
+  tool callu, fallbacku nebo oslabení `local-only`.
+- [ ] Inteligentní iterativní hledání — F-M3-SEARCH-02: Ollama klasifikuje
+  každou bounded sadu výsledků jako `final`, `intermediate` nebo
+  `insufficient`, doloží úsudek konkrétními zdroji a může navrhnout další
+  bounded dotazy. Všechny mezivýsledky, hodnocení a návaznosti zůstávají
+  viditelné a durable; modelové `final` není garance pravdivosti.
+- [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
+  hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
+  s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
+  dotaz zkontrolovat/upravit, ihned odeslat nebo zrušit. Ztráta viditelnosti,
+  odpojení či restart odpočet fail-closed pozastaví; odeslaný síťový účinek
+  nelze odvolat a `unknown` se automaticky neopakuje. Jde o první vertikální
+  použití společného kontraktu F-M4-AUTONOMY-01; případné vytvoření lokálního
+  výstupu zůstává vždy za samostatným explicitním potvrzením.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
   provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
   providerů jsou PoC validated; PR #46 je sloučený do `develop`.
 - [ ] Provenance.
-- [ ] Řízené webové hledání — F-M3-SEARCH-01: použít konfigurovatelný SearXNG
+- [x] Řízené webové hledání — F-M3-SEARCH-01: konfigurovatelný SearXNG
   adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
   navrhnout samostatný výstup `web-search`, ale nevolá síť ani nástroj přímo;
   aplikace před dispatch ověří privacy/policy a po návratu předá Ollamě pouze
@@ -1078,6 +1118,24 @@ není vydáván za celý uzavřený.
   titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
   instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
   timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
+- [ ] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání:** nad výsledky
+  F-M3-SEARCH-01 přidat uzavřený evaluator/planner kontrakt s výsledkem
+  `final` / `intermediate` / `insufficient`, odkazy na použité source IDs,
+  omezeními a navrženými follow-up queries. Každé kolo musí mít vlastní přesný
+  Context Manifest, search/LLM run provenance a parent/child vazbu; UI zobrazí
+  i mezivýsledky a důvod pokračování. Orchestrátor vynutí uživatelsky viditelné
+  limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
+  změně privacy/policy/binding nebo `unknown` účinku.
+- [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
+  a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
+  s odloženým odesláním.
+  Každý automatický dotaz musí být před sítí viditelný spolu s přesným cílem,
+  privacy, kolem a budgetem a mít uživatelsky zvolený countdown 3–5 sekund.
+  Akce pause/review, edit, send-now a cancel jsou dostupné po celý countdown;
+  pause zastaví i další frontu. Fronta je durable a fail-closed při skrytí UI,
+  odpojení či restartu. Stav po dispatch respektuje stávající hranici
+  `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
+  Uložení výsledku jako lokálního dokumentu/artefaktu automatizovat nelze.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
@@ -1095,6 +1153,10 @@ začlenění feature větve do `develop` zůstává otevřené.
 - [ ] Editor.
 - [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
 - [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
+- [ ] Obecná řízená autonomie — F-M4-AUTONOMY-01: opt-in bounded fronta pro
+  všechny registrované orchestrační akce s fail-closed action policy;
+  vytvoření každého uživatelsky adresovatelného lokálního souboru, dokumentu
+  nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
