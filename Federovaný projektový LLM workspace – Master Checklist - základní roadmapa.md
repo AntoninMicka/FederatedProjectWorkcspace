@@ -37,6 +37,10 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] Core orchestrace systému nesmí být závislá na dostupnosti LLM; deterministický aplikační orchestrátor musí fungovat i bez lokálního nebo externího modelu.
 - [ ] Konverzační orchestraci („orchestrator chat“) navrhnout jako volitelnou LLM vrstvu nad deterministickým aplikačním orchestrátorem.
 - [ ] Nedostupnost lokálního LLM nesmí způsobit tichý fallback na externího providera; změna execution boundary musí být explicitně povolená policy.
+- [ ] Budoucí autonomie orchestrace musí být vždy opt-in a řízená
+  explicitní policy. Vytvoření každého uživatelsky adresovatelného lokálního
+  souboru, dokumentu nebo artefaktu vyžaduje samostatné schválení konkrétního
+  výstupu; countdown ani obecný souhlas s automatickým režimem je nenahrazují.
 - [ ] Lokální Ollama používat primárně jako:
   - [ ] klasifikátor,
   - [ ] extraktor,
@@ -651,6 +655,22 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Každý krok musí mít explicitní vstupní artefakty.
 - [ ] Nepřenášet implicitně kompletní historii předchozí role.
 - [ ] Umožnit checkpoint člověka mezi jednotlivými rolemi.
+- [ ] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace:** všechny
+  orchestrační akce mohou používat společnou opt-in frontu a bounded
+  automatický režim pouze tehdy, když jejich uzavřený action registry záznam
+  výslovně dovoluje automatický dispatch. Každá položka fronty zobrazuje akci,
+  vstupy, účinek, cíl, privacy, oprávnění, budget a mezivýsledek; LLM pouze
+  navrhuje, deterministický orchestrátor autorizuje a vykonává.
+- [ ] Automatika musí mít viditelný stav, pause/resume/cancel, limity kroků,
+  času a nákladů a fail-closed recovery při změně oprávnění, privacy, vstupů,
+  ztrátě UI nebo restartu. Neznámá akce ani `unknown` účinek se automaticky
+  nespustí či neopakuje.
+- [ ] **Povinný lidský checkpoint pro lokální obsah:** vytvoření každého
+  uživatelsky adresovatelného lokálního souboru, dokumentu nebo artefaktu musí
+  uživatel samostatně schválit nad přesným cílem, typem, obsahem/hash, privacy
+  a provenance. Countdown ani obecný souhlas s automatikou toto potvrzení
+  nenahrazují. Interní bounded recovery journal není obsahovým výstupem;
+  stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
 
 ---
 
@@ -1081,7 +1101,9 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
   dotaz zkontrolovat/upravit, ihned odeslat nebo zrušit. Ztráta viditelnosti,
   odpojení či restart odpočet fail-closed pozastaví; odeslaný síťový účinek
-  nelze odvolat a `unknown` se automaticky neopakuje.
+  nelze odvolat a `unknown` se automaticky neopakuje. Jde o první vertikální
+  použití společného kontraktu F-M4-AUTONOMY-01; případné vytvoření lokálního
+  výstupu zůstává vždy za samostatným explicitním potvrzením.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
@@ -1105,13 +1127,15 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
   změně privacy/policy/binding nebo `unknown` účinku.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
-  přidat per-search režim `manual` versus automatický s odloženým odesláním.
+  a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
+  s odloženým odesláním.
   Každý automatický dotaz musí být před sítí viditelný spolu s přesným cílem,
   privacy, kolem a budgetem a mít uživatelsky zvolený countdown 3–5 sekund.
   Akce pause/review, edit, send-now a cancel jsou dostupné po celý countdown;
   pause zastaví i další frontu. Fronta je durable a fail-closed při skrytí UI,
   odpojení či restartu. Stav po dispatch respektuje stávající hranici
   `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
+  Uložení výsledku jako lokálního dokumentu/artefaktu automatizovat nelze.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
@@ -1129,6 +1153,10 @@ začlenění feature větve do `develop` zůstává otevřené.
 - [ ] Editor.
 - [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
 - [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
+- [ ] Obecná řízená autonomie — F-M4-AUTONOMY-01: opt-in bounded fronta pro
+  všechny registrované orchestrační akce s fail-closed action policy;
+  vytvoření každého uživatelsky adresovatelného lokálního souboru, dokumentu
+  nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
