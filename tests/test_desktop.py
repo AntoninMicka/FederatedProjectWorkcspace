@@ -43,9 +43,13 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/tasks/search/preview',request)", JS)
         self.assertIn("projectRequest('/v1/tasks/search/confirm'", JS)
         self.assertIn("outcome.kind==='web-search-answer'", JS)
-        self.assertIn('url.textContent=item.url', JS)
-        self.assertIn('snippet.textContent=item.snippet', JS)
-        self.assertNotIn('link.href=item.url', JS)
+        self.assertIn('url.textContent=source.url', JS)
+        self.assertIn('snippet.textContent=source.snippet', JS)
+        self.assertNotIn('.href=source.url', JS)
+        self.assertIn('renderSearchWorkflow(card,projection.search_workflow)', JS)
+        self.assertIn('Zkontrolovat další dotaz:', JS)
+        self.assertIn('Finálnost je hodnocení modelu', JS)
+        self.assertIn('query===null && projection.search_preview', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
                         <= DesktopHandler.post_paths)

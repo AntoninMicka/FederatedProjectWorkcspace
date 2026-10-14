@@ -14,6 +14,7 @@ import re
 import sqlite3
 import ssl
 import stat
+import time
 from urllib.parse import urlencode, urlsplit
 
 from spikes.metadata import require, timestamp, uuid
@@ -26,6 +27,10 @@ MAX_TITLE_BYTES = 1024
 MAX_SNIPPET_BYTES = 8192
 MAX_URL_BYTES = 8192
 DEFAULT_SEARCH_LANGUAGE = 'cs-CZ'
+MAX_WORKFLOW_ROUNDS = 3
+MAX_WORKFLOW_QUERIES = 3
+MAX_WORKFLOW_RESULTS = 30
+MAX_WORKFLOW_SECONDS = 300
 
 
 def _canonical(value):
@@ -211,11 +216,32 @@ class SearchRuns:
             preview_json TEXT NOT NULL, preview_sha256 TEXT NOT NULL,
             binding_json TEXT NOT NULL, state TEXT NOT NULL,
             result_json TEXT, error TEXT, error_code TEXT)''')
+        db.execute('''CREATE TABLE IF NOT EXISTS search_workflows(
+            task_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
+            project_id TEXT NOT NULL, privacy TEXT NOT NULL, expected_head TEXT NOT NULL,
+            binding_json TEXT NOT NULL, max_rounds INTEGER NOT NULL,
+            max_queries INTEGER NOT NULL, max_results INTEGER NOT NULL,
+            max_seconds INTEGER NOT NULL, started_at REAL NOT NULL, state TEXT NOT NULL)''')
+        db.execute('''CREATE TABLE IF NOT EXISTS search_rounds(
+            search_id TEXT PRIMARY KEY, task_id TEXT NOT NULL, search_task_id TEXT NOT NULL UNIQUE,
+            round_index INTEGER NOT NULL, parent_search_id TEXT, query TEXT NOT NULL,
+            synthesis_run_id TEXT NOT NULL, synthesis_manifest_id TEXT NOT NULL,
+            evaluation_json TEXT, UNIQUE(task_id,round_index))''')
         columns = [row[1] for row in db.execute('PRAGMA table_info(searches)')]
         require(columns == ['search_id', 'task_id', 'node_id', 'user_id', 'project_id',
             'request_json', 'request_digest', 'preview_json', 'preview_sha256',
             'binding_json', 'state', 'result_json', 'error', 'error_code'],
             'Unknown search run schema')
+        workflow_columns = [row[1] for row in db.execute(
+            'PRAGMA table_info(search_workflows)')]
+        require(workflow_columns == ['task_id', 'node_id', 'user_id', 'project_id',
+            'privacy', 'expected_head', 'binding_json', 'max_rounds', 'max_queries',
+            'max_results', 'max_seconds', 'started_at', 'state'],
+            'Unknown iterative search workflow schema')
+        round_columns = [row[1] for row in db.execute('PRAGMA table_info(search_rounds)')]
+        require(round_columns == ['search_id', 'task_id', 'search_task_id', 'round_index',
+            'parent_search_id', 'query', 'synthesis_run_id', 'synthesis_manifest_id',
+            'evaluation_json'], 'Unknown iterative search round schema')
         db.commit(); return closing(db)
 
     @staticmethod
@@ -268,6 +294,147 @@ class SearchRuns:
             db.commit()
         return self.get(search_id)
 
+    def prepare_round(self, *, search_id, task_id, search_task_id, node_id, user_id,
+                      project_id, privacy, expected_head, request, preview, binding,
+                      round_index, parent_search_id, synthesis_run_id,
+                      synthesis_manifest_id, now=time.time):
+        for value in (search_id, task_id, search_task_id, node_id, user_id, project_id,
+                      synthesis_run_id, synthesis_manifest_id):
+            uuid(value)
+        if parent_search_id is not None: uuid(parent_search_id)
+        require(privacy in {'public', 'project', 'confidential'},
+                'Invalid iterative search privacy')
+        require(type(round_index) is int and 1 <= round_index <= MAX_WORKFLOW_ROUNDS,
+                'Iterative search round exceeds budget')
+        require(isinstance(expected_head, str) and expected_head,
+                'Invalid iterative search project revision')
+        require(isinstance(binding, SearXNGBinding), 'Invalid search binding')
+        query = _bounded_text(request.get('query'), 'query', MAX_QUERY_BYTES)
+        raw_request = _canonical(request).decode(); request_digest = _digest(raw_request.encode())
+        raw_preview = _canonical(preview).decode(); preview_sha256 = _digest(raw_preview.encode())
+        raw_binding = _canonical(binding.serialize()).decode()
+        search_identity = (search_task_id, node_id, user_id, project_id, raw_request,
+                           request_digest, raw_preview, preview_sha256, raw_binding)
+        workflow_identity = (node_id, user_id, project_id, privacy, expected_head, raw_binding,
+                             MAX_WORKFLOW_ROUNDS, MAX_WORKFLOW_QUERIES,
+                             MAX_WORKFLOW_RESULTS, MAX_WORKFLOW_SECONDS)
+        round_identity = (task_id, search_task_id, round_index, parent_search_id, query,
+                          synthesis_run_id, synthesis_manifest_id)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            workflow = db.execute('SELECT node_id,user_id,project_id,privacy,expected_head,'
+                'binding_json,max_rounds,max_queries,max_results,max_seconds,state '
+                'FROM search_workflows WHERE task_id=?', (task_id,)).fetchone()
+            if workflow:
+                require(workflow[:10] == workflow_identity and workflow[10] == 'active',
+                        'Iterative search workflow changed or is closed')
+            else:
+                require(round_index == 1 and parent_search_id is None,
+                        'Iterative search must start with round one')
+                db.execute('INSERT INTO search_workflows VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                    (task_id,) + workflow_identity[:6] + workflow_identity[6:10]
+                    + (float(now()), 'active'))
+            existing = db.execute('SELECT task_id,node_id,user_id,project_id,request_json,'
+                'request_digest,preview_json,preview_sha256,binding_json FROM searches '
+                'WHERE search_id=?', (search_id,)).fetchone()
+            if existing:
+                require(existing == search_identity,
+                        'Search ID belongs to a different iterative round')
+            else:
+                require(db.execute('SELECT 1 FROM searches WHERE task_id=?',
+                                   (search_task_id,)).fetchone() is None,
+                        'Iterative round already has a different search preview')
+                db.execute('INSERT INTO searches VALUES(?,?,?,?,?,?,?,?,?,?,?,NULL,NULL,NULL)',
+                    (search_id,) + search_identity + ('prepared',))
+            existing_round = db.execute('SELECT task_id,search_task_id,round_index,'
+                'parent_search_id,query,synthesis_run_id,synthesis_manifest_id '
+                'FROM search_rounds WHERE search_id=?', (search_id,)).fetchone()
+            if existing_round:
+                require(existing_round == round_identity,
+                        'Search ID belongs to a different workflow round')
+            else:
+                require(db.execute('SELECT 1 FROM search_rounds WHERE task_id=? '
+                    'AND round_index=?', (task_id, round_index)).fetchone() is None,
+                    'Workflow round already has a different search')
+                db.execute('INSERT INTO search_rounds VALUES(?,?,?,?,?,?,?,?,NULL)',
+                    (search_id,) + round_identity)
+            db.commit()
+        return self.get(search_id)
+
+    def workflow(self, task_id, node_id, user_id):
+        for value in (task_id, node_id, user_id): uuid(value)
+        with self.connect() as db:
+            row = db.execute('SELECT node_id,user_id,project_id,privacy,expected_head,'
+                'binding_json,max_rounds,max_queries,max_results,max_seconds,started_at,state '
+                'FROM search_workflows WHERE task_id=?', (task_id,)).fetchone()
+            if row is None: return None
+            require(row[:2] == (node_id, user_id),
+                    'Iterative search workflow is unavailable to this user')
+            rounds = db.execute('SELECT search_id,search_task_id,round_index,parent_search_id,'
+                'query,synthesis_run_id,synthesis_manifest_id,evaluation_json '
+                'FROM search_rounds WHERE task_id=? ORDER BY round_index', (task_id,)).fetchall()
+            searches = {item[0]: self._row(item) for item in db.execute(
+                'SELECT * FROM searches WHERE search_id IN '
+                '(SELECT search_id FROM search_rounds WHERE task_id=?)', (task_id,)).fetchall()}
+        return {'task_id': task_id, 'node_id': row[0], 'user_id': row[1],
+                'project_id': row[2], 'privacy': row[3], 'expected_head': row[4],
+                'binding': json.loads(row[5]),
+                'budget': {'max_rounds': row[6], 'max_queries': row[7],
+                           'max_results': row[8], 'max_seconds': row[9]},
+                'started_at': row[10], 'state': row[11],
+                'rounds': [{'search_id': item[0], 'search_task_id': item[1],
+                            'round_index': item[2], 'parent_search_id': item[3],
+                            'query': item[4], 'synthesis_run_id': item[5],
+                            'synthesis_manifest_id': item[6],
+                            'evaluation': None if item[7] is None else json.loads(item[7]),
+                            'search': searches[item[0]]} for item in rounds]}
+
+    def record_evaluation(self, task_id, node_id, user_id, search_id, evaluation):
+        workflow = self.workflow(task_id, node_id, user_id)
+        require(workflow is not None and workflow['state'] == 'active',
+                'Iterative search workflow is closed')
+        raw = _canonical(evaluation).decode()
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT evaluation_json FROM search_rounds '
+                             'WHERE task_id=? AND search_id=?',
+                             (task_id, search_id)).fetchone()
+            require(row is not None, 'Iterative search round is unavailable')
+            if row[0] is None:
+                changed = db.execute('UPDATE search_rounds SET evaluation_json=? '
+                    'WHERE task_id=? AND search_id=? AND evaluation_json IS NULL',
+                    (raw, task_id, search_id))
+                require(changed.rowcount == 1, 'Iterative search evaluation changed')
+            else:
+                require(row[0] == raw, 'Iterative search evaluation changed')
+            db.commit()
+        return self.workflow(task_id, node_id, user_id)
+
+    def finish_workflow(self, task_id, node_id, user_id):
+        workflow = self.workflow(task_id, node_id, user_id)
+        require(workflow is not None and workflow['state'] in {'active', 'completed'},
+                'Iterative search workflow cannot be completed')
+        if workflow['state'] == 'completed': return workflow
+        require(workflow['rounds'] and workflow['rounds'][-1]['evaluation'] is not None,
+                'Iterative search has no final evaluation')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute("UPDATE search_workflows SET state='completed' "
+                "WHERE task_id=? AND state='active'", (task_id,))
+            require(changed.rowcount == 1, 'Iterative search workflow changed')
+            db.commit()
+        return self.workflow(task_id, node_id, user_id)
+
+    @staticmethod
+    def budget_state(workflow, *, now=time.time):
+        rounds = workflow['rounds']
+        return {'rounds_used': len(rounds),
+                'queries_used': len(rounds),
+                'results_used': sum(len(item['search']['result']['results'])
+                                    for item in rounds
+                                    if item['search']['result'] is not None),
+                'elapsed_seconds': max(0, int(now() - workflow['started_at']))}
+
     def transition(self, search_id, current, following, *, result=None, error=None, code=None):
         encoded = None if result is None else _canonical(result).decode()
         with self.connect() as db:
@@ -280,6 +447,22 @@ class SearchRuns:
         return self.get(search_id)
 
     def cancel_task(self, task_id, node_id, user_id):
+        workflow = self.workflow(task_id, node_id, user_id)
+        if workflow is not None:
+            if workflow['state'] in {'completed', 'cancelled'}: return workflow
+            for item in workflow['rounds']:
+                row = item['search']
+                require(row['state'] not in {'dispatching', 'unknown'},
+                        'Active or unknown web search cannot be cancelled')
+            with self.connect() as db:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute("UPDATE searches SET state='cancelled' WHERE search_id IN "
+                    "(SELECT search_id FROM search_rounds WHERE task_id=?) "
+                    "AND state='prepared'", (task_id,))
+                db.execute("UPDATE search_workflows SET state='cancelled' "
+                           "WHERE task_id=? AND state='active'", (task_id,))
+                db.commit()
+            return self.workflow(task_id, node_id, user_id)
         row = self.for_task(task_id, node_id, user_id)
         if row is None or row['state'] in {'failed', 'succeeded', 'cancelled'}:
             return row
@@ -318,7 +501,9 @@ class SearXNGAdapter:
             title = _bounded_text(item.get('title'), 'result title', MAX_TITLE_BYTES)
             snippet = _bounded_text(item.get('content', ''), 'result snippet',
                                     MAX_SNIPPET_BYTES, allow_empty=True)
-            results.append(SearXNGResult(title, url, snippet).serialize())
+            result = SearXNGResult(title, url, snippet).serialize()
+            result['source_id'] = 'source-' + hashlib.sha256(url.encode()).hexdigest()[:32]
+            results.append(result)
             if len(results) == binding.result_limit: break
         return {'schema_version': 1, 'query': query, 'searched_at': searched_at,
                 'source': {'adapter': 'searxng', 'binding_id': binding.binding_id,

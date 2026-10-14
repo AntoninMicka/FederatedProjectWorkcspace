@@ -69,6 +69,13 @@ class ThreadLifecycle:
         with closing(sqlite3.connect(path, timeout=30)) as db:
             return db.execute(query, values).fetchall()
 
+    def _table_exists(self, name, table):
+        path = self._existing_db(name)
+        if path is None: return False
+        with closing(sqlite3.connect(path, timeout=30)) as db:
+            return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                              (table,)).fetchone() is not None
+
     def _published(self, project_id, thread_id):
         if project_id is None: return []
         workspace = self.projects.workspace(project_id, blocking=False)
@@ -98,11 +105,25 @@ class ThreadLifecycle:
             'SELECT task_id,state,run_id,result FROM outcomes '
             'WHERE thread_id=? AND node_id=? AND user_id=? ORDER BY task_id',
             (thread_id, node_id, user_id))
-        searches = []
+        searches, workflow_task_ids, workflow_runs = [], [], set()
         for task_id, *_ in outcomes:
-            searches += self._rows('search-runs.sqlite',
+            legacy = self._rows('search-runs.sqlite',
                 'SELECT search_id,task_id,state,request_json FROM searches WHERE task_id=?',
                 (task_id,))
+            searches += legacy
+            if self._table_exists('search-runs.sqlite', 'search_rounds'):
+                rounds = self._rows('search-runs.sqlite',
+                    'SELECT search_id,synthesis_run_id FROM search_rounds WHERE task_id=?',
+                    (task_id,))
+                if rounds:
+                    workflow_task_ids.append(task_id)
+                workflow_runs.update(row[1] for row in rounds)
+                legacy_ids = {row[0] for row in legacy}
+                for search_id, _ in rounds:
+                    if search_id not in legacy_ids:
+                        searches += self._rows('search-runs.sqlite',
+                            'SELECT search_id,task_id,state,request_json FROM searches '
+                            'WHERE search_id=?', (search_id,))
         approvals = []
         for approval_id, state, run_id, request in self._rows(
                 'external-dispatches.sqlite',
@@ -114,6 +135,7 @@ class ThreadLifecycle:
         run_ids = {turn['run_id'] for turn in thread['turns'] if turn['run_id']}
         run_ids.update(row[2] for row in outcomes if row[2])
         run_ids.update(row[2] for row in approvals if row[2])
+        run_ids.update(workflow_runs)
         for _, _, _, raw in searches:
             value = self._json(raw)
             if isinstance(value, dict) and isinstance(value.get('synthesis_run_id'), str):
@@ -153,6 +175,7 @@ class ThreadLifecycle:
                        'task_outcomes': len(outcomes), 'approvals': len(approval_ids),
                        'backend_runs': len(backend_runs), 'web_searches': len(searches)},
             'task_ids': sorted(row[0] for row in outcomes),
+            'search_workflow_task_ids': sorted(workflow_task_ids),
             'search_ids': sorted(row[0] for row in searches),
             'approval_ids': sorted(approval_ids), 'run_ids': sorted(run_ids),
             'published_artifacts': self._published(thread['project_id'], thread_id),
@@ -259,6 +282,10 @@ class ThreadLifecycle:
                              plan['approval_ids'])
             checkpoint('approvals'); self._advance(operation_id, 'marked', 'approvals'); stage = 'approvals'
         if stage == 'approvals':
+            self._delete_ids('search-runs.sqlite', 'search_rounds', 'task_id',
+                             plan.get('search_workflow_task_ids', []))
+            self._delete_ids('search-runs.sqlite', 'search_workflows', 'task_id',
+                             plan.get('search_workflow_task_ids', []))
             self._delete_ids('search-runs.sqlite', 'searches', 'search_id',
                              plan.get('search_ids', []))
             self._delete_ids('task-outcomes.sqlite', 'outcomes', 'task_id', plan['task_ids'])

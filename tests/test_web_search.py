@@ -73,10 +73,50 @@ class WebSearchTests(unittest.TestCase):
                                   now=lambda: '2026-10-12T12:01:00Z')
         self.assertEqual([item['title'] for item in result['results']], ['One', 'Two', 'Three'])
         self.assertEqual(result['results'][1]['snippet'], '<script>x</script>')
+        self.assertRegex(result['results'][0]['source_id'], r'^source-[0-9a-f]{32}$')
+        self.assertEqual(result['results'][0]['source_id'],
+                         adapter.dispatch(request['search_id'], self.binding,
+                         preview_sha256=row['preview_sha256'])['results'][0]['source_id'])
         self.assertEqual(result['source']['binding_revision'], 'one')
         self.assertEqual(adapter.dispatch(request['search_id'], self.binding,
                          preview_sha256=row['preview_sha256']), result)
         self.assertEqual(len(calls), 1)
+
+    def test_iterative_workflow_is_bounded_and_rounds_are_durable(self):
+        runs = SearchRuns(self.root)
+        task_id, node_id, user_id, project_id = (str(uuid4()) for _ in range(4))
+        first_search, first_run, first_manifest = (str(uuid4()) for _ in range(3))
+        request = {'task_id': task_id, 'search_id': first_search,
+                   'project_id': project_id, 'query': 'first', 'privacy': 'project',
+                   'created_at': '2026-10-12T12:00:00Z',
+                   'synthesis_run_id': first_run,
+                   'synthesis_manifest_id': first_manifest}
+        runs.prepare_round(search_id=first_search, task_id=task_id,
+            search_task_id=task_id, node_id=node_id, user_id=user_id,
+            project_id=project_id, privacy='project', expected_head='a' * 40,
+            request=request, preview={'search_id': first_search}, binding=self.binding,
+            round_index=1, parent_search_id=None, synthesis_run_id=first_run,
+            synthesis_manifest_id=first_manifest, now=lambda: 100.0)
+        runs.transition(first_search, 'prepared', 'dispatching')
+        runs.transition(first_search, 'dispatching', 'succeeded', result={
+            'schema_version': 1, 'query': 'first', 'searched_at': '2026-10-12T12:00:00Z',
+            'source': {}, 'results': [{'source_id': 'source-one'}]})
+        evaluation = {'schema_version': 1, 'assessment': 'intermediate',
+            'answer': 'Partial', 'rationale': 'Need more', 'used_source_ids': [],
+            'limitations': [], 'follow_up_queries': ['second']}
+        workflow = runs.record_evaluation(task_id, node_id, user_id, first_search,
+                                          evaluation)
+        self.assertEqual(workflow['rounds'][0]['evaluation'], evaluation)
+        self.assertEqual(runs.budget_state(workflow, now=lambda: 105.0), {
+            'rounds_used': 1, 'queries_used': 1, 'results_used': 1,
+            'elapsed_seconds': 5})
+        with self.assertRaisesRegex(ValueError, 'round exceeds budget'):
+            runs.prepare_round(search_id=str(uuid4()), task_id=task_id,
+                search_task_id=str(uuid4()), node_id=node_id, user_id=user_id,
+                project_id=project_id, privacy='project', expected_head='a' * 40,
+                request=dict(request, query='too late'), preview={}, binding=self.binding,
+                round_index=4, parent_search_id=first_search,
+                synthesis_run_id=str(uuid4()), synthesis_manifest_id=str(uuid4()))
 
     def test_invalid_response_is_failed_and_unknown_transport_is_not_retried(self):
         request, row = self.prepare()

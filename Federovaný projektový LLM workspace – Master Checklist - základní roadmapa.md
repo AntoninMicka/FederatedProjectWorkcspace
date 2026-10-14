@@ -1097,7 +1097,9 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   každou bounded sadu výsledků jako `final`, `intermediate` nebo
   `insufficient`, doloží úsudek konkrétními zdroji a může navrhnout další
   bounded dotazy. Všechny mezivýsledky, hodnocení a návaznosti zůstávají
-  viditelné a durable; modelové `final` není garance pravdivosti.
+  viditelné a durable; modelové `final` není garance pravdivosti. Implementace
+  a automatická regrese jsou hotové na feature větvi; PoC validace čeká na
+  fyzický průchod se živou Ollamou a SearXNG.
 - [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
   hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
   s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,

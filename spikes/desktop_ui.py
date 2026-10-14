@@ -523,6 +523,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
+.search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
  background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
  padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
@@ -1867,6 +1868,35 @@ function taskButton(label,handler,secondary=false){
  const button=document.createElement('button');button.type='button';button.textContent=label;
  if(secondary)button.className='secondary-button';button.addEventListener('click',handler);return button;
 }
+function renderSearchWorkflow(container,workflow){
+ if(!workflow)return;
+ const budget=document.createElement('p');budget.className='search-budget';
+ const used=workflow.budget_used || {},limits=workflow.budget || {};
+ budget.textContent=`Rozpočet: kola ${used.rounds_used || 0}/${limits.max_rounds || 0} · dotazy ${used.queries_used || 0}/${limits.max_queries || 0} · výsledky ${used.results_used || 0}/${limits.max_results || 0} · čas ${used.elapsed_seconds || 0}/${limits.max_seconds || 0} s`;
+ container.append(budget);
+ const rounds=document.createElement('div');rounds.className='search-rounds';
+ for(const item of workflow.rounds || []){
+  const round=document.createElement('section');round.className='search-round';
+  const title=document.createElement('h4');title.textContent=`Kolo ${item.round_index}: ${item.query}`;round.append(title);
+  const provenance=document.createElement('small');
+  provenance.textContent=`search ${item.search_id} · run ${item.run_id} · manifest ${item.manifest_id}`;round.append(provenance);
+  const sources=document.createElement('ol');sources.className='search-sources';
+  for(const source of item.sources || []){const row=document.createElement('li'),name=document.createElement('strong');
+   name.textContent=source.title;const url=document.createElement('code');url.textContent=source.url;
+   const snippet=document.createElement('small');snippet.textContent=source.snippet;
+   const sourceId=document.createElement('small');sourceId.textContent=source.source_id;
+   row.append(name,url,snippet,sourceId);sources.append(row);}round.append(sources);
+  if(item.evaluation){const evaluation=document.createElement('div');evaluation.className='search-evaluation';
+   const assessment=document.createElement('strong');assessment.textContent=`Hodnocení modelu: ${item.evaluation.assessment}`;
+   const answer=document.createElement('p');answer.textContent=item.evaluation.answer;
+   const rationale=document.createElement('small');rationale.textContent=item.evaluation.rationale;
+   evaluation.append(assessment,answer,rationale);
+   for(const limitation of item.evaluation.limitations || []){const note=document.createElement('small');note.textContent=`Omezení: ${limitation}`;evaluation.append(note);}
+   round.append(evaluation);}
+  rounds.append(round);
+ }
+ container.append(rounds);
+}
 function renderTaskOutcomes(){
  for(const projection of taskOutcomes){
   const prompt=document.createElement('div');prompt.className='chat-message user';
@@ -1907,18 +1937,27 @@ function renderTaskOutcomes(){
   }else if(outcome.kind==='web-search'){
    const purpose=document.createElement('p');purpose.textContent=outcome.purpose;card.append(purpose);
    const query=document.createElement('pre');query.textContent=outcome.query;card.append(query);
+   renderSearchWorkflow(card,projection.search_workflow);
    const actions=document.createElement('div');actions.className='task-actions';
-   actions.append(taskButton('Zkontrolovat webový dotaz',()=>prepareTaskSearch(projection)),
-                  taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+   const workflow=projection.search_workflow,latest=workflow?.rounds?.at(-1);
+   if(!workflow || !latest?.evaluation){
+    actions.append(taskButton('Zkontrolovat webový dotaz',()=>prepareTaskSearch(projection)));
+   }else{
+    for(const nextQuery of workflow.next_queries || []){
+     actions.append(taskButton(`Zkontrolovat další dotaz: ${nextQuery}`,
+      ()=>prepareTaskSearch(projection,nextQuery,latest.search_id)));
+    }
+   }
+   actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
   }else if(outcome.kind==='web-search-answer'){
    const answer=document.createElement('div');answer.className='chat-message assistant';
    answer.textContent=outcome.content;card.append(answer);
-   const sources=document.createElement('ol');sources.className='search-sources';
-   for(const item of outcome.sources || []){const row=document.createElement('li'),link=document.createElement('strong');
-    link.textContent=item.title;const url=document.createElement('code');url.textContent=item.url;
-    const snippet=document.createElement('small');snippet.textContent=item.snippet;
-    row.append(link,url,snippet);sources.append(row);}card.append(sources);
-   const detail=document.createElement('small');detail.textContent=`SearXNG ${outcome.searched_at} · ${outcome.sources?.length || 0} zdrojů · ${outcome.model}`;card.append(detail);
+   renderSearchWorkflow(card,{rounds:outcome.rounds,budget:outcome.budget,
+    budget_used:outcome.budget_used});
+   const caveat=document.createElement('small');caveat.textContent=
+    `Finálnost je hodnocení modelu, nikoli záruka správnosti · důvod ukončení: ${outcome.completion_reason}`;card.append(caveat);
+   const detail=document.createElement('small');detail.textContent=
+    `SearXNG · ${outcome.sources?.length || 0} unikátních zdrojů · ${outcome.model}`;card.append(detail);
   }else if(outcome.kind==='artifact-link'){
    const link=document.createElement('button');link.type='button';link.className='artifact-link';
    link.textContent=`${outcome.title} → ${outcome.artifact_id}`;
@@ -1971,12 +2010,13 @@ async function prepareTaskExternal(projection){
   chatOperationStatus.textContent='Externí požadavek je jen náhled. Zkontrolujte jej a potvrďte.';
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
-async function prepareTaskSearch(projection){
+async function prepareTaskSearch(projection,query=null,parentSearchId=null){
  hideSearchRecovery();
  chatOperationStatus.textContent='Připravuji přesný náhled webového dotazu…';
  const request={task_id:projection.task_id,search_id:crypto.randomUUID(),
   synthesis_run_id:crypto.randomUUID(),synthesis_manifest_id:crypto.randomUUID()};
- try{const preview=projection.search_preview ||
+ if(query!==null){request.query=query;request.parent_search_id=parentSearchId;}
+ try{const preview=(query===null && projection.search_preview) ||
    await projectRequest('/v1/tasks/search/preview',request);
   pendingSearchPreview={projection,preview};
   document.querySelector('#search-preview-content').textContent=JSON.stringify(preview,null,2);
@@ -2005,7 +2045,9 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
    preview_sha256:preview.preview_sha256,approved:true},210000);
   replaceTaskProjection(projection);pendingSearchPreview=null;
   document.querySelector('#search-preview').hidden=true;
-  chatOperationStatus.textContent='Řízené hledání a syntéza jsou dokončené.';
+  chatOperationStatus.textContent=projection.temporary ?
+   'Kolo je vyhodnocené. Navržený další dotaz se odešle až po vaší kontrole a potvrzení.' :
+   'Řízené hledání a syntéza jsou dokončené.';
  }catch(error){chatOperationStatus.textContent=error.message;
   offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
 });
