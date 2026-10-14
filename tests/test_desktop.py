@@ -670,6 +670,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="google-drive-open-settings"', HTML)
         self.assertIn('id="google-drive-callback"', HTML)
         self.assertIn('Google heslo zadáváte jen Googlu.', HTML)
+        self.assertIn('Google Auth Platform → Audience', HTML)
+        self.assertIn('<strong>Test users</strong>', HTML)
         self.assertIn("setGoogleDriveStep(3,2)", JS)
         self.assertIn("googleDriveFiles.replaceChildren()", JS)
         self.assertNotIn('googleDriveFiles.innerHTML', JS)

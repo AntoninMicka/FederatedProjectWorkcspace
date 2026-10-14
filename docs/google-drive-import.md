@@ -14,6 +14,13 @@ klientovi ručně neregistrujte. Pro server vytvořte samostatný klient typu
 správného klienta vložte v Nastavení → AI backend → Google Drive import.
 Workspace žádá pouze `https://www.googleapis.com/auth/drive.file`.
 
+Pro osobní fyzickou akceptaci může OAuth aplikace zůstat v režimu **Testing**.
+V Google Auth Platform → Audience → Test users ale musí být výslovně přidaný
+přesný Google účet použitý při přihlášení. Veřejné ověření Googlem není pro
+vývojový/testovací projekt nutné; bez allowlistu testovacího účtu Google přístup
+zablokuje. U pracovního Google Workspace účtu může přístup navíc omezit správce
+organizace.
+
 Akceptační průchod:
 
 1. Otevřete projekt → Podklady → Importovat zdroj, nastavte privacy a otevřete

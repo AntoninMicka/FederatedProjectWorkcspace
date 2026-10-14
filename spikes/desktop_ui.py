@@ -181,6 +181,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details class="oauth-setup-guide"><summary>Jak připravit první přihlášení</summary>
 <ol><li id="google-drive-client-guide">Načítám správný typ OAuth klienta pro tuto aplikaci.</li>
 <li><span id="google-drive-callback-guide">Návratová adresa:</span> <code id="google-drive-callback"></code></li>
+<li>V Google Auth Platform → Audience ponechte pro osobní test stav <strong>Testing</strong> a v části <strong>Test users</strong> přidejte přesný Google účet, kterým se budete přihlašovat. Pro takový test není nutné čekat na veřejné ověření aplikace.</li>
 <li>Client ID a client secret vložte níže. Uloží se jen v soukromém stavu tohoto uzlu, ne do projektu.</li></ol>
 <p>Google heslo se zadává pouze na stránce Googlu; Workspace je nikdy neuvidí.</p></details>
 <form id="google-drive-config-form"><label>OAuth client ID <input name="client_id" maxlength="512" autocomplete="off" required></label>

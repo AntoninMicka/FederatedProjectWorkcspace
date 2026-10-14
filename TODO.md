@@ -79,8 +79,10 @@ odvolaný přístup operaci zastaví bez částečné projektové publikace.
   První fyzický pokus odhalil Google `redirect_uri_mismatch`: desktop nyní
   používá kořenový loopback redirect požadovaný klientem typu `Desktop app`,
   zatímco web zachovává přesnou HTTPS callback cestu; oba callbacky mají
-  samostatný integrační test. Úspěšný fyzický průchod se skutečným účtem zatím
-  chybí; postup je v
+  samostatný integrační test. Druhý fyzický pokus dosáhl Google consent gate,
+  ale účet ještě nebyl povolen mezi `Audience → Test users`; průvodce i návod
+  nyní tuto podmínku režimu Testing uvádějí. Úspěšný fyzický průchod se
+  skutečným účtem zatím chybí; postup je v
   [docs/google-drive-import.md](docs/google-drive-import.md).
 - Ověření 2026-10-14: `node --check` generovaného `app.js`; cílené Drive,
   indexové, desktopové a HTTPS testy; úplná sada
