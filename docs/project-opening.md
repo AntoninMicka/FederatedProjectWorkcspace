@@ -43,6 +43,31 @@ capability token od prohlížeče nepřijímá. Náhled i potvrzení směřují 
 správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
 `<adresář node.json>/projects`) a vytvoření je dostupné jen správci uzlu.
 
+## Bezpečné odstranění projektu
+
+Na kartě projektu zvolte **Správa odstranění…**. Každá volba nejprve zobrazí
+přesný repozitář, projektový stav, HEAD, lokální záznamy a blokátory; bez
+checkboxu se nic nezmění.
+
+- **Obnovit odvozený index** odstraní jen obnovitelný `index.sqlite`; další
+  otevření jej sestaví z Gitu. Journal ani projekt nemaže.
+- **Pouze odregistrovat** odebere projekt ze seznamu, ale ponechá repozitář,
+  stav i node-local historii na původních cestách.
+- **Přesunout do obnovitelného koše** přesune repozitář a projektový stav
+  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Sekce
+  **Obnovitelný koš projektů** nabídne samostatně potvrzenou obnovu.
+
+Definitivní výmaz lze připravit jen nad položkou v koši a vyžaduje nový
+náhled i druhé potvrzení. Pokud k projektu zůstává chatová/AI historie,
+pending Workspace nebo Git přenos, `unknown` externí účinek, účet či aktivní
+federační mapování, backend akci zablokuje. Tyto záznamy ani sdílené
+credentials se nikdy nemažou jako vedlejší efekt.
+
+Lokální odstranění nemaže vzdálené, federované ani dříve sdílené kopie.
+Přerušenou již potvrzenou operaci obnoví durable journal se stejným operation
+ID; cizí změna cesty, inode nebo registrace se nepřepíše. Kontrakt a crash
+boundaries: [ADR 0031](adr/0031-recoverable-project-removal.md).
+
 ## Načtení existujícího projektu a oprava cesty
 
 Tlačítko **Načíst projekt z umístění…** zaregistruje existující kořen běžného

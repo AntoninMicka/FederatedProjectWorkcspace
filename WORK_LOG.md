@@ -5,6 +5,45 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu — 2026-10-14
+
+Dávka na větvi `feature/f-m1-project-delete-01-safe-project-removal`, založené
+z `develop` `7373d81`, rozlišila obnovu odvozeného indexu, pouhé odregistrování,
+obnovitelný lokální koš a samostatně potvrzený definitivní výmaz. Dosažená
+úroveň je **PoC validated**. Uživatel fyzicky potvrdil odstranění slovy
+„smazani ok“. Feature akceptace je uzavřená; implementace je v lokálním commitu
+`f48a760`, ale jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M1-PROJECT-DELETE-01-A — Kontrakt, inventář a reuse
+  (designed).** ADR 0031 vymezilo autoritu Gitu, node registry, projektu,
+  odvozeného indexu a samostatných chatových, AI, přenosových a administračních
+  stavů. Implementace adaptuje jediný node writer lock a journal; nevytváří
+  druhého Git writera ani obecný cleanup framework.
+- [x] [completed] **F-M1-PROJECT-DELETE-01-B — Doménová služba a durable
+  recovery (implemented).** Přesný preview a confirm vážou operation ID,
+  digest, HEAD, inode/dev, původní a cílovou registraci i inventář dopadů.
+  Přesun do koše, obnova a purge mají idempotentní receipts a fail-closed
+  recovery; symlink se při purge nenásleduje.
+- [x] [completed] **F-M1-PROJECT-DELETE-01-C — Sdílené UI/API
+  (implemented).** Desktop a web používají společný adaptér. Náhled zobrazuje
+  cesty, HEAD, dirty worktree, přenosy, členství, federační mapování,
+  node-local historii a zachování vzdálených kopií. Cancel je bezpečný výchozí
+  stav, webová mutace vyžaduje správce a purge nový náhled i potvrzení.
+- [x] [completed] **F-M1-PROJECT-DELETE-01-D — Regrese, dokumentace a
+  akceptace (PoC validated).** Jedenáct doménových testů pokrylo persistentní
+  hranice, retry/recovery, blokátory, explicitní odebrání členství, zachování
+  historie a symlink. Skutečná HTTPS cesta ověřila preview → koš → obnova;
+  uživatel následně fyzicky akceptoval odstranění ve skutečném UI.
+
+Závěrečné automatické ověření po poslední aplikační změně: JavaScript syntaxe,
+`git diff --check`, cílené testy a úplná sada **530 testů OK za 116,058 s,
+24 volitelných přeskočeno**. SQLite `ResourceWarning` z širší sady nebyla
+selháním testů. Lokální operace nemaže vzdálené, federované nebo dříve sdílené
+kopie,
+nerevokuje publikovaná data ani sdílené credentials. Dokončená node-local
+historie se zachovává a blokuje purge; ochrana před nekooperujícím procesem
+stejného uživatele a libovolnými filesystemovými závody zůstává V-06.
+
 ## F-M3-SEARCH-01 — Řízené webové hledání přes SearXNG — 2026-10-13
 
 Dávka na větvi `feature/f-m3-search-01-searxng`, založené z `develop`

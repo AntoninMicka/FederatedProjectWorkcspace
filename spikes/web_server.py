@@ -17,6 +17,8 @@ from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
+from spikes.project_deletion import ProjectDeletion
+from spikes.project_deletion_actions import ProjectDeletionActions
 from spikes.projects import Projects
 from spikes.administration import Administration, AccessDenied
 from spikes.metadata import MAX_FILE
@@ -301,6 +303,10 @@ class WebHandler(DesktopHandler):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
             return super().dispatch(request)
+        if self.path.startswith('/v1/projects/delete/'):
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            return super().dispatch(request)
         if self.path == '/v1/sources/import':
             return self._import_source(request)
         return super().dispatch(request)
@@ -365,6 +371,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     creator = ProjectCreation(node)
     if creator.database.exists():
         creator.recover()
+        ProjectDeletion(node).recover()
     tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(cert, key)
@@ -376,6 +383,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     server.node = node
     server.project_creation_actions = ProjectCreationActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
+    server.project_deletion_actions = ProjectDeletionActions(node)
     server.chat_service = ChatService(node, server.projects)
     server.media_service = MediaService(node, server.projects,
         state_dir=server.chat_service.state_dir)

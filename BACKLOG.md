@@ -37,24 +37,12 @@ jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 `436f4e6`. `UX-UNIFIED-02C-FIX1` bylo po fyzické akceptaci doručeno PR #62 jako
 merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
 doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
-`F-M3-SEARCH-01` má na větvi `feature/f-m3-search-01-searxng` uzavřenou
-feature akceptaci; evidence je ve WORK_LOG a čeká se na vytvoření a doručení
-jediného PR do `develop`.
+`F-M3-SEARCH-01` bylo doručeno PR #64 jako merge commit `7373d81`; evidence je
+ve WORK_LOG. `F-M1-PROJECT-DELETE-01` je fyzicky akceptovaná a archivovaná ve
+WORK_LOG; lokální commit `f48a760` na samostatné feature větvi čeká na jediný
+PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu
-  (cílová úroveň: designed → PoC validated).** Oddělit pouhé
-  odregistrování, odstranění lokálního odvozeného stavu, přesun repozitáře do
-  obnovitelného koše a definitivní výmaz. Před každou variantou zobrazit přesné
-  cesty a dopady na chatová vlákna, sdílené/cross-project reference, credentials,
-  pending operace a federované kopie; projekt s aktivní operací, nevyřešeným
-  přenosem nebo neznámým externím účinkem se nesmí tiše odstranit. Více
-  persistentních vrstev vyžaduje journal, idempotentní recovery a samostatné
-  potvrzení definitivního výmazu; odstranění lokální kopie není tvrzení, že
-  zmizely vzdálené či dříve sdílené revize. Omezené odregistrování
-  doslova chybějícího rootu dodané ve F-M1-PROJECT-LOCATION-01 nemaže stav
-  ani data a tuto samostatnou feature neuzavírá.
 
 - [ ] [planned] **IMP-01 — Explicitní jednorázový import z Google Drive
   (cílová úroveň: implemented).** První praktický tok nabídne ruční výběr
