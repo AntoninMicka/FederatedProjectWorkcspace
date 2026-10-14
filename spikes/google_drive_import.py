@@ -285,10 +285,13 @@ class GoogleDriveImport:
         require(project['commit_id'] == request['expected_head'],
                 'Projekt se změnil. Otevřete jej znovu.')
         parsed = urlsplit(redirect_uri)
-        require(parsed.path == '/oauth/google-drive/callback' and not parsed.query
-                and not parsed.fragment and not parsed.username and not parsed.password
-                and ((parsed.scheme == 'http' and parsed.hostname == '127.0.0.1')
-                     or parsed.scheme == 'https'), 'Neplatná OAuth callback adresa.')
+        desktop_callback = (parsed.scheme == 'http' and parsed.hostname == '127.0.0.1'
+                            and parsed.path in {'', '/'})
+        web_callback = (parsed.scheme == 'https'
+                        and parsed.path == '/oauth/google-drive/callback')
+        require(not parsed.query and not parsed.fragment and not parsed.username
+                and not parsed.password and (desktop_callback or web_callback),
+                'Neplatná OAuth callback adresa.')
         selection_id, state = str(uuid4()), secrets.token_urlsafe(32)
         verifier = secrets.token_urlsafe(64)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip('=')

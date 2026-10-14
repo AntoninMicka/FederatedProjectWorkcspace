@@ -76,12 +76,15 @@ odvolaný přístup operaci zastaví bez částečné projektové publikace.
   obnovu. Chybové stavy vysvětlují zrušené přihlášení i zablokované popup okno;
   UI připomíná, že heslo zůstává u Googlu a samotný výběr projekt nemění. HTTPS
   test ověřuje callback, `drive.file`, webový zákaz `local-only` a RBAC.
-  Fyzický průchod se skutečným Google účtem a prohlížečem zatím nebyl proveden;
-  postup je v
+  První fyzický pokus odhalil Google `redirect_uri_mismatch`: desktop nyní
+  používá kořenový loopback redirect požadovaný klientem typu `Desktop app`,
+  zatímco web zachovává přesnou HTTPS callback cestu; oba callbacky mají
+  samostatný integrační test. Úspěšný fyzický průchod se skutečným účtem zatím
+  chybí; postup je v
   [docs/google-drive-import.md](docs/google-drive-import.md).
 - Ověření 2026-10-14: `node --check` generovaného `app.js`; cílené Drive,
   indexové, desktopové a HTTPS testy; úplná sada
-  `python3 -m unittest discover -s tests -v` — **539 OK, 24 skipped**. Skipped
+  `python3 -m unittest discover -s tests -v` — **541 OK, 24 skipped**. Skipped
   scénáře vyžadují reálný WebEngine, privátní Takeout vzorek nebo volitelný
   native probe a nejsou vydávány za fyzickou Drive akceptaci.
 

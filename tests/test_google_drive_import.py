@@ -81,7 +81,7 @@ class GoogleDriveImportTests(unittest.TestCase):
         started = self.service.authorize(self.actor, {
             'project_id': self.project_id,
             'expected_head': head or Projects(self.node).open(self.project_id)['commit_id'],
-            'privacy': 'project'}, 'http://127.0.0.1:12345/oauth/google-drive/callback')
+            'privacy': 'project'}, 'http://127.0.0.1:12345/')
         query = parse_qs(urlsplit(started['authorization_url']).query)
         self.assertEqual(query['scope'], [SCOPE])
         self.assertEqual(query['trigger_onepick'], ['true'])
@@ -90,6 +90,14 @@ class GoogleDriveImportTests(unittest.TestCase):
 
     def project_root(self):
         return Path(parse_node(read_config(self.node), location=self.node)['projects'][0]['root'])
+
+    def test_redirect_contract_rejects_web_path_for_desktop_loopback(self):
+        request = {'project_id': self.project_id,
+                   'expected_head': Projects(self.node).open(self.project_id)['commit_id'],
+                   'privacy': 'project'}
+        with self.assertRaisesRegex(ValueError, 'callback'):
+            self.service.authorize(self.actor, request,
+                                   'http://127.0.0.1:12345/oauth/google-drive/callback')
 
     def test_raw_and_native_export_publish_atomically_with_provenance(self):
         self.fake.add('raw1', 'notes.md', 'text/markdown', b'# Notes\n')

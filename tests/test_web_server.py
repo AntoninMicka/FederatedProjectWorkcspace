@@ -214,7 +214,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/google-drive/authorize',
                                      body=json.dumps(authorize))[0], 403)
         callback = '/oauth/google-drive/callback?' + urlencode({
-            'state':query['state'][0], 'code':'code', 'picked_file_ids':'file-id'})
+            'state':query['state'][0], 'code':'code', 'picked_file_ids':'file-id',
+            'scope':'https://www.googleapis.com/auth/drive.file'})
         with patch.object(self.server.google_drive_import, 'callback',
                           return_value={'status':'selected'}) as called:
             code, data, headers = self.request('GET', callback)

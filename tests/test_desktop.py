@@ -651,7 +651,7 @@ class DesktopTests(unittest.TestCase):
         origin = 'http://127.0.0.1:4321'
         query = {'client_id': 'client.apps.googleusercontent.com',
                  'scope': 'https://www.googleapis.com/auth/drive.file',
-                 'redirect_uri': origin + '/oauth/google-drive/callback',
+                 'redirect_uri': origin + '/',
                  'response_type': 'code', 'access_type': 'offline', 'prompt': 'consent',
                  'trigger_onepick': 'true', 'allow_multiple': 'true',
                  'allow_folder_selection': 'true', 'state': 'state',
@@ -661,8 +661,10 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(google_authorization_url(approved, origin), approved)
         for changed in (approved.replace('accounts.google.com', 'accounts.google.com.evil.test'),
                         approved.replace('drive.file', 'drive.readonly'),
-                        approved.replace('127.0.0.1%3A4321', '127.0.0.1%3A9999')):
+                        approved.replace('127.0.0.1%3A4321', '127.0.0.1%3A9999'),
+                        approved.replace('%2F&response_type', '%2Foauth%2Fgoogle-drive%2Fcallback&response_type')):
             self.assertIsNone(google_authorization_url(changed, origin))
+        self.assertEqual(DesktopHandler.google_drive_callback_path, '/')
         self.assertIn('id="google-drive-preview"', HTML)
         self.assertIn('id="google-drive-steps"', HTML)
         self.assertIn('id="google-drive-open-settings"', HTML)
@@ -673,6 +675,26 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('googleDriveFiles.innerHTML', JS)
         self.assertIn("projectRequest('/v1/google-drive/confirm'", JS)
         self.assertIn("projectRequest('/v1/google-drive/recover'", JS)
+
+    def test_desktop_google_callback_returns_to_loopback_root(self):
+        calls = []
+
+        class Drive:
+            @staticmethod
+            def callback(*args):
+                calls.append(args)
+                return {'status': 'selected'}
+
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.google_drive_import = Drive()
+            query = urlencode({'state': 's' * 32, 'code': 'code',
+                               'picked_file_ids': 'file-id',
+                               'scope': 'https://www.googleapis.com/auth/drive.file'})
+            response = driver.request(server, method='GET', path='/?' + query)
+        self.assertTrue(response.startswith(b'HTTP/1.0 200'), response[:80])
+        self.assertIn('Vraťte se'.encode(), response)
+        self.assertEqual(calls, [('s' * 32, 'code', 'file-id', None)])
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

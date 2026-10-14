@@ -65,7 +65,7 @@ def google_authorization_url(url, origin):
             return None
         callback = urlsplit(query['redirect_uri'][0])
         if (callback.scheme, callback.netloc, callback.path) != (
-                'http', urlsplit(origin).netloc, '/oauth/google-drive/callback'):
+                'http', urlsplit(origin).netloc, '/'):
             return None
         return url
     except (ValueError, AttributeError):

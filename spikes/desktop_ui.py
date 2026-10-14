@@ -18,7 +18,7 @@ from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnkno
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
-from spikes.google_drive_import import GoogleDriveImport, DriveAccessError
+from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, SCOPE
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_search import SearchResponseError, SearchUnknown
@@ -179,8 +179,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <hr><h2>Google Drive import</h2>
 <p id="settings-google-drive-status" role="status" aria-live="polite">Připojení zatím nebylo načteno.</p>
 <details class="oauth-setup-guide"><summary>Jak připravit první přihlášení</summary>
-<ol><li>V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta pro tento Workspace.</li>
-<li>Pro webového klienta povolte návratovou adresu <code id="google-drive-callback"></code>. Desktopový klient používá stejnou lokální návratovou cestu.</li>
+<ol><li id="google-drive-client-guide">Načítám správný typ OAuth klienta pro tuto aplikaci.</li>
+<li><span id="google-drive-callback-guide">Návratová adresa:</span> <code id="google-drive-callback"></code></li>
 <li>Client ID a client secret vložte níže. Uloží se jen v soukromém stavu tohoto uzlu, ne do projektu.</li></ol>
 <p>Google heslo se zadává pouze na stránce Googlu; Workspace je nikdy neuvidí.</p></details>
 <form id="google-drive-config-form"><label>OAuth client ID <input name="client_id" maxlength="512" autocomplete="off" required></label>
@@ -1666,7 +1666,15 @@ const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsSearchStatus=document.querySelector('#settings-search-status');
 const settingsGoogleDriveStatus=document.querySelector('#settings-google-drive-status');
-document.querySelector('#google-drive-callback').textContent=location.origin+'/oauth/google-drive/callback';
+const googleDriveDesktop=document.body.dataset.runtime==='desktop';
+document.querySelector('#google-drive-client-guide').textContent=googleDriveDesktop ?
+ 'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Desktop app. Nepoužívejte klienta typu Web application.' :
+ 'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Web application.';
+document.querySelector('#google-drive-callback-guide').textContent=googleDriveDesktop ?
+ 'Desktop používá automatickou loopback adresu; v klientovi ji ručně neregistrujte:' :
+ 'Do Authorized redirect URIs vložte přesně:';
+document.querySelector('#google-drive-callback').textContent=googleDriveDesktop ?
+ location.origin+'/' : location.origin+'/oauth/google-drive/callback';
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
@@ -3018,6 +3026,7 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
+    google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -3081,7 +3090,8 @@ class DesktopHandler(Handler):
                         request['client_id'], request['client_secret']))
                 if (self.path == '/v1/google-drive/authorize' and isinstance(request, dict)
                         and set(request) == {'project_id', 'expected_head', 'privacy'}):
-                    redirect = self.request_origin(self.request_authority()) + '/oauth/google-drive/callback'
+                    redirect = self.request_origin(self.request_authority()) \
+                        + self.google_drive_callback_path
                     return self.reply(200, service.authorize(actor_id, request, redirect))
                 if (self.path == '/v1/google-drive/preview' and isinstance(request, dict)
                         and set(request) == {'selection_id'}):
@@ -3535,12 +3545,12 @@ class DesktopHandler(Handler):
         if authority is None:
             return self.send_error(403)
         parsed = urlsplit(self.path)
-        if parsed.path == '/oauth/google-drive/callback':
+        if parsed.path == self.google_drive_callback_path and parsed.query:
             try:
                 query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
-                allowed = {'state', 'code', 'picked_file_ids', 'error'}
+                allowed = {'state', 'code', 'picked_file_ids', 'scope', 'error'}
                 if not set(query) <= allowed or any(len(values) != 1 for values in query.values()) \
-                        or 'state' not in query:
+                        or 'state' not in query or ('scope' in query and query['scope'] != [SCOPE]):
                     return self.send_error(400)
                 self.server.google_drive_import.callback(
                     query['state'][0], query.get('code', [''])[0],

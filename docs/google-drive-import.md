@@ -5,12 +5,14 @@ SPDX-License-Identifier: MPL-2.0
 
 # Google Drive import — konfigurace a fyzická akceptace
 
-V Google Cloud Console vytvořte OAuth klienta typu **Desktop app** pro lokální
-desktop callback, nebo odpovídající webový klient pro přesnou HTTPS adresu
-serveru. Povolte Google Drive API a do povoleného redirectu vložte přesně
-`<workspace origin>/oauth/google-drive/callback`. Client ID a secret vložte v
-Nastavení → AI backend → Google Drive import. Workspace žádá pouze
-`https://www.googleapis.com/auth/drive.file`.
+V Google Cloud Console povolte Google Drive API. Pro lokální aplikaci vytvořte
+OAuth klienta typu **Desktop app**; Workspace pro něj používá Googlem
+podporovanou loopback adresu `http://127.0.0.1:<náhodný-port>/`, kterou v
+klientovi ručně neregistrujte. Pro server vytvořte samostatný klient typu
+**Web application** a do `Authorized redirect URIs` vložte přesně
+`<workspace HTTPS origin>/oauth/google-drive/callback`. Client ID a secret
+správného klienta vložte v Nastavení → AI backend → Google Drive import.
+Workspace žádá pouze `https://www.googleapis.com/auth/drive.file`.
 
 Akceptační průchod:
 

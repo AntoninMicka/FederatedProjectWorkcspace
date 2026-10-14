@@ -95,6 +95,7 @@ def secret(path):
 
 class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
+    google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
