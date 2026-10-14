@@ -41,8 +41,11 @@ není produktová šablona ani autoritativní projektový obsah.
   Google Drive/NotebookLM, vyhledávání, chat, workflow, media a CMS zůstaly
   zachovány; presenter doplnil své routy a assety. Ověření: cílený běh
   62 testů pro presenter a desktop prošel (12 přeskočených Qt/hardwarových),
-  celá sada `583 tests` prošla (35 přeskočených volitelných fyzických testů),
+  celá sada `584 tests` prošla (35 přeskočených volitelných fyzických testů),
   vložený JavaScript prošel `node --check` a Python soubory `py_compile`.
+  Následná runtime kontrola odhalila a odstranila závislost presenterového editoru
+  na již odstraněném `spikes.desktop_editor`; 8 skutečných Qt testů editoru,
+  displejů a profilu prošlo se systémovým PySide6.
 
 - [ ] [planned] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
   v1 (implemented).** Nahradit JSON-only obsah fenced bloku lidsky editovatelným

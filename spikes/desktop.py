@@ -170,6 +170,13 @@ def main():
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
+                                          QWebEngineSettings, QWebEngineUrlRequestInterceptor)
+    except ImportError:
+        print('Chybí PySide6 WebEngine. Instalace viz README, sekce Desktop.', file=sys.stderr)
+        return 1
+    try:
         from spikes.desktop_displays import PresenterDisplays
         from spikes.desktop_user_profile import UserProfileDialog
         from spikes.desktop_presentation_editor import PresentationEditorDialog
@@ -179,11 +186,8 @@ def main():
         from spikes.desktop_network import NetworkDialog
         from spikes.desktop_transfer import TransferDialog
         from spikes.network_backend import NetworkBackend
-        from PySide6.QtWebEngineWidgets import QWebEngineView
-        from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
-                                          QWebEngineSettings, QWebEngineUrlRequestInterceptor)
-    except ImportError:
-        print('Chybí PySide6 WebEngine. Instalace viz README, sekce Desktop.', file=sys.stderr)
+    except ImportError as exc:
+        print('Nelze načíst interní modul desktopu: ' + str(exc), file=sys.stderr)
         return 1
     if os.geteuid() == 0:
         print('Desktop spouštějte jako běžný uživatel.', file=sys.stderr)

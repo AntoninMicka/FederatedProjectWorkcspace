@@ -174,6 +174,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/notebooklm/confirm'", JS)
         self.assertIn('archive_capability:notebookArchiveCapability', JS)
 
+    def test_presentation_editor_does_not_depend_on_removed_native_editor(self):
+        editor = Path('spikes/desktop_presentation_editor.py').read_text()
+        self.assertNotIn('spikes.desktop_editor', editor)
+        self.assertIn('class PresentationWorker(QThread):', editor)
+
     def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
         origin = 'http://127.0.0.1:4711'
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'

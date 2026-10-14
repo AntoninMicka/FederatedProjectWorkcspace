@@ -6,15 +6,31 @@ import copy
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import Qt, Signal, QRectF, QBuffer, QByteArray, QIODevice
+from PySide6.QtCore import Qt, Signal, QRectF, QBuffer, QByteArray, QIODevice, QThread
 from PySide6.QtGui import QColor, QFont, QImage, QImageReader, QPainter
 from PySide6.QtWidgets import (QDialog, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPlainTextEdit, QPushButton, QLabel, QListWidget, QListWidgetItem,
     QComboBox, QSplitter, QMessageBox, QColorDialog, QFileDialog, QTabWidget, QCheckBox)
 
-from spikes.desktop_editor import EditorWorker
 from spikes.presentation_documents import (MAX_WALLPAPER, new_deck, new_slide, main_order,
     relink, set_neighbor, remove_slide, validate_deck, project_deck)
+
+
+class PresentationWorker(QThread):
+    """Run a bounded presentation document operation outside the Qt UI thread."""
+    succeeded = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, action, parent):
+        super().__init__(parent)
+        self.action = action
+
+    def run(self):
+        try:
+            self.succeeded.emit(self.action())
+        except Exception as exc:
+            # Native-only error rendered by a plain-text QLabel.
+            self.failed.emit(str(exc))
 
 
 class SlidePreview(QWidget):
@@ -163,7 +179,7 @@ class PresentationEditorDialog(QDialog):
 
     def run(self, action, done):
         self.busy = True; self.update_enabled(); self.status.setText('Pracuji…')
-        worker = EditorWorker(action, self); self.workers.append(worker)
+        worker = PresentationWorker(action, self); self.workers.append(worker)
         def success(value):
             self.busy = False
             done(value)
