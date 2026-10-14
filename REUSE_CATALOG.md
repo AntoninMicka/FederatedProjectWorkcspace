@@ -202,6 +202,13 @@ odmítají; použijí se jen verzované allowlisted šablony, explicitní bindin
 bounded výstupy svázané s konkrétním runem.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
 
+F-M4-PRESENTER-01-C **adaptuje existující projektový deck a sdílený bezpečný
+renderer**. Šablony zůstávají součástí stejného validovaného dokumentu a
+speaker, editor i audience používají `presentation_visual.py`; nevzniká druhý
+renderer ani externí template engine. Volné HTML/CSS šablony byly odmítnuty,
+protože by rozbily stabilní zóny a rozšířily veřejný projekční povrch. Nový
+omezený kontrakt dovoluje pouze allowlisted preset, zarovnání, hustotu a barvy.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

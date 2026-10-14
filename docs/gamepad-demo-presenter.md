@@ -150,6 +150,16 @@ založit novou; projektový dokument vznikne až explicitním uložením.
   přímo do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
   překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
   SVG se nepoužívají.
+- Každý slide vybírá pojmenovanou šablonu layoutu. Deck začíná čtyřmi
+  předlohami: **Titulní slide**, **Nadpis a obsah**, **Dva sloupce** a
+  **Závěrečný slide**. V části **Šablony layoutu** lze předlohu přejmenovat,
+  změnit její typ, zarovnání, hustotu, pozadí, text a akcent nebo vytvořit
+  vlastní kopii. Nejde o volný CSS editor: šablona zůstává v omezeném
+  verzovaném kontraktu a nemůže vložit HTML, skript ani síťový zdroj.
+- U dvousloupcového layoutu určuje pole **Levý sloupec – počet odrážek**, kde
+  začne pravý sloupec; hodnota 0 rozdělí obsah automaticky. Zóny nadpisu a
+  obsahu mají stabilní pozici ve všech třech náhledech. Změna výchozí barvy
+  šablony aktualizuje slidy, které ještě nemají vlastní barevnou odchylku.
 - Tlačítky **Dříve** a **Později** měňte pořadí hlavní linie. Vazby `next`
   editor dopočítá automaticky; hlavní linie proto nemá dvě konkurenční pořadí
   ani cykly.

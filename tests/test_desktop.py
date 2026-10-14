@@ -197,6 +197,12 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/presentations/open'", JS)
         self.assertIn("projectRequest('/v1/presentations/save'", JS)
         self.assertIn("projectRequest('/v1/presentations/use'", JS)
+        self.assertIn('id="presentation-template-select"', HTML)
+        self.assertIn('id="presentation-template-copy"', HTML)
+        self.assertIn('id="presentation-slide-layout"', HTML)
+        self.assertIn("['title','title-content','two-column','closing']", SLIDE_JS)
+        self.assertIn("gridTemplateColumns:'1fr 1fr'", SLIDE_JS)
+        self.assertIn('presentationVisualSlide', JS)
         self.assertNotIn("location.hash='presentation-editor'", JS)
 
     def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
@@ -261,7 +267,7 @@ assert.equal(elements['#presenter-next-notes'].textContent,'Main notes');
 presenterSelectedBackup={title:'Backup',body:'Backup body',notes:'Backup notes'};
 presenterSequence.chooseBackup(presenterSelectedBackup);refreshPresenterNext();
 assert.equal(presenterNextSelectionKind,'backup');
-assert.equal(presenterPrivatePreview.children[0].textContent,'Backup');
+assert.equal(presenterPrivatePreview.children[0].children[0].textContent,'Backup');
 assert.equal(elements['#presenter-next-notes'].textContent,'Backup notes');
 presenterTabIndex=0;refreshPresenterNext();
 assert.equal(presenterNextSelection,presenterSelectedBackup);
@@ -274,6 +280,33 @@ renderPresenterWidget(element(),elements['#presenter-next-notes'],{title:'No not
 assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá poznámky.');
 """
         subprocess.run(['node', '-e', harness + SLIDE_JS + model + JS[start:end] + checks], check=True)
+
+    def test_layout_renderer_keeps_fixed_zones_and_two_columns(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js is required for layout renderer validation')
+        harness = r"""
+const assert=require('node:assert/strict');
+const element=tag=>({tag,textContent:'',className:'',style:{},children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);}});
+const document={createElement:element};
+const target=element('div');
+const slide={title:'Bezpečný layout',bullets:['Levá 1','Levá 2','Pravá 1'],background:'#112233',foreground:'#ffffff',wallpaper:'',column_break:2,layout:{preset:'two-column',title_align:'left',content_align:'left',density:'normal',background:'#102b36',foreground:'#ffffff',accent:'#79c9ac'}};
+"""
+        checks = r"""
+renderSlideVisual(target,slide);
+assert.equal(target.children.length,2);
+assert.equal(target.children[0].style.top,'8%');
+assert.equal(target.children[1].style.top,'30%');
+const columns=target.children[1].children[0];
+assert.equal(columns.style.gridTemplateColumns,'1fr 1fr');
+assert.equal(columns.children[0].children.length,2);
+assert.equal(columns.children[1].children.length,1);
+assert.equal(target.children[0].children[0].textContent,'Bezpečný layout');
+slide.layout.preset='title';renderSlideVisual(target,slide);
+assert.equal(target.children[0].style.top,'24%');
+assert.equal(target.children[1].style.top,'62%');
+"""
+        subprocess.run(['node', '-e', harness + SLIDE_JS + checks], check=True)
 
     def test_presenter_only_lists_explicitly_assigned_backups(self):
         import shutil

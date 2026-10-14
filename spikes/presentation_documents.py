@@ -14,15 +14,45 @@ from spikes.metadata import require, uuid
 
 PREFIX = '```fpw-presentation-v1\n'
 MAX_WALLPAPER = 256 * 1024
+LAYOUT_PRESETS = (
+    dict(id='title', revision=1, name='Titulní slide', preset='title',
+         title_align='center', content_align='center', density='spacious',
+         background='#102b36', foreground='#ffffff', accent='#79c9ac'),
+    dict(id='content', revision=1, name='Nadpis a obsah', preset='title-content',
+         title_align='left', content_align='left', density='normal',
+         background='#102b36', foreground='#ffffff', accent='#79c9ac'),
+    dict(id='two-column', revision=1, name='Dva sloupce', preset='two-column',
+         title_align='left', content_align='left', density='compact',
+         background='#102b36', foreground='#ffffff', accent='#79c9ac'),
+    dict(id='closing', revision=1, name='Závěrečný slide', preset='closing',
+         title_align='center', content_align='right', density='spacious',
+         background='#102b36', foreground='#ffffff', accent='#79c9ac'),
+)
 
 
-def new_slide(kind='main'):
+def layout_presets():
+    return copy.deepcopy(list(LAYOUT_PRESETS))
+
+
+def new_slide(kind='main', layout='content'):
     return dict(id=str(uuid4()), kind=kind, title='Nový slide', bullets=[], notes='',
-                background='#102b36', foreground='#ffffff', wallpaper='', next=None, backups=[], repeat=False, reveal='all')
+                background='#102b36', foreground='#ffffff', wallpaper='', next=None, backups=[],
+                repeat=False, reveal='all', layout=layout, column_break=0)
 
 
 def new_deck():
-    return dict(version=1, title='Nová prezentace', slides=[new_slide()])
+    return dict(version=1, title='Nová prezentace', templates=layout_presets(), slides=[new_slide()])
+
+
+def normalize_layouts(deck):
+    """Upgrade legacy v1 decks in memory without rewriting their Git revision."""
+    result = copy.deepcopy(deck)
+    if 'templates' not in result:
+        result['templates'] = layout_presets()
+    for slide in result.get('slides', []):
+        slide.setdefault('layout', 'content')
+        slide.setdefault('column_break', 0)
+    return result
 
 
 def main_order(deck):
@@ -92,19 +122,44 @@ def validate_wallpaper(value):
 
 
 def validate_deck(deck):
-    require(isinstance(deck, dict) and deck.keys() == {'version', 'title', 'slides'}
+    deck = normalize_layouts(deck)
+    require(isinstance(deck, dict) and deck.keys() == {'version', 'title', 'templates', 'slides'}
             and type(deck['version']) is int and deck['version'] == 1, 'Neplatný formát prezentace.')
     require(isinstance(deck['title'], str) and 0 < len(deck['title'].strip()) <= 200
             and not any(c in deck['title'] for c in '\r\n\0'), 'Vyplňte název prezentace (max. 200 znaků).')
     require(isinstance(deck['slides'], list) and 1 <= len(deck['slides']) <= 100, 'Prezentace má mít 1–100 slidů.')
+    require(isinstance(deck['templates'], list) and 1 <= len(deck['templates']) <= 20,
+            'Prezentace musí mít 1–20 šablon layoutu.')
+    template_ids = set()
+    template_fields = {'id', 'revision', 'name', 'preset', 'title_align', 'content_align',
+                       'density', 'background', 'foreground', 'accent'}
+    for template in deck['templates']:
+        require(isinstance(template, dict) and template.keys() == template_fields,
+                'Neplatná pole šablony layoutu.')
+        require(isinstance(template['id'], str) and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', template['id'])
+                and template['id'] not in template_ids, 'Neplatné nebo duplicitní ID šablony.')
+        template_ids.add(template['id'])
+        require(type(template['revision']) is int and 1 <= template['revision'] <= 1000000,
+                'Nepodporovaná revize šablony.')
+        require(isinstance(template['name'], str) and 0 < len(template['name'].strip()) <= 80
+                and not any(c in template['name'] for c in '\r\n\0'), 'Neplatný název šablony.')
+        require(template['preset'] in {'title', 'title-content', 'two-column', 'closing'},
+                'Neplatný typ layoutu.')
+        require(template['title_align'] in {'left', 'center', 'right'}
+                and template['content_align'] in {'left', 'center', 'right'}, 'Neplatné zarovnání layoutu.')
+        require(template['density'] in {'compact', 'normal', 'spacious'}, 'Neplatná hustota layoutu.')
+        for key in ('background', 'foreground', 'accent'):
+            require(isinstance(template[key], str) and re.fullmatch(r'#[0-9a-fA-F]{6}', template[key]),
+                    'Neplatná barva šablony.')
     seen = set()
     for slide in deck['slides']:
         required = {'id', 'kind', 'title', 'bullets', 'notes', 'background', 'foreground', 'wallpaper', 'next', 'backups'}
         require(isinstance(slide, dict) and required <= slide.keys()
-                and slide.keys() <= required | {'repeat', 'reveal'},
+                and slide.keys() <= required | {'repeat', 'reveal', 'layout', 'column_break'},
             'Neplatná pole slidu.')
         require(type(slide.get('repeat', False)) is bool, 'Opakování musí být boolean.')
         require(slide.get('reveal', 'all') in ('all', 'step'), 'Neplatný režim odrážek.')
+        require(slide.get('layout', 'content') in template_ids, 'Slide odkazuje na neexistující šablonu.')
         uuid(slide['id'])
         require(slide['id'] not in seen, 'Duplicitní ID slidu.')
         seen.add(slide['id'])
@@ -114,6 +169,8 @@ def validate_deck(deck):
         require(isinstance(slide['bullets'], list) and len(slide['bullets']) <= 12
                 and all(isinstance(b, str) and 0 < len(b.strip()) <= 500 for b in slide['bullets']),
                 'Použijte nejvýše 12 odrážek po 500 znacích.')
+        require(type(slide.get('column_break', 0)) is int and 0 <= slide.get('column_break', 0) <= len(slide['bullets']),
+                'Neplatné rozdělení sloupců.')
         for key in ('background', 'foreground'):
             require(isinstance(slide[key], str) and re.fullmatch(r'#[0-9a-fA-F]{6}', slide[key]), 'Neplatná barva.')
         validate_wallpaper(slide['wallpaper'])
@@ -131,7 +188,7 @@ def validate_deck(deck):
 
 
 def encode_deck(deck):
-    validate_deck(deck)
+    deck = validate_deck(deck)
     return PREFIX + json.dumps(deck, ensure_ascii=False, separators=(',', ':')) + '\n```\n'
 
 
@@ -142,17 +199,21 @@ def decode_deck(body):
 
 def public_content(slide):
     content = {key: copy.deepcopy(slide[key]) for key in ('title', 'bullets', 'background', 'foreground', 'wallpaper')}
+    if 'layout' in slide:
+        content.update(layout=copy.deepcopy(slide['layout']), column_break=slide.get('column_break', 0))
     if slide.get('closing') is True:
         content.update(closing=True, contacts=copy.deepcopy(slide['contacts']), qr=slide['qr'])
     return content
 
 
 def project_deck(deck, revision):
-    validate_deck(deck)
+    deck = validate_deck(deck)
     by_id = {s['id']: s for s in deck['slides']}
+    templates = {item['id']: item for item in deck['templates']}
     order = main_order(deck)
     def project(slide):
-        return dict(public_content(slide), id=slide['id'], body='\n'.join(slide['bullets']),
+        visible = dict(slide, layout=templates[slide['layout']])
+        return dict(public_content(visible), id=slide['id'], body='\n'.join(slide['bullets']),
                     notes=slide['notes'], deck_revision=revision,
                     repeat=slide.get('repeat', False), reveal=slide.get('reveal', 'all'))
     return dict(active=True, title=deck['title'], slides=[project(by_id[id_]) for id_ in order],
@@ -176,7 +237,7 @@ class PresentationDocuments:
                 except (ValueError, TypeError, KeyError) as exc:
                     row['error'] = str(exc)
                 docs.append(row)
-        return dict(view, documents=docs)
+        return dict(view, documents=docs, layout_presets=layout_presets())
 
     def save(self, request, operation_id, *, checkpoint=lambda stage: None):
         body = encode_deck(request['deck'])

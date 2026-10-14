@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from spikes.presentation_documents import (PresentationDocuments, new_deck, new_slide,
     main_order, relink, set_neighbor, remove_slide, validate_deck, encode_deck, decode_deck,
-    project_deck, validate_wallpaper)
+    project_deck, validate_wallpaper, layout_presets)
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
 from spikes.desktop_ui import presentation_public_payload, presentation_status
@@ -43,6 +43,38 @@ def sample():
 
 
 class PresentationModelTests(unittest.TestCase):
+    def test_versioned_layout_templates_customize_round_trip_and_legacy_upgrade(self):
+        deck = sample(); first = deck['slides'][0]
+        custom = copy.deepcopy(layout_presets()[2])
+        custom.update(id=str(uuid4()), name='Technické srovnání', accent='#ffcc00',
+                      background='#112233', title_align='right', revision=2)
+        deck['templates'].append(custom); first.update(layout=custom['id'], column_break=1,
+                                                       background=custom['background'])
+        decoded = decode_deck(encode_deck(deck))
+        self.assertEqual(decoded, deck)
+        projected = project_deck(decoded, 'layout-revision')['slides'][0]
+        self.assertEqual(projected['layout'], custom)
+        self.assertEqual(projected['column_break'], 1)
+
+        legacy = copy.deepcopy(deck); legacy.pop('templates')
+        for slide in legacy['slides']:
+            slide.pop('layout'); slide.pop('column_break')
+        upgraded = decode_deck(encode_deck(legacy))
+        self.assertEqual(upgraded['templates'], layout_presets())
+        self.assertTrue(all(slide['layout'] == 'content' for slide in upgraded['slides']))
+
+        for mutation in (
+            lambda d: d['templates'][0].update(preset='free-css'),
+            lambda d: d['templates'][0].update(background='url(https://example.com)'),
+            lambda d: d['templates'].append(copy.deepcopy(d['templates'][0])),
+            lambda d: d['slides'][0].update(layout='missing'),
+            lambda d: d['slides'][0].update(column_break=99),
+        ):
+            with self.subTest(mutation=mutation):
+                invalid = sample(); mutation(invalid)
+                with self.assertRaises(ValueError):
+                    validate_deck(invalid)
+
     def test_round_trip_reciprocal_neighbors_and_shared_backup(self):
         deck = sample(); a, b, c, backup = deck['slides']
         self.assertEqual(decode_deck(encode_deck(deck)), deck)

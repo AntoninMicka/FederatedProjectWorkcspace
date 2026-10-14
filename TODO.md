@@ -100,11 +100,22 @@ není produktová šablona ani autoritativní projektový obsah.
   a bezpečnou migrací existujícího `fpw-presentation-v1`. Parser musí selhat
   uzavřeně, zachovat Git historii a neinterpretovat vložené HTML.
 
-- [ ] [planned] **F-M4-PRESENTER-01-C — Stabilní layout šablony
+- [x] [completed] **F-M4-PRESENTER-01-C — Stabilní layout šablony
   (implemented).** Zavést omezený registr verzovaných layoutů se stabilními zónami,
   minimálně titulní slide, nadpis + text/odrážky, dvousloupec a závěrečný
   kontakt. Speaker preview a audience renderer používají stejný layout kontrakt;
   delší obsah se validuje a nesmí posouvat základní kotvy mezi slidy.
+
+  Dokončeno 2026-10-15 před B na přímý požadavek uživatele. Deck nese 1–20
+  verzovaných pojmenovaných šablon; výchozí registr nabízí titulní, obsahový,
+  dvousloupcový a závěrečný layout. Editor umožňuje předlohy přizpůsobit,
+  kopírovat, obnovit a odstranit, ale nepřijímá CSS/HTML ani libovolné pozice.
+  Renderer používá pevné zóny a tentýž resolved layout pro editor, speaker i
+  audience projekci. Staré v1 decky se při čtení bezzápisově doplní výchozími
+  šablonami; úkol B musí tato pole zachovat při migraci do Markdownu. Cílené
+  testy dokumentového kontraktu, rendereru a UI prošly (33 testů, 1 přeskočený
+  volitelný QR dekodér); po poslední změně prošla i celá sada 594 testů
+  (27 přeskočeno), Python syntax check, JavaScript syntax check a diff check.
 
 - [ ] [planned] **F-M4-PRESENTER-01-D — Návrh prezentace z orchestračního
   chatu (PoC validated).** Rozšířit typovaný výstup orchestrace o návrh nového
