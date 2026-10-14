@@ -18,6 +18,7 @@ from spikes.metadata import (MAX_FILE, MAX_METADATA, require, safe_path, uuid,
 from spikes.project_creation import ProjectCreation
 
 SUFFIXES = {'.md', '.png', '.jpg', '.jpeg', '.pdf'}
+MAX_BATCH = 64 * 1024 * 1024
 
 
 def content_type(filename, raw):
@@ -66,7 +67,8 @@ def request_from_file(project_id, base_head, path, title, description, tags, pri
 
 def request_from_bytes(project_id, base_head, filename, raw, title, description, tags, privacy, *,
                        source_url=None, source_author=None, source_created_at=None,
-                       source_revision=None, supersedes=None):
+                       source_revision=None, supersedes=None, source_mime_type=None,
+                       export_mime_type=None):
     content_type(filename, raw)
     request = dict(project_id=project_id, artifact_id=str(uuid4()), base_head=base_head,
                    filename=filename, title=title, description=description, tags=tags, privacy=privacy,
@@ -76,6 +78,10 @@ def request_from_bytes(project_id, base_head, filename, raw, title, description,
                    source_created_at=source_created_at, source_revision=source_revision)
     if supersedes is not None:
         request['supersedes'] = supersedes
+    if source_mime_type is not None:
+        request['source_mime_type'] = source_mime_type
+    if export_mime_type is not None:
+        request['export_mime_type'] = export_mime_type
     return request
 
 
@@ -108,7 +114,8 @@ class Sources(Artifacts):
         fields = {'project_id', 'artifact_id', 'base_head', 'filename', 'title', 'description',
                   'tags', 'privacy', 'created_at', 'content', 'sha256', 'source_url',
                   'source_author', 'source_created_at', 'source_revision'}
-        require(isinstance(request, dict) and fields <= request.keys() <= fields | {'supersedes'},
+        optional = {'supersedes', 'source_mime_type', 'export_mime_type'}
+        require(isinstance(request, dict) and fields <= request.keys() <= fields | optional,
                 'Invalid source import request')
         uuid(request['project_id']); uuid(request['artifact_id'])
         require(isinstance(request['base_head'], str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', request['base_head'])), 'Invalid base commit')
@@ -122,12 +129,14 @@ class Sources(Artifacts):
         author = author_id or ProjectCreation(self.node_path).author_id()
         uuid(author)
         require(isinstance(importer_name, str) and importer_name in
-                {'workspace-native-import', 'workspace-web-import'}, 'Invalid importer')
+                {'workspace-native-import', 'workspace-web-import', 'google-drive-import'},
+                'Invalid importer')
         imported = dict(imported_at=request['created_at'], imported_by=author,
                         content_sha256=request['sha256'],
                         importer={'name': importer_name, 'version': '2'})
-        for key in ('source_author', 'source_created_at', 'source_revision'):
-            if request[key] is not None:
+        for key in ('source_author', 'source_created_at', 'source_revision',
+                    'source_mime_type', 'export_mime_type'):
+            if request.get(key) is not None:
                 imported[key] = request[key]
         meta = dict(schema_version=2, id=request['artifact_id'], title=request['title'], kind='source',
                     created_at=request['created_at'], author_id=author, privacy=request['privacy'], provenance='external',
@@ -167,6 +176,105 @@ class Sources(Artifacts):
             return changes, 'Local workspace author', author + '@local.invalid', 'Import original source'
 
         return ws.transact(operation_id, intent, prepare, expected_head=request['base_head'], checkpoint=checkpoint)
+
+    def import_sources(self, requests, operation_id, *, author_id=None,
+                       importer_name='google-drive-import', checkpoint=lambda stage: None):
+        """Publish one explicitly approved remote selection in a single commit."""
+        require(isinstance(requests, list) and 1 <= len(requests) <= 20,
+                'Importní dávka musí obsahovat 1 až 20 souborů.')
+        required = {'project_id', 'artifact_id', 'base_head', 'filename', 'title',
+                    'description', 'tags', 'privacy', 'created_at', 'content', 'sha256',
+                    'source_url', 'source_author', 'source_created_at', 'source_revision'}
+        optional = {'supersedes', 'source_mime_type', 'export_mime_type'}
+        require(all(isinstance(item, dict) and required <= item.keys()
+                    and item.keys() <= required | optional for item in requests),
+                'Neplatná dávka importovaných zdrojů.')
+        project_id, base_head = requests[0]['project_id'], requests[0]['base_head']
+        uuid(project_id)
+        require(isinstance(base_head, str) and bool(re.fullmatch(r'[a-f0-9]{40,64}', base_head)),
+                'Invalid base commit')
+        require(all(item['project_id'] == project_id and item['base_head'] == base_head
+                    for item in requests), 'Celá dávka musí patřit jedné verzi projektu.')
+        author = author_id or ProjectCreation(self.node_path).author_id()
+        uuid(author)
+        require(importer_name == 'google-drive-import', 'Invalid batch importer')
+        prepared, seen, total = [], set(), 0
+        for request in requests:
+            uuid(request['artifact_id'])
+            require(request['artifact_id'] not in seen, 'Dávka obsahuje duplicitní UUID zdroje.')
+            seen.add(request['artifact_id'])
+            require(isinstance(request['content'], str)
+                    and len(request['content']) <= 4 * ((MAX_FILE + 2) // 3),
+                    'Oversized encoded source')
+            raw = base64.b64decode(request['content'], validate=True)
+            total += len(raw); require(total <= MAX_BATCH, 'Importní dávka přesahuje 64 MiB.')
+            content_type(request['filename'], raw)
+            require(hashlib.sha256(raw).hexdigest() == request['sha256'],
+                    'Source digest differs')
+            require(isinstance(request['title'], str)
+                    and 0 < len(request['title'].strip()) <= 200
+                    and not any(c in request['title'] for c in '\r\n\0'),
+                    'Vyplňte název zdroje do 200 znaků.')
+            imported = {'imported_at': request['created_at'], 'imported_by': author,
+                        'content_sha256': request['sha256'],
+                        'importer': {'name': importer_name, 'version': '1'}}
+            for key in ('source_author', 'source_created_at', 'source_revision',
+                        'source_mime_type', 'export_mime_type'):
+                if request.get(key) is not None:
+                    imported[key] = request[key]
+            meta = {'schema_version': 2, 'id': request['artifact_id'],
+                    'title': request['title'], 'kind': 'source',
+                    'created_at': request['created_at'], 'author_id': author,
+                    'privacy': request['privacy'], 'provenance': 'external',
+                    'file': request['filename'], 'description': request['description'],
+                    'tags': request['tags'], 'import': imported}
+            if request['source_url'] is not None:
+                meta['source_url'] = request['source_url']
+            validate_metadata(meta, sidecar=True)
+            prepared.append((request, raw, meta))
+        ws = self.workspace(project_id)
+        intent = {'action': 'import-google-drive-sources', 'project_id': project_id,
+                  'base_head': base_head, 'author_id': author,
+                  'sources': [{key: value for key, value in request.items()
+                               if key != 'content'} for request in requests]}
+
+        def prepare(workspace):
+            head = workspace.git.head()
+            require(head == base_head,
+                    'Projekt se změnil. Import nelze přepsat na jiný HEAD; obnovte plán.')
+            committed_project(workspace.git, head, project_id)
+            files = workspace.git.snapshot(head)
+            entities = validate_snapshot(files)
+            changes = {}
+            for request, raw, meta in prepared:
+                require(request['artifact_id'] not in entities,
+                        'Source UUID already exists')
+                candidate_meta = meta
+                if 'supersedes' in request:
+                    uuid(request['supersedes'])
+                    predecessor = entities.get(request['supersedes'])
+                    require(predecessor is not None and predecessor['kind'] == 'source',
+                            'Superseded source is missing or is not a source')
+                    candidate_meta = dict(meta, relations=[{
+                        'type': 'supersedes', 'target_id': request['supersedes']}])
+                    validate_metadata(candidate_meta, sidecar=True)
+                encoded_meta = (json.dumps(candidate_meta, ensure_ascii=False,
+                    sort_keys=True, indent=2) + '\n').encode()
+                require(len(encoded_meta) <= MAX_METADATA,
+                        'Metadata importu přesahují 64 KiB.')
+                prefix = 'artifacts/' + request['artifact_id'] + '/'
+                require(not any(path.startswith(prefix) for path in files)
+                        and not any(path.startswith(prefix) for path in changes),
+                        'Source directory already exists')
+                changes[prefix + request['filename']] = raw
+                changes[prefix + 'metadata.json'] = encoded_meta
+            candidate = dict(files); candidate.update(changes)
+            validate_snapshot(candidate)
+            return changes, 'Local workspace author', author + '@local.invalid', \
+                'Import Google Drive sources'
+
+        return ws.transact(operation_id, intent, prepare, expected_head=base_head,
+                           checkpoint=checkpoint)
 
     def edit_metadata(self, request, operation_id, *, checkpoint=lambda stage: None):
         """Version allowed source annotations; privacy relaxation needs an explicit authorization bit."""

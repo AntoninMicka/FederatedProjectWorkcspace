@@ -28,6 +28,7 @@ from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.media_service import MediaService
 from spikes.role_workflow_service import RoleWorkflowService
 from spikes.publication_cms import PublicationCms
+from spikes.google_drive_import import GoogleDriveImport
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
@@ -38,6 +39,37 @@ NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archiv
 def provider_key_url(url):
     """Return an exact approved provider onboarding URL, never an arbitrary URL."""
     return url if url in PROVIDER_KEY_URLS else None
+
+
+def google_authorization_url(url, origin):
+    """Allow only the bounded OAuth/One Picker URL produced by the backend."""
+    parsed = urlsplit(url)
+    if (parsed.scheme, parsed.netloc, parsed.path, parsed.fragment) != (
+            'https', 'accounts.google.com', '/o/oauth2/v2/auth', ''):
+        return None
+    try:
+        query = parse_qs(parsed.query, strict_parsing=True)
+        required = {'client_id', 'scope', 'redirect_uri', 'response_type', 'access_type',
+                    'prompt', 'trigger_onepick', 'allow_multiple', 'allow_folder_selection',
+                    'state', 'code_challenge', 'code_challenge_method',
+                    'include_granted_scopes'}
+        if set(query) != required or any(len(values) != 1 for values in query.values()):
+            return None
+        if (query['scope'] != ['https://www.googleapis.com/auth/drive.file']
+                or query['response_type'] != ['code'] or query['access_type'] != ['offline']
+                or query['prompt'] != ['consent'] or query['trigger_onepick'] != ['true']
+                or query['allow_multiple'] != ['true']
+                or query['allow_folder_selection'] != ['true']
+                or query['code_challenge_method'] != ['S256']
+                or query['include_granted_scopes'] != ['false']):
+            return None
+        callback = urlsplit(query['redirect_uri'][0])
+        if (callback.scheme, callback.netloc, callback.path) != (
+                'http', urlsplit(origin).netloc, '/'):
+            return None
+        return url
+    except (ValueError, AttributeError):
+        return None
 
 
 def native_action_request(url, origin):
@@ -163,7 +195,7 @@ def main():
     class Page(QWebEnginePage):
         def acceptNavigationRequest(self, url, kind, main_frame):
             requested = url.toString()
-            external = provider_key_url(requested)
+            external = provider_key_url(requested) or google_authorization_url(requested, server.origin)
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
@@ -217,6 +249,7 @@ def main():
         server.project_deletion_actions = ProjectDeletionActions(node_path)
         server.notebooklm_import_actions = NotebookLMImportActions(
             node_path, desktop_capabilities=True)
+        server.google_drive_import = GoogleDriveImport(node_path)
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)

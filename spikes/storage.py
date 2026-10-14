@@ -81,11 +81,12 @@ def projection(files, entities, commit):
 
 
 class Index:
-    VERSION = 2
+    VERSION = 3
     FIELDS = ('schema_version', 'id', 'title', 'kind', 'privacy', 'provenance', 'author_id', 'created_at',
               'description', 'source_url', 'status', 'body')
     IMPORT_FIELDS = ('imported_at', 'imported_by', 'content_sha256', 'source_author',
-                     'source_created_at', 'source_revision')
+                     'source_created_at', 'source_revision', 'source_mime_type',
+                     'export_mime_type')
     SCHEMA = (
         '''CREATE TABLE entities (
             schema_version INTEGER NOT NULL, id TEXT PRIMARY KEY, title TEXT NOT NULL, kind TEXT NOT NULL,
@@ -95,8 +96,8 @@ class Index:
         '''CREATE TABLE imports (
             entity_id TEXT PRIMARY KEY REFERENCES entities(id), imported_at TEXT NOT NULL,
             imported_by TEXT NOT NULL, content_sha256 TEXT NOT NULL, source_author TEXT,
-            source_created_at TEXT, source_revision TEXT, importer_name TEXT NOT NULL,
-            importer_version TEXT)''',
+            source_created_at TEXT, source_revision TEXT, source_mime_type TEXT,
+            export_mime_type TEXT, importer_name TEXT NOT NULL, importer_version TEXT)''',
         '''CREATE TABLE tags (entity_id TEXT NOT NULL REFERENCES entities(id),
             ordinal INTEGER NOT NULL, tag TEXT NOT NULL, PRIMARY KEY(entity_id, ordinal))''',
         '''CREATE TABLE relations (
@@ -139,10 +140,26 @@ class Index:
                 for table, columns in expected.items():
                     require([row[1] for row in db.execute('PRAGMA table_info(' + table + ')')] == columns,
                             'Unrecognized v1 index; index retained')
+            elif version == 2:
+                tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                require(tables == {'state', 'entities', 'imports', 'tags', 'relations'},
+                        'Unrecognized v2 index; index retained')
+                expected = {
+                    'state': ['singleton', 'commit_id'],
+                    'entities': list(self.FIELDS) + ['path', 'metadata'],
+                    'imports': ['entity_id', 'imported_at', 'imported_by', 'content_sha256',
+                                'source_author', 'source_created_at', 'source_revision',
+                                'importer_name', 'importer_version'],
+                    'tags': ['entity_id', 'ordinal', 'tag'],
+                    'relations': ['source_id', 'ordinal', 'type', 'target_id'],
+                }
+                for table, columns in expected.items():
+                    require([item[1] for item in db.execute('PRAGMA table_info(' + table + ')')]
+                            == columns, 'Unrecognized v2 index; index retained')
 
     def _version(self, db):
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        require(version in {0, 1, self.VERSION}, 'Unsupported index schema version; index retained')
+        require(version in {0, 1, 2, self.VERSION}, 'Unsupported index schema version; index retained')
         return version
 
     def rebuild(self, git, *, checkpoint=lambda stage: None):
@@ -172,6 +189,7 @@ class Index:
                     require(columns == ['id', 'title'], 'Unrecognized legacy index; index retained')
                 db.execute('DROP TABLE IF EXISTS relations')
                 db.execute('DROP TABLE IF EXISTS tags')
+                db.execute('DROP TABLE IF EXISTS imports')
                 db.execute('DROP TABLE entities')
                 for statement in self.SCHEMA:
                     db.execute(statement)
@@ -182,7 +200,7 @@ class Index:
             db.execute('DELETE FROM entities')
             checkpoint('index-cleared')
             db.executemany('INSERT INTO entities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', rows)
-            db.executemany('INSERT INTO imports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', imports)
+            db.executemany('INSERT INTO imports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', imports)
             checkpoint('index-entities')
             db.executemany('INSERT INTO tags VALUES (?, ?, ?)',
                            [(id_, n, tag) for id_, meta in entities.items()
@@ -205,6 +223,8 @@ class Index:
                 raise StaleIndex('Legacy index must be rebuilt from current HEAD')
             if self._version(db) == 1:
                 raise StaleIndex('V1 index must be rebuilt from current HEAD')
+            if self._version(db) == 2:
+                raise StaleIndex('V2 index must be rebuilt from current HEAD')
             state = db.execute('SELECT commit_id FROM state WHERE singleton=1').fetchone()
             if state is None or state[0] != git.head():
                 raise StaleIndex('Index must be rebuilt from current HEAD')

@@ -12,6 +12,7 @@ import stat
 import sqlite3
 import subprocess
 from http.server import HTTPServer
+from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.chat_service import ChatService
@@ -31,6 +32,7 @@ from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
+from spikes.google_drive_import import GoogleDriveImport
 
 # The shell is shared byte-for-byte. This explicit bootstrap is the only web
 # variant: it provides browser authentication and enables server capabilities.
@@ -38,6 +40,7 @@ WEB_HTML = HTML
 WEB_CSS = CSS
 WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=false;
 document.querySelector('#source-import-local-only').disabled=true;
+document.querySelector('#google-drive-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
 let accessKey='';
 const notebookImportButton=document.querySelector('#open-notebooklm-import');
@@ -92,6 +95,7 @@ def secret(path):
 
 class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
+    google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
@@ -162,6 +166,33 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path == '/v1/google-drive/configure':
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+        if self.path == '/v1/google-drive/authorize':
+            if (not isinstance(request, dict) or not self._can_write(request.get('project_id'))
+                    or request.get('privacy') == 'local-only'):
+                return self.send_error(403)
+        if self.path == '/v1/google-drive/confirm':
+            plan = request.get('plan') if isinstance(request, dict) else None
+            if (not isinstance(plan, dict) or not self._can_write(plan.get('project_id'))
+                    or plan.get('privacy') == 'local-only'):
+                return self.send_error(403)
+        if self.path == '/v1/google-drive/preview':
+            selection_id = request.get('selection_id') if isinstance(request, dict) else None
+            if not isinstance(selection_id, str):
+                return self.send_error(403)
+            actor_id = self.actor.get('id') or ProjectCreation(self.server.node).author_id()
+            selected = self.server.google_drive_import.selection(actor_id, selection_id)
+            if (not selected or not self._can_write(selected['project_id'])
+                    or selected['privacy'] == 'local-only'):
+                return self.send_error(403)
+        if self.path == '/v1/google-drive/recover':
+            actor_id = self.actor.get('id') or ProjectCreation(self.server.node).author_id()
+            pending = self.server.google_drive_import.pending(actor_id)
+            if (not pending or not self._can_write(pending['project_id'])
+                    or pending['privacy'] == 'local-only'):
+                return self.send_error(403)
         if self.path in {'/v1/chat/configure', '/v1/chat/test',
                          '/v1/search/configure', '/v1/search/test'} \
                 and not self.server.administration.is_admin(self.actor):
@@ -314,6 +345,8 @@ class WebHandler(DesktopHandler):
     def do_GET(self):
         if self.request_authority() is None:
             return self.send_error(403)
+        if urlsplit(self.path).path == '/oauth/google-drive/callback':
+            return super().do_GET()
         if self.path not in ASSETS:
             return self.send_error(404)
         kind, content = ASSETS[self.path]
@@ -401,6 +434,7 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     server.publication_cms = PublicationCms(server.chat_service.state_dir)
     server.notebooklm_import_actions = NotebookLMImportActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
+    server.google_drive_import = GoogleDriveImport(node)
     server.administration = Administration(node)
     return server
 

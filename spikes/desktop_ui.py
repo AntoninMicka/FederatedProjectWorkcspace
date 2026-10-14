@@ -5,6 +5,7 @@
 import json
 import sqlite3
 import subprocess
+from urllib.parse import parse_qs, urlsplit
 
 from spikes.artifact_history import ArtifactHistory
 from spikes.artifact_actions import ArtifactActions
@@ -17,6 +18,7 @@ from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnkno
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
+from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, GOOGLE_ISSUER, SCOPE
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_search import SearchResponseError, SearchUnknown
@@ -174,6 +176,18 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="search-backend-test" type="button">Ověřit veřejným testovacím dotazem</button>
 <button type="submit">Uložit SearXNG</button></form>
 <small>Test odešle pouze pevný veřejný dotaz „SearXNG“. Projektová data se neodesílají. Skutečný dotaz se odešle až po kontrole přesného náhledu a potvrzení; obsah „Jen na tomto počítači“ se odmítne.</small>
+<hr><h2>Google Drive import</h2>
+<p id="settings-google-drive-status" role="status" aria-live="polite">Připojení zatím nebylo načteno.</p>
+<details class="oauth-setup-guide"><summary>Jak připravit první přihlášení</summary>
+<ol><li id="google-drive-client-guide">Načítám správný typ OAuth klienta pro tuto aplikaci.</li>
+<li><span id="google-drive-callback-guide">Návratová adresa:</span> <code id="google-drive-callback"></code></li>
+<li>V Google Auth Platform → Audience ponechte pro osobní test stav <strong>Testing</strong> a v části <strong>Test users</strong> přidejte přesný Google účet, kterým se budete přihlašovat. Pro takový test není nutné čekat na veřejné ověření aplikace.</li>
+<li>Client ID a client secret vložte níže. Uloží se jen v soukromém stavu tohoto uzlu, ne do projektu.</li></ol>
+<p>Google heslo se zadává pouze na stránce Googlu; Workspace je nikdy neuvidí.</p></details>
+<form id="google-drive-config-form"><label>OAuth client ID <input name="client_id" maxlength="512" autocomplete="off" required></label>
+<label>OAuth client secret <input name="client_secret" type="password" minlength="8" maxlength="512" autocomplete="new-password" required></label>
+<button type="submit">Uložit Google OAuth klienta</button></form>
+<small>Použije se pouze per-file scope <code>drive.file</code>. OAuth klient a tokeny zůstanou v soukromém stavu uzlu mimo projektový Git; secret se po uložení vymaže a backend jej nevrací.</small>
 <hr><h2>Lokální obrazový backend ComfyUI</h2>
 <p id="settings-comfy-status" role="status">Načítám nastavení ComfyUI…</p>
 <form id="comfy-backend-form">
@@ -271,8 +285,35 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </div>
 <div id="source-import-view" hidden>
 <header><span class="badge">Podklady projektu</span><span>Původní bajty a doložená metadata</span></header>
-<div class="page-heading"><div class="eyebrow">IMPORT ZDROJE</div><h1>Importovat zdroj</h1>
+<div class="page-heading"><div class="eyebrow">IMPORT ZDROJE</div><h1 id="source-import-heading" tabindex="-1">Importovat zdroj</h1>
 <p>Zdroj se uloží jako neměnný podklad. Nová verze se importuje jako nový zdroj.</p></div>
+<section id="google-drive-import" class="standalone-form"><h2>Google Drive</h2>
+<p>Průvodce vás provede připojením, výběrem a kontrolou. Do projektu se nic neuloží bez posledního potvrzení.</p>
+<ol id="google-drive-steps" class="import-steps" aria-label="Postup importu z Google Drive">
+<li data-step="1" aria-current="step"><span>1</span><strong>Připojení</strong><small>Připravenost Google OAuth</small></li>
+<li data-step="2"><span>2</span><strong>Výběr</strong><small>Soubory nebo jedna složka</small></li>
+<li data-step="3"><span>3</span><strong>Kontrola</strong><small>Formát, revize a privacy</small></li>
+<li data-step="4"><span>4</span><strong>Import</strong><small>Jediné potvrzené uložení</small></li></ol>
+<section id="google-drive-connect-step" class="wizard-callout"><h3>1. Připravte připojení</h3>
+<p id="google-drive-connect-copy">Ověřuji, zda je Google Drive na tomto uzlu připravený.</p>
+<button id="google-drive-open-settings" class="secondary-button" type="button" hidden>Nastavit připojení</button></section>
+<section id="google-drive-select-step"><h3>2. Vyberte, co chcete přidat</h3>
+<div class="google-login-guide"><h4>Jak přihlášení proběhne</h4><ol>
+<li>V systémovém prohlížeči nebo nové kartě se otevře přihlášení přímo u Googlu.</li>
+<li>Vyberete účet a povolíte přístup jen k souborům, které zvolíte pro tuto aplikaci.</li>
+<li>Vyberete jednotlivé soubory nebo jednu složku a vrátíte se sem ke kontrole.</li></ol>
+<p><strong>Google heslo zadáváte jen Googlu.</strong> Workspace je neuvidí, do Drive nic nezapisuje a bez závěrečného potvrzení nezmění ani projekt.</p></div>
+<label>Soukromí <select id="google-drive-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option id="google-drive-local-only" value="local-only">Pouze lokální</option><option value="public">Veřejné</option></select></label>
+<button id="google-drive-select" type="button">Přihlásit se ke Googlu a vybrat…</button>
+<button id="google-drive-recover" class="secondary-button" type="button" hidden>Pokračovat v potvrzeném importu</button>
+<p id="google-drive-status" role="status" aria-live="polite">Načítám stav připojení…</p></section>
+<section id="google-drive-preview" hidden><h3>3. Zkontrolujte vybrané položky</h3>
+<p id="google-drive-summary" class="wizard-summary"></p><ul id="google-drive-files" class="wizard-file-list"></ul>
+<details><summary>Technické podrobnosti a provenance</summary><pre id="google-drive-plan"></pre></details>
+<h3>4. Potvrďte import</h3>
+<label class="confirm"><input id="google-drive-confirm-check" type="checkbox"> Potvrzuji cílový projekt, privacy, soubory, případné PDF exporty a uvedené limity.</label>
+<button id="google-drive-run" type="button" disabled>Importovat potvrzený výběr</button></section></section>
+<h2 class="import-divider">Soubor z tohoto zařízení</h2>
 <form id="source-import-form" class="standalone-form"><label>Soubor <input name="file" type="file" accept=".md,.png,.jpg,.jpeg,.pdf" required></label>
 <label>Název <input name="title" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
@@ -590,6 +631,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
 #source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
 .standalone-form textarea{width:100%}.form-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}#notebooklm-archive{width:min(680px,100%)}
@@ -603,6 +645,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
  .standalone-form,#notebooklm-import{padding:14px 12px;overflow-wrap:anywhere}
  .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{width:100%}
  #notebooklm-import button,.standalone-form button{width:100%;margin-top:6px}
+ .import-steps{grid-template-columns:1fr 1fr}.import-steps small{margin-left:0}
  #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 }'''
 JS = '''const button=document.querySelector('#increment');
@@ -784,9 +827,22 @@ async function projectRequest(path,body,timeout=60000){
 }
 const sourceImportForm=document.querySelector('#source-import-form');
 const sourceImportStatus=document.querySelector('#source-import-status');
+const googleDriveStatus=document.querySelector('#google-drive-status');
+const googleDrivePreview=document.querySelector('#google-drive-preview');
+const googleDrivePlanElement=document.querySelector('#google-drive-plan');
+const googleDriveConnectCopy=document.querySelector('#google-drive-connect-copy');
+const googleDriveFiles=document.querySelector('#google-drive-files');
+let googleDriveSelection=null,googleDrivePlan=null,googleDriveOperation=null,googleDrivePoll=null;
 let sourceImportAttempt=null;
+function setGoogleDriveStep(current,completed=0){
+ for(const item of document.querySelectorAll('#google-drive-steps li')){
+  const step=Number(item.dataset.step);item.classList.toggle('done',step<=completed);item.classList.toggle('current',step===current);
+  if(step===current)item.setAttribute('aria-current','step');else item.removeAttribute('aria-current');
+ }
+}
 function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(binary);}
 function closeSourceImport(){
+ if(googleDrivePoll){clearTimeout(googleDrivePoll);googleDrivePoll=null;}
  sourceImportView.hidden=true;
  if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
  else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
@@ -799,12 +855,127 @@ function openSourceImport(){
   const option=document.createElement('option');option.value=item.id;option.textContent=`${item.title} — ${item.id}`;predecessors.append(option);
  }
  sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
+ resetGoogleDrivePlan();loadGoogleDriveStatus();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
- sourceImportForm.elements.file.focus();
+ document.querySelector('#source-import-heading').focus();
 }
+function resetGoogleDrivePlan(){
+ googleDrivePlan=null;googleDriveOperation=null;googleDrivePreview.hidden=true;
+ document.querySelector('#google-drive-confirm-check').checked=false;
+ document.querySelector('#google-drive-run').disabled=true;googleDrivePlanElement.textContent='';googleDriveFiles.replaceChildren();
+ document.querySelector('#google-drive-summary').textContent='';setGoogleDriveStep(1);
+}
+async function loadGoogleDriveStatus(){
+ try{const status=await projectRequest('/v1/google-drive/status',{});
+  googleDriveConnectCopy.textContent=status.configured ?
+   'Připojení aplikace je připravené. Přihlašovací údaje zadáte až přímo Googlu v dalším kroku.' :
+   'Nejdřív je potřeba jednorázově uložit OAuth klienta pro tento uzel. Průvodce vás zavede přímo na správné místo v nastavení.';
+  document.querySelector('#google-drive-open-settings').hidden=status.configured;
+  googleDriveStatus.textContent=status.configured ?
+   'Můžete se přihlásit ke Googlu a vybrat soubory. Projekt se tím ještě nezmění.' :
+   'Google Drive zatím není připojený. Použijte tlačítko Nastavit připojení.';
+  document.querySelector('#google-drive-select').disabled=!status.configured;
+  document.querySelector('#google-drive-recover').hidden=!status.pending_import;
+  setGoogleDriveStep(status.pending_import ? 4 : (status.configured ? 2 : 1),status.pending_import ? 3 : (status.configured ? 1 : 0));
+  if(status.pending_import)googleDriveStatus.textContent='Na tomto uzlu čeká dříve potvrzený import. Můžete bezpečně pokračovat z lokálního stagingu.';
+  const resumable=status.pending_selection;
+  if(!status.pending_import && resumable && resumable.project_id===activeProject.id && resumable.expected_head===activeProject.head){
+   document.querySelector('#google-drive-privacy').value=resumable.privacy;googleDriveSelection=resumable.selection_id;
+   document.querySelector('#google-drive-select').disabled=true;setGoogleDriveStep(2,1);
+   googleDriveStatus.textContent='Navazuji na dokončený výběr z Googlu a připravuji bezpečný náhled…';
+   if(googleDrivePoll)clearTimeout(googleDrivePoll);googleDrivePoll=setTimeout(pollGoogleDrive,0);
+  }
+ }catch(error){googleDriveConnectCopy.textContent='Stav připojení se nepodařilo ověřit.';googleDriveStatus.textContent=error.message;document.querySelector('#google-drive-select').disabled=true;}
+}
+function renderGoogleDrivePlan(plan){
+ const lines=[`Cíl: ${activeProject.title} (${plan.project_id})`,`Projektová verze: ${plan.expected_head}`,
+  `Soukromí: ${plan.privacy}`,`Počet souborů: ${plan.file_count}`,
+  `Drive zápisy: ne · průběžná synchronizace: ne`,''];
+ for(const [index,item] of plan.files.entries()){
+  lines.push(`${index+1}. ${item.name} → ${item.filename}`,
+   `   zdrojový typ: ${item.source_mime_type}`,
+   `   revize: ${item.source_revision} · vznik zdroje: ${item.source_created_at}`,
+   item.export_mime_type ? `   transformace: export do ${item.export_mime_type} (limit 10 MiB)` :
+    `   původní bajty: ano · deklarovaná velikost: ${item.size} B`,
+   item.supersedes ? `   navazuje na: ${item.supersedes}` : '   samostatný zdroj');
+ }
+ if(plan.blockers.length)lines.push('',...plan.blockers.map(value=>'BLOKACE: '+value));
+ document.querySelector('#google-drive-summary').textContent=`Vybráno ${plan.file_count} položek pro projekt ${activeProject.title}. Zkontrolujte zejména PDF exporty, privacy a případné blokace.`;
+ googleDriveFiles.replaceChildren();
+ for(const item of plan.files){
+  const row=document.createElement('li'),name=document.createElement('strong'),format=document.createElement('small'),provenance=document.createElement('small');
+  name.textContent=item.name;format.textContent=item.export_mime_type ?
+   `Google dokument → ${item.filename} (${item.export_mime_type})` :
+   `Původní soubor → ${item.filename} · ${item.source_mime_type} · ${item.size} B`;
+  provenance.textContent=`Revize ${item.source_revision} · vznik zdroje ${item.source_created_at}`;
+  row.append(name,format,provenance);googleDriveFiles.append(row);
+ }
+ googleDrivePlanElement.textContent=lines.join('\\n');googleDrivePreview.hidden=false;
+ document.querySelector('#google-drive-confirm-check').checked=false;
+ document.querySelector('#google-drive-run').disabled=true;
+ setGoogleDriveStep(3,2);
+ googleDriveStatus.textContent=plan.blockers.length ?
+  'Výběr obsahuje blokující duplicitu; zvolte jiný soubor nebo revizi.' :
+  'Náhled je připraven. Drive byl pouze přečten; projekt zatím nebyl změněn.';
+}
+async function pollGoogleDrive(){
+ if(!googleDriveSelection || sourceImportView.hidden)return;
+ try{const result=await projectRequest('/v1/google-drive/preview',{selection_id:googleDriveSelection});
+  if(result.status==='planned'){googleDrivePlan=result.plan;renderGoogleDrivePlan(result.plan);return;}
+  if(result.status==='failed')throw new Error('Přihlášení nebo výběr nebyly dokončeny. Můžete bezpečně začít znovu.');
+  googleDriveStatus.textContent='Dokončete přihlášení a výběr u Googlu. Potom se náhled načte automaticky.';
+ }catch(error){googleDriveStatus.textContent='Náhled Drive výběru se nepodařilo vytvořit. '+error.message;document.querySelector('#google-drive-select').disabled=false;setGoogleDriveStep(2,1);return;}
+ googleDrivePoll=setTimeout(pollGoogleDrive,1000);
+}
+document.querySelector('#google-drive-privacy').addEventListener('change',()=>{
+ googleDriveSelection=null;if(googleDrivePoll)clearTimeout(googleDrivePoll);googleDrivePoll=null;resetGoogleDrivePlan();
+ googleDriveStatus.textContent='Změnili jste privacy; spusťte nový Drive výběr.';
+});
+document.querySelector('#google-drive-recover').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;googleDriveStatus.textContent='Obnovuji potvrzený Drive import z lokálního stagingu…';
+ try{const result=await projectRequest('/v1/google-drive/recover',{},180000);
+  if(!result.receipt)throw new Error('Žádný potvrzený import nečeká na obnovu.');
+  await openRegisteredProject(result.receipt.project_id);
+  sidebarArtifactStatus.textContent=`Drive import byl obnoven; ${result.receipt.file_count} souborů bylo publikováno v jednom commitu.`;
+ }catch(error){googleDriveStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
+document.querySelector('#google-drive-select').addEventListener('click',async event=>{
+ if(!activeProject)return;event.currentTarget.disabled=true;resetGoogleDrivePlan();setGoogleDriveStep(2,1);
+ googleDriveStatus.textContent='Připravuji bezpečné přihlášení přímo u Googlu…';
+ try{const result=await projectRequest('/v1/google-drive/authorize',{project_id:activeProject.id,
+   expected_head:activeProject.head,privacy:document.querySelector('#google-drive-privacy').value});
+  googleDriveSelection=result.selection_id;
+  if(document.body.dataset.runtime==='desktop'){
+   googleDriveStatus.textContent='Google se otevírá v systémovém prohlížeči. Přihlaste se, vyberte položky a vraťte se sem.';
+   location.assign(result.authorization_url);
+  }else{
+   googleDriveStatus.textContent='Google se otevírá v nové kartě. Pokud se nic nestalo, povolte pro tento web vyskakovací okna a zkuste to znovu.';
+   window.open(result.authorization_url,'_blank','noopener');
+  }
+  googleDrivePoll=setTimeout(pollGoogleDrive,1000);
+ }catch(error){googleDriveStatus.textContent='Přihlášení se nepodařilo zahájit. '+error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#google-drive-confirm-check').addEventListener('change',event=>{
+ document.querySelector('#google-drive-run').disabled=!event.currentTarget.checked || !googleDrivePlan || googleDrivePlan.blockers.length>0;
+ setGoogleDriveStep(event.currentTarget.checked ? 4 : 3,event.currentTarget.checked ? 3 : 2);
+});
+document.querySelector('#google-drive-run').addEventListener('click',async event=>{
+ if(!googleDrivePlan || !document.querySelector('#google-drive-confirm-check').checked)return;
+ if(!googleDriveOperation)googleDriveOperation=crypto.randomUUID();
+ event.currentTarget.disabled=true;googleDriveStatus.textContent='Stahuji a atomicky importuji potvrzený výběr…';
+ try{const result=await projectRequest('/v1/google-drive/confirm',{
+   plan:googleDrivePlan,operation_id:googleDriveOperation},180000);
+  const projectId=result.project_id;googleDriveSelection=null;googleDrivePlan=null;googleDriveOperation=null;
+  await openRegisteredProject(projectId);sidebarArtifactStatus.textContent=`Z Google Drive bylo importováno ${result.file_count} souborů v jednom commitu.`;
+ }catch(error){googleDriveStatus.textContent=error.message;event.currentTarget.disabled=false;}
+});
 document.querySelector('#open-source-import').addEventListener('click',openSourceImport);
 document.querySelector('#source-import-back').addEventListener('click',closeSourceImport);
+document.querySelector('#google-drive-open-settings').addEventListener('click',async()=>{
+ await openSettings();document.querySelector('#google-drive-config-form input[name="client_id"]').focus();
+});
 sourceImportForm.elements.file.addEventListener('change',event=>{
  const file=event.currentTarget.files[0];if(file&&!sourceImportForm.elements.title.value)sourceImportForm.elements.title.value=file.name.replace(/\\.[^.]+$/,'');
  sourceImportAttempt=null;
@@ -1247,7 +1418,7 @@ for(const [index,tab] of settingsTabs.entries()){
 async function openSettings(){
  if(!canLeaveArtifactEditor())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
- settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab'};
+ settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden};
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
  selectSettingsTab(document.querySelector('#settings-backend-tab'));
@@ -1257,6 +1428,7 @@ async function openSettings(){
 async function closeSettings(){
  const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
  document.dispatchEvent(new Event('settingsclosed'));
+ if(destination?.sourceImport && activeProject){openSourceImport();return;}
  if(destination?.project && activeProject){
   projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;
   const tab=document.getElementById(destination.tabId);if(tab)selectMainTab(tab);
@@ -1501,6 +1673,16 @@ const draft=document.querySelector('#chat-draft');
 const chatStatus=document.querySelector('#chat-backend-status');
 const settingsBackendStatus=document.querySelector('#settings-backend-status');
 const settingsSearchStatus=document.querySelector('#settings-search-status');
+const settingsGoogleDriveStatus=document.querySelector('#settings-google-drive-status');
+const googleDriveDesktop=document.body.dataset.runtime==='desktop';
+document.querySelector('#google-drive-client-guide').textContent=googleDriveDesktop ?
+ 'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Desktop app. Nepoužívejte klienta typu Web application.' :
+ 'V Google Cloud zapněte Google Drive API a vytvořte OAuth klienta typu Web application.';
+document.querySelector('#google-drive-callback-guide').textContent=googleDriveDesktop ?
+ 'Desktop používá automatickou loopback adresu; v klientovi ji ručně neregistrujte:' :
+ 'Do Authorized redirect URIs vložte přesně:';
+document.querySelector('#google-drive-callback').textContent=googleDriveDesktop ?
+ location.origin+'/' : location.origin+'/oauth/google-drive/callback';
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
@@ -1956,6 +2138,10 @@ async function loadBackendBinding(){
   document.querySelector('#settings-openai-image-status').textContent=openaiImage ?
    `OpenAI Images ${openaiImage.model} · ${openaiImage.revision}` :
    'OpenAI Images zatím není nastaveno.';
+  const drive=await projectRequest('/v1/google-drive/status',{});
+  settingsGoogleDriveStatus.textContent=drive.configured ?
+   `OAuth klient je uložen · scope drive.file · konfigurace ${drive.credential_revision} · ${drive.client_id_hint}.` :
+   'Google OAuth klient zatím není nastaven.';
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
   return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
@@ -2115,6 +2301,15 @@ searchForm.addEventListener('submit',async event=>{
   fillSearchBinding(result.binding);hideSearchRecovery();
   settingsSearchStatus.textContent=`SearXNG ${result.binding.endpoint} bylo uloženo.`;}
  catch(error){settingsSearchStatus.textContent=error.message;}
+});
+document.querySelector('#google-drive-config-form').addEventListener('submit',async event=>{
+ event.preventDefault();const fields=event.currentTarget.elements;
+ settingsGoogleDriveStatus.textContent='Ukládám Google OAuth klienta pouze na tomto uzlu…';
+ try{const result=await projectRequest('/v1/google-drive/configure',{
+   client_id:fields.client_id.value.trim(),client_secret:fields.client_secret.value});
+  fields.client_secret.value='';settingsGoogleDriveStatus.textContent=
+   `OAuth klient je uložen · scope drive.file · konfigurace ${result.credential_revision} · ${result.client_id_hint}.`;
+ }catch(error){fields.client_secret.value='';settingsGoogleDriveStatus.textContent=error.message;}
 });
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
@@ -2839,6 +3034,7 @@ ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; chars
 
 class DesktopHandler(Handler):
     assets = ASSETS
+    google_drive_callback_path = '/'
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
@@ -2850,7 +3046,10 @@ class DesktopHandler(Handler):
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
-        '/v1/sources/import', '/v1/chat/status', '/v1/chat/configure',
+        '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
+        '/v1/google-drive/authorize', '/v1/google-drive/preview',
+        '/v1/google-drive/confirm', '/v1/google-drive/recover',
+        '/v1/chat/status', '/v1/chat/configure',
         '/v1/chat/preferences', '/v1/chat/test',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
         '/v1/chat/send', '/v1/chat/send-stream',
@@ -2884,6 +3083,35 @@ class DesktopHandler(Handler):
             return super().dispatch(request)
         projects = self.server.projects or Projects()
         try:
+            if self.path.startswith('/v1/google-drive/'):
+                service = self.server.google_drive_import
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                actor = getattr(self, 'actor', {}) or {}
+                actor_id = actor.get('id') or ProjectCreation(node).author_id()
+                if self.path == '/v1/google-drive/status' and request == {}:
+                    return self.reply(200, service.status(actor_id))
+                if (self.path == '/v1/google-drive/configure' and isinstance(request, dict)
+                        and set(request) == {'client_id', 'client_secret'}):
+                    return self.reply(200, service.configure(
+                        request['client_id'], request['client_secret']))
+                if (self.path == '/v1/google-drive/authorize' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'expected_head', 'privacy'}):
+                    redirect = self.request_origin(self.request_authority()) \
+                        + self.google_drive_callback_path
+                    return self.reply(200, service.authorize(actor_id, request, redirect))
+                if (self.path == '/v1/google-drive/preview' and isinstance(request, dict)
+                        and set(request) == {'selection_id'}):
+                    return self.reply(200, service.preview(actor_id, request['selection_id']))
+                if (self.path == '/v1/google-drive/confirm' and isinstance(request, dict)
+                        and set(request) == {'plan', 'operation_id'}):
+                    result = service.confirm(actor_id, request['plan'], request['operation_id'])
+                    return self.reply(200, result)
+                if self.path == '/v1/google-drive/recover' and request == {}:
+                    result = service.recover(actor_id)
+                    return self.reply(200, {'receipt': result})
+                return self.send_error(400)
             if (self.path == '/v1/workflows/status' and isinstance(request, dict)
                     and set(request) == {'project_id'}):
                 result = self.server.role_workflow_service.status()
@@ -3238,6 +3466,9 @@ class DesktopHandler(Handler):
                                    'diagnostic': exc.code, 'outcome': 'failed',
                                    'retry': ('configure-search' if exc.code == 'not-configured'
                                              else 'new-search')})
+        except DriveAccessError:
+            return self.reply(502, {'error': 'Google Drive není dostupný nebo byl přístup odvolán. '
+                                   'Projekt nebyl změněn.'})
         except OllamaResponseError as exc:
             messages = {
                 'unavailable': 'Ollama endpoint není dostupný.',
@@ -3290,6 +3521,9 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': message})
             if self.path == '/v1/sources/import':
                 return self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
+            if self.path.startswith('/v1/google-drive/'):
+                return self.reply(422, {'error': 'Google Drive import nelze provést. Obnovte výběr '
+                                       'a ověřte konfiguraci, privacy, limity a aktuální projekt.'})
             if self.path.startswith('/v1/projects/create/'):
                 return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
             if self.path.startswith('/v1/projects/delete/'):
@@ -3315,8 +3549,44 @@ class DesktopHandler(Handler):
                                    'práva lokálního stavu a platnost Git dat/indexu.'})
 
     def do_GET(self):
-        if self.single('Host') != self.server.authority:
+        authority = self.request_authority()
+        if authority is None:
             return self.send_error(403)
+        parsed = urlsplit(self.path)
+        query = None
+        if parsed.path == self.google_drive_callback_path and parsed.query:
+            try:
+                query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
+            except ValueError:
+                pass
+        if query is not None and 'state' in query:
+            try:
+                allowed = {'state', 'code', 'picked_file_ids', 'scope', 'iss', 'error'}
+                if not set(query) <= allowed or any(len(values) != 1 for values in query.values()) \
+                        or 'state' not in query or ('scope' in query and query['scope'] != [SCOPE]) \
+                        or ('iss' in query and query['iss'] != [GOOGLE_ISSUER]):
+                    raise ValueError('Neplatná OAuth callback odpověď.')
+                self.server.google_drive_import.callback(
+                    query['state'][0], query.get('code', [''])[0],
+                    query.get('picked_file_ids', [''])[0], query.get('error', [None])[0])
+                title = 'Výběr Google Drive byl přijat'
+                body = 'Vraťte se do pracovního prostoru; náhled importu se načte automaticky.'
+            except (ValueError, OSError, sqlite3.Error, DriveAccessError):
+                title = 'Výběr Google Drive se nepodařilo přijmout'
+                body = 'Vraťte se do pracovního prostoru a spusťte nový výběr.'
+            data = ('<!doctype html><html lang="cs"><meta charset="utf-8"><title>' + title
+                    + '</title><body><h1>' + title + '</h1><p>' + body
+                    + '</p><p>Toto okno můžete zavřít.</p></body></html>').encode()
+            self.close_connection = True
+            self.send_response_only(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'")
+            self.send_header('Connection', 'close')
+            self.end_headers(); self.wfile.write(data)
+            return
         if self.path not in self.assets:
             return self.send_error(404)
         kind, content = self.assets[self.path]

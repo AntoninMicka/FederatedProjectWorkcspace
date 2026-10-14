@@ -10,8 +10,9 @@ import subprocess
 import sys
 import threading
 import unittest
+from urllib.parse import urlencode
 
-from spikes.desktop import (native_action_name, native_action_request, notebooklm_target_error,
+from spikes.desktop import (google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
                             provider_key_url, repairable_target_mode, request_policy)
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.local_api import running_api
@@ -645,6 +646,65 @@ class DesktopTests(unittest.TestCase):
                     'https://evil.example/', 'http://platform.openai.com/api-keys'):
             with self.subTest(url=url):
                 self.assertIsNone(provider_key_url(url))
+
+    def test_google_picker_uses_exact_system_browser_oauth_contract(self):
+        origin = 'http://127.0.0.1:4321'
+        query = {'client_id': 'client.apps.googleusercontent.com',
+                 'scope': 'https://www.googleapis.com/auth/drive.file',
+                 'redirect_uri': origin + '/',
+                 'response_type': 'code', 'access_type': 'offline', 'prompt': 'consent',
+                 'trigger_onepick': 'true', 'allow_multiple': 'true',
+                 'allow_folder_selection': 'true', 'state': 'state',
+                 'code_challenge': 'challenge', 'code_challenge_method': 'S256',
+                 'include_granted_scopes': 'false'}
+        approved = 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode(query)
+        self.assertEqual(google_authorization_url(approved, origin), approved)
+        for changed in (approved.replace('accounts.google.com', 'accounts.google.com.evil.test'),
+                        approved.replace('drive.file', 'drive.readonly'),
+                        approved.replace('127.0.0.1%3A4321', '127.0.0.1%3A9999'),
+                        approved.replace('%2F&response_type', '%2Foauth%2Fgoogle-drive%2Fcallback&response_type')):
+            self.assertIsNone(google_authorization_url(changed, origin))
+        self.assertEqual(DesktopHandler.google_drive_callback_path, '/')
+        self.assertIn('id="google-drive-preview"', HTML)
+        self.assertIn('id="google-drive-steps"', HTML)
+        self.assertIn('id="google-drive-open-settings"', HTML)
+        self.assertIn('id="google-drive-callback"', HTML)
+        self.assertIn('Google heslo zadáváte jen Googlu.', HTML)
+        self.assertIn('Google Auth Platform → Audience', HTML)
+        self.assertIn('<strong>Test users</strong>', HTML)
+        self.assertIn("setGoogleDriveStep(3,2)", JS)
+        self.assertIn("googleDriveFiles.replaceChildren()", JS)
+        self.assertNotIn('googleDriveFiles.innerHTML', JS)
+        self.assertIn("projectRequest('/v1/google-drive/confirm'", JS)
+        self.assertIn("projectRequest('/v1/google-drive/recover'", JS)
+        self.assertIn('status.pending_selection', JS)
+        self.assertIn('Navazuji na dokončený výběr', JS)
+
+    def test_desktop_google_callback_returns_to_loopback_root(self):
+        calls = []
+
+        class Drive:
+            @staticmethod
+            def callback(*args):
+                calls.append(args)
+                return {'status': 'selected'}
+
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.google_drive_import = Drive()
+            query = urlencode({'state': 's' * 32, 'code': 'code',
+                               'picked_file_ids': 'file-id',
+                               'iss': 'https://accounts.google.com',
+                               'scope': 'https://www.googleapis.com/auth/drive.file'})
+            response = driver.request(server, method='GET', path='/?' + query)
+            rejected = driver.request(server, method='GET', path='/?' + urlencode({
+                'state': 's' * 32, 'code': 'code', 'picked_file_ids': 'file-id',
+                'iss': 'https://accounts.google.com.evil.test'}))
+        self.assertTrue(response.startswith(b'HTTP/1.0 200'), response[:80])
+        self.assertIn('Vraťte se'.encode(), response)
+        self.assertTrue(rejected.startswith(b'HTTP/1.0 200'), rejected[:80])
+        self.assertIn('nepodařilo přijmout'.encode(), rejected)
+        self.assertEqual(calls, [('s' * 32, 'code', 'file-id', None)])
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

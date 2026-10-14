@@ -3,14 +3,14 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na doručení F-M1-PROJECT-DELETE-01
+# TODO — čeká se na doručení IMP-01
 
-Feature dávka `F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu`
-dosáhla na větvi `feature/f-m1-project-delete-01-safe-project-removal` úrovně
-**PoC validated**. Akceptovaná evidence úkolů `F-M1-PROJECT-DELETE-01-A` až
-`F-M1-PROJECT-DELETE-01-D`, ověření, recovery a omezení jsou archivované ve
-[WORK_LOG](WORK_LOG.md).
+Feature dávka **IMP-01 — Explicitní jednorázový import z Google Drive** byla
+2026-10-14 fyzicky akceptována na větvi
+`feature/imp-01-google-drive-import`. Dokončená evidence je ve
+[WORK_LOG.md](WORK_LOG.md); strategický stav v
+[roadmapě](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>).
 
-Implementace je v lokálním commitu `f48a760`. Čeká se na vytvoření a doručení
-jediného PR do `develop`; PR dosud nebyl vytvořen ani sloučen. Další feature
-dávka zde nebude aktivována před tímto doručením.
+Jediný PR této větve do `develop` dosud nebyl vytvořen ani sloučen. Další
+nesouvisející feature dávka se aktivuje na vlastní větvi až po doručení tohoto
+PR, pokud uživatel výslovně neschválí jiné předání.
