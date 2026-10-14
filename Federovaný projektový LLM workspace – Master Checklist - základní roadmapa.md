@@ -337,13 +337,14 @@ Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM back
 
 ## 3C. Import z Google služeb, NotebookLM a chatbotů
 
-**Stav: `IMP-02` PoC validated a uživatelsky přijato 2026-10-08; čeká na
-doručení jednoho PR do `develop`. Ostatní konektory a automatické zařazení
-zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
+**Stav: `IMP-02` bylo doručeno PR #48. `IMP-01` má k 2026-10-14
+implementovaný a automaticky ověřený explicitní Drive tok; před fyzickou
+akceptací skutečného osobního účtu se nepovažuje za PoC validated. Ostatní
+konektory a automatické zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
 importuje jeden kompletní notebook osobního Google AI plánu přes Google One ze
 skutečného Takeout exportu jako nový Workspace projekt; necílí na Google Cloud
-Enterprise. Operativní důkazy `IMP-02` drží WORK_LOG a stav doručení TODO,
-ostatní `IMP-*` BACKLOG.
+Enterprise. Operativní důkazy dokončeného `IMP-02` drží WORK_LOG, aktuální
+`IMP-01` TODO a ostatní `IMP-*` BACKLOG.
 
 - [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
 - [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.

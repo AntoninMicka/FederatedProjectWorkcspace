@@ -352,3 +352,12 @@ F-M1-DELETE-01/M1-08 **reuse/adapt** existujícího odstranění v Artifacts, Wo
 F-M1-META-01/V-04 **reuse/adapt** současného striktního validátoru metadat, importního request digestu, Git blobů a Workspace/Journal/Index recovery. Designed výstup [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md) nepřidává parser, storage ani externí závislost; zachovává v1 a vyhrazuje novou verzi pro podrobnou importní provenance. Implementace v2 a migrace jsou samostatná navazující feature.
 
 F-M1-SOURCE-01/V-05 **reuse/adapt** nativního importu, validátoru metadat, Git historie, Workspace/Journal/Index a relačních vztahů. [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md) definuje neměnné bajty pod jedním UUID, novou verzi jako nový artefakt a transition validaci bez nové databáze nebo content-addressed storage. Implementace vynucení a UI zůstává navazující feature.
+
+IMP-01 **reuse/adaptuje** `Sources`, Workspace journal/receipt, Git/Index,
+striktní metadata v2, same-origin API, RBAC a sdílené desktop/web UI. Nový
+node-local journal řeší pouze OAuth selection, bounded download a staging před
+jedinou Workspace publikací; není projektovým indexem ani sync databází.
+Systémový prohlížeč a oficiální Google REST kontrakty nahrazují provider SDK,
+široký cloud file manager i login ve WebEngine. Soukromá inventura nenabídla
+komponentu se stejným per-file OAuth, provenance a recovery kontraktem; nebyl
+převzat cizí kód ani neveřejné názvy. Rozhodnutí: [ADR 0032](docs/adr/0032-google-drive-import.md).

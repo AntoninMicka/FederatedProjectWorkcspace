@@ -106,6 +106,21 @@ class ProjectionTests(unittest.TestCase):
             ''')
             db.execute('INSERT INTO state VALUES (1, ?)', (self.original,))
 
+    def v2(self):
+        self.index.path.unlink()
+        schema = list(Index.SCHEMA)
+        schema[1] = '''CREATE TABLE imports (
+            entity_id TEXT PRIMARY KEY REFERENCES entities(id), imported_at TEXT NOT NULL,
+            imported_by TEXT NOT NULL, content_sha256 TEXT NOT NULL, source_author TEXT,
+            source_created_at TEXT, source_revision TEXT, importer_name TEXT NOT NULL,
+            importer_version TEXT)'''
+        with closing(sqlite3.connect(self.index.path)) as db, db:
+            db.execute('CREATE TABLE state(singleton INTEGER PRIMARY KEY CHECK(singleton=1), commit_id TEXT NOT NULL)')
+            for statement in schema:
+                db.execute(statement)
+            db.execute('PRAGMA user_version=2')
+            db.execute('INSERT INTO state VALUES (1, ?)', (self.original,))
+
     def test_metadata_paths_relations_tags_and_legacy_api(self):
         view = self.index.read_projection(self.git)
         self.assertEqual(view, self.expected())
@@ -203,6 +218,14 @@ Index(sys.argv[2]).rebuild(Git(sys.argv[1]),checkpoint=checkpoint)
                 reopened = Index(self.index.path)
                 reopened.rebuild(self.git)
                 self.assertEqual(reopened.read_projection(self.git), self.expected())
+
+    def test_v2_index_requires_and_supports_rebuild_to_v3(self):
+        self.v2(); reopened = Index(self.index.path)
+        with self.assertRaisesRegex(StaleIndex, 'V2'):
+            reopened.read_projection(self.git)
+        reopened.rebuild(self.git)
+        self.assertEqual(self.dump()[1], 3)
+        self.assertEqual(reopened.read_projection(self.git), self.expected())
 
     def test_unrecognized_legacy_database_is_not_initialized_as_index(self):
         self.index.path.unlink()

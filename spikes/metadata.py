@@ -28,7 +28,8 @@ STATES = {
 REQUIRED = {'schema_version', 'id', 'title', 'kind', 'created_at', 'author_id', 'privacy', 'provenance'}
 OPTIONAL = {'description', 'tags', 'source_url', 'relations'}
 IMPORT_REQUIRED = {'imported_at', 'imported_by', 'content_sha256', 'importer'}
-IMPORT_OPTIONAL = {'source_author', 'source_created_at', 'source_revision'}
+IMPORT_OPTIONAL = {'source_author', 'source_created_at', 'source_revision',
+                   'source_mime_type', 'export_mime_type'}
 
 
 class ValidationError(ValueError):
@@ -69,9 +70,12 @@ def validate_import(value):
     for key in ('name', 'version'):
         if key in importer:
             require(isinstance(importer[key], str) and bool(importer[key].strip()), f'Invalid importer {key}')
-    for key in ('source_author', 'source_revision'):
+    for key in ('source_author', 'source_revision', 'source_mime_type',
+                'export_mime_type'):
         if key in value:
             require(isinstance(value[key], str) and bool(value[key].strip()), f'Invalid {key}')
+    require('export_mime_type' not in value or 'source_mime_type' in value,
+            'Export MIME type requires source MIME type')
     if 'source_created_at' in value:
         timestamp(value['source_created_at'], 'source_created_at')
     return value

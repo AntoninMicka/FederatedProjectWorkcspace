@@ -35,6 +35,8 @@ Objekt `import` přijímá přesně pole uvedená níže a odmítá neznámé kl
 | `source_author` | Volitelný neprázdný text převzatý z doloženého vstupu; není lokálním user ID. |
 | `source_created_at` | Volitelný UTC RFC3339 čas vzniku deklarovaný a doložený zdrojem. Je nezávislý na `imported_at` a běžně mu může předcházet; neznámý čas se vynechá. |
 | `source_revision` | Volitelný neprázdný identifikátor/verze zdroje, beze změny významu poskytovatele. |
+| `source_mime_type` | Volitelný neprázdný MIME typ externího zdroje. Je povinný, pokud import eviduje `export_mime_type`. |
+| `export_mime_type` | Volitelný neprázdný MIME typ skutečně importovaných exportovaných bajtů. Jeho přítomnost výslovně říká, že `content_sha256` patří transformaci, ne původním bajtům nativního cloudového dokumentu. |
 | `importer` | Povinný objekt s neprázdným `name` a volitelnou neprázdnou `version`; popisuje transformační software, ne uživatele. |
 
 `source_url` zůstává volitelným top-level locatorem, aby se neměnil jeho dosavadní význam. Neznámý původní autor, čas, URL ani revize se nevymýšlejí a pole se vynechá. Importovaný neměnný soubor zůstává v původních bajtech; `content_sha256` se počítá z těchto bajtů před publikací.
@@ -94,5 +96,10 @@ V2 registr s `provenance: external` používá stejný validovaný `import` blok
 - Index musí být před nasazením v2 aktualizován tak, aby neznámou verzi odmítl nebo v2 celou projektoval podle nového indexového schématu. Nesmí vydat částečnou v2 provenance ani starý index jako aktuální.
 
 F-M1-META-02 implementuje souběžné čtení v1/v2, zápis native importu v2, kontrolu source hashe, úplnou indexovou projekci a zobrazení provenance v Podrobnostech. Explicitní `Sources.migrate_source` vyžaduje původní native Workspace importní commit: ancestry, přidání artefaktu v daném commitu, trailer operace a shodu neměnných polí/bajtů. Vytvoří pouze povinná doložitelná pole a identitu původního v1 importéru; žádná externí fakta neodhaduje. Automatická plošná migrace neexistuje.
+
+IMP-01 rozšiřuje v2 pouze o volitelnou dvojici MIME polí výše. Projektový
+index v3 je projektuje úplně; index v2 musí být z aktuálního HEAD atomicky
+přestavěn a do té doby se nesmí číst jako aktuální. Rozhodnutí pro Google Drive
+výběr, export a staging popisuje [ADR 0032](0032-google-drive-import.md).
 
 Neměnnost hodnot v `import` bloku a vytváření nového source UUID při změně bajtů vymezuje navazující [ADR 0024](0024-source-immutability-and-versioning.md).

@@ -13,6 +13,7 @@ import threading
 import tarfile
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import uuid4
 
 from spikes.web_server import make_server, secret, validate_hostname, WEB_HTML, WEB_CSS, WEB_JS
@@ -192,6 +193,35 @@ class WebTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
 
+    def test_google_drive_https_configuration_picker_callback_and_privacy(self):
+        _, data, _ = self.create_project('Drive HTTPS')
+        project = json.loads(data)['id']; view = Projects(self.root/'node.json').open(project)
+        code, data, _ = self.request(path='/v1/google-drive/status')
+        self.assertEqual(code, 200); self.assertFalse(json.loads(data)['configured'])
+        code, data, _ = self.request(path='/v1/google-drive/configure', body=json.dumps({
+            'client_id':'client-id-1234567890.apps.googleusercontent.com',
+            'client_secret':'client-secret-value'}))
+        self.assertEqual(code, 200, data); self.assertNotIn(b'client-secret-value', data)
+        authorize = {'project_id':project, 'expected_head':view['commit_id'], 'privacy':'project'}
+        code, data, _ = self.request(path='/v1/google-drive/authorize', body=json.dumps(authorize))
+        self.assertEqual(code, 200, data); started = json.loads(data)
+        parsed = urlsplit(started['authorization_url']); query = parse_qs(parsed.query)
+        self.assertEqual(parsed.netloc, 'accounts.google.com')
+        self.assertEqual(query['scope'], ['https://www.googleapis.com/auth/drive.file'])
+        self.assertEqual(query['redirect_uri'], [
+            'https://' + self.authority + '/oauth/google-drive/callback'])
+        authorize['privacy'] = 'local-only'
+        self.assertEqual(self.request(path='/v1/google-drive/authorize',
+                                     body=json.dumps(authorize))[0], 403)
+        callback = '/oauth/google-drive/callback?' + urlencode({
+            'state':query['state'][0], 'code':'code', 'picked_file_ids':'file-id'})
+        with patch.object(self.server.google_drive_import, 'callback',
+                          return_value={'status':'selected'}) as called:
+            code, data, headers = self.request('GET', callback)
+            self.assertEqual(code, 200); self.assertIn('Vraťte se'.encode(), data)
+            self.assertEqual(headers['Referrer-Policy'], 'no-referrer')
+            called.assert_called_once()
+
     def test_inherited_feature_routes_have_complete_web_runtime_wiring(self):
         self.assertEqual(self.create_project('Runtime wiring')[0], 200)
         shared = self.server.chat_service.state_dir
@@ -278,6 +308,9 @@ class WebTests(unittest.TestCase):
             'project_id': project, 'mode': 'trash'}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/notebooklm/preview',
             body='{"archive_path":"/tmp/denied.tgz","archive_capability":null}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/google-drive/configure', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/google-drive/authorize', body=json.dumps({
+            'project_id':project, 'expected_head':'0'*40, 'privacy':'project'}), headers=headers)[0], 403)
         code, data, _ = admin({'action':'update-user', 'expected_commit':state['commit_id'], 'user_id':user['id'],
                               'active':True, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code, 200); state = json.loads(data)

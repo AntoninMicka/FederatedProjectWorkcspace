@@ -38,27 +38,11 @@ jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
 doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-01` bylo doručeno PR #64 jako merge commit `7373d81`; evidence je
-ve WORK_LOG. `F-M1-PROJECT-DELETE-01` je fyzicky akceptovaná a archivovaná ve
-WORK_LOG; lokální commit `f48a760` na samostatné feature větvi čeká na jediný
-PR do `develop`.
+ve WORK_LOG. `F-M1-PROJECT-DELETE-01` bylo doručeno PR #65 jako merge commit
+`a09538e`; evidence je ve WORK_LOG. `IMP-01` je aktivovaná v TODO na samostatné
+feature větvi.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **IMP-01 — Explicitní jednorázový import z Google Drive
-  (cílová úroveň: implemented).** První praktický tok nabídne ruční výběr
-  jednoho či více souborů nebo jedné složky na osobním Drive a jejich import do
-  uživatelem zvoleného aktivního projektu s náhledem, privacy a provenance.
-  Běžné soubory stáhne v původních bajtech; Docs/Sheets/Slides exportuje do
-  explicitně uvedeného podporovaného formátu a transformaci nezamění za
-  původní obsah. Bez samostatného rozhodnutí neprochází celý Drive, nezapíná
-  průběžnou synchronizaci a nezapisuje zpět. Při aktivaci ověřit aktuální
-  oficiální OAuth scopes, picker, sdílené položky a limity; credentials zůstávají
-  mimo Git. Akceptace: binární i nativní dokument, doložený čas vzniku oddělený
-  od importu, exportní provenance, duplicita/nová revize, odvolaný přístup,
-  změna výběru po preview a recovery přerušeného přenosu bez částečného
-  publikování. Před zápisy popsat download/staging/Workspace crash boundaries
-  podle ADR 0003 a navázat na ADR 0023/0024. Jde o samostatnou feature po
-  doručení IMP-02, nikoli o rozšíření jeho větve.
 
 ## Zjištěné mezery a navazující ověření
 
