@@ -370,6 +370,9 @@ přesnými poli `schema_version`, `assessment`, `answer`, `rationale`,
 `source-` plus prvních 32 hex znaků SHA-256 přes přesnou URL a evaluator smí
 odkazovat jen na ID přítomná v dosavadních kolech. `final` nesmí navrhovat
 další dotaz a v UI je výslovně označeno jako úsudek modelu, nikoli garance.
+Jediná tolerovaná modelová odchylka je neprázdné textové `limitations`, které
+se bezpečně normalizuje na jednoprvkový seznam; jiná pole a typy zůstávají
+fail-closed.
 
 Workflow používá v existujícím `search-runs.sqlite` tabulky
 `search_workflows` a `search_rounds`; druhý search journal nevzniká. Kořenové
@@ -394,6 +397,9 @@ Terminální task se uloží před označením workflow jako `completed`, takže
 tomto okně dokončí pouze stav workflow. Deletion plán zahrne všechna kola a
 evaluator runy. Změna HEAD, privacy nebo bindingu a search/model `unknown`
 zastaví tok bez automatického opakování.
+Vypršení časového budgetu zakazuje nový search nebo dosud neodeslaný evaluator,
+ale nesmí zabránit vyhodnocení už uloženého terminálního či neurčitého běhu;
+taková recovery nevytváří nový externí účinek.
 
 Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)

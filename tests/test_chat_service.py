@@ -568,6 +568,9 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'duplicate follow-up'):
             parse_search_evaluation(json.dumps(dict(base, assessment='intermediate',
                 follow_up_queries=['same query', ' same query '])), {'source-known'})
+        normalized = parse_search_evaluation(json.dumps(dict(base,
+            limitations='One model limitation.')), {'source-known'})
+        self.assertEqual(normalized['limitations'], ['One model limitation.'])
 
     def test_iterative_search_stops_at_round_budget(self):
         request = self.route_request()

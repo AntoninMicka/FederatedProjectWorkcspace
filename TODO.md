@@ -70,6 +70,12 @@ TaskOutcomes completion nesmí vyvolat druhý search ani LLM dispatch.
   explicitní JSON roli `researcher-v2` a konkrétní UI diagnostiku. Neplatný
   succeeded modelový run se bezpečně neopakuje; fyzický retest nového hledání
   zůstává otevřený.
+- **Fyzické zjištění 2026-10-14, pokračování:** JSON evaluator dokončil běh,
+  ale Gemma vrátila jediné `limitations` jako text místo seznamu. Přidána úzká
+  normalizace neprázdného textu na jednoprvkový seznam; uložený succeeded run
+  lze po restartu znovu vyhodnotit bez opakování search nebo Ollama dispatch.
+  Recovery již dokončených účinků smí doběhnout i po vypršení 300sekundového
+  budgetu; limit nadále blokuje každý nový search nebo nový evaluator dispatch.
 
 ## Podmínky dokončení
 

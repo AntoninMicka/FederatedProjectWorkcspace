@@ -69,6 +69,8 @@ def parse_search_evaluation(raw, source_ids):
             and all(isinstance(item, str) and item in source_ids
                     for item in value['used_source_ids']),
             'Ollama cited an unavailable search source')
+    if isinstance(value['limitations'], str) and value['limitations'].strip():
+        value['limitations'] = [value['limitations']]
     require(isinstance(value['limitations'], list) and len(value['limitations']) <= 8
             and all(isinstance(item, str) and bool(item.strip()) and '\0' not in item
                     and len(item.encode('utf-8')) <= 2048
@@ -659,9 +661,6 @@ class ChatService:
         workflow = search_runs.workflow(request['task_id'], node_id, user_id)
         require(workflow is not None and workflow['state'] == 'active',
                 'Iterative search workflow is unavailable or closed')
-        budget_used = search_runs.budget_state(workflow)
-        require(budget_used['elapsed_seconds'] < workflow['budget']['max_seconds'],
-                'Iterative search time budget is exhausted')
         round_record = next((item for item in workflow['rounds']
                              if item['search_id'] == request['search_id']), None)
         search = search_runs.get(request['search_id'])
@@ -670,6 +669,14 @@ class ChatService:
                 and search['node_id'] == node_id and search['user_id'] == user_id
                 and search['preview_sha256'] == request['preview_sha256'],
                 'Web search preview changed before confirmation')
+        budget_used = search_runs.budget_state(workflow)
+        evaluator_run = OllamaRuns(root).get(round_record['synthesis_run_id'])
+        effects_are_recoverable = (search['state'] == 'succeeded'
+            and evaluator_run is not None
+            and evaluator_run['state'] in {'dispatching', 'succeeded', 'failed', 'unknown'})
+        require(budget_used['elapsed_seconds'] < workflow['budget']['max_seconds']
+                or effects_are_recoverable,
+                'Iterative search time budget is exhausted')
         search_binding = self._search_binding()
         require(search['binding'] == search_binding.serialize(),
                 'SearXNG binding changed after preview')
