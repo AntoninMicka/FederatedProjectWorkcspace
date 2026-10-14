@@ -490,7 +490,7 @@ class ChatServiceTests(unittest.TestCase):
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
                    'query': 'initial query', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
-        ollama_calls, search_calls = [], []
+        ollama_calls, ollama_formats, search_calls = [], [], []
         evaluations = [
             {'schema_version': 1, 'assessment': 'intermediate',
              'answer': 'First round is incomplete.', 'rationale': 'More detail is needed.',
@@ -501,7 +501,9 @@ class ChatServiceTests(unittest.TestCase):
              'limitations': [], 'follow_up_queries': []},
         ]
         def ollama_transport(binding, raw):
-            ollama_calls.append(json.loads(raw)['prompt'])
+            provider_request = json.loads(raw)
+            ollama_calls.append(provider_request['prompt'])
+            ollama_formats.append(provider_request.get('format'))
             response = outcome if len(ollama_calls) == 1 else evaluations[len(ollama_calls) - 2]
             return {'model': binding.model, 'response': json.dumps(response)}
         def search_transport(_binding, query):
@@ -550,6 +552,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
                          first['search_id'])
+        self.assertEqual(ollama_formats, ['json', 'json', 'json'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 

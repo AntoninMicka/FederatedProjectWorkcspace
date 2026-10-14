@@ -133,6 +133,21 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(payload['retry'], 'configure-search')
         self.assertIn('Nastavení', payload['error'])
 
+    def test_invalid_search_evaluation_has_actionable_diagnostic(self):
+        class Service:
+            def task_search_confirm(self, _request):
+                raise ValidationError(
+                    'Ollama returned an invalid iterative search evaluation')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.chat_service = Service()
+            response = driver.request(server, path='/v1/tasks/search/confirm', body=b'{}')
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 422 ', head)
+        message = json.loads(body)['error']
+        self.assertIn('neplatné hodnocení výsledků hledání', message)
+        self.assertIn('Zahoďte tento návrh', message)
+
     def test_notebooklm_desktop_uses_shared_page_and_exact_native_capabilities(self):
         desktop = Path('spikes/desktop.py').read_text()
         self.assertNotIn('NotebookLMImportDialog', desktop)

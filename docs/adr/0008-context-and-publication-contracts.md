@@ -363,7 +363,7 @@ nebo `unknown` hledání je blocker stejně jako jiný neurčitý externí úči
 ### Bounded iterativní hledání — F-M3-SEARCH-02
 
 Jednorázový search tok se rozšiřuje o workflow, ne o autonomní modelový tool
-call. Po každém potvrzeném kole vrací `researcher-v1` pouze JSON objekt s
+call. Po každém potvrzeném kole vrací JSON role `researcher-v2` pouze objekt s
 přesnými poli `schema_version`, `assessment`, `answer`, `rationale`,
 `used_source_ids`, `limitations` a `follow_up_queries`. `assessment` je právě
 `final`, `intermediate` nebo `insufficient`. Source ID je stabilní

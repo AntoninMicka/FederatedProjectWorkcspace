@@ -3544,6 +3544,19 @@ class DesktopHandler(Handler):
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
+            if (isinstance(exc, ValidationError)
+                    and self.path == '/v1/tasks/search/confirm'
+                    and str(exc) in {
+                        'Ollama returned an invalid iterative search evaluation',
+                        'Ollama cited an unavailable search source',
+                        'Ollama returned invalid search limitations',
+                        'Ollama returned invalid follow-up search queries',
+                        'Ollama returned duplicate follow-up search queries',
+                        'Final search evaluation cannot request another query'}):
+                return self.reply(422, {'error':
+                    'Ollama vrátila neplatné hodnocení výsledků hledání. '
+                    'Uložené výsledky nebyly změněny ani automaticky zopakovány. '
+                    'Zahoďte tento návrh a spusťte nové hledání.'})
             if isinstance(exc, ValidationError) and self.path in {
                     '/v1/chat/send', '/v1/chat/send-stream', '/v1/tasks/route'}:
                 message = CHAT_VALIDATION_ERRORS.get(str(exc))

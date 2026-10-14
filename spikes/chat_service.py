@@ -718,14 +718,14 @@ class ChatService:
             ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in selected) +
                 (AdHocInput(request['search_id'], search_bytes, row['privacy']),),
-            task=TaskInstruction('researcher', 'researcher-v1', instruction))
+            task=TaskInstruction('researcher', 'researcher-v2', instruction))
         require(choice.resolve(ollama=ollama_bindings.load()) == binding,
                 'Selected synthesis binding changed')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
-        role = ROLES.resolve('researcher', 'researcher-v1')
-        adapter.prepare(handoff, binding, role, 'text')
-        response = adapter.dispatch(handoff, binding, role, 'text')
+        role = ROLES.resolve('researcher', 'researcher-v2')
+        adapter.prepare(handoff, binding, role, 'json')
+        response = adapter.dispatch(handoff, binding, role, 'json')
         source_ids = {source['source_id'] for item in rounds_for_model
                       for source in item['search']['results']}
         evaluation = parse_search_evaluation(response.get('response'), source_ids)
