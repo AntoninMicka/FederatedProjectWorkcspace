@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 from spikes.desktop import (google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
                             provider_key_url, repairable_target_mode, request_policy)
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
+from spikes.presentation_visual import SLIDE_JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
@@ -209,6 +210,102 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('prázdná', notebooklm_target_error(
             ValueError('Existující cílová složka musí být prázdná.')))
 
+    def test_presenter_next_preview_follows_tab_and_includes_notes(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js is required for presenter behavior validation')
+        start = JS.index('function renderPresenterContent(')
+        end = JS.index('function renderPresenterSlide()', start)
+        harness = """
+const assert=require('node:assert/strict');
+const element=()=>({textContent:'',style:{},children:[],replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},setAttribute(){},dataset:{}});
+const elements={};
+const document={createElement:element,querySelector(id){return elements[id]??=element();}};
+const presenterPrivatePreview=element(),presenterNextPreview=element(),presenterNextButton=element();
+let presenterNextSelection=null,presenterNextSelectionKind='main',presenterTabIndex=0,presenterIndex=0;
+const presenterSlides=[{title:'Current'}, {title:'Next',body:'Main body',notes:'Main notes'}];
+"""
+        model = JS[JS.index('function createPresenterSequence('):
+                   JS.index('function renderPresenterContent(')]
+        checks = """
+presenterSequence=createPresenterSequence(presenterSlides);
+presenterSequence.commit(presenterSequence.current);
+refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSlides[1]);
+assert.equal(elements['#presenter-next-notes'].textContent,'Main notes');
+presenterSelectedBackup={title:'Backup',body:'Backup body',notes:'Backup notes'};
+presenterSequence.chooseBackup(presenterSelectedBackup);refreshPresenterNext();
+assert.equal(presenterNextSelectionKind,'backup');
+assert.equal(presenterPrivatePreview.children[0].textContent,'Backup');
+assert.equal(elements['#presenter-next-notes'].textContent,'Backup notes');
+presenterTabIndex=0;refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSelectedBackup);
+presenterSequence.choosePlanned();refreshPresenterNext();
+assert.equal(presenterNextSelection,presenterSlides[1]);
+presenterSequence.commit(presenterSequence.next);refreshPresenterNext();
+assert.equal(presenterNextPreview.disabled,true);
+assert.equal(elements['#presenter-next-notes'].textContent,'Žádné poznámky.');
+renderPresenterWidget(element(),elements['#presenter-next-notes'],{title:'No notes'});
+assert.equal(elements['#presenter-next-notes'].textContent,'Tento slide nemá poznámky.');
+"""
+        subprocess.run(['node', '-e', harness + SLIDE_JS + model + JS[start:end] + checks], check=True)
+
+    def test_presenter_only_lists_explicitly_assigned_backups(self):
+        import shutil
+        if not shutil.which('node'):
+            self.skipTest('Node.js is required for presenter behavior validation')
+        start = JS.index('function createPresenterBackupItem(')
+        end = JS.index('async function loadPresenter()', start)
+        harness = """
+const assert=require('node:assert/strict');
+const element=()=>({textContent:'',children:[],events:{},replaceChildren(){this.children=[];},append(...items){this.children.push(...items);},addEventListener(name,fn){this.events[name]=fn;}});
+const elements={};
+const document={createElement:element,querySelector(id){return elements[id]??=element();}};
+const presenterBackups=element(),presenterBackupStatus=element(),presenterBackupSearch={value:''};
+const presenterSlides=[{title:'First'},{title:'Second'},{title:'No backups'}];
+let presenterIndex=0,presenterSelectedBackup=null,selected=null;
+function renderPrivateSelection(backup){selected=backup;}
+function choosePresenterBackup(backup){presenterSelectedBackup=backup;selected=backup;}
+const presenterBackupsData=[
+ {title:'First backup',body:'A',after_slide:0},
+ {title:'Second backup',body:'B',after_slide:1},
+ {title:'Unassigned',body:'C'},
+ {title:'Null assignment',body:'D',after_slide:null},
+ {title:'Invalid string',body:'E',after_slide:'0'}
+];
+"""
+        checks = """
+const linked=document.querySelector('#presenter-slide-backups');
+renderPresenterBackups();
+assert.equal(linked.children.length,1);
+assert.equal(presenterBackups.children.length,5);
+assert.equal(selected,null);
+linked.children[0].children[0].events.click();
+assert.equal(selected,presenterBackupsData[0]);
+assert.equal(presenterSelectedBackup,selected);
+presenterIndex=1;renderPresenterBackups();
+assert.equal(linked.children.length,1);
+assert.equal(linked.children[0].children[0].children[0].textContent,'Second backup');
+presenterBackupSearch.value='First';renderPresenterBackups();
+assert.equal(linked.children.length,0);
+assert.equal(presenterBackups.children.length,1);
+assert.match(elements['#presenter-slide-backup-status'].textContent,/Hledání/);
+presenterBackupSearch.value='';presenterIndex=2;renderPresenterBackups();
+assert.equal(linked.children.length,0);
+assert.match(elements['#presenter-slide-backup-status'].textContent,/nejsou přiřazené/);
+presenterIndex=0;renderPresenterBackups();
+assert.equal(linked.children.length,1);
+"""
+        model = JS[JS.index('function createPresenterSequence('):JS.index('function renderPresenterContent(')]
+        checks += '''
+presenterSequence.chooseBackup(presenterBackupsData[0]);presenterSequence.commit(presenterSequence.next);
+renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(presenterBackups.children.length,4);
+'''
+        subprocess.run(['node', '-e', harness + model + 'presenterSequence=createPresenterSequence(presenterSlides);' + JS[start:end] + checks], check=True)
+        slide_renderer = JS[JS.index('function renderPresenterSlide()'):
+                            JS.index('function renderPresenterDeck()')]
+        self.assertIn('renderPresenterBackups();', slide_renderer)
+
     def test_stream_endpoint_emits_delta_and_terminal_result_over_http(self):
         class Service:
             def external_send_stream(self, request, on_delta):
@@ -298,6 +395,103 @@ class DesktopTests(unittest.TestCase):
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
         self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
+
+    def test_gamepad_demo_ui_and_backend_are_exposed(self):
+        from spikes.desktop_ui import HTML, JS
+        self.assertIn('id="gamepad-scan"', HTML)
+        self.assertIn('/v1/gamepad/status', JS)
+        self.assertIn('Gamepad demo', HTML)
+        self.assertIn('id="gamepad-list"', HTML)
+
+    def test_presentation_ui_and_backend_are_exposed(self):
+        from spikes.desktop_ui import ASSETS, CSS, HTML, JS, presentation_public_payload
+        from types import SimpleNamespace
+        from spikes.desktop_ui import presentation_deck
+        deck = presentation_deck()
+        self.assertIn('id="presentation-start"', HTML)
+        self.assertIn('id="presentation-slide"', HTML)
+        self.assertIn('/v1/presentation/status', JS)
+        self.assertIn('Promítání prezentace', HTML)
+        self.assertIn('presentation-mode', JS)
+        self.assertIn('id="presentation-prev"', HTML)
+        self.assertIn('id="presentation-next"', HTML)
+        self.assertIn('id="presentation-fullscreen"', HTML)
+        self.assertIn('requestFullscreen()', JS)
+        self.assertIn("event.key==='ArrowRight'", JS)
+        self.assertIn('id="presenter-view"', HTML)
+        self.assertIn('id="presenter-screen"', HTML)
+        self.assertNotIn('id="presenter-ratio"', HTML)
+        self.assertIn('id="presenter-backups"', HTML)
+        self.assertIn('presenterBackupsData=[]', JS)
+        self.assertIn("result.backups", JS)
+        self.assertIn('Otevřít presenter', HTML)
+        self.assertIn('id="presenter-notes"', HTML)
+        self.assertIn('id="presenter-next-preview"', HTML)
+        self.assertIn('id="presenter-deck-list"', HTML)
+        self.assertIn('id="presenter-private-preview"', HTML)
+        self.assertIn('id="presenter-show-private"', HTML)
+        self.assertIn('id="presenter-exposure"', HTML)
+        self.assertIn('id="presenter-blackout"', HTML)
+        self.assertIn('id="presenter-question"', HTML)
+        self.assertIn('id="presenter-gamepad-status"', HTML)
+        self.assertIn('id="presenter-tab-content"', HTML)
+        self.assertIn('class="presenter-next-selector"', HTML)
+        self.assertIn('id="presenter-slide-list"', HTML)
+        self.assertIn('id="presenter-backup-list"', HTML)
+        self.assertIn('id="presenter-question-list"', HTML)
+        self.assertIn('class="presenter-slide-widget"', HTML)
+        self.assertIn('min-height:48px', CSS)
+        self.assertIn('presenter-next-selector h3', CSS)
+        self.assertIn('setPresenterNextSelection', JS)
+        self.assertIn("setPresenterNextSelection(backup,'backup')", JS)
+        self.assertIn('#presenter-tab-status,#presenter-backup-status{display:none}', CSS)
+        self.assertIn("document.querySelector('#presenter-backup-list').hidden", JS)
+        self.assertIn('.presenter-selection-preview{flex:0 0 auto', CSS)
+        self.assertIn("pad.axes[2]", JS)
+        self.assertIn("pad.axes[3]", JS)
+        self.assertIn('selectPresenterTab', JS)
+        self.assertIn('movePresenterItem', JS)
+        self.assertIn('presenter-gamepad-selected', CSS)
+        self.assertIn('id="presenter-meeting-time"', HTML)
+        self.assertIn('id="presenter-branch-time"', HTML)
+        self.assertIn('id="presenter-backup-search"', HTML)
+        self.assertIn('id="presenter-outline"', HTML)
+        self.assertIn('id="presenter-alert"', HTML)
+        self.assertIn('id="presenter-return"', HTML)
+        self.assertEqual(HTML.count('id="presenter-notes"'), 1)
+        self.assertIn('presenterBackupSearch.addEventListener', JS)
+        self.assertIn('presenterMeetingStarted', JS)
+        self.assertIn('renderPrivateSelection(backup', JS)
+        self.assertIn('presenterShowPrivate.addEventListener', JS)
+        self.assertNotIn('renderPresenterContent(presenterScreen,backup)', JS)
+        self.assertEqual(len(deck['slides']), 5)
+        self.assertEqual(len(deck['backups']), 10)
+        self.assertTrue(all(slide.get('notes') for slide in deck['slides']))
+        self.assertEqual([sum(item['after_slide'] == index for item in deck['backups']) for index in range(5)], [2] * 5)
+        self.assertIn('grid-template-columns:15% 25% minmax(0,1fr)', CSS)
+        self.assertIn('.presenter-speaker{width:100%;align-self:stretch;display:flex;flex-direction:column}', CSS)
+        self.assertIn('#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column', CSS)
+        self.assertIn('.presenter-header{font-size:1.5em;min-height:52px', CSS)
+        self.assertIn('class="presenter-header-main"', HTML)
+        self.assertIn('body.presenter-active>aside{display:none}', CSS)
+        self.assertIn("document.body.classList.add('presenter-active')", JS)
+        self.assertIn("document.body.classList.remove('presenter-active')", JS)
+        self.assertIn('height:100%', CSS)
+        self.assertIn('aspect-ratio:16/9', CSS)
+        self.assertIn('max-width:420px', CSS)
+        self.assertLess(HTML.index('id="presenter-screen"'), HTML.index('id="presenter-notes"'))
+        self.assertGreaterEqual(CSS.count('font-size:1.5em'), 2)
+        self.assertIn('/presentation-screen', ASSETS)
+        self.assertIn('/v1/presentation/control', JS)
+        public_server = SimpleNamespace()
+        self.assertFalse(presentation_public_payload(public_server)['visible'])
+        public_payload = presentation_public_payload(public_server, {'action': 'show', 'slide': 0})
+        self.assertTrue(public_payload['visible'])
+        ratio_payload = presentation_public_payload(public_server, {'action': 'display-ratio', 'ratio': '4:3'})
+        self.assertEqual(ratio_payload['ratio'], '4:3')
+        self.assertIn('display-ratio', ASSETS['/presentation-screen.js'][1])
+        self.assertNotIn('notes', public_payload['content'])
+        self.assertNotIn('backups', public_payload)
 
     def test_chat_ui_uses_authenticated_api_and_explicit_message_selection(self):
         self.assertIn("projectRequest('/v1/chat/status',{})", JS)
@@ -729,6 +923,123 @@ class DesktopTests(unittest.TestCase):
         self.assertTrue(rejected.startswith(b'HTTP/1.0 200'), rejected[:80])
         self.assertIn('nepodařilo přijmout'.encode(), rejected)
         self.assertEqual(calls, [('s' * 32, 'code', 'file-id', None)])
+
+    def test_management_serves_audience_page_and_authenticates_slide_polling(self):
+        from spikes.desktop_management import DesktopManagementHandler
+        from spikes.desktop_ui import PUBLIC_HTML
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopManagementHandler) as server:
+            self.assertEqual(request_policy(server.origin + '/presentation-screen',
+                                            '', 'GET', server.origin), 'allow')
+            response = driver.request(server, method='GET', path='/presentation-screen',
+                                      headers={'Authorization': None})
+            self.assertTrue(response.startswith(b'HTTP/1.0 200'), response[:100])
+            self.assertEqual(response.split(b'\r\n\r\n', 1)[1], PUBLIC_HTML.encode())
+            self.assertNotIn(server.token.encode(), response)
+            self.assertNotIn('<script>', PUBLIC_HTML)
+            self.assertNotIn('<style>', PUBLIC_HTML)
+            for path in ('/presentation-screen.css', '/presentation-screen.js'):
+                self.assertIn(path, PUBLIC_HTML)
+                self.assertEqual(request_policy(server.origin + path, server.origin,
+                                                'GET', server.origin), 'allow')
+                asset = driver.request(server, method='GET', path=path,
+                                       headers={'Authorization': None})
+                self.assertTrue(asset.startswith(b'HTTP/1.0 200'), asset[:100])
+                self.assertNotIn(server.token.encode(), asset)
+            self.assertEqual(request_policy(server.origin + '/v1/presentation/public',
+                                            server.origin, 'POST', server.origin), 'authenticate')
+            driver.rejected(server, path='/v1/presentation/public', body=b'{}',
+                            headers={'Authorization': None})
+            shown = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0,
+                'content': {'title': 'Audience regression', 'body': 'Approved content'},
+            }).encode())
+            self.assertTrue(shown.startswith(b'HTTP/1.0 200'), shown[:100])
+            public = driver.request(server, path='/v1/presentation/public', body=b'{}')
+            payload = json.loads(public.split(b'\r\n\r\n', 1)[1])
+            self.assertTrue(payload['visible'])
+            self.assertEqual(payload['content']['title'], 'Audience regression')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_audience_renders_approved_slide(self):
+        script = r'''
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_management import DesktopManagementHandler
+from spikes.local_api import running_api
+from tests.test_local_api import LocalAPITests
+from tests.test_presentation_documents import sample
+from spikes.presentation_documents import project_deck
+app = QApplication([])
+with running_api('http', handler=DesktopManagementHandler) as server:
+    class Interceptor(QWebEngineUrlRequestInterceptor):
+        def interceptRequest(self, info):
+            policy = request_policy(info.requestUrl().toString(), info.initiator().toString(),
+                                    bytes(info.requestMethod()).decode(), server.origin)
+            if policy == 'block':
+                info.block(True)
+            elif policy == 'authenticate':
+                info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
+    profile = QWebEngineProfile(app)
+    interceptor = Interceptor(profile)
+    profile.setUrlRequestInterceptor(interceptor)
+    page = QWebEnginePage(profile, app)
+    state = {'phase': 0}
+    driver = LocalAPITests()
+    def received(value):
+        if not value:
+            return
+        text, color, foreground, image_ready, bullets = json.loads(value)
+        if state['phase'] == 0 and 'čeká na schválený slide' in text:
+            response = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0,
+                'content': {'title': 'Audience smoke', 'body': 'Approved slide rendered'},
+            }).encode())
+            assert response.startswith(b'HTTP/1.0 200')
+            state['phase'] = 1
+        elif state['phase'] == 1 and 'Approved slide rendered' in text and color == 'rgb(5, 9, 12)':
+            deck = sample()
+            deck['slides'][0]['foreground'] = '#aabbcc'
+            server.presentation_selected_deck = project_deck(deck, 'saved-revision')
+            response = driver.request(server, path='/v1/presentation/control', body=json.dumps({
+                'action': 'show', 'slide': 0, 'slide_id': deck['slides'][0]['id'],
+                'deck_revision': 'saved-revision',
+            }).encode())
+            assert response.startswith(b'HTTP/1.0 200')
+            state['phase'] = 2
+        elif state['phase'] == 2 and bullets == ['First point', '<b>Plain text</b>'] and image_ready and foreground == 'rgb(170, 187, 204)':
+            assert 'Private' not in text
+            print('audience: page, stylesheet, authenticated polling and approved slide verified', flush=True)
+            print('editor: saved slide, literal bullets, foreground and decoded wallpaper verified', flush=True)
+            app.exit(0)
+    poll = QTimer()
+    poll.timeout.connect(lambda: page.runJavaScript(
+        """(()=>{const target=document.querySelector('#screen');if(!target)return '';
+const style=getComputedStyle(target);
+if(style.backgroundImage.startsWith('url("data:') && !window.wallpaperProbe){
+ window.wallpaperProbe=new Image();window.wallpaperProbe.src=style.backgroundImage.slice(5,-2);
+}
+return JSON.stringify([target.textContent,getComputedStyle(document.body).backgroundColor,style.color,
+ Boolean(window.wallpaperProbe?.naturalWidth),[...target.querySelectorAll('li')].map(li=>li.textContent)]);
+})()""",
+        0, received))
+    poll.start(100)
+    page.loadFinished.connect(lambda ok: None if ok else app.exit(3))
+    page.setUrl(QUrl(server.origin + '/presentation-screen'))
+    QTimer.singleShot(10000, lambda: app.exit(2))
+    code = app.exec()
+    poll.stop()
+    raise SystemExit(code)
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('approved slide verified', result.stdout)
+        self.assertIn('decoded wallpaper verified', result.stdout)
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):
         driver = test_local_api.LocalAPITests()

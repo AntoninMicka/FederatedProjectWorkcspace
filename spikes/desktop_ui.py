@@ -3,15 +3,20 @@
 #
 """Static same-origin UI; project data arrives through authenticated reads."""
 import json
+import copy
 import sqlite3
 import subprocess
 from urllib.parse import parse_qs, urlsplit
+from pathlib import Path
 
 from spikes.artifact_history import ArtifactHistory
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.metadata import MAX_FILE, ValidationError
+from spikes.presentation_visual import SLIDE_JS
+from spikes.presentation_documents import public_content
+from spikes.presentation_closing import closing_slide
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
@@ -55,6 +60,138 @@ CHAT_VALIDATION_ERRORS = {
     'Selected messages must use thread order': (
         'Vybrané zprávy nejsou v aktuálním pořadí vlákna. Obnovte výběr kontextu.'),
 }
+
+
+def scan_gamepads():
+    """Return a safe, Linux-specific list of likely joystick/gamepad devices."""
+    base = Path('/dev/input')
+    if not base.exists():
+        return {'available': False, 'devices': [], 'message': 'Linux /dev/input není dostupné.'}
+    matches = []
+    for entry in sorted(base.iterdir(), key=lambda p: p.name):
+        if not entry.name.startswith('event'):
+            continue
+        path = str(entry)
+        name = entry.name
+        labels = [name]
+        try:
+            result = subprocess.run(
+                ['udevadm', 'info', '--query=property', '--name=' + path],
+                capture_output=True, text=True, check=False, timeout=2)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            result = None
+        if result and result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD', 'ID_INPUT_KEYBOARD', 'DEVNAME'}:
+                    labels.append(f'{key}={value}')
+                    if key in {'ID_INPUT_JOYSTICK', 'ID_INPUT_GAMEPAD'} and value in {'1', 'true', 'True'}:
+                        matches.append(path)
+        if any(token in ' '.join(labels).lower() for token in ('gamepad', 'joystick', 'controller', 'pad')):
+            matches.append(path)
+    devices = []
+    seen = set()
+    for path in sorted(set(matches)):
+        device_name = path.rsplit('/', 1)[-1]
+        if path in seen:
+            continue
+        seen.add(path)
+        devices.append({'path': path, 'name': device_name})
+    return {
+        'available': bool(devices),
+        'devices': devices,
+        'message': 'Nalezeno gamepad/joystick zařízení.' if devices else 'Nebyl nalezen žádný gamepad/joystick.'
+    }
+
+
+def presentation_deck():
+    """Return a small presenter deck for desktop projection demo."""
+    return {
+        'active': True,
+        'slides': [
+            {'title': 'Úvod', 'body': 'Demo: desktopová prezentace a promítání.', 'notes': 'Přivítejte publikum a řekněte, že ukazujeme celý presenter workflow.'},
+            {'title': 'Problém', 'body': 'Potřebujeme jasnou, bezpečnou prezentaci bez rizika ztráty kontextu.', 'notes': 'Zdůrazněte rozdíl mezi tím, co vidí publikum, a tím, co potřebuje řečník.'},
+            {'title': 'Řešení', 'body': 'Presenter odděluje audience screen, speaker notes, další slide a backupy.', 'notes': 'Tady ukažte, že backup je připravený, ale automaticky nenaruší hlavní linii.'},
+            {'title': 'Výhody', 'body': 'Snadná navigace, rychlá iterace a bezpečné odbočky pro otázky publika.', 'notes': 'Předveďte šipky, náhled dalšího slidu a otevření backupu.'},
+            {'title': 'Další krok', 'body': 'Napojit deck na projektové artefakty, notes a verzovaný export.', 'notes': 'Uzavřete demo a pojmenujte, co už je funkční a co bude následovat.'},
+        ],
+        'backups': [
+            {'title': 'Úvod: kontext', 'body': 'Presenter je součástí desktopového workspace, ne samostatný export.', 'after_slide': 0},
+            {'title': 'Úvod: cíl', 'body': 'Dnes ověřujeme tok od přípravy decku až po promítání.', 'after_slide': 0},
+            {'title': 'Problém: publikum', 'body': 'Publikum nemá vidět poznámky, backupy ani rozhodovací scénář.', 'after_slide': 1},
+            {'title': 'Problém: řečník', 'body': 'Řečník potřebuje navigaci a připravenou odpověď na časté otázky.', 'after_slide': 1},
+            {'title': 'Řešení: API', 'body': 'Deck se načítá přes lokální same-origin endpoint desktopu.', 'after_slide': 2},
+            {'title': 'Řešení: stav', 'body': 'Aktuální pozice zůstává oddělená od obsahu backupu.', 'after_slide': 2},
+            {'title': 'Výhody: fullscreen', 'body': 'Audience screen lze přepnout do celé obrazovky bez speaker panelu.', 'after_slide': 3},
+            {'title': 'Výhody: otázky', 'body': 'Backupy slouží jako řízené odbočky při dotazech publika.', 'after_slide': 3},
+            {'title': 'Další krok: data', 'body': 'Slides mohou být odvozené z verzovaných projektových artefaktů.', 'after_slide': 4},
+            {'title': 'Další krok: export', 'body': 'Bezpečný export musí vyloučit notes a nepoužité backupy.', 'after_slide': 4},
+        ],
+        'current_slide': 0,
+        'message': 'Prezentace je připravena k promítání.'
+    }
+
+
+def presentation_public_payload(server, request=None):
+    """Return only the currently approved public presentation content."""
+    deck = getattr(server, 'presentation_selected_deck', None) or presentation_deck()
+    session = getattr(server, 'presentation_session_deck', None)
+    if session is not None and session.get('revision') == deck.get('revision'):
+        deck = session
+    state = getattr(server, 'presentation_public_state',
+                    {'visible': False, 'blackout': True, 'slide': 0, 'content': None, 'ratio': '16:9'})
+    if request and request.get('action') == 'show':
+        index = request.get('slide', state['slide'])
+        if not isinstance(index, int) or not 0 <= index < len(deck['slides']):
+            index = 0
+        if 'slide_id' in request:
+            if request.get('deck_revision') != deck.get('revision'):
+                raise ValueError('Prezentace se změnila. Znovu otevřete presenter.')
+            source = next((s for s in deck['slides'] + deck['backups'] if s.get('id') == request['slide_id']), None)
+            if source is None:
+                raise ValueError('Slide v této prezentaci neexistuje.')
+            content = public_content(source)
+            rows = request.get('rows', len(content['bullets']))
+            if type(rows) is not int or not 0 <= rows <= len(content['bullets']):
+                raise ValueError('Neplatný počet zobrazených řádků.')
+            content['bullets'] = content['bullets'][:rows]
+            content['body'] = '\n'.join(content['bullets'])
+        else:
+            content = request.get('content')
+        if not isinstance(content, dict):
+            source = deck['slides'][index]
+            content = {'title': source['title'], 'body': source['body']}
+        ratio = request.get('ratio', state.get('ratio', '16:9'))
+        if ratio not in {'16:9', '4:3'}:
+            ratio = '16:9'
+        state = {'visible': True, 'blackout': False, 'slide': index, 'ratio': ratio,
+                 'content': (content if 'slide_id' in request else {'title': str(content.get('title', '')), 'body': str(content.get('body', ''))})}
+    elif request and request.get('action') == 'display-ratio' and request.get('ratio') in {'16:9', '4:3'}:
+        state = dict(state, ratio=request['ratio'])
+    elif request and request.get('action') == 'ratio' and request.get('ratio') in {'16:9', '4:3'}:
+        state = dict(state, ratio=request['ratio'])
+    elif request and request.get('action') == 'blackout':
+        state = dict(state, blackout=True)
+    elif request and request.get('action') == 'reveal':
+        state = dict(state, blackout=False, visible=True)
+    server.presentation_public_state = state
+    if not state['visible'] or state['blackout']:
+        return {'visible': False, 'blackout': True}
+    return {'visible': True, 'blackout': False, 'slide': state['slide'], 'ratio': state.get('ratio', '16:9'), 'content': state['content']}
+
+
+def presentation_status(server, *, start=False):
+    result = copy.deepcopy(getattr(server, 'presentation_selected_deck', None) or presentation_deck())
+    if start:
+        profile = getattr(server, 'user_profile', None)
+        result['slides'].append(closing_slide(profile.load() if profile else None, result.get('revision')))
+        server.presentation_session_deck = copy.deepcopy(result)
+    state = getattr(server, 'presentation_public_state', {})
+    result['ratio'] = state.get('ratio', '16:9')
+    return result
+
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -122,6 +259,21 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
+<details class="diagnostics"><summary>Gamepad demo</summary>
+<button id="gamepad-scan" type="button">Vyhledat gamepad</button>
+<p id="gamepad-status" role="status">Stav: zatím bez skenování.</p>
+<ul id="gamepad-list" aria-live="polite"></ul>
+</details>
+<details id="presentation-mode" class="diagnostics presentation-panel"><summary>Promítání prezentace</summary>
+<button id="presentation-start" type="button">Spustit prezentaci</button>
+<button id="presentation-editor" type="button">Editor prezentací…</button>
+<button id="presentation-open" type="button">Otevřít presenter</button>
+<button id="presentation-prev" type="button" disabled aria-label="Předchozí slide">Předchozí</button>
+<button id="presentation-next" type="button" disabled aria-label="Další slide">Další</button>
+<button id="presentation-fullscreen" type="button" disabled>Celá obrazovka</button>
+<p id="presentation-status" role="status">Stav: prezentace není spuštěna.</p>
+<div id="presentation-slide" tabindex="0" aria-live="polite">Zde se zobrazí aktuální slide.</div>
+</details>
 </div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
@@ -149,6 +301,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
+<button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
@@ -280,6 +433,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
 </section>
+<section id="settings-profile-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-profile-tab" hidden>
+<h2>Uživatelský profil</h2><p>Jméno a kontakty pro závěrečný slide prezentace. Platí pro tohoto uživatele desktopu.</p>
+<button id="user-profile-open" type="button">Upravit profil…</button></section>
 '''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
@@ -505,6 +661,22 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
 </div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+<div id="presenter-view" hidden>
+<header class="presenter-header"><div class="presenter-header-main"><span class="badge">Presenter · NÁCVIK</span><h1>Disclosure cockpit</h1><p>Demo workspace · Ukázková schůzka · Interní demo · r1</p></div>
+<div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span>Schůzka <b id="presenter-meeting-time">00:00</b></span><span>Odbočka <b id="presenter-branch-time">00:00</b></span><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
+<p id="presenter-status" role="status">Presenter není spuštěný.</p>
+<div class="presenter-layout">
+<nav class="presenter-deck" aria-label="Pořadí prezentace"><h2>Pořadí prezentace</h2><ol id="presenter-deck-list"></ol><p id="presenter-return-anchor">Návrat: hlavní slide 01</p></nav>
+<section class="presenter-audience" aria-label="Náhled veřejného výstupu"><div class="presenter-kicker">ZMENŠENÝ NÁHLED VEŘEJNÉHO VÝSTUPU</div>
+<div class="presenter-slide-preview" id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
+<section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
+<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
+<aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p><p id="presenter-tab-status">K slide · otázky a doplňky</p>
+<div id="presenter-tab-content"><section id="presenter-slide-list"><h3>Současný slide</h3><div id="presenter-preview"></div><h3>Další podle plánu</h3><button id="presenter-planned-slide" class="presenter-backup" type="button" disabled></button><h3>Backupy k aktuálnímu slidu</h3><p id="presenter-slide-backup-status" role="status"></p><ul id="presenter-slide-backups"></ul></section><section id="presenter-backup-list" hidden><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></section><section id="presenter-question-list" hidden><h3>Otázky / doplňky</h3><button id="presenter-question" type="button">Doplňující otázka</button><p id="presenter-question-status">Žádná aktivní odbočka.</p></section></div>
+</section><section class="presenter-next-selector"><h3 id="presenter-next-title">Další slide podle plánu</h3><div class="presenter-slide-widget"><div class="presenter-slide-preview" id="presenter-private-preview"></div><section class="presenter-notes"><h2>Poznámky k vybranému slidu</h2><p id="presenter-next-notes"></p></section></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-next-preview" type="button">Zobrazit další slide</button><button id="presenter-show-private" type="button" hidden disabled>Zobrazit publiku</button></section></aside>
+</div>
+<footer class="presenter-footer"><button id="presenter-return" type="button">Návrat na původní slide</button><span>Otázky: <strong id="presenter-question-count">0</strong></span><span>Odložené: <strong>0</strong></span><span id="presenter-blackout-state">Veřejný výstup aktivní</span></footer>
+</div>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
@@ -517,6 +689,8 @@ h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#62718
 button{border:0;border-radius:8px;background:#176b60;color:white;font-weight:600;padding:12px 18px;cursor:pointer}
 button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button:focus-visible,textarea:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #59b6aa;outline-offset:3px}
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
+#gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
+#gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
 .home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
@@ -649,7 +823,37 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
  .import-steps{grid-template-columns:1fr 1fr}.import-steps small{margin-left:0}
  #notebooklm-preview{max-height:50vh;max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 }'''
-JS = '''const button=document.querySelector('#increment');
+PRESENTER_CSS = '''
+.presentation-panel #presentation-slide{margin-top:12px;padding:28px 24px;min-height:150px;background:#162638;color:#f6faf8;border-radius:10px}
+.presentation-panel #presentation-slide h3{font-size:28px;color:#79c9ac;margin:0 0 14px}.presentation-panel #presentation-slide p{font-size:18px;line-height:1.5;margin:0}
+.presentation-panel #presentation-slide:fullscreen{display:flex;flex-direction:column;justify-content:center;padding:8vw;background:#10222f;border-radius:0}
+.presentation-panel #presentation-slide:fullscreen h3{font-size:clamp(32px,6vw,80px)}.presentation-panel #presentation-slide:fullscreen p{font-size:clamp(20px,3vw,42px)}
+.presenter-header{font-size:1.5em;min-height:52px;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:6px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center}.presenter-header-main{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.presenter-header-main h1{font-size:24px;color:#162638;margin:0;flex:none}.presenter-header-main p{font-size:12px;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.presenter-header-state{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}.presenter-header-state strong{color:#176b60;font-size:12px}.presenter-header-state span{font-size:12px;color:#627183}#presenter-view{height:100%;min-height:0;display:flex;flex-direction:column;gap:8px}.presenter-layout{display:grid;grid-template-columns:15% 25% minmax(0,1fr);gap:14px;min-height:0;flex:1}.presenter-layout>nav,.presenter-layout>section,.presenter-layout>aside{min-width:0;min-height:0}body.presenter-active>aside{display:none}body.presenter-active main{padding-left:22px;padding-right:22px}
+.presenter-header + #presenter-status{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.presenter-deck,.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:10px;overflow:auto;height:100%}.presenter-speaker{width:100%;align-self:stretch;display:flex;flex-direction:column}.presenter-panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px}.presenter-panel-head h2{font-size:16px;margin:0}.presenter-panel-head p{font-size:11px;margin:0}.presenter-tab-row{display:flex;align-items:center;gap:6px;margin:4px 0}.presenter-next-selector{flex:0 0 auto;border-bottom:1px solid #dce3e9;padding:4px 0 8px}.presenter-next-selector h3{font-size:12px;margin:0 0 4px}.presenter-next-selector #presenter-next-preview{width:100%;text-align:left;background:#f4f7fa;color:#304657;border:1px solid #dce3e9;padding:8px;border-radius:8px}.presenter-next-selector #presenter-next-preview h2{font-size:14px;color:#176b60;margin:0 0 4px}.presenter-next-selector #presenter-next-preview p{font-size:12px;margin:0}.presenter-tab-content{flex:1;min-height:0;overflow:auto}.presenter-selection-preview{flex:0 0 auto;border-top:1px solid #dce3e9;margin-top:6px;padding-top:6px}.presenter-deck h2{margin-top:0;font-size:16px}.presenter-deck ol{padding-left:24px;margin:0}.presenter-deck li{padding:9px 6px;color:#456276;cursor:pointer;border-radius:6px}.presenter-deck li:hover,.presenter-deck li[aria-current="true"]{background:#e0efe9;color:#176b60}.presenter-deck li.presenter-live{font-weight:700;border-left:3px solid #176b60}.presenter-deck li.presenter-visited{color:#82909d}.presenter-deck button{background:transparent;color:inherit;padding:0;text-align:left;font-weight:inherit;width:100%}.presenter-return-anchor{border-top:1px solid #dce3e9;padding-top:14px;font-size:12px}
+.presenter-audience{background:#10222f;border-radius:14px;padding:16px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}.presenter-kicker{font-size:11px;letter-spacing:1.6px;color:#79c9ac}.presenter-audience #presenter-screen{width:100%;max-width:420px;aspect-ratio:16/9;height:auto;min-height:0;flex:0 0 auto;display:flex;flex-direction:column;justify-content:center;align-self:center;padding:5%;color:#f6faf8;outline:none;border:1px solid #496072}.presenter-audience #presenter-screen:fullscreen{background:#10222f;max-width:none}
+.presenter-audience #presenter-screen h2{font-size:clamp(14px,1.8vw,30px);color:#79c9ac;margin:0 0 8px}.presenter-audience #presenter-screen p{font-size:clamp(10px,1.2vw,20px);line-height:1.35;margin:0}.presenter-controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.presenter-speaker{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:18px;overflow:auto}.presenter-speaker h2{margin-top:0}.presenter-speaker h3{border-top:1px solid #dce3e9;padding-top:18px}.presenter-speaker #presenter-preview,.presenter-speaker #presenter-next-preview{background:#f4f7fa;padding:14px;border-radius:8px}.presenter-speaker #presenter-preview h2,.presenter-speaker #presenter-next-preview h2{font-size:17px;border:0;padding:0;margin:0 0 8px;color:#176b60}.presenter-speaker #presenter-preview p,.presenter-speaker #presenter-next-preview p{margin:0;white-space:pre-wrap;font-size:13px}.presenter-speaker #presenter-notes{background:#fffaf0;border-left:3px solid #d6b36a;padding:10px 12px;white-space:pre-wrap}.presenter-speaker ul{list-style:none;padding:0}.presenter-backup{width:100%;text-align:left;background:#fffaf0;border:1px solid #d6b36a;color:#304657;margin:6px 0;padding:10px}.presenter-backup:hover{background:#fff3d8}.presenter-backup strong,.presenter-backup span{display:block}.presenter-backup span{font-size:12px;margin-top:4px;color:#627183}
+.presenter-notes{flex:1;min-height:0;overflow:auto;background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}#presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}#presenter-private-preview h2{font-size:16px;color:#176b60}#presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{font-size:1.5em;display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:10px 14px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
+.presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:8px 12px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:3px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:3px;flex:0 0 auto}.presenter-tabs button{font-size:11px;padding:7px 9px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:flex;align-items:center;gap:4px;min-width:110px;margin:0;font-size:11px;color:#627183}.presenter-search input{width:100px;padding:6px;margin:0;border:1px solid #bfcdc9;border-radius:7px}#presenter-tab-status,#presenter-backup-status{display:none}.presenter-private-preview{background:#f4f7fa;padding:8px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:4px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
+.presenter-gamepad-status{font-size:11px!important;color:#627183;margin:4px 0!important}.presenter-gamepad-selected{outline:3px solid #59b6aa!important;outline-offset:2px}
+.presenter-next-selector h3{border-top:0!important;padding-top:0!important;margin:0 0 4px!important}.presenter-next-selector #presenter-next-preview{display:block;min-height:48px;line-height:1.25;cursor:pointer}
+.presenter-speaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden}
+.presenter-panel-head{grid-column:1/-1}
+.presenter-speaker{color:#162638}.presenter-speaker h2{color:#162638}.presenter-speaker p{color:#627183}
+.presenter-browser{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.presenter-browser .presenter-tab-row{flex-wrap:wrap;flex-shrink:0}
+.presenter-next-selector{min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;border:0;border-left:1px solid #dce3e9;padding:0 0 0 12px}
+.presenter-next-selector>h3,.presenter-next-selector>p,.presenter-next-selector>button{flex-shrink:0}
+.presenter-slide-widget{display:flex;flex:1;flex-direction:column;min-height:0;background:#10222f}
+.presenter-slide-widget .presenter-slide-preview{flex-shrink:0}
+.presenter-slide-widget .presenter-notes{flex:1;min-height:0}
+.presenter-audience #presenter-screen,.presenter-speaker #presenter-private-preview{width:100%;max-width:420px;aspect-ratio:16/9;align-self:center;display:flex;flex-direction:column;justify-content:center;background:#10222f;color:#f6faf8;padding:5%;border:1px solid #496072;border-radius:0;overflow:auto}.presenter-audience #presenter-screen h2,.presenter-speaker #presenter-private-preview h2{font-size:clamp(14px,1.8vw,30px);color:#79c9ac;margin:0 0 8px}.presenter-audience #presenter-screen p,.presenter-speaker #presenter-private-preview p{font-size:clamp(10px,1.2vw,20px);color:#c8d4df;line-height:1.35;margin:0;white-space:pre-wrap}.presenter-notes p{white-space:pre-wrap}#presenter-tab-content{flex:1;min-height:0;overflow:auto}
+.back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
+@media(max-width:1100px){.presenter-layout{grid-template-columns:15% 25% minmax(0,1fr)}}
+@media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
+'''
+CSS += PRESENTER_CSS
+JS = SLIDE_JS + '''const button=document.querySelector('#increment');
 button.addEventListener('click',async()=>{
  button.disabled=true;
  const status=document.querySelector('#status');
@@ -664,6 +868,420 @@ button.addEventListener('click',async()=>{
  }catch(error){status.textContent='Spojení se nezdařilo. Zavřete a znovu spusťte aplikaci.';}
  finally{button.disabled=false;}
 });'''
+JS += """
+const gamepadScanButton=document.querySelector('#gamepad-scan');
+const gamepadStatus=document.querySelector('#gamepad-status');
+const gamepadList=document.querySelector('#gamepad-list');
+gamepadScanButton.addEventListener('click',async()=>{
+ gamepadScanButton.disabled=true;
+ gamepadStatus.textContent='Skenuji vstupní zařízení…';
+ gamepadList.replaceChildren();
+ try{
+  const response=await fetch('/v1/gamepad/status',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({action:'scan'}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error || 'Gamepad není dostupný.');
+  gamepadStatus.textContent=result.message || 'Gamepad demo hotovo.';
+  if(!result.devices || !result.devices.length){
+   const item=document.createElement('li');item.textContent='Žádné joystick/gamepad zařízení nebylo detekováno.';gamepadList.append(item);return;
+  }
+  for(const device of result.devices){
+   const item=document.createElement('li');item.textContent=`${device.name} — ${device.path}`;gamepadList.append(item);
+  }
+ }catch(error){
+  gamepadStatus.textContent=error.message || 'Gamepad demo nebylo možné spustit.';
+  const item=document.createElement('li');item.textContent='Demo vyžaduje Linux /dev/input a dostupné udev metadata.';gamepadList.append(item);
+ }finally{gamepadScanButton.disabled=false;}
+});"""
+JS += """
+const presentationStartButton=document.querySelector('#presentation-start');
+const presentationPrevButton=document.querySelector('#presentation-prev');
+const presentationNextButton=document.querySelector('#presentation-next');
+const presentationFullscreenButton=document.querySelector('#presentation-fullscreen');
+const presentationStatus=document.querySelector('#presentation-status');
+const presentationSlide=document.querySelector('#presentation-slide');
+const presentationMode=document.querySelector('#presentation-mode');
+let presentationSlides=[];
+let presentationIndex=0;
+function renderPresentationSlide(slide){
+ renderSlideVisual(presentationSlide,slide,'h3');
+ presentationPrevButton.disabled=presentationIndex===0;
+ presentationNextButton.disabled=presentationIndex>=presentationSlides.length-1;
+ presentationStatus.textContent=`Promítám slide ${presentationIndex+1} z ${presentationSlides.length}.`;
+}
+presentationStartButton.addEventListener('click',async()=>{
+ presentationStartButton.disabled=true;
+ presentationStatus.textContent='Načítám prezentaci…';
+ try{
+  const response=await fetch('/v1/presentation/status',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({action:'start'}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();
+  if(!response.ok) throw new Error(result.error || 'Prezentaci nebylo možné připravit.');
+    presentationSlides=Array.isArray(result.slides) ? result.slides : [];
+    presentationIndex=Math.min(result.current_slide ?? 0,Math.max(0,presentationSlides.length-1));
+    presentationPrevButton.disabled=false;presentationNextButton.disabled=false;
+    presentationFullscreenButton.disabled=!presentationSlides.length;
+    presentationStartButton.textContent='Restartovat prezentaci';
+    renderPresentationSlide(presentationSlides[presentationIndex]);
+ }catch(error){
+  presentationStatus.textContent=error.message || 'Prezentace nebylo možné spustit.';
+  presentationSlide.textContent='Demo promítání vyžaduje běžící desktop app a validní prezentaci.';
+ }finally{presentationStartButton.disabled=false;}
+});
+function movePresentation(offset){
+ if(!presentationSlides.length)return;
+ presentationIndex=Math.max(0,Math.min(presentationSlides.length-1,presentationIndex+offset));
+ renderPresentationSlide(presentationSlides[presentationIndex]);
+}
+presentationPrevButton.addEventListener('click',()=>movePresentation(-1));
+presentationNextButton.addEventListener('click',()=>movePresentation(1));
+presentationFullscreenButton.addEventListener('click',async()=>{
+ try{await presentationSlide.requestFullscreen();presentationSlide.focus();}
+ catch(error){presentationStatus.textContent='Celou obrazovku se nepodařilo spustit.';}
+});
+presentationMode.addEventListener('keydown',event=>{
+ if(event.key==='ArrowLeft'){event.preventDefault();movePresentation(-1);}
+ if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
+});
+const presentationOpenButton=document.querySelector('#presentation-open');
+document.querySelector('#presentation-editor').addEventListener('click',()=>{location.hash='presentation-editor';});
+const presenterView=document.querySelector('#presenter-view');
+const presenterScreen=document.querySelector('#presenter-screen');
+const presenterPreview=document.querySelector('#presenter-preview');
+const presenterNotes=document.querySelector('#presenter-notes');
+const presenterNextPreview=document.querySelector('#presenter-next-preview');
+const presenterOutline=document.querySelector('#presenter-outline');
+const presenterMeetingTime=document.querySelector('#presenter-meeting-time');
+const presenterBranchTime=document.querySelector('#presenter-branch-time');
+const presenterBackupSearch=document.querySelector('#presenter-backup-search');
+const presenterTabStatus=document.querySelector('#presenter-tab-status');
+const presenterGamepadStatus=document.querySelector('#presenter-gamepad-status');
+const presenterDeckList=document.querySelector('#presenter-deck-list');
+const presenterPrivatePreview=document.querySelector('#presenter-private-preview');
+const presenterPrivateStatus=document.querySelector('#presenter-private-status');
+const presenterShowPrivate=document.querySelector('#presenter-show-private');
+const presenterExposure=document.querySelector('#presenter-exposure');
+const presenterLiveState=document.querySelector('#presenter-live-state');
+const presenterReturnAnchor=document.querySelector('#presenter-return-anchor');
+const presenterBlackoutButton=document.querySelector('#presenter-blackout');
+const presenterBlackoutState=document.querySelector('#presenter-blackout-state');
+const presenterQuestionButton=document.querySelector('#presenter-question');
+const presenterQuestionStatus=document.querySelector('#presenter-question-status');
+const presenterQuestionCount=document.querySelector('#presenter-question-count');
+const presenterStatus=document.querySelector('#presenter-status');
+const presenterCounter=document.querySelector('#presenter-counter');
+const presenterBackups=document.querySelector('#presenter-backups');
+const presenterBackupStatus=document.querySelector('#presenter-backup-status');
+const presenterPrevButton=document.querySelector('#presenter-prev');
+const presenterNextButton=document.querySelector('#presenter-next');
+const presenterFullscreenButton=document.querySelector('#presenter-fullscreen');
+let presenterSlides=[];
+let presenterBackupsData=[];
+let presenterIndex=0;
+let presenterPrivateSelection=null;
+let presenterNextSelection=null;
+let presenterNextSelectionKind='main';
+let presenterExposureValue=0;
+let presenterBlackout=false;
+let presenterMeetingStarted=0;
+let presenterBranchStarted=0;
+async function presentationControl(payload){
+ const response=await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(4000)});
+ if(!response.ok)throw new Error('Veřejné okno nepřijalo změnu.');
+ return response.json();
+}
+function applyPresenterRatio(ratio){for(const preview of [presenterScreen,presenterPrivatePreview])preview.style.aspectRatio=ratio==='4:3'?'4 / 3':'16 / 9';}
+function formatPresenterTime(value){const seconds=Math.max(0,Math.floor(value/1000));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
+setInterval(()=>{if(!presenterMeetingStarted)return;presenterMeetingTime.textContent=formatPresenterTime(Date.now()-presenterMeetingStarted);presenterBranchTime.textContent=presenterBranchStarted?formatPresenterTime(Date.now()-presenterBranchStarted):'00:00';},1000);
+function createPresenterSequence(slides){
+ const entries=slides.map((slide,mainIndex)=>({slide,mainIndex,kind:slide.closing?'closing':'main',visited:false}));
+ const shown=new Map();
+ let position=0,frontier=-1,preferred=null;
+ const key=slide=>slide?.id || slide;
+ const count=slide=>shown.get(key(slide)) || 0;
+ const remaining=slide=>slide.reveal==='step' && count(slide)<(slide.bullets?.length || 0);
+ const available=slide=>!shown.has(key(slide)) || slide.repeat===true || remaining(slide);
+ const unfinished=()=>entries.some(e=>e.kind==='main' && (!shown.has(key(e.slide)) || remaining(e.slide)));
+ return {
+  entries, available, count,
+  get position(){return position;},
+  get current(){return entries[position];},
+  get previous(){return entries.slice(0,position).reverse().find(e=>e.visited);},
+  get returnEntry(){return this.current?.returnPending?this.current.returnTo:undefined;},
+  get next(){return preferred || this.returnEntry || this.planned;},
+  get planned(){
+   if(this.current?.visited && remaining(this.current.slide))return this.current;
+   return entries.slice(frontier+1).find(e=>e.kind==='main' && available(e.slide)) ||
+    entries.find(e=>e.kind==='main' && remaining(e.slide)) ||
+    (!unfinished()?entries.find(e=>e.kind==='closing' && available(e.slide)):undefined);
+  },
+  get choices(){
+   const seen=new Set();
+   return entries.map(e=>key(e.slide)===key(this.current?.slide)?this.current:e).filter(e=>{
+    if(e.kind!=='main' || !available(e.slide) || (e===this.current && !remaining(e.slide)) || seen.has(key(e.slide)))return false;
+    seen.add(key(e.slide));return true;
+   });
+  },
+  canShow(entry,backward=false){return Boolean(entry && (backward?entry===this.previous:
+   (entry===this.returnEntry || (available(entry.slide) && (entry.kind!=='closing' || !unfinished())))));},
+  rows(entry){return entry.slide.reveal==='step'?Math.min(count(entry.slide)+1,entry.slide.bullets?.length || 0):entry.slide.bullets?.length || 0;},
+  visual(entry, upcoming=false){
+   if(!entry)return undefined;
+   const slide=entry.slide;
+   if(slide.reveal!=='step')return slide;
+   const bullets=(slide.bullets || []).slice(0,upcoming?this.rows(entry):count(slide));
+   return {...slide,bullets,body:bullets.join('\\n')};
+  },
+  chooseBackup(slide){
+   if(!this.current || !slide || !available(slide))return false;
+   preferred=key(slide)===key(this.current.slide)?this.current:{slide,mainIndex:this.current.mainIndex,kind:'backup',returnTo:this.current,returnPending:true,visited:false};
+   return true;
+  },
+  choosePlanned(){preferred=this.planned || null;},
+  chooseEntry(entry){
+   if(!entries.includes(entry) || !this.canShow(entry))return;
+   if(entry.kind==='backup' && entry!==this.returnEntry)this.chooseBackup(entry.slide);
+   else preferred=entry;
+  },
+  chooseMain(delta){
+   const choices=this.choices;if(!choices.length)return;
+   const index=choices.indexOf(this.next);
+   preferred=choices[(index<0?(delta>0?0:choices.length-1):(index+delta+choices.length)%choices.length)];
+  },
+  target(delta){return delta<0?this.previous:this.next;},
+  commit(entry,backward=false){
+   if(!this.canShow(entry,backward))return;
+   const rows=this.rows(entry),returning=entry===this.returnEntry;
+   if(backward){position=entries.indexOf(entry);}
+   else if(entry===this.current && position===frontier){/* Reveal another row in place. */}
+   else {
+    const index=entries.indexOf(entry);
+    if(entry.visited)entry={...entry,returnPending:returning && entry.returnPending};
+    else if(index>=0)entries.splice(index,1);
+    entries.splice(frontier+1,0,entry);position=++frontier;
+   }
+   entry.visited=true;preferred=null;shown.set(key(entry.slide),Math.max(1,rows));
+  }
+ };
+}
+let presenterSequence=createPresenterSequence([]);
+let presenterNavigating=false;
+function createPresenterGamepadInput(){
+ let identity=null,armed={left:false,leftY:false,x:false,y:false,confirm:false};
+ return (pad,active)=>{
+  if(!active || !pad){identity=null;armed={left:false,leftY:false,x:false,y:false,confirm:false};return [];}
+  const key=`${pad.index}:${pad.id}`;
+  if(identity!==key){identity=key;armed={left:false,leftY:false,x:false,y:false,confirm:false};}
+  const actions=[];
+  for(const [name,value,negative,positive] of [
+   ['left',pad.axes[0] ?? 0,'previous','next'],
+   ['leftY',pad.axes[1] ?? 0,'mainPrevious','mainNext'],
+   ['x',pad.axes[2] ?? 0,'tabPrevious','tabNext'],
+   ['y',pad.axes[3] ?? 0,'itemPrevious','itemNext'],
+   ['confirm',pad.buttons?.[0]?.pressed?1:0,'confirm','confirm']
+  ]){
+   if(Math.abs(value)<0.35)armed[name]=true;
+   else if(Math.abs(value)>0.65 && armed[name]){armed[name]=false;actions.push(value>0?positive:negative);}
+  }
+  return actions;
+ };
+}
+const readPresenterGamepad=createPresenterGamepadInput();
+function renderPresenterContent(target,slide){renderSlideVisual(target,slide);}
+function renderPresenterWidget(preview,notes,slide){
+ renderPresenterContent(preview,slide);
+ notes.textContent=slide?.notes || (slide ? 'Tento slide nemá poznámky.' : 'Žádné poznámky.');
+}
+let presenterSelectedBackup=null;
+function refreshPresenterNext(){
+ const next=presenterSequence.next;
+ setPresenterNextSelection(presenterSequence.visual(next,true),next?.kind || 'main');
+ const planned=presenterSequence.planned;
+ const button=document.querySelector('#presenter-planned-slide');
+ button.disabled=!planned || presenterNavigating;
+ button.textContent=planned?planned.slide.title:'Konec hlavní prezentace';
+ button.setAttribute('aria-pressed',String(Boolean(planned && next===planned)));
+ presenterNextButton.disabled=!next || presenterNavigating;
+}
+function setPresenterNextSelection(slide,kind='main'){
+ presenterNextSelection=slide;presenterNextSelectionKind=kind;renderPresenterWidget(presenterPrivatePreview,document.querySelector('#presenter-next-notes'),slide);document.querySelector('#presenter-next-title').textContent=kind==='backup'?'Vybraný backup':'Další slide podle plánu';presenterNextPreview.textContent=kind==='backup'?'Zobrazit backup publiku':'Zobrazit další slide';presenterNextPreview.disabled=!slide;presenterNextPreview.dataset.kind=kind;
+}
+function renderPresenterSlide(){
+ const entry=presenterSequence.current;
+ presenterIndex=entry?.mainIndex ?? 0;
+ const slide=presenterSequence.visual(entry);
+ renderPresenterWidget(presenterScreen,presenterNotes,slide);renderPresenterContent(presenterPreview,slide);
+ presenterOutline.textContent=slide ? `Cíl: ${slide.title}. Veřejně potvrzený obsah zůstává oddělený od soukromé přípravy.` : 'Osnova se zobrazí po spuštění.';
+ refreshPresenterNext();
+ renderPresenterBackups();
+ presenterCounter.textContent=`Pozice ${presenterSequence.position+1} z ${presenterSequence.entries.length}`;
+ presenterPrevButton.disabled=!presenterSequence.target(-1) || presenterNavigating;presenterNextButton.disabled=!presenterSequence.next || presenterNavigating;
+ presenterStatus.textContent=slide?`Promítám: ${slide.title}.`:'Prezentace je prázdná.';
+ presenterReturnAnchor.disabled=!presenterSequence.returnEntry;
+ document.querySelector('#presenter-return').disabled=!presenterSequence.returnEntry;
+ presenterReturnAnchor.textContent=presenterSequence.returnEntry?`Návrat: ${presenterSequence.returnEntry.slide.title}`:'Návrat není dostupný';
+ renderPresenterDeck();
+}
+function renderPresenterDeck(){
+ presenterDeckList.replaceChildren();
+ presenterSequence.entries.forEach((entry,index)=>{
+  // Keep the full route visible; consumed entries are history, not new choices.
+  const item=document.createElement('li');const button=document.createElement('button');button.type='button';
+  button.textContent=`${String(index+1).padStart(2,'0')} ${entry.kind==='backup'?'Backup · ':''}${entry.slide.title}`;
+  item.setAttribute('aria-current',String(index===presenterSequence.position));
+  item.classList.toggle('presenter-live',index===presenterSequence.position);
+  item.classList.toggle('presenter-visited',entry.visited);
+  button.disabled=presenterNavigating || !presenterSequence.canShow(entry);
+  button.addEventListener('click',()=>{if(presenterNavigating)return;presenterSequence.chooseEntry(entry);refreshPresenterNext();});
+  item.append(button);presenterDeckList.append(item);
+ });
+}
+function choosePresenterBackup(backup){
+ if(presenterNavigating)return;
+ if(!presenterSequence.chooseBackup(backup))return;
+ presenterSelectedBackup=backup;
+ renderPrivateSelection(backup,`Backup zařazen do dočasného pořadí za aktuální slide. Zatím nepromítnuto.`);
+ setPresenterNextSelection(backup,'backup');
+ refreshPresenterNext();renderPresenterDeck();
+}
+async function showPresenterEntry(entry,backward=false){
+ if(presenterNavigating || !presenterSequence.canShow(entry,backward))return;
+ let failure=null;
+ presenterNavigating=true;presenterPrevButton.disabled=true;presenterNextButton.disabled=true;presenterNextPreview.disabled=true;
+ try{
+  await presentationControl(entry.slide.id?{action:'show',slide:entry.mainIndex,slide_id:entry.slide.id,deck_revision:entry.slide.deck_revision,rows:presenterSequence.rows(entry)}:{action:'show',slide:entry.mainIndex,content:{title:entry.slide.title,body:entry.slide.body}});
+  presenterSequence.commit(entry,backward);presenterPrivateSelection=null;
+  presenterBlackout=false;presenterView.classList.remove('presenter-blackout');
+  presenterBlackoutButton.textContent='Zatemnit';presenterBlackoutState.textContent='Veřejný výstup aktivní';
+  presenterLiveState.textContent='ŽIVĚ';
+  if(entry.kind==='backup'){presenterExposureValue+=1;presenterExposure.textContent=`Expozice ${presenterExposureValue} · +1`;}
+  presenterPrivateStatus.textContent='Výstup potvrzen. Nabídka zohledňuje promítnuté slidy a odhalené řádky.';
+ }catch(error){
+  failure=error.message;
+  presenterPrivateStatus.textContent='Zobrazení nebylo potvrzeno. Pozice zůstala zachovaná; ověřte veřejný výstup.';
+ }finally{
+  presenterNavigating=false;renderPresenterSlide();if(failure)presenterStatus.textContent=failure;
+ }
+}
+function movePresenter(delta){return showPresenterEntry(presenterSequence.target(delta),delta<0);}
+function returnPresenterMain(){
+ return showPresenterEntry(presenterSequence.returnEntry);
+}
+function renderPrivateSelection(slide,status){
+ presenterPrivateSelection=slide;presenterPrivateStatus.textContent=status;presenterShowPrivate.disabled=!slide;
+ if(slide){setPresenterNextSelection(slide,'private');if(!presenterBranchStarted)presenterBranchStarted=Date.now();}
+ else refreshPresenterNext();
+}
+function createPresenterBackupItem(backup){
+ const item=document.createElement('li');const button=document.createElement('button');button.type='button';button.className='presenter-backup';
+ const title=document.createElement('strong');title.textContent=backup.title;
+ const body=document.createElement('span');body.textContent=backup.body;
+ button.append(title,body);
+ button.addEventListener('click',()=>choosePresenterBackup(backup));
+ item.append(button);return item;
+}
+function renderPresenterBackups(){
+ presenterBackups.replaceChildren();
+ const slideBackups=document.querySelector('#presenter-slide-backups');
+ const slideStatus=document.querySelector('#presenter-slide-backup-status');
+ slideBackups.replaceChildren();
+ presenterBackupStatus.textContent=presenterBackupsData.length ? 'Volitelné odbočky pro dotazy publika.' : 'Tento deck nemá backupy.';
+ const filter=(presenterBackupSearch.value || '').trim().toLowerCase();
+ let assigned=0,visible=0;
+ for(const backup of presenterBackupsData){
+  if(!presenterSequence.available(backup))continue;
+  const linked=Boolean(presenterSlides[presenterIndex]) && (backup.after_slide===presenterIndex || (Array.isArray(backup.after_slides) && backup.after_slides.includes(presenterIndex)));
+  if(linked)assigned++;
+  if(filter && !`${backup.title} ${backup.body}`.toLowerCase().includes(filter))continue;
+  presenterBackups.append(createPresenterBackupItem(backup));
+  if(linked){slideBackups.append(createPresenterBackupItem(backup));visible++;}
+ }
+ slideStatus.textContent=!assigned?'K tomuto slidu nejsou přiřazené žádné backupy.':!visible?'Hledání neodpovídá žádný přiřazený backup.':`Přiřazené backupy: ${visible} z ${assigned}.`;
+}
+async function loadPresenter(){
+ presenterStatus.textContent='Načítám presenter…';
+ try{
+  const result=await projectRequest('/v1/presentation/status',{action:'start'});
+  presenterSlides=Array.isArray(result.slides)?result.slides:[];presenterBackupsData=Array.isArray(result.backups)?result.backups:[];presenterIndex=0;presenterSequence=createPresenterSequence(presenterSlides);presenterSelectedBackup=null;presenterPrivateSelection=null;selectPresenterTab(0);
+  presenterPrevButton.disabled=!presenterSlides.length;presenterNextButton.disabled=!presenterSlides.length;presenterFullscreenButton.disabled=!presenterSlides.length;
+    presenterExposureValue=0;presenterBlackout=false;presenterMeetingStarted=Date.now();presenterBranchStarted=0;presenterLiveState.textContent='NÁCVIK';presenterExposure.textContent='Expozice 0 · +0';
+    applyPresenterRatio(result.ratio);renderPresenterSlide();renderPrivateSelection(null,'Soukromé procházení nemění veřejný výstup.');await showPresenterEntry(presenterSequence.current);
+ }catch(error){presenterStatus.textContent=error.message || 'Presenter nebylo možné spustit.';}
+}
+function openPresenter(){
+ location.hash='presenter-open';
+ document.body.classList.add('presenter-active');document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
+ document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
+}
+function closePresenter(){location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
+presentationOpenButton.addEventListener('click',openPresenter);
+document.querySelector('#presenter-back').addEventListener('click',closePresenter);
+presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
+presenterNextButton.addEventListener('click',()=>movePresenter(1));
+presenterFullscreenButton.textContent='Displeje a role…';
+presenterFullscreenButton.addEventListener('click',()=>{location.hash='presenter-displays';});
+presenterView.addEventListener('keydown',event=>{
+ if(event.repeat || event.target.closest('input,textarea,[contenteditable="true"],[role="tablist"]'))return;
+ if(event.key==='ArrowLeft'){event.preventDefault();movePresenter(-1);}
+ if(event.key==='ArrowRight'){event.preventDefault();movePresenter(1);}
+});
+presenterShowPrivate.addEventListener('click',()=>movePresenter(1));
+presenterReturnAnchor.addEventListener('click',returnPresenterMain);
+document.querySelector('#presenter-return').addEventListener('click',returnPresenterMain);
+document.querySelector('#presenter-planned-slide').addEventListener('click',()=>{
+ if(presenterNavigating)return;
+ presenterSequence.choosePlanned();presenterPrivateSelection=null;refreshPresenterNext();renderPresenterDeck();
+ presenterPrivateStatus.textContent='Vybrán plánovaný slide. Zatím nepromítnuto.';
+});
+presenterBlackoutButton.addEventListener('click',async()=>{presenterBlackout=!presenterBlackout;presenterView.classList.toggle('presenter-blackout',presenterBlackout);presenterBlackoutButton.textContent=presenterBlackout?'Zobrazit veřejný výstup':'Zatemnit';presenterBlackoutState.textContent=presenterBlackout?'Veřejný výstup zatemněn':'Veřejný výstup aktivní';try{await presentationControl({action:presenterBlackout?'blackout':'reveal'});}catch(error){presenterStatus.textContent=error.message;}});
+presenterQuestionButton.addEventListener('click',()=>{if(!presenterBranchStarted)presenterBranchStarted=Date.now();presenterQuestionCount.textContent=String(Number(presenterQuestionCount.textContent)+1);presenterQuestionStatus.textContent=`Odbočka uložena: slide ${presenterIndex+1}. Veřejný výstup zůstává beze změny.`;});
+presenterNextPreview.addEventListener('click',()=>movePresenter(1));
+presenterBackupSearch.addEventListener('input',renderPresenterBackups);
+const presenterTabs=[...document.querySelectorAll('.presenter-tabs [role="tab"]')];
+let presenterTabIndex=0,presenterItemIndex=0;
+function presenterItems(){
+ if(presenterTabIndex===0)return [document.querySelector('#presenter-planned-slide'),...document.querySelector('#presenter-slide-backups').querySelectorAll('button')].filter(button=>!button.disabled);
+ if(presenterTabIndex===1)return [...presenterBackups.querySelectorAll('button')];
+ if(presenterTabIndex===2)return [presenterQuestionButton];
+ return [];
+}
+function updatePresenterItem(select=false){
+ const items=presenterItems();if(!items.length)return;presenterItemIndex=Math.max(0,Math.min(items.length-1,presenterItemIndex));
+ for(const [index,item] of items.entries()){item.classList.toggle('presenter-gamepad-selected',index===presenterItemIndex);item.setAttribute('aria-current',index===presenterItemIndex?'true':'false');}
+ items[presenterItemIndex].focus({preventScroll:true});
+ if(select && presenterTabIndex!==2)items[presenterItemIndex].click();
+ presenterGamepadStatus.textContent=`Gamepad: ${presenterTabs[presenterTabIndex].textContent} · ${presenterItemIndex+1}/${items.length}`;
+}
+function selectPresenterTab(index){presenterTabIndex=(index+presenterTabs.length)%presenterTabs.length;presenterItemIndex=0;for(const [tabIndex,tab] of presenterTabs.entries())tab.setAttribute('aria-selected',String(tabIndex===presenterTabIndex));document.querySelector('#presenter-slide-list').hidden=presenterTabIndex!==0;document.querySelector('#presenter-backup-list').hidden=presenterTabIndex!==1;document.querySelector('#presenter-question-list').hidden=presenterTabIndex!==2;presenterTabStatus.textContent=presenterTabIndex===0?'K tomuto slidu · veřejný a následující slide':presenterTabIndex===1?'Všechny backupy · soukromá knihovna':'Otázky a odpovědi · strom odboček';refreshPresenterNext();updatePresenterItem();}
+for(const [index,tab] of presenterTabs.entries())tab.addEventListener('click',()=>selectPresenterTab(index));
+function movePresenterItem(delta){const items=presenterItems();if(!items.length)return;presenterItemIndex=(presenterItemIndex+delta+items.length)%items.length;updatePresenterItem(true);}
+function pollPresenterGamepad(){
+ const pad=Array.from(navigator.getGamepads?.() || []).find(item=>item);
+ const active=!presenterView.hidden && !document.hidden && document.hasFocus();
+ const actions=readPresenterGamepad(pad,active);
+ presenterGamepadStatus.textContent=pad?`Gamepad: ${pad.id.slice(0,32)} · levý ↑↓: výběr hlavního slidu · ←→: předchozí/další · pravý: výběr backupu · A: promítnout`:'Gamepad: čekám na připojení.';
+ // Horizontal navigation projects the choice visible before this frame.
+ if(actions.includes('previous'))movePresenter(-1);
+ else if(actions.includes('next') || actions.includes('confirm'))movePresenter(1);
+ else if(!presenterNavigating && (actions.includes('mainPrevious') || actions.includes('mainNext'))){
+  presenterSequence.chooseMain(actions.includes('mainNext')?1:-1);refreshPresenterNext();renderPresenterDeck();
+ }
+ else if(!presenterNavigating){
+  for(const action of actions){
+   if(action==='tabPrevious')selectPresenterTab(presenterTabIndex-1);
+   if(action==='tabNext')selectPresenterTab(presenterTabIndex+1);
+   if(action==='itemPrevious')movePresenterItem(-1);
+   if(action==='itemNext')movePresenterItem(1);
+  }
+ }
+ requestAnimationFrame(pollPresenterGamepad);
+}
+addEventListener('gamepadconnected',()=>{presenterGamepadStatus.textContent='Gamepad: připojen.';updatePresenterItem();});
+addEventListener('blur',()=>readPresenterGamepad(null,false));
+addEventListener('gamepaddisconnected',()=>{readPresenterGamepad(null,false);presenterGamepadStatus.textContent='Gamepad: odpojen.';});
+requestAnimationFrame(pollPresenterGamepad);
+selectPresenterTab(0);
+"""
 JS += """
 const projectCards=document.querySelector('#project-cards');
 const sidebarProjects=document.querySelector('#sidebar-project-list');
@@ -1537,6 +2155,7 @@ document.querySelector('#cms-deployment-run').addEventListener('click',async eve
  event.currentTarget.disabled=true;if(!cmsDeploymentAttempt)cmsDeploymentAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsDeploymentPreview.preview_sha256,approved:true};
  try{cmsDeploymentStatus.textContent='Nahrávám potvrzený release do Cloudflare…';const result=await projectRequest('/v1/publication-cms/deployment/confirm',cmsDeploymentAttempt,120000);cmsDeploymentAttempt=null;cmsDeploymentStatus.textContent=`Deployment ${result.deployment_id} dokončen pro ${result.hostnames.length} domén.`;await loadCmsDeploymentStatus();
  }catch(error){cmsDeploymentStatus.textContent=error.message;}});
+document.querySelector('#user-profile-open').addEventListener('click',()=>{location.hash='user-profile';});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
@@ -3091,7 +3710,20 @@ if(window.workspaceAutoStart!==false)loadProjects();
 """
 JS += ADMIN_JS
 DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
-ASSETS = {'/': ('text/html; charset=utf-8', HTML), '/app.css': ('text/css; charset=utf-8', CSS),
+PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
+PUBLIC_JS = SLIDE_JS + '''
+const screen=document.querySelector('#screen');
+function render(result){renderSlideVisual(screen,result.visible?result.content:null,'h1');if(!result.visible){screen.replaceChildren();const empty=document.createElement('p');empty.className='neutral';empty.textContent='Veřejné okno čeká na schválený slide.';screen.append(empty);return;}screen.style.aspectRatio=result.ratio==='4:3'?'4 / 3':'16 / 9';}
+async function poll(){try{const response=await fetch('/v1/presentation/public',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(response.ok)render(await response.json());}catch(error){}}
+async function reportDisplayRatio(){const ratio=innerWidth/innerHeight>=1.55?'16:9':'4:3';try{await fetch('/v1/presentation/control',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'display-ratio',ratio})});}catch(error){}}
+reportDisplayRatio();addEventListener('resize',reportDisplayRatio);poll();setInterval(poll,300);
+'''
+PUBLIC_HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Veřejné promítání</title>
+<link rel="stylesheet" href="/presentation-screen.css">
+<main id="screen" class="screen"><p class="neutral">Veřejné okno čeká na schválený slide.</p></main><script src="/presentation-screen.js"></script></html>'''
+ASSETS = {'/presentation-screen.css': ('text/css; charset=utf-8', PUBLIC_CSS),
+          '/presentation-screen.js': ('text/javascript; charset=utf-8', PUBLIC_JS),
+          '/': ('text/html; charset=utf-8', HTML), '/presentation-screen': ('text/html; charset=utf-8', PUBLIC_HTML), '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}
 
 
@@ -3118,6 +3750,8 @@ class DesktopHandler(Handler):
         '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
+        '/v1/gamepad/status', '/v1/presentation/status',
+        '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -3144,6 +3778,20 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
+            return self.reply(200, scan_gamepads())
+        if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
+            try:
+                return self.reply(200, presentation_status(self.server, start=request.get('action') == 'start'))
+            except (ValueError, OSError, sqlite3.Error, ImportError):
+                return self.reply(422, {'error': 'Prezentaci nelze připravit. Ověřte profil uživatele a instalaci Segno.'})
+        if self.path == '/v1/presentation/control' and isinstance(request, dict):
+            try:
+                return self.reply(200, presentation_public_payload(self.server, request))
+            except ValueError as exc:
+                return self.reply(409, {'error': str(exc)})
+        if self.path == '/v1/presentation/public' and request == {}:
+            return self.reply(200, presentation_public_payload(self.server))
         projects = self.server.projects or Projects()
         try:
             if self.path.startswith('/v1/google-drive/'):
