@@ -1066,10 +1066,12 @@ capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
 F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
-F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`;
-inteligentní iterace `F-M3-SEARCH-02`, volitelný automatický dispatch
-`F-M3-SEARCH-03`, explicitní jazyk odpovědi a obecný workflow zůstávají
-samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzavřený.
+F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`.
+F-M3-SEARCH-02 je PoC validated na feature větvi, ale její PR dosud nebyl
+doručen do `develop`. Volitelný automatický dispatch `F-M3-SEARCH-03`, obecné
+zpracování veřejných zdrojů, explicitní jazyk odpovědi a obecný workflow
+zůstávají samostatné navazující schopnosti. Gate M3 proto není vydáván za celý
+uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
@@ -1093,13 +1095,15 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
   výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
   tool callu, fallbacku nebo oslabení `local-only`.
-- [ ] Inteligentní iterativní hledání — F-M3-SEARCH-02: Ollama klasifikuje
+- [x] Inteligentní iterativní hledání — F-M3-SEARCH-02 PoC validated na feature
+  větvi: Ollama klasifikuje
   každou bounded sadu výsledků jako `final`, `intermediate` nebo
   `insufficient`, doloží úsudek konkrétními zdroji a může navrhnout další
   bounded dotazy. Všechny mezivýsledky, hodnocení a návaznosti zůstávají
-  viditelné a durable; modelové `final` není garance pravdivosti. Implementace
-  a automatická regrese jsou hotové na feature větvi; PoC validace čeká na
-  fyzický průchod se živou Ollamou a SearXNG.
+  viditelné a durable; modelové `final` není garance pravdivosti. Živý průchod
+  se SearXNG a Gemmou ověřil mezivýsledek i ruční zpřesnění. Výstup je omezený
+  na titulky, URL a úryvky search výsledků: cílové stránky automaticky nečte a
+  bez další capability proto negarantuje konkrétní údaje ukryté za odkazem.
 - [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
   hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
   s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
@@ -1122,7 +1126,7 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
   instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
   timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
-- [ ] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání:** nad výsledky
+- [x] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání:** nad výsledky
   F-M3-SEARCH-01 přidat uzavřený evaluator/planner kontrakt s výsledkem
   `final` / `intermediate` / `insufficient`, odkazy na použité source IDs,
   omezeními a navrženými follow-up queries. Každé kolo musí mít vlastní přesný
@@ -1130,6 +1134,18 @@ samostatné navazující schopnosti. Gate M3 proto není vydáván za celý uzav
   i mezivýsledky a důvod pokračování. Orchestrátor vynutí uživatelsky viditelné
   limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
   změně privacy/policy/binding nebo `unknown` účinku.
+- [ ] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt veřejných
+  zdrojů:** před implementací načítání cílových stránek ověřit pro relevantní
+  třídy služeb dostupnost podporovaných obecných či oficiálních API, jejich
+  podmínky, autentizaci, rate limits, licenci, formát a provenance. Navrhnout
+  provider-neutral read-only capability pro bounded získání a extrakci
+  veřejného obsahu s ochranou proti SSRF, redirectům, nečekanému MIME,
+  nadměrnému obsahu a prompt injection. Statický page reader, strukturované API
+  a doménový adaptér jsou odlišné capability; browserová automatizace,
+  session cookies a neoficiální interní endpointy nejsou implicitní fallback.
+  Speciální vyhledávání dopravních spojů se neplánuje, pokud průzkum nedoloží
+  vhodné obecné a podporované rozhraní. Cílem je obecné zpracování veřejných
+  zdrojů, nikoli konektor vytvořený jen pro jeden ukázkový dotaz.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
   s odloženým odesláním.

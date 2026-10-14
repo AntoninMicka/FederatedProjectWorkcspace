@@ -41,11 +41,27 @@ doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
 ve WORK_LOG. `F-M1-PROJECT-DELETE-01` bylo doručeno PR #65 jako merge commit
 `a09538e`; evidence je ve WORK_LOG. `IMP-01` bylo po fyzické akceptaci
 doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
-`F-M3-SEARCH-02` je aktivovaná v TODO na samostatné feature větvi.
+`F-M3-SEARCH-02` je feature-akceptovaná na samostatné větvi; evidence je ve
+WORK_LOG a TODO čeká na doručení jediného PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt
+  veřejných zdrojů (cílová úroveň: designed).** Navazuje na poznatek z
+  F-M3-SEARCH-02, že SearXNG poskytuje pouze bounded titulky, URL a úryvky,
+  nikoli obsah cílových služeb. Nejdříve pro relevantní třídy veřejných služeb
+  ověřit podporovaná obecná či oficiální API, podmínky použití, autentizaci,
+  rate limits, licenci, datové formáty a provenance; teprve z důkazů rozhodnout
+  mezi strukturovaným API, obecným statickým page readerem a samostatným
+  doménovým adaptérem. Navrhnout provider-neutral read-only capability s
+  bounded fetch/extraction kontraktem, explicitním cílem a ochranou proti SSRF,
+  redirectům, nečekanému MIME, nadměrnému obsahu a prompt injection.
+  Browserová automatizace, session cookies a neoficiální interní endpointy
+  nejsou implicitní fallback. Speciální hledání dopravních spojů nevznikne,
+  pokud průzkum nedoloží vhodné obecné a podporované rozhraní. Implementační
+  dávka se určí až podle výsledku tohoto průzkumu.
 
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
