@@ -24,6 +24,9 @@ organizace.
 OAuth návratová odpověď může obsahovat RFC 9207 parametr
 `iss=https://accounts.google.com`. Workspace jej přijme pouze s touto přesnou
 hodnotou; jiný issuer i neznámé callback parametry odmítne bez změny projektu.
+Drive metadata mohou pro nativní dokument vrátit `webViewLink` relevantního
+editoru na `docs.google.com`, zatímco běžný soubor používá `drive.google.com`;
+Workspace připouští jen tyto přesné HTTPS hosty a odkaz používá jako provenance.
 
 Akceptační průchod:
 

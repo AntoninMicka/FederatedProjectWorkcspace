@@ -879,6 +879,13 @@ async function loadGoogleDriveStatus(){
   document.querySelector('#google-drive-recover').hidden=!status.pending_import;
   setGoogleDriveStep(status.pending_import ? 4 : (status.configured ? 2 : 1),status.pending_import ? 3 : (status.configured ? 1 : 0));
   if(status.pending_import)googleDriveStatus.textContent='Na tomto uzlu čeká dříve potvrzený import. Můžete bezpečně pokračovat z lokálního stagingu.';
+  const resumable=status.pending_selection;
+  if(!status.pending_import && resumable && resumable.project_id===activeProject.id && resumable.expected_head===activeProject.head){
+   document.querySelector('#google-drive-privacy').value=resumable.privacy;googleDriveSelection=resumable.selection_id;
+   document.querySelector('#google-drive-select').disabled=true;setGoogleDriveStep(2,1);
+   googleDriveStatus.textContent='Navazuji na dokončený výběr z Googlu a připravuji bezpečný náhled…';
+   if(googleDrivePoll)clearTimeout(googleDrivePoll);googleDrivePoll=setTimeout(pollGoogleDrive,0);
+  }
  }catch(error){googleDriveConnectCopy.textContent='Stav připojení se nepodařilo ověřit.';googleDriveStatus.textContent=error.message;document.querySelector('#google-drive-select').disabled=true;}
 }
 function renderGoogleDrivePlan(plan){
@@ -918,7 +925,7 @@ async function pollGoogleDrive(){
   if(result.status==='planned'){googleDrivePlan=result.plan;renderGoogleDrivePlan(result.plan);return;}
   if(result.status==='failed')throw new Error('Přihlášení nebo výběr nebyly dokončeny. Můžete bezpečně začít znovu.');
   googleDriveStatus.textContent='Dokončete přihlášení a výběr u Googlu. Potom se náhled načte automaticky.';
- }catch(error){googleDriveStatus.textContent=error.message;document.querySelector('#google-drive-select').disabled=false;setGoogleDriveStep(2,1);return;}
+ }catch(error){googleDriveStatus.textContent='Náhled Drive výběru se nepodařilo vytvořit. '+error.message;document.querySelector('#google-drive-select').disabled=false;setGoogleDriveStep(2,1);return;}
  googleDrivePoll=setTimeout(pollGoogleDrive,1000);
 }
 document.querySelector('#google-drive-privacy').addEventListener('change',()=>{

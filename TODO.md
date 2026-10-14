@@ -84,12 +84,17 @@ odvolaný přístup operaci zastaví bez částečné projektové publikace.
   nyní tuto podmínku režimu Testing uvádějí. Třetí pokus už vrátil vybraná
   `picked_file_ids`, ale odhalil legitimní RFC 9207 callback parametr
   `iss=https://accounts.google.com`; callback jej nyní přijímá pouze s přesnou
-  hodnotou a vadnou odpověď zobrazí jako srozumitelnou návratovou stránku.
+  hodnotou a vadnou odpověď zobrazí jako srozumitelnou návratovou stránku. Čtvrtý
+  pokus dokončil callback a uložil 13 vybraných položek, ale náhled odmítl
+  legitimní `docs.google.com` editorový `webViewLink`. Přesný Google allowlist
+  nyní zahrnuje Drive i Docs host, cizí host zůstává odmítnutý a UI po restartu
+  naváže na actor-scoped stav `selected`/`planned`. Zachovaný skutečný výběr byl
+  bez zápisu do projektu znovu načten jako plán 13 položek bez blokací za 4,12 s.
   Úspěšný fyzický průchod se skutečným účtem zatím chybí; postup je v
   [docs/google-drive-import.md](docs/google-drive-import.md).
 - Ověření 2026-10-14: `node --check` generovaného `app.js`; cílené Drive,
   indexové, desktopové a HTTPS testy; úplná sada
-  `python3 -m unittest discover -s tests -v` — **541 OK, 24 skipped**. Skipped
+  `python3 -m unittest discover -s tests -v` — **542 OK, 24 skipped**. Skipped
   scénáře vyžadují reálný WebEngine, privátní Takeout vzorek nebo volitelný
   native probe a nejsou vydávány za fyzickou Drive akceptaci.
 

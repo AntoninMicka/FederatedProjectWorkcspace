@@ -31,6 +31,7 @@ SCOPE = 'https://www.googleapis.com/auth/drive.file'
 AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
 GOOGLE_ISSUER = 'https://accounts.google.com'
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
+GOOGLE_VIEW_HOSTS = frozenset({'drive.google.com', 'docs.google.com'})
 FOLDER = 'application/vnd.google-apps.folder'
 EXPORTS = {
     'application/vnd.google-apps.document': ('application/pdf', '.pdf'),
@@ -259,17 +260,29 @@ class GoogleDriveImport:
     def status(self, actor_id=None):
         if not self.database.exists():
             return {'configured': False, 'credential_revision': None, 'scope': SCOPE,
-                    'pending_import': False}
+                    'pending_import': False, 'pending_selection': None}
         with self.locked() as db:
             row = db.execute('SELECT client_id,revision FROM configuration WHERE singleton=1').fetchone()
+            selection = None
             if actor_id is None:
                 pending = db.execute('SELECT 1 FROM imports WHERE done=0').fetchone()
             else:
+                actor_id = self._actor(actor_id)
                 pending = db.execute('SELECT 1 FROM imports WHERE done=0 AND actor_id=?',
-                                     (self._actor(actor_id),)).fetchone()
+                                     (actor_id,)).fetchone()
+                if row:
+                    selected = db.execute(
+                        "SELECT id,project_id,expected_head,privacy,status FROM selections "
+                        "WHERE actor_id=? AND credential_revision=? "
+                        "AND status IN ('selected','planned') ORDER BY created_at DESC LIMIT 1",
+                        (actor_id, row[1])).fetchone()
+                    if selected:
+                        selection = {'selection_id': selected[0], 'project_id': selected[1],
+                                     'expected_head': selected[2], 'privacy': selected[3],
+                                     'status': selected[4]}
             return {'configured': bool(row), 'credential_revision': row[1] if row else None,
                     'scope': SCOPE, 'client_id_hint': row[0][-24:] if row else None,
-                    'pending_import': bool(pending)}
+                    'pending_import': bool(pending), 'pending_selection': selection}
 
     @staticmethod
     def _actor(actor_id):
@@ -458,9 +471,15 @@ class GoogleDriveImport:
                 declared += int(size)
             require(declared <= MAX_BATCH, 'Drive výběr přesahuje 64 MiB.')
             url = item.get('webViewLink')
-            require(isinstance(url, str) and urlsplit(url).scheme == 'https'
-                    and urlsplit(url).hostname == 'drive.google.com',
-                    'Drive vrátil neplatný odkaz na zdroj.')
+            try:
+                parsed_url = urlsplit(url) if isinstance(url, str) else None
+                valid_url = (parsed_url is not None and parsed_url.scheme == 'https'
+                             and parsed_url.hostname in GOOGLE_VIEW_HOSTS
+                             and parsed_url.username is None and parsed_url.password is None
+                             and parsed_url.port is None and bool(parsed_url.path))
+            except ValueError:
+                valid_url = False
+            require(valid_url, 'Drive vrátil neplatný odkaz na zdroj.')
             matches = [(id_, meta) for id_, meta in existing if url and meta.get('source_url') == url]
             same = [id_ for id_, meta in matches
                     if meta.get('import', {}).get('source_revision') == item['version']]

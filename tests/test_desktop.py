@@ -677,6 +677,8 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('googleDriveFiles.innerHTML', JS)
         self.assertIn("projectRequest('/v1/google-drive/confirm'", JS)
         self.assertIn("projectRequest('/v1/google-drive/recover'", JS)
+        self.assertIn('status.pending_selection', JS)
+        self.assertIn('Navazuji na dokončený výběr', JS)
 
     def test_desktop_google_callback_returns_to_loopback_root(self):
         calls = []

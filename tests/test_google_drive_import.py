@@ -51,10 +51,12 @@ class FakeDrive:
 
     def add(self, file_id, name, mime, raw=b'', version='1', parent=None):
         import hashlib
+        view_host = ('docs.google.com' if mime.startswith('application/vnd.google-apps.')
+                     and mime != FOLDER else 'drive.google.com')
         item = {'id': file_id, 'name': name, 'mimeType': mime,
                 'createdTime': '2025-01-02T03:04:05.123Z',
                 'modifiedTime': '2025-01-03T03:04:05.123Z', 'version': version,
-                'webViewLink': 'https://drive.google.com/file/d/' + file_id,
+                'webViewLink': 'https://' + view_host + '/file/d/' + file_id,
                 'capabilities': {'canDownload': mime != FOLDER}, 'trashed': False}
         if parent: item['parents'] = [parent]
         if mime != FOLDER and not mime.startswith('application/vnd.google-apps.'):
@@ -104,6 +106,9 @@ class GoogleDriveImportTests(unittest.TestCase):
         self.fake.add('doc1', 'Proposal', 'application/vnd.google-apps.document',
                       b'%PDF-1.7\nexported')
         selection = self.select(['raw1', 'doc1'])
+        pending = self.service.status(self.actor)['pending_selection']
+        self.assertEqual(pending['selection_id'], selection)
+        self.assertEqual(pending['project_id'], self.project_id)
         response = self.service.preview(self.actor, selection)
         plan = response['plan']
         self.assertEqual(plan['file_count'], 2)
@@ -124,6 +129,14 @@ class GoogleDriveImportTests(unittest.TestCase):
             self.assertNotEqual(meta['created_at'], meta['import']['source_created_at'])
         self.assertEqual(self.fake.downloads,
                          [('raw1', None), ('doc1', 'application/pdf')])
+
+    def test_untrusted_view_link_is_rejected_without_project_change(self):
+        self.fake.add('raw1', 'notes.md', 'text/markdown', b'ok')
+        self.fake.items['raw1']['webViewLink'] = 'https://drive.google.com.evil.test/file/raw1'
+        before = Projects(self.node).open(self.project_id)['commit_id']
+        with self.assertRaisesRegex(ValueError, 'neplatný odkaz'):
+            self.service.preview(self.actor, self.select(['raw1']))
+        self.assertEqual(Projects(self.node).open(self.project_id)['commit_id'], before)
 
     def test_folder_is_bounded_and_changed_revision_fails_before_download(self):
         self.fake.add('folder1', 'Folder', FOLDER)
