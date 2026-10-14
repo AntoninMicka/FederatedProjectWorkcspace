@@ -31,6 +31,7 @@ from spikes.role_workflow_service import RoleWorkflowService
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
 from spikes.user_profile import UserProfile
+from spikes.gamepad_settings import GamepadSettings
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
@@ -242,6 +243,7 @@ def main():
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
         server.user_profile = UserProfile(node_path)
+        server.gamepad_settings = GamepadSettings(node_path)
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)

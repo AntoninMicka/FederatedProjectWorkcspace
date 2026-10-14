@@ -8,6 +8,7 @@ from pathlib import Path
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 from urllib.parse import urlencode
@@ -20,6 +21,7 @@ from spikes.local_api import running_api
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
+from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
 from tests import test_local_api
 
 
@@ -408,6 +410,26 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Gamepad demo', HTML)
         self.assertIn('id="gamepad-list"', HTML)
 
+    def test_gamepad_settings_endpoint_loads_without_write_and_saves_explicitly(self):
+        driver = test_local_api.LocalAPITests()
+        with tempfile.TemporaryDirectory() as directory, running_api(
+                'http', handler=DesktopHandler) as server:
+            server.gamepad_settings = GamepadSettings(Path(directory) / 'node.json')
+            response = driver.request(server, path='/v1/gamepad/settings',
+                                      body=b'{"action":"load"}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body), {'settings': DEFAULT_GAMEPAD_SETTINGS,
+                                                'saved': False})
+            self.assertFalse(server.gamepad_settings.path.exists())
+            changed = dict(DEFAULT_GAMEPAD_SETTINGS, history_axis=4)
+            response = driver.request(server, path='/v1/gamepad/settings', body=json.dumps(
+                {'action': 'save', 'settings': changed}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body), {'settings': changed, 'saved': True})
+            self.assertEqual(server.gamepad_settings.load(), changed)
+
     def test_presentation_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import ASSETS, CSS, HTML, JS, presentation_public_payload
         from types import SimpleNamespace
@@ -439,6 +461,12 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="presenter-blackout"', HTML)
         self.assertIn('id="presenter-question"', HTML)
         self.assertIn('id="presenter-gamepad-status"', HTML)
+        self.assertIn('id="presenter-gamepad-settings"', HTML)
+        self.assertIn('id="presenter-gamepad-device"', HTML)
+        self.assertIn('id="presenter-gamepad-apply"', HTML)
+        self.assertIn('id="presenter-gamepad-save"', HTML)
+        self.assertIn('Uložit na tomto uzlu', HTML)
+        self.assertIn('/v1/gamepad/settings', JS)
         self.assertIn('id="presenter-tab-content"', HTML)
         self.assertIn('class="presenter-next-selector"', HTML)
         self.assertIn('id="presenter-slide-list"', HTML)
@@ -452,8 +480,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('#presenter-tab-status,#presenter-backup-status{display:none}', CSS)
         self.assertIn("document.querySelector('#presenter-backup-list').hidden", JS)
         self.assertIn('.presenter-selection-preview{flex:0 0 auto', CSS)
-        self.assertIn("pad.axes[2]", JS)
-        self.assertIn("pad.axes[3]", JS)
+        self.assertIn("pad.axes[settings.tabs_axis]", JS)
+        self.assertIn("pad.axes[settings.items_axis]", JS)
         self.assertIn('selectPresenterTab', JS)
         self.assertIn('movePresenterItem', JS)
         self.assertIn('presenter-gamepad-selected', CSS)

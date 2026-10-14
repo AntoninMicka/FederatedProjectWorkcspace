@@ -147,12 +147,25 @@ pad.buttons[0].pressed=false;read(pad,true);
 pad.buttons[0].pressed=true;assert.deepEqual(read(pad,true),['confirm']);
 """)
 
+    def test_mapping_can_select_axes_direction_button_and_thresholds(self):
+        self.run_js("""
+const read=createPresenterGamepadInput(),settings={...defaultPresenterGamepadSettings(),
+ history_axis:4,history_invert:true,confirm_button:2,neutral_threshold:0.2,activation_threshold:0.8};
+const pad={index:2,id:'Custom pad',axes:[0,0,0,0,0],buttons:[{}, {}, {pressed:false}]};
+assert.deepEqual(read(pad,true,settings),[]);
+pad.axes[4]=0.7;assert.deepEqual(read(pad,true,settings),[]);
+pad.axes[4]=0;read(pad,true,settings);pad.axes[4]=0.9;
+assert.deepEqual(read(pad,true,settings),['previous']);
+pad.axes[4]=0;read(pad,true,settings);pad.buttons[2].pressed=true;
+assert.deepEqual(read(pad,true,settings),['confirm']);
+""")
+
     def test_gamepad_poll_selects_privately_and_confirms_visible_choice(self):
         poll = JS[JS.index('function pollPresenterGamepad()'):JS.index("addEventListener('gamepadconnected'")]
         self.run_js("""
 const pad={index:0,id:'pad',axes:[0,0,0,0],buttons:[{pressed:false}]};
 const navigator={getGamepads:()=>[pad]},document={hidden:false,hasFocus:()=>true};
-const presenterView={hidden:false},presenterGamepadStatus={};
+const presenterView={hidden:false},presenterGamepadStatus={},presenterGamepadLive={};
 function requestAnimationFrame(){};function refreshPresenterNext(){};function renderPresenterDeck(){};
 let projections=[];
 function movePresenter(delta){projections.push(delta<0?'previous':presenterSequence.next.slide.title);}

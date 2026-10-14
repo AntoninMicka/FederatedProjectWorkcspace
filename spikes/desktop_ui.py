@@ -24,6 +24,7 @@ from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
 from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, GOOGLE_ISSUER, SCOPE
+from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_search import SearchResponseError, SearchUnknown
@@ -671,7 +672,19 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="presenter-slide-preview" id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
 <div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
-<aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p><p id="presenter-tab-status">K slide · otázky a doplňky</p>
+<aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p>
+<details id="presenter-gamepad-settings" class="presenter-gamepad-settings"><summary>Nastavení gamepadu</summary>
+<div class="presenter-gamepad-grid"><label class="presenter-gamepad-wide"><input id="presenter-gamepad-enabled" type="checkbox"> Používat gamepad</label>
+<label class="presenter-gamepad-wide">Zařízení <select id="presenter-gamepad-device"><option value="">První připojené</option></select></label>
+<label>Předchozí / další <input id="presenter-gamepad-history-axis" type="number" min="0" max="31"></label><label><input id="presenter-gamepad-history-invert" type="checkbox"> Obrátit osu</label>
+<label>Výběr hlavního slidu <input id="presenter-gamepad-main-axis" type="number" min="0" max="31"></label><label><input id="presenter-gamepad-main-invert" type="checkbox"> Obrátit osu</label>
+<label>Přepínání záložek <input id="presenter-gamepad-tabs-axis" type="number" min="0" max="31"></label><label><input id="presenter-gamepad-tabs-invert" type="checkbox"> Obrátit osu</label>
+<label>Výběr položky <input id="presenter-gamepad-items-axis" type="number" min="0" max="31"></label><label><input id="presenter-gamepad-items-invert" type="checkbox"> Obrátit osu</label>
+<label>Potvrzovací tlačítko <input id="presenter-gamepad-confirm-button" type="number" min="0" max="63"></label><span></span>
+<label>Neutrální práh <input id="presenter-gamepad-neutral" type="number" min="0.05" max="0.8" step="0.05"></label><label>Aktivační práh <input id="presenter-gamepad-activation" type="number" min="0.1" max="1" step="0.05"></label></div>
+<div class="presenter-gamepad-actions"><button id="presenter-gamepad-refresh" type="button" class="secondary-button">Obnovit zařízení</button><button id="presenter-gamepad-apply" type="button">Použít nyní</button><button id="presenter-gamepad-save" type="button">Uložit na tomto uzlu</button></div>
+<p id="presenter-gamepad-settings-status" role="status">Načítám místní nastavení. Použití nyní nic neukládá.</p><output id="presenter-gamepad-live">Živý vstup: čekám na zařízení.</output></details>
+<p id="presenter-tab-status">K slide · otázky a doplňky</p>
 <div id="presenter-tab-content"><section id="presenter-slide-list"><h3>Současný slide</h3><div id="presenter-preview"></div><h3>Další podle plánu</h3><button id="presenter-planned-slide" class="presenter-backup" type="button" disabled></button><h3>Backupy k aktuálnímu slidu</h3><p id="presenter-slide-backup-status" role="status"></p><ul id="presenter-slide-backups"></ul></section><section id="presenter-backup-list" hidden><p id="presenter-backup-status">Backupy se zobrazí po spuštění.</p><ul id="presenter-backups"></ul></section><section id="presenter-question-list" hidden><h3>Otázky / doplňky</h3><button id="presenter-question" type="button">Doplňující otázka</button><p id="presenter-question-status">Žádná aktivní odbočka.</p></section></div>
 </section><section class="presenter-next-selector"><h3 id="presenter-next-title">Další slide podle plánu</h3><div class="presenter-slide-widget"><div class="presenter-slide-preview" id="presenter-private-preview"></div><section class="presenter-notes"><h2>Poznámky k vybranému slidu</h2><p id="presenter-next-notes"></p></section></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-next-preview" type="button">Zobrazit další slide</button><button id="presenter-show-private" type="button" hidden disabled>Zobrazit publiku</button></section></aside>
 </div>
@@ -836,6 +849,7 @@ PRESENTER_CSS = '''
 .presenter-notes{flex:1;min-height:0;overflow:auto;background:#fffaf0;border-top:1px solid #d6b36a;padding:10px 18px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:4px 0;font-size:13px}.presenter-tabs{display:flex;gap:4px;flex-wrap:wrap}.presenter-tabs button{font-size:11px;padding:8px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}#presenter-private-preview{background:#f4f7fa;padding:12px;border-radius:8px}#presenter-private-preview h2{font-size:16px;color:#176b60}#presenter-private-preview p{font-size:12px;margin:5px 0}.presenter-private-status{font-size:11px}.presenter-footer{font-size:1.5em;display:flex;gap:16px;align-items:center;flex-wrap:wrap;border:1px solid #dce3e9;background:#fff;border-radius:10px;padding:10px 14px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:8px 12px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:3px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:3px;flex:0 0 auto}.presenter-tabs button{font-size:11px;padding:7px 9px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:flex;align-items:center;gap:4px;min-width:110px;margin:0;font-size:11px;color:#627183}.presenter-search input{width:100px;padding:6px;margin:0;border:1px solid #bfcdc9;border-radius:7px}#presenter-tab-status,#presenter-backup-status{display:none}.presenter-private-preview{background:#f4f7fa;padding:8px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:4px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .presenter-gamepad-status{font-size:11px!important;color:#627183;margin:4px 0!important}.presenter-gamepad-selected{outline:3px solid #59b6aa!important;outline-offset:2px}
+.presenter-gamepad-settings{font-size:11px;color:#456276;border:1px solid #dce3e9;border-radius:8px;padding:6px 8px;margin:4px 0}.presenter-gamepad-settings summary{cursor:pointer;font-weight:700;color:#176b60}.presenter-gamepad-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:8px}.presenter-gamepad-grid label{display:flex;align-items:center;justify-content:space-between;gap:6px}.presenter-gamepad-grid input[type="number"]{width:64px;padding:4px}.presenter-gamepad-grid select{min-width:0;max-width:230px;padding:4px}.presenter-gamepad-wide{grid-column:1/-1}.presenter-gamepad-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.presenter-gamepad-actions button{font-size:11px;padding:7px 9px}.presenter-gamepad-settings p{font-size:11px;margin:6px 0!important}.presenter-gamepad-settings output{display:block;overflow-wrap:anywhere;color:#627183}
 .presenter-next-selector h3{border-top:0!important;padding-top:0!important;margin:0 0 4px!important}.presenter-next-selector #presenter-next-preview{display:block;min-height:48px;line-height:1.25;cursor:pointer}
 .presenter-speaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden}
 .presenter-panel-head{grid-column:1/-1}
@@ -956,6 +970,10 @@ const presenterBranchTime=document.querySelector('#presenter-branch-time');
 const presenterBackupSearch=document.querySelector('#presenter-backup-search');
 const presenterTabStatus=document.querySelector('#presenter-tab-status');
 const presenterGamepadStatus=document.querySelector('#presenter-gamepad-status');
+const presenterGamepadEnabled=document.querySelector('#presenter-gamepad-enabled');
+const presenterGamepadDevice=document.querySelector('#presenter-gamepad-device');
+const presenterGamepadSettingsStatus=document.querySelector('#presenter-gamepad-settings-status');
+const presenterGamepadLive=document.querySelector('#presenter-gamepad-live');
 const presenterDeckList=document.querySelector('#presenter-deck-list');
 const presenterPrivatePreview=document.querySelector('#presenter-private-preview');
 const presenterPrivateStatus=document.querySelector('#presenter-private-status');
@@ -1066,27 +1084,66 @@ function createPresenterSequence(slides){
 }
 let presenterSequence=createPresenterSequence([]);
 let presenterNavigating=false;
+function defaultPresenterGamepadSettings(){return """ + json.dumps(DEFAULT_GAMEPAD_SETTINGS, ensure_ascii=False, separators=(',', ':')) + """;}
+let presenterGamepadSettings=defaultPresenterGamepadSettings();
 function createPresenterGamepadInput(){
  let identity=null,armed={left:false,leftY:false,x:false,y:false,confirm:false};
- return (pad,active)=>{
+ return (pad,active,settings=defaultPresenterGamepadSettings())=>{
   if(!active || !pad){identity=null;armed={left:false,leftY:false,x:false,y:false,confirm:false};return [];}
   const key=`${pad.index}:${pad.id}`;
   if(identity!==key){identity=key;armed={left:false,leftY:false,x:false,y:false,confirm:false};}
   const actions=[];
   for(const [name,value,negative,positive] of [
-   ['left',pad.axes[0] ?? 0,'previous','next'],
-   ['leftY',pad.axes[1] ?? 0,'mainPrevious','mainNext'],
-   ['x',pad.axes[2] ?? 0,'tabPrevious','tabNext'],
-   ['y',pad.axes[3] ?? 0,'itemPrevious','itemNext'],
-   ['confirm',pad.buttons?.[0]?.pressed?1:0,'confirm','confirm']
+   ['left',(pad.axes[settings.history_axis] ?? 0)*(settings.history_invert?-1:1),'previous','next'],
+   ['leftY',(pad.axes[settings.main_axis] ?? 0)*(settings.main_invert?-1:1),'mainPrevious','mainNext'],
+   ['x',(pad.axes[settings.tabs_axis] ?? 0)*(settings.tabs_invert?-1:1),'tabPrevious','tabNext'],
+   ['y',(pad.axes[settings.items_axis] ?? 0)*(settings.items_invert?-1:1),'itemPrevious','itemNext'],
+   ['confirm',pad.buttons?.[settings.confirm_button]?.pressed?1:0,'confirm','confirm']
   ]){
-   if(Math.abs(value)<0.35)armed[name]=true;
-   else if(Math.abs(value)>0.65 && armed[name]){armed[name]=false;actions.push(value>0?positive:negative);}
+   if(Math.abs(value)<settings.neutral_threshold)armed[name]=true;
+   else if(Math.abs(value)>settings.activation_threshold && armed[name]){armed[name]=false;actions.push(value>0?positive:negative);}
   }
   return actions;
  };
 }
 const readPresenterGamepad=createPresenterGamepadInput();
+const gamepadFieldIds={history_axis:'history-axis',history_invert:'history-invert',main_axis:'main-axis',main_invert:'main-invert',tabs_axis:'tabs-axis',tabs_invert:'tabs-invert',items_axis:'items-axis',items_invert:'items-invert',confirm_button:'confirm-button',neutral_threshold:'neutral',activation_threshold:'activation'};
+function refreshPresenterGamepadDevices(){
+ const selected=presenterGamepadDevice.value || presenterGamepadSettings.device_id;
+ const pads=Array.from(navigator.getGamepads?.() || []).filter(Boolean);
+ presenterGamepadDevice.replaceChildren(new Option('První připojené',''));
+ for(const pad of pads)presenterGamepadDevice.append(new Option(`${pad.index}: ${pad.id}`,pad.id));
+ if(selected && !pads.some(pad=>pad.id===selected))presenterGamepadDevice.append(new Option(`${selected} (nyní nepřipojený)`,selected));
+ presenterGamepadDevice.value=selected;
+}
+function fillPresenterGamepadForm(settings){
+ presenterGamepadEnabled.checked=settings.enabled;presenterGamepadDevice.value=settings.device_id;
+ for(const [key,suffix] of Object.entries(gamepadFieldIds)){
+  const field=document.querySelector(`#presenter-gamepad-${suffix}`);
+  if(typeof settings[key]==='boolean')field.checked=settings[key];else field.value=String(settings[key]);
+ }
+ refreshPresenterGamepadDevices();
+}
+function readPresenterGamepadForm(){
+ const settings={...presenterGamepadSettings,enabled:presenterGamepadEnabled.checked,device_id:presenterGamepadDevice.value};
+ for(const [key,suffix] of Object.entries(gamepadFieldIds)){
+  const field=document.querySelector(`#presenter-gamepad-${suffix}`);
+  settings[key]=field.type==='checkbox'?field.checked:Number(field.value);
+ }
+ if(!Number.isInteger(settings.history_axis)||!Number.isInteger(settings.main_axis)||!Number.isInteger(settings.tabs_axis)||!Number.isInteger(settings.items_axis)||!Number.isInteger(settings.confirm_button))throw new Error('Osy a tlačítko musí být celá čísla.');
+ if(settings.neutral_threshold<0.05 || settings.neutral_threshold>0.8 || settings.activation_threshold<=settings.neutral_threshold || settings.activation_threshold>1)throw new Error('Aktivační práh musí být větší než neutrální práh.');
+ return settings;
+}
+function applyPresenterGamepadSettings(settings,message){
+ presenterGamepadSettings=settings;readPresenterGamepad(null,false,settings);fillPresenterGamepadForm(settings);presenterGamepadSettingsStatus.textContent=message;
+}
+async function loadPresenterGamepadSettings(){
+ try{
+  const response=await fetch('/v1/gamepad/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'load'}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error || 'Nastavení nelze načíst.');
+  applyPresenterGamepadSettings(result.settings,result.saved?'Načteno uložené nastavení tohoto uzlu.':'Používá se výchozí nastavení; dosud nevznikl žádný konfigurační soubor.');
+ }catch(error){fillPresenterGamepadForm(presenterGamepadSettings);presenterGamepadSettingsStatus.textContent=error.message || 'Nastavení nelze načíst.';}
+}
 function renderPresenterContent(target,slide){renderSlideVisual(target,slide);}
 function renderPresenterWidget(preview,notes,slide){
  renderPresenterContent(preview,slide);
@@ -1255,11 +1312,28 @@ function updatePresenterItem(select=false){
 function selectPresenterTab(index){presenterTabIndex=(index+presenterTabs.length)%presenterTabs.length;presenterItemIndex=0;for(const [tabIndex,tab] of presenterTabs.entries())tab.setAttribute('aria-selected',String(tabIndex===presenterTabIndex));document.querySelector('#presenter-slide-list').hidden=presenterTabIndex!==0;document.querySelector('#presenter-backup-list').hidden=presenterTabIndex!==1;document.querySelector('#presenter-question-list').hidden=presenterTabIndex!==2;presenterTabStatus.textContent=presenterTabIndex===0?'K tomuto slidu · veřejný a následující slide':presenterTabIndex===1?'Všechny backupy · soukromá knihovna':'Otázky a odpovědi · strom odboček';refreshPresenterNext();updatePresenterItem();}
 for(const [index,tab] of presenterTabs.entries())tab.addEventListener('click',()=>selectPresenterTab(index));
 function movePresenterItem(delta){const items=presenterItems();if(!items.length)return;presenterItemIndex=(presenterItemIndex+delta+items.length)%items.length;updatePresenterItem(true);}
+document.querySelector('#presenter-gamepad-refresh').addEventListener('click',()=>{refreshPresenterGamepadDevices();presenterGamepadSettingsStatus.textContent='Seznam zařízení byl obnoven.';});
+document.querySelector('#presenter-gamepad-apply').addEventListener('click',()=>{
+ try{applyPresenterGamepadSettings(readPresenterGamepadForm(),'Nastavení je použito pro tento běh; na disk se nic nezapsalo.');}
+ catch(error){presenterGamepadSettingsStatus.textContent=error.message;}
+});
+document.querySelector('#presenter-gamepad-save').addEventListener('click',async()=>{
+ const button=document.querySelector('#presenter-gamepad-save');button.disabled=true;
+ try{
+  const settings=readPresenterGamepadForm();
+  const response=await fetch('/v1/gamepad/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'save',settings}),signal:AbortSignal.timeout(4000)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error || 'Nastavení nelze uložit.');
+  applyPresenterGamepadSettings(result.settings,'Nastavení bylo uloženo pouze na tomto uzlu.');
+ }catch(error){presenterGamepadSettingsStatus.textContent=error.message || 'Nastavení nelze uložit.';}
+ finally{button.disabled=false;}
+});
 function pollPresenterGamepad(){
- const pad=Array.from(navigator.getGamepads?.() || []).find(item=>item);
- const active=!presenterView.hidden && !document.hidden && document.hasFocus();
- const actions=readPresenterGamepad(pad,active);
- presenterGamepadStatus.textContent=pad?`Gamepad: ${pad.id.slice(0,32)} · levý ↑↓: výběr hlavního slidu · ←→: předchozí/další · pravý: výběr backupu · A: promítnout`:'Gamepad: čekám na připojení.';
+ const pads=Array.from(navigator.getGamepads?.() || []).filter(Boolean);
+ const pad=presenterGamepadSettings.device_id?pads.find(item=>item.id===presenterGamepadSettings.device_id):pads[0];
+ const active=presenterGamepadSettings.enabled && !presenterView.hidden && !document.hidden && document.hasFocus();
+ const actions=readPresenterGamepad(pad,active,presenterGamepadSettings);
+ presenterGamepadStatus.textContent=!presenterGamepadSettings.enabled?'Gamepad: vypnutý v nastavení.':pad?`Gamepad: ${pad.id.slice(0,32)} · mapování lze změnit níže`:'Gamepad: čekám na vybrané zařízení.';
+ presenterGamepadLive.textContent=pad?`Živý vstup: osy ${pad.axes.map(value=>Number(value).toFixed(2)).join(', ')} · stisknutá tlačítka ${pad.buttons.map((button,index)=>button.pressed?index:null).filter(index=>index!==null).join(', ') || 'žádná'}`:'Živý vstup: čekám na zařízení.';
  // Horizontal navigation projects the choice visible before this frame.
  if(actions.includes('previous'))movePresenter(-1);
  else if(actions.includes('next') || actions.includes('confirm'))movePresenter(1);
@@ -1276,9 +1350,10 @@ function pollPresenterGamepad(){
  }
  requestAnimationFrame(pollPresenterGamepad);
 }
-addEventListener('gamepadconnected',()=>{presenterGamepadStatus.textContent='Gamepad: připojen.';updatePresenterItem();});
+addEventListener('gamepadconnected',()=>{refreshPresenterGamepadDevices();presenterGamepadStatus.textContent='Gamepad: připojen.';updatePresenterItem();});
 addEventListener('blur',()=>readPresenterGamepad(null,false));
-addEventListener('gamepaddisconnected',()=>{readPresenterGamepad(null,false);presenterGamepadStatus.textContent='Gamepad: odpojen.';});
+addEventListener('gamepaddisconnected',()=>{readPresenterGamepad(null,false);refreshPresenterGamepadDevices();presenterGamepadStatus.textContent='Gamepad: odpojen.';});
+loadPresenterGamepadSettings();
 requestAnimationFrame(pollPresenterGamepad);
 selectPresenterTab(0);
 """
@@ -3751,6 +3826,7 @@ class DesktopHandler(Handler):
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/gamepad/status', '/v1/presentation/status',
+        '/v1/gamepad/settings',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
@@ -3780,6 +3856,18 @@ class DesktopHandler(Handler):
             return super().dispatch(request)
         if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, scan_gamepads())
+        if self.path == '/v1/gamepad/settings' and isinstance(request, dict):
+            service = getattr(self.server, 'gamepad_settings', None)
+            if service is None:
+                return self.reply(503, {'error': 'Nastavení gamepadu je dostupné jen v desktopu.'})
+            try:
+                if request == {'action': 'load'}:
+                    return self.reply(200, {'settings': service.load(), 'saved': service.path.exists()})
+                if request.keys() == {'action', 'settings'} and request['action'] == 'save':
+                    return self.reply(200, {'settings': service.save(request['settings']), 'saved': True})
+                return self.send_error(400)
+            except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
             try:
                 return self.reply(200, presentation_status(self.server, start=request.get('action') == 'start'))

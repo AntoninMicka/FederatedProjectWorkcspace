@@ -47,6 +47,21 @@ není produktová šablona ani autoritativní projektový obsah.
   na již odstraněném `spikes.desktop_editor`; 8 skutečných Qt testů editoru,
   displejů a profilu prošlo se systémovým PySide6.
 
+- [x] [completed] **F-M4-PRESENTER-01-A1 — Konfigurovatelné lokální mapování
+  gamepadu (implemented).** Doplnit do soukromého kokpitu výběr browserového
+  zařízení, mapování a obrácení čtyř os, potvrzovací tlačítko, prahy a živý
+  náhled. Použití pro relaci nesmí zapisovat; node-local SQLite konfigurace
+  vznikne až po explicitním tlačítku **Uložit na tomto uzlu**. Ověřit validaci,
+  restart, pád uprostřed transakce, symlink, JS gesta, API a celý test suite.
+
+  Dokončeno 2026-10-15. Výchozí načtení i **Použít nyní** jsou bez zápisu;
+  explicitní uložení používá jednu synchronní SQLite transakci mimo projektový
+  Git. Cílené testy ověřily validaci, restart, oba crash scénáře, symlink, API
+  a přemapovaná JS gesta. Celá sada `590 tests` prošla (27 přeskočených
+  volitelných/fyzických testů), vložený JavaScript prošel `node --check` a
+  offscreen Qt WebEngine smoke načetl UI i autentizované API. Fyzický gamepad
+  nebyl v tomto běhu dostupný a zůstává k ruční akceptaci v úkolu F.
+
 - [ ] [planned] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
   v1 (implemented).** Nahradit JSON-only obsah fenced bloku lidsky editovatelným
   Markdown formátem s YAML frontmatterem, stabilními ID slidů, notes, backup vazbami

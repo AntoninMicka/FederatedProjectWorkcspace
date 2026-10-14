@@ -203,6 +203,17 @@ záložky a výběr backupu.
 Každé gesto vyžaduje návrat do neutrální polohy; držení tlačítka neopakuje akci.
 Šipka doprava a tlačítko **Další** promítnou právě vybranou možnost.
 
+Výchozí mapování není povinné. V soukromém kokpitu rozbalte **Nastavení
+gamepadu**: lze vybrat konkrétní zařízení, přiřadit samostatnou osu ke každé
+akci, obrátit její směr, změnit potvrzovací tlačítko a nastavit neutrální i
+aktivační práh. **Použít nyní** změní jen běžící relaci a nic nevytváří.
+Teprve explicitní volba **Uložit na tomto uzlu** zapíše nastavení do lokálního
+souboru `node.gamepad.sqlite3` mimo projektový Git. Načtení výchozí konfigurace
+je bez vedlejších účinků. Zápis je jedna SQLite transakce se synchronním commitem;
+při pádu před commitem zůstane platná předchozí konfigurace a při prvním
+nedokončeném zápisu může zůstat pouze prázdná databáze, která se čte jako výchozí
+nastavení. Živý náhled os a stisknutých tlačítek pomáhá určit jejich čísla.
+
 Celé dočasné pořadí zůstává viditelné: promítnutá historie včetně backupů
 a návratů i dosud nepromítnutá hlavní linie. Vybraný hlavní slide se při
 promítnutí přesune za konec potvrzené historie; přeskočené slidy zůstanou na
