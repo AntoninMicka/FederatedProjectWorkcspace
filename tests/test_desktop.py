@@ -692,10 +692,16 @@ class DesktopTests(unittest.TestCase):
             server.google_drive_import = Drive()
             query = urlencode({'state': 's' * 32, 'code': 'code',
                                'picked_file_ids': 'file-id',
+                               'iss': 'https://accounts.google.com',
                                'scope': 'https://www.googleapis.com/auth/drive.file'})
             response = driver.request(server, method='GET', path='/?' + query)
+            rejected = driver.request(server, method='GET', path='/?' + urlencode({
+                'state': 's' * 32, 'code': 'code', 'picked_file_ids': 'file-id',
+                'iss': 'https://accounts.google.com.evil.test'}))
         self.assertTrue(response.startswith(b'HTTP/1.0 200'), response[:80])
         self.assertIn('Vraťte se'.encode(), response)
+        self.assertTrue(rejected.startswith(b'HTTP/1.0 200'), rejected[:80])
+        self.assertIn('nepodařilo přijmout'.encode(), rejected)
         self.assertEqual(calls, [('s' * 32, 'code', 'file-id', None)])
 
     def test_assets_do_not_bootstrap_token_and_api_still_requires_auth(self):

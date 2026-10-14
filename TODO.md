@@ -81,8 +81,11 @@ odvolaný přístup operaci zastaví bez částečné projektové publikace.
   zatímco web zachovává přesnou HTTPS callback cestu; oba callbacky mají
   samostatný integrační test. Druhý fyzický pokus dosáhl Google consent gate,
   ale účet ještě nebyl povolen mezi `Audience → Test users`; průvodce i návod
-  nyní tuto podmínku režimu Testing uvádějí. Úspěšný fyzický průchod se
-  skutečným účtem zatím chybí; postup je v
+  nyní tuto podmínku režimu Testing uvádějí. Třetí pokus už vrátil vybraná
+  `picked_file_ids`, ale odhalil legitimní RFC 9207 callback parametr
+  `iss=https://accounts.google.com`; callback jej nyní přijímá pouze s přesnou
+  hodnotou a vadnou odpověď zobrazí jako srozumitelnou návratovou stránku.
+  Úspěšný fyzický průchod se skutečným účtem zatím chybí; postup je v
   [docs/google-drive-import.md](docs/google-drive-import.md).
 - Ověření 2026-10-14: `node --check` generovaného `app.js`; cílené Drive,
   indexové, desktopové a HTTPS testy; úplná sada

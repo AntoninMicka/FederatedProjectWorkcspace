@@ -29,6 +29,7 @@ from spikes.source_import import MAX_BATCH, Sources, request_from_bytes
 
 SCOPE = 'https://www.googleapis.com/auth/drive.file'
 AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
+GOOGLE_ISSUER = 'https://accounts.google.com'
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
 FOLDER = 'application/vnd.google-apps.folder'
 EXPORTS = {

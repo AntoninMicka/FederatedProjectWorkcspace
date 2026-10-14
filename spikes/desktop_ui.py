@@ -18,7 +18,7 @@ from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnkno
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
-from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, SCOPE
+from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, GOOGLE_ISSUER, SCOPE
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_search import SearchResponseError, SearchUnknown
@@ -3546,13 +3546,19 @@ class DesktopHandler(Handler):
         if authority is None:
             return self.send_error(403)
         parsed = urlsplit(self.path)
+        query = None
         if parsed.path == self.google_drive_callback_path and parsed.query:
             try:
                 query = parse_qs(parsed.query, strict_parsing=True, keep_blank_values=True)
-                allowed = {'state', 'code', 'picked_file_ids', 'scope', 'error'}
+            except ValueError:
+                pass
+        if query is not None and 'state' in query:
+            try:
+                allowed = {'state', 'code', 'picked_file_ids', 'scope', 'iss', 'error'}
                 if not set(query) <= allowed or any(len(values) != 1 for values in query.values()) \
-                        or 'state' not in query or ('scope' in query and query['scope'] != [SCOPE]):
-                    return self.send_error(400)
+                        or 'state' not in query or ('scope' in query and query['scope'] != [SCOPE]) \
+                        or ('iss' in query and query['iss'] != [GOOGLE_ISSUER]):
+                    raise ValueError('Neplatná OAuth callback odpověď.')
                 self.server.google_drive_import.callback(
                     query['state'][0], query.get('code', [''])[0],
                     query.get('picked_file_ids', [''])[0], query.get('error', [None])[0])

@@ -21,6 +21,10 @@ vývojový/testovací projekt nutné; bez allowlistu testovacího účtu Google 
 zablokuje. U pracovního Google Workspace účtu může přístup navíc omezit správce
 organizace.
 
+OAuth návratová odpověď může obsahovat RFC 9207 parametr
+`iss=https://accounts.google.com`. Workspace jej přijme pouze s touto přesnou
+hodnotou; jiný issuer i neznámé callback parametry odmítne bez změny projektu.
+
 Akceptační průchod:
 
 1. Otevřete projekt → Podklady → Importovat zdroj, nastavte privacy a otevřete
