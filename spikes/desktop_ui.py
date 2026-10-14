@@ -1782,6 +1782,8 @@ function renderChat(thread){
   }
  }
  renderTaskOutcomes();
+ draft.placeholder=activeSearchContinuation()?
+  'Zpřesněte další kolo hledání…':'Co chcete v projektu zpracovat?';
  const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
  document.querySelector('#chat-submit').disabled=composerDisabled;
  document.querySelector('#external-propose-button').disabled=composerDisabled;
@@ -1864,6 +1866,11 @@ function replaceTaskProjection(projection){
  if(index<0)taskOutcomes.push(projection);else taskOutcomes[index]=projection;
  activeTaskThreadId=projection.thread_id;renderChat(activeThread);
 }
+function activeSearchContinuation(){
+ const projection=taskOutcomes.at(-1),round=projection?.search_workflow?.rounds?.at(-1);
+ return projection?.temporary && projection.outcome?.kind==='web-search' && round?.evaluation ?
+  {projection,round}:null;
+}
 function taskButton(label,handler,secondary=false){
  const button=document.createElement('button');button.type='button';button.textContent=label;
  if(secondary)button.className='secondary-button';button.addEventListener('click',handler);return button;
@@ -1943,10 +1950,13 @@ function renderTaskOutcomes(){
    if(!workflow || !latest?.evaluation){
     actions.append(taskButton('Zkontrolovat webový dotaz',()=>prepareTaskSearch(projection)));
    }else{
-    for(const nextQuery of workflow.next_queries || []){
+   for(const nextQuery of workflow.next_queries || []){
      actions.append(taskButton(`Zkontrolovat další dotaz: ${nextQuery}`,
       ()=>prepareTaskSearch(projection,nextQuery,latest.search_id)));
     }
+    if(!(workflow.next_queries || []).length){const hint=document.createElement('small');
+     hint.textContent='Výsledek není konečný. Zpřesnění dalšího kola napište do pole dole.';
+     actions.append(hint);}
    }
    actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
   }else if(outcome.kind==='web-search-answer'){
@@ -2047,7 +2057,9 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
   replaceTaskProjection(projection);pendingSearchPreview=null;
   document.querySelector('#search-preview').hidden=true;
   chatOperationStatus.textContent=projection.temporary ?
-   'Kolo je vyhodnocené. Navržený další dotaz se odešle až po vaší kontrole a potvrzení.' :
+   (projection.search_workflow?.next_queries?.length ?
+    'Kolo je vyhodnocené. Navržený další dotaz se odešle až po vaší kontrole a potvrzení.' :
+    'Kolo není konečné. Napište do pole dole vlastní zpřesnění; před odesláním jej zkontrolujete.') :
    'Řízené hledání a syntéza jsou dokončené.';
  }catch(error){chatOperationStatus.textContent=error.message;
   offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
@@ -2531,12 +2543,11 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(mode==='orchestration'){
   runChoice.binding_id=chatBinding.binding_id;runChoice.binding_revision=chatBinding.revision;
  }
- const latestTask=taskOutcomes.at(-1),latestSearchRound=
-  latestTask?.search_workflow?.rounds?.at(-1);
- if(mode==='orchestration' && latestTask?.temporary
-    && latestTask.outcome?.kind==='web-search' && latestSearchRound?.evaluation){
+ const searchContinuation=activeSearchContinuation();
+ if(mode==='orchestration' && searchContinuation){
   const submit=document.querySelector('#chat-submit');submit.disabled=true;
-  const prepared=await prepareTaskSearch(latestTask,draft.value.trim(),latestSearchRound.search_id);
+  const prepared=await prepareTaskSearch(searchContinuation.projection,draft.value.trim(),
+                                         searchContinuation.round.search_id);
   if(prepared){draft.value='';draft.focus();}
   submit.disabled=!activeProject || !draft.value.trim();return;
  }

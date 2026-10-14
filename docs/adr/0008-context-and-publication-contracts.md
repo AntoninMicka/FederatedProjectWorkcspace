@@ -389,7 +389,9 @@ výsledků a 300 sekund od přípravy prvního preview. Vyčerpání kteréhokol
 uzavře workflow posledním dostupným hodnocením a přesným důvodem. Modelový
 follow-up se pouze zobrazí; uživatel může ve stejném composeru napsat i vlastní
 zpřesnění. To vytvoří nové preview navázané na poslední kolo a odeslání stále
-vyžaduje ruční kontrolu a potvrzení jeho hashe.
+vyžaduje ruční kontrolu a potvrzení jeho hashe. UI tento stav označí přímo u
+karty i v placeholderu composeru; evaluator dostává explicitní pokyn zachovat
+jazyk uživatelova focus požadavku.
 Automatický dispatch a countdown patří až do F-M3-SEARCH-03.
 
 Crash/recovery zachovává původní autority. `SearchRuns.succeeded` předchází

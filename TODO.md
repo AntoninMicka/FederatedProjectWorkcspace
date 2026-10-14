@@ -87,6 +87,9 @@ TaskOutcomes completion nesmí vyvolat druhý search ani LLM dispatch.
   přímá odpověď. `final` s omezením se nyní konzervativně mění na
   `intermediate` a ručně napsané zpřesnění v composeru připraví další kolo
   stejného workflow. Síťový dotaz se nadále odešle až po kontrole a potvrzení.
+  UI nyní při chybějícím modelovém návrhu výslovně ukazuje, kam vlastní
+  zpřesnění napsat, používá odpovídající placeholder a netvrdí, že návrh
+  existuje. Evaluator má také explicitně zachovat jazyk focus požadavku.
 
 ## Podmínky dokončení
 

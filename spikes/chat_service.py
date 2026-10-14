@@ -729,7 +729,9 @@ class ChatService:
             'must directly answer the request, have no limitations and have no follow_up_queries. '
             'If a requested fact is still missing, use intermediate or insufficient. Propose at '
             'most three bounded public queries; do not '
-            'claim they were executed. State uncertainty and do not invent or fetch sources.')
+            'claim they were executed. Write answer, rationale, limitations and follow-up queries '
+            'in the language of the user focus request. State uncertainty and do not invent or '
+            'fetch sources.')
         builder = ContextBuilder(workspace, row['project_id'])
         prepared = builder.prepare(
             manifest_id=round_record['synthesis_manifest_id'],
