@@ -1018,15 +1018,16 @@ Aktualizace 2026-10-11: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
 - [ ] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
   podle sekce 12A; Qt/PySide ponechat pouze pro desktop-only integrační funkce.
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
-- [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování a indexu drží WORK_LOG, odstranění [TODO](TODO.md).
+- [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování, indexu a odstranění drží WORK_LOG.
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
-- [ ] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
+- [x] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
   odregistrování, odstranění obnovitelného lokálního stavu, přesun repozitáře do
   koše a definitivní výmaz. Preview musí zahrnout projektová i chatová data,
   credentials, sdílené reference, pending operace a známé federované kopie;
   operace přes registraci/filesystem/Git/SQLite má durable journal a idempotentní
   recovery. Lokální smazání nesmí předstírat výmaz dříve publikovaných,
-  sdílených nebo vzdálených revizí.
+  sdílených nebo vzdálených revizí. Lokální PoC byl fyzicky akceptován
+  2026-10-14; důkazy a omezení drží WORK_LOG a ADR 0031.
 
 **Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
 

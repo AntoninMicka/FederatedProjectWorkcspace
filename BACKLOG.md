@@ -38,8 +38,9 @@ jako merge commit `1101d52` a `UX-UNIFIED-02C` PR #61 jako merge commit
 merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
 doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-01` bylo doručeno PR #64 jako merge commit `7373d81`; evidence je
-ve WORK_LOG. `F-M1-PROJECT-DELETE-01` je aktivovaná v TODO na samostatné feature
-větvi.
+ve WORK_LOG. `F-M1-PROJECT-DELETE-01` je fyzicky akceptovaná a archivovaná ve
+WORK_LOG; lokální commit `f48a760` na samostatné feature větvi čeká na jediný
+PR do `develop`.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
