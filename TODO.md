@@ -80,6 +80,20 @@ není produktová šablona ani autoritativní projektový obsah.
   společné UI i autentizované API. Ruční vizuální a vstupní akceptace editoru
   zůstává součástí F-M4-PRESENTER-01-F.
 
+- [x] [completed] **F-M4-PRESENTER-01-A3 — Seznam hotových prezentací v
+  bočním panelu (implemented).** Doplnit do levého projektového panelu vlastní
+  záložku se seznamem uložených prezentací. Každá platná položka nabízí přímé
+  otevření v integrovaném editoru a spuštění přesně uložené revize. Pouhé
+  otevření seznamu nevytváří soubor, artefakt ani commit.
+
+  Dokončeno 2026-10-15. Záložka **Prezentace** je vedle Úkolů, Podkladů a Chatů;
+  zobrazuje název a ID uloženého decku a akce **Upravit** a **Spustit**.
+  Neplatný uložený dokument zůstane viditelný a označený, ale jeho akce jsou
+  vypnuté. Webová varianta záložku zatím skrývá stejně jako lokální presenter.
+  Cílených 27 presenter/editor/UI testů prošlo, stejně jako syntaxe vloženého
+  JavaScriptu; celá sada `592 tests` prošla (27 přeskočených volitelných či
+  fyzických testů). Ruční vizuální akceptace zůstává součástí úkolu F.
+
 - [ ] [planned] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
   v1 (implemented).** Nahradit JSON-only obsah fenced bloku lidsky editovatelným
   Markdown formátem s YAML frontmatterem, stabilními ID slidů, notes, backup vazbami

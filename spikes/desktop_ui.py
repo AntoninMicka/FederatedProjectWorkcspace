@@ -211,7 +211,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
 <button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">Úkoly</button>
 <button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button>
-<button id="chats-tab" role="tab" aria-controls="sidebar-chats" aria-selected="false" tabindex="-1">Chaty</button></div>
+<button id="chats-tab" role="tab" aria-controls="sidebar-chats" aria-selected="false" tabindex="-1">Chaty</button>
+<button id="presentations-tab" role="tab" aria-controls="sidebar-presentations" aria-selected="false" tabindex="-1">Prezentace</button></div>
 <div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
@@ -225,7 +226,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
 <div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button">Nové vlákno</button>
 <button id="chat-open-settings" type="button">Nastavení backendu</button></div>
-<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div></div>
+<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div>
+<div id="sidebar-presentations" role="tabpanel" aria-labelledby="presentations-tab" tabindex="0" hidden>
+<h2>Prezentace</h2><p id="sidebar-presentation-status" role="status">Otevřete projekt.</p>
+<ul id="sidebar-presentation-list" aria-label="Hotové prezentace projektu"></ul></div></div>
 <button id="open-settings" class="global-nav" type="button">Nastavení</button>
 <button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
 <main><div id="project-home">
@@ -738,7 +742,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
 #sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
 #sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
 #sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
@@ -756,14 +760,15 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
 #sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
 #sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
+.sidebar-presentation-row{padding:10px 8px;border-bottom:1px solid #274154}.sidebar-presentation-row strong,.sidebar-presentation-row small{display:block;overflow-wrap:anywhere}.sidebar-presentation-row small{margin-top:4px;color:#8faabc;font-size:10px}.sidebar-presentation-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}#sidebar-presentations .sidebar-presentation-actions button{padding:7px 5px;font-size:11px;text-align:center;background:#274154}#sidebar-presentations .sidebar-presentation-actions button:hover{background:#36566d}#sidebar-presentations .sidebar-presentation-actions button:disabled{opacity:.55}
 .sidebar-artifact-menu{position:relative;margin-top:4px}.sidebar-artifact-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-artifact-menu>summary::-webkit-details-marker{display:none}.sidebar-artifact-menu>summary:hover,.sidebar-artifact-menu[open]>summary{background:#274154}.sidebar-artifact-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}#sidebar-artifacts .sidebar-artifact-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}#sidebar-artifacts .sidebar-artifact-menu-items button:hover{background:#dfecea}
 #sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
 #sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-project-tools>[role="tabpanel"]:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list{flex:1}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list{flex:1}
 #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
@@ -1413,7 +1418,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-notebooklm-import,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-notebooklm-import,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -1424,14 +1429,15 @@ function selectSidebarTab(selected){
   document.getElementById(tab.getAttribute('aria-controls')).hidden=!active;
  }
 }
-for(const [index,tab] of sidebarTabs.entries()){
+for(const tab of sidebarTabs){
  tab.addEventListener('click',()=>selectSidebarTab(tab));
  tab.addEventListener('keydown',event=>{
-  const next={ArrowRight:(index+1)%sidebarTabs.length,
-   ArrowLeft:(index-1+sidebarTabs.length)%sidebarTabs.length,
-   Home:0,End:sidebarTabs.length-1}[event.key];
+  const visible=sidebarTabs.filter(item=>!item.hidden),index=visible.indexOf(tab);
+  const next={ArrowRight:(index+1)%visible.length,
+   ArrowLeft:(index-1+visible.length)%visible.length,
+   Home:0,End:visible.length-1}[event.key];
   if(next===undefined) return;
-  event.preventDefault();selectSidebarTab(sidebarTabs[next]);sidebarTabs[next].focus();
+  event.preventDefault();selectSidebarTab(visible[next]);visible[next].focus();
  });
 }
 let currentArtifacts=[];
@@ -1502,7 +1508,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
- presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();presentationEditorStatus.textContent='Otevřete projekt.';
+ presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
@@ -2114,6 +2120,8 @@ for(const tab of mainTabs){
 }
 const presentationTab=document.querySelector('#presentation-tab');
 const presentationEditorDocuments=document.querySelector('#presentation-editor-documents');
+const sidebarPresentationList=document.querySelector('#sidebar-presentation-list');
+const sidebarPresentationStatus=document.querySelector('#sidebar-presentation-status');
 const presentationEditorWorkspace=document.querySelector('#presentation-editor-workspace');
 const presentationEditorStatus=document.querySelector('#presentation-editor-status');
 const presentationEditorSave=document.querySelector('#presentation-editor-save');
@@ -2169,27 +2177,38 @@ function renderPresentationEditor(){
 function installPresentationDocument(document){
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
 }
-function renderPresentationDocuments(preferred=null){
+function renderSidebarPresentations(){
+ sidebarPresentationList.replaceChildren();
+ for(const doc of presentationEditorView.documents){
+  const item=document.createElement('li'),title=document.createElement('strong'),identity=document.createElement('small'),actions=document.createElement('div'),edit=document.createElement('button'),start=document.createElement('button');
+  item.className='sidebar-presentation-row';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;actions.className='sidebar-presentation-actions';edit.type='button';edit.textContent='Upravit';start.type='button';start.textContent='Spustit';edit.disabled=Boolean(doc.error);start.disabled=Boolean(doc.error);
+  edit.addEventListener('click',()=>openPresentationEditor(doc.id));start.addEventListener('click',()=>usePresentationDocument(doc));actions.append(edit,start);item.append(title,identity,actions);sidebarPresentationList.append(item);
+ }
+ sidebarPresentationStatus.textContent=presentationEditorView.documents.length?`Počet prezentací: ${presentationEditorView.documents.length}`:'Zatím tu nejsou žádné uložené prezentace.';
+}
+function renderPresentationDocuments(preferred=null,openEditor=true){
  presentationEditorDocuments.replaceChildren();
  for(const doc of presentationEditorView.documents){const option=new Option(doc.title+(doc.error?' — neplatná':''),doc.id);option.disabled=Boolean(doc.error);presentationEditorDocuments.append(option);}
+ renderSidebarPresentations();if(!openEditor)return;
  const document=presentationEditorView.documents.find(doc=>doc.id===(preferred||presentationEditorArtifact)&&doc.deck)||presentationEditorView.documents.find(doc=>doc.deck);
  if(document){presentationEditorDocuments.value=document.id;installPresentationDocument(document);}else{presentationEditorDocuments.append(new Option('Nová neuložená prezentace',''));createPresentationDocument(false);}
 }
-async function loadPresentationEditor(){
- if(!activeProject)return;presentationEditorStatus.textContent='Načítám prezentace projektu…';
- try{presentationEditorView=await projectRequest('/v1/presentations/open',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments();presentationEditorStatus.textContent=presentationEditorView.documents.length?'Editor používá aktuální uloženou verzi projektu.':'Nová prezentace vznikne až po kliknutí na Uložit do projektu.';}
- catch(error){presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorWorkspace.hidden=true;updatePresentationEditorEnabled();}
+async function loadPresentationEditor(preferred=null,openEditor=true){
+ if(!activeProject)return;sidebarPresentationStatus.textContent='Načítám prezentace projektu…';presentationEditorStatus.textContent='Načítám prezentace projektu…';
+ try{presentationEditorView=await projectRequest('/v1/presentations/open',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(preferred,openEditor);presentationEditorStatus.textContent=presentationEditorView.documents.length?'Editor používá aktuální uloženou verzi projektu.':'Nová prezentace vznikne až po kliknutí na Uložit do projektu.';}
+ catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorWorkspace.hidden=true;updatePresentationEditorEnabled();}
 }
-async function openPresentationEditor(){
+async function openPresentationEditor(preferred=null){
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
  if(!artifactEditorView.hidden){if(!canLeaveArtifactEditor())return;artifactEditorView.hidden=true;artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorDirty=false;}
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
- selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor();
+ selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
 }
 function createPresentationDocument(confirmDiscard=true){
  if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorDocuments.value='';renderPresentationEditor();presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
-presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();});
+presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();else if(!presentationEditorDeck)renderPresentationDocuments();});
+document.querySelector('#presentations-tab').addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
 presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
 document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
@@ -2206,10 +2225,11 @@ document.querySelector('#presentation-slide-wallpaper').addEventListener('change
 presentationEditorSave.addEventListener('click',async()=>{
  if(!activeProject||!presentationEditorDeck)return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
- try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor();const saved=presentationEditorView?.documents.find(item=>item.id===id&&item.deck);if(saved){presentationEditorDocuments.value=id;installPresentationDocument(saved);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
+ try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor(id);presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
  catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();}
 });
-presentationEditorUse.addEventListener('click',async()=>{try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:presentationEditorArtifact,expected_head:presentationEditorView.commit_id});presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}});
+async function usePresentationDocument(document){try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:document.id,expected_head:presentationEditorView.commit_id});sidebarPresentationStatus.textContent=`Prezentace „${document.title}“ je připravena v presenteru.`;presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}}
+presentationEditorUse.addEventListener('click',()=>usePresentationDocument({id:presentationEditorArtifact,title:presentationEditorDeck.title}));
 document.querySelector('#presentation-editor-presenter').addEventListener('click',openPresenter);
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];

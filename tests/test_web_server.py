@@ -254,10 +254,12 @@ class WebTests(unittest.TestCase):
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
         self.assertIn("const visible=mainTabs.filter(item=>!item.hidden)", WEB_JS)
+        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden)", WEB_JS)
         self.assertIn("#back-projects,#open-notebooklm-import,#open-settings", WEB_JS)
-        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
+        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
+        self.assertIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
         self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)

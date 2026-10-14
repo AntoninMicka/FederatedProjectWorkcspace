@@ -133,11 +133,14 @@ oken, zejména na Waylandu; fyzické zapojení je nutné před přednáškou vyz
 
 ## 10. Základní editor prezentací
 
-Otevřete záložku **Prezentace** přímo v hlavním panelu projektu. Tlačítka
+Záložka **Prezentace** v levém bočním panelu zobrazuje uložené prezentace
+otevřeného projektu. U každé nabízí přímé akce **Upravit** a **Spustit**.
+Úprava se otevře v záložce **Prezentace** hlavního panelu. Tlačítka
 **Prezentace…** v horní liště desktopu a **Editor prezentací…** v panelu
-promítání vedou do stejného integrovaného pohledu; samostatný editorový dialog
+promítání vedou přímo do stejného integrovaného editoru; samostatný dialog
 se již neotevírá. Bez otevřeného projektu editor nevytvoří žádný soubor a vyzve
-k jeho výběru. V horním seznamu lze přepínat uložené prezentace nebo založit novou.
+k jeho výběru. V horním seznamu editoru lze přepínat uložené prezentace nebo
+založit novou; projektový dokument vznikne až explicitním uložením.
 
 - Přidávejte hlavní slidy a backupy. Každý slide má nadpis, odrážky (jednu na
   řádek), soukromé poznámky, barvu pozadí, barvu textu a volitelnou tapetu.
