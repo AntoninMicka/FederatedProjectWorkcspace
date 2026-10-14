@@ -5,6 +5,47 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## IMP-01 — Explicitní jednorázový import z Google Drive — 2026-10-14
+
+Dávka na větvi `feature/imp-01-google-drive-import`, založené z `develop`
+`a09538e`, přidala explicitní bounded výběr z osobního Google Drive,
+bezpečný náhled a atomickou publikaci do aktivního projektu. Dosažená úroveň
+je **PoC validated**. Uživatel po opravách reálného OAuth/Picker toku potvrdil
+„import proběhl vpořádku“. Feature akceptace je uzavřená; jediný PR do
+`develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **IMP-01-A — OAuth/Picker kontrakt, reuse a ADR
+  (designed).** ADR 0032 připnulo minimální `drive.file`, systémový prohlížeč,
+  PKCE/state, přesné callbacky, raw/export mapování, limity, provenance a crash
+  boundaries. Implementace adaptuje existující Workspace/Sources/UI a
+  nezavádí provider SDK, průběžnou synchronizaci ani zápis do Drive.
+- [x] [completed] **IMP-01-B — Bounded Drive adapter a durable staging
+  (implemented).** Actor-scoped credentials a tokeny zůstávají mimo Git;
+  výběr, metadata, revize, limity a staging jsou obnovitelné. Složky mají
+  omezenou hloubku, počet položek i stránek a změna revize nebo odvolání
+  přístupu selže před projektovou publikací.
+- [x] [completed] **IMP-01-C — Atomická projektová publikace
+  (implemented).** Blob soubory zachovávají přesné bajty a hash, Google
+  Docs/Sheets/Slides mají viditelný PDF export a zdrojovou provenance.
+  Potvrzená dávka publikuje všechny zdroje jednou Workspace operací a jedním
+  commitem; duplicate/supersedes a retry jsou explicitní.
+- [x] [completed] **IMP-01-D — Sdílené UI/API a akceptace
+  (PoC validated).** Desktop a web sdílejí průvodce, bezpečný seznam, plán,
+  potvrzení a recovery. Reálný desktopový průchod odhalil a opravil root
+  loopback redirect, Google Testing/Test users, RFC 9207 `iss`, editorový
+  `docs.google.com` `webViewLink` a obnovení dokončeného výběru po restartu.
+  Webový HTTPS callback, RBAC a zákaz `local-only` pokrývá integrační test;
+  skutečný webový deployment nebyl součástí fyzické akceptace.
+
+Závěrečné automatické ověření po poslední aplikační změně: Python kompilace,
+JavaScript `node --check`, cílených 11 Drive/desktop/HTTPS testů,
+`git diff --check` a úplná sada **542 testů OK za 122,554 s, 24 volitelných
+přeskočeno**. Skutečný osobní Drive vytvořil plán 13 položek bez blokací za
+4,12 s a po uživatelském potvrzení publikoval 13 unikátních artefaktů jedním
+commitem `ade0db7703b33c8e7469278c99d6c79189cbe9ca`; receipt je dokončený a HEAD
+cílového projektu se s ním shodoval. Shared Drives, synchronizace, zápis zpět,
+import bez aktivního projektu a další Google služby zůstávají mimo rozsah.
+
 ## F-M1-PROJECT-DELETE-01 — Bezpečné odstranění celého projektu — 2026-10-14
 
 Dávka na větvi `feature/f-m1-project-delete-01-safe-project-removal`, založené

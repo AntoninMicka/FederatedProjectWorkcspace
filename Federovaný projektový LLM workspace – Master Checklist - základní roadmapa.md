@@ -337,17 +337,18 @@ Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM back
 
 ## 3C. Import z Google služeb, NotebookLM a chatbotů
 
-**Stav: `IMP-02` bylo doručeno PR #48. `IMP-01` má k 2026-10-14
-implementovaný a automaticky ověřený explicitní Drive tok; před fyzickou
-akceptací skutečného osobního účtu se nepovažuje za PoC validated. Ostatní
-konektory a automatické zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
+**Stav: `IMP-02` bylo doručeno PR #48. `IMP-01` je k 2026-10-14 PoC validated
+na skutečném osobním Drive: explicitní desktopový Picker výběr, náhled a
+potvrzený import 13 položek vytvořily 13 unikátních artefaktů v jednom commitu;
+feature PR do `develop` zatím nebyl vytvořen. Ostatní konektory a automatické
+zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
 importuje jeden kompletní notebook osobního Google AI plánu přes Google One ze
 skutečného Takeout exportu jako nový Workspace projekt; necílí na Google Cloud
-Enterprise. Operativní důkazy dokončeného `IMP-02` drží WORK_LOG, aktuální
-`IMP-01` TODO a ostatní `IMP-*` BACKLOG.
+Enterprise. Operativní důkazy dokončených `IMP-01` a `IMP-02` drží WORK_LOG a
+ostatní `IMP-*` BACKLOG.
 
 - [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
-- [ ] Google Drive: umožnit explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API. U nativních Workspace dokumentů evidovat exportní formát a transformaci, neoznačovat export za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.
+- [x] Google Drive: explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API jsou PoC validated pro osobní Drive. U nativních Workspace dokumentů se eviduje exportní formát a transformace; export se neoznačuje za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.
 - [x] NotebookLM: osobní Takeout import PoC validated pro dostupné zdroje, generované výstupy a chat jako odlišné artefakty; zachovává poskytované vazby a nedostupné části uvádí v přehledu. Desktop a web používají jednu stránku a autorizované preview/plan/confirm API; desktop předává pouze přesnou picker capability, ne obecnou lokální cestu. Skutečný vzorek neobsahoval notes ani původní binární bajty za HTML/JSON reprezentacemi, proto je import nevymýšlí. Přímý konektor a Enterprise zůstávají mimo ověřený rozsah; existence Enterprise API není důkaz stejné funkce pro osobní účet.
 - [ ] Chatboty: podporovat import uživatelem získaných exportů (např. ChatGPT nebo Gemini/Takeout) a ručně dodaného textu/Markdownu. Konkrétní formáty potvrdit na vzorcích; odlišit archiv konverzace od samostatné odpovědi. Zachovat role, pořadí, čas, větvení, přílohy a zdrojová ID, pokud je export obsahuje; chybějící hodnoty nevymýšlet.
 - [ ] Dostupnost čtení historie ověřovat samostatně pro každý produkt a edici. Generační API modelu není automaticky přístup k historii jeho webového chatbota. Při chybějícím oficiálním API nabídnout souborový import; nevyžadovat session cookies ani neoficiální interní endpointy.

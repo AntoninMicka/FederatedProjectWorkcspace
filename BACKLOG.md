@@ -39,8 +39,9 @@ merge commit `4d2e32c`; evidence je ve WORK_LOG. `F-M3-OLLAMA-STREAM-01` bylo
 doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-01` bylo doručeno PR #64 jako merge commit `7373d81`; evidence je
 ve WORK_LOG. `F-M1-PROJECT-DELETE-01` bylo doručeno PR #65 jako merge commit
-`a09538e`; evidence je ve WORK_LOG. `IMP-01` je aktivovaná v TODO na samostatné
-feature větvi.
+`a09538e`; evidence je ve WORK_LOG. `IMP-01` je fyzicky akceptovaná a uzavřená
+ve WORK_LOG; její jediný feature PR do `develop` zatím nebyl vytvořen ani
+sloučen.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
