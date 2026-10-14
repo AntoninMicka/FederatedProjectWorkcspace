@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # Akceptace řízeného hledání přes SearXNG
 
-Checklist ověřuje feature `F-M3-SEARCH-01`. SearXNG a Ollama jsou samostatné
+Checklist ověřuje feature `F-M3-SEARCH-01` a její bounded iterativní rozšíření
+`F-M3-SEARCH-02`. SearXNG a Ollama jsou samostatné
 explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privacy.
 
 ## Konfigurace
@@ -30,6 +31,20 @@ explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privac
 5. Výsledek musí zobrazit odpověď, čas hledání a bounded zdroje. Titulky,
    snippets i URL jsou text; aplikace sama neotevře ani nestáhne žádnou stránku.
 
+## Iterativní průchod
+
+1. Použijte dotaz, pro který první sada výsledků nestačí. Po potvrzeném prvním
+   kole musí karta zobrazit mezivýsledek, `intermediate` nebo `insufficient`,
+   důvod, omezení, zdroje, provenance a využitý/maximální budget.
+2. Navržený follow-up se nesmí sám odeslat. Jeho tlačítko otevře nový přesný
+   náhled mimo chat composer; zavření náhledu nesmí formulář zablokovat.
+3. Teprve po novém zaškrtnutí a potvrzení smí odejít právě jeden další search.
+   Druhé kolo musí mít jiné search/run/manifest ID a parent odkaz na první.
+4. Opakujte do modelového `final` nebo vyčerpání budgetu. Konečná karta musí
+   zachovat všechna kola a uvést, že finálnost je úsudek modelu, nikoli garance.
+5. Obnovte aplikaci po prvním kole. Mezivýsledek a nabídnutý follow-up musí
+   zůstat viditelné; potvrzení pokračuje stejným workflow bez opakování kola.
+
 ## Chybové a recovery scénáře
 
 - `local-only` odmítnout před preview a před sítí.
@@ -47,3 +62,9 @@ explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privac
 - Smazání vlákna s `prepared`, `dispatching` nebo `unknown` search je blokované;
   po terminálním stavu potvrzené deletion recovery odstraní task, search i
   navázané backend runy a zachová publikovanou Git historii.
+- Evaluator musí odmítnout neznámé source ID, neznámá pole, `final` s follow-up
+  dotazem a neplatný/nebounds JSON; takový výstup nesmí založit další kolo.
+- Třetí kolo, třetí dotaz, třicátý výsledek nebo 300 sekund workflow ukončí.
+  UI zobrazí přesný důvod vyčerpání a žádný čtvrtý preview nevytvoří.
+- Změna HEAD, privacy nebo bindingu mezi koly tok fail-closed zastaví. Search
+  nebo evaluator s neurčitým účinkem se automaticky neopakuje.

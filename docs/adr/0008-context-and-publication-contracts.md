@@ -360,6 +360,53 @@ Potvrzené smazání chatového vlákna zahrne navázané search záznamy a synt
 runy do existujícího crash-recoverable deletion plánu. Aktivní, `prepared`
 nebo `unknown` hledání je blocker stejně jako jiný neurčitý externí účinek.
 
+### Bounded iterativní hledání — F-M3-SEARCH-02
+
+Jednorázový search tok se rozšiřuje o workflow, ne o autonomní modelový tool
+call. Po každém potvrzeném kole vrací JSON role `researcher-v2` pouze objekt s
+přesnými poli `schema_version`, `assessment`, `answer`, `rationale`,
+`used_source_ids`, `limitations` a `follow_up_queries`. `assessment` je právě
+`final`, `intermediate` nebo `insufficient`. Source ID je stabilní
+`source-` plus prvních 32 hex znaků SHA-256 přes přesnou URL a evaluator smí
+odkazovat jen na ID přítomná v dosavadních kolech. `final` nesmí mít omezení
+ani navrhovat další dotaz a v UI je výslovně označeno jako úsudek modelu,
+nikoli garance. Modelové `final` s neprázdným omezením se konzervativně
+normalizuje na `intermediate`.
+Jediná tolerovaná modelová odchylka je neprázdné textové `limitations`, které
+se bezpečně normalizuje na jednoprvkový seznam; jiná pole a typy zůstávají
+fail-closed.
+
+Workflow používá v existujícím `search-runs.sqlite` tabulky
+`search_workflows` a `search_rounds`; druhý search journal nevzniká. Kořenové
+task ID váže neměnný owner, projekt, privacy, HEAD a přesný SearXNG binding.
+Každé kolo má vlastní search ID, interní search-task ID, pořadí, dotaz,
+parent search ID a vlastní synthesis run i Context Manifest ID. Context
+`fpw-iterative-search-context-v1` obsahuje všechny dosavadní bounded search
+výsledky a již uložená hodnocení a znovu je označuje jako nedůvěryhodná data.
+
+Pevný budget v této verzi je nejvýše tři kola, tři odeslané dotazy, třicet
+výsledků a 300 sekund od přípravy prvního preview. Vyčerpání kteréhokoli limitu
+uzavře workflow posledním dostupným hodnocením a přesným důvodem. Modelový
+follow-up se pouze zobrazí; uživatel může ve stejném composeru napsat i vlastní
+zpřesnění. To vytvoří nové preview navázané na poslední kolo a odeslání stále
+vyžaduje ruční kontrolu a potvrzení jeho hashe. UI tento stav označí přímo u
+karty i v placeholderu composeru; evaluator dostává explicitní pokyn zachovat
+jazyk uživatelova focus požadavku.
+Automatický dispatch a countdown patří až do F-M3-SEARCH-03.
+
+Crash/recovery zachovává původní autority. `SearchRuns.succeeded` předchází
+modelovému Context Manifestu a po restartu se znovu použije bez search retry.
+Každý evaluator má vlastní stabilní `OllamaRuns` ID; jeho succeeded odpověď se
+znovu validuje a evaluation se idempotentně uloží ke kolu. Až potom může vzniknout
+další ručně kontrolované preview nebo terminální `TaskOutcomes` výsledek.
+Terminální task se uloží před označením workflow jako `completed`, takže pád v
+tomto okně dokončí pouze stav workflow. Deletion plán zahrne všechna kola a
+evaluator runy. Změna HEAD, privacy nebo bindingu a search/model `unknown`
+zastaví tok bez automatického opakování.
+Vypršení časového budgetu zakazuje nový search nebo dosud neodeslaný evaluator,
+ale nesmí zabránit vyhodnocení už uloženého terminálního či neurčitého běhu;
+taková recovery nevytváří nový externí účinek.
+
 Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
 [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)
 má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;

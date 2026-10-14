@@ -5,6 +5,53 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání — 2026-10-14
+
+Dávka na větvi `feature/f-m3-search-02-iterative-search`, založené z `develop`
+`3466a5f`, rozšířila potvrzované SearXNG hledání o bounded vícekolové hodnocení
+a ruční zpřesňování. Dosažená úroveň je **PoC validated**. Uživatel živě
+ověřil výsledky SearXNG a viditelný `intermediate` úsudek Gemmy a schválil
+uzavření dávky s doloženým omezením. Feature akceptace je uzavřená; jediný PR
+do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-SEARCH-02-A — Iterační kontrakt, reuse a ADR
+  (designed).** ADR 0008 vymezuje uzavřené evaluator schéma, stabilní source
+  ID, parent/child vazbu, ruční potvrzení, limity 3 kol / 3 dotazů / 30
+  výsledků / 300 sekund a recovery hranice jediných `SearchRuns` a
+  `OllamaRuns` journalů.
+- [x] [completed] **F-M3-SEARCH-02-B — Durable workflow a evaluator
+  (implemented).** Každé kolo má samostatný search a JSON `researcher-v2` run,
+  přesný Context Manifest a durable evaluation. Uložené `succeeded` účinky se
+  po restartu znovu validují bez dispatch; `unknown` se neopakuje. Živá Gemma
+  vyžádala úzké normalizace jediného textového `limitations`, prázdného focus
+  výběru a vymyšleného artifact UUID pouze při autoritativně nulovém výběru.
+- [x] [completed] **F-M3-SEARCH-02-C — Sdílené API/UI mezivýsledků
+  (implemented).** Desktop i web bezpečně zobrazují všechna kola, zdroje,
+  omezení, provenance a budget. `final` s přiznaným omezením se konzervativně
+  mění na `intermediate`; modelový návrh i vlastní text v composeru připraví
+  další kolo stejného workflow, ale síťový dotaz se odešle až po kontrole a
+  potvrzení.
+- [x] [completed] **F-M3-SEARCH-02-D — Regrese, dokumentace a fyzická
+  akceptace (PoC validated).** Cílené testy pokryly ruční follow-up a vlastní
+  zpřesnění, restart, source ID, falešné `final`, budgety, deletion recovery a
+  živě zjištěné modelové odchylky. Fyzický průchod prokázal bounded výsledky a
+  mezivýsledek; uživatel jej akceptoval s níže uvedenou hranicí rozsahu.
+
+Závěrečné automatické ověření po poslední aplikační změně: JavaScript
+`node --check`, `git diff --check`, cílené regrese a úplná sada **549 testů OK
+za 122,727 s, 24 volitelných přeskočeno**. Implementace je v commitech
+`087b786`, `21c99da`, `d3ea3ff`, `2a9dc67`, `52ed398` a `9ef3840`.
+
+Akceptované omezení: workflow pracuje pouze s bounded výsledky SearXNG
+(titulek, URL, úryvek) a cílové URL automaticky neotevírá. Proto umí správně
+označit chybějící konkrétní údaj a nabídnout další hledání, ale samotným
+promptováním Gemmy nemůže spolehlivě získat data dostupná až na cílové stránce
+nebo za interaktivním formulářem. Uživatel nechce jednorázový dopravní scraper.
+Navazující `F-M3-PUBLIC-SOURCES-01` v BACKLOGu nejprve prověří obecná či
+oficiální API a navrhne provider-neutral zpracování veřejných zdrojů; speciální
+dopravní capability vznikne jen při doložení vhodného obecného rozhraní.
+Volitelný automatický dispatch zůstává samostatný `F-M3-SEARCH-03`.
+
 ## IMP-01 — Explicitní jednorázový import z Google Drive — 2026-10-14
 
 Dávka na větvi `feature/imp-01-google-drive-import`, založené z `develop`

@@ -9,7 +9,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
-from spikes.chat_service import ChatService
+from spikes.chat_service import ChatService, parse_search_evaluation
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import read_config
@@ -18,7 +18,7 @@ from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
-from spikes.web_search import SearXNGAdapter, SearchResponseError
+from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
 from tests import test_local_api
@@ -312,7 +312,11 @@ class ChatServiceTests(unittest.TestCase):
         def ollama_transport(binding, raw):
             prompt = json.loads(raw)['prompt']; first = not ollama_calls; ollama_calls.append(prompt)
             response = (json.dumps(outcome) if first
-                        else 'Synthesized answer with https://example.test/fact')
+                        else json.dumps({'schema_version': 1, 'assessment': 'final',
+                            'answer': 'Synthesized answer with https://example.test/fact',
+                            'rationale': 'The available source answers the request.',
+                            'used_source_ids': [], 'limitations': [],
+                            'follow_up_queries': []}))
             return {'model': binding.model, 'response': response}
         def search_transport(binding, query):
             search_calls.append(query)
@@ -439,7 +443,12 @@ class ChatServiceTests(unittest.TestCase):
         def ollama_transport(binding, raw):
             ollama_calls.append(raw)
             return {'model': binding.model, 'response':
-                    json.dumps(outcome) if len(ollama_calls) == 1 else 'Restored search answer'}
+                    json.dumps(outcome) if len(ollama_calls) == 1 else json.dumps({
+                        'schema_version': 1, 'assessment': 'final',
+                        'answer': 'Restored search answer',
+                        'rationale': 'The empty result is conclusive for this test.',
+                        'used_source_ids': [], 'limitations': [],
+                        'follow_up_queries': []})}
         def search_transport(_binding, query):
             search_calls.append(query)
             return {'query': query, 'results': []}
@@ -475,6 +484,171 @@ class ChatServiceTests(unittest.TestCase):
             'preview_sha256': preview['preview_sha256'], 'approved': True})
         self.assertEqual(search_calls, ['public facts'])
         self.assertEqual(projection['outcome']['content'], 'Restored search answer')
+
+    def test_iterative_search_accepts_manual_refinement_after_false_final(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
+                   'query': 'initial query', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        ollama_calls, ollama_formats, search_calls = [], [], []
+        evaluations = [
+            {'schema_version': 1, 'assessment': 'final',
+             'answer': 'First round is incomplete.', 'rationale': 'More detail is needed.',
+             'used_source_ids': [], 'limitations': ['Missing detail.'],
+             'follow_up_queries': []},
+            {'schema_version': 1, 'assessment': 'final', 'answer': 'Final answer.',
+             'rationale': 'Both rounds are sufficient.', 'used_source_ids': [],
+             'limitations': [], 'follow_up_queries': []},
+        ]
+        def ollama_transport(binding, raw):
+            provider_request = json.loads(raw)
+            ollama_calls.append(provider_request['prompt'])
+            ollama_formats.append(provider_request.get('format'))
+            response = outcome if len(ollama_calls) == 1 else evaluations[len(ollama_calls) - 2]
+            return {'model': binding.model, 'response': json.dumps(response)}
+        def search_transport(_binding, query):
+            search_calls.append(query)
+            return {'query': query, 'results': [{'title': query,
+                'url': 'https://example.test/' + str(len(search_calls)),
+                'content': 'bounded result'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=search_transport))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        routed = service.task_route(request)
+        first = service.task_search_preview({'task_id': request['task_id'],
+            'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+            'synthesis_manifest_id': str(uuid4())})
+        pending = service.task_search_confirm({'task_id': request['task_id'],
+            'search_id': first['search_id'], 'preview_sha256': first['preview_sha256'],
+            'approved': True})
+        self.assertTrue(pending['temporary'])
+        self.assertEqual(search_calls, ['initial query'])
+        self.assertEqual(pending['search_workflow']['next_queries'], [])
+        self.assertEqual(pending['search_workflow']['rounds'][0]['evaluation']['assessment'],
+                         'intermediate')
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=search_transport))
+        restored = next(item for item in restarted.task_outcomes(project_id=ENTITY)
+                        if item['task_id'] == request['task_id'])
+        self.assertEqual(restored['search_workflow']['next_queries'], [])
+        second = restarted.task_search_preview({'task_id': request['task_id'],
+            'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+            'synthesis_manifest_id': str(uuid4()), 'parent_search_id': first['search_id'],
+            'query': 'user-refined query'})
+        self.assertEqual(search_calls, ['initial query'])
+        completed = restarted.task_search_confirm({'task_id': request['task_id'],
+            'search_id': second['search_id'], 'preview_sha256': second['preview_sha256'],
+            'approved': True})
+        self.assertEqual(search_calls, ['initial query', 'user-refined query'])
+        self.assertEqual(completed['outcome']['content'], 'Final answer.')
+        self.assertEqual(len(completed['outcome']['rounds']), 2)
+        self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
+                         first['search_id'])
+        self.assertEqual(ollama_formats, ['json', 'json', 'json'])
+        self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
+                            completed['outcome']['rounds'][1]['run_id'])
+
+    def test_search_evaluation_rejects_unavailable_sources_and_final_follow_up(self):
+        base = {'schema_version': 1, 'assessment': 'final', 'answer': 'Answer',
+                'rationale': 'Reason', 'used_source_ids': ['source-known'],
+                'limitations': [], 'follow_up_queries': []}
+        with self.assertRaisesRegex(ValueError, 'unavailable search source'):
+            parse_search_evaluation(json.dumps(base), {'source-other'})
+        with self.assertRaisesRegex(ValueError, 'cannot request another query'):
+            parse_search_evaluation(json.dumps(dict(base,
+                follow_up_queries=['another query'])), {'source-known'})
+        with self.assertRaisesRegex(ValueError, 'duplicate follow-up'):
+            parse_search_evaluation(json.dumps(dict(base, assessment='intermediate',
+                follow_up_queries=['same query', ' same query '])), {'source-known'})
+        normalized = parse_search_evaluation(json.dumps(dict(base,
+            limitations='One model limitation.')), {'source-known'})
+        self.assertEqual(normalized['limitations'], ['One model limitation.'])
+        self.assertEqual(normalized['assessment'], 'intermediate')
+
+    def test_iterative_search_stops_at_round_budget(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
+                   'query': 'q1', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        calls = []
+        def ollama_transport(binding, raw):
+            calls.append(json.loads(raw)['prompt'])
+            if len(calls) == 1: response = outcome
+            else:
+                next_query = 'q' + str(len(calls))
+                response = {'schema_version': 1, 'assessment': 'intermediate',
+                    'answer': 'Still partial.', 'rationale': 'Continue.',
+                    'used_source_ids': [], 'limitations': ['Incomplete.'],
+                    'follow_up_queries': [next_query]}
+            return {'model': binding.model, 'response': json.dumps(response)}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda _binding, query: {'query': query, 'results': []}))
+        service.configure(self.binding)
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        service.task_route(request)
+        parent = None
+        for index, query in enumerate(('q1', 'q2', 'q3'), start=1):
+            preview_request = {'task_id': request['task_id'],
+                'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+                'synthesis_manifest_id': str(uuid4())}
+            if parent is not None:
+                preview_request.update(parent_search_id=parent, query=query)
+            preview = service.task_search_preview(preview_request)
+            projection = service.task_search_confirm({'task_id': request['task_id'],
+                'search_id': preview['search_id'],
+                'preview_sha256': preview['preview_sha256'], 'approved': True})
+            parent = preview['search_id']
+            self.assertEqual(projection['temporary'], index < 3)
+        self.assertEqual(projection['outcome']['completion_reason'],
+                         'round-budget-exhausted')
+        self.assertEqual(projection['outcome']['assessment'], 'intermediate')
+        self.assertEqual(projection['outcome']['budget_used']['rounds_used'], 3)
+
+    def test_iterative_search_time_budget_expires_before_dispatch(self):
+        request = self.route_request()
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
+                   'query': 'delayed query', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        search_calls = []
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(outcome)}),
+            search_adapter_factory=lambda runs: SearXNGAdapter(runs,
+                transport=lambda *_: search_calls.append(1)))
+        service.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        service.task_route(request)
+        preview = service.task_search_preview({'task_id': request['task_id'],
+            'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
+            'synthesis_manifest_id': str(uuid4())})
+        with SearchRuns(self.chat_state).connect() as db:
+            db.execute('UPDATE search_workflows SET started_at=0 WHERE task_id=?',
+                       (request['task_id'],)); db.commit()
+        with self.assertRaisesRegex(ValueError, 'time budget is exhausted'):
+            service.task_search_confirm({'task_id': request['task_id'],
+                'search_id': preview['search_id'],
+                'preview_sha256': preview['preview_sha256'], 'approved': True})
+        self.assertEqual(search_calls, [])
 
     def test_private_network_orchestration_requires_exact_binding_and_survives_restart(self):
         outcome = {'schema_version': 1, 'kind': 'direct-answer', 'content': 'LAN answer'}
@@ -623,6 +797,33 @@ class ChatServiceTests(unittest.TestCase):
             routed_for(external, {'schema_version': 1, 'kind': 'external-request',
                 'purpose': 'Externí model', 'query': 'dotaz',
                 'message_ids': [], 'artifact_ids': []})
+
+    def test_web_search_discards_invented_artifact_only_when_none_was_selected(self):
+        def routed_for(request, value):
+            service = ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(value)}))
+            return service.task_route(request)['outcome']
+
+        request = self.route_request()
+        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
+            'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
+            'message_ids': [], 'artifact_ids': [str(uuid4())]})
+        self.assertEqual(outcome['message_ids'], [request['message_id']])
+        self.assertEqual(outcome['artifact_ids'], [])
+
+        selected_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=selected_id,
+            base_head=self.git.head(), title='Project context', body='exact artifact', new=True),
+            str(uuid4()))
+        selected = self.route_request(expected_head=self.git.head(),
+                                      selected_artifact_ids=[selected_id])
+        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
+            routed_for(selected, {'schema_version': 1, 'kind': 'web-search',
+                'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
+                'message_ids': [selected['message_id']],
+                'artifact_ids': [str(uuid4())]})
 
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')

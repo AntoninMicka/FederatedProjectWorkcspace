@@ -246,6 +246,18 @@ shodným preview/privacy/`unknown`/Context Manifest kontraktem; žádný její k
 ani neveřejné detaily se nepřenášejí. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#řízené-webové-hledání-přes-searxng--f-m3-search-01).
 
+F-M3-SEARCH-02 **reuse/adaptuje** existující `SearchRuns`, `OllamaRuns`,
+`ContextBuilder`, `TaskOutcomes`, thread deletion recovery a bezpečné společné
+desktop/web vykreslování. Workflow a kola jsou nové tabulky ve stejném search
+journalu; search ani modelový účinek nedostává druhou autoritu. Stabilní source
+ID se odvozuje z již validované URL a evaluator je uzavřený JSON kontrakt.
+Agent framework, crawler, RAG, skrytý tool call i automatické odesílání dotazů
+se odmítají: pro bounded ruční iteraci nepřinášejí potřebný recovery kontrakt a
+automatika má vlastní navazující dávku. Soukromá inventura neposkytuje shodnou
+implementaci s preview/privacy/`unknown` hranicí; žádný její kód ani neveřejné
+detaily se nepřenášejí. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#bounded-iterativní-hledání--f-m3-search-02).
+
 F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
 provider-neutral `RoleRegistry` a backend adapter/run journals, durable
 prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný

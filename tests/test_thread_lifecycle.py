@@ -65,10 +65,13 @@ class ThreadLifecycleTests(unittest.TestCase):
             'project_id': str(uuid4()), 'query': 'facts', 'privacy': 'project',
             'created_at': NOW, 'synthesis_run_id': synthesis_run,
             'synthesis_manifest_id': str(uuid4())}
-        search = SearchRuns(root); search.prepare(search_id=search_id,
-            task_id=task_id, node_id=node_id, user_id=user_id,
-            project_id=search_request['project_id'], request=search_request,
-            preview={'search_id': search_id}, binding=search_binding)
+        search = SearchRuns(root); search.prepare_round(search_id=search_id,
+            task_id=task_id, search_task_id=task_id, node_id=node_id, user_id=user_id,
+            project_id=search_request['project_id'], privacy='project',
+            expected_head='a' * 40, request=search_request,
+            preview={'search_id': search_id}, binding=search_binding, round_index=1,
+            parent_search_id=None, synthesis_run_id=synthesis_run,
+            synthesis_manifest_id=search_request['synthesis_manifest_id'])
         search.transition(search_id, 'prepared', 'dispatching')
         search.transition(search_id, 'dispatching', 'succeeded', result={
             'schema_version': 1, 'query': 'facts', 'searched_at': NOW,
@@ -123,6 +126,9 @@ class ThreadLifecycleTests(unittest.TestCase):
                                 ('openai-runs.sqlite', 'runs')):
             with sqlite3.connect(root / filename) as db:
                 self.assertEqual(db.execute(f'SELECT count(*) FROM {table}').fetchone()[0], 0)
+        with sqlite3.connect(root / 'search-runs.sqlite') as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM search_rounds').fetchone()[0], 0)
+            self.assertEqual(db.execute('SELECT count(*) FROM search_workflows').fetchone()[0], 0)
 
     def test_each_committed_boundary_recovers_idempotently(self):
         for boundary in ('planned', 'marked', 'approvals', 'outcomes', 'runs', 'thread',
