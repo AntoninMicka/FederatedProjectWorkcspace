@@ -70,10 +70,14 @@ odvolaný přístup operaci zastaví bez částečné projektové publikace.
   export, duplicitu/supersedes, stale HEAD, změnu revize, odvolání, limit a
   recovery bez druhého downloadu.
 - **D — implemented, akceptace otevřená:** sdílená desktop/web stránka má
-  konfiguraci, systémový Picker/popup, polling, textový plán, explicitní
-  potvrzení a obnovu. HTTPS test ověřuje callback, `drive.file`, webový zákaz
-  `local-only` a RBAC. Fyzický průchod se skutečným Google účtem a prohlížečem
-  zatím nebyl proveden; postup je v
+  přívětivého průvodce prvním přihlášením i importem, jednorázové nastavení
+  OAuth s přesnou callback adresou, návrat z nastavení, systémový Picker/popup,
+  stavový postup, bezpečný seznam vybraných položek, explicitní potvrzení a
+  obnovu. Chybové stavy vysvětlují zrušené přihlášení i zablokované popup okno;
+  UI připomíná, že heslo zůstává u Googlu a samotný výběr projekt nemění. HTTPS
+  test ověřuje callback, `drive.file`, webový zákaz `local-only` a RBAC.
+  Fyzický průchod se skutečným Google účtem a prohlížečem zatím nebyl proveden;
+  postup je v
   [docs/google-drive-import.md](docs/google-drive-import.md).
 - Ověření 2026-10-14: `node --check` generovaného `app.js`; cílené Drive,
   indexové, desktopové a HTTPS testy; úplná sada

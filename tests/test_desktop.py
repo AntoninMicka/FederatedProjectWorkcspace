@@ -664,6 +664,13 @@ class DesktopTests(unittest.TestCase):
                         approved.replace('127.0.0.1%3A4321', '127.0.0.1%3A9999')):
             self.assertIsNone(google_authorization_url(changed, origin))
         self.assertIn('id="google-drive-preview"', HTML)
+        self.assertIn('id="google-drive-steps"', HTML)
+        self.assertIn('id="google-drive-open-settings"', HTML)
+        self.assertIn('id="google-drive-callback"', HTML)
+        self.assertIn('Google heslo zadáváte jen Googlu.', HTML)
+        self.assertIn("setGoogleDriveStep(3,2)", JS)
+        self.assertIn("googleDriveFiles.replaceChildren()", JS)
+        self.assertNotIn('googleDriveFiles.innerHTML', JS)
         self.assertIn("projectRequest('/v1/google-drive/confirm'", JS)
         self.assertIn("projectRequest('/v1/google-drive/recover'", JS)
 
