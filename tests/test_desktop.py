@@ -48,6 +48,8 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn('.href=source.url', JS)
         self.assertIn('renderSearchWorkflow(card,projection.search_workflow)', JS)
         self.assertIn('Zkontrolovat další dotaz:', JS)
+        self.assertIn("latestTask.outcome?.kind==='web-search'", JS)
+        self.assertIn('prepareTaskSearch(latestTask,draft.value.trim(),latestSearchRound.search_id)', JS)
         self.assertIn('Finálnost je hodnocení modelu', JS)
         self.assertIn('query===null && projection.search_preview', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',

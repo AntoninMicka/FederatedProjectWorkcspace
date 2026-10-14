@@ -77,6 +77,11 @@ def parse_search_evaluation(raw, source_ids):
                     for item in value['limitations']),
             'Ollama returned invalid search limitations')
     value['limitations'] = [item.strip() for item in value['limitations']]
+    # A result that admits a missing fact is not terminal even when a small
+    # local model labels it final. Keep the conservative assessment so the
+    # user can refine the search without granting any automatic dispatch.
+    if value['assessment'] == 'final' and value['limitations']:
+        value['assessment'] = 'intermediate'
     require(isinstance(value['follow_up_queries'], list)
             and len(value['follow_up_queries']) <= 3
             and all(isinstance(item, str) and bool(item.strip()) and '\0' not in item
@@ -604,9 +609,8 @@ class ChatService:
             latest = workflow['rounds'][-1]
             evaluation = latest['evaluation']
             require(evaluation is not None
-                    and request['parent_search_id'] == latest['search_id']
-                    and request['query'] in evaluation['follow_up_queries'],
-                    'Follow-up query was not proposed by the latest search round')
+                    and request['parent_search_id'] == latest['search_id'],
+                    'Follow-up query does not extend the latest search round')
             used = search_runs.budget_state(workflow)
             require(used['rounds_used'] < workflow['budget']['max_rounds']
                     and used['queries_used'] < workflow['budget']['max_queries']
@@ -722,7 +726,9 @@ class ChatService:
             'schema_version=1, assessment (final, intermediate, or insufficient), answer, '
             'rationale, used_source_ids, limitations, and follow_up_queries. Source IDs must come '
             'from supplied results. final means your model judgment, not guaranteed truth, and '
-            'must have no follow_up_queries. Propose at most three bounded public queries; do not '
+            'must directly answer the request, have no limitations and have no follow_up_queries. '
+            'If a requested fact is still missing, use intermediate or insufficient. Propose at '
+            'most three bounded public queries; do not '
             'claim they were executed. State uncertainty and do not invent or fetch sources.')
         builder = ContextBuilder(workspace, row['project_id'])
         prepared = builder.prepare(
@@ -747,7 +753,6 @@ class ChatService:
         used = search_runs.budget_state(workflow)
         reason = None
         if evaluation['assessment'] == 'final': reason = 'model-final'
-        elif not evaluation['follow_up_queries']: reason = 'no-follow-up-query'
         elif used['rounds_used'] >= workflow['budget']['max_rounds']:
             reason = 'round-budget-exhausted'
         elif used['queries_used'] >= workflow['budget']['max_queries']:

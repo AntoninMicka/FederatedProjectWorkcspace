@@ -81,6 +81,12 @@ TaskOutcomes completion nesmí vyvolat druhý search ani LLM dispatch.
   vrátil jedno vymyšlené artifact UUID. Bezpečná normalizace nyní vynutí
   autoritativní prázdný seznam pouze pro `web-search` bez vybraných artefaktů;
   cizí UUID při skutečném výběru i v jiném druhu požadavku nadále fail-closed.
+- **Fyzické zjištění 2026-10-14, ruční zpřesnění:** evaluator označil obecné
+  odkazy jako `final`, ačkoli současně přiznal chybějící konkrétní jízdní řád;
+  následný text v composeru pak bez search kontextu skončil jako nesmyslná
+  přímá odpověď. `final` s omezením se nyní konzervativně mění na
+  `intermediate` a ručně napsané zpřesnění v composeru připraví další kolo
+  stejného workflow. Síťový dotaz se nadále odešle až po kontrole a potvrzení.
 
 ## Podmínky dokončení
 

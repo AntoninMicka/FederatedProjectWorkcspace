@@ -2026,7 +2026,8 @@ async function prepareTaskSearch(projection,query=null,parentSearchId=null){
   chatOperationStatus.textContent=preview.state==='unknown'?
    'Výsledek předchozího hledání není známý; automatické opakování je zakázané.' :
    'Zkontrolujte přesný dotaz, privacy a endpoint a potom jej potvrďte.';
- }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);}
+  return true;
+ }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);return false;}
 }
 document.querySelector('#search-confirm-check').addEventListener('change',event=>{
  document.querySelector('#search-confirm').disabled=!event.currentTarget.checked || !pendingSearchPreview;
@@ -2529,6 +2530,15 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const runChoice={mode,adapter,model:mode==='orchestration'?null:model};
  if(mode==='orchestration'){
   runChoice.binding_id=chatBinding.binding_id;runChoice.binding_revision=chatBinding.revision;
+ }
+ const latestTask=taskOutcomes.at(-1),latestSearchRound=
+  latestTask?.search_workflow?.rounds?.at(-1);
+ if(mode==='orchestration' && latestTask?.temporary
+    && latestTask.outcome?.kind==='web-search' && latestSearchRound?.evaluation){
+  const submit=document.querySelector('#chat-submit');submit.disabled=true;
+  const prepared=await prepareTaskSearch(latestTask,draft.value.trim(),latestSearchRound.search_id);
+  if(prepared){draft.value='';draft.focus();}
+  submit.disabled=!activeProject || !draft.value.trim();return;
  }
  if(adapter==='ollama' && chatBinding.boundary==='private-network'){
   if(document.querySelector('#chat-privacy').value==='local-only'){

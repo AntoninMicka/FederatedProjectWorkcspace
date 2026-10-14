@@ -447,7 +447,7 @@ class ChatServiceTests(unittest.TestCase):
                         'schema_version': 1, 'assessment': 'final',
                         'answer': 'Restored search answer',
                         'rationale': 'The empty result is conclusive for this test.',
-                        'used_source_ids': [], 'limitations': ['No sources returned.'],
+                        'used_source_ids': [], 'limitations': [],
                         'follow_up_queries': []})}
         def search_transport(_binding, query):
             search_calls.append(query)
@@ -485,17 +485,17 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(search_calls, ['public facts'])
         self.assertEqual(projection['outcome']['content'], 'Restored search answer')
 
-    def test_iterative_search_requires_manual_follow_up_and_preserves_rounds(self):
+    def test_iterative_search_accepts_manual_refinement_after_false_final(self):
         request = self.route_request()
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
                    'query': 'initial query', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
         ollama_calls, ollama_formats, search_calls = [], [], []
         evaluations = [
-            {'schema_version': 1, 'assessment': 'intermediate',
+            {'schema_version': 1, 'assessment': 'final',
              'answer': 'First round is incomplete.', 'rationale': 'More detail is needed.',
              'used_source_ids': [], 'limitations': ['Missing detail.'],
-             'follow_up_queries': ['more specific query']},
+             'follow_up_queries': []},
             {'schema_version': 1, 'assessment': 'final', 'answer': 'Final answer.',
              'rationale': 'Both rounds are sufficient.', 'used_source_ids': [],
              'limitations': [], 'follow_up_queries': []},
@@ -530,7 +530,9 @@ class ChatServiceTests(unittest.TestCase):
             'approved': True})
         self.assertTrue(pending['temporary'])
         self.assertEqual(search_calls, ['initial query'])
-        self.assertEqual(pending['search_workflow']['next_queries'], ['more specific query'])
+        self.assertEqual(pending['search_workflow']['next_queries'], [])
+        self.assertEqual(pending['search_workflow']['rounds'][0]['evaluation']['assessment'],
+                         'intermediate')
         restarted = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state,
             adapter_factory=lambda runs: OllamaAdapter(runs, transport=ollama_transport),
@@ -538,16 +540,16 @@ class ChatServiceTests(unittest.TestCase):
                 transport=search_transport))
         restored = next(item for item in restarted.task_outcomes(project_id=ENTITY)
                         if item['task_id'] == request['task_id'])
-        self.assertEqual(restored['search_workflow']['next_queries'], ['more specific query'])
+        self.assertEqual(restored['search_workflow']['next_queries'], [])
         second = restarted.task_search_preview({'task_id': request['task_id'],
             'search_id': str(uuid4()), 'synthesis_run_id': str(uuid4()),
             'synthesis_manifest_id': str(uuid4()), 'parent_search_id': first['search_id'],
-            'query': 'more specific query'})
+            'query': 'user-refined query'})
         self.assertEqual(search_calls, ['initial query'])
         completed = restarted.task_search_confirm({'task_id': request['task_id'],
             'search_id': second['search_id'], 'preview_sha256': second['preview_sha256'],
             'approved': True})
-        self.assertEqual(search_calls, ['initial query', 'more specific query'])
+        self.assertEqual(search_calls, ['initial query', 'user-refined query'])
         self.assertEqual(completed['outcome']['content'], 'Final answer.')
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
@@ -571,6 +573,7 @@ class ChatServiceTests(unittest.TestCase):
         normalized = parse_search_evaluation(json.dumps(dict(base,
             limitations='One model limitation.')), {'source-known'})
         self.assertEqual(normalized['limitations'], ['One model limitation.'])
+        self.assertEqual(normalized['assessment'], 'intermediate')
 
     def test_iterative_search_stops_at_round_budget(self):
         request = self.route_request()

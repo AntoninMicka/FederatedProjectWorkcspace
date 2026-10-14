@@ -368,8 +368,10 @@ přesnými poli `schema_version`, `assessment`, `answer`, `rationale`,
 `used_source_ids`, `limitations` a `follow_up_queries`. `assessment` je právě
 `final`, `intermediate` nebo `insufficient`. Source ID je stabilní
 `source-` plus prvních 32 hex znaků SHA-256 přes přesnou URL a evaluator smí
-odkazovat jen na ID přítomná v dosavadních kolech. `final` nesmí navrhovat
-další dotaz a v UI je výslovně označeno jako úsudek modelu, nikoli garance.
+odkazovat jen na ID přítomná v dosavadních kolech. `final` nesmí mít omezení
+ani navrhovat další dotaz a v UI je výslovně označeno jako úsudek modelu,
+nikoli garance. Modelové `final` s neprázdným omezením se konzervativně
+normalizuje na `intermediate`.
 Jediná tolerovaná modelová odchylka je neprázdné textové `limitations`, které
 se bezpečně normalizuje na jednoprvkový seznam; jiná pole a typy zůstávají
 fail-closed.
@@ -384,8 +386,10 @@ výsledky a již uložená hodnocení a znovu je označuje jako nedůvěryhodná
 
 Pevný budget v této verzi je nejvýše tři kola, tři odeslané dotazy, třicet
 výsledků a 300 sekund od přípravy prvního preview. Vyčerpání kteréhokoli limitu
-uzavře workflow posledním dostupným hodnocením a přesným důvodem. Follow-up se
-pouze zobrazí; vytvoření nového preview a potvrzení jeho hashe je vždy ruční.
+uzavře workflow posledním dostupným hodnocením a přesným důvodem. Modelový
+follow-up se pouze zobrazí; uživatel může ve stejném composeru napsat i vlastní
+zpřesnění. To vytvoří nové preview navázané na poslední kolo a odeslání stále
+vyžaduje ruční kontrolu a potvrzení jeho hashe.
 Automatický dispatch a countdown patří až do F-M3-SEARCH-03.
 
 Crash/recovery zachovává původní autority. `SearchRuns.succeeded` předchází
