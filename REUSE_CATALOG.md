@@ -209,6 +209,13 @@ renderer ani externí template engine. Volné HTML/CSS šablony byly odmítnuty,
 protože by rozbily stabilní zóny a rozšířily veřejný projekční povrch. Nový
 omezený kontrakt dovoluje pouze allowlisted preset, zarovnání, hustotu a barvy.
 
+F-M4-PRESENTER-01-B **reuse/adaptuje schválený PyYAML `StrictLoader` a
+`Artifacts.save`**. Čitelný formát v2 používá omezený YAML frontmatter,
+allowlisted YAML metadata jednotlivých slidů a malou vlastní gramatiku Markdown
+nadpisu a odrážek; nepřidává obecný Markdown/HTML renderer ani novou závislost.
+Legacy JSON se čte bezzápisově a migruje se pouze explicitním uložením stejného
+artefaktu přes stávající Workspace/Journal/Git/index recovery hranici.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

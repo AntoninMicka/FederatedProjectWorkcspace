@@ -8,11 +8,14 @@ import re
 import struct
 from uuid import uuid4
 
+import yaml
+
 from spikes.artifacts import Artifacts
 from spikes.markdown_documents import MAX_EDITOR
-from spikes.metadata import require, uuid
+from spikes.metadata import StrictLoader, ValidationError, require, uuid
 
-PREFIX = '```fpw-presentation-v1\n'
+LEGACY_PREFIX = '```fpw-presentation-v1\n'
+MARKDOWN_PREFIX = '---\nformat: fpw-presentation\nformat_version: 2\n'
 MAX_WALLPAPER = 256 * 1024
 LAYOUT_PRESETS = (
     dict(id='title', revision=1, name='Titulní slide', preset='title',
@@ -167,10 +170,12 @@ def validate_deck(deck):
         require(slide['id'] not in seen, 'Duplicitní ID slidu.')
         seen.add(slide['id'])
         require(slide['kind'] in ('main', 'backup'), 'Neplatný typ slidu.')
-        require(isinstance(slide['title'], str) and 0 < len(slide['title'].strip()) <= 200, 'Vyplňte nadpis slidu.')
+        require(isinstance(slide['title'], str) and 0 < len(slide['title'].strip()) <= 200
+                and not any(c in slide['title'] for c in '\r\0'), 'Vyplňte nadpis slidu.')
         require(isinstance(slide['notes'], str) and len(slide['notes']) <= 10000, 'Poznámky jsou příliš dlouhé.')
         require(isinstance(slide['bullets'], list) and len(slide['bullets']) <= 12
-                and all(isinstance(b, str) and 0 < len(b.strip()) <= 500 for b in slide['bullets']),
+                and all(isinstance(b, str) and 0 < len(b.strip()) <= 500
+                        and not any(c in b for c in '\r\0') for b in slide['bullets']),
                 'Použijte nejvýše 12 odrážek po 500 znacích.')
         require(type(slide.get('column_break', 0)) is int and 0 <= slide.get('column_break', 0) <= len(slide['bullets']),
                 'Neplatné rozdělení sloupců.')
@@ -190,14 +195,137 @@ def validate_deck(deck):
     return deck
 
 
+def _yaml_dump(value):
+    return yaml.safe_dump(value, allow_unicode=True, sort_keys=False, width=1000000).rstrip()
+
+
+def _yaml_load(text):
+    require(isinstance(text, str) and len(text.encode('utf-8')) <= MAX_EDITOR,
+            'YAML prezentace překračuje povolený limit.')
+    try:
+        depth = events = 0
+        for event in yaml.parse(text, Loader=StrictLoader):
+            events += 1
+            require(events <= 20000, 'YAML prezentace je příliš složitý.')
+            require(not isinstance(event, yaml.AliasEvent) and not getattr(event, 'anchor', None),
+                    'YAML aliasy a kotvy nejsou podporované.')
+            require(not getattr(event, 'tag', None), 'Explicitní YAML tagy nejsou podporované.')
+            if isinstance(event, (yaml.MappingStartEvent, yaml.SequenceStartEvent)):
+                depth += 1
+                require(depth <= 16, 'YAML prezentace je příliš zanořený.')
+            elif isinstance(event, (yaml.MappingEndEvent, yaml.SequenceEndEvent)):
+                depth -= 1
+        return yaml.load(text, Loader=StrictLoader)
+    except (yaml.YAMLError, UnicodeError, RecursionError) as exc:
+        raise ValidationError('Neplatný YAML prezentace.') from exc
+
+
+def _markdown_text(lines, prefix, continuation):
+    parts = lines.split('\n')
+    return prefix + parts[0] + ''.join('\n' + continuation + part for part in parts[1:])
+
+
 def encode_deck(deck):
+    """Serialize the validated model as readable Markdown format v2."""
     deck = validate_deck(deck)
-    return PREFIX + json.dumps(deck, ensure_ascii=False, separators=(',', ':')) + '\n```\n'
+    front = dict(format='fpw-presentation', format_version=2,
+                 deck=dict(version=deck['version'], title=deck['title'], templates=deck['templates']))
+    sections = ['---\n' + _yaml_dump(front) + '\n---\n']
+    metadata_fields = ('id', 'kind', 'notes', 'background', 'foreground', 'wallpaper',
+                       'next', 'backups', 'layout', 'column_break')
+    for slide in deck['slides']:
+        metadata = {key: copy.deepcopy(slide[key]) for key in metadata_fields}
+        for key in ('repeat', 'reveal'):
+            if key in slide:
+                metadata[key] = copy.deepcopy(slide[key])
+        sections.append('\n```fpw-slide\n' + _yaml_dump(metadata) + '\n```\n'
+                        + _markdown_text(slide['title'], '## ', '   ') + '\n\n'
+                        + '\n'.join(_markdown_text(item, '- ', '  ') for item in slide['bullets']) + '\n')
+    result = ''.join(sections)
+    require(len(result.encode('utf-8')) < MAX_EDITOR, 'Prezentace překračuje limit 1 MiB.')
+    return result
+
+
+def _parse_markdown_content(text):
+    lines = text.split('\n')
+    while lines and lines[-1] == '':
+        lines.pop()
+    require(lines and lines[0].startswith('## '), 'Slide musí začínat nadpisem druhé úrovně.')
+    title = lines[0][3:]
+    index = 1
+    while index < len(lines) and lines[index].startswith('   '):
+        title += '\n' + lines[index][3:]
+        index += 1
+    require(index == len(lines) or lines[index] == '', 'Za nadpisem slidu musí následovat prázdný řádek.')
+    if index < len(lines):
+        index += 1
+    bullets = []
+    for line in lines[index:]:
+        if line.startswith('- '):
+            bullets.append(line[2:])
+        elif line.startswith('  ') and bullets:
+            bullets[-1] += '\n' + line[2:]
+        else:
+            require(False, 'Obsah slidu smí obsahovat pouze Markdown odrážky.')
+    return title, bullets
+
+
+def _decode_markdown(body):
+    require(body.startswith('---\n'), 'Prezentace nemá YAML frontmatter.')
+    end = body.find('\n---\n', 4)
+    require(end >= 0, 'YAML frontmatter prezentace není uzavřený.')
+    front = _yaml_load(body[4:end])
+    require(isinstance(front, dict) and front.keys() == {'format', 'format_version', 'deck'}
+            and front['format'] == 'fpw-presentation' and front['format_version'] == 2,
+            'Neplatný frontmatter prezentace.')
+    deck_header = front['deck']
+    require(isinstance(deck_header, dict) and deck_header.keys() == {'version', 'title', 'templates'},
+            'Neplatná metadata decku.')
+    rest = body[end + 5:]
+    require(rest.startswith('\n```fpw-slide\n'), 'Prezentace neobsahuje žádný slide.')
+    chunks = re.split(r'(?=^```fpw-slide\n)', rest[1:], flags=re.MULTILINE)
+    require(chunks.pop(0) == '', 'Neplatný obsah před prvním slidem.')
+    slides = []
+    slide_fields = {'id', 'kind', 'notes', 'background', 'foreground', 'wallpaper',
+                    'next', 'backups', 'layout', 'column_break'}
+    for chunk in chunks:
+        require(chunk.startswith('```fpw-slide\n'), 'Neplatný začátek slidu.')
+        close = chunk.find('\n```\n', len('```fpw-slide\n'))
+        require(close >= 0, 'YAML metadata slidu nejsou uzavřená.')
+        metadata = _yaml_load(chunk[len('```fpw-slide\n'):close])
+        require(isinstance(metadata, dict) and slide_fields <= metadata.keys()
+                and metadata.keys() <= slide_fields | {'repeat', 'reveal'},
+                'Neplatná metadata slidu.')
+        title, bullets = _parse_markdown_content(chunk[close + 5:])
+        slides.append(dict(metadata, title=title, bullets=bullets))
+    return validate_deck(dict(deck_header, slides=slides))
+
+
+def _decode_legacy(body):
+    require(body.startswith(LEGACY_PREFIX) and body.endswith('\n```\n'), 'Neplatný dokument prezentace.')
+    try:
+        value = json.loads(body[len(LEGACY_PREFIX):-5])
+    except (json.JSONDecodeError, RecursionError) as exc:
+        raise ValidationError('Neplatný JSON starší prezentace.') from exc
+    return validate_deck(value)
+
+
+def is_presentation_document(body):
+    if not isinstance(body, str):
+        return False
+    if body.startswith(LEGACY_PREFIX):
+        return True
+    if not body.startswith('---\n'):
+        return False
+    end = body.find('\n---\n', 4)
+    front = body[4:end if end >= 0 else min(len(body), MAX_EDITOR)]
+    return bool(re.search(r'(?m)^format:\s*["\']?fpw-presentation["\']?\s*$', front))
 
 
 def decode_deck(body):
-    require(isinstance(body, str) and body.startswith(PREFIX) and body.endswith('\n```\n'), 'Neplatný dokument prezentace.')
-    return validate_deck(json.loads(body[len(PREFIX):-5]))
+    require(isinstance(body, str) and len(body.encode('utf-8')) < MAX_EDITOR,
+            'Neplatný dokument prezentace.')
+    return _decode_legacy(body) if body.startswith(LEGACY_PREFIX) else _decode_markdown(body)
 
 
 def public_content(slide):
@@ -233,7 +361,7 @@ class PresentationDocuments:
         view = self.artifacts.open(project_id)
         docs = []
         for document in view['documents']:
-            if document['body'].startswith(PREFIX):
+            if is_presentation_document(document['body']):
                 row = dict(document)
                 try:
                     row['deck'] = decode_deck(document['body'])

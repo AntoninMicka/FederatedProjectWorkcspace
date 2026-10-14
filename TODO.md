@@ -94,11 +94,22 @@ není produktová šablona ani autoritativní projektový obsah.
   JavaScriptu; celá sada `592 tests` prošla (27 přeskočených volitelných či
   fyzických testů). Ruční vizuální akceptace zůstává součástí úkolu F.
 
-- [ ] [planned] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
+- [x] [completed] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
   v1 (implemented).** Nahradit JSON-only obsah fenced bloku lidsky editovatelným
   Markdown formátem s YAML frontmatterem, stabilními ID slidů, notes, backup vazbami
   a bezpečnou migrací existujícího `fpw-presentation-v1`. Parser musí selhat
   uzavřeně, zachovat Git historii a neinterpretovat vložené HTML.
+
+  Dokončeno 2026-10-15. Formát `fpw-presentation` v2 má omezený YAML
+  frontmatter pro deck a layouty, allowlisted YAML blok každého slidu a čitelný
+  Markdown nadpis s odrážkami. Sdílený strict loader odmítá duplicity, aliasy,
+  kotvy, explicitní tagy, nadměrné zanoření a neznámá pole; samostatné HTML
+  konstrukce parser odmítne a HTML uvnitř nadpisu či odrážky zůstává textem.
+  Legacy v1 JSON se otevírá bez zápisu a migruje se až explicitním uložením
+  stejného artefaktu do nové Git revize, zatímco původní bajty zůstávají v
+  historii. Cílených 15 presenterových testů prošlo (1 přeskočený fyzický
+  WebEngine test), stejně jako cílené lokální API testy, Python syntax check a
+  diff check. Celá sada `596 tests` prošla (27 přeskočeno).
 
 - [x] [completed] **F-M4-PRESENTER-01-C — Stabilní layout šablony
   (implemented).** Zavést omezený registr verzovaných layoutů se stabilními zónami,

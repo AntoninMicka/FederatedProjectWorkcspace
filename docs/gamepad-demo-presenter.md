@@ -189,12 +189,19 @@ projekčního displeje. Nejde o plný graf zanořených scénářů, animace ani
 
 ### Formát a ukládání
 
-Deck je běžný projektový dokument `artifacts/<id>/content.md` s blokem
-`fpw-presentation-v1` obsahujícím JSON a metadaty spravovanými existujícím
-editorem artefaktů. Každý slide má stabilní UUID, typ `main`/`backup`, `title`,
-`bullets`, `notes`, `background`, `foreground`, `wallpaper`, `next` a `backups`.
+Deck je běžný projektový dokument `artifacts/<id>/content.md` ve formátu
+`fpw-presentation` verze 2. YAML frontmatter obsahuje verzi decku, jeho název a
+pojmenované layouty. Každý slide má vlastní omezený blok `fpw-slide` se
+stabilním UUID, typem `main`/`backup`, soukromými poznámkami, vzhledem a vazbami;
+za ním následuje běžný Markdown nadpis `##` a seznam odrážek. Nadpis i odrážky
+lze upravit v textovém editoru bez editace jedné neprůhledné JSON řádky.
+Každý slide nese `title`, `bullets`, `notes`, `background`, `foreground`,
+`wallpaper`, `next`, `backups`, `layout` a `column_break`.
 Volitelná pole `repeat` (boolean, výchozí `false`) a `reveal` (`all` nebo `step`,
-výchozí `all`) určují přehrávání; starší dokumenty zůstávají čitelné.
+výchozí `all`) určují přehrávání. Starší blok `fpw-presentation-v1` s JSONem
+zůstává čitelný a pouhé otevření jej nemění. Až explicitní uložení v editoru
+zapíše formát v2 do stejného artefaktu jako novou Git revizi; původní v1 bajty
+zůstávají v historii.
 `Previous` a opačné přiřazení backupu jsou odvozené pohledy, nikoli druhá kopie
 stejné vazby. Formát není export pro publikum: obsahuje i poznámky a backupy.
 Divácké API vrací pouze vizuální obsah výslovně promítnutého slidu.
@@ -202,8 +209,11 @@ Divácké API vrací pouze vizuální obsah výslovně promítnutého slidu.
 Zápis adaptuje `Artifacts.save` → `Workspace.transact`; crash boundaries,
 serializace zápisů a recovery zůstávají podle
 [ADR 0003](adr/0003-coordinated-operation.md). Validace editoru před zápisem
-ověřuje ID, cíle vazeb, souvislou hlavní linii, barvy a limity. Ručně poškozený
-dokument se v editoru označí jako neplatný a automaticky se neopravuje.
+ověřuje ID, cíle vazeb, souvislou hlavní linii, barvy a limity. YAML parser
+odmítá duplicitní klíče, kotvy, aliasy, explicitní tagy, nadměrné zanoření a
+neznámá pole. Tělo slidu přijímá pouze nadpis a odrážky; vložené HTML zůstává
+obyčejným textem a nikdy se neinterpretuje. Ručně poškozený dokument se v
+editoru označí jako neplatný a automaticky se neopravuje.
 Tento formát nerozšiřuje obecný validátor projektových dokumentů o celé schéma
 prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
 

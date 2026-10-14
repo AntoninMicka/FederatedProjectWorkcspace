@@ -16,7 +16,8 @@ from uuid import uuid4
 
 from spikes.presentation_documents import (PresentationDocuments, new_deck, new_slide,
     main_order, relink, set_neighbor, remove_slide, validate_deck, encode_deck, decode_deck,
-    project_deck, validate_wallpaper, layout_presets)
+    project_deck, validate_wallpaper, layout_presets, LEGACY_PREFIX, MARKDOWN_PREFIX,
+    is_presentation_document)
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
 from spikes.desktop_ui import presentation_public_payload, presentation_status
@@ -43,6 +44,34 @@ def sample():
 
 
 class PresentationModelTests(unittest.TestCase):
+    def test_markdown_v2_is_readable_strict_and_keeps_literal_html(self):
+        deck = sample()
+        deck['slides'][0].update(title='První řádek\nDruhý řádek',
+                                 bullets=['První\npokračování', '<script>alert(1)</script>'],
+                                 notes='Soukromá poznámka\nse dvěma řádky')
+        encoded = encode_deck(deck)
+        self.assertTrue(encoded.startswith(MARKDOWN_PREFIX))
+        self.assertIn('```fpw-slide\n', encoded)
+        self.assertIn('## První řádek\n   Druhý řádek', encoded)
+        self.assertIn('- První\n  pokračování', encoded)
+        self.assertIn('- <script>alert(1)</script>', encoded)
+        self.assertTrue(is_presentation_document(encoded))
+        self.assertEqual(decode_deck(encoded), deck)
+
+        invalid_documents = (
+            encoded.replace('format_version: 2\n', 'format_version: 2\nformat_version: 2\n', 1),
+            encoded.replace('format_version: 2\n', 'format_version: &version 2\n', 1),
+            encoded.replace('\n---\n\n```fpw-slide', '\n\n```fpw-slide', 1),
+            encoded.replace('## První řádek', '<script>alert(1)</script>\n## První řádek', 1),
+            encoded.replace('id: ' + deck['slides'][0]['id'],
+                            'unknown: field\nid: ' + deck['slides'][0]['id'], 1),
+            encoded.replace('```fpw-slide\n', '```fpw-slide-broken\n', 1),
+        )
+        for document in invalid_documents:
+            with self.subTest(document=document[:80]), self.assertRaises(ValueError):
+                self.assertTrue(is_presentation_document(document))
+                decode_deck(document)
+
     def test_versioned_layout_templates_customize_round_trip_and_legacy_upgrade(self):
         deck = sample(); first = deck['slides'][0]
         custom = copy.deepcopy(layout_presets()[2])
@@ -194,6 +223,27 @@ class PresentationStorageTests(unittest.TestCase):
             self.service.save(dict(update, deck=request['deck']), str(uuid4()))
         self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
         self.assertEqual(self.git.snapshot(receipt['commit_id'])[f"artifacts/{request['artifact_id']}/content.md"].decode(), encode_deck(request['deck']))
+
+    def test_legacy_v1_open_is_read_only_and_explicit_save_migrates_with_history(self):
+        deck = sample(); artifact_id = str(uuid4()); base = self.git.head()
+        legacy = LEGACY_PREFIX + json.dumps(deck, ensure_ascii=False, separators=(',', ':')) + '\n```\n'
+        self.service.artifacts.save(dict(project_id=self.project, artifact_id=artifact_id,
+                                         base_head=base, new=True, title=deck['title'], body=legacy), str(uuid4()))
+        legacy_head = self.git.head()
+        opened = self.service.open(self.project)
+        self.assertEqual(opened['documents'][0]['deck'], deck)
+        self.assertEqual(self.git.head(), legacy_head)
+        self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
+
+        request = dict(project_id=self.project, artifact_id=artifact_id, base_head=legacy_head,
+                       new=False, deck=opened['documents'][0]['deck'])
+        self.service.save(request, str(uuid4()))
+        migrated_head = self.git.head()
+        path = f'artifacts/{artifact_id}/content.md'
+        self.assertEqual(self.git.snapshot(legacy_head)[path].decode(), legacy)
+        self.assertTrue(self.git.snapshot(migrated_head)[path].decode().startswith(MARKDOWN_PREFIX))
+        self.assertEqual(self.service.open(self.project)['documents'][0]['deck'], deck)
+        self.assertEqual(self.git.run('rev-list', '--count', base + '..' + migrated_head).stdout.strip(), '2')
 
     def test_select_requires_exact_saved_document_and_revision(self):
         request = self.request(); self.service.save(request, str(uuid4())); head = self.git.head()
