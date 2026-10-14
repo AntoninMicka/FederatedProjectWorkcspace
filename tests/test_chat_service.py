@@ -795,6 +795,33 @@ class ChatServiceTests(unittest.TestCase):
                 'purpose': 'Externí model', 'query': 'dotaz',
                 'message_ids': [], 'artifact_ids': []})
 
+    def test_web_search_discards_invented_artifact_only_when_none_was_selected(self):
+        def routed_for(request, value):
+            service = ChatService(self.node_path, Projects(self.node_path),
+                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                    runs, transport=lambda binding, raw:
+                        {'model': binding.model, 'response': json.dumps(value)}))
+            return service.task_route(request)['outcome']
+
+        request = self.route_request()
+        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
+            'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
+            'message_ids': [], 'artifact_ids': [str(uuid4())]})
+        self.assertEqual(outcome['message_ids'], [request['message_id']])
+        self.assertEqual(outcome['artifact_ids'], [])
+
+        selected_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=selected_id,
+            base_head=self.git.head(), title='Project context', body='exact artifact', new=True),
+            str(uuid4()))
+        selected = self.route_request(expected_head=self.git.head(),
+                                      selected_artifact_ids=[selected_id])
+        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
+            routed_for(selected, {'schema_version': 1, 'kind': 'web-search',
+                'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
+                'message_ids': [selected['message_id']],
+                'artifact_ids': [str(uuid4())]})
+
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
         request = self.route_request(privacy='confidential')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',

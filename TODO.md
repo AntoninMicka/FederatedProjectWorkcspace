@@ -63,7 +63,7 @@ TaskOutcomes completion nesmí vyvolat druhý search ani LLM dispatch.
 - **Ověření 2026-10-14:** cílené testy pokrývají ruční follow-up, restart,
   falešné source ID, zakázaný `final` s follow-upem, vyčerpání třetího kola a
   deletion recovery. Úplná sada `python3 -m unittest discover -s tests -v`:
-  548 testů OK, 24 přeskočených volitelných fyzických testů. `git diff --check`
+  549 testů OK, 24 přeskočených volitelných fyzických testů. `git diff --check`
   bez chyb. Zbývá fyzická akceptace podle `docs/searxng-search-acceptance.md`.
 - **Fyzické zjištění 2026-10-14:** první pokus odhalil, že evaluator používal
   textový `researcher-v1`, přestože nový kontrakt vyžaduje JSON. Opraveno na
@@ -76,6 +76,11 @@ TaskOutcomes completion nesmí vyvolat druhý search ani LLM dispatch.
   lze po restartu znovu vyhodnotit bez opakování search nebo Ollama dispatch.
   Recovery již dokončených účinků smí doběhnout i po vypršení 300sekundového
   budgetu; limit nadále blokuje každý nový search nebo nový evaluator dispatch.
+- **Fyzické zjištění 2026-10-14, směrovač návazného hledání:** `task-router-v1`
+  správně zvolil `web-search`, ale při nulovém výběru projektových artefaktů
+  vrátil jedno vymyšlené artifact UUID. Bezpečná normalizace nyní vynutí
+  autoritativní prázdný seznam pouze pro `web-search` bez vybraných artefaktů;
+  cizí UUID při skutečném výběru i v jiném druhu požadavku nadále fail-closed.
 
 ## Podmínky dokončení
 

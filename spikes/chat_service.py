@@ -485,6 +485,14 @@ class ChatService:
                 if (value.get('kind') == 'web-search'
                         and value.get('message_ids') == []):
                     value['message_ids'] = [request['message_id']]
+                # With no selected project inputs, the authoritative artifact
+                # selection is unambiguously empty. A local model can invent
+                # a UUID even though none was supplied; discard it only for
+                # web search with that exact zero-selection boundary.
+                if (value.get('kind') == 'web-search'
+                        and request['selected_artifact_ids'] == []
+                        and isinstance(value.get('artifact_ids'), list)):
+                    value['artifact_ids'] = []
             # Some small local models repeat the required focus UUID in one
             # redundant field. Normalize only that exact, verifiable shape;
             # the domain outcome remains closed and provider/tool fields fail.
