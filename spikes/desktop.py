@@ -180,7 +180,6 @@ def main():
     try:
         from spikes.desktop_displays import PresenterDisplays
         from spikes.desktop_user_profile import UserProfileDialog
-        from spikes.desktop_presentation_editor import PresentationEditorDialog
         from spikes.presentation_documents import PresentationDocuments
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
@@ -244,6 +243,7 @@ def main():
         server.administration = Administration(node_path, deployment='desktop')
         server.user_profile = UserProfile(node_path)
         server.gamepad_settings = GamepadSettings(node_path)
+        server.presentation_documents = PresentationDocuments(node_path)
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)
@@ -392,39 +392,10 @@ def main():
             dialog.deleteLater()
         transfer_button.clicked.connect(transfer_project)
         editor_toolbar.addWidget(transfer_button)
-        presentation_editor_open = False
         def edit_presentation():
-            nonlocal presentation_editor_open
-            if controller.busy or presentation_editor_open:
+            if controller.busy:
                 return
-            presentation_editor_open = True
-            def selected_project(project_id):
-                nonlocal presentation_editor_open
-                try:
-                    if view.closing:
-                        return
-                    if not project_id:
-                        rows = server.projects.catalog()
-                        if not rows:
-                            QMessageBox.information(window, 'Editor prezentací', 'Nejprve vytvořte nebo načtěte projekt.')
-                            return
-                        labels = [row['title'] + ' — ' + row['id'] for row in rows]
-                        label, accepted = QInputDialog.getItem(window, 'Projekt prezentace', 'Uložit prezentace do projektu:', labels, 0, False)
-                        if not accepted:
-                            return
-                        project_id = rows[labels.index(label)]['id']
-                    dialog = PresentationEditorDialog(PresentationDocuments(node_path), project_id, window)
-                    def use_deck(deck):
-                        server.presentation_selected_deck = deck
-                        page.runJavaScript('openPresenter()')
-                    dialog.selected.connect(use_deck)
-                    dialog.exec()
-                    for worker in dialog.workers:
-                        worker.wait()
-                    dialog.deleteLater()
-                finally:
-                    presentation_editor_open = False
-            page.runJavaScript('activeProject?.id || null', 0, selected_project)
+            page.runJavaScript('openPresentationEditor()')
         presentation_editor_button = QPushButton('Prezentace…')
         presentation_editor_button.clicked.connect(edit_presentation)
         editor_toolbar.addWidget(presentation_editor_button)
@@ -437,7 +408,6 @@ def main():
                 QMessageBox.warning(window, 'Uživatelský profil', 'Profil nelze načíst. Ověřte lokální konfiguraci.')
         def native_action(url):
             actions = {
-                '/#presentation-editor': edit_presentation,
                 '/#user-profile': edit_user_profile,
                 '/#presenter-open': displays.open,
                 '/#presenter-displays': displays.configure,

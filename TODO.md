@@ -62,6 +62,24 @@ není produktová šablona ani autoritativní projektový obsah.
   offscreen Qt WebEngine smoke načetl UI i autentizované API. Fyzický gamepad
   nebyl v tomto běhu dostupný a zůstává k ruční akceptaci v úkolu F.
 
+- [x] [completed] **F-M4-PRESENTER-01-A2 — Integrovaný editor prezentací
+  (implemented).** Nahradit uživatelský tok přes samostatný Qt dialog jedinou
+  záložkou **Prezentace** ve společném projektovém workspace. Sjednotit navigaci,
+  formuláře, responzivní rozložení, náhled a stavové hlášky; zachovat hlavní
+  linii, backup vazby, soukromé poznámky, tapetu, explicitní uložení, retry
+  stejné operace a spuštění pouze přesně uložené revize. Formát v1 a layouty
+  se v tomto kroku nemění; ty zůstávají v B a C.
+
+  Dokončeno 2026-10-15. Horní desktopové tlačítko, panel promítání i projektová
+  záložka vedou do jediného editoru ve workspace; samostatný Qt dialog již není
+  v uživatelském toku. Editor obnovuje seznam podkladů po uložení, chrání
+  rozepsaný či neověřeně uložený koncept a presenter přijme jen existující deck
+  z přesného aktuálního HEAD. Cílených 20 editor/presenter/API testů prošlo,
+  celá sada `592 tests` prošla (27 přeskočených volitelných/fyzických testů),
+  vložený JavaScript prošel `node --check` a offscreen Qt WebEngine smoke načetl
+  společné UI i autentizované API. Ruční vizuální a vstupní akceptace editoru
+  zůstává součástí F-M4-PRESENTER-01-F.
+
 - [ ] [planned] **F-M4-PRESENTER-01-B — Markdown kontrakt decku a migrace
   v1 (implemented).** Nahradit JSON-only obsah fenced bloku lidsky editovatelným
   Markdown formátem s YAML frontmatterem, stabilními ID slidů, notes, backup vazbami

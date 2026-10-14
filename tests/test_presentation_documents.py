@@ -161,6 +161,18 @@ class PresentationStorageTests(unittest.TestCase):
         self.assertEqual(self.git.run('status', '--porcelain').stdout, '')
         self.assertEqual(self.git.snapshot(receipt['commit_id'])[f"artifacts/{request['artifact_id']}/content.md"].decode(), encode_deck(request['deck']))
 
+    def test_select_requires_exact_saved_document_and_revision(self):
+        request = self.request(); self.service.save(request, str(uuid4())); head = self.git.head()
+        selected = self.service.select(self.project, request['artifact_id'], head)
+        self.assertEqual(selected['revision'], head + ':' + request['artifact_id'])
+        self.assertEqual(selected['slides'][0]['title'], request['deck']['slides'][0]['title'])
+        with self.assertRaises(ValueError):
+            self.service.select(self.project, str(uuid4()), head)
+        request2 = self.request(); request2['base_head'] = head
+        self.service.save(request2, str(uuid4()))
+        with self.assertRaises(ValueError):
+            self.service.select(self.project, request['artifact_id'], head)
+
     def test_invalid_deck_never_starts_a_transaction(self):
         request = self.request(); head = self.git.head()
         request['deck']['slides'][0]['next'] = 'missing'

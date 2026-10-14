@@ -523,6 +523,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
 <button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button>
 <button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" tabindex="-1">Obrázek</button>
+<button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" tabindex="-1">Prezentace</button>
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
@@ -623,6 +624,20 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <pre id="image-result-metadata"></pre><label for="image-title">Název artefaktu</label>
 <input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
+<div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
+<div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
+<div class="form-actions"><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
+<div id="presentation-editor-workspace" class="presentation-editor-workspace" hidden>
+<section class="presentation-editor-slides"><label>Název prezentace <input id="presentation-deck-title" maxlength="200"></label><h3>Slidy</h3><ol id="presentation-slide-list"></ol>
+<div class="form-actions"><button id="presentation-add-main" type="button">+ Hlavní</button><button id="presentation-add-backup" type="button">+ Backup</button><button id="presentation-delete-slide" class="danger-button" type="button">Odstranit</button></div></section>
+<section class="presentation-editor-fields"><h3 id="presentation-slide-kind">Hlavní slide</h3><label>Nadpis <input id="presentation-slide-title" maxlength="200"></label>
+<label>Odrážky, jedna na řádek <textarea id="presentation-slide-bullets" rows="7" maxlength="6012"></textarea></label><label>Soukromé poznámky <textarea id="presentation-slide-notes" rows="4" maxlength="10000"></textarea></label>
+<div class="presentation-editor-options"><label><input id="presentation-slide-repeat" type="checkbox"> Povolit opakované promítnutí</label><label>Zobrazení <select id="presentation-slide-reveal"><option value="all">Vše najednou</option><option value="step">Postupně</option></select></label>
+<label>Pozadí <input id="presentation-slide-background" type="color"></label><label>Text <input id="presentation-slide-foreground" type="color"></label></div>
+<label>Tapeta PNG <input id="presentation-slide-wallpaper" type="file" accept="image/png"></label><button id="presentation-clear-wallpaper" class="secondary-button" type="button">Odebrat tapetu</button>
+<fieldset><legend>Zařazení a vazby</legend><div class="form-actions"><button id="presentation-slide-up" class="secondary-button" type="button">↑ Dříve</button><button id="presentation-slide-down" class="secondary-button" type="button">↓ Později</button></div><div id="presentation-backup-links"></div></fieldset></section>
+<section class="presentation-editor-preview"><h3>Náhled slidu</h3><div id="presentation-editor-preview" class="presenter-slide-preview"></div><p>Náhled nepřenáší soukromé poznámky do veřejného okna.</p></section></div>
+<div class="presentation-editor-footer"><p id="presentation-editor-status" role="status" aria-live="polite">Otevřete editor.</p><div class="form-actions"><button id="presentation-editor-save" type="button" disabled>Uložit do projektu</button><button id="presentation-editor-use" type="button" disabled>Spustit uloženou prezentaci</button><button id="presentation-editor-presenter" class="secondary-button" type="button">Otevřít presenter</button></div></div></div>
 <div id="metadata-panel" role="tabpanel" aria-labelledby="metadata-tab" hidden><h2>Návrh popisu a štítků</h2>
 <p>Vyberte jeden artefakt. Návrh projekt nezmění, dokud nepotvrdíte konkrétní pole.</p>
 <label for="metadata-artifact">Artefakt</label><select id="metadata-artifact"></select>
@@ -777,6 +792,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
+#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(180px,24%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;padding:7%;display:flex;flex-direction:column;justify-content:center;overflow:auto}.presentation-editor-preview #presentation-editor-preview h2{color:#79c9ac;margin:0 0 12px}.presentation-editor-preview #presentation-editor-preview p{color:#c8d4df;white-space:pre-wrap}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 @media(max-width:640px){
@@ -804,6 +820,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #backend-metrics-indicator{right:8px;bottom:8px;max-width:calc(100vw - 16px)}
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
+@media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
+@media(max-width:700px){.presentation-editor-workspace{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}}
 '''
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
@@ -958,7 +976,7 @@ presentationMode.addEventListener('keydown',event=>{
  if(event.key==='ArrowRight'){event.preventDefault();movePresentation(1);}
 });
 const presentationOpenButton=document.querySelector('#presentation-open');
-document.querySelector('#presentation-editor').addEventListener('click',()=>{location.hash='presentation-editor';});
+document.querySelector('#presentation-editor').addEventListener('click',()=>openPresentationEditor());
 const presenterView=document.querySelector('#presenter-view');
 const presenterScreen=document.querySelector('#presenter-screen');
 const presenterPreview=document.querySelector('#presenter-preview');
@@ -1484,6 +1502,7 @@ function renderTodo(todo){
 function clearProject(){
  ++viewRequest;
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
+ presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
  currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
@@ -1542,7 +1561,7 @@ function closeSourceImport(){
  else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
 }
 function openSourceImport(){
- if(!activeProject||!canLeaveArtifactEditor())return;
+ if(!activeProject||!canLeaveWorkspaceEditors())return;
  const predecessors=document.querySelector('#source-import-supersedes');predecessors.replaceChildren();
  const standalone=document.createElement('option');standalone.value='';standalone.textContent='Samostatný zdroj';predecessors.append(standalone);
  for(const item of currentArtifacts.filter(item=>item.kind==='source')){
@@ -1707,6 +1726,7 @@ function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
  return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
 }
+function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor();}
 function fillArtifactEditor(doc,isNew=false){
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
@@ -1716,13 +1736,13 @@ function fillArtifactEditor(doc,isNew=false){
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
 }
 async function closeArtifactEditor(){
- if(!canLeaveArtifactEditor())return;
+ if(!canLeaveWorkspaceEditors())return;
  const item=artifactEditorItem;artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
  if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(item&&!item.new)await openPreview(item.id);}
 }
 async function openArtifactEditor(item,deleteMode=false){
  if(!activeProject||item.kind!=='document')return;
- if(!artifactEditorView.hidden&&!canLeaveArtifactEditor())return;
+ if(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors())return;
  await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
@@ -1736,7 +1756,7 @@ async function openArtifactEditor(item,deleteMode=false){
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
 function openNewArtifactEditor({todo=false}={}){
- if(!activeProject||(!artifactEditorView.hidden&&!canLeaveArtifactEditor()))return;
+ if(!activeProject||(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors()))return;
  const id=todo?activeProject.mainTodoId:crypto.randomUUID();
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
@@ -1779,7 +1799,7 @@ function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
 async function openRegisteredProject(projectId){
- if(!canLeaveArtifactEditor())return;
+ if(!canLeaveWorkspaceEditors())return;
  ++catalogRequest;
  clearProject();const request=viewRequest;
  projectStatus.textContent='Otevírám projekt…';
@@ -1877,7 +1897,7 @@ async function loadProjectTrash(){
  }catch(error){document.querySelector('#project-trash-status').textContent=error.message;}
 }
 async function loadProjects(selectedId=null){
- if(!canLeaveArtifactEditor())return;
+ if(!canLeaveWorkspaceEditors())return;
  const request=++catalogRequest;
  clearProject();projectCards.replaceChildren();sidebarProjects.replaceChildren();
  projectStatus.textContent='Načítám projekty…';document.querySelector('#sidebar-project-status').textContent='Načítám projekty…';
@@ -1972,7 +1992,7 @@ function requestNativeAction(action,payload={}){
  const fields=new URLSearchParams({...payload,nonce:crypto.randomUUID()});location.hash=`${action}?${fields}`;
 }
 function openNotebookLMImport(){
- if(!canLeaveArtifactEditor())return;
+ if(!canLeaveWorkspaceEditors())return;
  clearProject();
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;notebookImportView.hidden=false;
@@ -2082,15 +2102,115 @@ function selectMainTab(tab){
   document.getElementById(item.getAttribute('aria-controls')).hidden=!active;
  }
 }
-for(const [index,tab] of mainTabs.entries()){
+for(const tab of mainTabs){
  tab.addEventListener('click',()=>selectMainTab(tab));
  tab.addEventListener('keydown',event=>{
-  const next={ArrowRight:(index+1)%mainTabs.length,
-   ArrowLeft:(index+mainTabs.length-1)%mainTabs.length,Home:0,End:mainTabs.length-1}[event.key];
+  const visible=mainTabs.filter(item=>!item.hidden),index=visible.indexOf(tab);
+  const next={ArrowRight:(index+1)%visible.length,
+   ArrowLeft:(index+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
   if(next===undefined)return;
-  event.preventDefault();selectMainTab(mainTabs[next]);mainTabs[next].focus();
+  event.preventDefault();selectMainTab(visible[next]);visible[next].focus();
  });
 }
+const presentationTab=document.querySelector('#presentation-tab');
+const presentationEditorDocuments=document.querySelector('#presentation-editor-documents');
+const presentationEditorWorkspace=document.querySelector('#presentation-editor-workspace');
+const presentationEditorStatus=document.querySelector('#presentation-editor-status');
+const presentationEditorSave=document.querySelector('#presentation-editor-save');
+const presentationEditorUse=document.querySelector('#presentation-editor-use');
+let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
+let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
+function presentationNewSlide(kind='main'){return {id:crypto.randomUUID(),kind,title:'Nový slide',bullets:[],notes:'',background:'#102b36',foreground:'#ffffff',wallpaper:'',next:null,backups:[],repeat:false,reveal:'all'};}
+function presentationNewDeck(){return {version:1,title:'Nová prezentace',slides:[presentationNewSlide()]};}
+function presentationMainOrder(){
+ const main=new Map(presentationEditorDeck.slides.filter(slide=>slide.kind==='main').map(slide=>[slide.id,slide]));
+ const targets=new Set([...main.values()].map(slide=>slide.next).filter(Boolean));let current=[...main.keys()].find(id=>!targets.has(id)),order=[];
+ while(current&&main.has(current)&&!order.includes(current)){order.push(current);current=main.get(current).next;}
+ return order;
+}
+function presentationRelink(order){const byId=new Map(presentationEditorDeck.slides.map(slide=>[slide.id,slide]));for(const [index,id] of order.entries())byId.get(id).next=order[index+1]||null;}
+function presentationCurrentSlide(){return presentationEditorDeck?.slides.find(slide=>slide.id===presentationEditorSlide);}
+function canLeavePresentationEditor(){
+ if(!presentationEditorDirty&&!presentationEditorAttempt)return true;
+ return window.confirm(presentationEditorAttempt?'Výsledek uložení není ověřený. Zahodit rozepsanou relaci editoru?':'Zahodit neuložené změny prezentace?');
+}
+function updatePresentationEditorEnabled(){
+ const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck);
+ for(const control of presentationEditorWorkspace.querySelectorAll('input,textarea,select,button'))control.disabled=frozen||!ready;
+ presentationEditorDocuments.disabled=frozen;document.querySelector('#presentation-editor-new').disabled=frozen;
+ presentationEditorSave.disabled=!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
+ presentationEditorSave.textContent=presentationEditorAttempt?'Opakovat stejné uložení':'Uložit do projektu';
+ presentationEditorUse.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
+ document.querySelector('#presentation-clear-wallpaper').disabled=frozen||!ready||!presentationCurrentSlide()?.wallpaper;
+}
+function presentationEditorChanged(rerender=true){
+ if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=true;presentationEditorAttempt=null;
+ if(rerender)renderPresentationEditor();else{renderSlideVisual(document.querySelector('#presentation-editor-preview'),presentationCurrentSlide());const selected=document.querySelector('#presentation-slide-list button[aria-current="true"]');if(selected)selected.textContent=(presentationCurrentSlide().kind==='backup'?'Backup · ':'')+presentationCurrentSlide().title;updatePresentationEditorEnabled();}
+}
+function renderPresentationEditor(){
+ const slide=presentationCurrentSlide();presentationEditorLoading=true;presentationEditorWorkspace.hidden=!slide;
+ if(!slide){presentationEditorLoading=false;updatePresentationEditorEnabled();return;}
+ document.querySelector('#presentation-deck-title').value=presentationEditorDeck.title;
+ const list=document.querySelector('#presentation-slide-list');list.replaceChildren();const order=presentationMainOrder(),byId=new Map(presentationEditorDeck.slides.map(item=>[item.id,item]));
+ for(const id of [...order,...presentationEditorDeck.slides.filter(item=>item.kind==='backup').map(item=>item.id)]){
+  const item=byId.get(id),row=document.createElement('li'),button=document.createElement('button');row.className=item.kind;button.type='button';button.textContent=(item.kind==='backup'?'Backup · ':'')+item.title;button.setAttribute('aria-current',String(id===slide.id));button.addEventListener('click',()=>{presentationEditorSlide=id;renderPresentationEditor();});row.append(button);list.append(row);
+ }
+ document.querySelector('#presentation-slide-kind').textContent=slide.kind==='backup'?'Backup slide':'Hlavní slide';
+ document.querySelector('#presentation-slide-title').value=slide.title;document.querySelector('#presentation-slide-bullets').value=slide.bullets.join('\\n');document.querySelector('#presentation-slide-notes').value=slide.notes;
+ document.querySelector('#presentation-slide-repeat').checked=Boolean(slide.repeat);document.querySelector('#presentation-slide-reveal').value=slide.reveal||'all';document.querySelector('#presentation-slide-background').value=slide.background;document.querySelector('#presentation-slide-foreground').value=slide.foreground;
+ const links=document.querySelector('#presentation-backup-links');links.replaceChildren();
+ const candidates=presentationEditorDeck.slides.filter(item=>item.kind!==slide.kind);
+ for(const other of candidates){const label=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=slide.kind==='main'?slide.backups.includes(other.id):other.backups.includes(slide.id);check.addEventListener('change',()=>{const source=slide.kind==='main'?slide:other,target=slide.kind==='main'?other:slide;source.backups=check.checked?[...new Set([...source.backups,target.id])]:source.backups.filter(id=>id!==target.id);presentationEditorChanged();});label.append(check,document.createTextNode(' '+other.title));links.append(label);}
+ if(!candidates.length)links.textContent=slide.kind==='main'?'Zatím nejsou vytvořené žádné backupy.':'Zatím nejsou dostupné hlavní slidy.';
+ renderSlideVisual(document.querySelector('#presentation-editor-preview'),slide);
+ const position=order.indexOf(slide.id);document.querySelector('#presentation-slide-up').disabled=slide.kind!=='main'||position<=0;document.querySelector('#presentation-slide-down').disabled=slide.kind!=='main'||position<0||position===order.length-1;
+ presentationEditorLoading=false;updatePresentationEditorEnabled();
+}
+function installPresentationDocument(document){
+ presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
+}
+function renderPresentationDocuments(preferred=null){
+ presentationEditorDocuments.replaceChildren();
+ for(const doc of presentationEditorView.documents){const option=new Option(doc.title+(doc.error?' — neplatná':''),doc.id);option.disabled=Boolean(doc.error);presentationEditorDocuments.append(option);}
+ const document=presentationEditorView.documents.find(doc=>doc.id===(preferred||presentationEditorArtifact)&&doc.deck)||presentationEditorView.documents.find(doc=>doc.deck);
+ if(document){presentationEditorDocuments.value=document.id;installPresentationDocument(document);}else{presentationEditorDocuments.append(new Option('Nová neuložená prezentace',''));createPresentationDocument(false);}
+}
+async function loadPresentationEditor(){
+ if(!activeProject)return;presentationEditorStatus.textContent='Načítám prezentace projektu…';
+ try{presentationEditorView=await projectRequest('/v1/presentations/open',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments();presentationEditorStatus.textContent=presentationEditorView.documents.length?'Editor používá aktuální uloženou verzi projektu.':'Nová prezentace vznikne až po kliknutí na Uložit do projektu.';}
+ catch(error){presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorWorkspace.hidden=true;updatePresentationEditorEnabled();}
+}
+async function openPresentationEditor(){
+ if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
+ if(!artifactEditorView.hidden){if(!canLeaveArtifactEditor())return;artifactEditorView.hidden=true;artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorDirty=false;}
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor();
+}
+function createPresentationDocument(confirmDiscard=true){
+ if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorDocuments.value='';renderPresentationEditor();presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+}
+presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();});
+presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
+document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
+document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
+for(const id of ['presentation-deck-title','presentation-slide-title','presentation-slide-bullets','presentation-slide-notes','presentation-slide-repeat','presentation-slide-reveal','presentation-slide-background','presentation-slide-foreground'])document.querySelector('#'+id).addEventListener('input',()=>{
+ if(presentationEditorLoading)return;const slide=presentationCurrentSlide();presentationEditorDeck.title=document.querySelector('#presentation-deck-title').value;slide.title=document.querySelector('#presentation-slide-title').value;slide.bullets=document.querySelector('#presentation-slide-bullets').value.split(/\\r?\\n/).filter(line=>line.trim());slide.notes=document.querySelector('#presentation-slide-notes').value;slide.repeat=document.querySelector('#presentation-slide-repeat').checked;slide.reveal=document.querySelector('#presentation-slide-reveal').value;slide.background=document.querySelector('#presentation-slide-background').value;slide.foreground=document.querySelector('#presentation-slide-foreground').value;presentationEditorChanged(false);
+});
+function addPresentationSlide(kind){if(presentationEditorDeck.slides.length>=100){presentationEditorStatus.textContent='Limit je 100 slidů.';return;}const slide=presentationNewSlide(kind),current=presentationCurrentSlide(),order=presentationMainOrder();presentationEditorDeck.slides.push(slide);if(kind==='main')presentationRelink([...order,slide.id]);else if(current.kind==='main')current.backups.push(slide.id);presentationEditorSlide=slide.id;presentationEditorChanged();}
+document.querySelector('#presentation-add-main').addEventListener('click',()=>addPresentationSlide('main'));document.querySelector('#presentation-add-backup').addEventListener('click',()=>addPresentationSlide('backup'));
+document.querySelector('#presentation-delete-slide').addEventListener('click',()=>{const slide=presentationCurrentSlide(),order=presentationMainOrder();if(slide.kind==='main'&&order.length===1){presentationEditorStatus.textContent='Poslední hlavní slide nelze odstranit.';return;}presentationEditorDeck.slides=presentationEditorDeck.slides.filter(item=>item.id!==slide.id);presentationRelink(order.filter(id=>id!==slide.id));for(const item of presentationEditorDeck.slides)item.backups=item.backups.filter(id=>id!==slide.id);presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorChanged();});
+function movePresentationSlide(delta){const order=presentationMainOrder(),index=order.indexOf(presentationEditorSlide);if(index<0||index+delta<0||index+delta>=order.length)return;[order[index],order[index+delta]]=[order[index+delta],order[index]];presentationRelink(order);presentationEditorChanged();}
+document.querySelector('#presentation-slide-up').addEventListener('click',()=>movePresentationSlide(-1));document.querySelector('#presentation-slide-down').addEventListener('click',()=>movePresentationSlide(1));
+document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
+document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
+presentationEditorSave.addEventListener('click',async()=>{
+ if(!activeProject||!presentationEditorDeck)return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+ updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
+ try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor();const saved=presentationEditorView?.documents.find(item=>item.id===id&&item.deck);if(saved){presentationEditorDocuments.value=id;installPresentationDocument(saved);}presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
+ catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();}
+});
+presentationEditorUse.addEventListener('click',async()=>{try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:presentationEditorArtifact,expected_head:presentationEditorView.commit_id});presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}});
+document.querySelector('#presentation-editor-presenter').addEventListener('click',openPresenter);
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
 function selectSettingsTab(selected){
@@ -2110,7 +2230,7 @@ for(const [index,tab] of settingsTabs.entries()){
  });
 }
 async function openSettings(){
- if(!canLeaveArtifactEditor())return;
+ if(!canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden};
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
@@ -3827,6 +3947,7 @@ class DesktopHandler(Handler):
         '/v1/chat/delete/confirm',
         '/v1/gamepad/status', '/v1/presentation/status',
         '/v1/gamepad/settings',
+        '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
@@ -3867,6 +3988,26 @@ class DesktopHandler(Handler):
                     return self.reply(200, {'settings': service.save(request['settings']), 'saved': True})
                 return self.send_error(400)
             except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
+        if self.path.startswith('/v1/presentations/') and isinstance(request, dict):
+            service = getattr(self.server, 'presentation_documents', None)
+            if service is None:
+                return self.reply(503, {'error': 'Editor prezentací je dostupný jen v desktopu.'})
+            try:
+                if self.path == '/v1/presentations/open' and request.keys() == {'project_id', 'expected_head'}:
+                    result = service.open(request['project_id'])
+                    if result['commit_id'] != request['expected_head']:
+                        return self.reply(409, {'error': 'Projekt se od otevření změnil. Načtěte jej znovu.'})
+                    return self.reply(200, result)
+                if self.path == '/v1/presentations/save' and request.keys() == {'operation_id', 'document'}:
+                    service.save(request['document'], request['operation_id'])
+                    return self.reply(200, service.open(request['document']['project_id']))
+                if self.path == '/v1/presentations/use' and request.keys() == {'project_id', 'artifact_id', 'expected_head'}:
+                    deck = service.select(request['project_id'], request['artifact_id'], request['expected_head'])
+                    self.server.presentation_selected_deck = deck
+                    return self.reply(200, {'deck': deck})
+                return self.send_error(400)
+            except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
             try:

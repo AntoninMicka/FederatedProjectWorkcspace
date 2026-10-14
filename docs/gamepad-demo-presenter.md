@@ -133,22 +133,23 @@ oken, zejména na Waylandu; fyzické zapojení je nutné před přednáškou vyz
 
 ## 10. Základní editor prezentací
 
-Otevřete **Prezentace…** v horní liště desktopu nebo **Editor prezentací…**
-v panelu promítání. Editor používá aktuální projekt; pokud žádný není otevřený,
-nabídne výběr z registrovaných projektů. Nový projekt založte běžným projektovým
-ovládáním. V horním seznamu editoru lze přepínat uložené prezentace nebo založit novou.
+Otevřete záložku **Prezentace** přímo v hlavním panelu projektu. Tlačítka
+**Prezentace…** v horní liště desktopu a **Editor prezentací…** v panelu
+promítání vedou do stejného integrovaného pohledu; samostatný editorový dialog
+se již neotevírá. Bez otevřeného projektu editor nevytvoří žádný soubor a vyzve
+k jeho výběru. V horním seznamu lze přepínat uložené prezentace nebo založit novou.
 
 - Přidávejte hlavní slidy a backupy. Každý slide má nadpis, odrážky (jednu na
   řádek), soukromé poznámky, barvu pozadí, barvu textu a volitelnou tapetu.
   **Zobrazení odrážek** volí všechny řádky najednou nebo postupné odhalování.
   **Povolit opakované promítnutí** výslovně povolí opětovné nabízení slidu.
-- Tapetu vyberte z místního PNG/JPEG/WebP souboru. Editor vloží zmenšenou PNG
-  kopii do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
+- Tapetu vyberte z místního PNG souboru do 190 KiB. Editor vloží jeho kopii
+  přímo do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
   překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
   SVG se nepoužívají.
-- V záložce **Vazby** upravte **Next** nebo **Previous**. Změna přesune slide
-  v hlavní linii a opačný směr dopočítá automaticky. Volba „Konec“ přesune
-  aktuální slide na konec, „Začátek“ na začátek. Hlavní linie nemá cykly.
+- Tlačítky **Dříve** a **Později** měňte pořadí hlavní linie. Vazby `next`
+  editor dopočítá automaticky; hlavní linie proto nemá dvě konkurenční pořadí
+  ani cykly.
 - U hlavního slidu zaškrtněte jeho backupy. U backupu lze stejnou vazbu upravit
   z opačné strany v **Backup pro / návrat k**. Jeden backup může patřit k více
   hlavním slidům; výchozí návrat v presenteru vede ke slidu, odkud byl vyvolán.
@@ -166,10 +167,8 @@ případnou připravenou operaci a načte aktuální projekt. Při změně HEAD 
 úpravy nepřepisují. Po restartu aplikace otevřete uloženou prezentaci z editoru
 znovu; pozice a dočasná cesta presenteru se neukládají.
 
-Jde o základní desktopový editor: nejvýše 100 slidů, 12 odrážek po 500 znacích,
-256 KiB vložené tapety na slide a přibližně 1 MiB na celý dokument. Při importu
-má obrázek nejvýše 10 MiB a 8192 pixelů v každém rozměru; editor jej zmenší
-nejvýše na 960 × 540 a podle velikosti dále. Dlouhý obsah je nutné zkrátit nebo
+Jde o základní integrovaný editor: nejvýše 100 slidů, 12 odrážek po 500 znacích,
+256 KiB vložené tapety na slide a přibližně 1 MiB na celý dokument. Dlouhý obsah je nutné zkrátit nebo
 rozdělit do více slidů. Editorový náhled je 16:9, presenter přebírá poměr
 projekčního displeje. Nejde o plný graf zanořených scénářů, animace ani editor PPTX.
 

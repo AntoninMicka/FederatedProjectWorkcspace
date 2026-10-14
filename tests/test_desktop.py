@@ -12,6 +12,7 @@ import tempfile
 import threading
 import unittest
 from urllib.parse import urlencode
+from uuid import uuid4
 
 from spikes.desktop import (google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
                             provider_key_url, repairable_target_mode, request_policy)
@@ -22,6 +23,8 @@ from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
+from spikes.presentation_documents import PresentationDocuments
+from spikes.project_creation import ProjectCreation
 from tests import test_local_api
 
 
@@ -176,10 +179,17 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/notebooklm/confirm'", JS)
         self.assertIn('archive_capability:notebookArchiveCapability', JS)
 
-    def test_presentation_editor_does_not_depend_on_removed_native_editor(self):
-        editor = Path('spikes/desktop_presentation_editor.py').read_text()
-        self.assertNotIn('spikes.desktop_editor', editor)
-        self.assertIn('class PresentationWorker(QThread):', editor)
+    def test_presentation_editor_is_integrated_in_shared_workspace(self):
+        desktop = Path('spikes/desktop.py').read_text()
+        self.assertNotIn('PresentationEditorDialog', desktop)
+        self.assertIn("page.runJavaScript('openPresentationEditor()')", desktop)
+        self.assertIn('id="presentation-tab"', HTML)
+        self.assertIn('id="presentation-editor-workspace"', HTML)
+        self.assertIn('id="presentation-editor-save"', HTML)
+        self.assertIn("projectRequest('/v1/presentations/open'", JS)
+        self.assertIn("projectRequest('/v1/presentations/save'", JS)
+        self.assertIn("projectRequest('/v1/presentations/use'", JS)
+        self.assertNotIn("location.hash='presentation-editor'", JS)
 
     def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
         origin = 'http://127.0.0.1:4711'
@@ -430,12 +440,43 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             self.assertEqual(json.loads(body), {'settings': changed, 'saved': True})
             self.assertEqual(server.gamepad_settings.load(), changed)
 
+    def test_integrated_presentation_editor_api_saves_and_selects_exact_revision(self):
+        from tests.test_presentation_documents import sample
+        driver = test_local_api.LocalAPITests()
+        with tempfile.TemporaryDirectory() as directory:
+            node = Path(directory) / 'node.json'
+            project = ProjectCreation(node).create(
+                'Presentation API', str(Path(directory) / 'project'), str(uuid4()))['id']
+            service = PresentationDocuments(node); head = service.open(project)['commit_id']
+            with running_api('http', handler=DesktopHandler) as server:
+                server.presentation_documents = service
+                response = driver.request(server, path='/v1/presentations/open', body=json.dumps(
+                    {'project_id': project, 'expected_head': head}).encode())
+                self.assertIn(b' 200 ', response.split(b'\r\n\r\n', 1)[0])
+                artifact = str(uuid4())
+                request = {'operation_id': str(uuid4()), 'document': {'project_id': project,
+                    'artifact_id': artifact, 'base_head': head, 'new': True, 'deck': sample()}}
+                response = driver.request(server, path='/v1/presentations/save',
+                                          body=json.dumps(request).encode())
+                head_bytes, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', head_bytes); saved = json.loads(body)
+                response = driver.request(server, path='/v1/presentations/use', body=json.dumps({
+                    'project_id': project, 'artifact_id': artifact,
+                    'expected_head': saved['commit_id']}).encode())
+                head_bytes, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', head_bytes)
+                self.assertEqual(json.loads(body)['deck'], server.presentation_selected_deck)
+                stale = driver.request(server, path='/v1/presentations/use', body=json.dumps({
+                    'project_id': project, 'artifact_id': artifact, 'expected_head': head}).encode())
+                self.assertIn(b' 422 ', stale.split(b'\r\n\r\n', 1)[0])
+
     def test_presentation_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import ASSETS, CSS, HTML, JS, presentation_public_payload
         from types import SimpleNamespace
         from spikes.desktop_ui import presentation_deck
         deck = presentation_deck()
         self.assertIn('id="presentation-start"', HTML)
+        self.assertIn('id="presentation-tab"', HTML)
         self.assertIn('id="presentation-slide"', HTML)
         self.assertIn('/v1/presentation/status', JS)
         self.assertIn('Promítání prezentace', HTML)

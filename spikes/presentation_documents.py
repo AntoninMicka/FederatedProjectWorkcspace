@@ -183,3 +183,11 @@ class PresentationDocuments:
         native = {key: request[key] for key in ('project_id', 'artifact_id', 'base_head', 'new')}
         native.update(title=request['deck']['title'], body=body)
         return self.artifacts.save(native, operation_id, checkpoint=checkpoint)
+
+    def select(self, project_id, artifact_id, expected_head):
+        """Return only an exactly current, validated saved deck for presenting."""
+        view = self.open(project_id)
+        require(view['commit_id'] == expected_head, 'Projekt se od načtení editoru změnil.')
+        document = next((item for item in view['documents'] if item['id'] == artifact_id), None)
+        require(document is not None and 'deck' in document, 'Uložená prezentace není dostupná.')
+        return project_deck(document['deck'], expected_head + ':' + artifact_id)
