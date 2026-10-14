@@ -61,6 +61,8 @@ class PresentationModelTests(unittest.TestCase):
             slide.pop('layout'); slide.pop('column_break')
         upgraded = decode_deck(encode_deck(legacy))
         self.assertEqual(upgraded['templates'], layout_presets())
+        self.assertEqual([item['preset'] for item in upgraded['templates']],
+                         ['title', 'title-content', 'two-column', 'visual', 'closing'])
         self.assertTrue(all(slide['layout'] == 'content' for slide in upgraded['slides']))
 
         for mutation in (

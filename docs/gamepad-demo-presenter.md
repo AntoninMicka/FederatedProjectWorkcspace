@@ -150,9 +150,11 @@ založit novou; projektový dokument vznikne až explicitním uložením.
   přímo do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
   překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
   SVG se nepoužívají.
-- Každý slide vybírá pojmenovanou šablonu layoutu. Deck začíná čtyřmi
-  předlohami: **Titulní slide**, **Nadpis a obsah**, **Dva sloupce** a
-  **Závěrečný slide**. V části **Šablony layoutu** lze předlohu přejmenovat,
+- Každý slide vybírá pojmenovanou šablonu layoutu. Deck začíná pěti
+  předlohami: **Titulní slide**, **Nadpis a obsah**, **Dva sloupce**,
+  **Obrázek / graf** a **Závěrečný slide**. Layout obrázku/grafu vloží zvolené
+  PNG do pevné středové zóny a ponechá nadpis nahoře a popisek dole. V části
+  **Šablony layoutu** lze předlohu přejmenovat,
   změnit její typ, zarovnání, hustotu, pozadí, text a akcent nebo vytvořit
   vlastní kopii. Nejde o volný CSS editor: šablona zůstává v omezeném
   verzovaném kontraktu a nemůže vložit HTML, skript ani síťový zdroj.

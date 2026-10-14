@@ -6,13 +6,14 @@ function renderSlideVisual(target,slide,heading='h2'){
  target.replaceChildren();
  const color=(value,fallback)=>/^#[0-9a-fA-F]{6}$/.test(value || '')?value:fallback;
  const layout=slide?.layout && typeof slide.layout==='object'?slide.layout:{};
- const preset=['title','title-content','two-column','closing'].includes(layout.preset)?layout.preset:'title-content';
+ const preset=['title','title-content','two-column','visual','closing'].includes(layout.preset)?layout.preset:'title-content';
  const align=value=>['left','center','right'].includes(value)?value:'left';
  const density=['compact','normal','spacious'].includes(layout.density)?layout.density:'normal';
  target.style.backgroundColor=color(slide?.background,color(layout.background,'#102b36'));
  target.style.color=color(slide?.foreground,color(layout.foreground,'#ffffff'));
  const wallpaper=slide?.wallpaper || '';
- target.style.backgroundImage=/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(wallpaper)?`url("${wallpaper}")`:'none';
+ const validWallpaper=/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(wallpaper);
+ target.style.backgroundImage=validWallpaper&&preset!=='visual'?`url("${wallpaper}")`:'none';
  target.style.backgroundSize='cover';target.style.backgroundPosition='center';
  target.style.boxSizing='border-box';target.style.padding='0';target.style.overflow='hidden';
  target.style.position='relative';target.style.containerType='inline-size';
@@ -42,6 +43,7 @@ function renderSlideVisual(target,slide,heading='h2'){
  Object.assign(contentZone.style,{position:'absolute',left:'7%',width:'86%',textAlign:align(layout.content_align),overflow:'hidden',fontSize:sizes[1],lineHeight:density==='compact'?'1.25':'1.4'});
  const justify={left:'flex-start',center:'center',right:'flex-end'}[align(layout.title_align)];
  if(preset==='title'){Object.assign(titleZone.style,{top:'24%',height:'32%',display:'flex',alignItems:'center',justifyContent:justify});Object.assign(contentZone.style,{top:'62%',height:'24%'});}
+ else if(preset==='visual'){Object.assign(titleZone.style,{top:'6%',height:'14%'});Object.assign(contentZone.style,{top:'82%',height:'12%'});if(validWallpaper){const visual=document.createElement('img');visual.src=wallpaper;visual.alt=slide.title;Object.assign(visual.style,{position:'absolute',left:'8%',top:'23%',width:'84%',height:'54%',objectFit:'contain'});target.append(visual);}}
  else if(preset==='closing'){Object.assign(titleZone.style,{top:'28%',height:'28%',display:'flex',alignItems:'center',justifyContent:justify});Object.assign(contentZone.style,{top:'68%',height:'20%'});}
  else{Object.assign(titleZone.style,{top:'8%',height:'18%'});Object.assign(contentZone.style,{top:'30%',height:'60%'});}
  const bullets=Array.isArray(slide.bullets)?slide.bullets:null;

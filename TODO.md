@@ -108,8 +108,10 @@ není produktová šablona ani autoritativní projektový obsah.
 
   Dokončeno 2026-10-15 před B na přímý požadavek uživatele. Deck nese 1–20
   verzovaných pojmenovaných šablon; výchozí registr nabízí titulní, obsahový,
-  dvousloupcový a závěrečný layout. Editor umožňuje předlohy přizpůsobit,
-  kopírovat, obnovit a odstranit, ale nepřijímá CSS/HTML ani libovolné pozice.
+  dvousloupcový, obrázkový/grafový a závěrečný layout. Obrázkový layout používá
+  existující bezpečně vložené PNG v pevné středové zóně. Editor umožňuje
+  předlohy přizpůsobit, kopírovat, obnovit a odstranit, ale nepřijímá CSS/HTML
+  ani libovolné pozice.
   Renderer používá pevné zóny a tentýž resolved layout pro editor, speaker i
   audience projekci. Staré v1 decky se při čtení bezzápisově doplní výchozími
   šablonami; úkol B musí tato pole zachovat při migraci do Markdownu. Cílené

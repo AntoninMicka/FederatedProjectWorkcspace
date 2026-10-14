@@ -24,6 +24,9 @@ LAYOUT_PRESETS = (
     dict(id='two-column', revision=1, name='Dva sloupce', preset='two-column',
          title_align='left', content_align='left', density='compact',
          background='#102b36', foreground='#ffffff', accent='#79c9ac'),
+    dict(id='visual', revision=1, name='Obrázek / graf', preset='visual',
+         title_align='left', content_align='center', density='compact',
+         background='#102b36', foreground='#ffffff', accent='#79c9ac'),
     dict(id='closing', revision=1, name='Závěrečný slide', preset='closing',
          title_align='center', content_align='right', density='spacious',
          background='#102b36', foreground='#ffffff', accent='#79c9ac'),
@@ -143,7 +146,7 @@ def validate_deck(deck):
                 'Nepodporovaná revize šablony.')
         require(isinstance(template['name'], str) and 0 < len(template['name'].strip()) <= 80
                 and not any(c in template['name'] for c in '\r\n\0'), 'Neplatný název šablony.')
-        require(template['preset'] in {'title', 'title-content', 'two-column', 'closing'},
+        require(template['preset'] in {'title', 'title-content', 'two-column', 'visual', 'closing'},
                 'Neplatný typ layoutu.')
         require(template['title_align'] in {'left', 'center', 'right'}
                 and template['content_align'] in {'left', 'center', 'right'}, 'Neplatné zarovnání layoutu.')

@@ -200,7 +200,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presentation-template-select"', HTML)
         self.assertIn('id="presentation-template-copy"', HTML)
         self.assertIn('id="presentation-slide-layout"', HTML)
-        self.assertIn("['title','title-content','two-column','closing']", SLIDE_JS)
+        self.assertIn("['title','title-content','two-column','visual','closing']", SLIDE_JS)
         self.assertIn("gridTemplateColumns:'1fr 1fr'", SLIDE_JS)
         self.assertIn('presentationVisualSlide', JS)
         self.assertNotIn("location.hash='presentation-editor'", JS)
@@ -305,6 +305,12 @@ assert.equal(target.children[0].children[0].textContent,'Bezpečný layout');
 slide.layout.preset='title';renderSlideVisual(target,slide);
 assert.equal(target.children[0].style.top,'24%');
 assert.equal(target.children[1].style.top,'62%');
+slide.layout.preset='visual';slide.wallpaper='data:image/png;base64,AA==';renderSlideVisual(target,slide);
+assert.equal(target.style.backgroundImage,'none');
+assert.equal(target.children[0].style.top,'6%');
+assert.equal(target.children[1].style.top,'82%');
+assert.equal(target.children[2].tag,'img');
+assert.equal(target.children[2].style.objectFit,'contain');
 """
         subprocess.run(['node', '-e', harness + SLIDE_JS + checks], check=True)
 
