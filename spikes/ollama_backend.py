@@ -16,6 +16,7 @@ import ssl
 import stat
 from urllib.parse import urlsplit
 
+from spikes.artifact_preview import pdf_text
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendRegistry, BackendResponseError,
                                      BackendUnknown, ROLES)
@@ -337,6 +338,15 @@ class OllamaAdapter:
         self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
+    def _task_text(raw):
+        if raw.startswith(b'%PDF-'):
+            return pdf_text(raw), 'PDF text projection'
+        try:
+            return raw.decode('utf-8'), None
+        except UnicodeError as exc:
+            raise ValueError('Ollama task input is not valid UTF-8 or a supported PDF') from exc
+
+    @staticmethod
     def _prompt(payload):
         try:
             value = json.loads(payload)
@@ -359,10 +369,11 @@ class OllamaAdapter:
                         and set(source) == {'input_id', 'content_b64'},
                         'Invalid task input for Ollama')
                 try:
-                    content = base64.b64decode(source['content_b64'], validate=True).decode('utf-8')
+                    raw = base64.b64decode(source['content_b64'], validate=True)
+                    content, projection = OllamaAdapter._task_text(raw)
                 except (TypeError, ValueError, UnicodeError) as exc:
-                    raise ValueError('Ollama task input is not valid UTF-8') from exc
-                decoded.append((source['input_id'], content))
+                    raise ValueError('Ollama task input has no safe text projection') from exc
+                decoded.append((source['input_id'], content, projection))
             roles = {}
             if conversation is not None:
                 require(isinstance(conversation, list), 'Invalid task conversation for Ollama')
@@ -370,11 +381,11 @@ class OllamaAdapter:
                          if isinstance(item, dict) and set(item) == {'message_id', 'role'}
                          and item['role'] in {'user', 'assistant'}}
                 require(len(roles) == len(conversation), 'Invalid task conversation for Ollama')
-                selected_ids = [input_id for input_id, _ in decoded if input_id in roles]
+                selected_ids = [input_id for input_id, _, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
             sections = ['Instruction:\n' + task['instruction']]
-            for input_id, content in decoded:
+            for input_id, content, projection in decoded:
                 if input_id == task['focus_input_id']:
                     label = ('Focus ID ' + input_id if task['role_id'] == 'task-router'
                              else 'Focus')
@@ -384,6 +395,8 @@ class OllamaAdapter:
                         label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
+                if projection is not None:
+                    label += ' (' + projection + ')'
                 sections.append(label + ':\n' + content)
             sections.append('Summary:\n')
             return '\n\n'.join(sections)

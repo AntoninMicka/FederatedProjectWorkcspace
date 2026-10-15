@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -355,6 +356,21 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertEqual(captured[0]['prompt'],
                          'User:\nahoj\n\nUser:\nco je dnes za den?\n\nAssistant:\n')
         self.assertNotIn('content_b64', captured[0]['prompt'])
+
+    def test_task_pdf_uses_bounded_text_projection_without_changing_source_id(self):
+        source, focus = str(uuid4()), str(uuid4())
+        payload = json.dumps(dict(schema_version=1, inputs=[
+            dict(input_id=source, content_b64=base64.b64encode(b'%PDF-1.4 binary').decode()),
+            dict(input_id=focus, content_b64=base64.b64encode(b'Create slides').decode())],
+            task=dict(role_id='task-router', role_revision='task-router-v1',
+                      instruction='Return JSON.', focus_input_id=focus))).encode()
+        completed = subprocess.CompletedProcess([], 0, 'Bezpečný text PDF'.encode(), b'')
+        with patch('spikes.artifact_preview.subprocess.run', return_value=completed):
+            prompt = OllamaAdapter._prompt(payload)
+        self.assertIn('Source ' + source + ' (PDF text projection):\nBezpečný text PDF',
+                      prompt)
+        self.assertIn('Focus ID ' + focus + ':\nCreate slides', prompt)
+        self.assertNotIn('%PDF', prompt)
 
     def test_lost_response_becomes_unknown_without_automatic_retry(self):
         calls = []

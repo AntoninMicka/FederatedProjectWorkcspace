@@ -163,6 +163,18 @@ autoritativní projektový obsah.
   s povolenými loopback sockety (`601 tests`, 27 přeskočených volitelných či
   fyzických testů).
 
+- [x] [completed] **F-M4-PRESENTER-01-D2 — Textová projekce PDF pro LLM kontext
+  (implemented).** Dva opakované fyzické pokusy s Google Drive PDF skončily před
+  dispatchí, protože obecný router vyžadoval UTF-8 bajty a binární PDF nemohlo
+  založit Ollama run. Adapter nyní pro bounded PDF vytvoří přes Poppler inertní
+  UTF-8 textovou projekci označenou v promptu; Context Manifest a autorizace dál
+  vážou původní commit, artifact ID, privacy, velikost a SHA-256 původních bajtů.
+  Projekce nic nezapisuje, má limit 4 MiB, 2000 řádků a 15 sekund a při chybě
+  selže před dispatchí bez fallbacku na jiný zdroj nebo backend. Skutečný
+  104 733bajtový vybraný PDF artefakt prošel na 5 827 bajtů promptu se správným
+  českým nadpisem a bez PDF binárních dat; čtyři cílené testy a celá sada
+  `603 tests` prošly (27 volitelných či fyzických testů přeskočeno).
+
 - [ ] [planned] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
   aktualizace (implemented).** Chat zobrazí náhled/diff a teprve samostatná
   potvrzená akce vytvoří nebo aktualizuje lokální projektový dokument. Bez potvrzení

@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
-from spikes.artifact_preview import preview
+from spikes.artifact_preview import pdf_text, preview
 from spikes.artifacts import Artifacts
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
@@ -99,6 +99,21 @@ class PreviewTests(unittest.TestCase):
         with patch('spikes.artifact_preview.subprocess.run', side_effect=FileNotFoundError):
             result = preview(dict(raw=pdf_bytes(), path='x.pdf', sidecar=True, metadata={}))
             self.assertEqual(result['format'], 'unsupported')
+
+    def test_pdf_text_projection_is_bounded_utf8_and_fail_closed(self):
+        completed = subprocess.CompletedProcess([], 0, 'Nadpis\nObsah\n'.encode(), b'')
+        with patch('spikes.artifact_preview.subprocess.run', return_value=completed) as run:
+            self.assertEqual(pdf_text(pdf_bytes()), 'Nadpis\nObsah')
+        self.assertEqual(run.call_args.args[0],
+                         ['pdftotext', '-enc', 'UTF-8', '-layout', '-', '-'])
+        self.assertEqual(run.call_args.kwargs['input'], pdf_bytes())
+        for raw, result in ((b'not-pdf', completed),
+                            (pdf_bytes(), subprocess.CompletedProcess([], 1, b'', b'bad')),
+                            (pdf_bytes(), subprocess.CompletedProcess([], 0, b'\xff', b''))):
+            with self.subTest(raw=raw[:8], returncode=result.returncode), \
+                    patch('spikes.artifact_preview.subprocess.run', return_value=result), \
+                    self.assertRaises(ValueError):
+                pdf_text(raw)
 
     def test_html_is_visible_text_only_and_json_is_pretty_printed(self):
         html = (b'<!doctype html><html><head><title>Secret title</title>'
