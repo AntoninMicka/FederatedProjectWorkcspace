@@ -453,6 +453,13 @@ class ChatService:
             'to create, write, draft, or propose a document or other durable text. Choose '
             'presentation-proposal when the user asks to create or update a presentation. '
             'For a new presentation use operation create, a null target and null slide IDs. '
+            'For every presentation slide return exactly all five fields slide_id, title, '
+            'bullets, notes, and layout; use an empty notes string when no speaker note is '
+            'needed, and never put notes at the presentation top level. For a new presentation '
+            'the available layout IDs are title, content, two-column, visual, and closing. '
+            'When the focus does not request a slide count, turn a source document into 6-12 '
+            'slides. Use the language of the focus request and ground slide content only in the '
+            'supplied sources, without borrowing unrelated project themes. '
             'For an update use only the explicitly selected presentation artifact ID as target, '
             'include it among source_artifact_ids, and use only existing main slide IDs. '
             'Use only supplied artifact IDs and available layout IDs. '
@@ -520,13 +527,20 @@ class ChatService:
             if isinstance(value, dict) and value.get('kind') == 'presentation-proposal':
                 require(workspace.git.head() == prepared.manifest['project_commit'],
                         'Project changed while preparing presentation proposal')
-                value = materialize_presentation_proposal(value,
-                    task_id=request['task_id'], project_id=request['project_id'],
-                    base_revision=prepared.manifest['project_commit'],
-                    selected_artifact_ids=request['selected_artifact_ids'],
-                    node_path=self.node_path)
+                try:
+                    value = materialize_presentation_proposal(value,
+                        task_id=request['task_id'], project_id=request['project_id'],
+                        base_revision=prepared.manifest['project_commit'],
+                        selected_artifact_ids=request['selected_artifact_ids'],
+                        node_path=self.node_path)
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValidationError(
+                        'Ollama returned invalid presentation proposal') from exc
             outcome = AITaskOutcome.parse(value)
         except (KeyError, TypeError, ValueError) as exc:
+            if (isinstance(exc, ValidationError)
+                    and str(exc) == 'Ollama returned invalid presentation proposal'):
+                raise
             raise ValidationError('Ollama returned invalid task outcome') from exc
         if outcome.kind in {'external-request', 'web-search'}:
             allowed = request['selected_message_ids'] + [request['message_id']]

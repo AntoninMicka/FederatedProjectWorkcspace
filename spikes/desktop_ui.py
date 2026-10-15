@@ -4526,6 +4526,12 @@ class DesktopHandler(Handler):
                     'Zahoďte tento návrh a spusťte nové hledání.'})
             if isinstance(exc, ValidationError) and self.path in {
                     '/v1/chat/send', '/v1/chat/send-stream', '/v1/tasks/route'}:
+                if (self.path == '/v1/tasks/route'
+                        and str(exc) == 'Ollama returned invalid presentation proposal'):
+                    return self.reply(422, {'error':
+                        'Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát '
+                        'nebo povolené vazby na zdroje a layouty. '
+                        'Projekt ani předchozí vlákno nebyly změněny.'})
                 message = CHAT_VALIDATION_ERRORS.get(str(exc))
                 if message is not None:
                     return self.reply(422, {'error': message})

@@ -151,6 +151,18 @@ autoritativní projektový obsah.
   projektu. Cílená sada prošla (107 testů, 3 přeskočené); celá sada prošla
   (600 testů, 27 přeskočených volitelných/fyzických testů).
 
+- [x] [completed] **F-M4-PRESENTER-01-D1 — Zpřesnit kontrakt návrhu po fyzickém
+  neúspěchu Ollamy (implemented).** Reálný běh s dokumentem „Architektura EZS —
+  Track-to-Track Fúze“ vrátil správný druh návrhu, ale vynechal povinný layout,
+  přesunul poznámku mimo slide a přimíchal nesouvisející téma. Router nyní
+  explicitně opakuje všech pět polí každého slidu, povolené layouty nového decku,
+  výchozí rozsah 6–12 slidů, jazyk zadání a vazbu pouze na vybrané zdroje.
+  Deterministická vrstva vadný návrh nadále neopravuje ani neukládá a UI jej
+  odliší od ostatních neplatných výsledků; nový běh zůstává výslovnou akcí.
+  Pět cílených router/presenter/UI testů prošlo a celá sada prošla v prostředí
+  s povolenými loopback sockety (`601 tests`, 27 přeskočených volitelných či
+  fyzických testů).
+
 - [ ] [planned] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
   aktualizace (implemented).** Chat zobrazí náhled/diff a teprve samostatná
   potvrzená akce vytvoří nebo aktualizuje lokální projektový dokument. Bez potvrzení

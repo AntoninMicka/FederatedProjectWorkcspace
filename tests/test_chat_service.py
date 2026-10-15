@@ -14,6 +14,7 @@ from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import read_config
 from spikes.context_builder import ContextBuilder
+from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
@@ -277,6 +278,10 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIn('never copy or paraphrase the focus request as the answer', calls[0]['prompt'])
         self.assertIn('Do not wrap a template', calls[0]['prompt'])
         self.assertIn('"artifact_kind":"document"', calls[0]['prompt'])
+        self.assertIn('exactly all five fields slide_id, title, bullets, notes, and layout',
+                      calls[0]['prompt'])
+        self.assertIn('turn a source document into 6-12 slides', calls[0]['prompt'])
+        self.assertIn('Use the language of the focus request', calls[0]['prompt'])
         restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
             adapter_factory=lambda runs: OllamaAdapter(runs,
                 transport=lambda *_: self.fail('must not resend')))
@@ -930,7 +935,7 @@ class ChatServiceTests(unittest.TestCase):
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(proposal)}))
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
             rejected.task_route(unavailable)
 
     def test_presentation_proposal_rejects_unknown_layout_and_changed_head(self):
@@ -943,7 +948,7 @@ class ChatServiceTests(unittest.TestCase):
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(proposal)}))
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
             invalid.task_route(request)
 
         raced_request = self.route_request()
@@ -958,6 +963,28 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
             raced.task_route(raced_request)
         self.assertEqual(raced.task_outcomes(project_id=ENTITY), [])
+
+    def test_malformed_presentation_has_specific_validation_error(self):
+        source_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=source_id,
+            base_head=self.git.head(), title='Track-to-Track', body='Fusion source', new=True),
+            str(uuid4()))
+        request = self.route_request(expected_head=self.git.head(),
+                                     selected_artifact_ids=[source_id])
+        malformed = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'EZS',
+            'source_artifact_ids': [source_id], 'slides': [
+                {'slide_id': None, 'title': 'Architektura', 'bullets': ['Fúze'],
+                 'notes': ''}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(malformed)}))
+
+        with self.assertRaisesRegex(
+                ValidationError, '^Ollama returned invalid presentation proposal$'):
+            service.task_route(request)
+        self.assertEqual(service.task_outcomes(project_id=ENTITY), [])
 
     def test_external_outcome_confirms_without_persisting_full_chat_projection(self):
         request = self.route_request()

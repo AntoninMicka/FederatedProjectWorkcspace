@@ -681,6 +681,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Zadání a výběr zůstaly zachovány', JS)
         self.assertIn('Ollama vrátila neplatný formát výsledku úlohy',
                       Path('spikes/desktop_ui.py').read_text())
+        self.assertIn('Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát',
+                      Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)
         self.assertIn("projectRequest('/v1/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/external/cancel'", JS)
