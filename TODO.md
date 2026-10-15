@@ -220,11 +220,20 @@ autoritativní projektový obsah.
   JavaScript prošly a celá sada `608 tests` prošla (27 přeskočených volitelných či
   fyzických testů). Fyzická desktopová akceptace zůstává v F-M4-PRESENTER-01-F.
 
-- [ ] [planned] **F-M4-PRESENTER-01-F — Dokumentace a fyzická akceptace
+- [ ] [in progress] **F-M4-PRESENTER-01-F — Dokumentace a fyzická akceptace
   (PoC validated).** Aktualizovat návod a reuse evidenci a na Linux desktopu ověřit
   editor, uložení/aktualizaci, spuštění, speaker/audience oddělení, stabilní
   layouty a bezpečné chování při odpojení displeje. Gamepad ověřit fyzicky,
   je-li podporované zařízení dostupné; jinak zůstane explicitně neověřený.
+
+  Dílčí fyzická akceptace 2026-10-15: uživatel označil editor v současné fázi
+  za vyhovující. Další vizuální a dispoziční úpravy editoru nejsou podmínkou
+  dokončení této dávky a byly výslovně odloženy do existujícího backlogového
+  úkolu `UX-FACELIFT-01`, pro který uživatel dodá celkový návrh. Směrování
+  explicitního požadavku na návrh prezentace bylo fyzicky potvrzeno po opravě
+  D4. Uložení/aktualizace z orchestrace, spuštění prezentace, speaker/audience
+  oddělení, stabilita layoutů při běhu, odpojení displeje a případný gamepad
+  zatím fyzicky potvrzené nejsou.
 
 ## Crash boundaries a recovery
 
