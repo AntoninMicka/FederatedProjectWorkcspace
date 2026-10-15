@@ -3,6 +3,7 @@
 """Materialize an untrusted model proposal without writing a project artifact."""
 import copy
 import hashlib
+import json
 from uuid import NAMESPACE_URL, uuid5
 
 from spikes.metadata import require, uuid
@@ -124,3 +125,57 @@ def materialize_presentation_proposal(value, *, task_id, project_id, base_revisi
             'target_artifact_id': proposal['target_artifact_id'],
             'source_artifact_ids': proposal['source_artifact_ids'],
             'base_revision': base_revision, 'deck': deck, 'deck_sha256': digest}
+
+
+def _slide_preview(slide):
+    return {key: copy.deepcopy(slide[key])
+            for key in ('id', 'title', 'bullets', 'notes', 'layout')}
+
+
+def presentation_approval_preview(value, *, task_id, project_id, node_path):
+    """Build an inert exact diff bound to the already validated draft digest."""
+    uuid(task_id); uuid(project_id)
+    fields = {'schema_version', 'kind', 'operation', 'target_artifact_id',
+              'source_artifact_ids', 'base_revision', 'deck', 'deck_sha256'}
+    require(isinstance(value, dict) and set(value) == fields
+            and value['schema_version'] == 1
+            and value['kind'] == 'presentation-draft'
+            and value['operation'] in {'create', 'update'},
+            'Invalid presentation draft approval input')
+    deck = validate_deck(copy.deepcopy(value['deck']))
+    digest = hashlib.sha256(encode_deck(deck).encode('utf-8')).hexdigest()
+    require(digest == value['deck_sha256'], 'Presentation draft changed before approval')
+    before = None
+    if value['operation'] == 'update':
+        view = PresentationDocuments(node_path).open_revision(
+            project_id, value['base_revision'])
+        document = next((item for item in view['documents']
+                         if item['id'] == value['target_artifact_id']), None)
+        require(document is not None, 'Presentation target is unavailable at base revision')
+        before = document['deck']
+    before_slides = {} if before is None else {item['id']: item for item in before['slides']}
+    changes = []
+    for slide in deck['slides']:
+        previous = before_slides.get(slide['id'])
+        before_value = None if previous is None else _slide_preview(previous)
+        after_value = _slide_preview(slide)
+        if before_value != after_value:
+            changes.append({'action': 'add' if previous is None else 'update',
+                            'slide_id': slide['id'], 'before': before_value,
+                            'after': after_value})
+    if before is not None:
+        after_ids = {item['id'] for item in deck['slides']}
+        for slide in before['slides']:
+            require(slide['id'] in after_ids,
+                    'Presentation approval cannot remove slides')
+    payload = {'schema_version': 1, 'kind': 'presentation-approval',
+               'task_id': task_id, 'operation': value['operation'],
+               'target_artifact_id': value['target_artifact_id'],
+               'source_artifact_ids': list(value['source_artifact_ids']),
+               'base_revision': value['base_revision'],
+               'deck_sha256': digest,
+               'title_before': None if before is None else before['title'],
+               'title_after': deck['title'], 'changes': changes}
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                           separators=(',', ':')).encode('utf-8')
+    return dict(payload, approval_digest=hashlib.sha256(canonical).hexdigest())

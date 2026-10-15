@@ -189,11 +189,22 @@ autoritativní projektový obsah.
   Python syntax check a diff check. Skutečný nový modelový běh se nespouštěl
   automaticky a zůstává vědomou fyzickou akceptací uživatele.
 
-- [ ] [planned] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
-  aktualizace (implemented).** Chat zobrazí náhled/diff a teprve samostatná
+- [x] [completed] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
+  aktualizace (PoC validated).** Chat zobrazí náhled/diff a teprve samostatná
   potvrzená akce vytvoří nebo aktualizuje lokální projektový dokument. Bez potvrzení
   nevznikne soubor, artefakt ani Git commit; stale HEAD/digest se odmítne a opakování
   stejného operation ID je idempotentní.
+  Dokončeno 2026-10-15. Připravený návrh nyní nese deterministický schvalovací
+  náhled s přesným before/after diffem odvozeným z historické base revision a je
+  svázaný s base revision, kanonickým deck digestem i approval digestem. Samostatné
+  potvrzení podporuje create i update, zachovává privacy a provenance a používá
+  stabilní artifact/operation ID také při opakování po restartu. Stale projekt,
+  pozměněný digest či změněné potvrzení se odmítají před zápisem; pád po projektovém
+  commitu a před uzavřením výsledku se obnoví bez druhého commitu. Autentizovaný
+  desktop endpoint a UI vyžadují výslovné tlačítko a zobrazují inertní diff jako
+  text. Cílených `110 tests` prošlo (3 přeskočené), Python syntax check a vložený
+  JavaScript prošly a celá sada `608 tests` prošla (27 přeskočených volitelných či
+  fyzických testů). Fyzická desktopová akceptace zůstává v F-M4-PRESENTER-01-F.
 
 - [ ] [planned] **F-M4-PRESENTER-01-F — Dokumentace a fyzická akceptace
   (PoC validated).** Aktualizovat návod a reuse evidenci a na Linux desktopu ověřit

@@ -33,7 +33,9 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
                                    OpenAIResponseError, OpenAIRuns,
                                    OpenAIUnknownRun)
 from spikes.project_creation import ProjectCreation
-from spikes.presentation_proposals import materialize_presentation_proposal
+from spikes.presentation_documents import PresentationDocuments
+from spikes.presentation_proposals import (materialize_presentation_proposal,
+                                           presentation_approval_preview)
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
 from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
@@ -560,7 +562,9 @@ class ChatService:
             durable = TaskOutcomes(root).finish(request['task_id'], node_id, user_id,
                 'completed', result={'schema_version': 1, 'kind': 'direct-answer',
                                      'content': outcome.content})
-        routed['projection'] = durable['projection']
+        routed['projection'] = (self._task_projection(durable['projection'])
+                                if outcome.kind == 'presentation-draft'
+                                else durable['projection'])
         return routed
 
     def task_outcomes(self, *, project_id, thread_id=None):
@@ -845,6 +849,13 @@ class ChatService:
         """Attach display-only provider output without duplicating durable state."""
         outcome = projection.get('outcome')
         if (projection.get('state') == 'prepared' and isinstance(outcome, dict)
+                and outcome.get('kind') == 'presentation-draft'):
+            displayed = dict(projection)
+            displayed['presentation_approval'] = presentation_approval_preview(
+                outcome, task_id=projection['task_id'],
+                project_id=projection['project_id'], node_path=self.node_path)
+            return displayed
+        if (projection.get('state') == 'prepared' and isinstance(outcome, dict)
                 and outcome.get('kind') == 'web-search'):
             node_id, user_id = self._identity()
             runs = SearchRuns(self._root())
@@ -902,6 +913,71 @@ class ChatService:
         result = {'schema_version': 1, 'kind': 'artifact-link',
                   'artifact_id': request['artifact_id'],
                   'title': row['outcome']['title'],
+                  'project_commit': receipt['commit_id']}
+        return store.finish(request['task_id'], node_id, user_id, 'completed',
+                            result=result)['projection']
+
+    def task_confirm_presentation(self, request, *, checkpoint=lambda stage: None):
+        required = {'task_id', 'artifact_id', 'operation_id', 'approval_digest',
+                    'base_revision', 'deck_sha256', 'approved'}
+        require(isinstance(request, dict) and set(request) == required
+                and request['approved'] is True,
+                'Invalid presentation confirmation')
+        for key in ('task_id', 'artifact_id', 'operation_id'):
+            uuid(request[key])
+        for key in ('approval_digest', 'deck_sha256'):
+            require(isinstance(request[key], str)
+                    and re.fullmatch(r'[0-9a-f]{64}', request[key]),
+                    'Invalid presentation confirmation digest')
+        require(isinstance(request['base_revision'], str)
+                and re.fullmatch(r'[0-9a-f]{40,64}', request['base_revision']),
+                'Invalid presentation confirmation revision')
+        node_id, user_id = self._identity(); store = TaskOutcomes(self._root())
+        row = store.get(request['task_id'], node_id, user_id)
+        if row['state'] == 'completed':
+            result = row['result']
+            require(isinstance(result, dict)
+                    and result.get('kind') == 'presentation-link'
+                    and all(result.get(key) == request[key] for key in
+                            ('artifact_id', 'operation_id', 'approval_digest',
+                             'base_revision', 'deck_sha256')),
+                    'Task outcome was completed differently')
+            return row['projection']
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'presentation-draft',
+                'Task outcome is not a presentation draft')
+        draft = AITaskOutcome.parse(row['outcome'])
+        approval = presentation_approval_preview(
+            row['outcome'], task_id=request['task_id'],
+            project_id=row['project_id'], node_path=self.node_path)
+        require(request['approval_digest'] == approval['approval_digest']
+                and request['base_revision'] == draft.base_revision
+                and request['deck_sha256'] == draft.deck_sha256,
+                'Presentation approval does not match the exact draft')
+        artifact_id = request['artifact_id']
+        require((draft.operation == 'create' and draft.target_artifact_id is None)
+                or (draft.operation == 'update'
+                    and artifact_id == draft.target_artifact_id),
+                'Presentation confirmation targets a different artifact')
+        save_request = {'project_id': row['project_id'], 'artifact_id': artifact_id,
+                        'base_head': draft.base_revision,
+                        'new': draft.operation == 'create', 'deck': draft.deck}
+        documents = PresentationDocuments(self.node_path)
+        if draft.operation == 'create':
+            receipt = documents.save(save_request, request['operation_id'],
+                checkpoint=checkpoint, privacy=row['privacy'],
+                provenance='llm-generated')
+        else:
+            receipt = documents.save(save_request, request['operation_id'],
+                                     checkpoint=checkpoint)
+        result = {'schema_version': 1, 'kind': 'presentation-link',
+                  'operation': draft.operation, 'artifact_id': artifact_id,
+                  'title': draft.deck['title'],
+                  'source_artifact_ids': list(draft.source_artifact_ids),
+                  'base_revision': draft.base_revision,
+                  'deck_sha256': draft.deck_sha256,
+                  'approval_digest': request['approval_digest'],
+                  'operation_id': request['operation_id'],
                   'project_commit': receipt['commit_id']}
         return store.finish(request['task_id'], node_id, user_id, 'completed',
                             result=result)['projection']

@@ -2566,6 +2566,7 @@ const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false;
 function chatScrollOwner(){
  return getComputedStyle(mainPanelContent).overflowY==='visible' ?
@@ -2786,10 +2787,12 @@ function renderTaskOutcomes(){
   const heading=document.createElement('h3');
   heading.textContent=outcome.kind==='artifact-draft'?'Návrh artefaktu':
    outcome.kind==='presentation-draft'?'Návrh prezentace':
+   outcome.kind==='presentation-link'?'Uložená prezentace':
    outcome.kind==='artifact-link'?'Vytvořený artefakt':
    outcome.kind==='web-search'?'Návrh webového hledání':
    outcome.kind==='web-search-answer'?'Odpověď z řízeného hledání':'Externí volání';card.append(heading);
   if(outcome.kind==='presentation-draft'){
+   const approval=projection.presentation_approval;
    const title=document.createElement('strong');title.textContent=outcome.deck.title;card.append(title);
    const mode=document.createElement('p');mode.textContent=outcome.operation==='create'?
     'Nová prezentace — zatím pouze náhled.':'Aktualizace existující prezentace — zatím pouze náhled.';card.append(mode);
@@ -2802,10 +2805,40 @@ function renderTaskOutcomes(){
    card.append(slides);
    const digest=document.createElement('small');digest.textContent=
     `Výchozí revize ${outcome.base_revision.slice(0,12)} · digest návrhu ${outcome.deck_sha256.slice(0,12)}`;card.append(digest);
+   if(approval){const diff=document.createElement('details'),summary=document.createElement('summary');
+    summary.textContent=approval.operation==='create'?
+     `Přesný náhled vytvoření · ${approval.changes.length} slidů`:
+     `Přesný diff aktualizace · ${approval.changes.length} změněných slidů`;
+    diff.append(summary);const titles=document.createElement('p');titles.textContent=
+     approval.title_before===null?`Nový název: ${approval.title_after}`:
+     `Název: ${approval.title_before} → ${approval.title_after}`;diff.append(titles);
+    for(const change of approval.changes){const item=document.createElement('pre');item.textContent=
+      JSON.stringify({akce:change.action,před:change.before,po:change.after},null,2);diff.append(item);}
+    const approvalDigest=document.createElement('small');approvalDigest.textContent=
+     `Digest schválení ${approval.approval_digest}`;diff.append(approvalDigest);card.append(diff);}
    const warning=document.createElement('small');warning.textContent=
-    'Návrh není uložený. Vytvoření nebo změna artefaktu bude vyžadovat samostatné potvrzení.';card.append(warning);
+    'Návrh není uložený. Potvrzení vytvoří jeden projektový commit; změněná revize nebo digest se odmítne.';card.append(warning);
    const actions=document.createElement('div');actions.className='task-actions';
+   if(approval)actions.append(taskButton(outcome.operation==='create'?'Schválit a vytvořit':'Schválit aktualizaci',async event=>{
+    event.currentTarget.disabled=true;chatOperationStatus.textContent='Ukládám přesně schválenou prezentaci…';
+    let attempt=presentationApprovalAttempts.get(projection.task_id);
+    if(!attempt){attempt={artifact_id:outcome.operation==='update'?outcome.target_artifact_id:crypto.randomUUID(),operation_id:crypto.randomUUID()};presentationApprovalAttempts.set(projection.task_id,attempt);}
+    try{const projectId=activeProject.id,result=await projectRequest('/v1/tasks/presentation/confirm',{
+      task_id:projection.task_id,artifact_id:attempt.artifact_id,operation_id:attempt.operation_id,
+      approval_digest:approval.approval_digest,base_revision:approval.base_revision,
+      deck_sha256:approval.deck_sha256,approved:true},120000);
+     presentationApprovalAttempts.delete(projection.task_id);replaceTaskProjection(result);
+     await openRegisteredProject(projectId);await openPresentationEditor(attempt.artifact_id);
+     chatOperationStatus.textContent='Prezentace byla uložena do projektu a otevřena v editoru.';
+    }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
+   }));
    actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='presentation-link'){
+   const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
+   const detail=document.createElement('small');detail.textContent=
+    `${outcome.operation==='create'?'Vytvořeno':'Aktualizováno'} v revizi ${outcome.project_commit.slice(0,12)} · digest ${outcome.deck_sha256.slice(0,12)}`;card.append(detail);
+   const actions=document.createElement('div');actions.className='task-actions';
+   actions.append(taskButton('Otevřít prezentaci',()=>openPresentationEditor(outcome.artifact_id)));card.append(actions);
   }else if(outcome.kind==='artifact-draft'){
    const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
    const body=document.createElement('pre');body.textContent=outcome.content;card.append(body);
@@ -4023,7 +4056,8 @@ class DesktopHandler(Handler):
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
         '/v1/tasks/route', '/v1/tasks/list', '/v1/tasks/cancel',
-        '/v1/tasks/artifact', '/v1/tasks/external/preview',
+        '/v1/tasks/artifact', '/v1/tasks/presentation/confirm',
+        '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
@@ -4259,6 +4293,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_cancel(request))
             if self.path == '/v1/tasks/artifact' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_publish_artifact(request))
+            if (self.path == '/v1/tasks/presentation/confirm'
+                    and isinstance(request, dict)):
+                return self.reply(200,
+                    self.server.chat_service.task_confirm_presentation(request))
             if self.path == '/v1/tasks/external/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_external_preview(request))
             if self.path == '/v1/tasks/external/confirm' and isinstance(request, dict):
@@ -4541,6 +4579,11 @@ class DesktopHandler(Handler):
             if self.path == '/v1/tasks/route':
                 return self.reply(422, {'error': 'Ollama vrátila neplatný formát výsledku úlohy. '
                                        'Projekt ani předchozí vlákno nebyly změněny.'})
+            if self.path == '/v1/tasks/presentation/confirm':
+                return self.reply(422, {'error':
+                    'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
+                    'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
+                    'stejného tlačítka zachová identitu operace.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '

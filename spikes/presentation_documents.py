@@ -11,8 +11,10 @@ from uuid import uuid4
 import yaml
 
 from spikes.artifacts import Artifacts
-from spikes.markdown_documents import MAX_EDITOR
-from spikes.metadata import StrictLoader, ValidationError, require, uuid
+from spikes.configuration import committed_project
+from spikes.markdown_documents import MAX_EDITOR, document
+from spikes.metadata import (StrictLoader, ValidationError, require, uuid,
+                             validate_snapshot)
 
 LEGACY_PREFIX = '```fpw-presentation-v1\n'
 MARKDOWN_PREFIX = '---\nformat: fpw-presentation\nformat_version: 2\n'
@@ -374,11 +376,33 @@ class PresentationDocuments:
                 docs.append(row)
         return dict(view, documents=docs, layout_presets=layout_presets())
 
-    def save(self, request, operation_id, *, checkpoint=lambda stage: None):
+    def open_revision(self, project_id, revision):
+        """Read a validated historical deck snapshot without recovery or index writes."""
+        require(isinstance(revision, str) and re.fullmatch(r'[0-9a-f]{40,64}', revision),
+                'Invalid presentation revision')
+        workspace = self.artifacts.workspace(project_id)
+        committed_project(workspace.git, revision, project_id)
+        files = workspace.git.snapshot(revision)
+        entities = validate_snapshot(files)
+        docs = []
+        for id_, item in entities.items():
+            if item['kind'] != 'document':
+                continue
+            row = document(files, entities, id_)
+            if is_presentation_document(row['body']):
+                candidate = dict(row)
+                candidate['deck'] = decode_deck(row['body'])
+                docs.append(candidate)
+        return {'id': project_id, 'commit_id': revision, 'documents': docs,
+                'layout_presets': layout_presets()}
+
+    def save(self, request, operation_id, *, checkpoint=lambda stage: None,
+             privacy='project', provenance='user'):
         body = encode_deck(request['deck'])
         native = {key: request[key] for key in ('project_id', 'artifact_id', 'base_head', 'new')}
         native.update(title=request['deck']['title'], body=body)
-        return self.artifacts.save(native, operation_id, checkpoint=checkpoint)
+        return self.artifacts.save(native, operation_id, checkpoint=checkpoint,
+                                   privacy=privacy, provenance=provenance)
 
     def select(self, project_id, artifact_id, expected_head):
         """Return only an exactly current, validated saved deck for presenting."""

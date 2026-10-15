@@ -65,14 +65,19 @@ class DesktopTests(unittest.TestCase):
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
                         <= DesktopHandler.post_paths)
 
-    def test_presentation_task_is_preview_only_until_separate_confirmation(self):
+    def test_presentation_task_has_exact_diff_and_separate_confirmation(self):
         self.assertIn("outcome.kind==='presentation-draft'?'Návrh prezentace'", JS)
         branch = JS.split("if(outcome.kind==='presentation-draft'){", 1)[1].split(
-            "}else if(outcome.kind==='artifact-draft')", 1)[0]
+            "}else if(outcome.kind==='presentation-link')", 1)[0]
         self.assertIn("taskButton('Zahodit'", branch)
         self.assertIn('Návrh není uložený.', branch)
+        self.assertIn('projection.presentation_approval', branch)
+        self.assertIn("projectRequest('/v1/tasks/presentation/confirm'", branch)
+        self.assertIn("'Schválit a vytvořit'", branch)
+        self.assertIn('approval.approval_digest', branch)
+        self.assertIn('JSON.stringify({akce:change.action,před:change.before,po:change.after}', branch)
         self.assertNotIn('/v1/presentations/save', branch)
-        self.assertNotIn('Uložit', branch)
+        self.assertTrue({'/v1/tasks/presentation/confirm'} <= DesktopHandler.post_paths)
 
     def test_project_removal_ui_has_separate_preview_restore_and_purge_approvals(self):
         self.assertIn('id="project-delete-panel"', HTML)
@@ -765,6 +770,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertTrue({'/v1/artifacts/history/list', '/v1/artifacts/history/compare'} <= DesktopHandler.post_paths)
         self.assertIn('id="chat-delete-preview"', HTML)
         self.assertIn("projectRequest('/v1/tasks/artifact'", JS)
+        self.assertIn("projectRequest('/v1/tasks/presentation/confirm'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/preview'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/tasks/external/cancel'", JS)
