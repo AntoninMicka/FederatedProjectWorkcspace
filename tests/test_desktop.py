@@ -65,6 +65,15 @@ class DesktopTests(unittest.TestCase):
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
                         <= DesktopHandler.post_paths)
 
+    def test_presentation_task_is_preview_only_until_separate_confirmation(self):
+        self.assertIn("outcome.kind==='presentation-draft'?'Návrh prezentace'", JS)
+        branch = JS.split("if(outcome.kind==='presentation-draft'){", 1)[1].split(
+            "}else if(outcome.kind==='artifact-draft')", 1)[0]
+        self.assertIn("taskButton('Zahodit'", branch)
+        self.assertIn('Návrh není uložený.', branch)
+        self.assertNotIn('/v1/presentations/save', branch)
+        self.assertNotIn('Uložit', branch)
+
     def test_project_removal_ui_has_separate_preview_restore_and_purge_approvals(self):
         self.assertIn('id="project-delete-panel"', HTML)
         self.assertIn('id="project-trash-list"', HTML)

@@ -33,6 +33,7 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
                                    OpenAIResponseError, OpenAIRuns,
                                    OpenAIUnknownRun)
 from spikes.project_creation import ProjectCreation
+from spikes.presentation_proposals import materialize_presentation_proposal
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
 from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
@@ -435,17 +436,26 @@ class ChatService:
                     'Chat mode cannot change inside an existing thread')
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
             'task-router-v1', frozenset(request['selected_artifact_ids']))
-        instruction = ('Return only one JSON object matching exactly one of these flat templates: '
+        instruction = ('Return only one JSON object matching exactly one of these closed templates: '
             '{"schema_version":1,"kind":"direct-answer","content":"..."}; '
             '{"schema_version":1,"kind":"artifact-draft","artifact_kind":"document",'
             '"title":"...","content":"..."}; '
+            '{"schema_version":1,"kind":"presentation-proposal","operation":"create|update",'
+            '"target_artifact_id":null,"title":"...","source_artifact_ids":["..."],'
+            '"slides":[{"slide_id":null,"title":"...","bullets":["..."],'
+            '"notes":"...","layout":"content"}]}; '
             '{"schema_version":1,"kind":"web-search","purpose":"...","query":"...",'
             '"message_ids":["..."],"artifact_ids":["..."]}; '
             '{"schema_version":1,"kind":"external-request","purpose":"...","query":"...",'
-            '"message_ids":["..."],"artifact_ids":["..."]}. Do not nest fields inside '
-            'direct-answer, artifact, web-search, or external-request objects and do not add fields. '
+            '"message_ids":["..."],"artifact_ids":["..."]}. Do not wrap a template '
+            'in another object and do not add fields. '
             'Choose artifact-draft when the user asks '
             'to create, write, draft, or propose a document or other durable text. Choose '
+            'presentation-proposal when the user asks to create or update a presentation. '
+            'For a new presentation use operation create, a null target and null slide IDs. '
+            'For an update use only the explicitly selected presentation artifact ID as target, '
+            'include it among source_artifact_ids, and use only existing main slide IDs. '
+            'Use only supplied artifact IDs and available layout IDs. '
             'web-search when the request explicitly asks to find or search the public web, '
             'or requires current public facts. Choose external-request only when the request '
             'explicitly asks to use an external model. '
@@ -507,6 +517,14 @@ class ChatService:
                     and isinstance(value.get('message_ids'), list)
                     and request['message_id'] in value['message_ids']):
                 value = dict(value); value.pop('focus_id')
+            if isinstance(value, dict) and value.get('kind') == 'presentation-proposal':
+                require(workspace.git.head() == prepared.manifest['project_commit'],
+                        'Project changed while preparing presentation proposal')
+                value = materialize_presentation_proposal(value,
+                    task_id=request['task_id'], project_id=request['project_id'],
+                    base_revision=prepared.manifest['project_commit'],
+                    selected_artifact_ids=request['selected_artifact_ids'],
+                    node_path=self.node_path)
             outcome = AITaskOutcome.parse(value)
         except (KeyError, TypeError, ValueError) as exc:
             raise ValidationError('Ollama returned invalid task outcome') from exc

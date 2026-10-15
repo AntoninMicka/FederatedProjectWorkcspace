@@ -132,11 +132,24 @@ autoritativní projektový obsah.
   volitelný QR dekodér); po poslední změně prošla i celá sada 594 testů
   (27 přeskočeno), Python syntax check, JavaScript syntax check a diff check.
 
-- [ ] [planned] **F-M4-PRESENTER-01-D — Návrh prezentace z orchestračního
+- [x] [completed] **F-M4-PRESENTER-01-D — Návrh prezentace z orchestračního
   chatu (PoC validated).** Rozšířit typovaný výstup orchestrace o návrh nového
   decku a aktualizace existujícího decku z explicitního Context Manifestu.
   Deterministická vrstva validuje Markdown, layouty, oprávněné zdroje, privacy,
   původní revizi a nový digest; Ollama pouze navrhuje obsah.
+
+  Dokončeno 2026-10-15. Ollama vrací uzavřený `presentation-proposal` pouze s
+  obsahem a odkazy na explicitně vybrané zdroje; deterministická vrstva z něj
+  sestaví nový deck se stabilními ID nebo bezpečně upraví pouze existující
+  hlavní slidy vybrané prezentace. Výsledek znovu projde validací decku a
+  kanonického Markdownu, váže privacy a původní Git revizi z Context Manifestu
+  a nese SHA-256 nového Markdownu. Chat ukáže název, slidy, layouty, revizi a
+  digest, ale nabízí jen **Zahodit**; nevzniká projektový dokument ani commit.
+  Strukturální přidávání či mazání slidů při aktualizaci zůstává záměrně mimo
+  tento PoC. Testy doložily vytvoření i aktualizaci, restart projekce, privacy,
+  oprávněné zdroje, neznámý layout, změnu HEAD během běhu a absenci zápisu do
+  projektu. Cílená sada prošla (107 testů, 3 přeskočené); celá sada prošla
+  (600 testů, 27 přeskočených volitelných/fyzických testů).
 
 - [ ] [planned] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
   aktualizace (implemented).** Chat zobrazí náhled/diff a teprve samostatná

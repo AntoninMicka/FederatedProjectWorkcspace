@@ -228,8 +228,12 @@ def _markdown_text(lines, prefix, continuation):
 def encode_deck(deck):
     """Serialize the validated model as readable Markdown format v2."""
     deck = validate_deck(deck)
+    template_fields = ('id', 'revision', 'name', 'preset', 'title_align',
+                       'content_align', 'density', 'background', 'foreground', 'accent')
+    templates = [{key: item[key] for key in template_fields}
+                 for item in deck['templates']]
     front = dict(format='fpw-presentation', format_version=2,
-                 deck=dict(version=deck['version'], title=deck['title'], templates=deck['templates']))
+                 deck=dict(version=deck['version'], title=deck['title'], templates=templates))
     sections = ['---\n' + _yaml_dump(front) + '\n---\n']
     metadata_fields = ('id', 'kind', 'notes', 'background', 'foreground', 'wallpaper',
                        'next', 'backups', 'layout', 'column_break')

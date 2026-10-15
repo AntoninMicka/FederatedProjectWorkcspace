@@ -2785,10 +2785,28 @@ function renderTaskOutcomes(){
   const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
   const heading=document.createElement('h3');
   heading.textContent=outcome.kind==='artifact-draft'?'Návrh artefaktu':
+   outcome.kind==='presentation-draft'?'Návrh prezentace':
    outcome.kind==='artifact-link'?'Vytvořený artefakt':
    outcome.kind==='web-search'?'Návrh webového hledání':
    outcome.kind==='web-search-answer'?'Odpověď z řízeného hledání':'Externí volání';card.append(heading);
-  if(outcome.kind==='artifact-draft'){
+  if(outcome.kind==='presentation-draft'){
+   const title=document.createElement('strong');title.textContent=outcome.deck.title;card.append(title);
+   const mode=document.createElement('p');mode.textContent=outcome.operation==='create'?
+    'Nová prezentace — zatím pouze náhled.':'Aktualizace existující prezentace — zatím pouze náhled.';card.append(mode);
+   const slides=document.createElement('ol');slides.className='presentation-proposal-slides';
+   for(const slide of outcome.deck.slides.filter(item=>item.kind==='main')){
+    const item=document.createElement('li');const name=document.createElement('strong');name.textContent=slide.title;
+    const detail=document.createElement('small');detail.textContent=`Layout: ${slide.layout} · ${slide.bullets.length} odrážek`;
+    item.append(name,detail);slides.append(item);
+   }
+   card.append(slides);
+   const digest=document.createElement('small');digest.textContent=
+    `Výchozí revize ${outcome.base_revision.slice(0,12)} · digest návrhu ${outcome.deck_sha256.slice(0,12)}`;card.append(digest);
+   const warning=document.createElement('small');warning.textContent=
+    'Návrh není uložený. Vytvoření nebo změna artefaktu bude vyžadovat samostatné potvrzení.';card.append(warning);
+   const actions=document.createElement('div');actions.className='task-actions';
+   actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
+  }else if(outcome.kind==='artifact-draft'){
    const title=document.createElement('strong');title.textContent=outcome.title;card.append(title);
    const body=document.createElement('pre');body.textContent=outcome.content;card.append(body);
    const actions=document.createElement('div');actions.className='task-actions';
