@@ -189,6 +189,20 @@ autoritativní projektový obsah.
   Python syntax check a diff check. Skutečný nový modelový běh se nespouštěl
   automaticky a zůstává vědomou fyzickou akceptací uživatele.
 
+- [x] [completed] **F-M4-PRESENTER-01-D4 — Závazné směrování explicitního
+  požadavku na prezentaci (PoC validated).** Opakovaná fyzická zkouška ukázala,
+  že společné schema sice vynutilo platný tvar, ale dovolilo Ollamě zvolit
+  platnou větev dokumentu. Pro explicitní požadavek na vytvoření či aktualizaci
+  prezentace proto aplikace vybírá samostatně verzovanou roli a JSON Schema,
+  jehož jediným povoleným výsledkem je `presentation-proposal`; odlišné zaměření
+  nadále používá obecný router. Existující registr rolí a presenter schema byly
+  adaptovány, nové paralelní ukládání ani provider nebyly zavedeny.
+  Dokončeno 2026-10-15. Regresní test používá přesný český prompt
+  `vytvoř z daného dokumentu prezentaci`, ověřuje presentation-only schema,
+  zaznamenanou revizi role a odmítnutí dokumentového výsledku aplikační vrstvou.
+  Cílená sada `101 tests` a celá sada `610 tests` prošly (27 přeskočených
+  volitelných či fyzických testů).
+
 - [x] [completed] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
   aktualizace (PoC validated).** Chat zobrazí náhled/diff a teprve samostatná
   potvrzená akce vytvoří nebo aktualizuje lokální projektový dokument. Bez potvrzení

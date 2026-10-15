@@ -905,6 +905,39 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(restarted.task_outcomes(project_id=ENTITY),
                          [routed['projection']])
 
+    def test_explicit_czech_presentation_request_cannot_route_to_document(self):
+        request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Prezentace',
+            'source_artifact_ids': [], 'slides': [
+                {'slide_id': None, 'title': 'Úvod', 'bullets': ['Bod'],
+                 'notes': '', 'layout': 'title'}]}
+        calls = []
+        def transport(binding, raw):
+            calls.append(json.loads(raw))
+            return {'model': binding.model, 'response': json.dumps(proposal)}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport))
+
+        routed = service.task_route(request)
+
+        self.assertEqual(routed['outcome']['kind'], 'presentation-draft')
+        self.assertEqual(calls[0]['format']['properties']['kind']['enum'],
+                         ['presentation-proposal'])
+        run = OllamaRuns(self.chat_state).get(request['run_id'])
+        self.assertEqual(run['role_revision'], 'task-router-presentation-v1')
+
+        bad_request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        document = {'schema_version': 1, 'kind': 'artifact-draft',
+                    'artifact_kind': 'document', 'title': 'Špatně', 'content': 'Text'}
+        rejected = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                                                       'response': json.dumps(document)}))
+        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+            rejected.task_route(bad_request)
+
     def test_presentation_confirmation_is_exact_recoverable_and_idempotent(self):
         request = self.route_request(privacy='confidential')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',

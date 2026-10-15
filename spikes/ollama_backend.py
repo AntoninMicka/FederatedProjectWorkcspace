@@ -39,6 +39,24 @@ def _closed_object(properties, required):
 
 _TEXT = {'type': 'string', 'minLength': 1}
 _ID_LIST = {'type': 'array', 'items': _TEXT, 'uniqueItems': True}
+_PRESENTATION_PROPOSAL_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['presentation-proposal']},
+    'operation': {'type': 'string', 'enum': ['create', 'update']},
+    'target_artifact_id': {'type': ['string', 'null']},
+    'title': _TEXT,
+    'source_artifact_ids': _ID_LIST,
+    'slides': {'type': 'array', 'minItems': 1, 'maxItems': 100,
+               'items': _closed_object({
+                   'slide_id': {'type': ['string', 'null']},
+                   'title': _TEXT,
+                   'bullets': {'type': 'array', 'maxItems': 12,
+                               'items': _TEXT},
+                   'notes': {'type': 'string'},
+                   'layout': _TEXT,
+               }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
+}, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
+    'source_artifact_ids', 'slides'])
 _TASK_ROUTER_FORMAT = {
     'type': 'object',
     'oneOf': [
@@ -54,24 +72,7 @@ _TASK_ROUTER_FORMAT = {
             'title': _TEXT,
             'content': _TEXT,
         }, ['schema_version', 'kind', 'artifact_kind', 'title', 'content']),
-        _closed_object({
-            'schema_version': {'type': 'integer', 'enum': [1]},
-            'kind': {'type': 'string', 'enum': ['presentation-proposal']},
-            'operation': {'type': 'string', 'enum': ['create', 'update']},
-            'target_artifact_id': {'type': ['string', 'null']},
-            'title': _TEXT,
-            'source_artifact_ids': _ID_LIST,
-            'slides': {'type': 'array', 'minItems': 1, 'maxItems': 100,
-                       'items': _closed_object({
-                           'slide_id': {'type': ['string', 'null']},
-                           'title': _TEXT,
-                           'bullets': {'type': 'array', 'maxItems': 12,
-                                       'items': _TEXT},
-                           'notes': {'type': 'string'},
-                           'layout': _TEXT,
-                       }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
-        }, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
-            'source_artifact_ids', 'slides']),
+        _PRESENTATION_PROPOSAL_FORMAT,
         _closed_object({
             'schema_version': {'type': 'integer', 'enum': [1]},
             'kind': {'type': 'string', 'enum': ['web-search', 'external-request']},
@@ -502,9 +503,12 @@ class OllamaAdapter:
         body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                     stream=stream)
         if output_format == 'json':
-            body['format'] = (_TASK_ROUTER_FORMAT if role is not None
-                              and role.role_id == 'task-router'
-                              and role.revision == 'task-router-v1' else 'json')
+            if role is not None and role.role_id == 'task-router':
+                body['format'] = (_PRESENTATION_PROPOSAL_FORMAT
+                                  if role.revision == 'task-router-presentation-v1'
+                                  else _TASK_ROUTER_FORMAT)
+            else:
+                body['format'] = 'json'
         request = json.dumps(body, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format)

@@ -300,6 +300,20 @@ class OllamaAdapterTests(unittest.TestCase):
                          {'slide_id', 'title', 'bullets', 'notes', 'layout'})
         self.assertFalse(slide['additionalProperties'])
 
+    def test_explicit_presentation_router_allows_only_presentation_proposal(self):
+        captured = []
+        role = ROLES.resolve('task-router', 'task-router-presentation-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        schema = captured[0]['format']
+        self.assertEqual(schema['properties']['kind']['enum'], ['presentation-proposal'])
+        self.assertNotIn('oneOf', schema)
+        self.assertFalse(schema['additionalProperties'])
+        self.assertEqual(set(schema['properties']['slides']['items']['required']),
+                         {'slide_id', 'title', 'bullets', 'notes', 'layout'})
+
     def test_other_json_roles_keep_generic_json_format(self):
         captured = []
         role = ROLES.resolve('extractor', 'extractor-v1')

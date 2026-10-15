@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import stat
 from types import MappingProxyType
+import unicodedata
 from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
@@ -46,6 +47,21 @@ from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+
+
+def presentation_task_requested(content):
+    """Recognize an explicit create/update presentation request, not its subject matter."""
+    require(isinstance(content, str), 'Invalid presentation task content')
+    normalized = ''.join(char for char in unicodedata.normalize('NFKD', content.casefold())
+                         if not unicodedata.combining(char))
+    object_requested = re.search(
+        r'\b(?:prezentac\w*|slid(?:e|es|u|y|u|em|ech)?|slide\s+deck|deck)\b',
+        normalized)
+    action_requested = re.search(
+        r'\b(?:vytvor\w*|udel\w*|priprav\w*|sestav\w*|zpracuj\w*|preved\w*|'
+        r'generuj\w*|aktualizuj\w*|uprav\w*|dopln\w*|create|make|build|generate|'
+        r'convert|turn|update|edit|revise)\b', normalized)
+    return bool(object_requested and action_requested)
 
 
 def parse_search_evaluation(raw, source_ids):
@@ -436,8 +452,11 @@ class ChatService:
         if thread is not None and 'run_choice' in request:
             require(thread['classification'] == choice.mode,
                     'Chat mode cannot change inside an existing thread')
+        presentation_requested = presentation_task_requested(request['content'])
+        role_revision = ('task-router-presentation-v1' if presentation_requested
+                         else 'task-router-v1')
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
-            'task-router-v1', frozenset(request['selected_artifact_ids']))
+            role_revision, frozenset(request['selected_artifact_ids']))
         instruction = ('Return only one JSON object matching exactly one of these closed templates: '
             '{"schema_version":1,"kind":"direct-answer","content":"..."}; '
             '{"schema_version":1,"kind":"artifact-draft","artifact_kind":"document",'
@@ -481,13 +500,13 @@ class ChatService:
             ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in prior) + (AdHocInput(request['message_id'],
                 request['content'].encode(), request['privacy']),), conversation=conversation,
-            task=TaskInstruction('task-router', 'task-router-v1', instruction,
+            task=TaskInstruction('task-router', role_revision, instruction,
                                  request['message_id']))
         require(choice.resolve(ollama=bindings.load()) == binding,
                 'Selected orchestration binding changed')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
-        role = ROLES.resolve('task-router', 'task-router-v1')
+        role = ROLES.resolve('task-router', role_revision)
         adapter.prepare(handoff, binding, role, 'json')
         response = adapter.dispatch(handoff, binding, role, 'json')
         try:
@@ -538,6 +557,10 @@ class ChatService:
                 except (KeyError, TypeError, ValueError) as exc:
                     raise ValidationError(
                         'Ollama returned invalid presentation proposal') from exc
+            if presentation_requested:
+                require(isinstance(value, dict)
+                        and value.get('kind') == 'presentation-draft',
+                        'Ollama did not return the requested presentation')
             outcome = AITaskOutcome.parse(value)
         except (KeyError, TypeError, ValueError) as exc:
             if (isinstance(exc, ValidationError)
