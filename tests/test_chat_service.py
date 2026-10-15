@@ -560,7 +560,8 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
                          first['search_id'])
-        self.assertEqual(ollama_formats, ['json', 'json', 'json'])
+        self.assertIsInstance(ollama_formats[0], dict)
+        self.assertEqual(ollama_formats[1:], ['json', 'json'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 

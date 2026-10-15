@@ -175,6 +175,20 @@ autoritativní projektový obsah.
   českým nadpisem a bez PDF binárních dat; čtyři cílené testy a celá sada
   `603 tests` prošly (27 volitelných či fyzických testů přeskočeno).
 
+- [x] [completed] **F-M4-PRESENTER-01-D3 — Strojově vynucený kontrakt
+  návrhu prezentace (implemented).** Fyzický běh s `qwen3-coder:latest`
+  správně použil vybrané PDF a vytvořil šest obsahově relevantních českých
+  slidů, ale navzdory explicitní instrukci u všech vynechal povinný `layout`.
+  Router proto pro Ollama structured output nově posílá uzavřené JSON Schema
+  všech povolených výsledků; větev prezentace vyžaduje přesně pět polí každého
+  slidu včetně `layout` a odmítá další pole. Aplikační validace zdrojových ID,
+  layoutů, HEAD, Markdownu a digestu zůstává druhou autoritativní vrstvou;
+  návrh se nadále neopravuje ani neukládá bez platného výsledku. Dva nové
+  kontraktové testy a související router test prošly; celá sada prošla
+  (`605 tests`, 27 přeskočených volitelných či fyzických testů), stejně jako
+  Python syntax check a diff check. Skutečný nový modelový běh se nespouštěl
+  automaticky a zůstává vědomou fyzickou akceptací uživatele.
+
 - [ ] [planned] **F-M4-PRESENTER-01-E — Povinné schválení vytvoření a
   aktualizace (implemented).** Chat zobrazí náhled/diff a teprve samostatná
   potvrzená akce vytvoří nebo aktualizuje lokální projektový dokument. Bez potvrzení

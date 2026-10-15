@@ -281,6 +281,34 @@ class OllamaAdapterTests(unittest.TestCase):
                          ('extractor', 'extractor-v1'))
         self.assertEqual(row['manifest_sha256'], self.handoff.manifest_sha256)
 
+    def test_task_router_uses_closed_schema_with_required_slide_layout(self):
+        captured = []
+        role = ROLES.resolve('task-router', 'task-router-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        schema = captured[0]['format']
+        proposals = [item for item in schema['oneOf']
+                     if item['properties']['kind'].get('enum') ==
+                     ['presentation-proposal']]
+        self.assertEqual(len(proposals), 1)
+        proposal = proposals[0]
+        self.assertFalse(proposal['additionalProperties'])
+        slide = proposal['properties']['slides']['items']
+        self.assertEqual(set(slide['required']),
+                         {'slide_id', 'title', 'bullets', 'notes', 'layout'})
+        self.assertFalse(slide['additionalProperties'])
+
+    def test_other_json_roles_keep_generic_json_format(self):
+        captured = []
+        role = ROLES.resolve('extractor', 'extractor-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        self.assertEqual(captured[0]['format'], 'json')
+
     def test_legacy_prepared_run_migrates_in_place_and_remains_idempotent(self):
         request = json.dumps(dict(model=self.binding.model,
             prompt=OllamaAdapter._prompt(self.handoff.payload), stream=False),

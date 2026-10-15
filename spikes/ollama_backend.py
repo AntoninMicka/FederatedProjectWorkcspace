@@ -32,6 +32,59 @@ MAX_STREAM_EVENTS = 65536
 MAX_STREAM_RESPONSE = 16 * 1024 * 1024
 
 
+def _closed_object(properties, required):
+    return {'type': 'object', 'properties': properties, 'required': required,
+            'additionalProperties': False}
+
+
+_TEXT = {'type': 'string', 'minLength': 1}
+_ID_LIST = {'type': 'array', 'items': _TEXT, 'uniqueItems': True}
+_TASK_ROUTER_FORMAT = {
+    'type': 'object',
+    'oneOf': [
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['direct-answer']},
+            'content': _TEXT,
+        }, ['schema_version', 'kind', 'content']),
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['artifact-draft']},
+            'artifact_kind': {'type': 'string', 'enum': ['document']},
+            'title': _TEXT,
+            'content': _TEXT,
+        }, ['schema_version', 'kind', 'artifact_kind', 'title', 'content']),
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['presentation-proposal']},
+            'operation': {'type': 'string', 'enum': ['create', 'update']},
+            'target_artifact_id': {'type': ['string', 'null']},
+            'title': _TEXT,
+            'source_artifact_ids': _ID_LIST,
+            'slides': {'type': 'array', 'minItems': 1, 'maxItems': 100,
+                       'items': _closed_object({
+                           'slide_id': {'type': ['string', 'null']},
+                           'title': _TEXT,
+                           'bullets': {'type': 'array', 'maxItems': 12,
+                                       'items': _TEXT},
+                           'notes': {'type': 'string'},
+                           'layout': _TEXT,
+                       }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
+        }, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
+            'source_artifact_ids', 'slides']),
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['web-search', 'external-request']},
+            'purpose': _TEXT,
+            'query': _TEXT,
+            'message_ids': _ID_LIST,
+            'artifact_ids': _ID_LIST,
+        }, ['schema_version', 'kind', 'purpose', 'query', 'message_ids',
+            'artifact_ids']),
+    ],
+}
+
+
 def normalize_tls_fingerprint(value):
     if not isinstance(value, str):
         return value
@@ -449,7 +502,9 @@ class OllamaAdapter:
         body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                     stream=stream)
         if output_format == 'json':
-            body['format'] = 'json'
+            body['format'] = (_TASK_ROUTER_FORMAT if role is not None
+                              and role.role_id == 'task-router'
+                              and role.revision == 'task-router-v1' else 'json')
         request = json.dumps(body, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format)
