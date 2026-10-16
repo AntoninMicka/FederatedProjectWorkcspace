@@ -231,9 +231,15 @@ autoritativní projektový obsah.
   dokončení této dávky a byly výslovně odloženy do existujícího backlogového
   úkolu `UX-FACELIFT-01`, pro který uživatel dodá celkový návrh. Směrování
   explicitního požadavku na návrh prezentace bylo fyzicky potvrzeno po opravě
-  D4. Uložení/aktualizace z orchestrace, spuštění prezentace, speaker/audience
-  oddělení, stabilita layoutů při běhu, odpojení displeje a případný gamepad
-  zatím fyzicky potvrzené nejsou.
+  D4.
+
+  Dílčí fyzická akceptace 2026-10-16: na notebooku se dvěma displeji úspěšně
+  proběhlo spuštění a procházení prezentace i načtení starší uložené prezentace;
+  uživatel nehlásil chybu. Tím je potvrzen základní dvoudisplejový presenterový
+  tok a zpětné načtení existujícího decku. Uložení/aktualizace z orchestrace,
+  explicitní kontrola oddělení soukromého speaker obsahu od audience výstupu,
+  bezpečné chování při odpojení displeje a případný gamepad zatím fyzicky
+  potvrzené nejsou.
 
 ## Crash boundaries a recovery
 
