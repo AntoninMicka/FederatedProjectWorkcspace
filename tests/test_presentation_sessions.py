@@ -87,6 +87,21 @@ class PresentationSessionTests(unittest.TestCase):
         self.assertEqual(len(session['pages']), 1)
         self.assertEqual(session['pages'][0]['content']['bullets'], ['První'])
 
+    def test_presenter_records_locally_generated_closing_slide(self):
+        selected = self.documents.select(self.project, self.deck_id, self.git.head())
+        server = SimpleNamespace(presentation_selected_deck=selected,
+                                 presentation_sessions=self.sessions)
+        started = presentation_status(server, start=True)
+        closing = started['slides'][-1]
+        shown = presentation_public_payload(server, dict(
+            action='show', slide=len(started['slides']) - 1, slide_id=closing['id'],
+            deck_revision=closing['deck_revision'], rows=0))
+        self.assertTrue(shown['content']['closing'])
+        finish_presentation_session(server)
+        page = self.documents.open(self.project)['sessions'][0]['session']['pages'][0]
+        self.assertEqual(page['slide_id'], 'presentation-closing')
+        self.assertTrue(page['content']['closing'])
+
     def test_restart_recovers_unfinished_session_once_as_interrupted(self):
         session_id = self.sessions.start(self.project, self.deck_id, self.revision,
                                          self.deck['title'])
@@ -136,6 +151,8 @@ class PresentationSessionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sessions.record(session_id, self.deck['slides'][0]['id'], '16:9',
                                  dict(self.content(), notes='secret'))
+        with self.assertRaises(ValueError):
+            self.sessions.record(session_id, 'another-generated-slide', '16:9', self.content())
         value = dict(version=1, session_id=session_id, source_project_id=self.project,
                      source_artifact_id=self.deck_id, source_revision=self.revision,
                      title=self.deck['title'], started_at='2026-10-16T10:00:00Z',

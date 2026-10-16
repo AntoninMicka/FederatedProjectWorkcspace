@@ -72,11 +72,21 @@ soubor k bezpečnému úklidu/opakování.
   nejisté potvrzení po commitu bez duplicity, potvrzené smazání se zachovanou
   historií, kanonický/relační náhled a zachování původního PDF při známém
   selhání.
-- Celá sada po implementaci: `617 tests`, `OK`, `27 skipped`. Přeskočené testy
+- Celá sada po opravě fyzicky nalezených regresí: `619 tests`, `OK`, `27 skipped`.
+  Přeskočené testy
   vyžadují skutečný WebEngine, soukromý vzorek, nativní Git probe nebo živé
   služby a nejsou vydávány za fyzickou akceptaci této feature.
 - Samostatný headless Qt WebEngine smoke skutečně vytvořil dvoustránkový PDF;
   `pdfinfo` potvrdil `2` strany, rozměr `1152 × 648 pt` (16:9) a PDF 1.4.
+- Fyzická kontrola odhalila dvě blokující regrese: evidence relace odmítala
+  allowlistované ID lokálně generovaného závěrečného slajdu a validátor nativní
+  akce nepředal ověřené nonce obsluze PDF dialogu. Opakovaná kontrola exportu
+  odkryla ještě vlastní příčinu tichého selhání: použitý PySide6 nepřevedl JS
+  objekt na Python `dict`. PDF most nyní přenáší explicitní bounded JSON,
+  validuje nonce i digest a chybu ukáže v dialogu. Kontrakty kryjí regresní testy
+  a skutečný offscreen WebEngine probe. Po úplném restartu desktopu uživatel
+  fyzicky ověřil výběr cílového souboru, zpřístupnění potvrzení i dokončení PDF
+  exportu jako funkční; ostatní níže uvedené scénáře ještě zbývají.
 - Zbývá fyzicky v desktopu ověřit: dokončenou i po restartu přerušenou relaci v
   seznamu, tisk kanonického decku a relace, zrušení výběru cíle, přepsání
   existujícího PDF, vizuální shodu s audience rendererem a potvrzené smazání.

@@ -21,17 +21,25 @@ PREFIX = '```fpw-presentation-session-v1\n'
 MAX_PAGES = 1000
 PUBLIC_FIELDS = frozenset({'title', 'body', 'bullets', 'background', 'foreground', 'wallpaper',
                            'layout', 'column_break', 'closing', 'contacts', 'qr'})
+GENERATED_SLIDE_IDS = frozenset({'presentation-closing'})
 
 
 def utc_now():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
+def validate_slide_id(value):
+    """Accept persisted deck UUIDs and the one bounded locally generated slide ID."""
+    if value not in GENERATED_SLIDE_IDS:
+        uuid(value)
+    return value
+
+
 def validate_snapshot(value):
     require(isinstance(value, dict) and value.keys() == {'shown_at', 'slide_id', 'ratio', 'content'},
             'Neplatný veřejný snapshot relace.')
     timestamp(value['shown_at'], 'shown_at')
-    uuid(value['slide_id'])
+    validate_slide_id(value['slide_id'])
     require(value['ratio'] in {'16:9', '4:3'}, 'Neplatný poměr stran snapshotu.')
     content = value['content']
     require(isinstance(content, dict) and set(content) <= PUBLIC_FIELDS
@@ -138,7 +146,7 @@ class PresentationSessions:
         return row['session_id']
 
     def record(self, session_id, slide_id, ratio, content, *, shown_at=None):
-        uuid(session_id); uuid(slide_id)
+        uuid(session_id); validate_slide_id(slide_id)
         page = validate_snapshot(dict(shown_at=shown_at or utc_now(), slide_id=slide_id,
                                       ratio=ratio, content=copy.deepcopy(content)))
         with closing(self._connect()) as db, db:

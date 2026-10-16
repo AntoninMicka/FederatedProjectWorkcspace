@@ -54,6 +54,28 @@ def presentation_pdf_paths(target, nonce):
     return target, target.parent / ('.' + target.name + '.' + nonce + '.part')
 
 
+def presentation_pdf_js_request(value):
+    """Decode the explicit JSON bridge used because Qt does not portably map JS objects."""
+    if not isinstance(value, str) or not 0 < len(value) <= 512:
+        raise ValueError('Invalid PDF export request')
+    try:
+        request = json.loads(value)
+    except (json.JSONDecodeError, RecursionError) as exc:
+        raise ValueError('Invalid PDF export request') from exc
+    if (not isinstance(request, dict) or set(request) != {'nonce', 'preview_sha256'}
+            or not isinstance(request['nonce'], str)
+            or not isinstance(request['preview_sha256'], str)
+            or len(request['preview_sha256']) != 64
+            or any(character not in '0123456789abcdef' for character in request['preview_sha256'])):
+        raise ValueError('Invalid PDF export request')
+    try:
+        if str(UUID(request['nonce'])) != request['nonce']:
+            raise ValueError('Invalid PDF export request')
+    except (ValueError, AttributeError) as exc:
+        raise ValueError('Invalid PDF export request') from exc
+    return request
+
+
 def publish_presentation_pdf(temporary, target):
     """Durably replace the target only after WebEngine completed the whole PDF."""
     temporary, target = Path(temporary), Path(target)
@@ -118,7 +140,7 @@ def native_action_request(url, origin):
         nonce = fields['nonce'][0]
         if str(UUID(nonce)) != nonce:
             return None
-        request = {'action': action}
+        request = {'action': action, 'nonce': nonce}
         if action == 'choose-notebooklm-target':
             operation_id = fields['operation_id'][0]
             if str(UUID(operation_id)) != operation_id:
@@ -504,11 +526,14 @@ def main():
                         page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
                             notebooklm_target_error(exc)) + ')')
             elif action == 'choose-presentation-pdf':
-                def choose_presentation_pdf(plan):
-                    if (not isinstance(plan, dict) or set(plan) != {'nonce', 'preview_sha256'}
-                            or plan['nonce'] != request['nonce']
-                            or not isinstance(plan['preview_sha256'], str)
-                            or len(plan['preview_sha256']) != 64):
+                def choose_presentation_pdf(raw_plan):
+                    try:
+                        plan = presentation_pdf_js_request(raw_plan)
+                    except ValueError:
+                        page.runJavaScript("setPresentationPdfNativeError('Nativní výběr cíle nepřevzal platný plán exportu.')")
+                        return
+                    if plan['nonce'] != request['nonce']:
+                        page.runJavaScript("setPresentationPdfNativeError('Výběr cíle neodpovídá aktuálnímu exportu.')")
                         return
                     filename, _ = QFileDialog.getSaveFileName(
                         window, 'Export prezentace do PDF', '', 'PDF (*.pdf)')
@@ -523,16 +548,22 @@ def main():
                         except (ValueError, OSError) as exc:
                             page.runJavaScript('presentationPdfExportFinished(' + json.dumps({
                                 'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
-                page.runJavaScript('presentationPdfTargetRequest()', 0, choose_presentation_pdf)
+                page.runJavaScript('JSON.stringify(presentationPdfTargetRequest())', 0,
+                                   choose_presentation_pdf)
             elif action == 'export-presentation-pdf':
                 selected = presentation_pdf_targets.get(request['nonce'])
                 if selected is None:
+                    page.runJavaScript("setPresentationPdfNativeError('Cíl PDF už není pro tento export dostupný. Vyberte jej znovu.')")
                     return
-                def export_pdf(approval):
-                    if (not isinstance(approval, dict)
-                            or set(approval) != {'nonce', 'preview_sha256'}
-                            or approval.get('nonce') != request['nonce']
-                            or approval.get('preview_sha256') != selected[2]):
+                def export_pdf(raw_approval):
+                    try:
+                        approval = presentation_pdf_js_request(raw_approval)
+                    except ValueError:
+                        page.runJavaScript("setPresentationPdfNativeError('Nativní export nepřevzal platné potvrzení.')")
+                        return
+                    if (approval['nonce'] != request['nonce']
+                            or approval['preview_sha256'] != selected[2]):
+                        page.runJavaScript("setPresentationPdfNativeError('Potvrzení neodpovídá aktuálnímu exportu.')")
                         return
                     target, temporary, _ = selected
                     try:
@@ -548,7 +579,7 @@ def main():
                     except (ValueError, OSError) as exc:
                         page.runJavaScript('presentationPdfExportFinished(' + json.dumps({
                             'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
-                page.runJavaScript('presentationPdfExportRequest()', 0, export_pdf)
+                page.runJavaScript('JSON.stringify(presentationPdfExportRequest())', 0, export_pdf)
         page.urlChanged.connect(native_action)
 
         def presentation_pdf_finished(filename, success):
