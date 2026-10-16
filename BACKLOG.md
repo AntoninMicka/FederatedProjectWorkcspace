@@ -48,6 +48,35 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
+- [ ] [planned] **F-M4-PRESENTER-PDF-01 — PDF export nativního decku a
+  odprezentované relace (cílová úroveň: PoC validated).** Uživatelský požadavek
+  z 2026-10-15; samostatná navazující feature po `F-M4-PRESENTER-01`, protože
+  export je nezávisle dodávatelný výstup s vlastní recovery a souborovou
+  hranicí. Navržená větev `feature/f-m4-presenter-pdf-01`, základ/cíl PR
+  aktuální `develop` → `develop`.
+
+  Nabídnout dva explicitně odlišené režimy. **Nativní (kanonická) verze**
+  vyrenderuje pouze hlavní slidy přes jejich uloženou `next` linii v
+  předdefinovaném pořadí; nezahrne backupy, soukromé notes ani automaticky
+  generovaný závěrečný slide. **Odprezentovaná verze** vyrenderuje přesné
+  audience snapshoty ve skutečném pořadí relace, včetně skutečně zobrazených
+  backupů, opakování, závěrečného slidu a konkrétního stavu postupně odhalených
+  odrážek. Nezobrazený obsah, soukromý preview, notes ani pouhý výběr do exportu
+  nepatří. Export relace je dostupný jen dokud existuje její přesná historie;
+  nesmí rekonstruovat údajný průběh z aktuálního decku.
+
+  Před vytvořením každého PDF zobrazit režim, zdrojový deck a commit/revizi,
+  počet a pořadí stránek, cílovou cestu a skutečnost, zda soubor bude přepsán.
+  PDF ani pomocný obsahový soubor nesmí vzniknout před explicitním potvrzením
+  uživatele. Po potvrzení použít atomickou publikaci nebo ponechat jednoznačně
+  identifikovatelný obnovitelný stav; zrušení či známé selhání nesmí vydávat
+  částečný soubor za hotový export. Oba režimy musí použít stejný bezpečný
+  renderer a 16:9 layout jako audience, fungovat offline a nevložit vzdálené
+  zdroje, HTML, skripty ani soukromá pole. Export sám není důkazem doručení ani
+  DisclosureEvent. Akceptace zahrne stabilní pořadí, backup/opakování/reveal,
+  prázdnou historii relace, změněnou revizi, zrušení výběru cíle, existující
+  cílový soubor, pád během zápisu, restart a vizuální porovnání výsledného PDF.
+
 - [ ] [planned] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt
   veřejných zdrojů (cílová úroveň: designed).** Navazuje na poznatek z
   F-M3-SEARCH-02, že SearXNG poskytuje pouze bounded titulky, URL a úryvky,

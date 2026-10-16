@@ -82,6 +82,25 @@ NOTEBOOKLM_TAKEOUT_SAMPLE=/cesta/takeout.tgz \
   python3 -m unittest tests.test_notebooklm_import.ActualNotebookLMTakeoutTests -v
 ```
 
+### Markdown prezentace a presenter
+
+Desktopová záložka **Prezentace** nabízí integrovaný editor verzovaných
+Markdown decků, spuštění přesně uložené revize a oddělené zobrazení řečníka a
+publika. Presenter podporuje hlavní linii, backupy, postupné odhalování,
+soukromé poznámky, stabilní layouty, klávesnici i volitelně mapovaný gamepad.
+
+V režimu **Orchestrace** lze vybrat projektové podklady a zadat například
+`vytvoř z daného dokumentu prezentaci`. Explicitní požadavek na vytvoření nebo
+aktualizaci decku používá presentation-only výstupní schema. Ollama připraví
+pouze návrh; aplikace následně ověří zdroje, layouty, privacy, přesnou Git
+revizi a digest. Teprve samostatné tlačítko **Schválit a vytvořit** nebo
+**Schválit aktualizaci** provede jeden obnovitelný projektový zápis. Změněná
+revize nebo digest se odmítne a opakování stejné operace nevytvoří druhý commit.
+
+Úplný postup editoru, displejů, orchestrace, recovery a fyzické akceptace je v
+[návodu presenteru](docs/gamepad-demo-presenter.md). Export do PDF zatím není
+součástí této schopnosti.
+
 ### Streamovaný lokální chat
 
 Přímý brainstorming přes Ollamu zobrazuje odpověď průběžně a rozlišuje přípravu

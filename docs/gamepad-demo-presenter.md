@@ -3,7 +3,11 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# Demo presenter: gamepad driver patch
+# Presenter a demo gamepad driver patch
+
+Tento dokument začínal jako scénář ukázkové prezentace o gamepad patchi.
+Sekce 9 a další nyní tvoří uživatelský návod obecného projektového presenteru;
+demo obsah není produktová šablona ani autoritativní obsah jiných projektů.
 
 ## 1. Cíl demo
 
@@ -286,3 +290,58 @@ znovu. Kontakty se publiku zobrazí až výslovným promítnutím závěru.
 Generování QR vyžaduje `segno==1.6.6` z `requirements.txt`; při systémovém
 Pythonu použijte balíček `python3-segno` (>=1.6.6). Závislost doplňuje i
 instalační `.deb`; běžný start aplikace nic nestahuje.
+
+## 13. Návrh a aktualizace prezentace z orchestrace
+
+V otevřeném projektu přejděte do chatu, zvolte režim **Orchestrace**, vyberte
+jen podklady, které smí být součástí kontextu, a zadejte explicitní požadavek,
+například `vytvoř z daného dokumentu prezentaci`. Pro aktualizaci vyberte také
+právě jednu existující prezentaci a výslovně požádejte o její úpravu.
+
+Explicitní požadavek na vytvoření nebo aktualizaci prezentace používá
+samostatnou verzovanou routerovou roli. Ollama dostane uzavřené JSON Schema,
+ve kterém je povolen pouze `presentation-proposal`; nemůže platně přepnout na
+obecný dokument. PDF podklad se do promptu promítne jako bounded inertní text,
+zatímco Context Manifest dál váže ID, privacy, původní bajty, SHA-256 a Git
+revizi zdroje. Selhání extrakce nemá fallback na jiný zdroj nebo provider.
+
+Platný výsledek se nejdřív zobrazí jako **Návrh prezentace**. Karta obsahuje
+název, slidy, layouty, výchozí revizi, digest decku a rozbalitelný přesný
+before/after diff. Náhled sám nevytvoří projektový dokument ani Git commit.
+Volba **Zahodit** návrh ukončí bez zápisu.
+
+Samostatné tlačítko **Schválit a vytvořit** nebo **Schválit aktualizaci** váže
+potvrzení na task ID, base revision, deck digest a approval digest. Aplikace
+před zápisem znovu ověří aktuální HEAD a přesný cíl. Stale projekt, pozměněný
+návrh nebo jiný cíl se odmítne. Nový deck zdědí privacy nejsilnějšího vstupu a
+provenance `llm-generated`; aktualizace zachová metadata existujícího decku.
+
+Potvrzený zápis používá stejnou `Artifacts.save` → `Workspace.transact`
+hranici jako ruční editor. Stabilní artifact ID a operation ID se při chybě
+zachovají. Pokud proces skončí po projektovém commitu, ale před uzavřením
+výsledku úlohy, stejné potvrzení po restartu obnoví výsledek bez druhého
+commitu. Automatické opakování modelového běhu ani potvrzení neprobíhá.
+
+Aktualizace v tomto PoC mění pouze existující hlavní slidy a jejich obsah;
+strukturální přidávání či mazání slidů modelem není podporováno. Ruční editor
+zůstává autoritativní cestou pro následné úpravy struktury. Export PDF/PPTX,
+trvalá relace schůzky, disclosure semafor a obecný rozhodovací strom jsou mimo
+rozsah této feature.
+
+## 14. Ověřený fyzický průchod
+
+Dne 2026-10-15 a 2026-10-16 uživatel na Linux notebooku fyzicky ověřil:
+
+- vytvoření i aktualizaci prezentace z vybraného dokumentu přes orchestration
+  náhled a explicitní potvrzení;
+- integrovaný editor a načtení starší uložené prezentace;
+- spuštění a procházení prezentace na dvou displejích;
+- oddělení soukromého speaker obsahu od audience výstupu;
+- stabilní presenterový tok při odpojení displeje;
+- ovládání fyzickým gamepadem.
+
+Průchod skončil bez hlášeného omezení. Další vizuální a dispoziční změny
+editoru byly vědomě odloženy do `UX-FACELIFT-01`; nejsou součástí této
+akceptace. Automatické testy nenahrazují tuto fyzickou kontrolu a naopak tento
+průchod nedokládá dosud neimplementovaný PDF export ani širší Disclosure
+Presenter z roadmapy 22C.

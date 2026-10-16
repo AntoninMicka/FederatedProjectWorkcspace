@@ -216,6 +216,23 @@ nadpisu a odrážek; nepřidává obecný Markdown/HTML renderer ani novou závi
 Legacy JSON se čte bezzápisově a migruje se pouze explicitním uložením stejného
 artefaktu přes stávající Workspace/Journal/Git/index recovery hranici.
 
+F-M4-PRESENTER-01-D/D4 **reuse/adaptuje existující `ContextBuilder`, registr
+rolí, `OllamaRuns` a task router**. Pro obecný router zůstává společné uzavřené
+schema výsledků; explicitní vytvoření či aktualizace prezentace vybírá zvlášť
+verzovanou roli s presentation-only JSON Schema. PDF vstup používá existující
+lokální Poppler projekci v bounded režimu, ale manifest dál autorizuje a
+hashuje původní artefakt. Nevznikl nový provider, druhý context mechanismus ani
+automatický fallback. Modelový návrh není autoritou zdrojových ID, layoutů,
+privacy, HEAD ani kanonického Markdownu; ty znovu ověřuje aplikace.
+
+F-M4-PRESENTER-01-E **reuse/adaptuje `TaskOutcomes`, `PresentationDocuments` a
+`Artifacts.save`**. Schvalovací diff se odvozuje z validovaného historického
+Git snapshotu bez obnovy indexu nebo zápisu a váže se na base revision, deck
+digest a approval digest. Potvrzený create/update používá jedinou existující
+Workspace/Journal/Git/index hranici a stabilní operation ID; nevznikl druhý
+journal ani presenterový ukládací subsystém. Volné modelové ukládání, skryté
+automatické potvrzení a druhý template engine byly odmítnuty.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
