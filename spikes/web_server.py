@@ -42,6 +42,9 @@ WEB_JS = '''document.body.dataset.runtime='server';window.workspaceAutoStart=fal
 document.querySelector('#source-import-local-only').disabled=true;
 document.querySelector('#google-drive-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
+document.querySelector('#presentation-tab').hidden=true;
+document.querySelector('#presentations-tab').hidden=true;
+document.querySelector('#presentation-editor').hidden=true;
 let accessKey='';
 const notebookImportButton=document.querySelector('#open-notebooklm-import');
 const originalFetch=window.fetch.bind(window);

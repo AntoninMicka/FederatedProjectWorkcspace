@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import signal
 import stat
+import sqlite3
 import sys
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -29,6 +30,8 @@ from spikes.media_service import MediaService
 from spikes.role_workflow_service import RoleWorkflowService
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
+from spikes.user_profile import UserProfile
+from spikes.gamepad_settings import GamepadSettings
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
@@ -168,16 +171,23 @@ def main():
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
-        from spikes.desktop_creation import CreationController
-        from spikes.desktop_deployment import DeploymentDialog
-        from spikes.desktop_network import NetworkDialog
-        from spikes.desktop_transfer import TransferDialog
-        from spikes.network_backend import NetworkBackend
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
     except ImportError:
         print('Chybí PySide6 WebEngine. Instalace viz README, sekce Desktop.', file=sys.stderr)
+        return 1
+    try:
+        from spikes.desktop_displays import PresenterDisplays
+        from spikes.desktop_user_profile import UserProfileDialog
+        from spikes.presentation_documents import PresentationDocuments
+        from spikes.desktop_creation import CreationController
+        from spikes.desktop_deployment import DeploymentDialog
+        from spikes.desktop_network import NetworkDialog
+        from spikes.desktop_transfer import TransferDialog
+        from spikes.network_backend import NetworkBackend
+    except ImportError as exc:
+        print('Nelze načíst interní modul desktopu: ' + str(exc), file=sys.stderr)
         return 1
     if os.geteuid() == 0:
         print('Desktop spouštějte jako běžný uživatel.', file=sys.stderr)
@@ -199,8 +209,9 @@ def main():
             if main_frame and external:
                 QDesktopServices.openUrl(QUrl(external))
                 return False
-            return main_frame and (requested == server.origin + '/'
-                                   or native_action_name(requested, server.origin) is not None)
+            return main_frame and (
+                requested in {server.origin + '/', server.origin + '/presentation-screen'}
+                or native_action_name(requested, server.origin) is not None)
 
         def createWindow(self, kind):
             return None
@@ -218,6 +229,7 @@ def main():
                 event.ignore()
                 return
             view.closing = True
+            displays.stop()
             super().closeEvent(event)
 
     app = QApplication([sys.argv[0]])
@@ -229,6 +241,9 @@ def main():
         QMessageBox.warning(None, 'Odstranění projektu nebylo dokončeno', str(exc))
     with running_api('http', handler=DesktopHandler, projects=Projects(node_path)) as server:
         server.administration = Administration(node_path, deployment='desktop')
+        server.user_profile = UserProfile(node_path)
+        server.gamepad_settings = GamepadSettings(node_path)
+        server.presentation_documents = PresentationDocuments(node_path)
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)
@@ -265,6 +280,14 @@ def main():
         window.setCentralWidget(view)
         window.setWindowTitle('Projektový workspace · Zkušební verze')
         window.resize(1100, 800)
+        public_view = View()
+        public_page = Page(profile, public_view)
+        public_view.setPage(public_page)
+        public_window = QMainWindow()
+        public_window.setCentralWidget(public_view)
+        public_window.setWindowTitle('Veřejné promítání · Projektový workspace')
+        displays = PresenterDisplays(app, window, public_window)
+        public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
             try:
@@ -274,6 +297,7 @@ def main():
             except Exception as exc:
                 QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
         app.aboutToQuit.connect(network_backend.stop)
+        app.aboutToQuit.connect(public_window.close)
         creation_result = {'receipt': None, 'loaded': False}
         def created(receipt):
             if receipt:
@@ -368,7 +392,32 @@ def main():
             dialog.deleteLater()
         transfer_button.clicked.connect(transfer_project)
         editor_toolbar.addWidget(transfer_button)
+        def edit_presentation():
+            if controller.busy:
+                return
+            page.runJavaScript('openPresentationEditor()')
+        presentation_editor_button = QPushButton('Prezentace…')
+        presentation_editor_button.clicked.connect(edit_presentation)
+        editor_toolbar.addWidget(presentation_editor_button)
+        def edit_user_profile():
+            try:
+                dialog = UserProfileDialog(server.user_profile, window)
+                dialog.exec()
+                dialog.deleteLater()
+            except (ValueError, OSError, sqlite3.Error):
+                QMessageBox.warning(window, 'Uživatelský profil', 'Profil nelze načíst. Ověřte lokální konfiguraci.')
         def native_action(url):
+            actions = {
+                '/#user-profile': edit_user_profile,
+                '/#presenter-open': displays.open,
+                '/#presenter-displays': displays.configure,
+                '/#presenter-close': displays.stop,
+            }
+            action = actions.get(url.toString().removeprefix(server.origin))
+            if action and url.toString().startswith(server.origin + '/'):
+                page.runJavaScript("history.replaceState(null, '', '/');")
+                action()
+                return
             # A same-document fragment never loads a route or exposes an HTTP writer.
             request = native_action_request(url.toString(), server.origin)
             if request is None:
@@ -425,6 +474,7 @@ def main():
             creation_result['loaded'] = ok
             if ok and creation_result['receipt']:
                 page.runJavaScript('loadProjects(' + json.dumps(creation_result['receipt']['id']) + ')')
+        view.loadStarted.connect(displays.stop)
         view.loadFinished.connect(project_loaded)
         page.renderProcessTerminated.connect(lambda *_: None if view.closing else app.exit(1))
         timer = QTimer()

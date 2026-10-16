@@ -128,6 +128,27 @@ def _bounded_text(result, format_, text, *, message=None):
             result['message'] = message
 
 
+def pdf_text(raw):
+    """Return a bounded inert UTF-8 text projection of committed PDF bytes."""
+    require(type(raw) is bytes and raw.startswith(b'%PDF-') and len(raw) <= MAX_PREVIEW,
+            'PDF text projection requires bounded PDF bytes')
+    try:
+        process = subprocess.run(
+            ['pdftotext', '-enc', 'UTF-8', '-layout', '-', '-'], input=raw,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=15)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError('PDF text projection failed') from exc
+    require(process.returncode == 0 and 0 < len(process.stdout) <= MAX_PREVIEW,
+            'PDF text projection failed')
+    try:
+        text = process.stdout.decode('utf-8')
+    except UnicodeError as exc:
+        raise ValueError('PDF text projection is not UTF-8') from exc
+    require(text.strip() and '\0' not in text and text.count('\n') < MAX_PREVIEW_LINES,
+            'PDF text projection is empty or exceeds 2000 lines')
+    return text.strip()
+
+
 def preview(item, page=1):
     require(type(page) is int and 1 <= page <= 100, 'Invalid preview page')
     raw = item.pop('raw')

@@ -5,6 +5,109 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-PRESENTER-01 — Markdown prezentace jako výstup orchestrace — 2026-10-16
+
+Dávka na větvi `feature/f-m4-presenter-01-markdown-decks`, založené z
+`develop` `6c94047`, začlenila a rozšířila existující presenterový základ z
+`origin/feature/gamepad-demo-presenter`. Dosažená úroveň je **PoC validated**.
+Feature akceptace je uzavřená; jediný PR
+[#68](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/68) do
+`develop` je otevřený a dosud nebyl sloučen. Implementační historie je na
+feature větvi včetně merge `fed649e` a navazujících commitů po `2042efd`;
+závěrečné předávací dokumenty jsou součástí lokálního finálního diffu a bez
+samostatného pokynu nebyly commitnuty ani pushnuty.
+
+- [x] [completed] **F-M4-PRESENTER-01-A — Začlenění a stabilizace základu
+  (PoC validated).** Současný desktop zachoval chat, hledání, importy,
+  publikaci a bezpečnostní hranice a doplnil presenter, audience assety,
+  displejové role, backupy, profil a závěrečný slide. Runtime oprava odstranila
+  závislost na vyřazeném nativním editoru; skutečné Qt testy následně prošly.
+- [x] [completed] **F-M4-PRESENTER-01-A1 — Konfigurovatelné mapování gamepadu
+  (implemented).** Výběr zařízení, mapování os/tlačítka, prahy a živý náhled
+  používají node-local SQLite mimo Git. Použití pro relaci je bezzápisové;
+  explicitní uložení je jedna synchronní transakce s doloženým restartem,
+  crash scénáři a odmítnutím symlinku.
+- [x] [completed] **F-M4-PRESENTER-01-A2 — Integrovaný editor prezentací
+  (implemented).** Jediná responzivní workspace záložka nahradila samostatný
+  dialog a sdílí navigaci, formuláře, náhled a stavové hlášky. Koncept, retry
+  stejné operace a cizí změna HEAD zůstávají fail-closed; spustit lze jen přesně
+  uloženou revizi.
+- [x] [completed] **F-M4-PRESENTER-01-A3 — Seznam hotových prezentací
+  (implemented).** Sidebar bezpečně zobrazuje uložené i neplatné decky a nabízí
+  úpravu nebo spuštění platné přesné revize. Pouhé otevření seznamu nic
+  nezapisuje; webová varianta lokální presenterovou záložku skrývá.
+- [x] [completed] **F-M4-PRESENTER-01-B — Markdown kontrakt a migrace v1
+  (implemented).** Formát `fpw-presentation` v2 kombinuje omezený YAML a
+  čitelný Markdown se stabilními UUID. Strict loader odmítá neznámá pole,
+  duplicity, aliasy, tagy a nadměrné zanoření; HTML se neinterpretuje. Legacy
+  JSON se čte bez zápisu a migruje až explicitním uložením stejného artefaktu.
+- [x] [completed] **F-M4-PRESENTER-01-C — Stabilní layout šablony
+  (implemented).** Deck nese verzované allowlisted šablony titulního,
+  obsahového, dvousloupcového, vizuálního a závěrečného slidu. Editor, speaker
+  preview a audience sdílejí `presentation_visual.py`; volné HTML/CSS ani
+  druhý renderer nevznikly.
+- [x] [completed] **F-M4-PRESENTER-01-D — Validovaný návrh z orchestrace
+  (PoC validated).** Task router přijímá uzavřený `presentation-proposal`,
+  aplikačně ověřuje zdroje, layouty, privacy, HEAD, kanonický Markdown a
+  SHA-256 a vytváří pouze durable návrh bez projektového zápisu.
+- [x] [completed] **F-M4-PRESENTER-01-D1 — Zpřesněný návrhový kontrakt
+  (implemented).** Po prvním fyzickém selhání instrukce vyžaduje všech pět polí
+  slidu, allowlisted layout, 6–12 slidů bez zadaného rozsahu, jazyk zadání a
+  obsah pouze z vybraných zdrojů; vadný návrh se automaticky neopravuje.
+- [x] [completed] **F-M4-PRESENTER-01-D2 — Bounded PDF textová projekce
+  (implemented).** Lokální Poppler převádí vybraný PDF artefakt na inertní text
+  s limity 4 MiB, 2000 řádků a 15 sekund. Manifest dál váže původní bajty, ID,
+  privacy, commit a SHA-256; selhání nemá fallback.
+- [x] [completed] **F-M4-PRESENTER-01-D3 — Structured output schema
+  (implemented).** Ollama dostává uzavřené JSON Schema všech výsledků a větev
+  prezentace strojově vyžaduje layout i ostatní pole. Aplikační validace zůstává
+  samostatnou autoritativní vrstvou.
+- [x] [completed] **F-M4-PRESENTER-01-D4 — Presentation-only směrování
+  (PoC validated).** Explicitní vytvoření či aktualizace decku používá zvlášť
+  verzovanou roli, která nepovoluje dokumentovou větev. Regresní test používá
+  přesný prompt `vytvoř z daného dokumentu prezentaci` a odmítá odlišný výstup.
+- [x] [completed] **F-M4-PRESENTER-01-E — Povinné schválení create/update
+  (PoC validated).** Návrh zobrazuje přesný before/after diff z historické base
+  revision. Potvrzení je vázané na task, cíl, base revision, deck digest a
+  approval digest. Stale nebo pozměněný návrh se odmítne; stabilní
+  artifact/operation ID obnoví pád po projektovém commitu bez druhého commitu.
+  Create zachová privacy vstupů a `llm-generated` provenance, update metadata
+  existujícího decku.
+- [x] [completed] **F-M4-PRESENTER-01-F — Dokumentace a fyzická akceptace
+  (PoC validated).** README a uživatelský návod popisují editor, displeje,
+  orchestration preview/confirm, recovery a omezení. REUSE_CATALOG eviduje
+  adaptaci ContextBuilderu, registru rolí, OllamaRuns, TaskOutcomes a jediné
+  Workspace/Journal/Git/index hranice. Roadmapa rozlišuje hotový omezený základ
+  od otevřeného širšího Disclosure Presenter rozsahu.
+
+### Ověření a recovery
+
+Průběžné cílené testy pokryly renderer, editor, sidebar, Markdown migraci,
+layouty, gamepad, task router, PDF projekci, structured output, přesný diff,
+stale HEAD/digest, autentizované API a pád po projektovém commitu. Poslední
+aplikační změna prošla úplnou sadou **610 testů za 127,797 s, 27 volitelných či
+fyzických testů přeskočeno**; Python compilation a `git diff --check` prošly.
+Po ní následovaly pouze dokumentační a evidenční změny kontrolované na odkazy,
+konzistenci a finální diff.
+
+Před projektovým commitem je autoritou existující journal; po commitu lze index
+obnovit z HEAD. Modelový návrh ani presenterová relace nejsou důkazem uložení.
+Bez explicitního schválení nevzniká artefakt ani commit; ztracená odpověď po
+potvrzeném commitu se obnoví stejným operation ID bez druhého zápisu.
+
+### Fyzická akceptace a hranice rozsahu
+
+Uživatel 2026-10-15 a 2026-10-16 na Linux notebooku fyzicky potvrdil editor,
+vytvoření i aktualizaci prezentace z vybraného dokumentu, načtení staršího
+decku, dvoudisplejové spuštění a navigaci, oddělení speaker/audience obsahu,
+odpojení displeje a fyzický gamepad; bez hlášeného omezení. Další vzhledové
+úpravy editoru byly výslovně odloženy do `UX-FACELIFT-01`.
+
+Mimo rozsah zůstává obecná projektová kompilace, plný Disclosure Registry,
+expozice/semafor, trvalá relace schůzky, obecný rozhodovací strom a PPTX.
+`F-M4-PRESENTER-PDF-01` byl se zachovaným bezpečnostním a recovery kontraktem
+předán do BACKLOGu; širší ER-04/roadmapa 22C zůstává autoritativní a otevřená.
+
 ## F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání — 2026-10-14
 
 Dávka na větvi `feature/f-m3-search-02-iterative-search`, založené z `develop`

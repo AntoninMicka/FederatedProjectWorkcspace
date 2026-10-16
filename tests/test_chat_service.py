@@ -14,10 +14,13 @@ from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.configuration import read_config
 from spikes.context_builder import ContextBuilder
+from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
 from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
+from spikes.presentation_documents import PresentationDocuments, new_deck
+from spikes.task_outcomes import TaskOutcomes
 from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
@@ -274,8 +277,12 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIn('Choose artifact-draft', calls[0]['prompt'])
         self.assertIn('asks to find or search', calls[0]['prompt'])
         self.assertIn('never copy or paraphrase the focus request as the answer', calls[0]['prompt'])
-        self.assertIn('Do not nest fields inside', calls[0]['prompt'])
+        self.assertIn('Do not wrap a template', calls[0]['prompt'])
         self.assertIn('"artifact_kind":"document"', calls[0]['prompt'])
+        self.assertIn('exactly all five fields slide_id, title, bullets, notes, and layout',
+                      calls[0]['prompt'])
+        self.assertIn('turn a source document into 6-12 slides', calls[0]['prompt'])
+        self.assertIn('Use the language of the focus request', calls[0]['prompt'])
         restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
             adapter_factory=lambda runs: OllamaAdapter(runs,
                 transport=lambda *_: self.fail('must not resend')))
@@ -554,7 +561,8 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
                          first['search_id'])
-        self.assertEqual(ollama_formats, ['json', 'json', 'json'])
+        self.assertIsInstance(ollama_formats[0], dict)
+        self.assertEqual(ollama_formats[1:], ['json', 'json'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 
@@ -853,6 +861,286 @@ class ChatServiceTests(unittest.TestCase):
                                 state_dir=self.chat_state)
         self.assertEqual(restarted.task_publish_artifact({'task_id': request['task_id'],
             'artifact_id': artifact_id, 'operation_id': operation_id}), projection)
+
+    def test_presentation_create_proposal_is_validated_durable_and_never_saved(self):
+        source_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=source_id,
+            base_head=self.git.head(), title='Source data', body='Revenue grew.', new=True),
+            str(uuid4()))
+        base = self.git.head()
+        request = self.route_request(expected_head=base,
+            selected_artifact_ids=[source_id], privacy='confidential')
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Výsledky',
+            'source_artifact_ids': [source_id], 'slides': [
+                {'slide_id': None, 'title': 'Přehled', 'bullets': ['Růst výnosů'],
+                 'notes': 'Interní poznámka', 'layout': 'title'},
+                {'slide_id': None, 'title': 'Data', 'bullets': ['Meziročně'],
+                 'notes': '', 'layout': 'visual'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+
+        routed = service.task_route(request)
+
+        outcome = routed['outcome']
+        self.assertEqual(outcome['kind'], 'presentation-draft')
+        self.assertEqual(outcome['base_revision'], base)
+        self.assertEqual(outcome['source_artifact_ids'], [source_id])
+        self.assertEqual(routed['privacy'], 'confidential')
+        self.assertRegex(outcome['deck_sha256'], r'^[0-9a-f]{64}$')
+        self.assertEqual([item['layout'] for item in outcome['deck']['slides']],
+                         ['title', 'visual'])
+        self.assertEqual(self.git.head(), base)
+        self.assertEqual(PresentationDocuments(self.node_path).open(ENTITY)['documents'], [])
+        approval = routed['projection']['presentation_approval']
+        self.assertEqual(approval['operation'], 'create')
+        self.assertEqual(len(approval['changes']), 2)
+        self.assertTrue(all(item['action'] == 'add' and item['before'] is None
+                            for item in approval['changes']))
+        self.assertRegex(approval['approval_digest'], r'^[0-9a-f]{64}$')
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.task_outcomes(project_id=ENTITY),
+                         [routed['projection']])
+
+    def test_explicit_czech_presentation_request_cannot_route_to_document(self):
+        request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Prezentace',
+            'source_artifact_ids': [], 'slides': [
+                {'slide_id': None, 'title': 'Úvod', 'bullets': ['Bod'],
+                 'notes': '', 'layout': 'title'}]}
+        calls = []
+        def transport(binding, raw):
+            calls.append(json.loads(raw))
+            return {'model': binding.model, 'response': json.dumps(proposal)}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=transport))
+
+        routed = service.task_route(request)
+
+        self.assertEqual(routed['outcome']['kind'], 'presentation-draft')
+        self.assertEqual(calls[0]['format']['properties']['kind']['enum'],
+                         ['presentation-proposal'])
+        run = OllamaRuns(self.chat_state).get(request['run_id'])
+        self.assertEqual(run['role_revision'], 'task-router-presentation-v1')
+
+        bad_request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        document = {'schema_version': 1, 'kind': 'artifact-draft',
+                    'artifact_kind': 'document', 'title': 'Špatně', 'content': 'Text'}
+        rejected = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                                                       'response': json.dumps(document)}))
+        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+            rejected.task_route(bad_request)
+
+    def test_presentation_confirmation_is_exact_recoverable_and_idempotent(self):
+        request = self.route_request(privacy='confidential')
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Schválený deck',
+            'source_artifact_ids': [], 'slides': [
+                {'slide_id': None, 'title': 'Úvod', 'bullets': ['Bod'],
+                 'notes': 'Soukromá poznámka', 'layout': 'title'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+        routed = service.task_route(request); draft = routed['outcome']
+        approval = routed['projection']['presentation_approval']
+        artifact_id, operation_id = str(uuid4()), str(uuid4())
+        confirmation = {'task_id': request['task_id'], 'artifact_id': artifact_id,
+            'operation_id': operation_id, 'approval_digest': approval['approval_digest'],
+            'base_revision': approval['base_revision'],
+            'deck_sha256': approval['deck_sha256'], 'approved': True}
+        with self.assertRaisesRegex(ValueError, 'exact draft'):
+            service.task_confirm_presentation(dict(confirmation, deck_sha256='0' * 64))
+        self.assertEqual(self.git.head(), draft['base_revision'])
+
+        with patch.object(TaskOutcomes, 'finish', side_effect=RuntimeError('crash after commit')):
+            with self.assertRaisesRegex(RuntimeError, 'crash after commit'):
+                service.task_confirm_presentation(confirmation)
+        committed = self.git.head()
+        self.assertNotEqual(committed, draft['base_revision'])
+        self.assertEqual(self.git.run('rev-list', '--count',
+                                     draft['base_revision'] + '..' + committed).stdout.strip(), '1')
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        projection = restarted.task_confirm_presentation(confirmation)
+        self.assertEqual(self.git.head(), committed)
+        self.assertEqual(projection['outcome']['kind'], 'presentation-link')
+        self.assertEqual(projection['outcome']['artifact_id'], artifact_id)
+        self.assertEqual(restarted.task_confirm_presentation(confirmation), projection)
+        with self.assertRaisesRegex(ValueError, 'completed differently'):
+            restarted.task_confirm_presentation(dict(
+                confirmation, operation_id=str(uuid4())))
+        document = PresentationDocuments(self.node_path).open(ENTITY)['documents'][0]
+        self.assertEqual(document['deck'], draft['deck'])
+        self.assertEqual(document['metadata']['privacy'], 'confidential')
+        self.assertEqual(document['metadata']['provenance'], 'llm-generated')
+
+    def test_presentation_update_only_patches_selected_saved_deck_at_exact_head(self):
+        artifact_id = str(uuid4()); deck = new_deck()
+        deck['title'] = 'Původní'; slide_id = deck['slides'][0]['id']
+        deck['slides'][0].update(title='Starý slide', bullets=['Původní bod'],
+                                 notes='Původní poznámka')
+        PresentationDocuments(self.node_path).save(dict(project_id=ENTITY,
+            artifact_id=artifact_id, base_head=self.git.head(), new=True, deck=deck),
+            str(uuid4()))
+        base = self.git.head()
+        request = self.route_request(expected_head=base,
+                                     selected_artifact_ids=[artifact_id])
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'update', 'target_artifact_id': artifact_id,
+            'title': 'Aktualizovaná', 'source_artifact_ids': [artifact_id],
+            'slides': [{'slide_id': slide_id, 'title': 'Nový slide',
+                'bullets': ['Nový bod'], 'notes': 'Nová poznámka',
+                'layout': 'two-column'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+
+        routed = service.task_route(request); outcome = routed['outcome']
+
+        self.assertEqual(outcome['operation'], 'update')
+        self.assertEqual(outcome['target_artifact_id'], artifact_id)
+        self.assertEqual(outcome['deck']['slides'][0]['title'], 'Nový slide')
+        self.assertEqual(outcome['deck']['slides'][0]['layout'], 'two-column')
+        self.assertEqual(self.git.head(), base)
+        saved = PresentationDocuments(self.node_path).open(ENTITY)['documents'][0]['deck']
+        self.assertEqual(saved['title'], 'Původní')
+        self.assertEqual(saved['slides'][0]['title'], 'Starý slide')
+        approval = routed['projection']['presentation_approval']
+        self.assertEqual((approval['title_before'], approval['title_after']),
+                         ('Původní', 'Aktualizovaná'))
+        self.assertEqual(approval['changes'][0]['before']['title'], 'Starý slide')
+        self.assertEqual(approval['changes'][0]['after']['title'], 'Nový slide')
+        confirmation = {'task_id': request['task_id'], 'artifact_id': artifact_id,
+            'operation_id': str(uuid4()),
+            'approval_digest': approval['approval_digest'],
+            'base_revision': approval['base_revision'],
+            'deck_sha256': approval['deck_sha256'], 'approved': True}
+        completed = service.task_confirm_presentation(confirmation)
+        self.assertEqual(completed['outcome']['operation'], 'update')
+        updated = PresentationDocuments(self.node_path).open(ENTITY)['documents'][0]
+        self.assertEqual(updated['deck']['title'], 'Aktualizovaná')
+        self.assertEqual(updated['deck']['slides'][0]['title'], 'Nový slide')
+        self.assertEqual(updated['metadata']['provenance'], 'user')
+
+        unavailable = self.route_request(expected_head=self.git.head())
+        rejected = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
+            rejected.task_route(unavailable)
+
+    def test_presentation_confirmation_rejects_stale_project_without_write(self):
+        request = self.route_request()
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Stale deck',
+            'source_artifact_ids': [], 'slides': [
+                {'slide_id': None, 'title': 'Slide', 'bullets': [],
+                 'notes': '', 'layout': 'content'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+        routed = service.task_route(request); approval = routed['projection']['presentation_approval']
+        (self.root / 'later.txt').write_text('later'); self.git.run('add', 'later.txt')
+        self.git.commit('Later change'); changed = self.git.head()
+        restored = service.task_outcomes(project_id=ENTITY,
+                                         thread_id=request['thread_id'])[0]
+        self.assertEqual(restored['presentation_approval'], approval)
+        confirmation = {'task_id': request['task_id'], 'artifact_id': str(uuid4()),
+            'operation_id': str(uuid4()),
+            'approval_digest': approval['approval_digest'],
+            'base_revision': approval['base_revision'],
+            'deck_sha256': approval['deck_sha256'], 'approved': True}
+        with self.assertRaisesRegex(ValueError, 'Projekt se změnil'):
+            service.task_confirm_presentation(confirmation)
+        self.assertEqual(self.git.head(), changed)
+        self.assertEqual(PresentationDocuments(self.node_path).open(ENTITY)['documents'], [])
+
+    def test_authenticated_presentation_confirmation_endpoint(self):
+        request = self.route_request()
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'API deck',
+            'source_artifact_ids': [], 'slides': [
+                {'slide_id': None, 'title': 'API slide', 'bullets': ['Bod'],
+                 'notes': '', 'layout': 'content'}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+        routed = service.task_route(request); approval = routed['projection']['presentation_approval']
+        confirmation = {'task_id': request['task_id'], 'artifact_id': str(uuid4()),
+            'operation_id': str(uuid4()),
+            'approval_digest': approval['approval_digest'],
+            'base_revision': approval['base_revision'],
+            'deck_sha256': approval['deck_sha256'], 'approved': True}
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler,
+                         projects=Projects(self.node_path)) as server:
+            server.chat_service = service
+            response = driver.request(server, path='/v1/tasks/presentation/confirm',
+                                      body=json.dumps(confirmation).encode())
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 200 ', head)
+        self.assertEqual(json.loads(body)['outcome']['kind'], 'presentation-link')
+
+    def test_presentation_proposal_rejects_unknown_layout_and_changed_head(self):
+        request = self.route_request()
+        proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'Deck',
+            'source_artifact_ids': [], 'slides': [{'slide_id': None, 'title': 'Slide',
+                'bullets': [], 'notes': '', 'layout': 'invented'}]}
+        invalid = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(proposal)}))
+        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
+            invalid.task_route(request)
+
+        raced_request = self.route_request()
+        proposal['slides'][0]['layout'] = 'content'
+        def change_project(binding, raw):
+            (self.root / 'race.txt').write_text('changed')
+            self.git.run('add', 'race.txt'); self.git.commit('Race')
+            return {'model': binding.model, 'response': json.dumps(proposal)}
+        raced = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=change_project))
+        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+            raced.task_route(raced_request)
+        self.assertEqual(raced.task_outcomes(project_id=ENTITY), [])
+
+    def test_malformed_presentation_has_specific_validation_error(self):
+        source_id = str(uuid4())
+        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=source_id,
+            base_head=self.git.head(), title='Track-to-Track', body='Fusion source', new=True),
+            str(uuid4()))
+        request = self.route_request(expected_head=self.git.head(),
+                                     selected_artifact_ids=[source_id])
+        malformed = {'schema_version': 1, 'kind': 'presentation-proposal',
+            'operation': 'create', 'target_artifact_id': None, 'title': 'EZS',
+            'source_artifact_ids': [source_id], 'slides': [
+                {'slide_id': None, 'title': 'Architektura', 'bullets': ['Fúze'],
+                 'notes': ''}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: {'model': binding.model,
+                    'response': json.dumps(malformed)}))
+
+        with self.assertRaisesRegex(
+                ValidationError, '^Ollama returned invalid presentation proposal$'):
+            service.task_route(request)
+        self.assertEqual(service.task_outcomes(project_id=ENTITY), [])
 
     def test_external_outcome_confirms_without_persisting_full_chat_projection(self):
         request = self.route_request()

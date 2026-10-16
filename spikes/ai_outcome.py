@@ -2,9 +2,12 @@
 # SPDX-License-Identifier: MPL-2.0
 """Closed, untrusted result contract for unified AI task routing."""
 from dataclasses import dataclass
+import hashlib
 import json
+import re
 
 from spikes.metadata import require, uuid
+from spikes.presentation_documents import encode_deck, validate_deck
 
 
 MAX_OUTCOME_CONTENT = 1024 * 1024
@@ -27,12 +30,18 @@ def _ids(value, name):
 @dataclass(frozen=True)
 class AITaskOutcome:
     kind: str
-    content: str
+    content: str | None = None
     title: str | None = None
     artifact_kind: str | None = None
     purpose: str | None = None
     message_ids: tuple = ()
     artifact_ids: tuple = ()
+    operation: str | None = None
+    target_artifact_id: str | None = None
+    source_artifact_ids: tuple = ()
+    base_revision: str | None = None
+    deck: dict | None = None
+    deck_sha256: str | None = None
 
     @classmethod
     def parse(cls, value):
@@ -64,6 +73,28 @@ class AITaskOutcome:
                        purpose=_content(value['purpose'], 'external purpose', 2000),
                        message_ids=_ids(value['message_ids'], 'Message IDs'),
                        artifact_ids=_ids(value['artifact_ids'], 'Artifact IDs'))
+        if kind == 'presentation-draft':
+            fields = {'schema_version', 'kind', 'operation', 'target_artifact_id',
+                      'source_artifact_ids', 'base_revision', 'deck', 'deck_sha256'}
+            require(set(value) == fields and value['operation'] in {'create', 'update'},
+                    'Invalid presentation draft')
+            target = value['target_artifact_id']
+            require((value['operation'] == 'create' and target is None)
+                    or (value['operation'] == 'update' and isinstance(target, str)),
+                    'Invalid presentation draft target')
+            if target is not None:
+                uuid(target)
+            sources = _ids(value['source_artifact_ids'], 'Presentation source IDs')
+            require(isinstance(value['base_revision'], str)
+                    and re.fullmatch(r'[0-9a-f]{40,64}', value['base_revision']),
+                    'Invalid presentation base revision')
+            deck = validate_deck(value['deck'])
+            require(deck == value['deck'], 'Presentation draft is not normalized')
+            digest = hashlib.sha256(encode_deck(deck).encode('utf-8')).hexdigest()
+            require(value['deck_sha256'] == digest, 'Invalid presentation draft digest')
+            return cls(kind, operation=value['operation'], target_artifact_id=target,
+                       source_artifact_ids=sources, base_revision=value['base_revision'],
+                       deck=deck, deck_sha256=digest)
         raise ValueError('Unsupported AI task outcome kind')
 
     def serialize(self):
@@ -73,6 +104,13 @@ class AITaskOutcome:
             return {'schema_version': 1, 'kind': self.kind,
                     'artifact_kind': self.artifact_kind, 'title': self.title,
                     'content': self.content}
+        if self.kind == 'presentation-draft':
+            return {'schema_version': 1, 'kind': self.kind,
+                    'operation': self.operation,
+                    'target_artifact_id': self.target_artifact_id,
+                    'source_artifact_ids': list(self.source_artifact_ids),
+                    'base_revision': self.base_revision, 'deck': self.deck,
+                    'deck_sha256': self.deck_sha256}
         return {'schema_version': 1, 'kind': self.kind, 'purpose': self.purpose,
                 'query': self.content, 'message_ids': list(self.message_ids),
                 'artifact_ids': list(self.artifact_ids)}

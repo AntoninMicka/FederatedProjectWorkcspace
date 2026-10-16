@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import stat
 from types import MappingProxyType
+import unicodedata
 from uuid import uuid4
 
 from spikes.chat_threads import ChatThreads
@@ -33,6 +34,9 @@ from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
                                    OpenAIResponseError, OpenAIRuns,
                                    OpenAIUnknownRun)
 from spikes.project_creation import ProjectCreation
+from spikes.presentation_documents import PresentationDocuments
+from spikes.presentation_proposals import (materialize_presentation_proposal,
+                                           presentation_approval_preview)
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
 from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
@@ -43,6 +47,21 @@ from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+
+
+def presentation_task_requested(content):
+    """Recognize an explicit create/update presentation request, not its subject matter."""
+    require(isinstance(content, str), 'Invalid presentation task content')
+    normalized = ''.join(char for char in unicodedata.normalize('NFKD', content.casefold())
+                         if not unicodedata.combining(char))
+    object_requested = re.search(
+        r'\b(?:prezentac\w*|slid(?:e|es|u|y|u|em|ech)?|slide\s+deck|deck)\b',
+        normalized)
+    action_requested = re.search(
+        r'\b(?:vytvor\w*|udel\w*|priprav\w*|sestav\w*|zpracuj\w*|preved\w*|'
+        r'generuj\w*|aktualizuj\w*|uprav\w*|dopln\w*|create|make|build|generate|'
+        r'convert|turn|update|edit|revise)\b', normalized)
+    return bool(object_requested and action_requested)
 
 
 def parse_search_evaluation(raw, source_ids):
@@ -433,19 +452,38 @@ class ChatService:
         if thread is not None and 'run_choice' in request:
             require(thread['classification'] == choice.mode,
                     'Chat mode cannot change inside an existing thread')
+        presentation_requested = presentation_task_requested(request['content'])
+        role_revision = ('task-router-presentation-v1' if presentation_requested
+                         else 'task-router-v1')
         authority = Authority('task-route:' + request['task_id'], user_id, node_id,
-            'task-router-v1', frozenset(request['selected_artifact_ids']))
-        instruction = ('Return only one JSON object matching exactly one of these flat templates: '
+            role_revision, frozenset(request['selected_artifact_ids']))
+        instruction = ('Return only one JSON object matching exactly one of these closed templates: '
             '{"schema_version":1,"kind":"direct-answer","content":"..."}; '
             '{"schema_version":1,"kind":"artifact-draft","artifact_kind":"document",'
             '"title":"...","content":"..."}; '
+            '{"schema_version":1,"kind":"presentation-proposal","operation":"create|update",'
+            '"target_artifact_id":null,"title":"...","source_artifact_ids":["..."],'
+            '"slides":[{"slide_id":null,"title":"...","bullets":["..."],'
+            '"notes":"...","layout":"content"}]}; '
             '{"schema_version":1,"kind":"web-search","purpose":"...","query":"...",'
             '"message_ids":["..."],"artifact_ids":["..."]}; '
             '{"schema_version":1,"kind":"external-request","purpose":"...","query":"...",'
-            '"message_ids":["..."],"artifact_ids":["..."]}. Do not nest fields inside '
-            'direct-answer, artifact, web-search, or external-request objects and do not add fields. '
+            '"message_ids":["..."],"artifact_ids":["..."]}. Do not wrap a template '
+            'in another object and do not add fields. '
             'Choose artifact-draft when the user asks '
             'to create, write, draft, or propose a document or other durable text. Choose '
+            'presentation-proposal when the user asks to create or update a presentation. '
+            'For a new presentation use operation create, a null target and null slide IDs. '
+            'For every presentation slide return exactly all five fields slide_id, title, '
+            'bullets, notes, and layout; use an empty notes string when no speaker note is '
+            'needed, and never put notes at the presentation top level. For a new presentation '
+            'the available layout IDs are title, content, two-column, visual, and closing. '
+            'When the focus does not request a slide count, turn a source document into 6-12 '
+            'slides. Use the language of the focus request and ground slide content only in the '
+            'supplied sources, without borrowing unrelated project themes. '
+            'For an update use only the explicitly selected presentation artifact ID as target, '
+            'include it among source_artifact_ids, and use only existing main slide IDs. '
+            'Use only supplied artifact IDs and available layout IDs. '
             'web-search when the request explicitly asks to find or search the public web, '
             'or requires current public facts. Choose external-request only when the request '
             'explicitly asks to use an external model. '
@@ -462,13 +500,13 @@ class ChatService:
             ad_hoc_inputs=tuple(AdHocInput(item['message_id'], item['content'].encode(),
                 item['privacy']) for item in prior) + (AdHocInput(request['message_id'],
                 request['content'].encode(), request['privacy']),), conversation=conversation,
-            task=TaskInstruction('task-router', 'task-router-v1', instruction,
+            task=TaskInstruction('task-router', role_revision, instruction,
                                  request['message_id']))
         require(choice.resolve(ollama=bindings.load()) == binding,
                 'Selected orchestration binding changed')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                  target=binding.target())
-        role = ROLES.resolve('task-router', 'task-router-v1')
+        role = ROLES.resolve('task-router', role_revision)
         adapter.prepare(handoff, binding, role, 'json')
         response = adapter.dispatch(handoff, binding, role, 'json')
         try:
@@ -507,8 +545,27 @@ class ChatService:
                     and isinstance(value.get('message_ids'), list)
                     and request['message_id'] in value['message_ids']):
                 value = dict(value); value.pop('focus_id')
+            if isinstance(value, dict) and value.get('kind') == 'presentation-proposal':
+                require(workspace.git.head() == prepared.manifest['project_commit'],
+                        'Project changed while preparing presentation proposal')
+                try:
+                    value = materialize_presentation_proposal(value,
+                        task_id=request['task_id'], project_id=request['project_id'],
+                        base_revision=prepared.manifest['project_commit'],
+                        selected_artifact_ids=request['selected_artifact_ids'],
+                        node_path=self.node_path)
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise ValidationError(
+                        'Ollama returned invalid presentation proposal') from exc
+            if presentation_requested:
+                require(isinstance(value, dict)
+                        and value.get('kind') == 'presentation-draft',
+                        'Ollama did not return the requested presentation')
             outcome = AITaskOutcome.parse(value)
         except (KeyError, TypeError, ValueError) as exc:
+            if (isinstance(exc, ValidationError)
+                    and str(exc) == 'Ollama returned invalid presentation proposal'):
+                raise
             raise ValidationError('Ollama returned invalid task outcome') from exc
         if outcome.kind in {'external-request', 'web-search'}:
             allowed = request['selected_message_ids'] + [request['message_id']]
@@ -528,7 +585,9 @@ class ChatService:
             durable = TaskOutcomes(root).finish(request['task_id'], node_id, user_id,
                 'completed', result={'schema_version': 1, 'kind': 'direct-answer',
                                      'content': outcome.content})
-        routed['projection'] = durable['projection']
+        routed['projection'] = (self._task_projection(durable['projection'])
+                                if outcome.kind == 'presentation-draft'
+                                else durable['projection'])
         return routed
 
     def task_outcomes(self, *, project_id, thread_id=None):
@@ -813,6 +872,13 @@ class ChatService:
         """Attach display-only provider output without duplicating durable state."""
         outcome = projection.get('outcome')
         if (projection.get('state') == 'prepared' and isinstance(outcome, dict)
+                and outcome.get('kind') == 'presentation-draft'):
+            displayed = dict(projection)
+            displayed['presentation_approval'] = presentation_approval_preview(
+                outcome, task_id=projection['task_id'],
+                project_id=projection['project_id'], node_path=self.node_path)
+            return displayed
+        if (projection.get('state') == 'prepared' and isinstance(outcome, dict)
                 and outcome.get('kind') == 'web-search'):
             node_id, user_id = self._identity()
             runs = SearchRuns(self._root())
@@ -870,6 +936,71 @@ class ChatService:
         result = {'schema_version': 1, 'kind': 'artifact-link',
                   'artifact_id': request['artifact_id'],
                   'title': row['outcome']['title'],
+                  'project_commit': receipt['commit_id']}
+        return store.finish(request['task_id'], node_id, user_id, 'completed',
+                            result=result)['projection']
+
+    def task_confirm_presentation(self, request, *, checkpoint=lambda stage: None):
+        required = {'task_id', 'artifact_id', 'operation_id', 'approval_digest',
+                    'base_revision', 'deck_sha256', 'approved'}
+        require(isinstance(request, dict) and set(request) == required
+                and request['approved'] is True,
+                'Invalid presentation confirmation')
+        for key in ('task_id', 'artifact_id', 'operation_id'):
+            uuid(request[key])
+        for key in ('approval_digest', 'deck_sha256'):
+            require(isinstance(request[key], str)
+                    and re.fullmatch(r'[0-9a-f]{64}', request[key]),
+                    'Invalid presentation confirmation digest')
+        require(isinstance(request['base_revision'], str)
+                and re.fullmatch(r'[0-9a-f]{40,64}', request['base_revision']),
+                'Invalid presentation confirmation revision')
+        node_id, user_id = self._identity(); store = TaskOutcomes(self._root())
+        row = store.get(request['task_id'], node_id, user_id)
+        if row['state'] == 'completed':
+            result = row['result']
+            require(isinstance(result, dict)
+                    and result.get('kind') == 'presentation-link'
+                    and all(result.get(key) == request[key] for key in
+                            ('artifact_id', 'operation_id', 'approval_digest',
+                             'base_revision', 'deck_sha256')),
+                    'Task outcome was completed differently')
+            return row['projection']
+        require(row['state'] == 'prepared'
+                and row['outcome']['kind'] == 'presentation-draft',
+                'Task outcome is not a presentation draft')
+        draft = AITaskOutcome.parse(row['outcome'])
+        approval = presentation_approval_preview(
+            row['outcome'], task_id=request['task_id'],
+            project_id=row['project_id'], node_path=self.node_path)
+        require(request['approval_digest'] == approval['approval_digest']
+                and request['base_revision'] == draft.base_revision
+                and request['deck_sha256'] == draft.deck_sha256,
+                'Presentation approval does not match the exact draft')
+        artifact_id = request['artifact_id']
+        require((draft.operation == 'create' and draft.target_artifact_id is None)
+                or (draft.operation == 'update'
+                    and artifact_id == draft.target_artifact_id),
+                'Presentation confirmation targets a different artifact')
+        save_request = {'project_id': row['project_id'], 'artifact_id': artifact_id,
+                        'base_head': draft.base_revision,
+                        'new': draft.operation == 'create', 'deck': draft.deck}
+        documents = PresentationDocuments(self.node_path)
+        if draft.operation == 'create':
+            receipt = documents.save(save_request, request['operation_id'],
+                checkpoint=checkpoint, privacy=row['privacy'],
+                provenance='llm-generated')
+        else:
+            receipt = documents.save(save_request, request['operation_id'],
+                                     checkpoint=checkpoint)
+        result = {'schema_version': 1, 'kind': 'presentation-link',
+                  'operation': draft.operation, 'artifact_id': artifact_id,
+                  'title': draft.deck['title'],
+                  'source_artifact_ids': list(draft.source_artifact_ids),
+                  'base_revision': draft.base_revision,
+                  'deck_sha256': draft.deck_sha256,
+                  'approval_digest': request['approval_digest'],
+                  'operation_id': request['operation_id'],
                   'project_commit': receipt['commit_id']}
         return store.finish(request['task_id'], node_id, user_id, 'completed',
                             result=result)['projection']

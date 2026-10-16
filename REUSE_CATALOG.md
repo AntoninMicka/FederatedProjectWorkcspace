@@ -21,6 +21,7 @@ Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md
 | libgit2 / C++ | evaluate (PoC validated) | Ověřená alternativa, `spikes/libgit2/probe.cpp`, ADR 0005 | Runtime 1.9.1 dostupný; chybějící dev headers rozbaleny do /tmp. Produkční port Workspace, cílové balení a TLS/SSH neověřeny |
 | Python stdlib SQLite | adapt (M0/M1 PoC) | Obnovitelný relační projektový index (`spikes/storage.py`, ADR 0022) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); ověření metadat/vztahů ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15), zbývá produkční integrace, výkon a paměť na Turrisu |
 | PyYAML 6.0.3 | approved | Omezený frontmatter parser v M0 | Produkční release: doplnit evidence licenčních textů/notice pro všechny distribuované třetí strany; aktuálně je pro PyYAML 6.0.3 v M1 audit potvrzen jako MIT-approved (2026-09-10). |
+| Segno 1.6.6 | reuse (presenter PoC) | Lokální QR kontaktů, čistý Python bez dalších runtime závislostí; [veřejný upstream](https://github.com/heuer/segno), BSD-3-Clause, dostupnost a licence ověřeny 2026-09-26 | Cílové systémové balení; knihovna se nekopíruje do zdrojů projektu |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
 
 Nad rámec komponent najdeš evidenci compliance závislostí v [docs/legal/DEPENDENCIES.toml](docs/legal/DEPENDENCIES.toml).
@@ -37,7 +38,7 @@ M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je no
 
 ## Již používané vlastní komponenty
 
-Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; jediná deklarovaná pip závislost je PyYAML 6.0.3 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; deklarované pip závislosti jsou PyYAML 6.0.3 a Segno 1.6.6 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
 
 | Komponenta / zdroj | Rozhodnutí a důvod | Důkazy a omezení |
 | --- | --- | --- |
@@ -200,6 +201,37 @@ LLM-generovaný workflow, automatický fallback a obecné stahování URL se
 odmítají; použijí se jen verzované allowlisted šablony, explicitní binding a
 bounded výstupy svázané s konkrétním runem.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+
+F-M4-PRESENTER-01-C **adaptuje existující projektový deck a sdílený bezpečný
+renderer**. Šablony zůstávají součástí stejného validovaného dokumentu a
+speaker, editor i audience používají `presentation_visual.py`; nevzniká druhý
+renderer ani externí template engine. Volné HTML/CSS šablony byly odmítnuty,
+protože by rozbily stabilní zóny a rozšířily veřejný projekční povrch. Nový
+omezený kontrakt dovoluje pouze allowlisted preset, zarovnání, hustotu a barvy.
+
+F-M4-PRESENTER-01-B **reuse/adaptuje schválený PyYAML `StrictLoader` a
+`Artifacts.save`**. Čitelný formát v2 používá omezený YAML frontmatter,
+allowlisted YAML metadata jednotlivých slidů a malou vlastní gramatiku Markdown
+nadpisu a odrážek; nepřidává obecný Markdown/HTML renderer ani novou závislost.
+Legacy JSON se čte bezzápisově a migruje se pouze explicitním uložením stejného
+artefaktu přes stávající Workspace/Journal/Git/index recovery hranici.
+
+F-M4-PRESENTER-01-D/D4 **reuse/adaptuje existující `ContextBuilder`, registr
+rolí, `OllamaRuns` a task router**. Pro obecný router zůstává společné uzavřené
+schema výsledků; explicitní vytvoření či aktualizace prezentace vybírá zvlášť
+verzovanou roli s presentation-only JSON Schema. PDF vstup používá existující
+lokální Poppler projekci v bounded režimu, ale manifest dál autorizuje a
+hashuje původní artefakt. Nevznikl nový provider, druhý context mechanismus ani
+automatický fallback. Modelový návrh není autoritou zdrojových ID, layoutů,
+privacy, HEAD ani kanonického Markdownu; ty znovu ověřuje aplikace.
+
+F-M4-PRESENTER-01-E **reuse/adaptuje `TaskOutcomes`, `PresentationDocuments` a
+`Artifacts.save`**. Schvalovací diff se odvozuje z validovaného historického
+Git snapshotu bez obnovy indexu nebo zápisu a váže se na base revision, deck
+digest a approval digest. Potvrzený create/update používá jedinou existující
+Workspace/Journal/Git/index hranici a stabilní operation ID; nevznikl druhý
+journal ani presenterový ukládací subsystém. Volné modelové ukládání, skryté
+automatické potvrzení a druhý template engine byly odmítnuty.
 
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS

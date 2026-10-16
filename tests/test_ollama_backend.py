@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -280,6 +281,48 @@ class OllamaAdapterTests(unittest.TestCase):
                          ('extractor', 'extractor-v1'))
         self.assertEqual(row['manifest_sha256'], self.handoff.manifest_sha256)
 
+    def test_task_router_uses_closed_schema_with_required_slide_layout(self):
+        captured = []
+        role = ROLES.resolve('task-router', 'task-router-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        schema = captured[0]['format']
+        proposals = [item for item in schema['oneOf']
+                     if item['properties']['kind'].get('enum') ==
+                     ['presentation-proposal']]
+        self.assertEqual(len(proposals), 1)
+        proposal = proposals[0]
+        self.assertFalse(proposal['additionalProperties'])
+        slide = proposal['properties']['slides']['items']
+        self.assertEqual(set(slide['required']),
+                         {'slide_id', 'title', 'bullets', 'notes', 'layout'})
+        self.assertFalse(slide['additionalProperties'])
+
+    def test_explicit_presentation_router_allows_only_presentation_proposal(self):
+        captured = []
+        role = ROLES.resolve('task-router', 'task-router-presentation-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        schema = captured[0]['format']
+        self.assertEqual(schema['properties']['kind']['enum'], ['presentation-proposal'])
+        self.assertNotIn('oneOf', schema)
+        self.assertFalse(schema['additionalProperties'])
+        self.assertEqual(set(schema['properties']['slides']['items']['required']),
+                         {'slide_id', 'title', 'bullets', 'notes', 'layout'})
+
+    def test_other_json_roles_keep_generic_json_format(self):
+        captured = []
+        role = ROLES.resolve('extractor', 'extractor-v1')
+        adapter = OllamaAdapter(OllamaRuns(self.state), lambda binding, request:
+            (captured.append(json.loads(request)),
+             {'model': binding.model, 'response': '{}'})[1])
+        adapter.dispatch(self.handoff, self.binding, role, 'json')
+        self.assertEqual(captured[0]['format'], 'json')
+
     def test_legacy_prepared_run_migrates_in_place_and_remains_idempotent(self):
         request = json.dumps(dict(model=self.binding.model,
             prompt=OllamaAdapter._prompt(self.handoff.payload), stream=False),
@@ -355,6 +398,21 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertEqual(captured[0]['prompt'],
                          'User:\nahoj\n\nUser:\nco je dnes za den?\n\nAssistant:\n')
         self.assertNotIn('content_b64', captured[0]['prompt'])
+
+    def test_task_pdf_uses_bounded_text_projection_without_changing_source_id(self):
+        source, focus = str(uuid4()), str(uuid4())
+        payload = json.dumps(dict(schema_version=1, inputs=[
+            dict(input_id=source, content_b64=base64.b64encode(b'%PDF-1.4 binary').decode()),
+            dict(input_id=focus, content_b64=base64.b64encode(b'Create slides').decode())],
+            task=dict(role_id='task-router', role_revision='task-router-v1',
+                      instruction='Return JSON.', focus_input_id=focus))).encode()
+        completed = subprocess.CompletedProcess([], 0, 'Bezpečný text PDF'.encode(), b'')
+        with patch('spikes.artifact_preview.subprocess.run', return_value=completed):
+            prompt = OllamaAdapter._prompt(payload)
+        self.assertIn('Source ' + source + ' (PDF text projection):\nBezpečný text PDF',
+                      prompt)
+        self.assertIn('Focus ID ' + focus + ':\nCreate slides', prompt)
+        self.assertNotIn('%PDF', prompt)
 
     def test_lost_response_becomes_unknown_without_automatic_retry(self):
         calls = []

@@ -5,7 +5,7 @@ import sqlite3
 import os
 import subprocess
 
-from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
+from spikes.desktop_ui import ASSETS as BASE_ASSETS, DesktopHandler, HTML, CSS, JS
 from spikes.administration import AccessDenied
 from spikes.project_creation import ProjectCreation
 
@@ -18,7 +18,8 @@ document.getElementById('open-notebooklm-import').hidden=false;
 
 # HTML and CSS are exactly the same assets served by the browser deployment.
 # The bootstrap only declares capabilities of this trusted single-user node.
-ASSETS = {'/': ('text/html; charset=utf-8', HTML),
+ASSETS = {**BASE_ASSETS,
+          '/': ('text/html; charset=utf-8', HTML),
           '/app.css': ('text/css; charset=utf-8', CSS),
           '/app.js': ('text/javascript; charset=utf-8', DESKTOP_BOOTSTRAP + JS)}
 

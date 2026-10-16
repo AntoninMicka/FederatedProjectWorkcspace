@@ -16,6 +16,7 @@ import ssl
 import stat
 from urllib.parse import urlsplit
 
+from spikes.artifact_preview import pdf_text
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendRegistry, BackendResponseError,
                                      BackendUnknown, ROLES)
@@ -29,6 +30,60 @@ OLLAMA_IDLE_TIMEOUT = 30
 MAX_STREAM_LINE = 1024 * 1024
 MAX_STREAM_EVENTS = 65536
 MAX_STREAM_RESPONSE = 16 * 1024 * 1024
+
+
+def _closed_object(properties, required):
+    return {'type': 'object', 'properties': properties, 'required': required,
+            'additionalProperties': False}
+
+
+_TEXT = {'type': 'string', 'minLength': 1}
+_ID_LIST = {'type': 'array', 'items': _TEXT, 'uniqueItems': True}
+_PRESENTATION_PROPOSAL_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['presentation-proposal']},
+    'operation': {'type': 'string', 'enum': ['create', 'update']},
+    'target_artifact_id': {'type': ['string', 'null']},
+    'title': _TEXT,
+    'source_artifact_ids': _ID_LIST,
+    'slides': {'type': 'array', 'minItems': 1, 'maxItems': 100,
+               'items': _closed_object({
+                   'slide_id': {'type': ['string', 'null']},
+                   'title': _TEXT,
+                   'bullets': {'type': 'array', 'maxItems': 12,
+                               'items': _TEXT},
+                   'notes': {'type': 'string'},
+                   'layout': _TEXT,
+               }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
+}, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
+    'source_artifact_ids', 'slides'])
+_TASK_ROUTER_FORMAT = {
+    'type': 'object',
+    'oneOf': [
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['direct-answer']},
+            'content': _TEXT,
+        }, ['schema_version', 'kind', 'content']),
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['artifact-draft']},
+            'artifact_kind': {'type': 'string', 'enum': ['document']},
+            'title': _TEXT,
+            'content': _TEXT,
+        }, ['schema_version', 'kind', 'artifact_kind', 'title', 'content']),
+        _PRESENTATION_PROPOSAL_FORMAT,
+        _closed_object({
+            'schema_version': {'type': 'integer', 'enum': [1]},
+            'kind': {'type': 'string', 'enum': ['web-search', 'external-request']},
+            'purpose': _TEXT,
+            'query': _TEXT,
+            'message_ids': _ID_LIST,
+            'artifact_ids': _ID_LIST,
+        }, ['schema_version', 'kind', 'purpose', 'query', 'message_ids',
+            'artifact_ids']),
+    ],
+}
 
 
 def normalize_tls_fingerprint(value):
@@ -337,6 +392,15 @@ class OllamaAdapter:
         self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
+    def _task_text(raw):
+        if raw.startswith(b'%PDF-'):
+            return pdf_text(raw), 'PDF text projection'
+        try:
+            return raw.decode('utf-8'), None
+        except UnicodeError as exc:
+            raise ValueError('Ollama task input is not valid UTF-8 or a supported PDF') from exc
+
+    @staticmethod
     def _prompt(payload):
         try:
             value = json.loads(payload)
@@ -359,10 +423,11 @@ class OllamaAdapter:
                         and set(source) == {'input_id', 'content_b64'},
                         'Invalid task input for Ollama')
                 try:
-                    content = base64.b64decode(source['content_b64'], validate=True).decode('utf-8')
+                    raw = base64.b64decode(source['content_b64'], validate=True)
+                    content, projection = OllamaAdapter._task_text(raw)
                 except (TypeError, ValueError, UnicodeError) as exc:
-                    raise ValueError('Ollama task input is not valid UTF-8') from exc
-                decoded.append((source['input_id'], content))
+                    raise ValueError('Ollama task input has no safe text projection') from exc
+                decoded.append((source['input_id'], content, projection))
             roles = {}
             if conversation is not None:
                 require(isinstance(conversation, list), 'Invalid task conversation for Ollama')
@@ -370,11 +435,11 @@ class OllamaAdapter:
                          if isinstance(item, dict) and set(item) == {'message_id', 'role'}
                          and item['role'] in {'user', 'assistant'}}
                 require(len(roles) == len(conversation), 'Invalid task conversation for Ollama')
-                selected_ids = [input_id for input_id, _ in decoded if input_id in roles]
+                selected_ids = [input_id for input_id, _, _ in decoded if input_id in roles]
                 require(selected_ids == [item['message_id'] for item in conversation],
                         'Task conversation does not match input order')
             sections = ['Instruction:\n' + task['instruction']]
-            for input_id, content in decoded:
+            for input_id, content, projection in decoded:
                 if input_id == task['focus_input_id']:
                     label = ('Focus ID ' + input_id if task['role_id'] == 'task-router'
                              else 'Focus')
@@ -384,6 +449,8 @@ class OllamaAdapter:
                         label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
+                if projection is not None:
+                    label += ' (' + projection + ')'
                 sections.append(label + ':\n' + content)
             sections.append('Summary:\n')
             return '\n\n'.join(sections)
@@ -436,7 +503,12 @@ class OllamaAdapter:
         body = dict(model=binding.model, prompt=OllamaAdapter._prompt(handoff.payload),
                     stream=stream)
         if output_format == 'json':
-            body['format'] = 'json'
+            if role is not None and role.role_id == 'task-router':
+                body['format'] = (_PRESENTATION_PROPOSAL_FORMAT
+                                  if role.revision == 'task-router-presentation-v1'
+                                  else _TASK_ROUTER_FORMAT)
+            else:
+                body['format'] = 'json'
         request = json.dumps(body, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = OllamaAdapter._execution(binding, role, output_format)
