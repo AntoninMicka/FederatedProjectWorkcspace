@@ -184,7 +184,9 @@ Při chybě uložení zůstává koncept i identita operace v editoru. Tlačítk
 ztraceném potvrzení. **Znovu načíst** po potvrzení opuštění konceptu obnoví
 případnou připravenou operaci a načte aktuální projekt. Při změně HEAD se cizí
 úpravy nepřepisují. Po restartu aplikace otevřete uloženou prezentaci z editoru
-znovu; pozice a dočasná cesta presenteru se neukládají.
+znovu; pracovní pozice presenteru se neobnovuje, ale již potvrzené veřejné
+snapshoty rozpracované relace se z lokálního journalu uzavřou jako přerušený
+projektový záznam.
 
 Jde o základní integrovaný editor: nejvýše 100 slidů, 12 odrážek po 500 znacích,
 256 KiB vložené tapety na slide a přibližně 1 MiB na celý dokument. Dlouhý obsah je nutné zkrátit nebo
@@ -220,6 +222,32 @@ obyčejným textem a nikdy se neinterpretuje. Ručně poškozený dokument se v
 editoru označí jako neplatný a automaticky se neopravuje.
 Tento formát nerozšiřuje obecný validátor projektových dokumentů o celé schéma
 prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
+
+### Záznamy relací a PDF export
+
+Spuštění přesně uložené prezentace založí novou relaci. Do její historie se
+zapisuje až potvrzená změna veřejného audience výstupu: konkrétní slide,
+skutečně odhalené odrážky, vzhled, poměr stran a čas. Soukromý výběr, preview,
+poznámky, nepromítnuté backupy ani pouhé zatemnění se nezapisují. **Zpět do
+workspace** relaci uzavře a jednou materializuje jako dokument
+`fpw-presentation-session-v1` v projektu. Pád aplikace před ukončením zachová
+potvrzené snapshoty v lokálním `<node>.presentation-sessions.sqlite3`; při
+dalším startu vznikne záznam se stavem **Přerušená**. Nejistý výsledek po Git
+commitu se opakuje se stejným ID operace a nevytvoří druhý artefakt.
+
+Editor pod deckem zobrazuje jeho uskutečněné relace, čas, stav a počet stran.
+**Smazat** nejprve zobrazí identitu relace a výchozí commit, vyžádá druhé
+potvrzení a odstraní pouze aktuální verzi; Git historie zůstává zachovaná.
+
+**Vytisknout prezentaci** připraví kanonické PDF pouze z hlavní `next` linie,
+bez backupů, notes a automatického závěru. **Vytisknout** u relace použije
+přesné uložené snapshoty v jejich skutečném pořadí, včetně promítnutých
+backupů, opakování, reveal kroků a závěru. Náhled plánu ukáže režim, zdrojovou
+revizi, počet i pořadí stran. Potom se samostatně vybere cílový `.pdf`; editor
+zobrazí úplnou cestu a zda se bude přepisovat. Teprve zaškrtnutí potvrzení a
+**Vytvořit PDF** spustí offline renderer. Výstup nejprve vzniká v jednoznačně
+pojmenovaném dočasném souboru ve stejné složce a hotový PDF atomicky nahradí
+cíl. Zrušení výběru ani známá chyba cílový soubor nemění.
 
 ## 11. Výběr a postup během prezentace
 

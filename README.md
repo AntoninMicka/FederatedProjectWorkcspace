@@ -97,9 +97,13 @@ revizi a digest. Teprve samostatné tlačítko **Schválit a vytvořit** nebo
 **Schválit aktualizaci** provede jeden obnovitelný projektový zápis. Změněná
 revize nebo digest se odmítne a opakování stejné operace nevytvoří druhý commit.
 
-Úplný postup editoru, displejů, orchestrace, recovery a fyzické akceptace je v
-[návodu presenteru](docs/gamepad-demo-presenter.md). Export do PDF zatím není
-součástí této schopnosti.
+Každé skutečné spuštění uloženého decku vytváří samostatný záznam potvrzených
+veřejných snapshotů. Editor je zobrazuje u příslušné prezentace a nabízí jejich
+potvrzené smazání a tisk. Do PDF lze exportovat buď kanonickou hlavní linii,
+nebo přesný průběh konkrétní relace; cíl a případné přepsání se potvrzují před
+atomickou publikací souboru. Úplný postup editoru, displejů, orchestrace,
+recovery a fyzické akceptace je v
+[návodu presenteru](docs/gamepad-demo-presenter.md).
 
 ### Streamovaný lokální chat
 

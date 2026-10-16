@@ -32,11 +32,37 @@ from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
 from spikes.user_profile import UserProfile
 from spikes.gamepad_settings import GamepadSettings
+from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
 NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
-                            'choose-notebooklm-target'})
+                            'choose-notebooklm-target', 'choose-presentation-pdf',
+                            'export-presentation-pdf'})
+
+
+def presentation_pdf_paths(target, nonce):
+    """Resolve a user-picked PDF and its same-directory, one-operation temporary file."""
+    if str(UUID(nonce)) != nonce:
+        raise ValueError('Invalid PDF export nonce')
+    target = Path(target).absolute()
+    if target.suffix.lower() != '.pdf':
+        target = target.with_suffix('.pdf')
+    if (not target.parent.is_dir() or target.parent.is_symlink() or target.exists() and target.is_dir()
+            or '\0' in str(target) or len(target.name.encode()) > 240):
+        raise ValueError('Invalid PDF export target')
+    return target, target.parent / ('.' + target.name + '.' + nonce + '.part')
+
+
+def publish_presentation_pdf(temporary, target):
+    """Durably replace the target only after WebEngine completed the whole PDF."""
+    temporary, target = Path(temporary), Path(target)
+    if not temporary.is_file() or temporary.is_symlink() or temporary.stat().st_size == 0:
+        raise OSError('PDF renderer nevytvořil platný dočasný soubor.')
+    with temporary.open('rb') as stream:
+        os.fsync(stream.fileno())
+    os.replace(temporary, target)
+    sync_dir(target.parent)
 
 
 def provider_key_url(url):
@@ -167,8 +193,8 @@ def main():
     if args.screenshot and not args.smoke:
         parser.error('--screenshot requires --smoke')
     try:
-        from PySide6.QtCore import Qt, QTimer, QUrl
-        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import Qt, QTimer, QUrl, QMarginsF, QSizeF
+        from PySide6.QtGui import QDesktopServices, QPageLayout, QPageSize
         from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
                                        QFileDialog, QInputDialog)
         from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -181,6 +207,7 @@ def main():
         from spikes.desktop_displays import PresenterDisplays
         from spikes.desktop_user_profile import UserProfileDialog
         from spikes.presentation_documents import PresentationDocuments
+        from spikes.presentation_sessions import PresentationSessions
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
@@ -244,6 +271,11 @@ def main():
         server.user_profile = UserProfile(node_path)
         server.gamepad_settings = GamepadSettings(node_path)
         server.presentation_documents = PresentationDocuments(node_path)
+        server.presentation_sessions = PresentationSessions(node_path)
+        try:
+            server.presentation_sessions.recover()
+        except Exception as exc:
+            QMessageBox.warning(None, 'Obnova záznamu prezentace nebyla dokončena', str(exc))
         server.chat_service = ChatService(node_path, server.projects)
         server.media_service = MediaService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)
@@ -268,6 +300,8 @@ def main():
         profile = QWebEngineProfile(app)  # unnamed => off the record
         interceptor = Interceptor(profile)
         profile.setUrlRequestInterceptor(interceptor)
+        presentation_pdf_targets = {}
+        presentation_pdf_jobs = {}
         profile.downloadRequested.connect(lambda download: download.cancel())
         view = View()
         page = Page(profile, view)
@@ -469,7 +503,74 @@ def main():
                     except (ValueError, OSError) as exc:
                         page.runJavaScript('setNotebookLMNativeError(' + json.dumps(
                             notebooklm_target_error(exc)) + ')')
+            elif action == 'choose-presentation-pdf':
+                def choose_presentation_pdf(plan):
+                    if (not isinstance(plan, dict) or set(plan) != {'nonce', 'preview_sha256'}
+                            or plan['nonce'] != request['nonce']
+                            or not isinstance(plan['preview_sha256'], str)
+                            or len(plan['preview_sha256']) != 64):
+                        return
+                    filename, _ = QFileDialog.getSaveFileName(
+                        window, 'Export prezentace do PDF', '', 'PDF (*.pdf)')
+                    if filename:
+                        try:
+                            target, temporary = presentation_pdf_paths(filename, request['nonce'])
+                            presentation_pdf_targets[request['nonce']] = (
+                                target, temporary, plan['preview_sha256'])
+                            result = {'nonce': request['nonce'], 'path': str(target),
+                                      'exists': target.exists()}
+                            page.runJavaScript('setPresentationPdfTarget(' + json.dumps(result) + ')')
+                        except (ValueError, OSError) as exc:
+                            page.runJavaScript('presentationPdfExportFinished(' + json.dumps({
+                                'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
+                page.runJavaScript('presentationPdfTargetRequest()', 0, choose_presentation_pdf)
+            elif action == 'export-presentation-pdf':
+                selected = presentation_pdf_targets.get(request['nonce'])
+                if selected is None:
+                    return
+                def export_pdf(approval):
+                    if (not isinstance(approval, dict)
+                            or set(approval) != {'nonce', 'preview_sha256'}
+                            or approval.get('nonce') != request['nonce']
+                            or approval.get('preview_sha256') != selected[2]):
+                        return
+                    target, temporary, _ = selected
+                    try:
+                        if temporary.exists():
+                            raise OSError('Dočasný soubor této exportní operace již existuje.')
+                        layout = QPageLayout(
+                            QPageSize(QSizeF(16, 9), QPageSize.Unit.Inch, '16:9'),
+                            # Custom size is already 16 x 9; Qt "Landscape" would rotate it.
+                            QPageLayout.Orientation.Portrait, QMarginsF(0, 0, 0, 0),
+                            QPageLayout.Unit.Inch)
+                        presentation_pdf_jobs[str(temporary)] = (request['nonce'], target)
+                        QTimer.singleShot(0, lambda: page.printToPdf(str(temporary), layout))
+                    except (ValueError, OSError) as exc:
+                        page.runJavaScript('presentationPdfExportFinished(' + json.dumps({
+                            'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
+                page.runJavaScript('presentationPdfExportRequest()', 0, export_pdf)
         page.urlChanged.connect(native_action)
+
+        def presentation_pdf_finished(filename, success):
+            job = presentation_pdf_jobs.pop(filename, None)
+            if job is None:
+                return
+            nonce, target = job
+            temporary = Path(filename)
+            try:
+                if not success:
+                    raise OSError('WebEngine nedokončil vytvoření PDF.')
+                publish_presentation_pdf(temporary, target)
+                presentation_pdf_targets.pop(nonce, None)
+                result = {'nonce': nonce, 'success': True}
+            except OSError as exc:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                result = {'nonce': nonce, 'success': False, 'error': str(exc)}
+            page.runJavaScript('presentationPdfExportFinished(' + json.dumps(result) + ')')
+        page.pdfPrintingFinished.connect(presentation_pdf_finished)
         def project_loaded(ok):
             creation_result['loaded'] = ok
             if ok and creation_result['receipt']:

@@ -3,6 +3,7 @@
 """Versioned basic decks stored through the existing document transaction boundary."""
 import base64
 import copy
+import hashlib
 import json
 import re
 import struct
@@ -15,6 +16,7 @@ from spikes.configuration import committed_project
 from spikes.markdown_documents import MAX_EDITOR, document
 from spikes.metadata import (StrictLoader, ValidationError, require, uuid,
                              validate_snapshot)
+from spikes.presentation_sessions import decode_session, is_session_document
 
 LEGACY_PREFIX = '```fpw-presentation-v1\n'
 MARKDOWN_PREFIX = '---\nformat: fpw-presentation\nformat_version: 2\n'
@@ -343,7 +345,7 @@ def public_content(slide):
     return content
 
 
-def project_deck(deck, revision):
+def project_deck(deck, revision, *, project_id=None, artifact_id=None):
     deck = validate_deck(deck)
     by_id = {s['id']: s for s in deck['slides']}
     templates = {item['id']: item for item in deck['templates']}
@@ -365,7 +367,7 @@ class PresentationDocuments:
 
     def open(self, project_id):
         view = self.artifacts.open(project_id)
-        docs = []
+        docs, sessions = [], []
         for document in view['documents']:
             if is_presentation_document(document['body']):
                 row = dict(document)
@@ -374,7 +376,15 @@ class PresentationDocuments:
                 except (ValueError, TypeError, KeyError) as exc:
                     row['error'] = str(exc)
                 docs.append(row)
-        return dict(view, documents=docs, layout_presets=layout_presets())
+            elif is_session_document(document['body']):
+                row = dict(document)
+                try:
+                    row['session'] = decode_session(document['body'])
+                except (ValueError, TypeError, KeyError) as exc:
+                    row['error'] = str(exc)
+                sessions.append(row)
+        sessions.sort(key=lambda row: row.get('session', {}).get('started_at', ''), reverse=True)
+        return dict(view, documents=docs, sessions=sessions, layout_presets=layout_presets())
 
     def open_revision(self, project_id, revision):
         """Read a validated historical deck snapshot without recovery or index writes."""
@@ -410,4 +420,34 @@ class PresentationDocuments:
         require(view['commit_id'] == expected_head, 'Projekt se od načtení editoru změnil.')
         document = next((item for item in view['documents'] if item['id'] == artifact_id), None)
         require(document is not None and 'deck' in document, 'Uložená prezentace není dostupná.')
-        return project_deck(document['deck'], expected_head + ':' + artifact_id)
+        result = project_deck(document['deck'], expected_head + ':' + artifact_id)
+        result.update(source_project_id=project_id, source_artifact_id=artifact_id)
+        return result
+
+    def export_preview(self, project_id, artifact_id, expected_head, *, session_artifact_id=None):
+        """Return only immutable public page models from the exact current project HEAD."""
+        view = self.open(project_id)
+        require(view['commit_id'] == expected_head, 'Projekt se změnil. Načtěte editor znovu.')
+        document = next((item for item in view['documents']
+                         if item['id'] == artifact_id and 'deck' in item), None)
+        require(document is not None, 'Zdrojová prezentace není dostupná.')
+        if session_artifact_id is None:
+            projection = project_deck(document['deck'], expected_head + ':' + artifact_id)
+            pages = [public_content(page) for page in projection['slides']]
+            mode, source_revision = 'canonical', expected_head + ':' + artifact_id
+        else:
+            uuid(session_artifact_id)
+            row = next((item for item in view['sessions']
+                        if item['id'] == session_artifact_id and 'session' in item), None)
+            require(row is not None, 'Záznam relace není dostupný.')
+            session = row['session']
+            require(session['source_artifact_id'] == artifact_id,
+                    'Relace nepatří k vybrané prezentaci.')
+            pages = [copy.deepcopy(page['content']) for page in session['pages']]
+            mode, source_revision = 'session', session['source_revision']
+        payload = dict(mode=mode, project_id=project_id, artifact_id=artifact_id,
+                       session_artifact_id=session_artifact_id, title=document['deck']['title'],
+                       source_revision=source_revision, expected_head=expected_head, pages=pages)
+        payload['preview_sha256'] = hashlib.sha256(json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        return payload

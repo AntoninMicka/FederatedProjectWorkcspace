@@ -233,6 +233,16 @@ Workspace/Journal/Git/index hranici a stabilní operation ID; nevznikl druhý
 journal ani presenterový ukládací subsystém. Volné modelové ukládání, skryté
 automatické potvrzení a druhý template engine byly odmítnuty.
 
+F-M4-PRESENTER-PDF-01 **reuse/adaptuje `PresentationDocuments`,
+`Artifacts.save`, `Workspace.transact` a společný `presentation_visual.py`**.
+Živá relace má malý lokální SQLite journal pouze do okamžiku, kdy se přesný
+veřejný průběh materializuje jako verzovaný projektový dokument; nevzniká
+druhý projektový zapisovač. Kanonický i relační PDF export používají stejný
+allowlisted model slidu a Qt WebEngine, který desktop již distribuuje. Obecný
+HTML/PDF template engine a nová runtime závislost byly odmítnuty. PDF se
+nejprve dokončí ve stejné cílové složce a až potom se publikuje atomickým
+nahrazením.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
