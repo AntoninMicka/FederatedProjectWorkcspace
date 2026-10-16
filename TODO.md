@@ -238,9 +238,10 @@ autoritativní projektový obsah.
   uživatel nehlásil chybu. Tím je potvrzen základní dvoudisplejový presenterový
   tok a zpětné načtení existujícího decku. Uživatel následně potvrdil také
   správné oddělení soukromého speaker obsahu od audience výstupu, bezpečné
-  chování při odpojení displeje a ovládání gamepadem. Z fyzické akceptace tak
-  zbývá samostatně doložit pouze uložení/aktualizaci z orchestrace; dokončení F
-  dále vyžaduje aktualizaci návodu a reuse evidence.
+  chování při odpojení displeje a ovládání gamepadem. Nakonec potvrdil také
+  uložení a aktualizaci prezentace z orchestrace. Fyzická akceptace editoru,
+  generačního toku i presenteru je tím dokončená bez hlášeného omezení;
+  dokončení F dále vyžaduje aktualizaci návodu a reuse evidence.
 
 ## Crash boundaries a recovery
 
