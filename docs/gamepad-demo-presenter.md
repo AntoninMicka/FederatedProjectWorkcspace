@@ -352,9 +352,10 @@ commitu. Automatické opakování modelového běhu ani potvrzení neprobíhá.
 
 Aktualizace v tomto PoC mění pouze existující hlavní slidy a jejich obsah;
 strukturální přidávání či mazání slidů modelem není podporováno. Ruční editor
-zůstává autoritativní cestou pro následné úpravy struktury. Export PDF/PPTX,
-trvalá relace schůzky, disclosure semafor a obecný rozhodovací strom jsou mimo
-rozsah této feature.
+zůstává autoritativní cestou pro následné úpravy struktury. PPTX, obecná trvalá
+relace schůzky, disclosure semafor a obecný rozhodovací strom jsou mimo rozsah
+této feature; omezený záznam presenterové relace a PDF export popisuje sekce
+výše.
 
 ## 14. Ověřený fyzický průchod
 
@@ -368,8 +369,16 @@ Dne 2026-10-15 a 2026-10-16 uživatel na Linux notebooku fyzicky ověřil:
 - stabilní presenterový tok při odpojení displeje;
 - ovládání fyzickým gamepadem.
 
+Dne 2026-10-17 uživatel na stejném desktopovém toku dále fyzicky ověřil:
+
+- dokončenou relaci i relaci přerušenou zavřením aplikace a obnovenou po
+  restartu;
+- kanonický export hlavní linie i export přesného audience průběhu relace;
+- vizuální shodu relačního PDF s promítnutým výstupem;
+- zrušení výběru cíle, potvrzené přepsání existujícího PDF a potvrzené smazání
+  relace se zachovanou Git historií.
+
 Průchod skončil bez hlášeného omezení. Další vizuální a dispoziční změny
 editoru byly vědomě odloženy do `UX-FACELIFT-01`; nejsou součástí této
-akceptace. Automatické testy nenahrazují tuto fyzickou kontrolu a naopak tento
-průchod nedokládá dosud neimplementovaný PDF export ani širší Disclosure
-Presenter z roadmapy 22C.
+akceptace. Automatické testy nenahrazují tuto fyzickou kontrolu a tento průchod
+nedokládá širší Disclosure Presenter z roadmapy 22C.
