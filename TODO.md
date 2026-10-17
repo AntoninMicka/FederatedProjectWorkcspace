@@ -3,10 +3,12 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na doručení F-M3-EXPLICIT-TASK-ROUTING-01
+# TODO — čeká se na společné doručení readeru a task routingu
 
-Feature akceptace dávky `F-M3-EXPLICIT-TASK-ROUTING-01` byla 2026-10-17
-archivována ve `WORK_LOG.md`. Větev `feature/f-m3-explicit-task-routing-01`
-je stacked nad `feature/f-m3-public-source-reader-01`; feature se proto mají
-doručit odděleně v pořadí reader → routing do `develop`. Routing commit
-`2c72dfb` nebyl pushnut ani zahrnut do PR a žádná z obou feature není sloučená.
+Feature akceptace dávek `F-M3-PUBLIC-SOURCE-READER-01` a
+`F-M3-EXPLICIT-TASK-ROUTING-01` byly 2026-10-17 archivovány ve `WORK_LOG.md`.
+Uživatel následně výslovně schválil jednorázovou delivery výjimku: obě věcně
+provázané a společně ověřené dávky doručit z konsolidované větve
+`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Původní feature
+ID, samostatné výsledky a implementační commity zůstávají zachované. Větev
+dosud nebyla pushnuta, PR nebyl vytvořen ani sloučen.

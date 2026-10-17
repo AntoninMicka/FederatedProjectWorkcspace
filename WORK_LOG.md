@@ -7,11 +7,12 @@ SPDX-License-Identifier: MPL-2.0
 
 ## F-M3-EXPLICIT-TASK-ROUTING-01 — explicitní podklady, výstup a vykonání — 2026-10-17
 
-Dávka na větvi `feature/f-m3-explicit-task-routing-01`, založené jako uživatelem
-schválená stacked výjimka nad reader checkpointem `ea7d101`, dosáhla úrovně
-**PoC validated**. Implementace je v lokálním commitu `2c72dfb`; větev nebyla
-pushnuta a PR do `develop` nebyl vytvořen ani sloučen. Samostatné doručení musí
-zachovat pořadí reader → routing.
+Dávka vznikla na stacked větvi nad reader checkpointem `ea7d101` a dosáhla
+úrovně **PoC validated**. Implementace je v commitu `2c72dfb`. Uživatel
+2026-10-17 následně schválil jednorázovou delivery výjimku: routing a věcně
+provázaný reader doručit z konsolidované větve
+`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Větev zatím
+nebyla pushnuta a PR nebyl vytvořen ani sloučen.
 
 - [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-A — přesný task-plan
   kontrakt a policy (implemented).** Uzavřený `ExplicitTaskPlan` odděluje
@@ -46,11 +47,13 @@ scope se má určit interaktivně nad skutečným UI, ne předem zmrazeným rede
 
 ## F-M3-PUBLIC-SOURCE-READER-01 — bounded statický reader — 2026-10-17
 
-Dávka na větvi `feature/f-m3-public-source-reader-01`, založené z doručeného
-`develop` `225ea01`, dosáhla úrovně **PoC validated**. Implementace je v lokálním
-commitu `bed828b` a závislost fyzické akceptace v `ea7d101`; větev nebyla
-pushnuta a PR do `develop` nebyl vytvořen ani sloučen. Fyzická akceptace byla
-dokončena na navazující stacked větvi s explicitním routováním.
+Dávka vznikla na větvi `feature/f-m3-public-source-reader-01` z doručeného
+`develop` `225ea01` a dosáhla úrovně **PoC validated**. Implementace je v
+commitu `bed828b` a závislost fyzické akceptace v `ea7d101`. Fyzická akceptace
+byla dokončena společně s explicitním routováním; uživatelem schválená delivery
+výjimka proto obě dávky doručí z `feature/f-m3-reader-task-routing-01` jediným
+PR do `develop`. Původní reader větev zůstává do merge recovery bodem; společná
+větev zatím nebyla pushnuta a PR nebyl vytvořen ani sloučen.
 
 - [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-A — kontrakt, journal a
   staging (implemented).** `PublicSourceRuns` váže binding, request a preview,

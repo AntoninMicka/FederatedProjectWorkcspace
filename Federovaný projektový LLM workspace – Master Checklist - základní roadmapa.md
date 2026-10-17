@@ -1156,14 +1156,17 @@ uzavřený.
   první vertikálu ADR 0033 pro jediný potvrzený HTTPS výsledek SearXNG,
   samostatný durable run, SSRF/DNS/robots/content limity a inertní Context
   Manifest vstup bez automatické projektové publikace. Dávka dosáhla
-  2026-10-17 úrovně PoC validated; evidence je ve [WORK_LOG](WORK_LOG.md), její
-  PR do `develop` zatím nebyl vytvořen ani sloučen.
+  2026-10-17 úrovně PoC validated; evidence je ve [WORK_LOG](WORK_LOG.md).
+  Uživatel schválil její společné doručení s explicitním task routingem z
+  konsolidované větve jediným PR do `develop`; PR zatím nebyl vytvořen ani
+  sloučen.
 - [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
   aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
   vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.
   Dávka dosáhla 2026-10-17 úrovně PoC validated podle
   [ADR 0034](docs/adr/0034-explicit-task-routing.md) a evidence ve
-  [WORK_LOG](WORK_LOG.md); stacked PR do `develop` zatím nebyl vytvořen ani
+  [WORK_LOG](WORK_LOG.md). Uživatel schválil její společné doručení s readerem
+  z konsolidované větve jediným PR do `develop`; PR zatím nebyl vytvořen ani
   sloučen.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
