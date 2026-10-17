@@ -25,7 +25,8 @@ def fixture(root):
     """Synthetic, trusted build tree with real legal assets, not a release build."""
     for name in (
         'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
-        'docs/ollama-lan.md',
+        'docs/ollama-lan.md', 'docs/searxng-search-acceptance.md',
+        'docs/public-source-reader-acceptance.md', 'docs/public-sources-research.md',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
         'AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md', 'FEDERATION.md',

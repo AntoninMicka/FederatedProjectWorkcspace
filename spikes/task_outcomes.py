@@ -82,6 +82,8 @@ class TaskOutcomes:
                       'prompt': {'message_id': request['message_id'],
                                  'content': request['content'],
                                  'privacy': request['privacy']}}
+        if isinstance(request.get('task_plan'), dict):
+            projection['task_plan'] = request['task_plan']
         if row[11] == 'prepared':
             projection.update(temporary=True, outcome=outcome)
             if result is not None:
@@ -163,5 +165,24 @@ class TaskOutcomes:
                                  (encoded, task_id))
             require(changed.rowcount == 1,
                     'Task external preview changed while binding')
+            db.commit()
+        return self.get(task_id, node_id, user_id)
+
+    def replace_external_outcome(self, task_id, node_id, user_id, outcome):
+        """Atomically replace a confirmed external-request preview with its draft."""
+        current = self.get(task_id, node_id, user_id)
+        parsed = AITaskOutcome.parse(outcome).serialize()
+        require(current['state'] == 'prepared'
+                and current['outcome']['kind'] == 'external-request'
+                and parsed['kind'] in {'artifact-draft', 'presentation-draft'},
+                'Invalid confirmed external task output')
+        encoded = _canonical(parsed)
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            changed = db.execute('UPDATE outcomes SET outcome=?,result=NULL '
+                                 "WHERE task_id=? AND state='prepared'",
+                                 (encoded, task_id))
+            require(changed.rowcount == 1,
+                    'Task outcome changed while accepting external output')
             db.commit()
         return self.get(task_id, node_id, user_id)

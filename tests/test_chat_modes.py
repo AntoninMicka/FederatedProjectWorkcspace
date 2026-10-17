@@ -58,6 +58,7 @@ class ChatModePolicyTests(unittest.TestCase):
         self.assertEqual(selected.credential_ref, self.openai.credential_ref)
         self.assertEqual(self.openai.model, 'gpt-5.6-luna')
         self.assertEqual(choice.resolve(ollama=self.ollama, openai=self.openai), selected)
+        self.assertEqual(choice.resolve(ollama=None, openai=self.openai), selected)
 
     def test_brainstorm_allows_text_but_rejects_artifacts(self):
         choice = ChatRunChoice.parse(

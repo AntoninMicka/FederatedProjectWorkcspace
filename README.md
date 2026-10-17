@@ -123,13 +123,29 @@ endpoint. Lokální instalace může používat například číselný loopback 
 Workspace neodvozuje adresu z názvu kontejneru. Test odešle pouze pevný veřejný
 dotaz `SearXNG` a binding neuloží.
 
-V režimu **Orchestrace** může task router navrhnout webové hledání. Samotný
-návrh nic neodesílá: zobrazí přesný dotaz, privacy, endpoint a limit. Teprve po
+V režimu **Zadání úkolu** uživatel explicitně volí zdroje (konverzace, interní
+artefakty, veřejný internet), výstup (konverzace, dokument, prezentace) a
+vykonání (lokální Ollama nebo OpenAI). Aplikace zvolí jediné výstupní schéma;
+model druh výsledku nehádá. Externí vykonání dovoluje jen konverzaci a načtené
+veřejné zdroje, interní artefakty jsou viditelně zakázané.
+
+Volba veřejného internetu bez již načteného zdroje připraví webové hledání.
+Samotný návrh nic neodesílá: zobrazí přesný dotaz, privacy, endpoint a limit. Teprve po
 zaškrtnutí potvrzení Workspace provede jeden bounded search, uloží jeho
 provenance a předá přesné výsledky Ollamě v novém Context Manifestu. URL ani
 stránky automaticky neotevírá. `local-only` dotaz je vždy odmítnut a neurčitý
 síťový výsledek se automaticky neopakuje. Praktická akceptace je v
 [checklistu SearXNG hledání](docs/searxng-search-acceptance.md).
+
+U jednotlivého HTTPS výsledku lze zvolit **Načíst stránku**. Workspace nejprve
+zobrazí přesný plán se samostatným `robots.txt` preflightem, cílovým GET,
+privacy a limity; síť použije až po potvrzení. Reader nepoužívá přihlášení,
+cookies, JavaScript, redirecty ani další odkazy a přijímá pouze bounded statické
+HTML nebo UTF-8 text. Výsledek zůstává node-local jako inertní nedůvěryhodný
+text, může být přesně zahrnut do Context Manifestu a sám nevytváří projektový
+artefakt. Úspěšný reader run lze následně zvolit jako veřejný podklad nového
+úkolu a kombinovat jej s libovolným explicitním výstupem. Postup a očekávané chyby jsou v
+[checklistu Public Source Readeru](docs/public-source-reader-acceptance.md).
 
 Izolovaný živý průchod s výchozími loopback endpointy lze ověřit příkazem
 `python3 scripts/searxng_search_smoke.py`; vytvoří pouze dočasný projekt, odešle

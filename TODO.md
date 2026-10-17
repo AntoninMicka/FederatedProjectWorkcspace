@@ -3,14 +3,12 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká na doručení F-M3-PUBLIC-SOURCES-01
+# TODO — čeká se na společné doručení readeru a task routingu
 
-Dávka **F-M3-PUBLIC-SOURCES-01 — průzkum obecných API a kontrakt veřejných
-zdrojů** je feature-akceptovaná na větvi `feature/f-m3-public-sources-01` v
-úrovni **designed**. Dokončené úkoly, ověřené podklady, rozhodnutí, recovery
-hranice i neimplementované části byly archivovány ve [WORK_LOG](WORK_LOG.md).
-
-Jediný PR z této větve do `develop` dosud nebyl vytvořen ani sloučen. Do jeho
-doručení zde není aktivovaná další feature dávka. Navazující implementační
-`F-M3-PUBLIC-SOURCE-READER-01` a ostatní otevřené požadavky jsou v
-[BACKLOG](BACKLOG.md).
+Feature akceptace dávek `F-M3-PUBLIC-SOURCE-READER-01` a
+`F-M3-EXPLICIT-TASK-ROUTING-01` byly 2026-10-17 archivovány ve `WORK_LOG.md`.
+Uživatel následně výslovně schválil jednorázovou delivery výjimku: obě věcně
+provázané a společně ověřené dávky doručit z konsolidované větve
+`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Původní feature
+ID, samostatné výsledky a implementační commity zůstávají zachované. Větev
+dosud nebyla pushnuta, PR nebyl vytvořen ani sloučen.

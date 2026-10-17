@@ -288,6 +288,16 @@ shodným preview/privacy/`unknown`/Context Manifest kontraktem; žádný její k
 ani neveřejné detaily se nepřenášejí. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#řízené-webové-hledání-přes-searxng--f-m3-search-01).
 
+F-M3-EXPLICIT-TASK-ROUTING-01 **reuse/adaptuje** `ChatRunChoice`,
+`ContextBuilder`, `TaskOutcomes`, existující lokální/externí backend journaly,
+external approval, řízené hledání, Public Source Reader a prezentační
+validátor. Přidává malý uzavřený `ExplicitTaskPlan` a tři output role; nepřidává
+nový adapter, context mechanismus ani workflow framework. Modelový výběr
+outcome druhu, heuristická oprava, automatický web fetch, externí předání
+interních artefaktů a automatický provider fallback se odmítají, protože by
+měnily explicitní plán nebo obcházely privacy/recovery hranici. Rozhodnutí:
+[ADR 0034](docs/adr/0034-explicit-task-routing.md).
+
 F-M3-SEARCH-02 **reuse/adaptuje** existující `SearchRuns`, `OllamaRuns`,
 `ContextBuilder`, `TaskOutcomes`, thread deletion recovery a bezpečné společné
 desktop/web vykreslování. Workflow a kola jsou nové tabulky ve stejném search
@@ -299,6 +309,16 @@ automatika má vlastní navazující dávku. Soukromá inventura neposkytuje sho
 implementaci s preview/privacy/`unknown` hranicí; žádný její kód ani neveřejné
 detaily se nepřenášejí. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#bounded-iterativní-hledání--f-m3-search-02).
+
+F-M3-PUBLIC-SOURCE-READER-01 **reuse/adaptuje** stavový a no-retry recovery
+vzor `SearchRuns`, standardní knihovnu pro HTTP/TLS, `ContextBuilder` a bezpečné
+textové vykreslení společného desktop/web UI. Používá však samostatný
+`PublicSourceRuns` journal a run-scoped fsync staging, protože fetch dokumentu
+má jiné requesty, bajty, výsledky a recovery než search snippet. Nové jsou
+SSRF-safe DNS validace a connect pinning, sekvenční robots preflight a bounded
+`static-html-v1` projekce. Obecný crawler, headless browser, cookies/login,
+automatické redirecty, MIME sniffing a automatická projektová publikace se
+odmítají. Rozhodnutí: [ADR 0033](docs/adr/0033-public-source-retrieval.md).
 
 F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
 provider-neutral `RoleRegistry` a backend adapter/run journals, durable

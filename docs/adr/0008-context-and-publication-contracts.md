@@ -530,6 +530,11 @@ recovery-safe operace. Externí varianta obsahuje účel, hotový dotaz a explic
 ID zdrojů, ale žádný provider, credential ani oprávnění. Aplikace z ní znovu
 sestaví Context Manifest a autoritativní externí preview.
 
+> **Nahrazeno pro nové task plány:** modelový výběr druhu výsledku popsaný v
+> předchozím odstavci nahrazuje [ADR 0034](0034-explicit-task-routing.md).
+> Aplikace nyní před dispatch zvolí jediný output a roli; web a externí cíl jsou
+> explicitní zdrojová/execution volba, nikoli modelový outcome.
+
 Výstupy AI nemusí být krátké. Pouze `direct-answer` je běžná trvalá chatová
 odpověď. Celý `artifact-draft` a `external-request` se před rozhodnutím promítnou
 do chatu jako jasně označené dočasné zprávy; UI je smí sbalit nebo rolovat, ale
@@ -870,6 +875,12 @@ Brainstorming dovoluje zvolit pro každý nový běh libovolný jinak povolený
 binding a model a smí obsahovat explicitně připravený textový/chatový kontext.
 Jeho Context Manifest však nesmí obsahovat projektový artefakt, jeho bajty ani
 automaticky odvozený artifact context.
+
+Pro nové explicitní task plány rozšiřuje [ADR 0034](0034-explicit-task-routing.md)
+orchestration také o `external-openai`, vždy přes samostatný přesný preview a
+potvrzení a bez projektových artefaktů. Následující omezení orchestrace jen na
+Ollamu proto platí pro původní chat-mode kontrakt, nikoli pro tento nový task
+execution řez.
 
 Výběr běhu je uzavřený objekt `{mode, adapter, model}` a pro orchestration může
 navíc nést `{binding_id, binding_revision}`. Orchestrace přijímá jen adapter

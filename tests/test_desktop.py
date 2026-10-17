@@ -26,6 +26,7 @@ from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
 from spikes.presentation_documents import PresentationDocuments
+from spikes.public_source import PublicSourceRejected, PublicSourceUnknown
 from spikes.project_creation import ProjectCreation
 from tests import test_local_api
 
@@ -54,7 +55,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('url.textContent=source.url', JS)
         self.assertIn('snippet.textContent=source.snippet', JS)
         self.assertNotIn('.href=source.url', JS)
-        self.assertIn('renderSearchWorkflow(card,projection.search_workflow)', JS)
+        self.assertIn('renderSearchWorkflow(card,projection.search_workflow,projection)', JS)
         self.assertIn('Zkontrolovat další dotaz:', JS)
         self.assertIn("projection.outcome?.kind==='web-search'", JS)
         self.assertIn("'Zpřesněte další kolo hledání…'", JS)
@@ -63,9 +64,40 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('Kolo není konečné. Napište do pole dole vlastní zpřesnění', JS)
         self.assertIn('Finálnost je hodnocení modelu', JS)
         self.assertIn('query===null && projection.search_preview', JS)
+        self.assertIn('id="public-source-preview"', HTML)
+        self.assertIn("existing?'Připravit nové načtení':'Načíst stránku'", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/preview',request)", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/confirm'", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/result'", JS)
+        self.assertIn("result.querySelector('pre').textContent=fetched.text", JS)
+        self.assertIn('do projektu nebylo nic zapsáno', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
-                         '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
+                         '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
+                         '/v1/tasks/public-source/preview',
+                         '/v1/tasks/public-source/confirm',
+                         '/v1/tasks/public-source/result'}
                         <= DesktopHandler.post_paths)
+
+    def test_public_source_diagnostics_distinguish_rejected_and_unknown(self):
+        driver = test_local_api.LocalAPITests()
+        cases = ((PublicSourceRejected('robots', code='robots-disallowed'), 422,
+                  'rejected', 'robots.txt'),
+                 (PublicSourceUnknown('lost', code='response-unknown'), 409,
+                  'unknown', 'automaticky opakovat'))
+        for error, status, outcome, message in cases:
+            class Service:
+                def task_public_source_confirm(self, _request):
+                    raise error
+            with self.subTest(outcome=outcome), running_api(
+                    'http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                response = driver.request(server, path='/v1/tasks/public-source/confirm',
+                                          body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(f' {status} '.encode(), head)
+            payload = json.loads(body)
+            self.assertEqual(payload['outcome'], outcome)
+            self.assertIn(message, payload['error'])
 
     def test_presentation_task_has_exact_diff_and_separate_confirmation(self):
         self.assertIn("outcome.kind==='presentation-draft'?'Návrh prezentace'", JS)
@@ -695,7 +727,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('keepChatStreamVisible()', JS)
         self.assertIn('startChatProgress', JS)
         self.assertIn('await waitForVisiblePaint()', JS)
-        self.assertIn("startChatProgress('Ollama zpracovává orchestraci…')", JS)
+        self.assertIn("'Ollama zpracovává explicitní úkol…'", JS)
         self.assertIn("startChatProgress('Připojuji se k OpenAI…')", JS)
         self.assertIn('Externí odpověď byla přijata průběžně (${receivedDeltas} částí).', JS)
         self.assertIn('přijato ${receivedDeltas} průběžných částí.', JS)
@@ -823,7 +855,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="advanced-external"', HTML)
         self.assertIn("body.textContent=outcome.content", JS)
         self.assertNotIn('innerHTML=outcome', JS)
-        self.assertIn("selected_message_ids:selectedMessages.map", JS)
+        self.assertIn("selected_message_ids:useConversation?selectedMessages.map", JS)
         self.assertIn("activeThread?.thread_id===threadId ? activeThread.messages : []", JS)
         self.assertIn("querySelectorAll('#task-artifact-list input:checked')", JS)
         self.assertIn("activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null", JS)
@@ -891,9 +923,17 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
-        self.assertIn('Orchestrace použije ${chatBinding.model}', JS)
+        self.assertIn('Úkol použije ${chatBinding.model}', JS)
         self.assertIn("lan?'privátní síť':'tento uzel'", JS)
         self.assertIn('${chatBinding.endpoint}', JS)
+        for control in ('task-source-conversation', 'task-source-artifacts',
+                        'task-source-public', 'task-output-kind', 'task-search-query',
+                        'task-public-source-list'):
+            self.assertIn('id="' + control + '"', HTML)
+        self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
+        self.assertIn("execution:adapter==='ollama'?'local-ollama':'external-openai'", JS)
+        self.assertIn('External task execution cannot include project artifacts',
+                      Path('spikes/task_plan.py').read_text())
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
