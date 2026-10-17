@@ -1356,21 +1356,24 @@ Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř
 
 ## 22C. Disclosure Presenter
 
-**Stav omezeného základu: PoC validated (F-M4-PRESENTER-01, 2026-10-16).**
+**Stav omezeného základu: PoC validated (F-M4-PRESENTER-01 a
+F-M4-PRESENTER-PDF-01, 2026-10-17).**
 Desktop má verzovaný Markdown deck, integrovaný editor, stabilní layouty,
 oddělený speaker/audience renderer, backupy, reveal kroky, lokálně mapovaný
 gamepad a explicitně schvalované návrhy vytvoření či aktualizace z orchestrace.
 Fyzický průchod na notebooku se dvěma displeji ověřil editor, starší deck,
 vytvoření i aktualizaci, spuštění, navigaci, soukromý speaker obsah, odpojení
-displeje a gamepad; podrobné důkazy drží [WORK_LOG](WORK_LOG.md). Tato omezená
-feature neimplementuje obecnou projektovou kompilaci, Disclosure Registry,
-expozici/semafor, trvalou relaci schůzky,
-obecný rozhodovací strom ani PDF/PPTX export; níže uvedené širší požadavky proto
-zůstávají otevřené.
+displeje a gamepad. Navazující dávka doplnila durable záznam potvrzených
+audience snapshotů, obnovu přerušené relace, správu relací a potvrzovaný
+kanonický i relační PDF export; podrobné automatické a fyzické důkazy drží
+[WORK_LOG](WORK_LOG.md). Tento omezený základ neimplementuje obecnou projektovou
+kompilaci, Disclosure Registry, expozici/semafor, obecnou trvalou relaci
+schůzky, obecný rozhodovací strom ani PPTX export; níže uvedené širší požadavky
+proto zůstávají otevřené.
 
 - [ ] Přípravu decku realizovat jako prezentační renderer obecné projektové kompilace ze sekce 2E. Sdílet definici zdrojů, jejich pořadí, manifest, stavy dostupnosti/neaktuálnosti a atomickou lokální generaci; prezentační runtime a disclosure evidence zůstávají samostatnou nadstavbou.
 - [ ] Přidat modul pro přípravu verzovaných prezentací: skládat deck z projektových artefaktů a médií, spravovat pořadí, šablonu, poznámky řečníka a kroky postupného odhalení a před spuštěním ověřit chybějící zdroje i přesné revize. Vytvořený deck a jeho bezpečný export nesmějí obsahovat privátní scénář, poznámky nebo skryté backupy, pokud je uživatel výslovně nezahrne do oprávněného výstupu.
-- [ ] F-M4-PRESENTER-PDF-01 doplní dva bezpečné PDF výstupy: nativní (kanonický) deck pouze z hlavních slidů v uloženém pořadí a přesný záznam skutečně odprezentovaných audience snapshotů včetně promítnutých backupů, opakování a stavu postupného odhalení. Druhá varianta nesmí domýšlet historii z aktuálního decku ani zahrnout privátní preview, notes nebo nezobrazený obsah. Před vznikem každého lokálního PDF musí uživatel explicitně potvrdit režim, zdrojovou revizi, rozsah, cílovou cestu a případné přepsání; export sám není důkaz doručení ani DisclosureEvent.
+- [x] F-M4-PRESENTER-PDF-01 doplnilo dva bezpečné PDF výstupy: nativní (kanonický) deck pouze z hlavních slidů v uloženém pořadí a přesný záznam skutečně odprezentovaných audience snapshotů včetně promítnutých backupů, opakování a stavu postupného odhalení. Druhá varianta nedomýšlí historii z aktuálního decku ani nezahrnuje privátní preview, notes nebo nezobrazený obsah. Před vznikem každého lokálního PDF uživatel explicitně potvrzuje režim, zdrojovou revizi, rozsah, cílovou cestu a případné přepsání; export sám není důkaz doručení ani DisclosureEvent. Feature je PoC validated; důkazy jsou ve WORK_LOG.
 - [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
 - [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.
 - [ ] Backup ponechat volitelný: větev může pokračovat doplňující otázkou, ústní odpovědí, odložením tématu nebo návratem bez dalšího slidu. Odkazovat na existující obsah v konkrétní revizi; jeden backup smí sloužit více slidům a větvím bez kopií.

@@ -15,7 +15,9 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from spikes.desktop import (google_authorization_url, native_action_name, native_action_request, notebooklm_target_error,
-                            provider_key_url, repairable_target_mode, request_policy)
+                            presentation_pdf_js_request, presentation_pdf_paths, provider_key_url,
+                            publish_presentation_pdf,
+                            repairable_target_mode, request_policy)
 from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
 from spikes.presentation_visual import SLIDE_JS
 from spikes.local_api import running_api
@@ -217,7 +219,42 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("['title','title-content','two-column','visual','closing']", SLIDE_JS)
         self.assertIn("gridTemplateColumns:'1fr 1fr'", SLIDE_JS)
         self.assertIn('presentationVisualSlide', JS)
+        self.assertIn('id="presentation-session-list"', HTML)
+        self.assertIn("projectRequest('/v1/presentations/export/preview'", JS)
+        self.assertIn('setPresentationPdfTarget', JS)
+        self.assertIn('setPresentationPdfNativeError', JS)
+        self.assertIn("JSON.stringify(presentationPdfTargetRequest())", desktop)
+        self.assertIn("JSON.stringify(presentationPdfExportRequest())", desktop)
+        self.assertIn("location.hash=`export-presentation-pdf?nonce=", JS)
         self.assertNotIn("location.hash='presentation-editor'", JS)
+
+    def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
+        nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
+        with tempfile.TemporaryDirectory() as directory:
+            target, temporary = presentation_pdf_paths(Path(directory) / 'deck', nonce)
+            self.assertEqual(target.name, 'deck.pdf')
+            self.assertEqual(temporary.parent, target.parent)
+            target.write_bytes(b'old complete pdf')
+            temporary.write_bytes(b'new complete pdf')
+            publish_presentation_pdf(temporary, target)
+            self.assertEqual(target.read_bytes(), b'new complete pdf')
+            self.assertFalse(temporary.exists())
+            temporary.write_bytes(b'')
+            with self.assertRaises(OSError):
+                publish_presentation_pdf(temporary, target)
+            self.assertEqual(target.read_bytes(), b'new complete pdf')
+
+    def test_presentation_pdf_javascript_bridge_is_explicit_and_bounded(self):
+        nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
+        digest = 'a' * 64
+        self.assertEqual(presentation_pdf_js_request(json.dumps({
+            'nonce': nonce, 'preview_sha256': digest})),
+            {'nonce': nonce, 'preview_sha256': digest})
+        for invalid in ('', '{}', 'null', json.dumps({'nonce': nonce,
+                        'preview_sha256': 'not-a-digest'}), json.dumps({
+                            'nonce': nonce, 'preview_sha256': digest, 'extra': True})):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                presentation_pdf_js_request(invalid)
 
     def test_native_picker_actions_require_fresh_exact_local_capability_url(self):
         origin = 'http://127.0.0.1:4711'
@@ -228,11 +265,17 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(native_action_name(target_url, origin),
             'choose-notebooklm-target')
         self.assertEqual(native_action_request(target_url, origin),
-                         {'action': 'choose-notebooklm-target', 'operation_id': operation})
+                         {'action': 'choose-notebooklm-target', 'nonce': nonce,
+                          'operation_id': operation})
         for action in ('choose-notebooklm-archive', 'choose-project-location'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
-                    f'{origin}/#{action}?nonce={nonce}', origin), {'action': action})
+                    f'{origin}/#{action}?nonce={nonce}', origin),
+                    {'action': action, 'nonce': nonce})
+        for action in ('choose-presentation-pdf', 'export-presentation-pdf'):
+            self.assertEqual(native_action_request(
+                f'{origin}/#{action}?nonce={nonce}', origin),
+                {'action': action, 'nonce': nonce})
         for url in (f'{origin}/#choose-notebooklm-target?nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id=invalid&nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id={operation}&nonce=invalid',

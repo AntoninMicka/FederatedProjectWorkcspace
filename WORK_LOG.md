@@ -5,17 +5,82 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-PRESENTER-PDF-01 — export prezentace a záznamy relací — 2026-10-17
+
+Dávka na větvi `feature/f-m4-presenter-pdf-01`, založené z doručeného
+`develop` `aa7fa26`, dosáhla úrovně **PoC validated**. Feature akceptace je
+uzavřená; jediný PR do `develop` dosud nebyl vytvořen ani sloučen. Implementace
+je v commitech `84c34b5` a `3dd89fe`, závěrečné předávací dokumenty zůstávají
+v lokálním finálním diffu bez commitu a push nebyl proveden.
+
+- [x] [completed] **F-M4-PRESENTER-PDF-01-A — kontrakt relace a reuse
+  (designed).** Omezené schema váže veřejné snapshoty na přesný deck a jeho
+  revizi. Implementace adaptuje `PresentationDocuments`, `Artifacts.save`,
+  existující Workspace transakci a allowlisted renderer; nevytváří druhý volný
+  HTML renderer.
+- [x] [completed] **F-M4-PRESENTER-PDF-01-B — durable zachycení a materializace
+  relace (implemented).** Node-local SQLite journal ukládá pouze potvrzené
+  audience snapshoty. Čisté ukončení vytvoří dokončenou relaci; restart uzavře
+  rozpracovanou relaci jako přerušenou a stabilní artifact/operation ID brání
+  duplicitě po nejistém výsledku projektového commitu.
+- [x] [completed] **F-M4-PRESENTER-PDF-01-C — seznam a mazání v editoru
+  (implemented).** Editor zobrazuje relace vybraného decku, stav, čas a počet
+  stran. Smazání vyžaduje náhled, druhé potvrzení a exact-HEAD kontrolu;
+  odstraní aktuální projektovou verzi, ale zachová Git historii.
+- [x] [completed] **F-M4-PRESENTER-PDF-01-D — bezpečný tisk/PDF
+  (implemented).** Kanonický export používá hlavní `next` linii, relační export
+  přesné uložené audience snapshoty včetně skutečně promítnutých backupů,
+  opakování, závěru a reveal stavů. Oba režimy používají stejný bounded 16:9
+  offline vizuální model a explicitní plán, cíl i potvrzení přepsání.
+- [x] [completed] **F-M4-PRESENTER-PDF-01-E — UI, testy, dokumentace a fyzická
+  akceptace (PoC validated).** Automatické kontrakty, skutečný WebEngine smoke
+  a uživatelský desktopový průchod ověřily dokončené i přerušené relace,
+  kanonický i relační tisk, zrušení, přepsání, vizuální shodu a potvrzené
+  smazání.
+
+### Ověření a recovery
+
+Cílené modelové, storage, UI-policy a atomické publikační testy pokryly oba
+stavy relace, exact public reveal snapshoty, stale HEAD, nejisté potvrzení po
+commitu bez duplicity, potvrzené smazání, stabilní pořadí, vyloučení soukromých
+polí a zachování původního PDF při známém selhání. Úplná sada po posledních
+aplikačních opravách prošla jako **619 testů OK, 27 volitelných testů
+přeskočeno**. Samostatný Qt WebEngine smoke vytvořil dvoustránkový PDF;
+`pdfinfo` potvrdil 2 strany, `1152 × 648 pt` (16:9) a PDF 1.4.
+
+Živá relace zapisuje potvrzený veřejný snapshot do lokálního SQLite journalu
+před oznámením úspěchu. Materializace pak používá jedinou existující
+Workspace/journal/Git/index hranici; před commitem je autoritou journal a po
+commitu lze index obnovit z HEAD. PDF vzniká v jednoznačně pojmenovaném
+dočasném souboru ve stejné složce a cílovou cestu nahradí atomicky až po
+dokončení. Známé selhání ani zrušení cíle původní soubor nemění.
+
+### Fyzická akceptace a hranice rozsahu
+
+Uživatel 2026-10-16 ověřil po úplném restartu desktopu funkční výběr cíle,
+potvrzení a dokončení PDF exportu. Dne 2026-10-17 následně bez hlášeného
+omezení potvrdil: dokončenou relaci se správným počtem stran; kanonické PDF;
+PDF přesného průběhu relace a jeho vizuální shodu s audience výstupem; zrušení
+výběru i potvrzené přepsání existujícího PDF; potvrzené smazání při zachování
+Git historie; a po restartu správně materializovanou přerušenou relaci pouze z
+již promítnutých snapshotů.
+
+Fyzická kontrola během dávky odhalila a implementace opravila odmítnutí
+allowlistovaného lokálního závěrečného slidu, nepředané nonce nativní PDF akci
+a nekompatibilní převod JS objektu v použitém PySide6. Most nyní předává
+explicitní bounded JSON a revaliduje nonce i digest. Mimo rozsah zůstává PPTX,
+obecný reporting, DisclosureEvent, disclosure semafor a širší rozhodovací
+scénář roadmapy 22C.
+
 ## F-M4-PRESENTER-01 — Markdown prezentace jako výstup orchestrace — 2026-10-16
 
 Dávka na větvi `feature/f-m4-presenter-01-markdown-decks`, založené z
 `develop` `6c94047`, začlenila a rozšířila existující presenterový základ z
 `origin/feature/gamepad-demo-presenter`. Dosažená úroveň je **PoC validated**.
-Feature akceptace je uzavřená; jediný PR
-[#68](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/68) do
-`develop` je otevřený a dosud nebyl sloučen. Implementační historie je na
-feature větvi včetně merge `fed649e` a navazujících commitů po `2042efd`;
-závěrečné předávací dokumenty jsou součástí lokálního finálního diffu a bez
-samostatného pokynu nebyly commitnuty ani pushnuty.
+Feature akceptace je uzavřená a jediný PR
+[#68](https://github.com/AntoninMicka/FederatedProjectWorkcspace/pull/68) byl
+doručen do `develop` jako merge commit `aa7fa26`. Implementační historie je na
+feature větvi včetně merge `fed649e` a navazujících commitů po `2042efd`.
 
 - [x] [completed] **F-M4-PRESENTER-01-A — Začlenění a stabilizace základu
   (PoC validated).** Současný desktop zachoval chat, hledání, importy,

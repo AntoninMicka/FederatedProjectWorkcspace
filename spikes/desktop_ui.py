@@ -4,6 +4,7 @@
 """Static same-origin UI; project data arrives through authenticated reads."""
 import json
 import copy
+import re
 import sqlite3
 import subprocess
 from urllib.parse import parse_qs, urlsplit
@@ -177,6 +178,11 @@ def presentation_public_payload(server, request=None):
         state = dict(state, blackout=True)
     elif request and request.get('action') == 'reveal':
         state = dict(state, blackout=False, visible=True)
+    if request and request.get('action') == 'show' and 'slide_id' in request:
+        sessions = getattr(server, 'presentation_sessions', None)
+        session_id = getattr(server, 'presentation_session_id', None)
+        if sessions is not None and session_id is not None:
+            sessions.record(session_id, request['slide_id'], state['ratio'], state['content'])
     server.presentation_public_state = state
     if not state['visible'] or state['blackout']:
         return {'visible': False, 'blackout': True}
@@ -189,9 +195,27 @@ def presentation_status(server, *, start=False):
         profile = getattr(server, 'user_profile', None)
         result['slides'].append(closing_slide(profile.load() if profile else None, result.get('revision')))
         server.presentation_session_deck = copy.deepcopy(result)
+        revision = result.get('revision', '')
+        match = re.fullmatch(r'([0-9a-f]{40,64}):([0-9a-f-]{36})', revision)
+        sessions = getattr(server, 'presentation_sessions', None)
+        project_id = result.get('source_project_id')
+        artifact_id = result.get('source_artifact_id')
+        if sessions is not None and match and project_id and artifact_id:
+            server.presentation_session_id = sessions.start(
+                project_id, artifact_id, revision, result.get('title', 'Prezentace'))
     state = getattr(server, 'presentation_public_state', {})
     result['ratio'] = state.get('ratio', '16:9')
     return result
+
+
+def finish_presentation_session(server):
+    session_id = getattr(server, 'presentation_session_id', None)
+    sessions = getattr(server, 'presentation_sessions', None)
+    if session_id is None or sessions is None:
+        return {'saved': False}
+    artifact_id = sessions.finish(session_id)
+    server.presentation_session_id = None
+    return {'saved': True, 'artifact_id': artifact_id}
 
 
 HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
@@ -646,7 +670,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label>Tapeta PNG <input id="presentation-slide-wallpaper" type="file" accept="image/png"></label><button id="presentation-clear-wallpaper" class="secondary-button" type="button">Odebrat tapetu</button>
 <fieldset><legend>Zařazení a vazby</legend><div class="form-actions"><button id="presentation-slide-up" class="secondary-button" type="button">↑ Dříve</button><button id="presentation-slide-down" class="secondary-button" type="button">↓ Později</button></div><div id="presentation-backup-links"></div></fieldset></section>
 <section class="presentation-editor-preview"><h3>Náhled slidu</h3><div id="presentation-editor-preview" class="presenter-slide-preview"></div><p>Náhled nepřenáší soukromé poznámky do veřejného okna.</p></section></div>
-<div class="presentation-editor-footer"><p id="presentation-editor-status" role="status" aria-live="polite">Otevřete editor.</p><div class="form-actions"><button id="presentation-editor-save" type="button" disabled>Uložit do projektu</button><button id="presentation-editor-use" type="button" disabled>Spustit uloženou prezentaci</button><button id="presentation-editor-presenter" class="secondary-button" type="button">Otevřít presenter</button></div></div></div>
+<section id="presentation-session-section" class="presentation-session-section"><div><h3>Uskutečněné relace</h3><p>Každý záznam obsahuje jen skutečně potvrzené veřejné výstupy.</p></div><ul id="presentation-session-list"></ul><p id="presentation-session-status" role="status"></p></section>
+<div class="presentation-editor-footer"><p id="presentation-editor-status" role="status" aria-live="polite">Otevřete editor.</p><div class="form-actions"><button id="presentation-editor-print" class="secondary-button" type="button" disabled>Vytisknout prezentaci</button><button id="presentation-editor-save" type="button" disabled>Uložit do projektu</button><button id="presentation-editor-use" type="button" disabled>Spustit uloženou prezentaci</button><button id="presentation-editor-presenter" class="secondary-button" type="button">Otevřít presenter</button></div></div></div>
+<dialog id="presentation-print-dialog"><form method="dialog"><h2>Export prezentace do PDF</h2><pre id="presentation-print-details"></pre><p id="presentation-print-warning"></p><p id="presentation-print-target">Cíl PDF zatím není vybraný.</p><button id="presentation-print-choose" type="button">Vybrat cílový PDF soubor</button><label class="confirm"><input id="presentation-print-confirm" type="checkbox" disabled> Potvrzuji uvedený režim, zdrojovou revizi, pořadí stran, cíl a případné přepsání.</label><div class="form-actions"><button id="presentation-print-run" type="button" disabled>Vytvořit PDF</button><button value="cancel" class="secondary-button">Zrušit</button></div></form></dialog>
+<div id="presentation-print-view" aria-hidden="true"></div>
 <div id="metadata-panel" role="tabpanel" aria-labelledby="metadata-tab" hidden><h2>Návrh popisu a štítků</h2>
 <p>Vyberte jeden artefakt. Návrh projekt nezmění, dokud nepotvrdíte konkrétní pole.</p>
 <label for="metadata-artifact">Artefakt</label><select id="metadata-artifact"></select>
@@ -802,7 +829,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
-#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}
+#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+@media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 @media(max-width:640px){
@@ -1298,7 +1326,14 @@ function openPresenter(){
  document.body.classList.add('presenter-active');document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
 }
-function closePresenter(){location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}}
+async function closePresenter(){
+ let saved=false;
+ try{const result=await projectRequest('/v1/presentation/status',{action:'end'},120000);saved=result.saved;}
+ catch(error){presenterStatus.textContent=`Záznam relace nelze uzavřít: ${error.message}`;return;}
+ location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;
+ if(activeProject){const projectId=activeProject.id;projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(saved){await openRegisteredProject(projectId);await loadPresentationEditor(presentationEditorArtifact,false);sidebarPresentationStatus.textContent='Relace byla uložena do projektu.';}}
+ else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+}
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
 presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
@@ -2131,8 +2166,12 @@ const presentationEditorWorkspace=document.querySelector('#presentation-editor-w
 const presentationEditorStatus=document.querySelector('#presentation-editor-status');
 const presentationEditorSave=document.querySelector('#presentation-editor-save');
 const presentationEditorUse=document.querySelector('#presentation-editor-use');
+const presentationEditorPrint=document.querySelector('#presentation-editor-print');
+const presentationSessionList=document.querySelector('#presentation-session-list');
+const presentationSessionStatus=document.querySelector('#presentation-session-status');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
+let presentationPrintPlan=null,presentationPrintTarget=null;
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
  return {id:crypto.randomUUID(),kind,title:'Nový slide',bullets:[],notes:'',background:template.background,foreground:template.foreground,wallpaper:'',next:null,backups:[],repeat:false,reveal:'all',layout,column_break:0};
@@ -2159,6 +2198,7 @@ function updatePresentationEditorEnabled(){
  presentationEditorSave.disabled=!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
  presentationEditorSave.textContent=presentationEditorAttempt?'Opakovat stejné uložení':'Uložit do projektu';
  presentationEditorUse.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
+ presentationEditorPrint.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
  document.querySelector('#presentation-clear-wallpaper').disabled=frozen||!ready||!presentationCurrentSlide()?.wallpaper;
 }
 function presentationEditorChanged(rerender=true){
@@ -2190,8 +2230,41 @@ function renderPresentationEditor(){
  if(!candidates.length)links.textContent=slide.kind==='main'?'Zatím nejsou vytvořené žádné backupy.':'Zatím nejsou dostupné hlavní slidy.';
  renderSlideVisual(document.querySelector('#presentation-editor-preview'),presentationVisualSlide(slide));
  const position=order.indexOf(slide.id);document.querySelector('#presentation-slide-up').disabled=slide.kind!=='main'||position<=0;document.querySelector('#presentation-slide-down').disabled=slide.kind!=='main'||position<0||position===order.length-1;
- presentationEditorLoading=false;updatePresentationEditorEnabled();
+ presentationEditorLoading=false;updatePresentationEditorEnabled();renderPresentationSessions();
 }
+function presentationSessionsForDeck(){return (presentationEditorView?.sessions||[]).filter(row=>row.session?.source_artifact_id===presentationEditorArtifact);}
+function renderPresentationSessions(){
+ presentationSessionList.replaceChildren();const rows=presentationSessionsForDeck();
+ for(const row of rows){const item=document.createElement('li'),description=document.createElement('div'),title=document.createElement('strong'),detail=document.createElement('small'),actions=document.createElement('div'),print=document.createElement('button'),remove=document.createElement('button'),session=row.session;
+  title.textContent=new Date(session.started_at).toLocaleString('cs-CZ');detail.textContent=`${session.outcome==='completed'?'Dokončená':'Přerušená'} · ${session.pages.length} stran · ${session.source_revision.slice(0,12)}`;description.append(title,detail);actions.className='form-actions';print.type='button';print.textContent='Vytisknout';print.disabled=!session.pages.length;remove.type='button';remove.className='danger-button';remove.textContent='Smazat';print.addEventListener('click',()=>preparePresentationPrint(row.id));remove.addEventListener('click',()=>deletePresentationSession(row));actions.append(print,remove);item.append(description,actions);presentationSessionList.append(item);
+ }
+ presentationSessionStatus.textContent=rows.length?`Počet zaznamenaných relací: ${rows.length}.`:'Tato prezentace zatím nemá zaznamenanou relaci.';
+}
+async function deletePresentationSession(row){
+ if(!activeProject||!window.confirm(`Smazat záznam relace z ${new Date(row.session.started_at).toLocaleString('cs-CZ')}? Git historie zůstane zachovaná.`))return;
+ try{const preview=await projectRequest('/v1/artifacts/delete/preview',{project_id:activeProject.id,artifact_id:row.id,expected_head:presentationEditorView.commit_id});
+  if(!window.confirm(`Potvrďte odstranění záznamu „${preview.title}“ z commitu ${preview.base_head.slice(0,12)}.`))return;
+  await projectRequest('/v1/artifacts/delete/confirm',{project_id:activeProject.id,artifact_id:row.id,base_head:preview.base_head,preview_sha256:preview.preview_sha256,operation_id:crypto.randomUUID()},120000);const projectId=activeProject.id,deckId=presentationEditorArtifact;await openRegisteredProject(projectId);await openPresentationEditor(deckId);presentationSessionStatus.textContent='Záznam relace byl odstraněn; Git historie zůstala zachovaná.';
+ }catch(error){presentationSessionStatus.textContent=error.message;}
+}
+async function preparePresentationPrint(sessionArtifactId=null){
+ if(!activeProject||!presentationEditorArtifact)return;
+ try{const request={project_id:activeProject.id,artifact_id:presentationEditorArtifact,expected_head:presentationEditorView.commit_id};if(sessionArtifactId)request.session_artifact_id=sessionArtifactId;
+  presentationPrintPlan=await projectRequest('/v1/presentations/export/preview',request);presentationPrintPlan.nonce=crypto.randomUUID();presentationPrintTarget=null;const count=presentationPrintPlan.pages.length,mode=presentationPrintPlan.mode==='canonical'?'Kanonická prezentace':'Uskutečněná relace';
+  document.querySelector('#presentation-print-details').textContent=`Režim: ${mode}\nPrezentace: ${presentationPrintPlan.title}\nZdrojová revize: ${presentationPrintPlan.source_revision}\nPočet stran: ${count}\nPořadí: ${presentationPrintPlan.pages.map((page,index)=>`${index+1}. ${page.title}`).join(' | ')||'žádné strany'}`;
+  document.querySelector('#presentation-print-warning').textContent=count?'Soukromé poznámky a nepromítnutý obsah nejsou součástí exportu.':'Prázdnou relaci nelze vytisknout.';document.querySelector('#presentation-print-target').textContent='Cíl PDF zatím není vybraný.';document.querySelector('#presentation-print-confirm').checked=false;document.querySelector('#presentation-print-confirm').disabled=true;document.querySelector('#presentation-print-run').disabled=true;document.querySelector('#presentation-print-choose').disabled=!count;document.querySelector('#presentation-print-dialog').showModal();
+ }catch(error){presentationEditorStatus.textContent=error.message;}
+}
+function renderPresentationPrint(){const target=document.querySelector('#presentation-print-view');document.body.append(target);target.replaceChildren();for(const page of presentationPrintPlan.pages){const slide=document.createElement('section');slide.className='print-slide presenter-slide-preview';renderSlideVisual(slide,page);target.append(slide);}}
+presentationEditorPrint.addEventListener('click',()=>preparePresentationPrint());
+document.querySelector('#presentation-print-choose').addEventListener('click',()=>{if(presentationPrintPlan?.pages.length)location.hash=`choose-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
+function presentationPdfTargetRequest(){return presentationPrintPlan?.pages.length?{nonce:presentationPrintPlan.nonce,preview_sha256:presentationPrintPlan.preview_sha256}:null;}
+function setPresentationPdfTarget(result){if(!presentationPrintPlan||result?.nonce!==presentationPrintPlan.nonce)return;presentationPrintTarget=result;document.querySelector('#presentation-print-target').textContent=`Cíl: ${result.path}${result.exists?' — existující soubor bude atomicky přepsán':' — nový soubor'}`;document.querySelector('#presentation-print-confirm').checked=false;document.querySelector('#presentation-print-confirm').disabled=false;document.querySelector('#presentation-print-run').disabled=true;}
+function setPresentationPdfNativeError(message){document.querySelector('#presentation-print-warning').textContent=message||'Nativní export se nezdařil.';document.querySelector('#presentation-print-run').disabled=true;}
+function presentationPdfExportRequest(){if(!presentationPrintPlan||!presentationPrintTarget||!document.querySelector('#presentation-print-confirm').checked)return null;return {nonce:presentationPrintPlan.nonce,preview_sha256:presentationPrintPlan.preview_sha256};}
+function presentationPdfExportFinished(result){if(!presentationPrintPlan||result?.nonce!==presentationPrintPlan.nonce)return;if(result.success){document.querySelector('#presentation-print-dialog').close();presentationEditorStatus.textContent=`PDF bylo atomicky uloženo: ${presentationPrintTarget.path}`;presentationPrintPlan=null;presentationPrintTarget=null;}else{document.querySelector('#presentation-print-warning').textContent=result.error||'PDF se nepodařilo vytvořit.';document.querySelector('#presentation-print-run').disabled=false;}}
+document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
+document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
 }
@@ -4050,6 +4123,7 @@ class DesktopHandler(Handler):
         '/v1/gamepad/status', '/v1/presentation/status',
         '/v1/gamepad/settings',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
+        '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
@@ -4109,18 +4183,28 @@ class DesktopHandler(Handler):
                     deck = service.select(request['project_id'], request['artifact_id'], request['expected_head'])
                     self.server.presentation_selected_deck = deck
                     return self.reply(200, {'deck': deck})
+                if (self.path == '/v1/presentations/export/preview'
+                        and request.keys() in ({'project_id', 'artifact_id', 'expected_head'},
+                                               {'project_id', 'artifact_id', 'expected_head',
+                                                'session_artifact_id'})):
+                    session_id = request.get('session_artifact_id')
+                    return self.reply(200, service.export_preview(
+                        request['project_id'], request['artifact_id'], request['expected_head'],
+                        session_artifact_id=session_id))
                 return self.send_error(400)
             except (ValueError, TypeError, KeyError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/presentation/status' and (request == {} or isinstance(request, dict)):
             try:
+                if request.get('action') == 'end':
+                    return self.reply(200, finish_presentation_session(self.server))
                 return self.reply(200, presentation_status(self.server, start=request.get('action') == 'start'))
-            except (ValueError, OSError, sqlite3.Error, ImportError):
-                return self.reply(422, {'error': 'Prezentaci nelze připravit. Ověřte profil uživatele a instalaci Segno.'})
+            except (ValueError, OSError, sqlite3.Error, ImportError) as exc:
+                return self.reply(422, {'error': str(exc) or 'Prezentaci nelze připravit.'})
         if self.path == '/v1/presentation/control' and isinstance(request, dict):
             try:
                 return self.reply(200, presentation_public_payload(self.server, request))
-            except ValueError as exc:
+            except (ValueError, OSError, sqlite3.Error) as exc:
                 return self.reply(409, {'error': str(exc)})
         if self.path == '/v1/presentation/public' and request == {}:
             return self.reply(200, presentation_public_payload(self.server))
