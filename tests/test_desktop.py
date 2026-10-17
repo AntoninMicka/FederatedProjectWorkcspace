@@ -26,6 +26,7 @@ from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
 from spikes.presentation_documents import PresentationDocuments
+from spikes.public_source import PublicSourceRejected, PublicSourceUnknown
 from spikes.project_creation import ProjectCreation
 from tests import test_local_api
 
@@ -54,7 +55,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('url.textContent=source.url', JS)
         self.assertIn('snippet.textContent=source.snippet', JS)
         self.assertNotIn('.href=source.url', JS)
-        self.assertIn('renderSearchWorkflow(card,projection.search_workflow)', JS)
+        self.assertIn('renderSearchWorkflow(card,projection.search_workflow,projection)', JS)
         self.assertIn('Zkontrolovat další dotaz:', JS)
         self.assertIn("projection.outcome?.kind==='web-search'", JS)
         self.assertIn("'Zpřesněte další kolo hledání…'", JS)
@@ -63,9 +64,40 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('Kolo není konečné. Napište do pole dole vlastní zpřesnění', JS)
         self.assertIn('Finálnost je hodnocení modelu', JS)
         self.assertIn('query===null && projection.search_preview', JS)
+        self.assertIn('id="public-source-preview"', HTML)
+        self.assertIn("existing?'Připravit nové načtení':'Načíst stránku'", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/preview',request)", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/confirm'", JS)
+        self.assertIn("projectRequest('/v1/tasks/public-source/result'", JS)
+        self.assertIn("result.querySelector('pre').textContent=fetched.text", JS)
+        self.assertIn('do projektu nebylo nic zapsáno', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
-                         '/v1/tasks/search/preview', '/v1/tasks/search/confirm'}
+                         '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
+                         '/v1/tasks/public-source/preview',
+                         '/v1/tasks/public-source/confirm',
+                         '/v1/tasks/public-source/result'}
                         <= DesktopHandler.post_paths)
+
+    def test_public_source_diagnostics_distinguish_rejected_and_unknown(self):
+        driver = test_local_api.LocalAPITests()
+        cases = ((PublicSourceRejected('robots', code='robots-disallowed'), 422,
+                  'rejected', 'robots.txt'),
+                 (PublicSourceUnknown('lost', code='response-unknown'), 409,
+                  'unknown', 'automaticky opakovat'))
+        for error, status, outcome, message in cases:
+            class Service:
+                def task_public_source_confirm(self, _request):
+                    raise error
+            with self.subTest(outcome=outcome), running_api(
+                    'http', handler=DesktopHandler) as server:
+                server.chat_service = Service()
+                response = driver.request(server, path='/v1/tasks/public-source/confirm',
+                                          body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(f' {status} '.encode(), head)
+            payload = json.loads(body)
+            self.assertEqual(payload['outcome'], outcome)
+            self.assertIn(message, payload['error'])
 
     def test_presentation_task_has_exact_diff_and_separate_confirmation(self):
         self.assertIn("outcome.kind==='presentation-draft'?'Návrh prezentace'", JS)

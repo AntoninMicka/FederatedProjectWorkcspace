@@ -21,6 +21,8 @@ from spikes.presentation_closing import closing_slide
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
+from spikes.public_source import (PublicSourceError, PublicSourceRejected,
+                                  PublicSourceUnknown, PublicSourceUnsupported)
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
 from spikes.source_import import Sources
@@ -577,6 +579,13 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label class="confirm"><input id="search-confirm-check" type="checkbox"> Potvrzuji odeslání zobrazeného dotazu na uvedený SearXNG endpoint.</label>
 <button id="search-confirm" type="button" disabled>Vyhledat a zpracovat přes Ollamu</button>
 <button id="search-cancel" class="secondary-button" type="button">Zrušit</button>
+</section>
+<section id="public-source-preview" hidden aria-label="Náhled načtení veřejného zdroje">
+<h3>Přesný plán načtení veřejného zdroje</h3><pre id="public-source-preview-content"></pre>
+<label class="confirm"><input id="public-source-confirm-check" type="checkbox"> Potvrzuji oba zobrazené GET účinky, cílovou URL, privacy a limity.</label>
+<button id="public-source-confirm" type="button" disabled>Načíst vybranou stránku</button>
+<button id="public-source-cancel" class="secondary-button" type="button">Zrušit</button>
+<div id="public-source-result" hidden><h3>Inertní text veřejného zdroje</h3><pre></pre><small></small></div>
 </section></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
@@ -761,6 +770,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
+#public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}
 #backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
  background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
@@ -2637,7 +2647,7 @@ const chatStreamProgressText=document.querySelector('#chat-stream-progress-text'
 const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,searchRecoveryBinding=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false;
@@ -2814,7 +2824,7 @@ function taskButton(label,handler,secondary=false){
  const button=document.createElement('button');button.type='button';button.textContent=label;
  if(secondary)button.className='secondary-button';button.addEventListener('click',handler);return button;
 }
-function renderSearchWorkflow(container,workflow){
+function renderSearchWorkflow(container,workflow,projection=null){
  if(!workflow)return;
  const budget=document.createElement('p');budget.className='search-budget';
  const used=workflow.budget_used || {},limits=workflow.budget || {};
@@ -2831,7 +2841,18 @@ function renderSearchWorkflow(container,workflow){
    name.textContent=source.title;const url=document.createElement('code');url.textContent=source.url;
    const snippet=document.createElement('small');snippet.textContent=source.snippet;
    const sourceId=document.createElement('small');sourceId.textContent=source.source_id;
-   row.append(name,url,snippet,sourceId);sources.append(row);}round.append(sources);
+   row.append(name,url,snippet,sourceId);
+   if(projection && typeof source.url==='string' && source.url.startsWith('https://')){
+    const existing=(projection.public_sources || []).filter(
+      value=>value.source_id===source.source_id).at(-1);
+    if(existing?.state==='succeeded')row.append(taskButton('Zobrazit načtený text',
+      ()=>showPublicSource(projection.task_id,existing.run_id),true));
+    else {if(existing){const state=document.createElement('small');
+      state.textContent=`Reader: ${existing.state}${existing.error_code?' · '+existing.error_code:''}`;row.append(state);}
+     row.append(taskButton(existing?'Připravit nové načtení':'Načíst stránku',
+      ()=>preparePublicSource(projection,item.search_id,source),true));}
+   }
+   sources.append(row);}round.append(sources);
   if(item.evaluation){const evaluation=document.createElement('div');evaluation.className='search-evaluation';
    const assessment=document.createElement('strong');assessment.textContent=`Hodnocení modelu: ${item.evaluation.assessment}`;
    const answer=document.createElement('p');answer.textContent=item.evaluation.answer;
@@ -2933,7 +2954,7 @@ function renderTaskOutcomes(){
   }else if(outcome.kind==='web-search'){
    const purpose=document.createElement('p');purpose.textContent=outcome.purpose;card.append(purpose);
    const query=document.createElement('pre');query.textContent=outcome.query;card.append(query);
-   renderSearchWorkflow(card,projection.search_workflow);
+   renderSearchWorkflow(card,projection.search_workflow,projection);
    const actions=document.createElement('div');actions.className='task-actions';
    const workflow=projection.search_workflow,latest=workflow?.rounds?.at(-1);
    if(!workflow || !latest?.evaluation){
@@ -2952,7 +2973,7 @@ function renderTaskOutcomes(){
    const answer=document.createElement('div');answer.className='chat-message assistant';
    answer.textContent=outcome.content;card.append(answer);
    renderSearchWorkflow(card,{rounds:outcome.rounds,budget:outcome.budget,
-    budget_used:outcome.budget_used});
+    budget_used:outcome.budget_used},projection);
    const caveat=document.createElement('small');caveat.textContent=
     `Finálnost je hodnocení modelu, nikoli záruka správnosti · důvod ukončení: ${outcome.completion_reason}`;card.append(caveat);
    const detail=document.createElement('small');detail.textContent=
@@ -3052,6 +3073,54 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
    'Řízené hledání a syntéza jsou dokončené.';
  }catch(error){chatOperationStatus.textContent=error.message;
   offerSearchRecovery(error,preview.binding);event.currentTarget.disabled=false;}
+});
+async function preparePublicSource(projection,searchId,source){
+ const request={task_id:projection.task_id,search_id:searchId,
+  source_id:source.source_id,run_id:crypto.randomUUID()};
+ chatOperationStatus.textContent='Připravuji přesný plán načtení vybraného zdroje…';
+ try{const preview=await projectRequest('/v1/tasks/public-source/preview',request);
+  pendingPublicSourcePreview={request,preview};
+  document.querySelector('#public-source-preview-content').textContent=JSON.stringify(preview,null,2);
+  document.querySelector('#public-source-preview').hidden=false;
+  document.querySelector('#public-source-result').hidden=true;
+  document.querySelector('#public-source-confirm-check').checked=false;
+  document.querySelector('#public-source-confirm').disabled=true;
+  chatOperationStatus.textContent='Zkontrolujte robots preflight, cílovou URL, privacy a limity.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
+function displayPublicSourceResult(fetched){
+ const panel=document.querySelector('#public-source-preview');panel.hidden=false;
+ const result=document.querySelector('#public-source-result');
+ result.querySelector('pre').textContent=fetched.text;
+ result.querySelector('small').textContent=
+  `run ${fetched.run_id} · SHA-256 ${fetched.result.text_sha256} · ${fetched.result.text_length} znaků · do projektu nebylo nic zapsáno`;
+ result.hidden=false;
+}
+async function showPublicSource(taskId,runId){
+ chatOperationStatus.textContent='Načítám ověřenou lokální projekci veřejného zdroje…';
+ try{const fetched=await projectRequest('/v1/tasks/public-source/result',{
+   task_id:taskId,run_id:runId});displayPublicSourceResult(fetched);
+  chatOperationStatus.textContent='Zobrazuji durable inertní text; síť nebyla znovu použita.';
+ }catch(error){chatOperationStatus.textContent=error.message;}
+}
+document.querySelector('#public-source-confirm-check').addEventListener('change',event=>{
+ document.querySelector('#public-source-confirm').disabled=
+  !event.currentTarget.checked || !pendingPublicSourcePreview;
+});
+document.querySelector('#public-source-cancel').addEventListener('click',()=>{
+ pendingPublicSourcePreview=null;document.querySelector('#public-source-preview').hidden=true;
+ document.querySelector('#public-source-confirm-check').checked=false;
+});
+document.querySelector('#public-source-confirm').addEventListener('click',async event=>{
+ if(!pendingPublicSourcePreview)return;event.currentTarget.disabled=true;
+ const {request,preview}=pendingPublicSourcePreview;
+ chatOperationStatus.textContent='Ověřuji robots.txt a načítám jednu bounded statickou stránku…';
+ try{const fetched=await projectRequest('/v1/tasks/public-source/confirm',{
+   ...request,preview_sha256:preview.preview_sha256,approved:true},65000);
+  displayPublicSourceResult(fetched);pendingPublicSourcePreview=null;
+  document.querySelector('#public-source-confirm-check').checked=false;
+  chatOperationStatus.textContent='Veřejný zdroj byl načten jako inertní nedůvěryhodný text.';
+ }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  hideSearchRecovery();
@@ -4134,6 +4203,8 @@ class DesktopHandler(Handler):
         '/v1/tasks/external/preview',
         '/v1/tasks/external/confirm', '/v1/tasks/external/cancel',
         '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
+        '/v1/tasks/public-source/preview', '/v1/tasks/public-source/confirm',
+        '/v1/tasks/public-source/result',
         '/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output',
         '/v1/workflows/status', '/v1/workflows/prepare',
         '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/prepare',
@@ -4391,6 +4462,15 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.task_search_preview(request))
             if self.path == '/v1/tasks/search/confirm' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.task_search_confirm(request))
+            if self.path == '/v1/tasks/public-source/preview' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.task_public_source_preview(request))
+            if self.path == '/v1/tasks/public-source/confirm' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.task_public_source_confirm(request))
+            if self.path == '/v1/tasks/public-source/result' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.task_public_source_result(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/preferences' and isinstance(request, dict):
@@ -4597,6 +4677,24 @@ class DesktopHandler(Handler):
                                    'diagnostic': exc.code, 'outcome': 'failed',
                                    'retry': ('configure-search' if exc.code == 'not-configured'
                                              else 'new-search')})
+        except PublicSourceUnknown as exc:
+            return self.reply(409, {'error': 'Výsledek načtení veřejného zdroje není známý. '
+                                   'Původní run se nesmí automaticky opakovat.',
+                                   'diagnostic': exc.code, 'outcome': 'unknown',
+                                   'retry': 'new-fetch'})
+        except (PublicSourceUnsupported, PublicSourceRejected, PublicSourceError) as exc:
+            state = getattr(exc, 'state', 'failed')
+            messages = {'robots-disallowed': 'robots.txt načtení této stránky zakazuje.',
+                'robots-unavailable': 'robots.txt nyní neumožňuje bezpečně rozhodnout.',
+                'redirect-requires-approval': ('Zdroj přesměrovává jinam. Nový cíl vyžaduje '
+                                               'samostatný náhled a potvrzení.'),
+                'authentication-required': 'Zdroj vyžaduje přihlášení, které reader nepodporuje.',
+                'unsupported-mime': 'Zdroj není podporovaný statický HTML nebo text.',
+                'unsupported-charset': 'Zdroj nepoužívá podporované UTF-8 kódování.',
+                'overloaded': 'Zdroj je přetížený; automatické opakování nebylo provedeno.'}
+            return self.reply(422 if state in {'unsupported', 'rejected'} else 502,
+                {'error': messages.get(exc.code, 'Veřejný zdroj nelze bezpečně načíst.'),
+                 'diagnostic': exc.code, 'outcome': state, 'retry': 'new-fetch'})
         except DriveAccessError:
             return self.reply(502, {'error': 'Google Drive není dostupný nebo byl přístup odvolán. '
                                    'Projekt nebyl změněn.'})

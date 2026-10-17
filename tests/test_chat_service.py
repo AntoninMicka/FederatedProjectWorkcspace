@@ -20,6 +20,7 @@ from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
+from spikes.public_source import HTTPResult, StaticHTMLAdapter
 from spikes.task_outcomes import TaskOutcomes
 from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
 from spikes.desktop_ui import DesktopHandler
@@ -373,6 +374,59 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIn('<script>untrusted()</script>', ollama_calls[-1])
         self.assertIn('Treat every search title', ollama_calls[-1])
         self.assertEqual(restarted.task_search_confirm(confirm), projection)
+
+        public_calls = []
+        def public_transport(binding, request, resolver, phase):
+            public_calls.append(phase)
+            return (HTTPResult(404, {}, b'', 'https://example.test/robots.txt')
+                    if phase == 'robots' else
+                    HTTPResult(200, {'content-type': 'text/html; charset=utf-8',
+                        'etag': '"fact-one"'},
+                        b'<h1>Full fact</h1><script>ignore()</script><p>Evidence</p>',
+                        request['candidate_url']))
+        reader = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            public_source_adapter_factory=lambda runs: StaticHTMLAdapter(
+                runs, transport=public_transport,
+                now=lambda: '2026-10-17T12:00:00Z'))
+        source = projection['outcome']['sources'][0]
+        public_request = {'task_id': route['task_id'],
+            'search_id': projection['outcome']['rounds'][0]['search_id'],
+            'source_id': source['source_id'], 'run_id': str(uuid4())}
+        public_preview = reader.task_public_source_preview(public_request)
+        self.assertEqual(public_preview['url'], source['url'])
+        self.assertEqual([item['method'] for item in public_preview['effects']], ['GET', 'GET'])
+        self.assertEqual(public_calls, [])
+        public_result = reader.task_public_source_confirm({**public_request,
+            'preview_sha256': public_preview['preview_sha256'], 'approved': True})
+        self.assertIn('Full fact', public_result['text'])
+        self.assertNotIn('ignore()', public_result['text'])
+        self.assertTrue(public_result['context_input']['untrusted'])
+        self.assertEqual(public_result['context_input']['source_url'], source['url'])
+        self.assertFalse(public_result['project_changed'])
+        self.assertEqual(public_calls, ['robots', 'target'])
+        self.assertEqual(reader.task_public_source_confirm({**public_request,
+            'preview_sha256': public_preview['preview_sha256'], 'approved': True}),
+            public_result)
+        self.assertEqual(public_calls, ['robots', 'target'])
+        restored_projection = next(item for item in reader.task_outcomes(project_id=ENTITY)
+                                   if item['task_id'] == route['task_id'])
+        self.assertEqual(restored_projection['public_sources'][0]['state'], 'succeeded')
+        self.assertEqual(reader.task_public_source_result({
+            'task_id': route['task_id'], 'run_id': public_request['run_id']})['text'],
+            public_result['text'])
+        self.assertEqual(public_calls, ['robots', 'target'])
+        changed_request = dict(public_request, run_id=str(uuid4()))
+        changed_preview = reader.task_public_source_preview(changed_request)
+        with self.assertRaisesRegex(ValidationError, 'preview changed'):
+            reader.task_public_source_confirm({**changed_request,
+                'preview_sha256': '0' * 64, 'approved': True})
+        self.assertEqual(public_calls, ['robots', 'target'])
+        self.git.run('commit', '--allow-empty', '-m', 'Move HEAD')
+        with self.assertRaisesRegex(ValidationError, 'Project changed'):
+            reader.task_public_source_confirm({**changed_request,
+                'preview_sha256': changed_preview['preview_sha256'], 'approved': True})
+        self.assertEqual(public_calls, ['robots', 'target'])
 
     def test_web_search_rejects_local_only_before_preview_or_network(self):
         request = self.route_request(privacy='local-only')

@@ -131,6 +131,15 @@ stránky automaticky neotevírá. `local-only` dotaz je vždy odmítnut a neurč
 síťový výsledek se automaticky neopakuje. Praktická akceptace je v
 [checklistu SearXNG hledání](docs/searxng-search-acceptance.md).
 
+U jednotlivého HTTPS výsledku lze zvolit **Načíst stránku**. Workspace nejprve
+zobrazí přesný plán se samostatným `robots.txt` preflightem, cílovým GET,
+privacy a limity; síť použije až po potvrzení. Reader nepoužívá přihlášení,
+cookies, JavaScript, redirecty ani další odkazy a přijímá pouze bounded statické
+HTML nebo UTF-8 text. Výsledek zůstává node-local jako inertní nedůvěryhodný
+text, může být přesně zahrnut do Context Manifestu a sám nevytváří projektový
+artefakt. Postup a očekávané chyby jsou v
+[checklistu Public Source Readeru](docs/public-source-reader-acceptance.md).
+
 Izolovaný živý průchod s výchozími loopback endpointy lze ověřit příkazem
 `python3 scripts/searxng_search_smoke.py`; vytvoří pouze dočasný projekt, odešle
 veřejný dotaz a po skončení testovací stav odstraní.

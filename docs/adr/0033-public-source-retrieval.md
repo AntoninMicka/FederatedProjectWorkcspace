@@ -6,7 +6,8 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0033 — Bounded získání veřejného zdroje
 
 Datum: 2026-10-17. Stav: přijato jako návrhová hranice
-`F-M3-PUBLIC-SOURCES-01`; implementace čeká.
+`F-M3-PUBLIC-SOURCES-01`; první řez implementuje
+`F-M3-PUBLIC-SOURCE-READER-01` na vlastní feature větvi.
 
 ## Kontext
 

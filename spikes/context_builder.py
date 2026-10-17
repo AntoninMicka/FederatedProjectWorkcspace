@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import base64
 import hashlib
 import json
+import re
 from types import MappingProxyType
 
 from spikes.configuration import committed_project
@@ -81,6 +82,19 @@ class AdHocInput:
 
 
 @dataclass(frozen=True)
+class PublicSourceInput:
+    run_id: str
+    content: bytes
+    privacy: str
+    adapter: str
+    adapter_revision: str
+    raw_sha256: str
+    text_sha256: str
+    source_url: str
+    required: bool = True
+
+
+@dataclass(frozen=True)
 class ConversationSelection:
     thread_id: str
     thread_revision: int
@@ -145,10 +159,12 @@ class ContextBuilder:
         self.project_id = project_id
 
     def prepare(self, *, manifest_id, run_id, authority, target, project_inputs=(),
-                ad_hoc_inputs=(), omitted=(), conversation=None, task=None):
+                ad_hoc_inputs=(), public_source_inputs=(), omitted=(),
+                conversation=None, task=None):
         uuid(manifest_id); uuid(run_id)
         authority.validate(); target.validate()
-        require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple),
+        require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple)
+                and isinstance(public_source_inputs, tuple),
                 'Inputs must be immutable tuples')
         require(isinstance(omitted, tuple), 'Omissions must be an immutable tuple')
         if conversation is not None:
@@ -158,10 +174,12 @@ class ContextBuilder:
             task.validate()
         with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
-                                        project_inputs, ad_hoc_inputs, omitted, conversation, task)
+                                        project_inputs, ad_hoc_inputs, public_source_inputs,
+                                        omitted, conversation, task)
 
     def _prepare_locked(self, db, manifest_id, run_id, authority, target,
-                        project_inputs, ad_hoc_inputs, omitted, conversation, task):
+                        project_inputs, ad_hoc_inputs, public_source_inputs,
+                        omitted, conversation, task):
         if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
         self.workspace._branch()
@@ -192,6 +210,32 @@ class ContextBuilder:
             records.append(dict(input_id=choice.entity_id, source='project', required=choice.required,
                                 path=path, privacy=meta['privacy'], size=len(raw), sha256=_digest(raw)))
             parts.append(dict(input_id=choice.entity_id, content_b64=base64.b64encode(raw).decode()))
+        for choice in public_source_inputs:
+            require(isinstance(choice, PublicSourceInput), 'Invalid public source input')
+            uuid(choice.run_id)
+            require(type(choice.content) is bytes and len(choice.content) <= MAX_FILE,
+                    'Invalid or oversized public source input')
+            require(choice.privacy in PRIVACY - {'local-only'}
+                    and type(choice.required) is bool and choice.run_id not in seen,
+                    'Duplicate or invalid public source input')
+            for value, label in ((choice.adapter, 'public source adapter'),
+                                 (choice.adapter_revision, 'public source adapter revision'),
+                                 (choice.source_url, 'public source URL')):
+                _text(value, label)
+            require(bool(re.fullmatch(r'[0-9a-f]{64}', choice.raw_sha256))
+                    and bool(re.fullmatch(r'[0-9a-f]{64}', choice.text_sha256))
+                    and choice.text_sha256 == _digest(choice.content),
+                    'Public source input hash mismatch')
+            seen.add(choice.run_id); total += len(choice.content)
+            require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
+            records.append(dict(input_id=choice.run_id, source='public-source',
+                required=choice.required, privacy=choice.privacy, size=len(choice.content),
+                sha256=choice.text_sha256, run_id=choice.run_id, adapter=choice.adapter,
+                adapter_revision=choice.adapter_revision, raw_sha256=choice.raw_sha256,
+                text_sha256=choice.text_sha256, source_url=choice.source_url,
+                untrusted=True))
+            parts.append(dict(input_id=choice.run_id,
+                              content_b64=base64.b64encode(choice.content).decode()))
         for choice in ad_hoc_inputs:
             require(isinstance(choice, AdHocInput), 'Invalid ad-hoc input')
             uuid(choice.input_id)
@@ -218,7 +262,7 @@ class ContextBuilder:
         payload_value = dict(schema_version=1, inputs=parts)
         if conversation is not None:
             end = -1 if task is not None and task.focus_input_id is not None else None
-            expected_records = records[len(project_inputs):end]
+            expected_records = records[len(project_inputs) + len(public_source_inputs):end]
             require(conversation.message_ids == tuple(
                 row['input_id'] for row in expected_records),
                     'Conversation selection must match included input order')
@@ -230,7 +274,7 @@ class ContextBuilder:
                 require(records[-1]['input_id'] == task.focus_input_id
                         and sum(row['input_id'] == task.focus_input_id for row in records) == 1,
                         'Task focus must be the final included input')
-                require(len(records) == len(project_inputs)
+                require(len(records) == len(project_inputs) + len(public_source_inputs)
                         + (len(conversation.message_ids) if conversation else 0) + 1,
                         'Task focus must be the only additional input')
             payload_value['task'] = dict(role_id=task.role_id,

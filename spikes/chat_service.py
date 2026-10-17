@@ -11,7 +11,7 @@ import re
 import stat
 from types import MappingProxyType
 import unicodedata
-from uuid import uuid4
+from uuid import UUID, uuid4, uuid5
 
 from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
@@ -37,6 +37,10 @@ from spikes.project_creation import ProjectCreation
 from spikes.presentation_documents import PresentationDocuments
 from spikes.presentation_proposals import (materialize_presentation_proposal,
                                            presentation_approval_preview)
+from spikes.public_source import (MAX_COMPRESSION_RATIO, MAX_DECODED_BYTES,
+    MAX_TEXT_CHARS, MAX_WIRE_BYTES,
+    PublicSourceBinding, PublicSourceRequest, PublicSourceRuns, StaticHTMLAdapter,
+    normalize_url, url_origin)
 from spikes.task_outcomes import TaskOutcomes
 from spikes.thread_lifecycle import ThreadLifecycle
 from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
@@ -47,6 +51,7 @@ from spikes.web_search import (DEFAULT_SEARCH_LANGUAGE, SearXNGAdapter,
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+ALLOWED_PUBLIC_SOURCE_PRIVACY = {'public', 'project', 'confidential'}
 
 
 def presentation_task_requested(content):
@@ -121,7 +126,8 @@ def now():
 
 class ChatService:
     def __init__(self, node_path, projects, *, state_dir=None, adapter_factory=None,
-                 external_adapter_factory=None, search_adapter_factory=None):
+                 external_adapter_factory=None, search_adapter_factory=None,
+                 public_source_adapter_factory=None):
         self.node_path = Path(node_path).absolute()
         self.projects = projects
         self.state_dir = (Path(state_dir).absolute() if state_dir else
@@ -130,6 +136,7 @@ class ChatService:
         self.adapter_factory = adapter_factory
         self.external_adapter_factory = external_adapter_factory
         self.search_adapter_factory = search_adapter_factory
+        self.public_source_adapter_factory = public_source_adapter_factory
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
@@ -846,6 +853,145 @@ class ChatService:
         search_runs.finish_workflow(request['task_id'], node_id, user_id)
         return self._task_projection(projection)
 
+    def _public_source_selection(self, request, node_id, user_id):
+        required = {'task_id', 'search_id', 'source_id', 'run_id'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid public source preview request')
+        for key in ('task_id', 'search_id', 'run_id'): uuid(request[key])
+        require(isinstance(request['source_id'], str) and request['source_id'],
+                'Invalid public source ID')
+        row = TaskOutcomes(self._root()).get(request['task_id'], node_id, user_id)
+        require(row['privacy'] in ALLOWED_PUBLIC_SOURCE_PRIVACY,
+                'local-only data cannot be used for public source fetch')
+        workflow = SearchRuns(self._root()).workflow(request['task_id'], node_id, user_id)
+        require(workflow is not None, 'Public source requires a durable search workflow')
+        round_record = next((item for item in workflow['rounds']
+                             if item['search_id'] == request['search_id']), None)
+        require(round_record is not None and round_record['search']['state'] == 'succeeded'
+                and isinstance(round_record['search']['result'], dict),
+                'Selected search result is unavailable')
+        source = next((item for item in round_record['search']['result'].get('results', [])
+                       if item.get('source_id') == request['source_id']), None)
+        require(source is not None, 'Selected public source is unavailable')
+        url = normalize_url(source.get('url'))
+        workspace = self.projects.workspace(row['project_id'], blocking=False)
+        require(workspace.git.head() == row['project_commit'],
+                'Project changed before public source preview')
+        return row, round_record, source, url, workspace
+
+    def task_public_source_preview(self, request):
+        node_id, user_id = self._identity()
+        row, round_record, source, url, _ = self._public_source_selection(
+            request, node_id, user_id)
+        origin = url_origin(url)
+        binding_id = str(uuid5(UUID(request['task_id']),
+                               'public-source-binding:' + request['source_id'] + ':' + origin))
+        binding = PublicSourceBinding.parse({'schema_version': 1,
+            'binding_id': binding_id, 'revision': 'static-html-v1',
+            'adapter': 'static-html-v1', 'origins': [origin],
+            'user_agent': 'FederatedWorkspaceReader/0.1', 'auth': 'none',
+            'max_wire_bytes': MAX_WIRE_BYTES, 'max_decoded_bytes': MAX_DECODED_BYTES,
+            'max_text_chars': MAX_TEXT_CHARS,
+            'max_compression_ratio': MAX_COMPRESSION_RATIO, 'timeout_seconds': 15})
+        fetch_request = PublicSourceRequest.parse({'schema_version': 1,
+            'run_id': request['run_id'], 'task_id': request['task_id'],
+            'user_id': user_id, 'project_id': row['project_id'],
+            'privacy': row['privacy'], 'expected_head': row['project_commit'],
+            'binding_id': binding.binding_id, 'binding_revision': binding.revision,
+            'adapter': binding.adapter_id, 'candidate_source_id': request['source_id'],
+            'candidate_url': url, 'purpose': row['outcome']['purpose'],
+            'accept': ['text/html', 'text/plain'], 'max_wire_bytes': MAX_WIRE_BYTES,
+            'max_decoded_bytes': MAX_DECODED_BYTES, 'max_text_chars': MAX_TEXT_CHARS,
+            'max_compression_ratio': MAX_COMPRESSION_RATIO,
+            'timeout_seconds': 15, 'created_at': now()})
+        preview = {'schema_version': 1, **request, 'project_id': row['project_id'],
+            'privacy': row['privacy'], 'expected_head': row['project_commit'],
+            'title': source['title'], 'url': url, 'origin': origin,
+            'adapter': binding.adapter_id, 'binding': binding.serialize(),
+            'effects': [{'method': 'GET', 'url': origin + '/robots.txt',
+                         'purpose': 'RFC 9309 preflight'},
+                        {'method': 'GET', 'url': url,
+                         'purpose': 'selected public document when robots allows'}],
+            'limits': {'wire_bytes': MAX_WIRE_BYTES,
+                       'decoded_bytes': MAX_DECODED_BYTES,
+                       'text_chars': MAX_TEXT_CHARS,
+                       'compression_ratio': MAX_COMPRESSION_RATIO, 'seconds': 15,
+                       'redirects': 0},
+            'warning': ('Remote content is untrusted data. No links, scripts, assets or '
+                        'redirects will be followed and no project artifact will be created.'),
+            'search_provenance': {'search_id': request['search_id'],
+                                  'round_index': round_record['round_index'],
+                                  'source_id': request['source_id']}}
+        runs = PublicSourceRuns(self._root()); runs.recover()
+        prepared = runs.prepare(request=fetch_request, preview=preview,
+                                binding=binding, node_id=node_id)
+        return dict(prepared['preview'], preview_sha256=prepared['preview_sha256'],
+                    state=prepared['state'])
+
+    def task_public_source_confirm(self, request):
+        required = {'task_id', 'search_id', 'source_id', 'run_id',
+                    'preview_sha256', 'approved'}
+        require(isinstance(request, dict) and set(request) == required
+                and request['approved'] is True,
+                'Public source fetch requires approval of the exact preview')
+        for key in ('task_id', 'search_id', 'run_id'): uuid(request[key])
+        require(isinstance(request['source_id'], str) and request['source_id'],
+                'Invalid public source ID')
+        require(isinstance(request['preview_sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', request['preview_sha256'])),
+                'Invalid public source preview digest')
+        node_id, user_id = self._identity()
+        selection = {key: request[key] for key in ('task_id', 'search_id',
+                                                    'source_id', 'run_id')}
+        row, _, source, url, workspace = self._public_source_selection(
+            selection, node_id, user_id)
+        runs = PublicSourceRuns(self._root()); runs.recover()
+        durable = runs.get(request['run_id'])
+        require(durable is not None and durable['task_id'] == request['task_id']
+                and durable['user_id'] == user_id and durable['project_id'] == row['project_id']
+                and durable['preview_sha256'] == request['preview_sha256']
+                and durable['request']['candidate_source_id'] == request['source_id']
+                and durable['request']['candidate_url'] == url
+                and durable['request']['expected_head'] == row['project_commit'],
+                'Public source preview changed before confirmation')
+        require(workspace.git.head() == row['project_commit'],
+                'Project changed before public source fetch')
+        binding = PublicSourceBinding.parse(durable['binding'])
+        adapter = (self.public_source_adapter_factory(runs)
+                   if self.public_source_adapter_factory else StaticHTMLAdapter(runs))
+        result = adapter.dispatch(request['run_id'], binding,
+                                  preview_sha256=request['preview_sha256'])
+        _, projected = runs.read_staging(request['run_id'])
+        require(hashlib.sha256(projected).hexdigest() == result['text_sha256'],
+                'Public source projection changed after fetch')
+        return {'schema_version': 1, 'run_id': request['run_id'],
+                'task_id': request['task_id'], 'search_id': request['search_id'],
+                'source_id': request['source_id'], 'title': source['title'],
+                'state': result['state'], 'result': result,
+                'text': projected.decode('utf-8'), 'project_changed': False,
+                'context_input': result['context_input']}
+
+    def task_public_source_result(self, request):
+        require(isinstance(request, dict) and set(request) == {'task_id', 'run_id'},
+                'Invalid public source result request')
+        for value in request.values(): uuid(value)
+        node_id, user_id = self._identity()
+        row = TaskOutcomes(self._root()).get(request['task_id'], node_id, user_id)
+        runs = PublicSourceRuns(self._root()); runs.recover()
+        durable = runs.get(request['run_id'])
+        require(durable is not None and durable['task_id'] == request['task_id']
+                and durable['node_id'] == node_id and durable['user_id'] == user_id
+                and durable['project_id'] == row['project_id']
+                and durable['state'] == 'succeeded',
+                'Public source result is unavailable')
+        _, projected = runs.read_staging(request['run_id'])
+        return {'schema_version': 1, 'task_id': request['task_id'],
+                'run_id': request['run_id'], 'state': durable['state'],
+                'source_id': durable['request']['candidate_source_id'],
+                'title': durable['preview']['title'], 'text': projected.decode('utf-8'),
+                'result': durable['result'], 'project_changed': False,
+                'context_input': durable['result']['context_input']}
+
     @staticmethod
     def _search_workflow_display(workflow):
         rounds = []
@@ -870,6 +1016,18 @@ class ChatService:
 
     def _task_projection(self, projection):
         """Attach display-only provider output without duplicating durable state."""
+        runs = PublicSourceRuns(self._root())
+        if runs.path.exists():
+            node_id, user_id = self._identity(); runs.recover()
+            records = runs.for_task(projection['task_id'], node_id, user_id)
+            if records:
+                projection = dict(projection)
+                projection['public_sources'] = [{'run_id': item['run_id'],
+                    'source_id': item['request']['candidate_source_id'],
+                    'search_id': item['preview']['search_id'], 'state': item['state'],
+                    'title': item['preview']['title'], 'url': item['preview']['url'],
+                    'error': item['error'], 'error_code': item['error_code'],
+                    'result': item['result']} for item in records]
         outcome = projection.get('outcome')
         if (projection.get('state') == 'prepared' and isinstance(outcome, dict)
                 and outcome.get('kind') == 'presentation-draft'):
