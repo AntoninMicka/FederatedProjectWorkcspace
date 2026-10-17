@@ -415,3 +415,18 @@ Systémový prohlížeč a oficiální Google REST kontrakty nahrazují provider
 široký cloud file manager i login ve WebEngine. Soukromá inventura nenabídla
 komponentu se stejným per-file OAuth, provenance a recovery kontraktem; nebyl
 převzat cizí kód ani neveřejné názvy. Rozhodnutí: [ADR 0032](docs/adr/0032-google-drive-import.md).
+
+F-M3-PUBLIC-SOURCES-01 **reuse/adaptuje návrhové vzory**, nikoli jednu
+existující implementaci: durable stavový automat `SearchRuns`, stdlib HTTP/TLS
+validaci backendů, Context Manifest, immutable `Sources` a jedinou
+Workspace/Journal/Git/index publikační hranici. Search run ani LLM run se
+nerozšíří o jiný síťový účinek; bounded získání zdroje potřebuje vlastní
+`PublicSourceRuns` autoritu. Oficiální CKAN/DCAT, MediaWiki, Crossref a Atom
+kontrakty byly posouzeny jako budoucí malé adaptéry. První doporučená vertikála
+je explicitní statická HTTPS stránka bez redirectů, credentials, JavaScriptu,
+assetů a link traversal. Obecný crawler, browser automation, provider SDK pool,
+RAG/vector DB, MIME sniffing a automatická publikace byly odmítnuty. Soukromá
+inventura neposkytla shodnou preview/privacy/SSRF/recovery/provenance
+komponentu; žádný kód ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0033](docs/adr/0033-public-source-retrieval.md), podklady:
+[průzkum zdrojů](docs/public-sources-research.md).
