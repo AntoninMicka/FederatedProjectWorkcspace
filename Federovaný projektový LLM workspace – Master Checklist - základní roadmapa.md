@@ -1067,8 +1067,8 @@ F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
 začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
 F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`.
-F-M3-SEARCH-02 je PoC validated na feature větvi, ale její PR dosud nebyl
-doručen do `develop`. Volitelný automatický dispatch `F-M3-SEARCH-03`, obecné
+F-M3-SEARCH-02 je PoC validated a bylo doručeno PR #67 do `develop` jako merge
+commit `6c94047`. Volitelný automatický dispatch `F-M3-SEARCH-03`, obecné
 zpracování veřejných zdrojů, explicitní jazyk odpovědi a obecný workflow
 zůstávají samostatné navazující schopnosti. Gate M3 proto není vydáván za celý
 uzavřený.
@@ -1134,9 +1134,9 @@ uzavřený.
   i mezivýsledky a důvod pokračování. Orchestrátor vynutí uživatelsky viditelné
   limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
   změně privacy/policy/binding nebo `unknown` účinku.
-- [ ] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt veřejných
-  zdrojů:** před implementací načítání cílových stránek ověřit pro relevantní
-  třídy služeb dostupnost podporovaných obecných či oficiálních API, jejich
+- [x] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt veřejných
+  zdrojů:** pro relevantní třídy služeb ověřil dostupnost podporovaných
+  obecných či oficiálních API, jejich
   podmínky, autentizaci, rate limits, licenci, formát a provenance. Navrhnout
   provider-neutral read-only capability pro bounded získání a extrakci
   veřejného obsahu s ochranou proti SSRF, redirectům, nečekanému MIME,
@@ -1145,7 +1145,15 @@ uzavřený.
   session cookies a neoficiální interní endpointy nejsou implicitní fallback.
   Speciální vyhledávání dopravních spojů se neplánuje, pokud průzkum nedoloží
   vhodné obecné a podporované rozhraní. Cílem je obecné zpracování veřejných
-  zdrojů, nikoli konektor vytvořený jen pro jeden ukázkový dotaz.
+  zdrojů, nikoli konektor vytvořený jen pro jeden ukázkový dotaz. Designed
+  výsledek je v [ADR 0033](docs/adr/0033-public-source-retrieval.md) a
+  [průzkumu](docs/public-sources-research.md): strukturované adaptéry mají
+  přednost, omezený statický reader je explicitní fallback a browser automation
+  se nezavádí.
+- [ ] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader:** implementovat
+  první vertikálu ADR 0033 pro jediný potvrzený HTTPS výsledek SearXNG,
+  samostatný durable run, SSRF/DNS/robots/content limity a inertní Context
+  Manifest vstup bez automatické projektové publikace.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
   s odloženým odesláním.

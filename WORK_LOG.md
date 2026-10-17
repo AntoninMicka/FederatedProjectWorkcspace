@@ -5,13 +5,56 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-PUBLIC-SOURCES-01 — průzkum API a kontrakt veřejných zdrojů — 2026-10-17
+
+Dávka na větvi `feature/f-m3-public-sources-01`, založené z doručeného
+`develop` `8338a6c`, dosáhla cílové úrovně **designed**. Feature akceptace je
+uzavřená; jediný PR do `develop` dosud nebyl vytvořen ani sloučen. Dávka nemění
+aplikační kód ani neprohlašuje síťový reader za implementovaný.
+
+- [x] [completed] **F-M3-PUBLIC-SOURCES-01-A — průzkum oficiálních zdrojů
+  (designed).** Aktuální primární dokumentace ověřila CKAN/DCAT katalogy,
+  MediaWiki REST, Crossref metadata, Atom a statickou HTTPS stránku. Výsledek
+  odděluje providerovou identitu, revizi, autentizaci, proměnlivé kvóty,
+  licenci a obsah a výslovně označuje odvozené závěry.
+- [x] [completed] **F-M3-PUBLIC-SOURCES-01-B — provider-neutral kontrakt
+  (designed).** ADR 0033 definuje verzovaný binding, request/preview digest,
+  durable výsledek, bounded bajty a text, MIME/charset, HTTP validators,
+  provenance, cache/revalidaci a `unknown` bez automatického retry.
+- [x] [completed] **F-M3-PUBLIC-SOURCES-01-C — bezpečnostní a recovery návrh
+  (designed).** Kontrakt vymezuje veřejné DNS adresy a connect pinning proti
+  rebindingu, nulové redirecty, robots preflight, TLS, wire/decoded limity,
+  inertní parser, prompt injection jako data, fsync staging, restart a oddělení
+  fetch runu od SearchRuns i projektové publikace.
+- [x] [completed] **F-M3-PUBLIC-SOURCES-01-D — reuse, rozhodnutí a předání
+  (designed).** Adaptují se existující stavové automaty, stdlib HTTP/TLS,
+  Context Manifest a immutable source/Workspace hranice, ne jejich databáze.
+  Strukturované adaptéry mají přednost; explicitní `static-html-v1` je omezený
+  fallback. Navazující `F-M3-PUBLIC-SOURCE-READER-01` je předán do BACKLOGu.
+
+### Výsledek, recovery a omezení
+
+Průzkum je v [samostatném podkladu](docs/public-sources-research.md), rozhodnutí
+v [ADR 0033](docs/adr/0033-public-source-retrieval.md) a reuse závěr v
+REUSE_CATALOG. Crash hranice budoucího fetch runu jsou navrženy jako
+`prepared → dispatching → succeeded|unsupported|rejected|failed|unknown`:
+před dispatch není síťový účinek, přerušený dispatch se bez nového potvrzení
+neopakuje, úspěšné raw/projection bajty se fsyncnou před uzavřením SQLite stavu
+a chybějící cache se nestahuje potichu znovu. Případný Git source vzniká až
+samostatnou potvrzenou Workspace operací.
+
+Ověření této čistě návrhové dávky tvoří kontrola primárních zdrojů, návazností,
+lokálních odkazů, finálního diffu a `git diff --check`; aplikační testy nebyly
+spuštěny, protože se aplikační kód, testy ani konfigurace nezměnily. Neověřeno
+zůstává provedení síťového kontraktu, jeho automatické testy a fyzický průchod
+dvěma veřejnými weby; ty jsou akceptací navazující implementační dávky.
+
 ## F-M4-PRESENTER-PDF-01 — export prezentace a záznamy relací — 2026-10-17
 
 Dávka na větvi `feature/f-m4-presenter-pdf-01`, založené z doručeného
 `develop` `aa7fa26`, dosáhla úrovně **PoC validated**. Feature akceptace je
-uzavřená; jediný PR do `develop` dosud nebyl vytvořen ani sloučen. Implementace
-je v commitech `84c34b5` a `3dd89fe`, závěrečné předávací dokumenty zůstávají
-v lokálním finálním diffu bez commitu a push nebyl proveden.
+uzavřená a jediný PR #69 byl doručen do `develop` jako merge commit `8338a6c`.
+Implementace je v commitech `84c34b5`, `3dd89fe` a `6a1d245`.
 
 - [x] [completed] **F-M4-PRESENTER-PDF-01-A — kontrakt relace a reuse
   (designed).** Omezené schema váže veřejné snapshoty na přesný deck a jeho
@@ -215,9 +258,10 @@ Akceptované omezení: workflow pracuje pouze s bounded výsledky SearXNG
 označit chybějící konkrétní údaj a nabídnout další hledání, ale samotným
 promptováním Gemmy nemůže spolehlivě získat data dostupná až na cílové stránce
 nebo za interaktivním formulářem. Uživatel nechce jednorázový dopravní scraper.
-Navazující `F-M3-PUBLIC-SOURCES-01` v BACKLOGu nejprve prověří obecná či
-oficiální API a navrhne provider-neutral zpracování veřejných zdrojů; speciální
-dopravní capability vznikne jen při doložení vhodného obecného rozhraní.
+Navazující `F-M3-PUBLIC-SOURCES-01` následně navrhlo provider-neutral bounded
+získání veřejného zdroje; první implementační řez
+`F-M3-PUBLIC-SOURCE-READER-01` je v BACKLOGu. Speciální dopravní capability
+nevznikla.
 Volitelný automatický dispatch zůstává samostatný `F-M3-SEARCH-03`.
 
 ## IMP-01 — Explicitní jednorázový import z Google Drive — 2026-10-14

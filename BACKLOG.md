@@ -41,27 +41,28 @@ doručeno PR #63 jako commit `5c3b565`; evidence je ve WORK_LOG.
 ve WORK_LOG. `F-M1-PROJECT-DELETE-01` bylo doručeno PR #65 jako merge commit
 `a09538e`; evidence je ve WORK_LOG. `IMP-01` bylo po fyzické akceptaci
 doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
-`F-M3-SEARCH-02` i `F-M4-PRESENTER-01` byly doručeny do `develop`; jejich
-evidence je ve WORK_LOG. Aktivní navazující dávka je v TODO.
+`F-M3-SEARCH-02` bylo doručeno PR #67 jako merge commit `6c94047`,
+`F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
+`F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
+ve WORK_LOG. Aktivní navazující dávka je v TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
-- [ ] [planned] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt
-  veřejných zdrojů (cílová úroveň: designed).** Navazuje na poznatek z
-  F-M3-SEARCH-02, že SearXNG poskytuje pouze bounded titulky, URL a úryvky,
-  nikoli obsah cílových služeb. Nejdříve pro relevantní třídy veřejných služeb
-  ověřit podporovaná obecná či oficiální API, podmínky použití, autentizaci,
-  rate limits, licenci, datové formáty a provenance; teprve z důkazů rozhodnout
-  mezi strukturovaným API, obecným statickým page readerem a samostatným
-  doménovým adaptérem. Navrhnout provider-neutral read-only capability s
-  bounded fetch/extraction kontraktem, explicitním cílem a ochranou proti SSRF,
-  redirectům, nečekanému MIME, nadměrnému obsahu a prompt injection.
-  Browserová automatizace, session cookies a neoficiální interní endpointy
-  nejsou implicitní fallback. Speciální hledání dopravních spojů nevznikne,
-  pokud průzkum nedoloží vhodné obecné a podporované rozhraní. Implementační
-  dávka se určí až podle výsledku tohoto průzkumu.
+- [ ] [planned] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader
+  veřejného zdroje (cílová úroveň: implemented → PoC validated).** Podle
+  designed výstupu `F-M3-PUBLIC-SOURCES-01` implementovat společnou obálku
+  `public-source-fetch-v1`, samostatný `PublicSourceRuns` journal, SSRF-safe
+  HTTPS transport a jediný `static-html-v1` adaptér pro uživatelem vybraný
+  výsledek SearXNG. Jeden potvrzený plán deklaruje robots preflight a cílový
+  GET, origin, privacy, účel a limity; redirect, login, cookies, JavaScript,
+  assety, link traversal, nečekané MIME/charset a neveřejná adresa selžou
+  fail-closed. Bounded inertní text může vstoupit do přesného Context Manifestu,
+  ale fetch nevytváří projektový artefakt. Akceptace zahrne DNS rebinding,
+  smíšené DNS, redirect na interní cíl, kompresní/časové limity, 429/503,
+  robots stavy, prompt injection jako data, restart/`unknown` bez retry a dva
+  skutečné veřejné statické weby; dynamický web skončí `unsupported`.
 
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
