@@ -47,7 +47,7 @@ za použitelný výsledek a nestahuje se potichu znovu.
   vykreslit bounded text a odlišit `unsupported`, `rejected`, `failed` a
   `unknown`. Statický a API kontrakt je ověřen automaticky; fyzický průchod je
   součástí položky E.
-- [ ] [in progress] **F-M3-PUBLIC-SOURCE-READER-01-E — automatické a fyzické
+- [ ] [blocked] **F-M3-PUBLIC-SOURCE-READER-01-E — automatické a fyzické
   ověření (cílová úroveň: PoC validated).** Pokrýt DNS rebinding, smíšené DNS,
   redirect na interní/jiný origin, TLS/timeout/429/503, lživou délku,
   kompresní limity, MIME/charset, malformed/deep HTML, robots stavy, prompt
@@ -61,7 +61,11 @@ za použitelný výsledek a nestahuje se potichu znovu.
   a `https://www.rfc-editor.org/rfc/rfc9309.html`; `https://app.element.io/`
   skončilo očekávaně `unsupported/no-static-text`. Zbývá fyzicky potvrdit
   desktopový preview/cancel/confirm/restart průchod nad SearXNG výsledkem podle
-  `docs/public-source-reader-acceptance.md`.
+  `docs/public-source-reader-acceptance.md`. Fyzická akceptace je pozastavena,
+  protože implicitní modelové routování nyní nespolehlivě volí prezentaci i pro
+  jiné záměry. Odblokuje ji samostatná stacked dávka
+  `F-M3-EXPLICIT-TASK-ROUTING-01`; po jejím ověření se reader dokončí na této
+  větvi a obě feature se doručí odděleně v pořadí reader → routing.
 
 Akceptace dávky vyžaduje cílené testy, celou současnou testovací sadu,
 `git diff --check`, kontrolu dokumentace a fyzický průchod popsaný v ADR 0033.
