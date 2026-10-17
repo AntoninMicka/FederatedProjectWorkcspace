@@ -243,6 +243,14 @@ HTML/PDF template engine a nová runtime závislost byly odmítnuty. PDF se
 nejprve dokončí ve stejné cílové složce a až potom se publikuje atomickým
 nahrazením.
 
+UX-FACELIFT-01-A **reuse aktuální `spikes.desktop_ui.HTML` a `CSS`** a
+**adaptuje** lokální Chromium print cestu na A4 inventuru pro ruční anotaci.
+Generátor nekopíruje webové formuláře do paralelní šablony a testuje úplné
+pokrytí všech `<form id>`. Používané nativní PySide6 dialogy převádí pouze na
+statický seznam jejich skutečných polí, protože jejich vzhled závisí na OS
+tématu a displeji. Nový aplikační PDF engine ani runtime závislost byly
+odmítnuty; HTML/PDF v `dist/` jsou ignorované lokální designové build artefakty.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

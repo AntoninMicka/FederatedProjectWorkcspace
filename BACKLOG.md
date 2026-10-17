@@ -104,18 +104,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
   požadovaný jazyk a případnou odchylku.
 
-- [ ] [planned] **UX-FACELIFT-01 — Vizuální facelift a přeuspořádání prvků
-  pro první release (cílová úroveň: designed → implemented).** Akceptace
-  explicitního routování 2026-10-17 potvrdila, že současné ovládání je funkční
-  a postačí k dokončení rozdělaných dávek, ale je příliš těžkopádné pro první
-  release. Facelift proto začne interaktivní společnou revizí skutečných
-  obrazovek a průchodů; uživatel bude průběžně určovat priority a konkrétní
-  rozsah se předem nezamyká ani nenahrazuje vymyšleným paralelním redesignem.
-  Jakmile revize vymezí ucelený reviewovatelný řez, zaznamenají se jeho hranice
-  a akceptace pro vlastní feature větev/PR. Zachovat jeden sdílený web/desktop
-  frontend, mobilní layout, klávesnicovou přístupnost, bezpečné textové
-  vykreslení a existující RBAC/privacy a recovery hranice.
-
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.

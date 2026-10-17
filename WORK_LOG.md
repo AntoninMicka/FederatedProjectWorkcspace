@@ -11,8 +11,8 @@ Dávka vznikla na stacked větvi nad reader checkpointem `ea7d101` a dosáhla
 úrovně **PoC validated**. Implementace je v commitu `2c72dfb`. Uživatel
 2026-10-17 následně schválil jednorázovou delivery výjimku: routing a věcně
 provázaný reader doručit z konsolidované větve
-`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Větev zatím
-nebyla pushnuta a PR nebyl vytvořen ani sloučen.
+`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Společný PR #71
+byl doručen jako merge commit `8b24452`.
 
 - [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-A — přesný task-plan
   kontrakt a policy (implemented).** Uzavřený `ExplicitTaskPlan` odděluje
@@ -51,9 +51,8 @@ Dávka vznikla na větvi `feature/f-m3-public-source-reader-01` z doručeného
 `develop` `225ea01` a dosáhla úrovně **PoC validated**. Implementace je v
 commitu `bed828b` a závislost fyzické akceptace v `ea7d101`. Fyzická akceptace
 byla dokončena společně s explicitním routováním; uživatelem schválená delivery
-výjimka proto obě dávky doručí z `feature/f-m3-reader-task-routing-01` jediným
-PR do `develop`. Původní reader větev zůstává do merge recovery bodem; společná
-větev zatím nebyla pushnuta a PR nebyl vytvořen ani sloučen.
+výjimka proto obě dávky doručila z `feature/f-m3-reader-task-routing-01`
+jediným PR #71 do `develop` jako merge commit `8b24452`.
 
 - [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-A — kontrakt, journal a
   staging (implemented).** `PublicSourceRuns` váže binding, request a preview,
