@@ -57,18 +57,21 @@ class FakeAdapter:
 
 
 class FakeExternalAdapter:
-    def __init__(self, runs, credentials, calls, error=None):
-        self.runs, self.credentials, self.calls, self.error = runs, credentials, calls, error
+    def __init__(self, runs, credentials, calls, error=None, answer=None):
+        self.runs, self.credentials, self.calls = runs, credentials, calls
+        self.error, self.answer = error, answer
 
-    def prepare(self, handoff, binding, stream=False):
+    def prepare(self, handoff, binding, role=None, output_format='text', stream=False):
         self.calls.append(('prepare', handoff, binding))
 
-    def dispatch(self, handoff, binding):
+    def dispatch(self, handoff, binding, role=None, output_format='text'):
         self.calls.append(('dispatch', handoff, binding))
         if self.error:
             raise self.error
+        answer = self.answer or ('External answer' if output_format == 'text' else json.dumps({
+            'schema_version': 1, 'kind': 'direct-answer', 'content': 'External answer'}))
         response = {'id': 'resp_external', 'model': binding.model,
-                    'response': 'External answer',
+                    'response': answer,
                     'usage': {'input_tokens': 3, 'output_tokens': 2, 'total_tokens': 5}}
         with self.runs.connect() as db:
             db.execute('INSERT OR REPLACE INTO runs(run_id,request_digest,state,response) '
@@ -244,12 +247,28 @@ class ChatServiceTests(unittest.TestCase):
         return value
 
     def route_request(self, **changes):
+        output_kind = changes.pop('output_kind', 'conversation')
+        web_query = changes.pop('web_query', None)
+        public_runs = changes.pop('public_source_run_ids', [])
         base = self.request()
         value = {key: base[key] for key in ('project_id', 'expected_head', 'thread_id',
                  'message_id', 'run_id', 'manifest_id', 'selected_message_ids', 'content',
                  'privacy', 'created_at')}
         value.update(task_id=str(uuid4()), selected_artifact_ids=[])
         value.update(changes)
+        if 'task_plan' not in value:
+            sources = ['conversation']
+            if value['selected_artifact_ids']:
+                sources.append('artifacts')
+            if web_query is not None or public_runs:
+                sources.append('public-web')
+            choice = value.get('run_choice', {})
+            execution = ('external-openai'
+                         if choice.get('adapter') == 'openai-responses'
+                         else 'local-ollama')
+            value['task_plan'] = {'schema_version': 1, 'source_kinds': sources,
+                'output_kind': output_kind, 'execution': execution,
+                'search_query': web_query, 'public_source_run_ids': public_runs}
         return value
 
     def test_routed_task_binds_artifact_privacy_and_replays_durable_outcome(self):
@@ -275,14 +294,9 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(routed_thread['project_id'], request['project_id'])
         self.assertIn('Source ' + artifact_id, calls[0]['prompt'])
         self.assertIn('Focus ID ' + request['message_id'], calls[0]['prompt'])
-        self.assertIn('Choose artifact-draft', calls[0]['prompt'])
-        self.assertIn('asks to find or search', calls[0]['prompt'])
-        self.assertIn('never copy or paraphrase the focus request as the answer', calls[0]['prompt'])
-        self.assertIn('Do not wrap a template', calls[0]['prompt'])
-        self.assertIn('"artifact_kind":"document"', calls[0]['prompt'])
-        self.assertIn('exactly all five fields slide_id, title, bullets, notes, and layout',
-                      calls[0]['prompt'])
-        self.assertIn('turn a source document into 6-12 slides', calls[0]['prompt'])
+        self.assertIn('"kind":"direct-answer"', calls[0]['prompt'])
+        self.assertNotIn('presentation-proposal', calls[0]['prompt'])
+        self.assertIn('Do not choose another output kind', calls[0]['prompt'])
         self.assertIn('Use the language of the focus request', calls[0]['prompt'])
         restarted = ChatService(self.node_path, Projects(self.node_path), state_dir=self.chat_state,
             adapter_factory=lambda runs: OllamaAdapter(runs,
@@ -293,7 +307,7 @@ class ChatServiceTests(unittest.TestCase):
         artifact_id = str(uuid4())
         request = self.route_request(selected_artifact_ids=[artifact_id], run_choice={
             'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
-        with self.assertRaisesRegex(ValueError, 'artifact'):
+        with self.assertRaisesRegex(ValueError, 'task mode'):
             self.service.task_route(request)
         self.assertEqual(self.calls, [])
 
@@ -303,29 +317,27 @@ class ChatServiceTests(unittest.TestCase):
                 transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(outcome)}))
         request = self.route_request(run_choice={
-            'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None})
         routed = service.task_route(request)
-        self.assertEqual(routed['model'], 'qwen3')
+        self.assertEqual(routed['model'], 'gemma3')
         self.assertEqual(service.status()['binding']['model'], 'gemma3')
         thread = next(row for row in service.status()['threads']
                       if row['thread_id'] == request['thread_id'])
-        self.assertEqual(thread['classification'], 'brainstorming')
+        self.assertEqual(thread['classification'], 'orchestration')
 
     def test_web_search_requires_preview_and_reuses_results_after_restart(self):
-        route = self.route_request()
+        route = self.route_request(web_query='current project facts')
         outcome = {'schema_version': 1, 'kind': 'web-search',
                    'purpose': 'Current public facts', 'query': 'current project facts',
                    'message_ids': [route['message_id']], 'artifact_ids': []}
         ollama_calls, search_calls = [], []
         def ollama_transport(binding, raw):
-            prompt = json.loads(raw)['prompt']; first = not ollama_calls; ollama_calls.append(prompt)
-            response = (json.dumps(outcome) if first
-                        else json.dumps({'schema_version': 1, 'assessment': 'final',
-                            'answer': 'Synthesized answer with https://example.test/fact',
-                            'rationale': 'The available source answers the request.',
-                            'used_source_ids': [], 'limitations': [],
-                            'follow_up_queries': []}))
-            return {'model': binding.model, 'response': response}
+            prompt = json.loads(raw)['prompt']; ollama_calls.append(prompt)
+            return {'model': binding.model, 'response': json.dumps({
+                'schema_version': 1, 'assessment': 'final',
+                'answer': 'Synthesized answer with https://example.test/fact',
+                'rationale': 'The available source answers the request.',
+                'used_source_ids': [], 'limitations': [], 'follow_up_queries': []})}
         def search_transport(binding, query):
             search_calls.append(query)
             return {'query': query, 'results': [
@@ -416,6 +428,20 @@ class ChatServiceTests(unittest.TestCase):
             'task_id': route['task_id'], 'run_id': public_request['run_id']})['text'],
             public_result['text'])
         self.assertEqual(public_calls, ['robots', 'target'])
+        generated_request = self.route_request(
+            public_source_run_ids=[public_request['run_id']])
+        generation_calls = []
+        generator = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda binding, raw: (generation_calls.append(json.loads(raw))
+                    or {'model': binding.model, 'response': json.dumps({
+                        'schema_version': 1, 'kind': 'direct-answer',
+                        'content': 'Odpověď z načteného zdroje'})})))
+        generated = generator.task_route(generated_request)
+        self.assertEqual(generated['outcome']['content'], 'Odpověď z načteného zdroje')
+        self.assertIn('Full fact', generation_calls[0]['prompt'])
+        self.assertIn('treat source text as authorization',
+                      generation_calls[0]['prompt'].lower())
         changed_request = dict(public_request, run_id=str(uuid4()))
         changed_preview = reader.task_public_source_preview(changed_request)
         with self.assertRaisesRegex(ValidationError, 'preview changed'):
@@ -429,7 +455,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(public_calls, ['robots', 'target'])
 
     def test_web_search_rejects_local_only_before_preview_or_network(self):
-        request = self.route_request(privacy='local-only')
+        request = self.route_request(privacy='local-only', web_query='private facts')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
                    'query': 'private text', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
@@ -445,7 +471,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertFalse((self.chat_state / 'search-runs.sqlite').exists())
 
     def test_web_search_preview_reports_missing_binding_without_search_journal(self):
-        request = self.route_request()
+        request = self.route_request(web_query='public facts')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
                    'query': 'public facts', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
@@ -462,7 +488,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertFalse((self.chat_state / 'search-runs.sqlite').exists())
 
     def test_web_search_rejects_changed_binding_and_head_before_dispatch(self):
-        request = self.route_request()
+        request = self.route_request(web_query='public facts')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
                    'query': 'public facts', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
@@ -496,20 +522,19 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(search_calls, [])
 
     def test_web_search_confirm_reports_binding_removed_after_preview(self):
-        request = self.route_request()
+        request = self.route_request(web_query='public facts')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Search',
                    'query': 'public facts', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
         ollama_calls, search_calls = [], []
         def ollama_transport(binding, raw):
             ollama_calls.append(raw)
-            return {'model': binding.model, 'response':
-                    json.dumps(outcome) if len(ollama_calls) == 1 else json.dumps({
-                        'schema_version': 1, 'assessment': 'final',
-                        'answer': 'Restored search answer',
-                        'rationale': 'The empty result is conclusive for this test.',
-                        'used_source_ids': [], 'limitations': [],
-                        'follow_up_queries': []})}
+            return {'model': binding.model, 'response': json.dumps({
+                'schema_version': 1, 'assessment': 'final',
+                'answer': 'Restored search answer',
+                'rationale': 'The empty result is conclusive for this test.',
+                'used_source_ids': [], 'limitations': [],
+                'follow_up_queries': []})}
         def search_transport(_binding, query):
             search_calls.append(query)
             return {'query': query, 'results': []}
@@ -547,7 +572,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(projection['outcome']['content'], 'Restored search answer')
 
     def test_iterative_search_accepts_manual_refinement_after_false_final(self):
-        request = self.route_request()
+        request = self.route_request(web_query='initial query')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
                    'query': 'initial query', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
@@ -565,7 +590,7 @@ class ChatServiceTests(unittest.TestCase):
             provider_request = json.loads(raw)
             ollama_calls.append(provider_request['prompt'])
             ollama_formats.append(provider_request.get('format'))
-            response = outcome if len(ollama_calls) == 1 else evaluations[len(ollama_calls) - 2]
+            response = evaluations[len(ollama_calls) - 1]
             return {'model': binding.model, 'response': json.dumps(response)}
         def search_transport(_binding, query):
             search_calls.append(query)
@@ -615,8 +640,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(len(completed['outcome']['rounds']), 2)
         self.assertEqual(completed['outcome']['rounds'][1]['parent_search_id'],
                          first['search_id'])
-        self.assertIsInstance(ollama_formats[0], dict)
-        self.assertEqual(ollama_formats[1:], ['json', 'json'])
+        self.assertEqual(ollama_formats, ['json', 'json'])
         self.assertNotEqual(completed['outcome']['rounds'][0]['run_id'],
                             completed['outcome']['rounds'][1]['run_id'])
 
@@ -638,20 +662,18 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(normalized['assessment'], 'intermediate')
 
     def test_iterative_search_stops_at_round_budget(self):
-        request = self.route_request()
+        request = self.route_request(web_query='q1')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
                    'query': 'q1', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
         calls = []
         def ollama_transport(binding, raw):
             calls.append(json.loads(raw)['prompt'])
-            if len(calls) == 1: response = outcome
-            else:
-                next_query = 'q' + str(len(calls))
-                response = {'schema_version': 1, 'assessment': 'intermediate',
-                    'answer': 'Still partial.', 'rationale': 'Continue.',
-                    'used_source_ids': [], 'limitations': ['Incomplete.'],
-                    'follow_up_queries': [next_query]}
+            next_query = 'q' + str(len(calls) + 1)
+            response = {'schema_version': 1, 'assessment': 'intermediate',
+                'answer': 'Still partial.', 'rationale': 'Continue.',
+                'used_source_ids': [], 'limitations': ['Incomplete.'],
+                'follow_up_queries': [next_query]}
             return {'model': binding.model, 'response': json.dumps(response)}
         service = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state,
@@ -683,7 +705,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(projection['outcome']['budget_used']['rounds_used'], 3)
 
     def test_iterative_search_time_budget_expires_before_dispatch(self):
-        request = self.route_request()
+        request = self.route_request(web_query='delayed query')
         outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
                    'query': 'delayed query', 'message_ids': [request['message_id']],
                    'artifact_ids': []}
@@ -792,103 +814,33 @@ class ChatServiceTests(unittest.TestCase):
             service.task_route(request)
         self.assertEqual(calls, [1])
 
-    def test_external_task_normalizes_only_matching_redundant_focus_id(self):
+    def test_explicit_local_output_rejects_model_selected_route(self):
         request = self.route_request()
-        value = {'schema_version': 1, 'kind': 'external-request',
-                 'purpose': 'Oponentura', 'query': 'Oponuj tvrzení',
-                 'message_ids': [request['message_id']], 'artifact_ids': [],
-                 'focus_id': request['message_id']}
-        def service_for(response):
-            return ChatService(self.node_path, Projects(self.node_path),
-                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
-                    runs, transport=lambda binding, raw:
-                        {'model': binding.model, 'response': json.dumps(response)}))
-        routed = service_for(value).task_route(request)
-        self.assertEqual(routed['outcome'], {key: item for key, item in value.items()
-                                             if key != 'focus_id'})
-
-        bad = self.route_request()
-        bad_value = dict(value, message_ids=[bad['message_id']],
-                         focus_id=str(uuid4()))
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
-            service_for(bad_value).task_route(bad)
-
-    def test_external_task_fills_only_missing_or_null_reference_lists(self):
-        def routed_for(request, value):
+        for kind in ('external-request', 'web-search', 'artifact-draft'):
+            value = {'schema_version': 1, 'kind': kind}
             service = ChatService(self.node_path, Projects(self.node_path),
-                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
-                    runs, transport=lambda binding, raw:
+                state_dir=self.chat_state, adapter_factory=lambda runs, value=value:
+                    OllamaAdapter(runs, transport=lambda binding, raw:
                         {'model': binding.model, 'response': json.dumps(value)}))
-            return service.task_route(request)['outcome']
-        for omitted in ('artifact_ids', 'message_ids'):
-            request = self.route_request()
-            value = {'schema_version': 1, 'kind': 'external-request',
-                     'purpose': 'Oponentura', 'query': 'Oponuj tvrzení',
-                     'message_ids': [request['message_id']], 'artifact_ids': []}
-            if omitted == 'artifact_ids':
-                value.pop(omitted)
-            else:
-                value[omitted] = None
-            outcome = routed_for(request, value)
-            self.assertEqual(outcome['message_ids'], [request['message_id']])
-            self.assertEqual(outcome['artifact_ids'], [])
+            with self.assertRaisesRegex(ValidationError, 'different output kind'):
+                service.task_route(dict(request, task_id=str(uuid4()), run_id=str(uuid4()),
+                                        manifest_id=str(uuid4())))
 
-        bad = self.route_request()
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
-            routed_for(bad, {'schema_version': 1, 'kind': 'external-request',
-                'purpose': 'X', 'query': 'Y', 'message_ids': None,
-                'artifact_ids': [], 'provider': 'forbidden'})
-
-    def test_web_search_fills_only_the_empty_mandatory_focus_selection(self):
-        def routed_for(request, value):
-            service = ChatService(self.node_path, Projects(self.node_path),
-                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
-                    runs, transport=lambda binding, raw:
-                        {'model': binding.model, 'response': json.dumps(value)}))
-            return service.task_route(request)['outcome']
-
-        request = self.route_request()
-        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
-            'purpose': 'Aktuální veřejná fakta', 'query': 'výsledky voleb 2026',
-            'message_ids': [], 'artifact_ids': []})
-        self.assertEqual(outcome['message_ids'], [request['message_id']])
-        self.assertEqual(outcome['artifact_ids'], [])
-
-        external = self.route_request()
-        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
-            routed_for(external, {'schema_version': 1, 'kind': 'external-request',
-                'purpose': 'Externí model', 'query': 'dotaz',
-                'message_ids': [], 'artifact_ids': []})
-
-    def test_web_search_discards_invented_artifact_only_when_none_was_selected(self):
-        def routed_for(request, value):
-            service = ChatService(self.node_path, Projects(self.node_path),
-                state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
-                    runs, transport=lambda binding, raw:
-                        {'model': binding.model, 'response': json.dumps(value)}))
-            return service.task_route(request)['outcome']
-
-        request = self.route_request()
-        outcome = routed_for(request, {'schema_version': 1, 'kind': 'web-search',
-            'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
-            'message_ids': [], 'artifact_ids': [str(uuid4())]})
-        self.assertEqual(outcome['message_ids'], [request['message_id']])
-        self.assertEqual(outcome['artifact_ids'], [])
-
-        selected_id = str(uuid4())
-        Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=selected_id,
-            base_head=self.git.head(), title='Project context', body='exact artifact', new=True),
-            str(uuid4()))
-        selected = self.route_request(expected_head=self.git.head(),
-                                      selected_artifact_ids=[selected_id])
-        with self.assertRaisesRegex(ValueError, 'unavailable or unordered'):
-            routed_for(selected, {'schema_version': 1, 'kind': 'web-search',
-                'purpose': 'Aktuální veřejná fakta', 'query': 'návazné hledání',
-                'message_ids': [selected['message_id']],
-                'artifact_ids': [str(uuid4())]})
+    def test_public_web_plan_routes_without_asking_model_to_choose(self):
+        request = self.route_request(web_query='výsledky voleb 2026')
+        calls = []
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=lambda *_: calls.append(1)))
+        routed = service.task_route(request)
+        self.assertEqual(routed['outcome']['kind'], 'web-search')
+        self.assertEqual(routed['outcome']['query'], 'výsledky voleb 2026')
+        self.assertEqual(routed['outcome']['message_ids'], [request['message_id']])
+        self.assertEqual(routed['outcome']['artifact_ids'], [])
+        self.assertEqual(calls, [])
 
     def test_artifact_outcome_is_durable_then_reduced_to_private_link(self):
-        request = self.route_request(privacy='confidential')
+        request = self.route_request(privacy='confidential', output_kind='document')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',
                    'artifact_kind': 'document', 'title': 'Long proposal',
                    'content': 'Full generated body\n' * 1000}
@@ -922,7 +874,7 @@ class ChatServiceTests(unittest.TestCase):
             base_head=self.git.head(), title='Source data', body='Revenue grew.', new=True),
             str(uuid4()))
         base = self.git.head()
-        request = self.route_request(expected_head=base,
+        request = self.route_request(expected_head=base, output_kind='presentation',
             selected_artifact_ids=[source_id], privacy='confidential')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'Výsledky',
@@ -960,7 +912,8 @@ class ChatServiceTests(unittest.TestCase):
                          [routed['projection']])
 
     def test_explicit_czech_presentation_request_cannot_route_to_document(self):
-        request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        request = self.route_request(content='vytvoř z daného dokumentu prezentaci',
+                                     output_kind='presentation')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'Prezentace',
             'source_artifact_ids': [], 'slides': [
@@ -980,20 +933,21 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(calls[0]['format']['properties']['kind']['enum'],
                          ['presentation-proposal'])
         run = OllamaRuns(self.chat_state).get(request['run_id'])
-        self.assertEqual(run['role_revision'], 'task-router-presentation-v1')
+        self.assertEqual(run['role_revision'], 'task-output-presentation-v1')
 
-        bad_request = self.route_request(content='vytvoř z daného dokumentu prezentaci')
+        bad_request = self.route_request(content='vytvoř z daného dokumentu prezentaci',
+                                         output_kind='presentation')
         document = {'schema_version': 1, 'kind': 'artifact-draft',
                     'artifact_kind': 'document', 'title': 'Špatně', 'content': 'Text'}
         rejected = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                                                        'response': json.dumps(document)}))
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+        with self.assertRaisesRegex(ValueError, 'different output kind'):
             rejected.task_route(bad_request)
 
     def test_presentation_confirmation_is_exact_recoverable_and_idempotent(self):
-        request = self.route_request(privacy='confidential')
+        request = self.route_request(privacy='confidential', output_kind='presentation')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'Schválený deck',
             'source_artifact_ids': [], 'slides': [
@@ -1046,7 +1000,7 @@ class ChatServiceTests(unittest.TestCase):
             artifact_id=artifact_id, base_head=self.git.head(), new=True, deck=deck),
             str(uuid4()))
         base = self.git.head()
-        request = self.route_request(expected_head=base,
+        request = self.route_request(expected_head=base, output_kind='presentation',
                                      selected_artifact_ids=[artifact_id])
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'update', 'target_artifact_id': artifact_id,
@@ -1086,16 +1040,17 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(updated['deck']['slides'][0]['title'], 'Nový slide')
         self.assertEqual(updated['metadata']['provenance'], 'user')
 
-        unavailable = self.route_request(expected_head=self.git.head())
+        unavailable = self.route_request(expected_head=self.git.head(),
+                                         output_kind='presentation')
         rejected = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(proposal)}))
-        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
+        with self.assertRaisesRegex(ValueError, 'unavailable source'):
             rejected.task_route(unavailable)
 
     def test_presentation_confirmation_rejects_stale_project_without_write(self):
-        request = self.route_request()
+        request = self.route_request(output_kind='presentation')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'Stale deck',
             'source_artifact_ids': [], 'slides': [
@@ -1122,7 +1077,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(PresentationDocuments(self.node_path).open(ENTITY)['documents'], [])
 
     def test_authenticated_presentation_confirmation_endpoint(self):
-        request = self.route_request()
+        request = self.route_request(output_kind='presentation')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'API deck',
             'source_artifact_ids': [], 'slides': [
@@ -1149,7 +1104,7 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(json.loads(body)['outcome']['kind'], 'presentation-link')
 
     def test_presentation_proposal_rejects_unknown_layout_and_changed_head(self):
-        request = self.route_request()
+        request = self.route_request(output_kind='presentation')
         proposal = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'Deck',
             'source_artifact_ids': [], 'slides': [{'slide_id': None, 'title': 'Slide',
@@ -1158,10 +1113,10 @@ class ChatServiceTests(unittest.TestCase):
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=lambda binding, raw: {'model': binding.model,
                     'response': json.dumps(proposal)}))
-        with self.assertRaisesRegex(ValueError, 'invalid presentation proposal'):
+        with self.assertRaisesRegex(ValueError, 'unavailable layout'):
             invalid.task_route(request)
 
-        raced_request = self.route_request()
+        raced_request = self.route_request(output_kind='presentation')
         proposal['slides'][0]['layout'] = 'content'
         def change_project(binding, raw):
             (self.root / 'race.txt').write_text('changed')
@@ -1170,7 +1125,7 @@ class ChatServiceTests(unittest.TestCase):
         raced = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
                 runs, transport=change_project))
-        with self.assertRaisesRegex(ValueError, 'invalid task outcome'):
+        with self.assertRaisesRegex(ValueError, 'Project changed'):
             raced.task_route(raced_request)
         self.assertEqual(raced.task_outcomes(project_id=ENTITY), [])
 
@@ -1179,7 +1134,7 @@ class ChatServiceTests(unittest.TestCase):
         Artifacts(self.node_path).save(dict(project_id=ENTITY, artifact_id=source_id,
             base_head=self.git.head(), title='Track-to-Track', body='Fusion source', new=True),
             str(uuid4()))
-        request = self.route_request(expected_head=self.git.head(),
+        request = self.route_request(expected_head=self.git.head(), output_kind='presentation',
                                      selected_artifact_ids=[source_id])
         malformed = {'schema_version': 1, 'kind': 'presentation-proposal',
             'operation': 'create', 'target_artifact_id': None, 'title': 'EZS',
@@ -1192,20 +1147,16 @@ class ChatServiceTests(unittest.TestCase):
                     'response': json.dumps(malformed)}))
 
         with self.assertRaisesRegex(
-                ValidationError, '^Ollama returned invalid presentation proposal$'):
+                ValidationError, '^Invalid presentation slide proposal$'):
             service.task_route(request)
         self.assertEqual(service.task_outcomes(project_id=ENTITY), [])
 
     def test_external_outcome_confirms_without_persisting_full_chat_projection(self):
-        request = self.route_request()
-        outcome = {'schema_version': 1, 'kind': 'external-request',
-                   'purpose': 'Fresh research', 'query': 'Full private provider query',
-                   'message_ids': [request['message_id']], 'artifact_ids': []}
+        request = self.route_request(run_choice={'mode': 'orchestration',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-luna'})
         calls = []
         service = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state,
-            adapter_factory=lambda runs: OllamaAdapter(runs, transport=lambda binding, raw:
-                {'model': binding.model, 'response': json.dumps(outcome)}),
             external_adapter_factory=lambda runs, credentials:
                 FakeExternalAdapter(runs, credentials, calls))
         service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
@@ -1230,11 +1181,10 @@ class ChatServiceTests(unittest.TestCase):
             'task_id': request['task_id'], 'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
             'privacy': preview['privacy']})
-        self.assertEqual(projection['outcome']['kind'], 'external-call')
-        self.assertNotIn('query', projection['outcome'])
-        self.assertNotIn('response', projection['outcome'])
-        self.assertEqual(projection['external_answer'], 'External answer')
-        self.assertEqual(service.status()['threads'], [])
+        self.assertEqual(projection['outcome'], {'schema_version': 1,
+            'kind': 'direct-answer', 'content': 'External answer'})
+        self.assertEqual(len(service.status()['threads']), 1)
+        self.assertEqual(service.status()['threads'][0]['messages'], [])
         self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
         restarted = ChatService(self.node_path, Projects(self.node_path),
                                 state_dir=self.chat_state)
@@ -1245,7 +1195,7 @@ class ChatServiceTests(unittest.TestCase):
             'privacy': preview['privacy']}), projection)
 
     def test_rejected_task_outcome_removes_temporary_projection(self):
-        request = self.route_request()
+        request = self.route_request(output_kind='document')
         outcome = {'schema_version': 1, 'kind': 'artifact-draft',
                    'artifact_kind': 'document', 'title': 'Discard me', 'content': 'draft'}
         service = ChatService(self.node_path, Projects(self.node_path),
@@ -1258,15 +1208,43 @@ class ChatServiceTests(unittest.TestCase):
         self.assertFalse(projection['temporary'])
         self.assertIsNone(projection['outcome'])
 
-    def test_external_task_cancel_recovers_after_approval_was_already_cancelled(self):
-        request = self.route_request()
-        outcome = {'schema_version': 1, 'kind': 'external-request', 'purpose': 'Research',
-                   'query': 'Prepared query', 'message_ids': [request['message_id']],
-                   'artifact_ids': []}
+    def test_external_explicit_document_becomes_reviewable_draft(self):
+        request = self.route_request(output_kind='document', run_choice={
+            'mode': 'orchestration', 'adapter': 'openai-responses',
+            'model': 'gpt-5.6-luna'})
+        document = {'schema_version': 1, 'kind': 'artifact-draft',
+                    'artifact_kind': 'document', 'title': 'Externí návrh',
+                    'content': 'Kontrolovatelný obsah'}
+        calls = []
         service = ChatService(self.node_path, Projects(self.node_path),
-            state_dir=self.chat_state, adapter_factory=lambda runs: OllamaAdapter(
-                runs, transport=lambda binding, raw:
-                    {'model': binding.model, 'response': json.dumps(outcome)}))
+            state_dir=self.chat_state,
+            external_adapter_factory=lambda runs, credentials: FakeExternalAdapter(
+                runs, credentials, calls, answer=json.dumps(document)))
+        service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='external-document', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'd' * 32))
+        routed = service.task_route(request)
+        self.assertEqual(routed['outcome']['kind'], 'external-request')
+        preview = service.task_external_preview({'task_id': request['task_id'],
+            'approval_id': str(uuid4()), 'turn_id': str(uuid4()), 'run_id': str(uuid4()),
+            'manifest_id': str(uuid4()), 'assistant_message_id': str(uuid4())})
+        self.assertEqual(preview['provider_request']['text']['format']['type'], 'json_object')
+        confirm = {'task_id': request['task_id'], 'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}
+        projection = service.task_external_confirm(confirm)
+        self.assertTrue(projection['temporary'])
+        self.assertEqual(projection['outcome'], document)
+        self.assertEqual(service.task_external_confirm(confirm), projection)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+
+    def test_external_task_cancel_recovers_after_approval_was_already_cancelled(self):
+        request = self.route_request(run_choice={'mode': 'orchestration',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-luna'})
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state)
         service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
             revision='external-one', adapter='openai-responses',
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',

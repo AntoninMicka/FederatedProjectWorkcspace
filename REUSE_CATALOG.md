@@ -288,6 +288,16 @@ shodným preview/privacy/`unknown`/Context Manifest kontraktem; žádný její k
 ani neveřejné detaily se nepřenášejí. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#řízené-webové-hledání-přes-searxng--f-m3-search-01).
 
+F-M3-EXPLICIT-TASK-ROUTING-01 **reuse/adaptuje** `ChatRunChoice`,
+`ContextBuilder`, `TaskOutcomes`, existující lokální/externí backend journaly,
+external approval, řízené hledání, Public Source Reader a prezentační
+validátor. Přidává malý uzavřený `ExplicitTaskPlan` a tři output role; nepřidává
+nový adapter, context mechanismus ani workflow framework. Modelový výběr
+outcome druhu, heuristická oprava, automatický web fetch, externí předání
+interních artefaktů a automatický provider fallback se odmítají, protože by
+měnily explicitní plán nebo obcházely privacy/recovery hranici. Rozhodnutí:
+[ADR 0034](docs/adr/0034-explicit-task-routing.md).
+
 F-M3-SEARCH-02 **reuse/adaptuje** existující `SearchRuns`, `OllamaRuns`,
 `ContextBuilder`, `TaskOutcomes`, thread deletion recovery a bezpečné společné
 desktop/web vykreslování. Workflow a kola jsou nové tabulky ve stejném search

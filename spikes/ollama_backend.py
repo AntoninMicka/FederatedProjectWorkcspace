@@ -57,21 +57,23 @@ _PRESENTATION_PROPOSAL_FORMAT = _closed_object({
                }, ['slide_id', 'title', 'bullets', 'notes', 'layout'])},
 }, ['schema_version', 'kind', 'operation', 'target_artifact_id', 'title',
     'source_artifact_ids', 'slides'])
+_DIRECT_ANSWER_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['direct-answer']},
+    'content': _TEXT,
+}, ['schema_version', 'kind', 'content'])
+_DOCUMENT_DRAFT_FORMAT = _closed_object({
+    'schema_version': {'type': 'integer', 'enum': [1]},
+    'kind': {'type': 'string', 'enum': ['artifact-draft']},
+    'artifact_kind': {'type': 'string', 'enum': ['document']},
+    'title': _TEXT,
+    'content': _TEXT,
+}, ['schema_version', 'kind', 'artifact_kind', 'title', 'content'])
 _TASK_ROUTER_FORMAT = {
     'type': 'object',
     'oneOf': [
-        _closed_object({
-            'schema_version': {'type': 'integer', 'enum': [1]},
-            'kind': {'type': 'string', 'enum': ['direct-answer']},
-            'content': _TEXT,
-        }, ['schema_version', 'kind', 'content']),
-        _closed_object({
-            'schema_version': {'type': 'integer', 'enum': [1]},
-            'kind': {'type': 'string', 'enum': ['artifact-draft']},
-            'artifact_kind': {'type': 'string', 'enum': ['document']},
-            'title': _TEXT,
-            'content': _TEXT,
-        }, ['schema_version', 'kind', 'artifact_kind', 'title', 'content']),
+        _DIRECT_ANSWER_FORMAT,
+        _DOCUMENT_DRAFT_FORMAT,
         _PRESENTATION_PROPOSAL_FORMAT,
         _closed_object({
             'schema_version': {'type': 'integer', 'enum': [1]},
@@ -441,11 +443,13 @@ class OllamaAdapter:
             sections = ['Instruction:\n' + task['instruction']]
             for input_id, content, projection in decoded:
                 if input_id == task['focus_input_id']:
-                    label = ('Focus ID ' + input_id if task['role_id'] == 'task-router'
+                    label = ('Focus ID ' + input_id if task['role_id'] in
+                             {'task-router', 'task-output'}
                              else 'Focus')
                 elif input_id in roles:
                     label = 'User message' if roles[input_id] == 'user' else 'Assistant message'
-                    if task['role_id'] in {'external-call-planner', 'task-router'}:
+                    if task['role_id'] in {'external-call-planner', 'task-router',
+                                           'task-output'}:
                         label += ' ID ' + input_id
                 else:
                     label = 'Source ' + input_id
@@ -507,6 +511,12 @@ class OllamaAdapter:
                 body['format'] = (_PRESENTATION_PROPOSAL_FORMAT
                                   if role.revision == 'task-router-presentation-v1'
                                   else _TASK_ROUTER_FORMAT)
+            elif role is not None and role.role_id == 'task-output':
+                body['format'] = {
+                    'task-output-conversation-v1': _DIRECT_ANSWER_FORMAT,
+                    'task-output-document-v1': _DOCUMENT_DRAFT_FORMAT,
+                    'task-output-presentation-v1': _PRESENTATION_PROPOSAL_FORMAT,
+                }[role.revision]
             else:
                 body['format'] = 'json'
         request = json.dumps(body, sort_keys=True,

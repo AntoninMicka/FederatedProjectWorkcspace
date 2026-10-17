@@ -39,9 +39,14 @@ class ChatRunChoice:
         require(value['mode'] in MODES and value['adapter'] in ADAPTERS,
                 'Unsupported chat mode or adapter')
         if value['mode'] == 'orchestration':
-            require(value['adapter'] == 'ollama' and value['model'] is None,
-                    'Orchestration fixes the configured Ollama model')
-            if set(value) == selected:
+            if value['adapter'] == 'ollama':
+                require(value['model'] is None,
+                        'Local task execution fixes the configured Ollama model')
+            else:
+                require(set(value) == core,
+                        'External task execution cannot select an Ollama binding')
+                _model(value['model'])
+            if set(value) == selected and value['adapter'] == 'ollama':
                 binding_id = value['binding_id']
                 revision = value['binding_revision']
                 uuid(binding_id)
@@ -59,8 +64,8 @@ class ChatRunChoice:
 
     def resolve(self, *, ollama, openai=None):
         """Return an immutable run binding without changing saved configuration."""
-        require(isinstance(ollama, OllamaBinding), 'Configured Ollama binding is required')
-        if self.mode == 'orchestration':
+        if self.mode == 'orchestration' and self.adapter_id == 'ollama':
+            require(isinstance(ollama, OllamaBinding), 'Configured Ollama binding is required')
             if ollama.boundary == 'private-network':
                 require(self.binding_id is not None,
                         'Private-network orchestration requires explicit Ollama binding selection')
@@ -83,9 +88,9 @@ class ChatRunChoice:
                 'Chat context selections must be immutable tuples')
         require(all(isinstance(value, str) for value in project_input_ids + text_input_ids),
                 'Invalid chat context selection')
-        if self.mode == 'brainstorming':
+        if self.mode == 'brainstorming' or self.adapter_id == 'openai-responses':
             require(not project_input_ids,
-                    'Brainstorming cannot include project artifact inputs')
+                    'This mode cannot include project artifact inputs')
         require(bool(project_input_ids or text_input_ids),
                 'Chat run requires explicit context')
         return self

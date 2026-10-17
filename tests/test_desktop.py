@@ -727,7 +727,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('keepChatStreamVisible()', JS)
         self.assertIn('startChatProgress', JS)
         self.assertIn('await waitForVisiblePaint()', JS)
-        self.assertIn("startChatProgress('Ollama zpracovává orchestraci…')", JS)
+        self.assertIn("'Ollama zpracovává explicitní úkol…'", JS)
         self.assertIn("startChatProgress('Připojuji se k OpenAI…')", JS)
         self.assertIn('Externí odpověď byla přijata průběžně (${receivedDeltas} částí).', JS)
         self.assertIn('přijato ${receivedDeltas} průběžných částí.', JS)
@@ -855,7 +855,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="advanced-external"', HTML)
         self.assertIn("body.textContent=outcome.content", JS)
         self.assertNotIn('innerHTML=outcome', JS)
-        self.assertIn("selected_message_ids:selectedMessages.map", JS)
+        self.assertIn("selected_message_ids:useConversation?selectedMessages.map", JS)
         self.assertIn("activeThread?.thread_id===threadId ? activeThread.messages : []", JS)
         self.assertIn("querySelectorAll('#task-artifact-list input:checked')", JS)
         self.assertIn("activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null", JS)
@@ -923,9 +923,17 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
-        self.assertIn('Orchestrace použije ${chatBinding.model}', JS)
+        self.assertIn('Úkol použije ${chatBinding.model}', JS)
         self.assertIn("lan?'privátní síť':'tento uzel'", JS)
         self.assertIn('${chatBinding.endpoint}', JS)
+        for control in ('task-source-conversation', 'task-source-artifacts',
+                        'task-source-public', 'task-output-kind', 'task-search-query',
+                        'task-public-source-list'):
+            self.assertIn('id="' + control + '"', HTML)
+        self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
+        self.assertIn("execution:adapter==='ollama'?'local-ollama':'external-openai'", JS)
+        self.assertIn('External task execution cannot include project artifacts',
+                      Path('spikes/task_plan.py').read_text())
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
