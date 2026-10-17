@@ -5,6 +5,81 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-EXPLICIT-TASK-ROUTING-01 — explicitní podklady, výstup a vykonání — 2026-10-17
+
+Dávka na větvi `feature/f-m3-explicit-task-routing-01`, založené jako uživatelem
+schválená stacked výjimka nad reader checkpointem `ea7d101`, dosáhla úrovně
+**PoC validated**. Implementace je v lokálním commitu `2c72dfb`; větev nebyla
+pushnuta a PR do `develop` nebyl vytvořen ani sloučen. Samostatné doručení musí
+zachovat pořadí reader → routing.
+
+- [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-A — přesný task-plan
+  kontrakt a policy (implemented).** Uzavřený `ExplicitTaskPlan` odděluje
+  podklady, jediný výstup a vykonání, váže je digestem a deterministicky vybírá
+  jednu z rolí `task-output-{conversation,document,presentation}-v1`; rozhodnutí
+  zachycuje ADR 0034.
+- [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-B — backendové explicitní
+  routování (implemented).** Lokální i externí backend dostává právě jedno
+  schéma a jiný output kind se odmítne bez opravy či fallbacku. Web bez reader
+  runu připraví pouze search, potvrzený reader run vstupuje do nového manifestu
+  a externí výsledek se po potvrzení redukuje na přímou odpověď nebo
+  reviewovatelný draft. Externí cíl nepřijme interní artefakty.
+- [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-C — desktopové volby a
+  diagnostika (implemented).** Režim Zadání úkolu zobrazuje samostatné volby
+  podkladů, výsledku a backendu, zakázanou externí artifact hranici i skutečný
+  plán; Volná konverzace zůstává přímým chatem.
+- [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-D — automatické a fyzické
+  ověření (PoC validated).** Celá sada `python3 -m unittest discover -s tests
+  -v` prošla 634 testy, 27 volitelných testů bylo přeskočeno; samostatně prošla
+  syntaxe desktopového JavaScriptu a `git diff --check`. Uživatel při fyzickém
+  desktopovém průchodu potvrdil, že explicitní routování i reader pro dokončení
+  rozdělaných dávek stačí.
+
+### Výsledek, recovery a omezení
+
+Plán, Context Manifest a oddělené search/reader/backend journaly zachovávají
+stale HEAD/binding/privacy kontroly a `unknown` bez automatického retry.
+Dokument ani prezentace se nezapíšou bez samostatného potvrzení. Fyzická
+akceptace současně označila ovládání za těžkopádné; nejde o vadu blokující tuto
+dávku, ale o explicitní vstup do `UX-FACELIFT-01` před prvním releasem. Jeho
+scope se má určit interaktivně nad skutečným UI, ne předem zmrazeným redesignem.
+
+## F-M3-PUBLIC-SOURCE-READER-01 — bounded statický reader — 2026-10-17
+
+Dávka na větvi `feature/f-m3-public-source-reader-01`, založené z doručeného
+`develop` `225ea01`, dosáhla úrovně **PoC validated**. Implementace je v lokálním
+commitu `bed828b` a závislost fyzické akceptace v `ea7d101`; větev nebyla
+pushnuta a PR do `develop` nebyl vytvořen ani sloučen. Fyzická akceptace byla
+dokončena na navazující stacked větvi s explicitním routováním.
+
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-A — kontrakt, journal a
+  staging (implemented).** `PublicSourceRuns` váže binding, request a preview,
+  ukládá raw/text bajty atomicky a po restartu převádí přerušený dispatch na
+  `unknown` bez automatického opakování.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-B — SSRF-safe HTTPS a robots
+  (implemented).** Transport validuje veřejné A/AAAA adresy, připíná spojení,
+  zachovává hostname/SNI a fail-closed u redirectu, TLS, robots, MIME, charset,
+  časových, wire, decoded a kompresních limitů.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-C/D — inertní projekce,
+  Context Manifest a UI (implemented).** Jedna potvrzená SearXNG URL se zobrazí
+  jako bounded inertní text s hashi a provenance, bez dalších fetchů či zápisu
+  do projektu; UI odlišuje `unsupported`, `rejected`, `failed` a `unknown`.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-E — automatické a fyzické
+  ověření (PoC validated).** Readerová cílená sada prošla 36 testy s jedním
+  volitelným přeskočením a tehdejší celá sada 631 testy s 27 přeskočeními.
+  Živý explicitní smoke uspěl na `example.com` a RFC Editoru, dynamický Element
+  skončil očekávaně `unsupported/no-static-text`. Navazující plná sada routingu
+  prošla 634 testy s 27 přeskočeními. Uživatel následný fyzický desktopový
+  průchod označil za dostačující pro dokončení obou rozdělaných dávek.
+
+### Výsledek, recovery a omezení
+
+Reader zůstává jediným potvrzovaným bounded HTTPS fetcherem, nikoli crawlerem,
+browserem ani automatickým importem. Příprava nemá síťový účinek; `dispatching`
+po pádu skončí `unknown`, úspěch se vydá jen proti ověřeným staging hashům a
+případný Git artefakt vyžaduje novou Workspace operaci. Neověřuje se tím
+browser automation, přihlášený obsah, PDF ani strukturované providerové API.
+
 ## F-M3-PUBLIC-SOURCES-01 — průzkum API a kontrakt veřejných zdrojů — 2026-10-17
 
 Dávka na větvi `feature/f-m3-public-sources-01`, založené z doručeného

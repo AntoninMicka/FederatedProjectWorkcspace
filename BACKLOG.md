@@ -50,20 +50,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
 
-- [ ] [planned] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader
-  veřejného zdroje (cílová úroveň: implemented → PoC validated).** Podle
-  designed výstupu `F-M3-PUBLIC-SOURCES-01` implementovat společnou obálku
-  `public-source-fetch-v1`, samostatný `PublicSourceRuns` journal, SSRF-safe
-  HTTPS transport a jediný `static-html-v1` adaptér pro uživatelem vybraný
-  výsledek SearXNG. Jeden potvrzený plán deklaruje robots preflight a cílový
-  GET, origin, privacy, účel a limity; redirect, login, cookies, JavaScript,
-  assety, link traversal, nečekané MIME/charset a neveřejná adresa selžou
-  fail-closed. Bounded inertní text může vstoupit do přesného Context Manifestu,
-  ale fetch nevytváří projektový artefakt. Akceptace zahrne DNS rebinding,
-  smíšené DNS, redirect na interní cíl, kompresní/časové limity, 429/503,
-  robots stavy, prompt injection jako data, restart/`unknown` bez retry a dva
-  skutečné veřejné statické weby; dynamický web skončí `unsupported`.
-
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
   opt-in kontrakt pro všechny orchestrační akce, nikoli zvláštní automatiku
@@ -119,13 +105,16 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   požadovaný jazyk a případnou odchylku.
 
 - [ ] [planned] **UX-FACELIFT-01 — Vizuální facelift a přeuspořádání prvků
-  (cílová úroveň: designed → implemented).** Uživatel dodá vlastní návrh
-  rozmístění; do té doby se nevymýšlí paralelní redesign. Následná feature
-  může upravit vizuální hierarchii a polohu vybraných prvků, ale zachová
-  jeden sdílený web/desktop frontend, mobilní layout, klávesnicovou
-  přístupnost, bezpečné textové vykreslení a existující RBAC/privacy a
-  recovery hranice. Před aktivací převést uživatelský návrh na konkrétní
-  obrazovky, mimo-rozsah a akceptační podmínky jednoho reviewovatelného PR.
+  pro první release (cílová úroveň: designed → implemented).** Akceptace
+  explicitního routování 2026-10-17 potvrdila, že současné ovládání je funkční
+  a postačí k dokončení rozdělaných dávek, ale je příliš těžkopádné pro první
+  release. Facelift proto začne interaktivní společnou revizí skutečných
+  obrazovek a průchodů; uživatel bude průběžně určovat priority a konkrétní
+  rozsah se předem nezamyká ani nenahrazuje vymyšleným paralelním redesignem.
+  Jakmile revize vymezí ucelený reviewovatelný řez, zaznamenají se jeho hranice
+  a akceptace pro vlastní feature větev/PR. Zachovat jeden sdílený web/desktop
+  frontend, mobilní layout, klávesnicovou přístupnost, bezpečné textové
+  vykreslení a existující RBAC/privacy a recovery hranice.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 

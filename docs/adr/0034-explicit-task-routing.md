@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0034 — Explicitní routování zdrojů, výstupu a vykonání úkolu
 
-Datum: 2026-10-17. Stav: přijato a implementováno v dávce
-`F-M3-EXPLICIT-TASK-ROUTING-01`; fyzická akceptace zůstává otevřená.
+Datum: 2026-10-17. Stav: přijato a PoC validated v dávce
+`F-M3-EXPLICIT-TASK-ROUTING-01`.
 
 ## Kontext
 
@@ -88,3 +88,8 @@ provideru není důvod plán změnit; chyba zůstane konkrétní a vyžádá nov
 běh. ADR 0008 zůstává autoritou Context Manifestu, backendů a chatových vláken,
 ale jeho starší obecný modelový task router a omezení orchestrace pouze na
 Ollamu jsou pro nové task plány tímto rozhodnutím nahrazeny.
+
+Fyzická akceptace 2026-10-17 potvrdila, že explicitní routování i navazující
+Public Source Reader stačí k dokončení rozdělaných dávek. Současně označila
+ovládání za příliš těžkopádné pro první release; nejde o změnu tohoto kontraktu,
+ale o vstup do interaktivně upřesňované navazující dávky `UX-FACELIFT-01`.

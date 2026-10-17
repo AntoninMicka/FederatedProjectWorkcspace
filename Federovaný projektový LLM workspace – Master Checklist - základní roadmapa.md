@@ -835,11 +835,13 @@ nenahrazují.
   desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
   UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
   [WORK_LOG](WORK_LOG.md).
-- [ ] **UX-FACELIFT-01:** po dodání uživatelského návrhu provést vizuální
-  facelift a přeuspořádání vybraných prvků. Do té doby nevytvářet
-  konkurenční redesign; následná feature musí zachovat jeden sdílený
-  web/desktop frontend, mobilní chování, klávesnicovou přístupnost a stávající
-  bezpečnostní a recovery hranice.
+- [ ] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
+  obrazovky a prioritní průchody a podle průběžných uživatelských rozhodnutí
+  provést vizuální facelift a zjednodušení ovládání. Scope se předem nezamyká;
+  po vymezení uceleného reviewovatelného řezu se zaznamenají jeho hranice a
+  akceptace pro vlastní feature větev/PR. Nevytvářet konkurenční redesign a
+  zachovat jeden sdílený web/desktop frontend, mobilní chování, klávesnicovou
+  přístupnost a stávající bezpečnostní a recovery hranice.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -1150,10 +1152,19 @@ uzavřený.
   [průzkumu](docs/public-sources-research.md): strukturované adaptéry mají
   přednost, omezený statický reader je explicitní fallback a browser automation
   se nezavádí.
-- [ ] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader:** implementovat
+- [x] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader:** implementovat
   první vertikálu ADR 0033 pro jediný potvrzený HTTPS výsledek SearXNG,
   samostatný durable run, SSRF/DNS/robots/content limity a inertní Context
-  Manifest vstup bez automatické projektové publikace.
+  Manifest vstup bez automatické projektové publikace. Dávka dosáhla
+  2026-10-17 úrovně PoC validated; evidence je ve [WORK_LOG](WORK_LOG.md), její
+  PR do `develop` zatím nebyl vytvořen ani sloučen.
+- [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
+  aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
+  vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.
+  Dávka dosáhla 2026-10-17 úrovně PoC validated podle
+  [ADR 0034](docs/adr/0034-explicit-task-routing.md) a evidence ve
+  [WORK_LOG](WORK_LOG.md); stacked PR do `develop` zatím nebyl vytvořen ani
+  sloučen.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
   s odloženým odesláním.
