@@ -2869,7 +2869,7 @@ function renderChat(thread){
 function renderThreadList(threads){
  knownThreads=threads;
  const tree=document.querySelector('#sidebar-chat-tree');tree.replaceChildren();
- const assigned=threads.filter(thread=>thread.project_id!==null);
+ const assigned=activeProject ? threads.filter(thread=>thread.project_id===activeProject.id) : [];
  const unassigned=threads.filter(thread=>thread.project_id===null);
  function branch(label,branchThreads){
   if(!branchThreads.length)return;
@@ -2913,8 +2913,9 @@ function renderThreadList(threads){
  }
  branch('Zařazené',assigned);branch('Nezařazené',unassigned);
  const assignedCount=assigned.length,unassignedCount=unassigned.length;
- document.querySelector('#sidebar-chat-status').textContent=threads.length?
-  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:'Zatím tu nejsou žádné uložené chaty.';
+ document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount?
+  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:
+  (activeProject?'Tento projekt nemá žádná přiřazená ani dostupná nezařazená vlákna.':'Zatím tu nejsou žádná nezařazená vlákna.');
 }
 function rememberThread(thread){
  const index=knownThreads.findIndex(item=>item.thread_id===thread.thread_id);

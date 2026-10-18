@@ -101,7 +101,10 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   mazání nemají backendový kontrakt. Stejně tak se u zdrojů a prezentací
   nezobrazují smyšlené destruktivní akce. Chat bez otevřeného projektu má
   výchozí akci v menu viditelnou, ale nedostupnou podle stávající projektové
-  hranice. Potvrzovací a recovery průchody mazání zůstaly beze změny.
+  hranice. Globální přehled Chatů bez otevřeného projektu nyní zobrazuje pouze
+  nezařazená vlákna; po otevření projektu zobrazuje nezařazená vlákna a vlákna
+  přiřazená právě tomuto projektu, nikoli chaty ostatních projektů. Potvrzovací
+  a recovery průchody mazání zůstaly beze změny.
   Aktualizované regresní testy ověřují pořadí, dostupnost, akce a mobilní
   navigaci. Cílená integrační sada prošla 68 testy (6 přeskočeno), JavaScript
   prošel `node --check` a opt-in skutečný Qt WebEngine smoke prošel nad
