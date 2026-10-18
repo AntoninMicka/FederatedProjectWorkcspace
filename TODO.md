@@ -92,13 +92,28 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   pravdivě uvádí, že dostupnost nebyla ověřena. CPU, GPU, RAM, VRAM, DISK a NET
   jsou označené placeholdery bez předstírané systémové telemetrie; seznam
   providerů je připravený pro více zdrojů.
+  Další schválený řez sjednocuje akční seznamy v levém panelu: kliknutí na
+  hlavní plochu položky provede její výchozí akci a menu se třemi tečkami tuto
+  akci vždy zopakuje spolu s dalšími skutečně podporovanými operacemi. Vzor je
+  použitý pro projekty, chaty, úkoly, podklady, prezentace a nastavení; prázdný
+  katalog Nástrojů zatím nemá položky. U úkolu vede výběr i menu poctivě do
+  editoru celého hlavního seznamu, protože samostatná per-item editace ani
+  mazání nemají backendový kontrakt. Stejně tak se u zdrojů a prezentací
+  nezobrazují smyšlené destruktivní akce. Chat bez otevřeného projektu má
+  výchozí akci v menu viditelnou, ale nedostupnou podle stávající projektové
+  hranice. Potvrzovací a recovery průchody mazání zůstaly beze změny.
   Aktualizované regresní testy ověřují pořadí, dostupnost, akce a mobilní
   navigaci. Cílená integrační sada prošla 68 testy (6 přeskočeno), JavaScript
   prošel `node --check` a opt-in skutečný Qt WebEngine smoke prošel nad
   projektem s podklady i nad prázdným projektem bez zápisu do jejich Git
   stavů. Další skutečný WebEngine průchod ověřil globálně dostupné Nastavení,
   otevření a zavření dialogu zdrojů i vytvoření projektu ze samostatné stránky.
-  Po poslední změně znovu prošla celá sada **637 testy** (27 přeskočeno).
+  Po sjednocení seznamů znovu prošla celá sada **637 testy** (27 přeskočeno),
+  `node --check` i `git diff --check`. Skutečný projektový Qt WebEngine test
+  prošel dvakrát nad hierarchickými úkoly a podklady, včetně nové výchozí akce
+  v menu, a potvrdil nezměněný Git stav projektu. Obecný samostatný layoutový
+  smoke zůstává v tomto prostředí občasný na své starší scrollovací časovací
+  podmínce; při samostatném běhu prošel, ale dvojité opakování nebylo stabilní.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

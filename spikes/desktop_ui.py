@@ -267,11 +267,11 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-settings" role="tabpanel" aria-labelledby="settings-sidebar-tab" tabindex="0" hidden>
 <h2>Nastavení</h2><p>Jednotlivá nastavení tohoto uzlu.</p>
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
-<li><button type="button" data-settings-tab="settings-backend-tab">AI backend</button></li>
-<li><button type="button" data-settings-tab="settings-cms-tab">Weby</button></li>
-<li><button type="button" data-settings-tab="settings-profile-tab">Profil</button></li>
-<li><button type="button" data-settings-tab="settings-users-tab">Uživatelé</button></li>
-<li><button type="button" data-settings-tab="settings-federation-tab">Federace</button></li>
+<li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-profile-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-users-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-users-tab">Uživatelé</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Uživatelé">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-users-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-federation-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-federation-tab">Federace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Federace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-federation-tab">Otevřít</button></div></details></li>
 </ul></div></div>
 <section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
 <button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
@@ -844,8 +844,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
 #sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
 #sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
-#sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
-.sidebar-artifact-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-artifact-main{min-width:0}.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px;overflow-wrap:anywhere}.sidebar-artifact-title{font-size:13px}
+.sidebar-list-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-list-main{min-width:0}.sidebar-list-main[aria-current="true"]{background:#274154!important;border-left:3px solid #79c9ac}.sidebar-item-id{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
+.sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 .sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}
@@ -853,15 +853,9 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
 .sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
-.sidebar-chat-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
-.sidebar-chat-row>.sidebar-chat-open{min-width:0}.sidebar-chat-menu{position:relative;margin-top:4px}
-.sidebar-chat-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}
-.sidebar-chat-menu>summary::-webkit-details-marker{display:none}.sidebar-chat-menu>summary:hover,.sidebar-chat-menu[open]>summary{background:#274154}
-.sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
-#sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
-#sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
-.sidebar-presentation-row{padding:10px 8px;border-bottom:1px solid #274154}.sidebar-presentation-row strong,.sidebar-presentation-row small{display:block;overflow-wrap:anywhere}.sidebar-presentation-row small{margin-top:4px;color:#8faabc;font-size:10px}.sidebar-presentation-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}#sidebar-presentations .sidebar-presentation-actions button{padding:7px 5px;font-size:11px;text-align:center;background:#274154}#sidebar-presentations .sidebar-presentation-actions button:hover{background:#36566d}#sidebar-presentations .sidebar-presentation-actions button:disabled{opacity:.55}
-.sidebar-artifact-menu{position:relative;margin-top:4px}.sidebar-artifact-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-artifact-menu>summary::-webkit-details-marker{display:none}.sidebar-artifact-menu>summary:hover,.sidebar-artifact-menu[open]>summary{background:#274154}.sidebar-artifact-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}#sidebar-artifacts .sidebar-artifact-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}#sidebar-artifacts .sidebar-artifact-menu-items button:hover{background:#dfecea}
+.sidebar-chat-row{position:relative}.sidebar-chat-row>.sidebar-chat-open{min-width:0}
+.sidebar-presentation-row{position:relative;border-bottom:1px solid #274154}.sidebar-presentation-row .sidebar-list-main strong,.sidebar-presentation-row .sidebar-list-main small{display:block;overflow-wrap:anywhere}.sidebar-presentation-row .sidebar-list-main small{margin-top:4px;color:#8faabc;font-size:10px}
+.sidebar-item-menu{position:relative;margin-top:4px}.sidebar-item-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-item-menu>summary::-webkit-details-marker{display:none}.sidebar-item-menu>summary:hover,.sidebar-item-menu[open]>summary{background:#274154}.sidebar-item-menu-items{position:absolute;z-index:30;right:0;top:100%;width:205px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}.sidebar-item-menu-items button{display:block!important;width:100%!important;padding:9px 10px!important;text-align:left!important;background:transparent!important;color:#20384b!important;font-size:12px!important}.sidebar-item-menu-items button:hover{background:#dfecea!important}.sidebar-item-menu-items button:disabled{display:block!important;opacity:.48;cursor:not-allowed}
 #sidebar-tabs{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;padding-right:8px;border-right:1px solid #365066;overflow:visible;z-index:10}
 #sidebar-tabs button{position:relative;width:42px;min-height:42px;padding:8px;display:grid;place-items:center;border:1px solid transparent;background:transparent;color:#c8d4df}
 .sidebar-tab-icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
@@ -874,10 +868,10 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
 #sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list{flex:1}
 #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
-#sidebar-settings-list button{display:block;width:100%;padding:10px 8px;text-align:left;background:transparent;color:#dce8f1;font-size:13px}#sidebar-settings-list button:hover{background:#274154}#sidebar-settings-list button[hidden]{display:none}
+#sidebar-settings-list button{display:block;width:100%;padding:10px 8px;text-align:left;background:transparent;color:#dce8f1;font-size:13px}#sidebar-settings-list button:hover{background:#274154}#sidebar-settings-list li[hidden]{display:none}
 #sidebar-tools h2,#sidebar-presentations h2,#sidebar-settings h2{margin-bottom:4px}#sidebar-presentations h3{font-size:13px;color:#dce8f1;margin:8px 0 0}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
-#todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
+#todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%;padding:7px 5px;border-radius:7px;cursor:pointer}.todo-label:hover,.todo-label:focus-visible{background:#274154;outline:none}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
 #project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0}.project-header h1{font-size:25px;color:#162638;margin:6px 0}
 .project-header details{max-width:280px}.project-header code{font-size:10px}
@@ -1534,7 +1528,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#sidebar-settings-list button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -1558,31 +1552,34 @@ for(const tab of sidebarTabs){
  });
 }
 let currentArtifacts=[];
+function sidebarItemMenu(label,actions,legacyClass=''){
+ const menu=document.createElement('details');menu.className=`sidebar-item-menu ${legacyClass}`.trim();
+ const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce položky ${label}`);trigger.textContent='⋮';
+ const items=document.createElement('div');items.className='sidebar-item-menu-items';items.setAttribute('role','menu');
+ for(const action of actions){
+  const button=document.createElement('button');button.type='button';button.textContent=action.label;button.disabled=Boolean(action.disabled);button.setAttribute('role','menuitem');
+  button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await action.run(event.currentTarget);});items.append(button);
+ }
+ menu.append(trigger,items);return menu;
+}
 function renderSidebarArtifacts(items){
  currentArtifacts=items;
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
-  const row=document.createElement('li');row.className='sidebar-artifact-row';
-  const main=document.createElement('div');main.className='sidebar-artifact-main';
-  const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
+  const row=document.createElement('li');row.className='sidebar-list-row sidebar-artifact-row';
+  const title=document.createElement('button'),name=document.createElement('span');title.className='sidebar-list-main sidebar-artifact-title';name.className='sidebar-item-title';name.textContent=item.title;
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
-  const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
-  main.append(title,id);row.append(main);
-  if(item.kind==='document'){
-   const menu=document.createElement('details');menu.className='sidebar-artifact-menu';
-   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce dokumentu ${item.title}`);trigger.textContent='⋮';
-   const actions=document.createElement('div');actions.className='sidebar-artifact-menu-items';actions.setAttribute('role','menu');
-   function action(label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('role','menuitem');button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await callback();});actions.append(button);}
-   action('Upravit / přejmenovat',()=>openArtifactEditor(item));
-   const history=document.createElement('button');history.type='button';history.textContent='Zobrazit historii';history.setAttribute('role','menuitem');
-   history.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();});
-   actions.append(history);
-   action('Připravit smazání',()=>openArtifactEditor(item,true));
-   action('Kopírovat ID',async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID dokumentu bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID dokumentu: ${item.id}`;}});
-   menu.append(trigger,actions);row.append(menu);
-  }
+  const id=document.createElement('small');id.className='sidebar-item-id sidebar-artifact-id';id.textContent=item.id;title.append(name,id);
+  const actions=[{label:'Zobrazit',run:()=>openPreview(item.id)}];
+  if(item.kind==='document')actions.push(
+   {label:'Upravit / přejmenovat',run:()=>openArtifactEditor(item)},
+   {label:'Připravit smazání',run:()=>openArtifactEditor(item,true)});
+  actions.push(
+   {label:'Zobrazit historii',run:async()=>{await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();}},
+   {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID položky bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID položky: ${item.id}`;}}});
+  row.append(title,sidebarItemMenu(item.title,actions,'sidebar-artifact-menu'));
   sidebarArtifacts.append(row);
  }
  renderSummarySources();
@@ -1606,12 +1603,14 @@ function renderTodo(todo){
  const lists=[todoTree];
  for(let i=0;i<todo.items.length;i++){
   const item=todo.items[i];lists.length=item.depth+1;
-  const row=document.createElement('li');row.dataset.depth=item.depth;
-  const label=document.createElement('span');label.className='todo-label';
+  const row=document.createElement('li');row.dataset.depth=item.depth;row.className='sidebar-list-row';
+  const label=document.createElement('span');label.className='todo-label sidebar-list-main';label.tabIndex=0;label.setAttribute('role','button');label.setAttribute('aria-label',`Upravit seznam úkolů: ${item.title}`);
   const check=document.createElement('input');check.type='checkbox';check.checked=item.checked;check.disabled=true;
   check.setAttribute('aria-label',item.checked ? 'Hotovo' : 'Nehotovo');
   const title=document.createElement('span');title.className='todo-text';title.textContent=item.title;
   label.append(check,title);
+  label.addEventListener('click',event=>{event.stopPropagation();openMainTodoEditor();});
+  label.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();openMainTodoEditor();});
   if(item.checked) row.classList.add('todo-done');
   if(todo.items[i+1]?.depth>item.depth){
    const branch=document.createElement('details');branch.open=true;
@@ -1619,6 +1618,7 @@ function renderTodo(todo){
    const children=document.createElement('ul');branch.append(children);row.append(branch);
    lists[item.depth+1]=children;
   }else{row.append(label);}
+  row.append(sidebarItemMenu(item.title,[{label:'Upravit seznam úkolů',run:()=>openMainTodoEditor()}],'sidebar-todo-menu'));
   lists[item.depth].append(row);
  }
 }
@@ -1963,8 +1963,15 @@ function renderProjectCatalog(items){
   card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));
   const remove=document.createElement('button');remove.type='button';remove.className='project-remove';remove.textContent='Správa odstranění…';
   remove.addEventListener('click',()=>openProjectDeletion(item));wrap.append(card,remove);projectCards.append(wrap);
-  const row=document.createElement('li');const compact=document.createElement('button');compact.type='button';compact.dataset.id=item.id;
-  compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));row.append(compact);sidebarProjects.append(row);
+  const row=document.createElement('li');row.className='sidebar-list-row';
+  const compact=document.createElement('button');compact.type='button';compact.className='sidebar-list-main';compact.dataset.id=item.id;
+  compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));
+  const menu=sidebarItemMenu(item.title,[
+   {label:item.available?'Otevřít':'Zkusit otevřít',run:()=>openRegisteredProject(item.id)},
+   {label:'Správa odstranění…',run:()=>openProjectDeletion(item)},
+   {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);document.querySelector('#sidebar-project-status').textContent='ID projektu bylo zkopírováno.';}catch(error){document.querySelector('#sidebar-project-status').textContent=`ID projektu: ${item.id}`;}}}
+  ],'sidebar-project-menu');
+  row.append(compact,menu);sidebarProjects.append(row);
  }
  document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
 }
@@ -2370,9 +2377,14 @@ function installPresentationDocument(document){
 function renderSidebarPresentations(){
  sidebarPresentationList.replaceChildren();
  for(const doc of presentationEditorView.documents){
-  const item=document.createElement('li'),title=document.createElement('strong'),identity=document.createElement('small'),actions=document.createElement('div'),edit=document.createElement('button'),start=document.createElement('button');
-  item.className='sidebar-presentation-row';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;actions.className='sidebar-presentation-actions';edit.type='button';edit.textContent='Upravit';start.type='button';start.textContent='Spustit';edit.disabled=Boolean(doc.error);start.disabled=Boolean(doc.error);
-  edit.addEventListener('click',()=>openPresentationEditor(doc.id));start.addEventListener('click',()=>usePresentationDocument(doc));actions.append(edit,start);item.append(title,identity,actions);sidebarPresentationList.append(item);
+  const item=document.createElement('li'),main=document.createElement('button'),title=document.createElement('strong'),identity=document.createElement('small');
+  item.className='sidebar-list-row sidebar-presentation-row';main.type='button';main.className='sidebar-list-main';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;main.disabled=Boolean(doc.error);
+  main.addEventListener('click',()=>openPresentationEditor(doc.id));main.append(title,identity);
+  const menu=sidebarItemMenu(doc.title,[
+   {label:'Upravit',run:()=>openPresentationEditor(doc.id),disabled:Boolean(doc.error)},
+   {label:'Spustit',run:()=>usePresentationDocument(doc),disabled:Boolean(doc.error)}
+  ],'sidebar-presentation-menu');
+  item.append(main,menu);sidebarPresentationList.append(item);
  }
  sidebarPresentationStatus.textContent=presentationEditorView.documents.length?`Počet prezentací: ${presentationEditorView.documents.length}`:'Zatím tu nejsou žádné uložené prezentace.';
 }
@@ -2453,7 +2465,7 @@ for(const [index,tab] of settingsTabs.entries()){
  });
 }
 function syncSidebarSettingsList(){
- for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-tab]'))button.hidden=document.getElementById(button.dataset.settingsTab).hidden;
+ for(const item of document.querySelectorAll('#sidebar-settings-list [data-settings-item]'))item.hidden=document.getElementById(item.dataset.settingsItem).hidden;
 }
 async function openSettings(settingsTabId='settings-backend-tab'){
  if(!canLeaveWorkspaceEditors())return;
@@ -2478,6 +2490,7 @@ async function closeSettings(){
  }
 }
 for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-tab]'))button.addEventListener('click',()=>openSettings(button.dataset.settingsTab));
+for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-menu-tab]'))button.addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openSettings(button.dataset.settingsMenuTab);});
 document.querySelector('#settings-back').addEventListener('click',closeSettings);
 const cmsStatus=document.querySelector('#cms-status');
 const cmsEditor=document.querySelector('#cms-editor');
@@ -2867,7 +2880,7 @@ function renderThreadList(threads){
   root.append(toggle,group);tree.append(root);
   for(const thread of branchThreads){
   const row=document.createElement('li'),button=document.createElement('button');button.type='button';row.setAttribute('role','treeitem');
-  row.className='sidebar-chat-row';button.className='sidebar-chat-open';
+  row.className='sidebar-list-row sidebar-chat-row';button.className='sidebar-list-main sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
   button.textContent=`${thread.classification} · ${thread.status}`;
@@ -2875,10 +2888,9 @@ function renderThreadList(threads){
   const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
   meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
   button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
-  const menu=document.createElement('details');menu.className='sidebar-chat-menu';
-  menu.hidden=!activeProject;
+  const menu=document.createElement('details');menu.className='sidebar-item-menu sidebar-chat-menu';
   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce chatu ${thread.classification}`);trigger.textContent='⋮';
-  const items=document.createElement('div');items.className='sidebar-chat-menu-items';items.setAttribute('role','menu');
+  const items=document.createElement('div');items.className='sidebar-item-menu-items sidebar-chat-menu-items';items.setAttribute('role','menu');
   function action(label,callback,disabled=false){
    const item=document.createElement('button');item.type='button';item.textContent=label;item.disabled=disabled;item.setAttribute('role','menuitem');
    item.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;
@@ -2886,15 +2898,16 @@ function renderThreadList(threads){
     if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
    items.append(item);
   }
+  action('Zobrazit',async()=>{},!activeProject);
   if(thread.project_id===null)action('Zařadit do tohoto projektu',async control=>{
    control.disabled=true;chatOperationStatus.textContent='Zařazuji vlákno do otevřeného projektu…';
    try{await assignActiveThread();chatOperationStatus.textContent='Vlákno bylo zařazeno do otevřeného projektu.';}
    catch(error){control.disabled=false;chatOperationStatus.textContent=error.message;}
-  },thread.status==='archived');
-  action('Archivovat',archiveActiveThread,thread.status==='archived');
-  action('Připravit smazání',prepareActiveThreadDeletion);
-  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
-  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!thread.messages.length);
+  },!activeProject||thread.status==='archived');
+  action('Archivovat',archiveActiveThread,!activeProject||thread.status==='archived');
+  action('Připravit smazání',prepareActiveThreadDeletion,!activeProject);
+  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!activeProject||!thread.messages.length);
+  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!activeProject||!thread.messages.length);
   menu.append(trigger,items);row.append(button,menu);group.append(row);
   }
  }

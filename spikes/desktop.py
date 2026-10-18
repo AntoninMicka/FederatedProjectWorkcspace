@@ -695,6 +695,7 @@ def main():
                         window.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
             script = """(()=>{
+              if(typeof startChatProgress!=='function')return null;
               document.querySelector('#project-home').hidden=true;
               document.querySelector('#project-view').hidden=false;
               const chatTab=document.querySelector('#chat-tab');chatTab.click();
@@ -731,7 +732,7 @@ def main():
             })()"""
             if project_check:
                 script = """(()=>{
-                  if(!document.querySelector('#project-view'))return null;
+                  if(!document.querySelector('#project-view') || typeof sidebarItemMenu!=='function')return null;
                   const expected=EXPECTED;
                   window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
@@ -745,7 +746,9 @@ def main():
                        document.querySelector('#sidebar-projects select') ||
                        card.querySelector('.project-name').textContent!==expected.title)return null;
                     const compact=[...document.querySelectorAll('#sidebar-project-list button')].find(e=>e.dataset.id===expected.id);
-                    if(!compact || compact.textContent!==expected.title)return null;
+                    const compactMenu=compact?.closest('li')?.querySelector('.sidebar-item-menu-items');
+                    if(!compact || compact.textContent!==expected.title ||
+                       compactMenu?.querySelector('button')?.textContent!=='Otevřít')return null;
                     window.projectSmokeStarted=true;(window.homeReturnChecked?compact:card).click();
                   }
                   if(document.querySelector('#project-view').hidden) return null;
@@ -761,9 +764,10 @@ def main():
                   if(artifactPanel.hidden || !todoPanel.hidden || artifactTab.getAttribute('aria-selected')!=='true') return null;
                   const sideRows=[...sidebarList.querySelectorAll('li')].map(row=>({
                     id:row.querySelector('.sidebar-artifact-id').textContent,
-                    title:row.querySelector('.sidebar-artifact-title').textContent}));
+                    title:row.querySelector('.sidebar-item-title').textContent}));
                   const expectedRows=expected.artifacts.map(({id,title})=>({id,title}));
-                  if(JSON.stringify(sideRows)!==JSON.stringify(expectedRows) || sidebarList.querySelector('img,script,a')) return null;
+                  if(JSON.stringify(sideRows)!==JSON.stringify(expectedRows) || sidebarList.querySelector('img,script,a') ||
+                     [...sidebarList.querySelectorAll(':scope > li')].some(row=>row.querySelector('.sidebar-item-menu-items button')?.textContent!=='Zobrazit')) return null;
                   window.smokeSidebarStage='rows';
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
                   if(document.querySelector('#sidebar-projects').hidden || !artifactPanel.hidden || document.activeElement!==projectsTab) return null;

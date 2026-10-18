@@ -259,13 +259,13 @@ class WebTests(unittest.TestCase):
         self.assertIn("const visible=mainTabs.filter(item=>!item.hidden)", WEB_JS)
         self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", WEB_JS)
         self.assertIn("#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open", WEB_JS)
-        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#sidebar-settings-list button'))closeMobileSidebar()",
+        self.assertIn(".sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
         self.assertIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
-        self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)
+        self.assertIn("items.className='sidebar-item-menu-items sidebar-chat-menu-items'", WEB_JS)
         self.assertIn("item.setAttribute('role','menuitem')", WEB_JS)
         self.assertNotIn('id="back-projects"', WEB_HTML)
         self.assertIn('grid-template-columns:51px minmax(0,1fr)', WEB_CSS)
