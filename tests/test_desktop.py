@@ -784,7 +784,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
         labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení']
         self.assertEqual([label for _, label in sorted(
-            (sidebar_tabs.index('>' + label + '</button>'), label) for label in labels)], labels)
+            (sidebar_tabs.index(f'aria-label="{label}"'), label) for label in labels)], labels)
+        self.assertEqual(sidebar_tabs.count('class="sidebar-tab-icon"'), len(labels))
+        self.assertEqual(sidebar_tabs.count('class="sidebar-tab-label" role="tooltip"'), len(labels))
         self.assertIn('id="projects-tab"', sidebar_tabs)
         self.assertNotIn('disabled', sidebar_tabs.split('id="projects-tab"', 1)[1].split('</button>', 1)[0])
         self.assertNotIn('disabled', sidebar_tabs.split('id="chats-tab"', 1)[1].split('</button>', 1)[0])
@@ -829,7 +831,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("document.querySelector('#chat-new-thread').disabled=!available", JS)
         self.assertIn("End:visible.length-1", JS)
         self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
-        self.assertIn('flex-direction:column;overflow:hidden', CSS)
+        self.assertIn('grid-template-columns:51px minmax(0,1fr)', CSS)
+        self.assertIn('.sidebar-tab-icon{width:22px;height:22px', CSS)
+        self.assertIn('#sidebar-tabs button:hover .sidebar-tab-label,#sidebar-tabs button:focus-visible .sidebar-tab-label', CSS)
         self.assertIn('#sidebar-project-tools>[role="tabpanel"]:not([hidden])', CSS)
         self.assertIn('#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree', CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', CSS)

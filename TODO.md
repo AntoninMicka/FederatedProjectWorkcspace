@@ -80,6 +80,10 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   kontraktu. Úkoly a Podklady používají původní obsah, Nástroje mají pravdivý
   prázdný katalog bez předstíraného runneru, Výstupy obsahují prezentace a
   Nastavení scrollovatelný seznam dostupných sekcí respektující runtime role.
+  Panel je nyní rozdělený do dvou souběžných částí: vlevo je úzký pás sedmi
+  ikonových tlačítek a vpravo obsah zvolené záložky. Každá ikona má přístupný
+  název a při najetí myší i při klávesnicovém zaměření zobrazí popisek
+  příslušné záložky.
   Aktualizované regresní testy ověřují pořadí, dostupnost, akce a mobilní
   navigaci. Cílená integrační sada prošla 68 testy (6 přeskočeno), JavaScript
   prošel `node --check` a opt-in skutečný Qt WebEngine smoke prošel nad
