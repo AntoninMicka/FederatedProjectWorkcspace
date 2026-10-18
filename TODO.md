@@ -35,10 +35,36 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   celá sada `python3 -m unittest discover -s tests -v` prošla **637 testy**,
   27 volitelných testů bylo přeskočeno. `pdfinfo` potvrdilo 33 stran formátu A4
   a `git diff --check` prošel bez chyb.
-- [ ] [planned] **UX-FACELIFT-01-B — ruční anotace a společná revize
+- [ ] [in progress] **UX-FACELIFT-01-B — ruční anotace a společná revize
   (cílová úroveň: designed).** Uživatel vytiskne nebo anotuje balíček; společně
   projdeme priority, přesuny, slučování a odstranění tření. Konkrétní scope
   změn vznikne z této revize, nikoli z automaticky domyšleného redesignu.
+  První schválený řez revize určuje novou informační architekturu levého
+  hlavního panelu:
+
+  - panel vždy zobrazuje ve stejném pořadí záložky **Projekty**, **Chaty**,
+    **Úkoly**, **Podklady**, **Nástroje**, **Výstupy** a **Nastavení**;
+  - **Projekty** a **Chaty** jsou dostupné i bez zvoleného projektu, zatímco
+    ostatní záložky se zpřístupní až po jeho zvolení;
+  - **Projekty** obsahují tlačítko pro vytvoření projektu, tlačítko pro import
+    projektu s NotebookLM jako jednou z importních možností a samostatně
+    scrollovatelný seznam projektů;
+  - **Chaty** přebírají současný seznam vláken a před ním zobrazují tlačítko
+    **Nové vlákno**;
+  - **Úkoly** a **Podklady** přebírají svůj současný obsah a chování;
+  - nové **Nástroje** budou katalogem výpočetních a simulačních skriptů
+    (například Julia). Nástroj může vzniknout jako výstup chatu, číst podklady
+    i vybrané výstupy a vytvářet nové výstupy; tento řez zatím neurčuje nový
+    spouštěcí backend ani persistence kontrakt;
+  - **Výstupy** nyní obsahují prezentace a počítají s budoucími grafy a
+    výstupy výpočtů;
+  - **Nastavení** zobrazují samostatně scrollovatelný seznam jednotlivých
+    nastavení.
+
+  Před implementací ještě společná revize určí chování globálních Chatů bez
+  zvoleného projektu a přesné položky seznamu Nástrojů a Nastavení; facelift
+  sám nesmí potichu přidat novou schopnost spouštět výpočty ani změnit
+  projektové, RBAC nebo privacy hranice.
 - [ ] [planned] **UX-FACELIFT-01-C — iterativní implementace schváleného řezu
   (cílová úroveň: implemented).** Promítnout schválené anotace do jediného
   sdíleného frontendu a zachovat mobilní layout, klávesnicovou přístupnost,
