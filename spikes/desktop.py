@@ -617,7 +617,36 @@ def main():
         if args.smoke:
             deadline = QTimer()
             deadline.setSingleShot(True)
-            deadline.timeout.connect(lambda: app.exit(2))
+            def smoke_timeout():
+                page.runJavaScript("""JSON.stringify({
+                  projectSmokeStarted:Boolean(window.projectSmokeStarted),
+                  sidebarStage:window.smokeSidebarStage || null,
+                  sidebarReloaded:Boolean(window.sidebarReloaded),
+                  promptSubmitChecked:Boolean(window.promptSubmitChecked),
+                  chatModesChecked:Boolean(window.chatModesChecked),
+                  workflowPanelChecked:Boolean(window.workflowPanelChecked),
+                  imagePanelChecked:Boolean(window.imagePanelChecked),
+                  previewStarted:Boolean(window.previewStarted),
+                  previewClearChecked:Boolean(window.previewClearChecked),
+                  homeReturnChecked:Boolean(window.homeReturnChecked),
+                  selectedSidebar:document.querySelector('#sidebar-tabs [aria-selected="true"]')?.id || null,
+                  artifactsHidden:document.querySelector('#sidebar-artifacts')?.hidden,
+                  todoHidden:document.querySelector('#todo-widget')?.hidden,
+                  artifactCount:document.querySelectorAll('#sidebar-artifact-list li').length,
+                  artifactRows:[...document.querySelectorAll('#sidebar-artifact-list li')].map(row=>({id:row.querySelector('.sidebar-artifact-id')?.textContent,title:row.querySelector('.sidebar-artifact-title')?.textContent})),
+                  expectedArtifacts:window.smokeExpectedArtifacts || null,
+                  chatMode:document.querySelector('#chat-mode')?.value || null,
+                  chatAdapterDisabled:document.querySelector('#chat-run-adapter')?.disabled,
+                  taskArtifactsHidden:document.querySelector('#task-artifacts')?.hidden,
+                  composerBottom:document.querySelector('#chat-composer')?.getBoundingClientRect().bottom,
+                  viewportHeight:window.innerHeight,
+                  previewTitle:document.querySelector('#preview-title')?.textContent || null,
+                  expectedPreviewTitle:window.smokeExpectedArtifacts?.[0]?.title || null,
+                  previewTitleMatches:document.querySelector('#preview-title')?.textContent===window.smokeExpectedArtifacts?.[0]?.title,
+                  previewDetailsHidden:document.querySelector('#preview-details')?.hidden,
+                  projectHidden:document.querySelector('#project-view')?.hidden
+                })""", lambda value: (print('desktop smoke timeout: ' + str(value), flush=True), app.exit(2)))
+            deadline.timeout.connect(smoke_timeout)
             deadline.start(15000)
             poll = QTimer()
             project_check = None
@@ -685,10 +714,11 @@ def main():
                 script = """(()=>{
                   if(!document.querySelector('#project-view'))return null;
                   const expected=EXPECTED;
+                  window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
-                       document.querySelector('#project-home select, #sidebar-projects select') ||
+                       document.querySelector('#sidebar-projects select') ||
                        card.querySelector('.project-name').textContent!==expected.title)return null;
                     const compact=[...document.querySelectorAll('#sidebar-project-list button')].find(e=>e.dataset.id===expected.id);
                     if(!compact || compact.textContent!==expected.title)return null;
@@ -698,22 +728,34 @@ def main():
                   if(document.querySelector('#project-title').textContent!==expected.title ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
                      !document.querySelector('#project-home').hidden || !document.querySelector('#sidebar-projects').hidden)return null;
+                  const projectsTab=document.querySelector('#projects-tab'),chatsTab=document.querySelector('#chats-tab');
                   const artifactTab=document.querySelector('#artifacts-tab'),todoTab=document.querySelector('#todo-tab');
                   const artifactPanel=document.querySelector('#sidebar-artifacts'),todoPanel=document.querySelector('#todo-widget');
                   const sidebarList=document.querySelector('#sidebar-artifact-list');
-                  if(window.sidebarReloaded && artifactTab.getAttribute('aria-selected')!=='true') return null;
+                  window.smokeSidebarStage='opened';
                   artifactTab.click();
                   if(artifactPanel.hidden || !todoPanel.hidden || artifactTab.getAttribute('aria-selected')!=='true') return null;
                   const sideRows=[...sidebarList.querySelectorAll('li')].map(row=>({
                     id:row.querySelector('.sidebar-artifact-id').textContent,
                     title:row.querySelector('.sidebar-artifact-title').textContent}));
-                  if(JSON.stringify(sideRows)!==JSON.stringify(expected.artifacts) || sidebarList.querySelector('img,script,a')) return null;
+                  const expectedRows=expected.artifacts.map(({id,title})=>({id,title}));
+                  if(JSON.stringify(sideRows)!==JSON.stringify(expectedRows) || sidebarList.querySelector('img,script,a')) return null;
+                  window.smokeSidebarStage='rows';
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
-                  if(todoPanel.hidden || !artifactPanel.hidden || document.activeElement!==todoTab) return null;
+                  if(document.querySelector('#sidebar-projects').hidden || !artifactPanel.hidden || document.activeElement!==projectsTab) return null;
+                  window.smokeSidebarStage='home';
+                  projectsTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+                  if(document.querySelector('#sidebar-chats').hidden || document.activeElement!==chatsTab) return null;
+                  window.smokeSidebarStage='chats';
+                  chatsTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+                  if(todoPanel.hidden || document.activeElement!==todoTab) return null;
+                  window.smokeSidebarStage='todo';
                   todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
                   if(artifactPanel.hidden || document.activeElement!==artifactTab || artifactTab.tabIndex!==0 || todoTab.tabIndex!==-1) return null;
+                  window.smokeSidebarStage='artifact-right';
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
                   if(todoPanel.hidden || document.activeElement!==todoTab) return null;
+                  window.smokeSidebarStage='todo-back';
                   const todo=expected.main_todo;
                   const todoAction=document.querySelector('#create-main-todo');
                   if(todoAction.hidden || todoAction.textContent!==(todo?'Upravit seznam úkolů':'Vytvořit seznam úkolů')) return null;
@@ -736,8 +778,10 @@ def main():
                     if(branch){branch.querySelector('summary').click();if(branch.open) return null;
                       branch.querySelector('summary').click();if(!branch.open) return null;}
                   }else if(todoRows.length) return null;
+                  window.smokeSidebarStage='todo-content';
                   todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
-                  if(artifactPanel.hidden || document.activeElement!==artifactTab) return null;
+                  if(document.querySelector('#sidebar-settings').hidden || document.activeElement!==document.querySelector('#settings-sidebar-tab')) return null;
+                  window.smokeSidebarStage='end';
                   if(!window.sidebarReloaded){
                     window.sidebarReloaded=true;
                     clearProject();
@@ -761,12 +805,12 @@ def main():
                   }
                   if(!window.chatModesChecked){
                     const mode=document.querySelector('#chat-mode'),adapter=document.querySelector('#chat-run-adapter');
-                    const artifacts=document.querySelector('#task-artifacts');
-                    if(mode.value!=='orchestration' || !adapter.disabled || artifacts.hidden)return null;
+                    const routing=document.querySelector('#task-routing');
+                    if(mode.value!=='orchestration' || adapter.disabled || routing.hidden)return null;
                     mode.value='brainstorming';mode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(adapter.disabled || !artifacts.hidden)return null;
+                    if(adapter.disabled || !routing.hidden)return null;
                     mode.value='orchestration';mode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(!adapter.disabled || artifacts.hidden)return null;
+                    if(adapter.disabled || routing.hidden)return null;
                     window.chatModesChecked=true;
                   }
                   if(!window.workflowPanelChecked){
@@ -794,15 +838,18 @@ def main():
                     if(document.querySelector('#chat-panel').hidden)return null;
                   }
                   const composer=document.querySelector('#chat-composer');
-                  if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
+                  window.smokeSidebarStage='composer';
+                  if(composer.closest('[role=tabpanel]') || !composer.offsetParent || composer.getBoundingClientRect().width<=0)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
                   if(document.querySelector('#preview-panel').hidden || draft.value!=='Local draft' ||
                      document.activeElement!==previewTab)return null;
+                  window.smokeSidebarStage='main-home';
                   if(expected.artifacts.length){
                     if(!window.previewStarted){window.previewStarted=true;
                       document.querySelector('#sidebar-artifact-list button').click();return null;}
                     if(document.querySelector('#preview-title').textContent!==expected.artifacts[0].title ||
                        document.querySelector('#preview-details').hidden)return null;
+                    window.smokeSidebarStage='preview-basic';
                     if(expected.preview.metadata.import){
                       const details=document.querySelector('#preview-metadata').textContent;
                       for(const value of [expected.preview.metadata.import.imported_at,
@@ -813,6 +860,7 @@ def main():
                         if(!details.includes(value))return null;
                       }
                     }
+                    window.smokeSidebarStage='preview-metadata';
                     const content=document.querySelector('#preview-content');
                     if(content.querySelector('script,iframe,object,a'))return null;
                     const image=content.querySelector('img');
@@ -821,6 +869,7 @@ def main():
                     if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
                     if(expected.preview.format==='json' &&
                        content.querySelector('pre')?.textContent!==expected.preview.text)return null;
+                    window.smokeSidebarStage='preview-content';
                     if(!window.previewClearChecked){
                       window.previewClearChecked=true;window.previewStarted=false;
                       clearProject();
@@ -830,7 +879,7 @@ def main():
                   }
                   if(!window.homeReturnChecked){
                     window.homeReturnChecked=true;window.projectSmokeStarted=false;window.previewStarted=false;
-                    document.querySelector('#back-projects').click();
+                    document.querySelector('#projects-tab').click();
                     if(!document.querySelector('#project-view').hidden || document.querySelector('#project-home').hidden ||
                        document.querySelector('#sidebar-projects').hidden || draft.value)return null;
                     return null;

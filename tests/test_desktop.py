@@ -234,7 +234,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presentation-tab"', HTML)
         self.assertIn('id="presentations-tab"', HTML)
         self.assertIn('id="sidebar-presentation-list"', HTML)
-        self.assertIn('aria-label="Hotové prezentace projektu"', HTML)
+        self.assertIn('aria-label="Prezentace ve výstupech projektu"', HTML)
         self.assertIn('renderSidebarPresentations', JS)
         self.assertIn("edit.textContent='Upravit'", JS)
         self.assertIn("start.textContent='Spustit'", JS)
@@ -780,14 +780,32 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                          '/v1/chat/delete/confirm', '/v1/sources/import'} <= DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
-        self.assertIn('id="back-projects" class="sidebar-back"', HTML)
-        self.assertNotIn('id="back-projects" class="back-button"', HTML)
+        self.assertNotIn('id="back-projects"', HTML)
+        sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
+        labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení']
+        self.assertEqual([label for _, label in sorted(
+            (sidebar_tabs.index('>' + label + '</button>'), label) for label in labels)], labels)
+        self.assertIn('id="projects-tab"', sidebar_tabs)
+        self.assertNotIn('disabled', sidebar_tabs.split('id="projects-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertNotIn('disabled', sidebar_tabs.split('id="chats-tab"', 1)[1].split('</button>', 1)[0])
+        for tab in ('todo-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab',
+                    'settings-sidebar-tab'):
+            self.assertIn('disabled', sidebar_tabs.split(f'id="{tab}"', 1)[1].split('</button>', 1)[0])
+        projects = HTML.split('id="sidebar-projects"', 1)[1].split('id="sidebar-chats"', 1)[0]
+        self.assertLess(projects.index('id="sidebar-create-project"'),
+                        projects.index('id="sidebar-project-list"'))
+        self.assertLess(projects.index('id="sidebar-import-project"'),
+                        projects.index('id="sidebar-project-list"'))
+        self.assertIn('id="open-notebooklm-import"', projects)
+        self.assertIn('id="sidebar-tools"', HTML)
+        self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
+        self.assertIn('<h2>Výstupy</h2><h3>Prezentace</h3>', HTML)
+        self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)
         sidebar_chats = HTML.split('id="sidebar-chats"', 1)[1].split('</div></div>', 1)[0]
         self.assertLess(sidebar_chats.index('id="chat-new-thread"'),
                         sidebar_chats.index('id="sidebar-chat-tree"'))
-        self.assertLess(sidebar_chats.index('id="chat-open-settings"'),
-                        sidebar_chats.index('id="sidebar-chat-tree"'))
+        self.assertNotIn('id="chat-open-settings"', sidebar_chats)
         self.assertIn("branch('Zařazené',assigned);branch('Nezařazené',unassigned)", JS)
         self.assertIn("if(!branchThreads.length)return", JS)
         self.assertIn("root.setAttribute('role','treeitem')", JS)
@@ -806,7 +824,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("openStoredThread(thread.thread_id)", JS)
         self.assertIn("function rememberThread(thread)", JS)
         self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)
-        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden)", JS)
+        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", JS)
+        self.assertIn("const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab','settings-sidebar-tab']", JS)
+        self.assertIn("document.querySelector('#chat-new-thread').disabled=!available", JS)
         self.assertIn("End:visible.length-1", JS)
         self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
         self.assertIn('flex-direction:column;overflow:hidden', CSS)
@@ -979,8 +999,11 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('approved:true', JS)
         self.assertIn('srcdoc=result.html', JS)
         self.assertNotIn('innerHTML=result.html', JS)
-        self.assertIn('id="open-settings"', HTML)
-        self.assertIn('id="chat-open-settings"', HTML)
+        self.assertNotIn('id="open-settings"', HTML)
+        self.assertNotIn('id="chat-open-settings"', HTML)
+        self.assertIn('id="sidebar-settings-list" aria-label="Seznam nastavení"', HTML)
+        self.assertIn('data-settings-tab="settings-backend-tab"', HTML)
+        self.assertIn("openSettings(button.dataset.settingsTab)", JS)
         self.assertNotIn('id="chat-backend-settings"', HTML)
         self.assertIn("settingsReturn={project:!!activeProject,tabId:", JS)
         self.assertIn("document.querySelector('#project-home').hidden=true", JS)

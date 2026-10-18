@@ -254,9 +254,9 @@ class WebTests(unittest.TestCase):
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
         self.assertIn("event.key==='Escape'", WEB_JS)
         self.assertIn("const visible=mainTabs.filter(item=>!item.hidden)", WEB_JS)
-        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden)", WEB_JS)
-        self.assertIn("#back-projects,#open-notebooklm-import,#open-settings", WEB_JS)
-        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
+        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", WEB_JS)
+        self.assertIn("#open-notebooklm-import,#sidebar-create-project", WEB_JS)
+        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#sidebar-settings-list button'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
         self.assertIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
@@ -264,7 +264,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
         self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)
         self.assertIn("item.setAttribute('role','menuitem')", WEB_JS)
-        self.assertIn('id="back-projects" class="sidebar-back"', WEB_HTML)
+        self.assertNotIn('id="back-projects"', WEB_HTML)
         self.assertIn('flex-direction:column;overflow:hidden', WEB_CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', WEB_CSS)
         self.assertIn('@media(max-width:640px)', WEB_CSS)
