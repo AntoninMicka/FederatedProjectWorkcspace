@@ -84,12 +84,21 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   ikonových tlačítek a vpravo obsah zvolené záložky. Každá ikona má přístupný
   název a při najetí myší i při klávesnicovém zaměření zobrazí popisek
   příslušné záložky.
+  Navazující schválený řez zpřístupňuje Nastavení i bez otevřeného projektu a
+  přesouvá formulář Nový projekt z úvodního přehledu na samostatnou stránku se
+  zachovaným náhledem a explicitním potvrzením. Ve spodní části levého panelu
+  přibyl grafický přehled zdrojů s detailním dialogem: OpenAI používá skutečný
+  existující účetní přehled, lokální AI zobrazuje pouze stav konfigurace a
+  pravdivě uvádí, že dostupnost nebyla ověřena. CPU, GPU, RAM, VRAM, DISK a NET
+  jsou označené placeholdery bez předstírané systémové telemetrie; seznam
+  providerů je připravený pro více zdrojů.
   Aktualizované regresní testy ověřují pořadí, dostupnost, akce a mobilní
   navigaci. Cílená integrační sada prošla 68 testy (6 přeskočeno), JavaScript
   prošel `node --check` a opt-in skutečný Qt WebEngine smoke prošel nad
   projektem s podklady i nad prázdným projektem bez zápisu do jejich Git
-  stavů. Po poslední změně znovu prošla celá sada **637 testy**
-  (27 přeskočeno).
+  stavů. Další skutečný WebEngine průchod ověřil globálně dostupné Nastavení,
+  otevření a zavření dialogu zdrojů i vytvoření projektu ze samostatné stránky.
+  Po poslední změně znovu prošla celá sada **637 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

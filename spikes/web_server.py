@@ -63,12 +63,13 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  projectCreateForm.hidden=!admin;document.querySelector('#sidebar-create-project').hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
-  document.body.classList.add('authenticated');await loadProjects();
+  document.querySelector('#openai-resource-provider').hidden=!admin;
+  document.body.classList.add('authenticated');await loadProjects();if(admin)await loadBackendMetrics();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
 window.addEventListener('pagehide',()=>{accessKey='';});

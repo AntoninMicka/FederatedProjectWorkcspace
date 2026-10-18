@@ -618,6 +618,9 @@ def main():
             deadline = QTimer()
             deadline.setSingleShot(True)
             def smoke_timeout():
+                print('desktop smoke controller: counter=' + str(server.counter) +
+                      ', busy=' + str(controller.busy) +
+                      ', receipt=' + str(bool(creation_result['receipt'])), flush=True)
                 page.runJavaScript("""JSON.stringify({
                   projectSmokeStarted:Boolean(window.projectSmokeStarted),
                   sidebarStage:window.smokeSidebarStage || null,
@@ -644,7 +647,18 @@ def main():
                   expectedPreviewTitle:window.smokeExpectedArtifacts?.[0]?.title || null,
                   previewTitleMatches:document.querySelector('#preview-title')?.textContent===window.smokeExpectedArtifacts?.[0]?.title,
                   previewDetailsHidden:document.querySelector('#preview-details')?.hidden,
-                  projectHidden:document.querySelector('#project-view')?.hidden
+                  projectHidden:document.querySelector('#project-view')?.hidden,
+                  projectCreateHidden:document.querySelector('#project-create-view')?.hidden,
+                  projectTitle:document.querySelector('#project-title')?.textContent || null,
+                  projectCommit:Boolean(document.querySelector('#project-commit')?.textContent),
+                  imageTabHidden:document.querySelector('#image-tab')?.hidden,
+                  imageTabSelected:document.querySelector('#image-tab')?.getAttribute('aria-selected'),
+                  imagePanelHidden:document.querySelector('#image-panel')?.hidden,
+                  imagePrompt:Boolean(document.querySelector('#image-prompt')),
+                  imageRequestHidden:document.querySelector('#image-request-preview')?.hidden,
+                  imageResultHidden:document.querySelector('#image-result')?.hidden,
+                  imageDispatchDisabled:document.querySelector('#image-dispatch')?.disabled,
+                  count:document.querySelector('#count')?.textContent || null
                 })""", lambda value: (print('desktop smoke timeout: ' + str(value), flush=True), app.exit(2)))
             deadline.timeout.connect(smoke_timeout)
             deadline.start(15000)
@@ -657,6 +671,11 @@ def main():
                 project_check = json.dumps(expected)
             def checked(value):
                 if value == '1' and server.counter == 1:
+                    if args.smoke_create and not creation_result['receipt'] and not controller.busy:
+                        created_projects = [item for item in server.projects.list()
+                                            if item['title'] == 'Nový projekt ze společného formuláře']
+                        if len(created_projects) == 1:
+                            creation_result['receipt'] = created_projects[0]
                     if args.smoke_create and (not creation_result['receipt'] or controller.busy):
                         return
                     poll.stop()
@@ -717,6 +736,11 @@ def main():
                   window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
+                    const settingsTab=document.querySelector('#settings-sidebar-tab');
+                    const monitor=document.querySelector('#resource-monitor-open');
+                    const monitorDialog=document.querySelector('#resource-monitor-dialog');
+                    if(settingsTab.disabled || !monitor || !monitorDialog)return null;
+                    monitor.click();if(!monitorDialog.open)return null;monitorDialog.close();
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
                        document.querySelector('#sidebar-projects select') ||
                        card.querySelector('.project-name').textContent!==expected.title)return null;
@@ -888,9 +912,14 @@ def main():
                 })()""".replace('EXPECTED', project_check)
             if args.smoke_create:
                 script = """(()=>{
+                  const required=['project-view','project-title','project-commit','image-tab','image-panel',
+                    'image-prompt','image-request-preview','image-result','image-dispatch'];
+                  const missing=required.filter(id=>!document.getElementById(id));
+                  if(missing.length)return null;
                   if(document.querySelector('#project-view').hidden ||
                      document.querySelector('#project-title').textContent!=='Nový projekt ze společného formuláře' ||
-                     !document.querySelector('#project-commit').textContent) return null;
+                     !document.querySelector('#project-commit').textContent ||
+                     !document.querySelector('#project-create-view').hidden) return null;
                   const imageTab=document.querySelector('#image-tab');imageTab.click();
                   if(document.querySelector('#image-panel').hidden ||
                      imageTab.getAttribute('aria-selected')!=='true' ||
@@ -914,6 +943,9 @@ def main():
                             args.smoke_create, operation)
                         bootstrap = """(()=>{
                           const title='Nový projekt ze společného formuláře';
+                          document.querySelector('#sidebar-create-project').click();
+                          if(document.querySelector('#project-create-view').hidden ||
+                             !document.querySelector('#project-home').hidden)throw new Error('Samostatná stránka vytvoření se neotevřela.');
                           document.querySelector('#new-project-title').value=title;
                           projectCreationAttempt={title,operation_id:OPERATION};
                           setProjectCreationLocation(LOCATION);

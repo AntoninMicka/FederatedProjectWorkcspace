@@ -11,7 +11,7 @@ from spikes.project_creation import ProjectCreation
 
 DESKTOP_BOOTSTRAP = '''document.body.dataset.runtime='desktop';
 for(const id of ['settings-cms-tab','settings-users-tab','settings-federation-tab',
- 'backend-metrics','backend-metrics-indicator'])document.getElementById(id).hidden=false;
+ 'backend-metrics','backend-metrics-indicator','openai-resource-provider'])document.getElementById(id).hidden=false;
 document.getElementById('project-location-controls').hidden=false;
 document.getElementById('open-notebooklm-import').hidden=false;
 '''

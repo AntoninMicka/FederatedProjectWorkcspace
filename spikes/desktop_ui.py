@@ -237,7 +237,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="artifacts-tab" role="tab" aria-label="Podklady" aria-controls="sidebar-artifacts" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7M9 16h7"/></svg><span class="sidebar-tab-label" role="tooltip">Podklady</span></button>
 <button id="tools-tab" role="tab" aria-label="Nástroje" aria-controls="sidebar-tools" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 3-4-4z"/></svg><span class="sidebar-tab-label" role="tooltip">Nástroje</span></button>
 <button id="presentations-tab" role="tab" aria-label="Výstupy" aria-controls="sidebar-presentations" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9h4v10M10 19V4h4v15M16 19v-7h4v7"/></svg><span class="sidebar-tab-label" role="tooltip">Výstupy</span></button>
-<button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button></div>
+<button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button></div>
 <div id="sidebar-projects" role="tabpanel" aria-labelledby="projects-tab" tabindex="0">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button">Nový projekt</button>
@@ -273,7 +273,28 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <li><button type="button" data-settings-tab="settings-users-tab">Uživatelé</button></li>
 <li><button type="button" data-settings-tab="settings-federation-tab">Federace</button></li>
 </ul></div></div>
+<section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
+<button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
+<span class="resource-monitor-heading">Zdroje <small>detail</small></span>
+<span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
+<span id="local-provider-indicator">Lokální AI · neověřeno</span>
+<span class="resource-mini-row"><span>CPU</span><progress max="100" value="0" aria-label="CPU – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>GPU</span><progress max="100" value="0" aria-label="GPU – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>RAM</span><progress max="100" value="0" aria-label="RAM – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>VRAM</span><progress max="100" value="0" aria-label="VRAM – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>DISK</span><progress max="100" value="0" aria-label="Disk – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>NET</span><progress max="100" value="0" aria-label="Síť – placeholder bez telemetrie"></progress><output>—</output></span>
+</button></section>
 <button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
+<dialog id="resource-monitor-dialog" aria-labelledby="resource-monitor-title">
+<div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
+<section><h3>Poskytovatelé</h3><div id="resource-provider-list">
+<article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p></article>
+<article><strong>Lokální AI</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><small>U lokálních providerů se zde sleduje pouze dostupnost, nikoli tokeny ani náklady.</small></article>
+</div></section>
+<section><h3>Systémové monitory</h3><p class="resource-placeholder-note">CPU, GPU, RAM, VRAM, DISK a NET jsou zatím pouze připravená místa. Aplikace dosud systémovou telemetrii nesbírá.</p>
+<div id="system-monitor-detail"></div></section>
+</dialog>
 <main><div id="project-home">
 <header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
 <div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
@@ -289,20 +310,6 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="project-delete-status" role="status"></p></section>
 <details id="project-trash"><summary>Obnovitelný koš projektů</summary><div id="project-trash-list"></div>
 <p id="project-trash-status" role="status"></p></details>
-<form id="create-project" aria-label="Vytvořit projekt">
-<label for="new-project-title">Název nového projektu</label>
-<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
-<button id="create-project-btn">Připravit vytvoření</button></div>
-<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
-<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
-<p id="project-location-label">Použije se výchozí místní umístění.</p>
-<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
-<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
-<pre id="project-create-details"></pre>
-<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
-<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
-<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
-<p id="create-project-status" role="status"> </p></form>
 <p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
@@ -322,6 +329,25 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="presentation-slide" tabindex="0" aria-live="polite">Zde se zobrazí aktuální slide.</div>
 </details>
 </div>
+<div id="project-create-view" hidden>
+<header><span class="badge">Nový projekt</span><span>Samostatný průvodce vytvořením</span></header>
+<button id="project-create-back" type="button" class="back-button">← Zpět na projekty</button>
+<section class="standalone-form"><div class="eyebrow">NOVÝ PRACOVNÍ PROSTOR</div><h1 id="project-create-heading" tabindex="-1">Vytvořit projekt</h1>
+<p>Nejprve připravíme přesný náhled. Projekt vznikne až po vašem potvrzení názvu a cílového umístění.</p>
+<form id="create-project" aria-label="Vytvořit projekt">
+<label for="new-project-title">Název nového projektu</label>
+<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
+<button id="create-project-btn">Připravit vytvoření</button></div>
+<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
+<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
+<p id="project-location-label">Použije se výchozí místní umístění.</p>
+<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
+<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
+<pre id="project-create-details"></pre>
+<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
+<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
+<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
+<p id="create-project-status" role="status"> </p></form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
 <button id="notebooklm-import-back" type="button" class="back-button">← Zpět na projekty</button>
@@ -745,7 +771,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section>
 <small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
 </section>
-</div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+</div>
 <div id="presenter-view" hidden>
 <header class="presenter-header"><div class="presenter-header-main"><span class="badge">Presenter · NÁCVIK</span><h1>Disclosure cockpit</h1><p>Demo workspace · Ukázková schůzka · Interní demo · r1</p></div>
 <div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span>Schůzka <b id="presenter-meeting-time">00:00</b></span><span>Odbočka <b id="presenter-branch-time">00:00</b></span><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
@@ -796,10 +822,17 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}
-#backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
- background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
- padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
- white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
+#resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
+#resource-monitor-open:hover{background:#1c3549}#resource-monitor-open>*{pointer-events:none}
+.resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
+#backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
+.resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;gap:5px;align-items:center;margin:2px 0;font-size:8px;color:#9eb5c7}.resource-mini-row progress{width:100%;height:5px;accent-color:#79c9ac}.resource-mini-row output{text-align:right;color:#7891a3}
+#resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
+#resource-monitor-dialog::backdrop{background:#07131fa8}.resource-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.resource-dialog-heading h2{margin:5px 0 12px}.resource-dialog-heading button{flex:none}
+#resource-monitor-dialog>section{margin-top:16px;padding:15px;border:1px solid #dce5eb;border-radius:12px;background:white}#resource-monitor-dialog h3{margin:0 0 12px}
+#resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
+.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 92px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}.project-card-wrap{display:grid;gap:6px;min-width:0}.project-remove{justify-self:end;background:transparent;color:#8b3030;padding:7px 9px;font-size:12px}.project-remove:hover{background:#fff1f1}.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash{margin:18px 0}#project-trash-list{margin-top:8px}
 .project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
@@ -896,7 +929,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  pre,code,output,[role="status"],[role="alert"]{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
  #preview-content pre,#workflow-panel pre,#image-request-json,#image-result-metadata,#external-preview pre,#cms-request-preview{white-space:pre-wrap;overflow-x:auto}
  #pdf-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#pdf-page{margin:0}
- #backend-metrics-indicator{right:8px;bottom:8px;max-width:calc(100vw - 16px)}
+ #system-monitor-detail{grid-template-columns:1fr}
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
@@ -915,7 +948,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#project-create-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -1468,6 +1501,7 @@ const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
+const projectCreateView=document.querySelector('#project-create-view');
 const sourceImportView=document.querySelector('#source-import-view');
 const notebookImportView=document.querySelector('#notebooklm-import-view');
 const historyView=document.querySelector('#history-view');
@@ -1500,7 +1534,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#sidebar-settings-list button'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#sidebar-settings-list button'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -1588,7 +1622,7 @@ function renderTodo(todo){
   lists[item.depth].append(row);
  }
 }
-const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab','settings-sidebar-tab'];
+const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab'];
 function syncSidebarProjectAvailability(){
  const available=Boolean(activeProject);
  for(const id of projectSidebarTabs){const tab=document.getElementById(id);tab.disabled=!available;tab.setAttribute('aria-disabled',String(!available));}
@@ -1611,6 +1645,7 @@ function clearProject(){
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
+ projectCreateView.hidden=true;
  settingsView.hidden=true;
  sourceImportView.hidden=true;
  notebookImportView.hidden=true;
@@ -2012,8 +2047,12 @@ document.querySelector('#projects-tab').addEventListener('click',()=>loadProject
 document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
 document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
  if(activeProject)await loadProjects();
- document.querySelector('#create-project').scrollIntoView({block:'start'});document.querySelector('#new-project-title').focus();
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
+ sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;
+ projectCreateView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
+ resetProjectCreationPreview();document.querySelector('#project-create-heading').focus();
 });
+document.querySelector('#project-create-back').addEventListener('click',()=>loadProjects());
 document.querySelector('#sidebar-import-project').addEventListener('click',event=>{
  const options=document.querySelector('#sidebar-project-import-options'),open=options.hidden;options.hidden=!open;event.currentTarget.setAttribute('aria-expanded',String(open));
 });
@@ -2417,10 +2456,10 @@ function syncSidebarSettingsList(){
  for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-tab]'))button.hidden=document.getElementById(button.dataset.settingsTab).hidden;
 }
 async function openSettings(settingsTabId='settings-backend-tab'){
- if(!activeProject||!canLeaveWorkspaceEditors())return;
+ if(!canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
  const requested=document.getElementById(settingsTabId);selectSettingsTab(requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -2687,6 +2726,30 @@ document.querySelector('#google-drive-callback').textContent=googleDriveDesktop 
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
+const resourceOpenAIDetail=document.querySelector('#resource-openai-detail');
+const localProviderAvailability=document.querySelector('#local-provider-availability');
+const localProviderIndicator=document.querySelector('#local-provider-indicator');
+const resourceMonitorDialog=document.querySelector('#resource-monitor-dialog');
+for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
+ const row=document.createElement('div');row.className='resource-detail-row';
+ const label=document.createElement('strong');label.textContent=name;
+ const progress=document.createElement('progress');progress.max=100;progress.value=0;
+ progress.setAttribute('aria-label',`${name} – placeholder bez telemetrie`);
+ const value=document.createElement('output');value.textContent='bez telemetrie';
+ row.append(label,progress,value);document.querySelector('#system-monitor-detail').append(row);
+}
+document.querySelector('#resource-monitor-open').addEventListener('click',()=>resourceMonitorDialog.showModal());
+document.querySelector('#resource-monitor-close').addEventListener('click',()=>resourceMonitorDialog.close());
+resourceMonitorDialog.addEventListener('click',event=>{
+ const bounds=resourceMonitorDialog.getBoundingClientRect();
+ if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)resourceMonitorDialog.close();
+});
+function renderLocalProviderAvailability(binding){
+ localProviderIndicator.textContent=binding ? `Lokální AI · ${binding.model} · neověřeno` : 'Lokální AI · nenastaveno';
+ localProviderAvailability.textContent=binding ?
+  `Nakonfigurováno: ${binding.model}. Dostupnost zatím nebyla ověřena.` :
+  'Lokální provider není nakonfigurován; dostupnost není ověřena.';
+}
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
@@ -3277,6 +3340,7 @@ function chatBindingLabel(binding){
 }
 function fillBinding(binding,draft=null,draftState=null){
  chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
+ renderLocalProviderAvailability(binding);
  if(candidate){fields.boundary.value=candidate.boundary;fields.endpoint.value=candidate.endpoint;
   fields.model.value=candidate.model;fields.target_id.value=candidate.target_id;
   fields.tls_cert_sha256.value=candidate.tls_cert_sha256 || '';
@@ -3348,7 +3412,10 @@ function renderBackendMetrics(result){
  if(!result?.report){backendMetricsStatus.textContent=result?.credential?.available ?
   'Administrátorský klíč je uložen; přehled zatím nebyl načten.' :
   'Administrátorský klíč není uložen.';report.hidden=true;
-  backendMetricsIndicator.textContent='OpenAI přehled: nenačten';return;}
+  backendMetricsIndicator.textContent='OpenAI · nenačteno';
+  resourceOpenAIDetail.textContent=result?.credential?.available ?
+   'Administrátorský klíč je uložen; spotřeba zatím nebyla načtena.' :
+   'Účetní přehled není nakonfigurován.';return;}
  const metricStates={unauthorized:'Administrátorský klíč byl odmítnut (HTTP 401).',
   forbidden:'Klíč nemá oprávnění k účetnímu přehledu (HTTP 403).',
   'rate-limited':'OpenAI dočasně omezilo načítání přehledu (HTTP 429).',
@@ -3365,6 +3432,9 @@ function renderBackendMetrics(result){
  const parts=[...costs,tokens ? `${tokens} tokenů` : ''].filter(Boolean);
  backendMetricsIndicator.textContent=`OpenAI · ${result.report.status}`+(parts.length ? ` · ${parts.join(' · ')}` : '');
  backendMetricsIndicator.title=`Poslední načtení: ${result.report.fetched_at}`;
+ resourceOpenAIDetail.textContent=`Stav: ${result.report.status}. `+
+  (parts.length ? parts.join(' · ') : 'Přehled neobsahuje agregovanou spotřebu.')+
+  ` Poslední načtení: ${result.report.fetched_at}.`;
 }
 async function loadBackendMetrics(){
  try{renderBackendMetrics(await projectRequest('/v1/backend-metrics/status',{}));}
@@ -3535,10 +3605,14 @@ document.querySelector('#google-drive-config-form').addEventListener('submit',as
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
+  localProviderIndicator.textContent=result.model_available ? 'Lokální AI · dostupná' : 'Lokální AI · dostupná, model chybí';
+  localProviderAvailability.textContent=result.model_available ?
+   `Dostupný · model ${result.model} je připraven.` :
+   `Dostupný · model ${result.model} není nainstalován.`;
   settingsBackendStatus.textContent=result.model_available ?
    `Ollama je dostupná a model ${result.model} je připraven.` :
    `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
- }catch(error){settingsBackendStatus.textContent=error.message;}
+ }catch(error){localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
 ollamaStreamingToggle.addEventListener('change',async event=>{
@@ -4280,7 +4354,7 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
  }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 refreshImageAdapter();
-if(window.workspaceAutoStart!==false)loadProjects();
+if(window.workspaceAutoStart!==false){loadProjects();if(!backendMetricsIndicator.hidden)loadBackendMetrics();}
 """
 JS += ADMIN_JS
 DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
