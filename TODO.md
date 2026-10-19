@@ -67,6 +67,20 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Nastavení přebírají existující sekce dostupné dané runtime roli. Další revize
   může obsah těchto seznamů rozšířit, nesmí však potichu přidat novou schopnost
   spouštět výpočty ani změnit projektové, RBAC nebo privacy hranice.
+
+  Nově schválený cílový směr společného pracovního prostoru nahrazuje omezení
+  globálních Chatů: bez otevřeného projektu má jít zobrazit nezařazené vlákno a
+  založit nové nezařazené vlákno. Otevřený projekt dostane vlastní úvodní
+  stránku s názvem, stručným popisem a úkoly. Stejná hlavní stránka bude pro
+  projekt i nezařazený chat rozdělená na horní kontextovou část (úvod projektu,
+  editor nebo aktivní konverzace) a spodní jednotný widget pro zadání dotazu či
+  úkolu. Detailní návrh prompt widgetu je vědomě odložený; před ním uživatel
+  projde existující editory a určí jejich cílové uspořádání. Datová vrstva již
+  podporuje vlákna s `project_id = null`, ale dnešní chat dispatch vyžaduje
+  projektový workspace, jeho HEAD a projektový Context Manifest. Implementace
+  proto musí nejdřív explicitně navrhnout bezpečný projektově nezařazený
+  dispatch kontrakt; nesmí pouze odstranit blokaci v UI ani předstírat
+  projektový kontext. Tento navazující řez zatím není implementovaný.
 - [ ] [in progress] **UX-FACELIFT-01-C — iterativní implementace schváleného řezu
   (cílová úroveň: implemented).** Promítnout schválené anotace do jediného
   sdíleného frontendu a zachovat mobilní layout, klávesnicovou přístupnost,
