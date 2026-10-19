@@ -558,6 +558,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             '<div id="preview-panel"', 1)[0]
         self.assertIn('id="project-title"', overview)
         self.assertIn('id="project-description"', overview)
+        self.assertIn('class="project-overview-grid"', overview)
+        self.assertIn('class="dashboard-tile project-overview-placeholder" aria-hidden="true"', overview)
+        self.assertIn('class="project-overview-description" aria-label="Stručný popis projektu"', overview)
         self.assertIn('id="project-overview-task-list"', overview)
         self.assertIn('id="project-overview-edit-todo"', overview)
         self.assertIn('class="dashboard-tile dashboard-tasks project-overview-tasks"', overview)
@@ -573,6 +576,13 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible"', HTML)
         self.assertIn('id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden"', HTML)
         self.assertIn('#prompt-widget{flex-shrink:0', CSS)
+        self.assertIn('.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
+        self.assertIn('.project-overview-description{grid-column:span 2', CSS)
+        self.assertIn('@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}', CSS)
+        self.assertIn('.project-overview-description{grid-column:1/-1;grid-row:1}', CSS)
+        self.assertIn('.project-overview-grid{grid-template-columns:1fr}', CSS)
+        self.assertIn('.project-overview-placeholder{display:flex!important;grid-column:1;grid-row:2', CSS)
+        self.assertIn('.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3', CSS)
 
     def test_gamepad_demo_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import HTML, JS

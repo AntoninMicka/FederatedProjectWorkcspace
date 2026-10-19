@@ -106,7 +106,7 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na dlaždici projektu nebo na jeho název v seznamu vlevo. Otevře se projektová stránka **Projekt** s názvem, stručným popisem a nehotovými položkami hlavního TODO; uložený commit je dostupný v rozbalovacím detailu nahoře. Úkoly vycházejí ze stejného validovaného Git snapshotu jako levý panel a vedou do společného editoru hlavního seznamu. Prázdný projekt a chybějící popis mají vlastní pravdivé hlášení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na dlaždici projektu nebo na jeho název v seznamu vlevo. Otevře se projektová stránka **Projekt** s názvem nahoře a pod ním široká mřížka `1–2–1`: prázdná připravená dlaždice, neorámovaný stručný popis přes dvě pozice a dlaždice nehotových položek hlavního TODO. Ve střední šířce je popis přes celý první řádek a obě dlaždice pod ním; na telefonu jsou všechny tři části pod sebou. Uložený commit je dostupný v rozbalovacím detailu nahoře. Úkoly vycházejí ze stejného validovaného Git snapshotu jako levý panel a vedou do společného editoru hlavního seznamu. Prázdný projekt a chybějící popis mají vlastní pravdivé hlášení. Při chybě se předchozí výsledek vymaže.
 
 ## Markdown editor a checklisty
 

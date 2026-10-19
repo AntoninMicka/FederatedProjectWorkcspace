@@ -617,12 +617,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
 <div id="project-overview-panel" role="tabpanel" aria-labelledby="project-overview-tab">
-<section class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1>
-<p id="project-description"></p></section>
+<header class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1></header>
+<div class="project-overview-grid">
+<section class="dashboard-tile project-overview-placeholder" aria-hidden="true"></section>
+<section class="project-overview-description" aria-label="Stručný popis projektu"><p id="project-description"></p></section>
 <section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
 <h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
 <ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
-<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div>
+<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
@@ -909,8 +911,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
 #main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}
-#project-overview-panel{max-width:1040px;margin:0 auto;padding:22px 0}.project-overview-heading{padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-heading p{max-width:760px;margin:0;white-space:pre-wrap}.project-overview-heading p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
-.project-overview-tasks{width:100%;max-height:none;min-height:260px;overflow:hidden}.project-overview-tasks ul{max-height:min(420px,42vh)}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:auto}
+#project-overview-panel{max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch}.project-overview-placeholder{grid-column:span 1;min-height:280px}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
+.project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:280px;overflow:hidden}.project-overview-tasks ul{max-height:min(420px,42vh)}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:auto}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
@@ -933,6 +935,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
+@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-placeholder{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
@@ -947,7 +950,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
  #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
- #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
+ #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-placeholder{display:flex!important;grid-column:1;grid-row:2;min-height:180px}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
  #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
  .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}

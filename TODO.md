@@ -141,6 +141,10 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   klienta, takže dlaždice spuštění ani načtená data nepředstírají.
   Otevřený projekt má nyní výchozí centrální stránku **Projekt** s názvem,
   commitnutým stručným popisem a přehledem nehotových položek hlavního TODO.
+  Pod názvem používá široká obrazovka čtyřsloupcový poměr `1–2–1`: prázdnou
+  připravenou dlaždici, neorámovaný popis přes dva sloupce a úkolovou dlaždici.
+  Střední šířka skládá popis přes dva sloupce nad dvě samostatné dlaždice;
+  mobil řadí popis, prázdnou dlaždici a úkoly po jednom pod sebe.
   Přehled reuse/adaptuje vzhled globální dlaždice úkolů a stejnou validovanou
   `main_todo` projekci jako levý panel; nevznikla druhá autorita ani nový zápis.
   Stávající chat composer je vložený jako jednotný spodní prompt widget, který
@@ -168,6 +172,10 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `git diff --check`. Skutečný Qt WebEngine průchod prošel nad projektem s
   podklady i nad prázdným projektem; ověřil název, popis, nehotové úkoly,
   ruční skrytí/zobrazení promptu, deklarované výchozí stavy a nezměněný Git.
+  Navazující geometrická kontrola stejného skutečného WebEngine průchodu
+  ověřila také střední layout `2 / 1 1`; po změně znovu prošlo všech **638
+  testů** (27 přeskočeno), cílené layoutové testy, JavaScript parser, Python
+  kompilace a `git diff --check`.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
