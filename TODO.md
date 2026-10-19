@@ -78,9 +78,11 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   projde existující editory a určí jejich cílové uspořádání. Datová vrstva již
   podporuje vlákna s `project_id = null`, ale dnešní chat dispatch vyžaduje
   projektový workspace, jeho HEAD a projektový Context Manifest. Implementace
-  proto musí nejdřív explicitně navrhnout bezpečný projektově nezařazený
-  dispatch kontrakt; nesmí pouze odstranit blokaci v UI ani předstírat
-  projektový kontext. Tento navazující řez zatím není implementovaný.
+  proto musí před zpřístupněním nezařazeného odesílání explicitně navrhnout
+  bezpečný projektově nezařazený dispatch kontrakt; nesmí pouze odstranit
+  blokaci v UI ani předstírat projektový kontext. Projektová úvodní stránka a
+  sdílený layout promptu jsou už implementované v položce C; nezařazené
+  otevření, založení a dispatch zatím implementované nejsou.
 - [ ] [in progress] **UX-FACELIFT-01-C — iterativní implementace schváleného řezu
   (cílová úroveň: implemented).** Promítnout schválené anotace do jediného
   sdíleného frontendu a zachovat mobilní layout, klávesnicovou přístupnost,
@@ -137,6 +139,15 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Kalendář a pošta jsou zatím pravdivé vizuální placeholdery: aplikace nemá
   nakonfigurovaný přenositelný kontrakt pro otevření konkrétního externího
   klienta, takže dlaždice spuštění ani načtená data nepředstírají.
+  Otevřený projekt má nyní výchozí centrální stránku **Projekt** s názvem,
+  commitnutým stručným popisem a přehledem nehotových položek hlavního TODO.
+  Přehled reuse/adaptuje vzhled globální dlaždice úkolů a stejnou validovanou
+  `main_todo` projekci jako levý panel; nevznikla druhá autorita ani nový zápis.
+  Stávající chat composer je vložený jako jednotný spodní prompt widget, který
+  lze ručně skrýt a zobrazit. Každá centrální záložka deklaruje svůj výchozí
+  stav promptu atributem `data-prompt-default`: Projekt, Náhled a Chat jej
+  otevírají, specializované workflow a editory jej standardně skládají.
+  Přepnutí Náhledu nebo Chatu už nezávisí na pozičním indexu záložky.
   Aktualizované regresní testy ověřují pořadí, dostupnost, akce a mobilní
   navigaci. Cílená integrační sada prošla 68 testy (6 přeskočeno), JavaScript
   prošel `node --check` a opt-in skutečný Qt WebEngine smoke prošel nad
@@ -152,6 +163,11 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Po dashboardovém řezu znovu prošla celá sada **637 testy** (27 přeskočeno),
   `node --check`, `git diff --check` i skutečný Qt WebEngine průchod načtením,
   interakcí a restartem sdíleného desktopového UI.
+  Po projektové úvodní stránce prošla celá sada **638 testy** (27 přeskočeno),
+  cílené desktopové a inventurní testy, JavaScript parser, Python kompilace a
+  `git diff --check`. Skutečný Qt WebEngine průchod prošel nad projektem s
+  podklady i nad prázdným projektem; ověřil název, popis, nehotové úkoly,
+  ruční skrytí/zobrazení promptu, deklarované výchozí stavy a nezměněný Git.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

@@ -602,20 +602,28 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="artifact-delete-run" type="button" disabled>Odstranit dokument</button><button id="artifact-delete-cancel" class="secondary-button" type="button">Zrušit</button></div></section>
 </div>
 <div id="project-view" hidden>
-<header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
+<header class="project-header"><span class="eyebrow">OTEVŘENÝ PROJEKT</span>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
-<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
-<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
-<button id="workflow-tab" role="tab" aria-controls="workflow-panel" aria-selected="false" tabindex="-1">Creator → opponent</button>
-<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
-<button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button>
-<button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" tabindex="-1">Obrázek</button>
-<button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" tabindex="-1">Prezentace</button>
-<button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" tabindex="-1">Metadata</button></div>
+<button id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible">Projekt</button>
+<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="false" data-prompt-default="visible" tabindex="-1">Náhled</button>
+<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible" tabindex="-1">Chat</button>
+<button id="workflow-tab" role="tab" aria-controls="workflow-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Creator → opponent</button>
+<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Souhrn</button>
+<button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Extrakce</button>
+<button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Obrázek</button>
+<button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Prezentace</button>
+<button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
-<div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
+<div id="project-overview-panel" role="tabpanel" aria-labelledby="project-overview-tab">
+<section class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1>
+<p id="project-description"></p></section>
+<section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
+<h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
+<ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
+<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div>
+<div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
@@ -751,6 +759,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label><input id="metadata-apply-description" type="checkbox"><span id="metadata-description-after"></span></label></section>
 <fieldset><legend>Navržené nové štítky</legend><div id="metadata-tag-list"></div></fieldset>
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
+<section id="prompt-widget" aria-label="Prompt"><header class="prompt-widget-heading"><strong>Zadání</strong>
+<button id="prompt-widget-toggle" type="button" class="secondary-button" aria-controls="chat-composer" aria-expanded="true">Skrýt prompt</button></header>
 <form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
 <label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Zadání úkolu</option><option value="brainstorming">Volná konverzace</option></select>
 <label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
@@ -786,7 +796,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
-<small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
+<small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form></section>
 </section>
 </div>
 <div id="presenter-view" hidden>
@@ -893,17 +903,19 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%;padding:7px 5px;border-radius:7px;cursor:pointer}.todo-label:hover,.todo-label:focus-visible{background:#274154;outline:none}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
-#project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0}.project-header h1{font-size:25px;color:#162638;margin:6px 0}
+#project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0;min-height:28px}.project-header .eyebrow{align-self:center}
 .project-header details{max-width:280px}.project-header code{font-size:10px}
 #workspace-panel{min-height:0;flex:1;display:flex;flex-direction:column;background:white;border:1px solid #dce3e9;border-radius:16px;overflow:hidden}
 #main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
 #main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}
+#project-overview-panel{max-width:1040px;margin:0 auto;padding:22px 0}.project-overview-heading{padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-heading p{max-width:760px;margin:0;white-space:pre-wrap}.project-overview-heading p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
+.project-overview-tasks{width:100%;max-height:none;min-height:260px;overflow:hidden}.project-overview-tasks ul{max-height:min(420px,42vh)}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:auto}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
-#chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
+#prompt-widget{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd}.prompt-widget-heading{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;color:#315f58}.prompt-widget-heading .secondary-button{margin:0;padding:7px 11px;min-height:0}#chat-composer{max-height:45vh;overflow:auto;padding:4px 20px 14px}#chat-composer label{font-weight:600;font-size:12px}
 #external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 #task-routing,#task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-routing fieldset,#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:160px;overflow:auto}#task-routing label,#task-artifact-list label,#task-public-source-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
@@ -935,6 +947,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
  #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
+ #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
  #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
  .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}
@@ -1613,6 +1626,26 @@ function renderSidebarArtifacts(items){
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
 createTodo.addEventListener('click',()=>openMainTodoEditor());
+document.querySelector('#project-overview-edit-todo').addEventListener('click',()=>openMainTodoEditor());
+function renderProjectOverview(todo){
+ const list=document.querySelector('#project-overview-task-list');
+ const status=document.querySelector('#project-overview-task-status');
+ const edit=document.querySelector('#project-overview-edit-todo');
+ list.replaceChildren();edit.textContent=todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů';
+ if(!todo){status.textContent='Projekt zatím nemá hlavní seznam úkolů.';return;}
+ if(todo.status!=='ready'){status.textContent='Hlavní seznam úkolů nelze zobrazit v tomto formátu nebo velikosti.';return;}
+ const open=todo.items.filter(item=>!item.checked);
+ for(const item of open){
+  const row=document.createElement('li');row.className='dashboard-task-row';
+  const button=document.createElement('button');button.type='button';
+  const title=document.createElement('span');title.textContent=item.title;
+  const detail=document.createElement('small');detail.textContent=item.depth ? `Vnořená úroveň ${item.depth}` : 'Hlavní úroveň';
+  button.append(title,detail);button.addEventListener('click',()=>openMainTodoEditor());row.append(button);list.append(row);
+ }
+ status.textContent=open.length ? `${open.length} nehotových · ${todo.completed} z ${todo.total} hotovo` :
+  (todo.total ? 'Všechny úkoly jsou hotové.' : 'Zatím bez úkolů.');
+ if(todo.truncated)status.textContent+=' Zobrazeno prvních 1000 položek.';
+}
 function renderTodo(todo){
  createTodo.hidden=false;createTodo.textContent=todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů';
  document.querySelector('#todo-help').hidden=!todo;
@@ -1679,8 +1712,10 @@ function clearProject(){
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
+ renderProjectOverview(null);
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
+ document.querySelector('#project-description').textContent='';
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
@@ -1966,15 +2001,16 @@ async function openRegisteredProject(projectId){
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
   rememberRecentProject(projectId);
-  activeProject={id:projectId,title:result.title,head:result.commit_id,mainTodoId:result.main_todo_id};
-  renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
+  activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id};
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
+  document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
   await loadChat();
   syncSidebarProjectAvailability();
-  selectSidebarTab(document.querySelector('#artifacts-tab'));
+  selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
@@ -2304,11 +2340,20 @@ let activeProject=null, selectedArtifact=null, previewRequest=0;
 const previewStatus=document.querySelector('#preview-status');
 const previewContent=document.querySelector('#preview-content');
 const mainTabs=[...document.querySelectorAll('#main-tabs [role="tab"]')];
+const promptForm=document.querySelector('#chat-composer');
+const promptToggle=document.querySelector('#prompt-widget-toggle');
+function setPromptVisible(visible,{focus=false}={}){
+ promptForm.hidden=!visible;promptToggle.setAttribute('aria-expanded',String(visible));
+ promptToggle.textContent=visible?'Skrýt prompt':'Zobrazit prompt';
+ if(visible&&focus)document.querySelector('#chat-draft').focus();
+}
+promptToggle.addEventListener('click',()=>setPromptVisible(promptForm.hidden,{focus:promptForm.hidden}));
 function selectMainTab(tab){
  for(const item of mainTabs){
   const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;
   document.getElementById(item.getAttribute('aria-controls')).hidden=!active;
  }
+ setPromptVisible(tab.dataset.promptDefault!=='hidden');
 }
 for(const tab of mainTabs){
  tab.addEventListener('click',()=>selectMainTab(tab));
@@ -2680,7 +2725,7 @@ async function openPreview(id,page=1){
  clearPreview();selectedArtifact=id;
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current',String(button.dataset.id===id));
  const request=previewRequest;
- selectMainTab(mainTabs[0]);previewStatus.textContent='Načítám náhled…';
+ selectMainTab(document.querySelector('#preview-tab'));previewStatus.textContent='Načítám náhled…';
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
@@ -3152,7 +3197,7 @@ function renderTaskOutcomes(){
     event.currentTarget.disabled=true;chatOperationStatus.textContent='Ukládám potvrzený artefakt…';
     try{const projectId=activeProject.id;await projectRequest('/v1/tasks/artifact',{
       task_id:projection.task_id,artifact_id:crypto.randomUUID(),operation_id:crypto.randomUUID()});
-     await openRegisteredProject(projectId);selectMainTab(mainTabs[1]);
+     await openRegisteredProject(projectId);selectMainTab(document.querySelector('#chat-tab'));
      chatOperationStatus.textContent='Artefakt byl uložen a návrh nahrazen odkazem.';
     }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
    }),taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
@@ -3746,7 +3791,7 @@ async function showExternalPreview(request){
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
- if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
@@ -3758,7 +3803,7 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
 document.querySelector('#external-propose-button').addEventListener('click',async event=>{
- if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const request={proposal_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
@@ -3844,7 +3889,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
- selectMainTab(mainTabs[1]);
+ selectMainTab(document.querySelector('#chat-tab'));
  const mode=document.querySelector('#chat-mode').value;
  const adapter=document.querySelector('#chat-run-adapter').value;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
@@ -4030,7 +4075,7 @@ async function runChatRecord(button,action){
     created_at:new Date().toISOString(),message_ids:[answer.message_id],snapshot_id:null,snapshot_sha256:null});
   }
   chatOperationStatus.textContent=action==='snapshot'?'Otisk byl uložen do projektu.':'Výstup byl uložen jako editovatelný dokument.';
-  await openRegisteredProject(activeProject.id);selectMainTab(mainTabs[1]);
+  await openRegisteredProject(activeProject.id);selectMainTab(document.querySelector('#chat-tab'));
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{button.disabled=false;}
 }

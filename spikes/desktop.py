@@ -753,8 +753,23 @@ def main():
                   }
                   if(document.querySelector('#project-view').hidden) return null;
                   if(document.querySelector('#project-title').textContent!==expected.title ||
+                     document.querySelector('#project-description').textContent!==expected.description ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
                      !document.querySelector('#project-home').hidden || !document.querySelector('#sidebar-projects').hidden)return null;
+                  const overviewTab=document.querySelector('#project-overview-tab');
+                  const overviewPanel=document.querySelector('#project-overview-panel');
+                  const promptForm=document.querySelector('#chat-composer');
+                  const promptToggle=document.querySelector('#prompt-widget-toggle');
+                  const openTodo=expected.main_todo?.status==='ready' ? expected.main_todo.items.filter(item=>!item.checked) : [];
+                  const overviewTasks=[...document.querySelectorAll('#project-overview-task-list .dashboard-task-row span')].map(item=>item.textContent);
+                  if(!window.projectOverviewChecked){
+                    if(overviewPanel.hidden || overviewTab.getAttribute('aria-selected')!=='true' || promptForm.hidden ||
+                       promptToggle.getAttribute('aria-expanded')!=='true' ||
+                       JSON.stringify(overviewTasks)!==JSON.stringify(openTodo.map(item=>item.title)))return null;
+                    promptToggle.click();if(!promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false')return null;
+                    promptToggle.click();if(promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='true')return null;
+                    window.projectOverviewChecked=true;
+                  }
                   const projectsTab=document.querySelector('#projects-tab'),chatsTab=document.querySelector('#chats-tab');
                   const artifactTab=document.querySelector('#artifacts-tab'),todoTab=document.querySelector('#todo-tab');
                   const artifactPanel=document.querySelector('#sidebar-artifacts'),todoPanel=document.querySelector('#todo-widget');
@@ -845,6 +860,7 @@ def main():
                     const workflowTab=document.querySelector('#workflow-tab');workflowTab.click();
                     const workflowPanel=document.querySelector('#workflow-panel');
                     if(workflowPanel.hidden || workflowTab.getAttribute('aria-selected')!=='true' ||
+                       !promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false' ||
                        !document.querySelector('#workflow-purpose') ||
                        !document.querySelector('#workflow-creator-artifacts') ||
                        !document.querySelector('#workflow-opponent-artifacts') ||
@@ -858,6 +874,7 @@ def main():
                     const imageTab=document.querySelector('#image-tab');imageTab.click();
                     const imagePanel=document.querySelector('#image-panel');
                     if(imagePanel.hidden || imageTab.getAttribute('aria-selected')!=='true' ||
+                       !promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false' ||
                        !document.querySelector('#image-prompt') ||
                        !document.querySelector('#image-request-preview').hidden ||
                        !document.querySelector('#image-result').hidden ||
@@ -869,8 +886,8 @@ def main():
                   window.smokeSidebarStage='composer';
                   if(composer.closest('[role=tabpanel]') || !composer.offsetParent || composer.getBoundingClientRect().width<=0)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
-                  if(document.querySelector('#preview-panel').hidden || draft.value!=='Local draft' ||
-                     document.activeElement!==previewTab)return null;
+                  if(overviewPanel.hidden || draft.value!=='Local draft' || promptForm.hidden ||
+                     document.activeElement!==overviewTab)return null;
                   window.smokeSidebarStage='main-home';
                   if(expected.artifacts.length){
                     if(!window.previewStarted){window.previewStarted=true;

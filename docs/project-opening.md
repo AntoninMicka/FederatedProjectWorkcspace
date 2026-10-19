@@ -106,7 +106,7 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na kartu projektu s názvem a popisem nebo na jeho název ve stručném seznamu vlevo. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Markdown dokumenty otevřete nativním editorem; registry zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na dlaždici projektu nebo na jeho název v seznamu vlevo. Otevře se projektová stránka **Projekt** s názvem, stručným popisem a nehotovými položkami hlavního TODO; uložený commit je dostupný v rozbalovacím detailu nahoře. Úkoly vycházejí ze stejného validovaného Git snapshotu jako levý panel a vedou do společného editoru hlavního seznamu. Prázdný projekt a chybějící popis mají vlastní pravdivé hlášení. Při chybě se předchozí výsledek vymaže.
 
 ## Markdown editor a checklisty
 
@@ -238,8 +238,12 @@ Po spuštění ověřte otevření, název, commit a „První poznámka“. Zav
 
 V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Podrobnosti**. U zdroje schema v2 jsou zde samostatně „Importováno do projektu“ a případný „Doložený čas vzniku zdroje“, který může být starší; dále aktér importu, SHA-256 původních bajtů, importér a všechny doložené volitelné údaje. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
 
-Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní zachová právě
-otevřený náhled nebo záložku; teprve Enter nebo **Odeslat** přepne na **Chat**.
+Společný prompt **Zadání** zůstává ve spodní části projektového pracovního
+panelu. Tlačítkem **Skrýt prompt** / **Zobrazit prompt** jej lze ručně sbalit a
+rozbalit. Stránky **Projekt**, **Náhled** a **Chat** jej při vstupu standardně
+zobrazí; specializované stránky workflow, souhrnu, extrakce, obrázku,
+prezentace a metadat jej standardně sbalí. Psaní zachová právě otevřený náhled
+nebo záložku; teprve Enter nebo **Zpracovat** přepne na **Chat**.
 Shift+Enter vytvoří nový řádek. Globální tlačítko **Nastavení** je dostupné i bez
 otevřeného projektu. Stránka má rovnocenné záložky **AI backend**,
 **Uživatelé** a **Federace**; obsah se zobrazuje přímo v hlavní ploše. Web ukáže

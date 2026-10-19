@@ -75,6 +75,7 @@ class ProjectTests(unittest.TestCase):
         for i, id_ in enumerate((ENTITY, OTHER)):
             result = self.projects.open(id_)
             self.assertEqual(result['commit_id'], self.gits[i].head())
+            self.assertEqual(result['description'], project().get('description', ''))
             self.assertEqual(result['artifacts'], [dict(id=id_, title=result['title'], kind='document')])
             self.assertEqual(self.gits[i].run('status', '--porcelain').stdout, '')
             self.assertEqual(Projects(self.node_path).open(id_), result)

@@ -551,7 +551,28 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
-        self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
+        self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", submit_handler)
+
+    def test_project_overview_and_prompt_widget_define_central_layout(self):
+        overview = HTML.split('<div id="project-overview-panel"', 1)[1].split(
+            '<div id="preview-panel"', 1)[0]
+        self.assertIn('id="project-title"', overview)
+        self.assertIn('id="project-description"', overview)
+        self.assertIn('id="project-overview-task-list"', overview)
+        self.assertIn('id="project-overview-edit-todo"', overview)
+        self.assertIn('class="dashboard-tile dashboard-tasks project-overview-tasks"', overview)
+        self.assertIn('function renderProjectOverview(todo)', JS)
+        self.assertIn('todo.items.filter(item=>!item.checked)', JS)
+        self.assertIn('renderTodo(result.main_todo);renderProjectOverview(result.main_todo)', JS)
+        self.assertIn("document.querySelector('#project-description').textContent=result.description", JS)
+        self.assertIn('id="prompt-widget"', HTML)
+        self.assertIn('aria-controls="chat-composer" aria-expanded="true"', HTML)
+        self.assertIn("setPromptVisible(tab.dataset.promptDefault!=='hidden')", JS)
+        self.assertIn('promptToggle.addEventListener', JS)
+        self.assertIn('id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible"', HTML)
+        self.assertIn('id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible"', HTML)
+        self.assertIn('id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden"', HTML)
+        self.assertIn('#prompt-widget{flex-shrink:0', CSS)
 
     def test_gamepad_demo_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import HTML, JS
