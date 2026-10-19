@@ -116,6 +116,10 @@ class DesktopTests(unittest.TestCase):
     def test_project_removal_ui_has_separate_preview_restore_and_purge_approvals(self):
         self.assertIn('id="project-delete-panel"', HTML)
         self.assertIn('id="project-trash-list"', HTML)
+        self.assertIn('id="project-trash-view" hidden', HTML)
+        self.assertIn('id="sidebar-project-trash"', HTML)
+        self.assertIn('id="dashboard-trash"', HTML)
+        self.assertIn("if(!openProjectTrashView())return", JS)
         for path in ('/v1/projects/delete/preview', '/v1/projects/delete/confirm',
                      '/v1/projects/delete/restore/preview',
                      '/v1/projects/delete/restore/confirm',
@@ -555,6 +559,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('/v1/gamepad/status', JS)
         self.assertIn('Gamepad demo', HTML)
         self.assertIn('id="gamepad-list"', HTML)
+        self.assertIn('id="legacy-home-diagnostics" hidden aria-hidden="true"', HTML)
 
     def test_gamepad_settings_endpoint_loads_without_write_and_saves_explicitly(self):
         driver = test_local_api.LocalAPITests()
@@ -798,6 +803,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                         projects.index('id="sidebar-project-list"'))
         self.assertLess(projects.index('id="sidebar-import-project"'),
                         projects.index('id="sidebar-project-list"'))
+        self.assertLess(projects.index('id="sidebar-project-trash"'),
+                        projects.index('id="sidebar-project-list"'))
         self.assertIn('id="open-notebooklm-import"', projects)
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
@@ -842,8 +849,23 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('#sidebar-project-tools>[role="tabpanel"]:not([hidden])', CSS)
         self.assertIn('#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree', CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', CSS)
-        project_home = HTML.split('<main><div id="project-home">', 1)[1].split('<div id="project-create-view"', 1)[0]
+        project_home = HTML.split('<main><div id="project-home">', 1)[1].split(
+            '<div id="project-trash-view"', 1)[0]
         self.assertNotIn('id="create-project"', project_home)
+        self.assertIn('id="dashboard-grid"', project_home)
+        self.assertIn('id="dashboard-calendar"', project_home)
+        self.assertIn('id="dashboard-tasks"', project_home)
+        self.assertIn('id="dashboard-mail"', project_home)
+        self.assertIn('id="dashboard-trash"', project_home)
+        self.assertNotIn('Gamepad demo', project_home)
+        self.assertNotIn('Promítání prezentace', project_home)
+        self.assertNotIn('VAŠE PRÁCE NA JEDNOM MÍSTĚ', project_home)
+        self.assertNotIn('Vaše projekty, zdroje a rozhodnutí', project_home)
+        self.assertIn('grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
+        self.assertNotIn('.dashboard-tasks{grid-row:span', CSS)
+        self.assertIn('#dashboard-tasks{display:flex!important', CSS)
+        self.assertIn("projectRequest('/v1/projects/open',{project_id:item.id})", JS)
+        self.assertIn('recentProjectOrder=[projectId,...recentProjectOrder.filter', JS)
         self.assertIn('<div id="project-create-view" hidden>', HTML)
         self.assertIn('id="project-create-back"', HTML)
         self.assertIn("projectCreateView.hidden=false", JS)

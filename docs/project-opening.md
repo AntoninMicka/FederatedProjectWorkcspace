@@ -45,17 +45,19 @@ správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
 
 ## Bezpečné odstranění projektu
 
-Na kartě projektu zvolte **Správa odstranění…**. Každá volba nejprve zobrazí
-přesný repozitář, projektový stav, HEAD, lokální záznamy a blokátory; bez
-checkboxu se nic nezmění.
+V levém panelu otevřete u projektu menu se třemi tečkami a zvolte **Správa
+odstranění…**. Samostatnou stránku koše lze otevřít také tlačítkem **Koš
+projektů** v panelu Projekty nebo stejnojmennou dlaždicí na úvodním přehledu.
+Každá volba nejprve zobrazí přesný repozitář, projektový stav, HEAD, lokální
+záznamy a blokátory; bez checkboxu se nic nezmění.
 
 - **Obnovit odvozený index** odstraní jen obnovitelný `index.sqlite`; další
   otevření jej sestaví z Gitu. Journal ani projekt nemaže.
 - **Pouze odregistrovat** odebere projekt ze seznamu, ale ponechá repozitář,
   stav i node-local historii na původních cestách.
 - **Přesunout do obnovitelného koše** přesune repozitář a projektový stav
-  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Sekce
-  **Obnovitelný koš projektů** nabídne samostatně potvrzenou obnovu.
+  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Stránka
+  **Koš projektů** nabídne samostatně potvrzenou obnovu.
 
 Definitivní výmaz lze připravit jen nad položkou v koši a vyžaduje nový
 náhled i druhé potvrzení. Pokud k projektu zůstává chatová/AI historie,

@@ -241,7 +241,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="sidebar-projects" role="tabpanel" aria-labelledby="projects-tab" tabindex="0">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button">Nový projekt</button>
-<button id="sidebar-import-project" type="button" aria-expanded="false" aria-controls="sidebar-project-import-options">Importovat projekt</button></div>
+<button id="sidebar-import-project" type="button" aria-expanded="false" aria-controls="sidebar-project-import-options">Importovat projekt</button>
+<button id="sidebar-project-trash" type="button">Koš projektů</button></div>
 <div id="sidebar-project-import-options" hidden><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p><ul id="sidebar-project-list"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
@@ -296,11 +297,28 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="system-monitor-detail"></div></section>
 </dialog>
 <main><div id="project-home">
-<header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
-<div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
-<h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
-<p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
-<div id="project-cards" aria-label="Seznam projektů"></div>
+<header><span class="badge">Pracovní prostor</span></header>
+<div class="home-heading"><h1>Přehled</h1></div>
+<p id="project-status" class="visually-hidden" role="status" aria-live="polite">Načítám přehled…</p>
+<div id="dashboard-grid" aria-label="Přehled pracovního prostoru">
+<section id="dashboard-calendar" class="dashboard-tile dashboard-placeholder" tabindex="0" aria-label="Kalendář, integrace připravena jako placeholder">
+<span class="dashboard-kicker">Dnes</span><strong id="dashboard-date">—</strong>
+<p>Kalendář zatím není propojený s externí aplikací.</p></section>
+<section id="dashboard-tasks" class="dashboard-tile dashboard-tasks"><span class="dashboard-kicker">Všechny projekty</span>
+<h2>Úkoly</h2><p id="dashboard-task-status" role="status">Načítám úkoly…</p>
+<ul id="dashboard-task-list" aria-label="Nehotové úkoly ze všech projektů"></ul></section>
+<section id="dashboard-mail" class="dashboard-tile dashboard-placeholder" tabindex="0" aria-label="Pošta, integrace připravena jako placeholder">
+<span class="dashboard-kicker">Pošta</span><strong>Přehled zpráv</strong>
+<p>Poštovní klient zatím není propojený.</p></section>
+<button id="dashboard-trash" class="dashboard-tile dashboard-action" type="button"><span class="dashboard-kicker">Projekty</span>
+<strong>Koš projektů</strong><span id="dashboard-trash-summary">Načítám…</span></button>
+<div id="project-cards" class="dashboard-projects" aria-label="Naposledy otevřené projekty"></div>
+</div>
+</div>
+<div id="project-trash-view" hidden>
+<header><span class="badge">Projekty</span></header>
+<button id="project-trash-back" type="button" class="back-button">← Zpět na přehled</button>
+<section class="standalone-form project-trash-page"><h1>Koš projektů</h1>
 <section id="project-delete-panel" class="creation-preview" hidden><h2 id="project-delete-title">Akce projektu</h2>
 <label id="project-delete-mode-row">Režim <select id="project-delete-mode"><option value="clear-derived">Obnovit odvozený index</option><option value="unregister">Pouze odregistrovat</option><option value="trash" selected>Přesunout do obnovitelného koše</option></select></label>
 <pre id="project-delete-details"></pre><p id="project-delete-blockers" role="alert"></p>
@@ -308,9 +326,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="project-delete-confirm" type="button" disabled>Provést potvrzenou akci</button>
 <button id="project-delete-cancel" type="button" class="secondary-button">Zrušit</button></div>
 <p id="project-delete-status" role="status"></p></section>
-<details id="project-trash"><summary>Obnovitelný koš projektů</summary><div id="project-trash-list"></div>
-<p id="project-trash-status" role="status"></p></details>
-<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
+<div id="project-trash-list"></div><p id="project-trash-status" role="status"></p></section></div>
+<div id="legacy-home-diagnostics" hidden aria-hidden="true">
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
 <details class="diagnostics"><summary>Gamepad demo</summary>
@@ -814,7 +831,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 #gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
 #gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
-.home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
+.home-heading,.settings-heading{margin-top:28px}.home-heading h1{font-size:38px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
@@ -834,11 +851,14 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 92px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-#project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}.project-card-wrap{display:grid;gap:6px;min-width:0}.project-remove{justify-self:end;background:transparent;color:#8b3030;padding:7px 9px;font-size:12px}.project-remove:hover{background:#fff1f1}.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash{margin:18px 0}#project-trash-list{margin-top:8px}
-.project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
-.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
-.project-card .project-name{font-size:21px;line-height:1.4}.project-card .project-description{font-size:13px;color:#627183;font-weight:400;line-height:1.6}
-.project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+#dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
+#project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
+button.dashboard-tile,button.project-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
+.dashboard-kicker{display:block;color:#31796e;font-size:11px;font-weight:750;letter-spacing:.09em;text-transform:uppercase}.dashboard-tile>strong,.project-card .project-name{display:block;font-size:21px;line-height:1.3}.dashboard-tile p{font-size:13px;margin:8px 0}.dashboard-placeholder{background:#f8fafb}.dashboard-placeholder>strong{font-size:24px}.dashboard-action #dashboard-trash-summary{margin-top:auto;color:#627183;font-size:12px;font-weight:500}
+.dashboard-tasks{display:flex;flex-direction:column}.dashboard-tasks h2{margin:6px 0 0}.dashboard-tasks>p{margin:0}.dashboard-tasks ul{list-style:none;padding:0;margin:8px 0 0;overflow:auto;min-height:0}.dashboard-task-row{border-top:1px solid #e2e8ec}.dashboard-task-row button{width:100%;padding:10px 4px;background:transparent;color:#162638;text-align:left}.dashboard-task-row button:hover{background:#edf7f4}.dashboard-task-row span,.dashboard-task-row small{display:block}.dashboard-task-row small{margin-top:3px}.project-card .project-meta{margin-top:auto;color:#627183;font-size:12px;font-weight:500}.project-card-unavailable{opacity:.68}
+.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash-list{margin-top:8px}.project-trash-page{margin-top:18px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
 #sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
@@ -848,7 +868,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}#sidebar-project-trash{grid-column:1/-1}
 #sidebar-project-import-options{margin-top:6px}#sidebar-project-import-options button{width:100%;padding:8px 6px;font-size:11px}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
@@ -900,7 +920,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
-@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
+@media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
+@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
  #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
@@ -911,7 +932,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  main{width:100%;min-height:100vh;min-height:100dvh;padding:68px 14px 24px;overflow:visible}
  header,.project-header{align-items:flex-start;flex-direction:column}.project-header details{max-width:100%}
  .home-heading,.settings-heading{margin-top:20px}.home-heading h1,h1{font-size:30px}
- #project-cards{grid-template-columns:minmax(0,1fr);gap:12px}.project-card{min-width:0;min-height:0;padding:18px}
+ #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
  #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
@@ -942,7 +963,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#project-create-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#project-create-view,#project-trash-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -1496,6 +1517,7 @@ const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
 const projectCreateView=document.querySelector('#project-create-view');
+const projectTrashView=document.querySelector('#project-trash-view');
 const sourceImportView=document.querySelector('#source-import-view');
 const notebookImportView=document.querySelector('#notebooklm-import-view');
 const historyView=document.querySelector('#history-view');
@@ -1528,7 +1550,7 @@ function closeMobileSidebar(restoreFocus=true){
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar();});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar();});
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
@@ -1646,6 +1668,7 @@ function clearProject(){
  document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
  projectCreateView.hidden=true;
+ projectTrashView.hidden=true;
  settingsView.hidden=true;
  sourceImportView.hidden=true;
  notebookImportView.hidden=true;
@@ -1929,6 +1952,11 @@ window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactE
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
+let recentProjectOrder=[];
+function recentProjectIds(){return recentProjectOrder;}
+function rememberRecentProject(projectId){
+ recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
+}
 async function openRegisteredProject(projectId){
  if(!canLeaveWorkspaceEditors())return;
  ++catalogRequest;
@@ -1937,6 +1965,7 @@ async function openRegisteredProject(projectId){
  try{
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
+  rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,head:result.commit_id,mainTodoId:result.main_todo_id};
   renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
@@ -1953,16 +1982,6 @@ async function openRegisteredProject(projectId){
 function renderProjectCatalog(items){
  projectCards.replaceChildren();sidebarProjects.replaceChildren();
  for(const item of items){
-  const wrap=document.createElement('div');wrap.className='project-card-wrap';
-  const card=document.createElement('button');card.type='button';card.className='project-card';card.dataset.id=item.id;
-  const name=document.createElement('span');name.className='project-name';name.textContent=item.title;
-  const description=document.createElement('span');description.className='project-description';
-  description.textContent=item.available ? (item.description.slice(0,240) || 'Prostor pro zdroje, poznámky a rozhodnutí.') : 'Projekt nelze načíst. Ověřte jeho umístění a konfiguraci.';
-  const id=document.createElement('span');id.className='project-id';id.textContent=item.id;
-  const action=document.createElement('span');action.className='project-action';action.textContent=item.available?'Otevřít projekt →':'Zkusit otevřít →';
-  card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));
-  const remove=document.createElement('button');remove.type='button';remove.className='project-remove';remove.textContent='Správa odstranění…';
-  remove.addEventListener('click',()=>openProjectDeletion(item));wrap.append(card,remove);projectCards.append(wrap);
   const row=document.createElement('li');row.className='sidebar-list-row';
   const compact=document.createElement('button');compact.type='button';compact.className='sidebar-list-main';compact.dataset.id=item.id;
   compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));
@@ -1973,7 +1992,34 @@ function renderProjectCatalog(items){
   ],'sidebar-project-menu');
   row.append(compact,menu);sidebarProjects.append(row);
  }
+ const byId=new Map(items.map(item=>[item.id,item]));
+ const ordered=[...recentProjectIds().map(id=>byId.get(id)).filter(Boolean),...items.filter(item=>!recentProjectIds().includes(item.id))].slice(0,4);
+ for(const item of ordered){
+  const card=document.createElement('button');card.type='button';card.className=`project-card${item.available?'':' project-card-unavailable'}`;card.dataset.id=item.id;
+  const kicker=document.createElement('span');kicker.className='dashboard-kicker';kicker.textContent='Nedávný projekt';
+  const name=document.createElement('span');name.className='project-name';name.textContent=item.title;
+  const meta=document.createElement('span');meta.className='project-meta';meta.textContent=item.available?'Otevřít':'Projekt není dostupný';
+  card.append(kicker,name,meta);card.addEventListener('click',()=>openRegisteredProject(item.id));projectCards.append(card);
+ }
  document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
+}
+async function loadDashboardTasks(items,request){
+ const list=document.querySelector('#dashboard-task-list'),status=document.querySelector('#dashboard-task-status');list.replaceChildren();status.textContent='Načítám úkoly…';
+ const available=items.filter(item=>item.available),results=await Promise.allSettled(available.map(item=>projectRequest('/v1/projects/open',{project_id:item.id})));
+ if(request!==catalogRequest)return;
+ let unavailable=0,openCount=0;
+ for(let index=0;index<results.length;index++){
+  const result=results[index],project=available[index];
+  if(result.status!=='fulfilled'){unavailable++;continue;}
+  const todo=result.value.main_todo;
+  if(!todo||todo.status!=='ready'){if(todo)unavailable++;continue;}
+  for(const item of todo.items.filter(item=>!item.checked)){
+   openCount++;const row=document.createElement('li');row.className='dashboard-task-row';const button=document.createElement('button');button.type='button';
+   const title=document.createElement('span');title.textContent=item.title;const source=document.createElement('small');source.textContent=project.title;button.append(title,source);
+   button.addEventListener('click',async()=>{await openRegisteredProject(project.id);if(activeProject?.id===project.id)selectSidebarTab(document.querySelector('#todo-tab'));});row.append(button);list.append(row);
+  }
+ }
+ status.textContent=openCount?`${openCount} nehotových úkolů${unavailable?` · ${unavailable} projektů nelze načíst`:''}`:(unavailable?'Úkoly nejsou dostupné ve všech projektech.':'Žádné nehotové úkoly.');
 }
 const projectDeletePanel=document.querySelector('#project-delete-panel');
 const projectDeleteMode=document.querySelector('#project-delete-mode');
@@ -2007,6 +2053,7 @@ async function refreshProjectDeletion(){
  catch(error){document.querySelector('#project-delete-status').textContent=error.message;}
 }
 function openProjectDeletion(item){
+ if(!openProjectTrashView())return;
  projectDeleteTarget=item;projectDeleteMode.value='trash';document.querySelector('#project-delete-mode-row').hidden=false;
  document.querySelector('#project-delete-title').textContent=`Akce projektu: ${item.title}`;refreshProjectDeletion();
 }
@@ -2033,7 +2080,13 @@ async function loadProjectTrash(){
    const purge=document.createElement('button');purge.type='button';purge.className='danger';purge.textContent='Připravit definitivní výmaz';purge.addEventListener('click',()=>prepareTrashAction(item,'purge'));
    row.append(label,restore,purge);list.append(row);
   }document.querySelector('#project-trash-status').textContent=result.projects.length?`Položek v koši: ${result.projects.length}`:'Koš je prázdný.';
- }catch(error){document.querySelector('#project-trash-status').textContent=error.message;}
+   document.querySelector('#dashboard-trash-summary').textContent=result.projects.length?`${result.projects.length} položek`:'Koš je prázdný';
+ }catch(error){document.querySelector('#project-trash-status').textContent=error.message;document.querySelector('#dashboard-trash-summary').textContent='Koš není dostupný';}
+}
+function openProjectTrashView(){
+ if(!canLeaveWorkspaceEditors())return false;
+ clearProject();document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
+ return true;
 }
 async function loadProjects(selectedId=null){
  if(!canLeaveWorkspaceEditors())return;
@@ -2044,14 +2097,17 @@ async function loadProjects(selectedId=null){
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await loadProjectTrash();
-  await loadChat();
-  projectStatus.textContent=result.projects.length ? 'Vyberte projekt.' : 'Zatím nemáte žádný projekt.';
+  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),loadChat()]);
+  projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
   if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
 document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
+document.querySelector('#sidebar-project-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#dashboard-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#project-trash-back').addEventListener('click',()=>loadProjects());
+document.querySelector('#dashboard-date').textContent=new Intl.DateTimeFormat('cs-CZ',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
  if(activeProject)await loadProjects();
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
@@ -2470,8 +2526,8 @@ function syncSidebarSettingsList(){
 async function openSettings(settingsTabId='settings-backend-tab'){
  if(!canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
- settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden};
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
+ settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden,trash:!projectTrashView.hidden};
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
  const requested=document.getElementById(settingsTabId);selectSettingsTab(requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -2480,6 +2536,7 @@ async function openSettings(settingsTabId='settings-backend-tab'){
 async function closeSettings(){
  const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
  document.dispatchEvent(new Event('settingsclosed'));
+ if(destination?.trash){openProjectTrashView();return;}
  if(destination?.sourceImport && activeProject){openSourceImport();return;}
  if(destination?.project && activeProject){
   projectView.hidden=false;
