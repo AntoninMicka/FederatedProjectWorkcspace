@@ -805,6 +805,14 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
                         projects.index('id="sidebar-project-list"'))
         self.assertLess(projects.index('id="sidebar-project-trash"'),
                         projects.index('id="sidebar-project-list"'))
+        self.assertEqual(projects.count('class="project-action-icon"'), 3)
+        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 3)
+        for label in ('Nový projekt', 'Importovat projekt', 'Koš projektů'):
+            self.assertIn(f'aria-label="{label}"', projects)
+            self.assertIn(f'role="tooltip">{label}</span>', projects)
+        self.assertIn('.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
+        self.assertIn('.sidebar-project-primary-actions button:hover .project-action-label', CSS)
+        self.assertIn('.sidebar-project-primary-actions button:focus-visible .project-action-label', CSS)
         self.assertIn('id="open-notebooklm-import"', projects)
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('Katalog nástrojů je zatím prázdný', HTML)

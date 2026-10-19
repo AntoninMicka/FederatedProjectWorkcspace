@@ -115,7 +115,10 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `/v1/projects/open` a projekci hlavního Markdown checklistu, takže nevzniká
   druhá autorita úkolů ani nový storage formát. Koš má samostatnou stránku,
   dostupnou z panelu Projekty i dashboardu, při zachování původního
-  preview/confirm/recovery kontraktu. Diagnostické demo bloky byly z úvodu
+  preview/confirm/recovery kontraktu. Tři primární projektové akce jsou v panelu
+  v jediné řadě jako ikonová tlačítka; jejich názvy zůstávají v přístupném
+  `aria-label` a zobrazují se jako tooltip při najetí i zaměření klávesnicí.
+  Diagnostické demo bloky byly z úvodu
   odstraněny; technický smoke harness zůstává skrytý mimo dashboard.
   Kalendář a pošta jsou zatím pravdivé vizuální placeholdery: aplikace nemá
   nakonfigurovaný přenositelný kontrakt pro otevření konkrétního externího
