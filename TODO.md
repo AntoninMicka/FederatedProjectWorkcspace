@@ -240,7 +240,17 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `UserProfileDialog` a fragmentový Qt most byly po dosažení parity odstraněny
   a A4 inventura nyní profil eviduje jako 18. sdílený formulář. Cílené API a
   HTTPS testy prošly, skutečný Qt WebEngine profil načetl a uložil a následná
-  celá sada prošla **641 testy** (27 přeskočeno).
+  celá sada prošla **641 testy** (27 přeskočeno). První fyzický průchod odhalil,
+  že skutečný desktop skládá schopnosti v `desktop_management.py`, zatímco
+  zpřístupnění profilu bylo jen v základním UI bootstrapu: po kliknutí proto
+  synchronizace skryla položku s dosud skrytou cílovou záložkou. Oprava
+  zpřístupňuje záložku i její položku v jediném skutečném desktop bootstrapu;
+  ve výchozím serverovém HTML jsou obě skryté. Regresní Qt WebEngine scénář
+  nyní otevírá profil skutečným kliknutím z nabídky, ověřuje, že položka
+  zůstane viditelná, a teprve poté načte a uloží formulář. Tento skutečný
+  desktopový průchod prošel a následná celá sada po opravě znovu prošla
+  **641 testy** (27 přeskočeno); parser výsledného desktopového JavaScriptu,
+  Python kompilace a `git diff --check` také prošly.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

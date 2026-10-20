@@ -731,12 +731,17 @@ def main():
                     const monitor=document.querySelector('#resource-monitor-open');
                     const monitorDialog=document.querySelector('#resource-monitor-dialog');
                     if(settingsTab.disabled || !monitor || !monitorDialog)return null;
-                    if(!window.profileSmokeOpened){window.profileSmokeOpened=true;openSettings('settings-profile-tab');return null;}
+                    const profileMenuItem=document.querySelector('[data-settings-item="settings-profile-tab"]');
+                    const profileMenuButton=document.querySelector('[data-settings-tab="settings-profile-tab"]');
+                    if(!window.profileSmokeOpened){
+                      if(profileMenuItem.hidden || !profileMenuButton)return null;
+                      window.profileSmokeOpened=true;profileMenuButton.click();return null;
+                    }
                     const profileStatus=document.querySelector('#user-profile-status');
                     const profileForm=document.querySelector('#user-profile-form');
                     if(!window.profileSmokeSubmitted){
                       if(document.querySelector('#settings-view').hidden || document.querySelector('#settings-profile-panel').hidden ||
-                         document.querySelector('#settings-profile-tab').hidden ||
+                         document.querySelector('#settings-profile-tab').hidden || profileMenuItem.hidden ||
                          !profileStatus.textContent.includes('načtený'))return null;
                       profileForm.elements.name.value='Desktop Smoke';profileForm.elements.email.value='smoke@example.invalid';
                       profileForm.elements.phone.value='+420 000 000 000';profileForm.elements.web.value='https://example.invalid';

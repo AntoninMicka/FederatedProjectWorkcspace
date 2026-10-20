@@ -10,8 +10,9 @@ from spikes.administration import AccessDenied
 from spikes.project_creation import ProjectCreation
 
 DESKTOP_BOOTSTRAP = '''document.body.dataset.runtime='desktop';
-for(const id of ['settings-cms-tab','settings-users-tab','settings-federation-tab',
+for(const id of ['settings-cms-tab','settings-profile-tab','settings-users-tab','settings-federation-tab',
  'backend-metrics','backend-metrics-indicator','openai-resource-provider'])document.getElementById(id).hidden=false;
+document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
 document.getElementById('project-location-controls').hidden=false;
 document.getElementById('open-notebooklm-import').hidden=false;
 '''

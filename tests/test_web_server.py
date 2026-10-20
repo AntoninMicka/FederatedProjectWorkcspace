@@ -160,6 +160,7 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="settings-users-tab"', WEB_HTML)
         self.assertIn('id="settings-cms-tab"', WEB_HTML)
         self.assertIn('id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden', WEB_HTML)
+        self.assertIn('data-settings-item="settings-profile-tab" hidden', WEB_HTML)
         self.assertNotIn("querySelector('#settings-profile-tab').hidden=false", WEB_JS)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
