@@ -863,8 +863,9 @@ def main():
                        action.value!=='answer' || publicSource.checked || !searchEditor.hidden ||
                        document.querySelector('#task-input-count').textContent!=='1')return null;
                     action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    const routingWarning=document.querySelector('#chat-orchestration-target');
                     if(!publicSource.checked || searchEditor.hidden ||
-                       !document.querySelector('#chat-orchestration-target').textContent.includes('SearXNG'))return null;
+                       (!routingWarning.hidden && !routingWarning.textContent.includes('nastavte SearXNG')))return null;
                     action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));
                     inputs.querySelector('summary').click();inputs.dispatchEvent(new Event('toggle'));
                     if(!inputs.open || !promptForm.classList.contains('inputs-open'))return null;

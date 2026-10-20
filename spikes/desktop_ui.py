@@ -788,16 +788,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select></label>
 <label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
 </div>
-<button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání" disabled>↑</button>
+<button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
 </div>
 <section id="task-search-editor" class="prompt-search-editor" aria-labelledby="task-search-heading" hidden>
 <div><strong id="task-search-heading">Vyhledávání na webu</strong><p>Oddělte pracovní zadání od přesného dotazu, který může opustit místní prostředí.</p></div>
 <label id="task-search-query-label" for="task-search-query">Přesný veřejný dotaz</label><input id="task-search-query" maxlength="4096" placeholder="Co se má najít ve veřejných zdrojích?">
 </section>
-<p id="task-selection-summary">Konverzace</p>
 <p id="chat-orchestration-target" role="status" aria-live="polite"></p>
-<p id="task-routing-note"></p>
-<details id="advanced-external"><summary>Pokročilé ruční externí volání</summary>
+<details id="advanced-external" hidden aria-hidden="true"><summary>Pokročilé ruční externí volání</summary>
 <button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
 <button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button>
 <section id="external-proposal" hidden aria-label="Návrh externího volání">
@@ -814,7 +812,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
-<small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form></section>
+</form></section>
 </section>
 </div>
 <div id="presenter-view" hidden>
@@ -935,11 +933,11 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
 #prompt-widget{position:relative;z-index:20;flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd}.prompt-widget-heading{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;color:#315f58}.prompt-widget-heading .secondary-button{margin:0;padding:7px 11px;min-height:0}#chat-composer{max-height:52vh;overflow:auto;padding:4px 20px 14px}#chat-composer.inputs-open{overflow:visible}#chat-composer label{font-weight:600;font-size:12px}.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #chat-draft{display:block;box-sizing:border-box;width:100%;min-height:68px;max-height:180px;resize:vertical;border:1px solid #bfcdc9;border-radius:10px;padding:11px 12px;background:#fff}
-.prompt-toolbar{display:flex;align-items:end;gap:8px;margin:9px 0 5px;min-width:0}.prompt-control{display:flex;flex-direction:column;gap:3px;min-width:0;color:#526675}.prompt-control>span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.prompt-control select,.prompt-control input{box-sizing:border-box;height:38px;min-width:0;max-width:180px;margin:0;padding:7px 28px 7px 9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746}.prompt-routing-controls,.prompt-execution-controls{display:flex;align-items:end;gap:8px;min-width:0}.prompt-routing-controls{flex:1}.prompt-execution-controls{margin-left:auto}.prompt-route-arrow{align-self:center;margin-top:14px;color:#688194;font-size:18px}.prompt-input-picker{position:relative;flex:0 0 auto}.prompt-input-picker>summary{display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:38px;min-width:108px;padding:5px 28px 5px 10px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746;cursor:pointer;list-style:none}.prompt-input-picker>summary::-webkit-details-marker{display:none}.prompt-input-picker>summary::after{content:'▾';position:absolute;right:10px;bottom:9px;color:#688194}.prompt-input-picker[open]>summary{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}.prompt-input-picker>summary span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#526675}.prompt-input-picker>summary output{font-size:13px;font-weight:600}.prompt-input-menu{position:absolute;z-index:25;left:0;bottom:44px;width:min(390px,calc(100vw - 48px));max-height:min(360px,45vh);overflow:auto;border:1px solid #bfcdc9;border-radius:10px;padding:10px 12px;background:#fff;box-shadow:0 10px 28px #14263835}.prompt-input-menu fieldset{margin:0;padding:0;border:0}.prompt-input-menu fieldset>legend{font-weight:700;margin-bottom:8px}.prompt-input-menu label{display:block!important;margin:7px 0!important;font-weight:400!important}.prompt-input-menu #task-artifacts{margin:5px 0 9px 22px}.prompt-input-menu #task-artifacts summary{cursor:pointer;font-weight:600}.prompt-input-menu #task-artifacts fieldset,.prompt-input-menu #task-public-sources{max-height:160px;overflow:auto;margin:7px 0;padding:7px 10px;border-left:2px solid #dce3e9}.prompt-privacy-control select{max-width:155px}.prompt-execution-controls .prompt-control:first-child select{max-width:165px}.prompt-execution-controls .prompt-control:last-child input{max-width:150px;padding-right:9px}#chat-submit{flex:0 0 42px;width:42px;height:42px;min-height:42px;padding:0;border-radius:50%;font-size:22px;line-height:1}#chat-submit:disabled{opacity:.48;cursor:not-allowed}.prompt-search-editor{display:grid;grid-template-columns:minmax(180px,.6fr) minmax(260px,1.4fr);gap:8px 16px;align-items:end;margin:10px 0;padding:12px 14px;border:1px solid #d6b36a;border-radius:10px;background:#fffaf0}.prompt-search-editor div{grid-row:span 2;align-self:center}.prompt-search-editor strong{color:#315f58}.prompt-search-editor p{margin:4px 0;color:#627183;font-size:12px}.prompt-search-editor label{color:#526675}.prompt-search-editor input{box-sizing:border-box;width:100%;padding:9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff}#task-selection-summary,#chat-orchestration-target,#task-routing-note{display:inline;margin:0 10px 0 0;color:#526675;font-size:11px}#task-selection-summary::after{content:' ·'}#task-routing-note{display:block;margin-top:4px}
+.prompt-toolbar{display:flex;align-items:end;gap:8px;margin:9px 0 5px;min-width:0}.prompt-control{display:flex;flex-direction:column;gap:3px;min-width:0;color:#526675}.prompt-control>span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.prompt-control select,.prompt-control input{box-sizing:border-box;height:38px;min-width:0;max-width:180px;margin:0;padding:7px 28px 7px 9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746}.prompt-routing-controls,.prompt-execution-controls{display:flex;align-items:end;gap:8px;min-width:0}.prompt-routing-controls{flex:1}.prompt-execution-controls{margin-left:auto}.prompt-route-arrow{align-self:center;margin-top:14px;color:#688194;font-size:18px}.prompt-input-picker{position:relative;flex:0 0 auto}.prompt-input-picker>summary{display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:38px;min-width:108px;padding:5px 28px 5px 10px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746;cursor:pointer;list-style:none}.prompt-input-picker>summary::-webkit-details-marker{display:none}.prompt-input-picker>summary::after{content:'▾';position:absolute;right:10px;bottom:9px;color:#688194}.prompt-input-picker[open]>summary{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}.prompt-input-picker>summary span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#526675}.prompt-input-picker>summary output{font-size:13px;font-weight:600}.prompt-input-menu{position:absolute;z-index:25;left:0;bottom:44px;width:min(390px,calc(100vw - 48px));max-height:min(360px,45vh);overflow:auto;border:1px solid #bfcdc9;border-radius:10px;padding:10px 12px;background:#fff;box-shadow:0 10px 28px #14263835}.prompt-input-menu fieldset{margin:0;padding:0;border:0}.prompt-input-menu fieldset>legend{font-weight:700;margin-bottom:8px}.prompt-input-menu label{display:block!important;margin:7px 0!important;font-weight:400!important}.prompt-input-menu #task-artifacts{margin:5px 0 9px 22px}.prompt-input-menu #task-artifacts summary{cursor:pointer;font-weight:600}.prompt-input-menu #task-artifacts fieldset,.prompt-input-menu #task-public-sources{max-height:160px;overflow:auto;margin:7px 0;padding:7px 10px;border-left:2px solid #dce3e9}.prompt-privacy-control select{max-width:155px}.prompt-execution-controls .prompt-control:first-child select{max-width:165px}.prompt-execution-controls .prompt-control:last-child input{max-width:150px;padding-right:9px}#chat-submit{flex:0 0 42px;width:42px;height:42px;min-height:42px;padding:0;border-radius:50%;font-size:22px;line-height:1}#chat-submit:disabled{opacity:.48;cursor:not-allowed}.prompt-search-editor{display:grid;grid-template-columns:minmax(180px,.6fr) minmax(260px,1.4fr);gap:8px 16px;align-items:end;margin:10px 0;padding:12px 14px;border:1px solid #d6b36a;border-radius:10px;background:#fffaf0}.prompt-search-editor div{grid-row:span 2;align-self:center}.prompt-search-editor strong{color:#315f58}.prompt-search-editor p{margin:4px 0;color:#627183;font-size:12px}.prompt-search-editor label{color:#526675}.prompt-search-editor input{box-sizing:border-box;width:100%;padding:9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff}#chat-orchestration-target{margin:5px 0 0;color:#9b4f30;font-size:12px}#chat-orchestration-target:empty{display:none}
 #external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
 #advanced-external{margin:8px 0;color:#456276;font-size:12px}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
 .chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;margin:5px 0 0;color:#315f58}#chat-operation-status:empty{display:none}
 #chat-stream-status.chat-live-progress{display:flex;align-items:center;gap:10px;min-height:52px;color:#304657;font-weight:600}
 .chat-progress-spinner{width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
 @keyframes chat-stream-spin{to{transform:rotate(360deg)}}
@@ -3105,14 +3103,7 @@ function updatePromptInputSummary(){
  const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
  const count=(conversation?1:0)+artifactCount+publicCount;
  const countOutput=document.querySelector('#task-input-count');
- const summary=document.querySelector('#task-selection-summary');
  if(countOutput)countOutput.textContent=String(count);
- if(!summary)return;
- const parts=[];
- if(conversation)parts.push('konverzace');
- if(artifacts)parts.push(artifactCount?(artifactCount===1?'1 podklad':`${artifactCount} podkladů`):'vyberte podklady');
- if(publicWeb)parts.push(publicCount?(publicCount===1?'1 veřejný zdroj':`${publicCount} veřejných zdrojů`):'nové webové hledání');
- summary.textContent=parts.length?parts.join(' + '):'Nejsou vybrané žádné vstupy';
 }
 function replaceTaskProjection(projection){
  const index=taskOutcomes.findIndex(item=>item.task_id===projection.task_id);
@@ -3668,12 +3659,10 @@ function refreshChatModeControls(){
  const publicSources=document.querySelector('#task-public-sources');
  const searchEditor=document.querySelector('#task-search-editor');
  const searchQuery=document.querySelector('#task-search-query');
- const selectionSummary=document.querySelector('#task-selection-summary');
- const routingNote=document.querySelector('#task-routing-note');
  const lan=chatBinding?.boundary==='private-network';
  ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
-  adapter.disabled=false;routing.hidden=false;selectionSummary.hidden=false;
+  adapter.disabled=false;routing.hidden=false;
   const external=adapter.value==='openai-responses';
   model.value=external ? (externalBinding?.model || model.value) : (chatBinding?.model || '');
   model.disabled=!external;
@@ -3683,18 +3672,14 @@ function refreshChatModeControls(){
   action.value=publicSource.checked?'search':'answer';
   publicSources.hidden=!publicSource.checked;searchEditor.hidden=!publicSource.checked;
   searchQuery.disabled=!publicSource.checked;
-  const searchPrefix=publicSource.checked?(searchBinding?'SearXNG → ':'SearXNG nenastaveno → '):'';
-  target.hidden=false;target.textContent=external ? (externalBinding ?
-   `${searchPrefix}OpenAI ${model.value} · před odesláním vznikne přesný náhled.` :
-   `${searchPrefix}externí úkol vyžaduje nejprve nastavit OpenAI backend.`) : (chatBinding ?
-   `${searchPrefix}${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
-   `${searchPrefix}lokální úkol vyžaduje nejprve nastavit Ollama backend.`);
-  routingNote.textContent=external ?
-   'Externímu modelu lze předat jen konverzaci a načtené veřejné zdroje; interní artefakty jsou zakázané.' :
-   'Zdroj, výstup a backend jsou pevnou součástí plánu; model je sám nemění.';
+  const warnings=[];
+  if(publicSource.checked&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
+  if(external&&!externalBinding)warnings.push('Externí úkol vyžaduje nejprve nastavit OpenAI backend.');
+  if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
+  target.textContent=warnings.join(' ');target.hidden=!warnings.length;
  }else{
   target.hidden=true;target.textContent='';
-  adapter.disabled=false;model.disabled=false;routing.hidden=true;artifacts.hidden=true;searchEditor.hidden=true;selectionSummary.hidden=true;
+  adapter.disabled=false;model.disabled=false;routing.hidden=true;artifacts.hidden=true;searchEditor.hidden=true;
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
   if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
  }
@@ -3745,8 +3730,7 @@ async function loadChat(){
   if(selectionRevision!==chatSelectionRevision)return;
   activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
   renderThreadList([...result.threads].reverse());
-  chatOperationStatus.textContent=result.threads.length?
-   'Vyberte uložené vlákno k vědomému navázání, nebo založte nové.':'Založte nové vlákno.';
+  chatOperationStatus.textContent='';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 function backendCandidate(){

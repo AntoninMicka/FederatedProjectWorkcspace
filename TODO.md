@@ -200,7 +200,15 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   prošla 83 testy (8 přeskočeno), JavaScript parser prošel a skutečný Qt
   WebEngine ověřil desktopové přepnutí akcí, vstupní nabídku/Escape a mobilní
   inline hledání při 390 px bez horizontálního přetečení. Následná celá sada
-  prošla **640 testy** (27 přeskočeno).
+  prošla **640 testy** (27 přeskočeno). Po prvním fyzickém průchodu byl prompt
+  dále zjednodušen: ze základního stavu zmizel duplicitní souhrn vstupů,
+  technický endpoint, trvalé vysvětlení routování, výchozí instrukce k vláknu
+  a spodní klávesnicová nápověda. Zkratka je dostupná v tooltipu odeslání,
+  stavové místo se vykreslí jen pro skutečné varování, průběh, chybu nebo
+  potvrzení a pokročilé ruční externí volání bylo skryto z běžného toku bez
+  odstranění jeho potvrzovací logiky. Opakovaná cílená desktop/web sada prošla
+  66 testy (6 přeskočeno), skutečný Qt WebEngine prošel desktopovým i mobilním
+  průchodem a celá sada po změně znovu prošla **640 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

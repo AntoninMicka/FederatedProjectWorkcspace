@@ -1030,12 +1030,15 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('const enabled=result.preferences?.streaming!==false', status)
         self.assertIn('ollamaStreaming=ollamaStreamingSupported&&enabled', status)
 
-    def test_orchestration_shows_the_configured_ollama_boundary(self):
+    def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
-        self.assertIn('${searchPrefix}${chatBinding.model}', JS)
-        self.assertIn("lan?'privátní síť':'tento uzel'", JS)
-        self.assertIn('${chatBinding.endpoint}', JS)
+        controls = JS.split('function refreshChatModeControls(){', 1)[1].split('\n}', 1)[0]
+        self.assertIn("warnings.push('Pro vyhledávání nejprve nastavte SearXNG.')", controls)
+        self.assertIn("warnings.push('Externí úkol vyžaduje nejprve nastavit OpenAI backend.')", controls)
+        self.assertIn("warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.')", controls)
+        self.assertIn("target.hidden=!warnings.length", controls)
+        self.assertNotIn('chatBinding.endpoint', controls)
         for control in ('task-source-conversation', 'task-source-artifacts',
                         'task-source-public', 'task-output-kind', 'task-search-query',
                         'task-public-source-list'):
@@ -1056,7 +1059,13 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('Výpočet', composer)
         self.assertNotIn('Julia', composer)
         self.assertIn('aria-label="Zpracovat zadání"', composer)
+        self.assertIn('title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)"', composer)
         self.assertIn('Přesný veřejný dotaz', composer)
+        self.assertIn('id="advanced-external" hidden aria-hidden="true"', composer)
+        self.assertNotIn('id="task-selection-summary"', composer)
+        self.assertNotIn('id="task-routing-note"', composer)
+        self.assertNotIn('historie zůstává lokálně na tomto uzlu', composer)
+        self.assertNotIn('Vyberte uložené vlákno k vědomému navázání', JS)
         self.assertIn("document.querySelector('#task-source-public').checked=event.currentTarget.value==='search'", JS)
         self.assertIn("action.value=publicSource.checked?'search':'answer'", JS)
         self.assertIn("searchEditor.hidden=!publicSource.checked", JS)
@@ -1066,6 +1075,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('.prompt-toolbar{display:flex', CSS)
         self.assertIn('#chat-composer.inputs-open{overflow:visible}', CSS)
         self.assertIn('.prompt-search-editor{display:grid', CSS)
+        self.assertIn('#chat-operation-status:empty{display:none}', CSS)
         self.assertIn('@media(max-width:640px)', CSS)
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
