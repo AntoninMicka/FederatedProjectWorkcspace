@@ -861,13 +861,19 @@ def main():
                     const routing=document.querySelector('#task-routing');
                     const action=document.querySelector('#task-action'),publicSource=document.querySelector('#task-source-public');
                     const searchEditor=document.querySelector('#task-search-editor'),inputs=document.querySelector('#task-inputs');
+                    const searchMode=document.querySelector('#task-search-query-mode');
+                    const searchQueryControl=document.querySelector('#task-search-query-label');
                     if(mode.value!=='orchestration' || adapter.disabled || routing.hidden ||
                        action.value!=='answer' || publicSource.checked || !searchEditor.hidden ||
                        document.querySelector('#task-input-count').textContent!=='1')return null;
                     action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));
                     const routingWarning=document.querySelector('#chat-orchestration-target');
-                    if(!publicSource.checked || searchEditor.hidden ||
+                    if(!publicSource.checked || searchEditor.hidden || searchMode.value!=='draft' || !searchQueryControl.hidden ||
                        (!routingWarning.hidden && !routingWarning.textContent.includes('nastavte SearXNG')))return null;
+                    searchMode.value='explicit';searchMode.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(searchQueryControl.hidden || document.querySelector('#task-search-query').disabled)return null;
+                    searchMode.value='draft';searchMode.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(!searchQueryControl.hidden || !document.querySelector('#task-search-query').disabled)return null;
                     action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));
                     inputs.querySelector('summary').click();inputs.dispatchEvent(new Event('toggle'));
                     if(!inputs.open || !promptForm.classList.contains('inputs-open'))return null;

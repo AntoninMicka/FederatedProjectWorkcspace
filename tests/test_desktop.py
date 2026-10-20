@@ -1040,7 +1040,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("target.hidden=!warnings.length", controls)
         self.assertNotIn('chatBinding.endpoint', controls)
         for control in ('task-source-conversation', 'task-source-artifacts',
-                        'task-source-public', 'task-output-kind', 'task-search-query',
+                        'task-source-public', 'task-output-kind', 'task-search-query-mode',
+                        'task-search-query',
                         'task-public-source-list'):
             self.assertIn('id="' + control + '"', HTML)
         self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
@@ -1064,7 +1065,10 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         for label in ('Režim', 'Akce', 'Výsledek', 'Soukromí', 'Backend', 'Model'):
             self.assertIn('<span>' + label + '</span>', composer)
         self.assertIn('class="prompt-control prompt-search-query-control"', composer)
-        self.assertIn('Přesný veřejný dotaz', composer)
+        self.assertIn('<option value="draft">Použít základní zadání</option>', composer)
+        self.assertIn('<option value="explicit">Vlastní vyhledávací dotaz</option>', composer)
+        self.assertIn('id="task-search-query-label" class="prompt-control prompt-search-query-control" for="task-search-query" hidden', composer)
+        self.assertIn('Vlastní veřejný dotaz', composer)
         self.assertIn('id="advanced-external" hidden aria-hidden="true"', composer)
         self.assertNotIn('id="task-selection-summary"', composer)
         self.assertNotIn('id="task-routing-note"', composer)
@@ -1073,6 +1077,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("document.querySelector('#task-source-public').checked=event.currentTarget.value==='search'", JS)
         self.assertIn("action.value=publicSource.checked?'search':'answer'", JS)
         self.assertIn("searchEditor.hidden=!publicSource.checked", JS)
+        self.assertIn("searchMode.value==='explicit'", JS)
+        self.assertIn("document.querySelector('#task-search-query-mode').value==='draft' ? draft.value.trim()", JS)
         self.assertIn('function updatePromptInputSummary()', JS)
         self.assertIn("promptForm.classList.toggle('inputs-open',taskInputs.open)", JS)
         self.assertIn("event.key==='Escape'&&taskInputs.open", JS)

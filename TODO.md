@@ -216,7 +216,13 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   záložkách zůstalo zachované. Cílená desktop/web sada po změně prošla 66 testy
   (6 přeskočeno) a skutečný Qt WebEngine ověřil desktopovou i mobilní geometrii
   vnitřních popisků, 44px ovládání a nepřítomnost starého přepínače. Následná
-  celá sada znovu prošla **640 testy** (27 přeskočeno).
+  celá sada znovu prošla **640 testy** (27 přeskočeno). Webové hledání nyní
+  nabízí výchozí volbu použít celé základní zadání jako veřejný dotaz a druhou
+  volbu pro vlastní explicitní dotaz; samostatné pole se zobrazí jen pro druhou
+  variantu. Obě cesty nadále vedou přes přesný síťový náhled a potvrzení.
+  Skutečný desktopový i mobilní Qt WebEngine ověřil výchozí variantu, přepnutí
+  vlastního pole a responzivní rozložení; následná celá sada znovu prošla
+  **640 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
