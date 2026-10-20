@@ -1040,8 +1040,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("target.hidden=!warnings.length", controls)
         self.assertNotIn('chatBinding.endpoint', controls)
         for control in ('task-source-conversation', 'task-source-artifacts',
-                        'task-source-public', 'task-output-kind', 'task-search-query-mode',
-                        'task-search-query',
+                        'task-source-public', 'task-source-current-prompt', 'task-output-kind',
                         'task-public-source-list'):
             self.assertIn('id="' + control + '"', HTML)
         self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
@@ -1053,7 +1052,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
         for control in ('task-inputs', 'task-input-count', 'task-action',
                         'task-output-kind', 'chat-privacy', 'chat-run-adapter',
-                        'chat-run-model', 'task-search-editor'):
+                        'chat-run-model'):
             self.assertIn('id="' + control + '"', composer)
         self.assertIn('<option value="answer">Odpovědět</option>', composer)
         self.assertIn('<option value="search">Vyhledat na webu</option>', composer)
@@ -1064,11 +1063,10 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('<label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>', composer)
         for label in ('Režim', 'Akce', 'Výsledek', 'Soukromí', 'Backend', 'Model'):
             self.assertIn('<span>' + label + '</span>', composer)
-        self.assertIn('class="prompt-control prompt-search-query-control"', composer)
-        self.assertIn('<option value="draft">Použít základní zadání</option>', composer)
-        self.assertIn('<option value="explicit">Vlastní vyhledávací dotaz</option>', composer)
-        self.assertIn('id="task-search-query-label" class="prompt-control prompt-search-query-control" for="task-search-query" hidden', composer)
-        self.assertIn('Vlastní veřejný dotaz', composer)
+        self.assertIn('id="task-source-current-prompt" hidden', composer)
+        self.assertIn('Aktuální zadání (povinné pro vyhledávání)', composer)
+        self.assertNotIn('id="task-search-editor"', composer)
+        self.assertNotIn('id="task-search-query"', composer)
         self.assertIn('id="advanced-external" hidden aria-hidden="true"', composer)
         self.assertNotIn('id="task-selection-summary"', composer)
         self.assertNotIn('id="task-routing-note"', composer)
@@ -1076,9 +1074,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('Vyberte uložené vlákno k vědomému navázání', JS)
         self.assertIn("document.querySelector('#task-source-public').checked=event.currentTarget.value==='search'", JS)
         self.assertIn("action.value=publicSource.checked?'search':'answer'", JS)
-        self.assertIn("searchEditor.hidden=!publicSource.checked", JS)
-        self.assertIn("searchMode.value==='explicit'", JS)
-        self.assertIn("document.querySelector('#task-search-query-mode').value==='draft' ? draft.value.trim()", JS)
+        self.assertIn("const searchQuery=searching?draft.value.trim():null", JS)
+        self.assertIn("output.value='conversation';output.disabled=true", JS)
+        self.assertIn("currentPromptSource.hidden=!searching", JS)
         self.assertIn('function updatePromptInputSummary()', JS)
         self.assertIn("promptForm.classList.toggle('inputs-open',taskInputs.open)", JS)
         self.assertIn("event.key==='Escape'&&taskInputs.open", JS)
@@ -1086,7 +1084,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('.prompt-control>span{position:absolute', CSS)
         self.assertIn('.prompt-draft-control>span{position:absolute', CSS)
         self.assertIn('#chat-composer.inputs-open{overflow:visible}', CSS)
-        self.assertIn('.prompt-search-editor{display:grid', CSS)
+        self.assertNotIn('.prompt-search-editor', CSS)
         self.assertIn('#chat-operation-status:empty{display:none}', CSS)
         self.assertIn('@media(max-width:640px)', CSS)
 

@@ -860,21 +860,20 @@ def main():
                     const mode=document.querySelector('#chat-mode'),adapter=document.querySelector('#chat-run-adapter');
                     const routing=document.querySelector('#task-routing');
                     const action=document.querySelector('#task-action'),publicSource=document.querySelector('#task-source-public');
-                    const searchEditor=document.querySelector('#task-search-editor'),inputs=document.querySelector('#task-inputs');
-                    const searchMode=document.querySelector('#task-search-query-mode');
-                    const searchQueryControl=document.querySelector('#task-search-query-label');
+                    const inputs=document.querySelector('#task-inputs'),output=document.querySelector('#task-output-kind');
+                    const currentPromptSource=document.querySelector('#task-source-current-prompt');
+                    const conversationSource=document.querySelector('#task-source-conversation-label');
                     if(mode.value!=='orchestration' || adapter.disabled || routing.hidden ||
-                       action.value!=='answer' || publicSource.checked || !searchEditor.hidden ||
+                       action.value!=='answer' || publicSource.checked || !currentPromptSource.hidden ||
                        document.querySelector('#task-input-count').textContent!=='1')return null;
+                    output.value='document';
                     action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));
                     const routingWarning=document.querySelector('#chat-orchestration-target');
-                    if(!publicSource.checked || searchEditor.hidden || searchMode.value!=='draft' || !searchQueryControl.hidden ||
+                    if(!publicSource.checked || currentPromptSource.hidden || !conversationSource.hidden ||
+                       output.value!=='conversation' || !output.disabled ||
                        (!routingWarning.hidden && !routingWarning.textContent.includes('nastavte SearXNG')))return null;
-                    searchMode.value='explicit';searchMode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(searchQueryControl.hidden || document.querySelector('#task-search-query').disabled)return null;
-                    searchMode.value='draft';searchMode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(!searchQueryControl.hidden || !document.querySelector('#task-search-query').disabled)return null;
                     action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(!currentPromptSource.hidden || conversationSource.hidden || output.disabled || output.value!=='document')return null;
                     inputs.querySelector('summary').click();inputs.dispatchEvent(new Event('toggle'));
                     if(!inputs.open || !promptForm.classList.contains('inputs-open'))return null;
                     inputs.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));

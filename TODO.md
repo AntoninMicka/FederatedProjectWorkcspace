@@ -210,19 +210,21 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   66 testy (6 přeskočeno), skutečný Qt WebEngine prošel desktopovým i mobilním
   průchodem a celá sada po změně znovu prošla **640 testy** (27 přeskočeno).
   Následující schválené zhuštění přesunulo trvale viditelné popisky Zadání,
-  Režim, Akce, Výsledek, Soukromí, Backend, Model a Přesný veřejný dotaz dovnitř
-  rámečků jejich ovládacích prvků. Samostatná hlavička promptu a ruční
+  Režim, Akce, Výsledek, Soukromí, Backend a Model dovnitř rámečků jejich
+  ovládacích prvků. Samostatná hlavička promptu a ruční
   skrývání byly odstraněny; deklarované automatické skrytí na specializovaných
   záložkách zůstalo zachované. Cílená desktop/web sada po změně prošla 66 testy
   (6 přeskočeno) a skutečný Qt WebEngine ověřil desktopovou i mobilní geometrii
   vnitřních popisků, 44px ovládání a nepřítomnost starého přepínače. Následná
-  celá sada znovu prošla **640 testy** (27 přeskočeno). Webové hledání nyní
-  nabízí výchozí volbu použít celé základní zadání jako veřejný dotaz a druhou
-  volbu pro vlastní explicitní dotaz; samostatné pole se zobrazí jen pro druhou
-  variantu. Obě cesty nadále vedou přes přesný síťový náhled a potvrzení.
-  Skutečný desktopový i mobilní Qt WebEngine ověřil výchozí variantu, přepnutí
-  vlastního pole a responzivní rozložení; následná celá sada znovu prošla
-  **640 testy** (27 přeskočeno).
+  celá sada znovu prošla **640 testy** (27 přeskočeno). Po společném upřesnění
+  nemá webové hledání druhý editor ani alternativní vlastní dotaz: aktuální
+  zadání je jeho jediný povinný vstup, viditelný ve Vstupech jako nezrušitelná
+  položka. Výsledek hledání je při této akci uzamčený na Konverzaci, odkud jej
+  lze v dalším kroku zpracovat běžnou akcí Odpovědět; přesný síťový náhled a
+  potvrzení zůstávají zachované. Skutečný desktopový i mobilní Qt WebEngine
+  ověřil přepnutí tohoto kontraktu, obnovu předchozího typu výsledku a
+  responzivní geometrii; následná celá sada znovu prošla **640 testy**
+  (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
