@@ -98,12 +98,8 @@ SHEETS = [
     sheet("presentation-pdf", "Export prezentace do PDF", ("#presentation-print-dialog",), scale=.82),
     sheet("metadata", "Návrh popisu a štítků", ("#metadata-panel",), scale=.72),
     sheet("gamepad", "Presenter — nastavení gamepadu", (".presenter-gamepad-settings",), scale=.78),
-    sheet(
-        "native-profile", "Nativní dialog — uživatelský profil", source="PySide6 desktop",
-        native_html=native_form(
-            "Údaje se zobrazí na závěrečném slidu textově a v QR kódu; zůstávají v lokálním profilu.",
-            (("Jméno", "text", ""), ("E-mail", "text", ""), ("Telefon", "text", ""), ("Web", "text", "")),
-            ("Uložit profil",))),
+    sheet("profile", "Nastavení — uživatelský profil", ("#settings-profile-panel",),
+          ("user-profile-form",), scale=.82),
     sheet(
         "native-deploy", "Nativní dialog — nasazení LXC uzlu", source="PySide6 desktop", scale=.75,
         native_html=native_form(

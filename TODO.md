@@ -230,7 +230,17 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   při webovém hledání se položka nezobrazuje a pro externí běh ji nelze vybrat.
   Skutečný desktopový Qt WebEngine ověřil zobrazení, zaškrtnutí a souhrnný
   počet vstupů, mobilní Qt WebEngine zobrazení u otevřeného náhledu a celá sada
-  po změně prošla **640 testy** (27 přeskočeno).
+  po změně prošla **640 testy** (27 přeskočeno). Jako první převod zbývajících
+  nativních dialogů byl uživatelský profil nahrazen formulářem v
+  **Nastavení → Profil**. Sdílené HTML zůstává stejné, ale desktop bootstrap
+  explicitně zpřístupní node-local panel a úzký endpoint pro načtení a uložení;
+  serverová varianta drží záložku skrytou a endpoint bez desktopové služby
+  odmítne. Formulář znovu používá původní validaci i atomické SQLite uložení,
+  nic nezapisuje do projektu a nepřidává přísnější inferenci kontaktů. Starý
+  `UserProfileDialog` a fragmentový Qt most byly po dosažení parity odstraněny
+  a A4 inventura nyní profil eviduje jako 18. sdílený formulář. Cílené API a
+  HTTPS testy prošly, skutečný Qt WebEngine profil načetl a uložil a následná
+  celá sada prošla **641 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

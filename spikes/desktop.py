@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import signal
 import stat
-import sqlite3
 import sys
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -227,7 +226,6 @@ def main():
         return 1
     try:
         from spikes.desktop_displays import PresenterDisplays
-        from spikes.desktop_user_profile import UserProfileDialog
         from spikes.presentation_documents import PresentationDocuments
         from spikes.presentation_sessions import PresentationSessions
         from spikes.desktop_creation import CreationController
@@ -455,16 +453,8 @@ def main():
         presentation_editor_button = QPushButton('Prezentace…')
         presentation_editor_button.clicked.connect(edit_presentation)
         editor_toolbar.addWidget(presentation_editor_button)
-        def edit_user_profile():
-            try:
-                dialog = UserProfileDialog(server.user_profile, window)
-                dialog.exec()
-                dialog.deleteLater()
-            except (ValueError, OSError, sqlite3.Error):
-                QMessageBox.warning(window, 'Uživatelský profil', 'Profil nelze načíst. Ověřte lokální konfiguraci.')
         def native_action(url):
             actions = {
-                '/#user-profile': edit_user_profile,
                 '/#presenter-open': displays.open,
                 '/#presenter-displays': displays.configure,
                 '/#presenter-close': displays.stop,
@@ -741,6 +731,21 @@ def main():
                     const monitor=document.querySelector('#resource-monitor-open');
                     const monitorDialog=document.querySelector('#resource-monitor-dialog');
                     if(settingsTab.disabled || !monitor || !monitorDialog)return null;
+                    if(!window.profileSmokeOpened){window.profileSmokeOpened=true;openSettings('settings-profile-tab');return null;}
+                    const profileStatus=document.querySelector('#user-profile-status');
+                    const profileForm=document.querySelector('#user-profile-form');
+                    if(!window.profileSmokeSubmitted){
+                      if(document.querySelector('#settings-view').hidden || document.querySelector('#settings-profile-panel').hidden ||
+                         document.querySelector('#settings-profile-tab').hidden ||
+                         !profileStatus.textContent.includes('načtený'))return null;
+                      profileForm.elements.name.value='Desktop Smoke';profileForm.elements.email.value='smoke@example.invalid';
+                      profileForm.elements.phone.value='+420 000 000 000';profileForm.elements.web.value='https://example.invalid';
+                      window.profileSmokeSubmitted=true;profileForm.requestSubmit();return null;
+                    }
+                    if(!window.profileSmokeSaved){
+                      if(!profileStatus.textContent.includes('uložen pouze'))return null;
+                      window.profileSmokeSaved=true;closeSettings();return null;
+                    }
                     monitor.click();if(!monitorDialog.open)return null;monitorDialog.close();
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
                        document.querySelector('#sidebar-projects select') ||

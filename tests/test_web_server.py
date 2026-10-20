@@ -159,6 +159,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('window.workspaceAutoStart=false', WEB_JS)
         self.assertIn('id="settings-users-tab"', WEB_HTML)
         self.assertIn('id="settings-cms-tab"', WEB_HTML)
+        self.assertIn('id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden', WEB_HTML)
+        self.assertNotIn("querySelector('#settings-profile-tab').hidden=false", WEB_JS)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
@@ -195,6 +197,7 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
+        self.assertEqual(self.request(path='/v1/user-profile', body='{"action":"load"}')[0], 503)
 
     def test_google_drive_https_configuration_picker_callback_and_privacy(self):
         _, data, _ = self.create_project('Drive HTTPS')

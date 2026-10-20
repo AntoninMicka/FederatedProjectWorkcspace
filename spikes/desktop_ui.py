@@ -525,7 +525,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section>
 <section id="settings-profile-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-profile-tab" hidden>
 <h2>Uživatelský profil</h2><p>Jméno a kontakty pro závěrečný slide prezentace. Platí pro tohoto uživatele desktopu.</p>
-<button id="user-profile-open" type="button">Upravit profil…</button></section>
+<p>Údaje zůstávají v lokálním profilu tohoto uzlu; do projektu se neukládají ani nesynchronizují.</p>
+<form id="user-profile-form">
+<label>Jméno <input name="name" maxlength="100" autocomplete="name"></label>
+<label>E-mail <input name="email" inputmode="email" maxlength="180" autocomplete="email"></label>
+<label>Telefon <input name="phone" type="tel" maxlength="80" autocomplete="tel"></label>
+<label>Web <input name="web" inputmode="url" maxlength="200" autocomplete="url"></label>
+<button type="submit">Uložit profil</button>
+<p id="user-profile-status" role="status" aria-live="polite"></p></form></section>
 '''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
@@ -2582,6 +2589,7 @@ function selectSettingsTab(selected){
  }
  const administration=document.getElementById('administration');if(administration)administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id);
  if(selected.id==='settings-cms-tab')loadCmsStatus();
+ if(selected.id==='settings-profile-tab')loadUserProfile();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -2605,7 +2613,7 @@ async function openSettings(settingsTabId='settings-backend-tab'){
  await loadBackendBinding();
 }
 async function closeSettings(){
- const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
+ const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;userProfileLoaded=false;
  document.dispatchEvent(new Event('settingsclosed'));
  if(destination?.trash){openProjectTrashView();return;}
  if(destination?.sourceImport && activeProject){openSourceImport();return;}
@@ -2716,7 +2724,26 @@ document.querySelector('#cms-deployment-run').addEventListener('click',async eve
  event.currentTarget.disabled=true;if(!cmsDeploymentAttempt)cmsDeploymentAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsDeploymentPreview.preview_sha256,approved:true};
  try{cmsDeploymentStatus.textContent='Nahrávám potvrzený release do Cloudflare…';const result=await projectRequest('/v1/publication-cms/deployment/confirm',cmsDeploymentAttempt,120000);cmsDeploymentAttempt=null;cmsDeploymentStatus.textContent=`Deployment ${result.deployment_id} dokončen pro ${result.hostnames.length} domén.`;await loadCmsDeploymentStatus();
  }catch(error){cmsDeploymentStatus.textContent=error.message;}});
-document.querySelector('#user-profile-open').addEventListener('click',()=>{location.hash='user-profile';});
+const userProfileForm=document.querySelector('#user-profile-form');
+const userProfileStatus=document.querySelector('#user-profile-status');
+let userProfileLoaded=false;
+async function loadUserProfile(){
+ if(userProfileLoaded)return;
+ userProfileStatus.textContent='Načítám lokální profil…';
+ try{const result=await projectRequest('/v1/user-profile',{action:'load'});
+  for(const [key,value] of Object.entries(result.profile))userProfileForm.elements[key].value=value;
+  userProfileLoaded=true;userProfileStatus.textContent='Profil je načtený z tohoto počítače.';
+ }catch(error){userProfileStatus.textContent=error.message;}
+}
+userProfileForm.addEventListener('submit',async event=>{
+ event.preventDefault();const submit=userProfileForm.querySelector('button[type="submit"]');submit.disabled=true;
+ const profile=Object.fromEntries(new FormData(userProfileForm));userProfileStatus.textContent='Ukládám lokální profil…';
+ try{const result=await projectRequest('/v1/user-profile',{action:'save',profile});
+  for(const [key,value] of Object.entries(result.profile))userProfileForm.elements[key].value=value;
+  userProfileLoaded=true;userProfileStatus.textContent='Profil byl uložen pouze na tomto počítači.';
+ }catch(error){userProfileStatus.textContent=error.message;
+ }finally{submit.disabled=false;}
+});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
  refreshCurrentFileSource();
@@ -4557,7 +4584,9 @@ refreshImageAdapter();
 if(window.workspaceAutoStart!==false){loadProjects();if(!backendMetricsIndicator.hidden)loadBackendMetrics();}
 """
 JS += ADMIN_JS
-DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
+DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
+document.querySelector('#settings-profile-tab').hidden=false;
+"""
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = SLIDE_JS + '''
 const screen=document.querySelector('#screen');
@@ -4599,7 +4628,7 @@ class DesktopHandler(Handler):
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/gamepad/status', '/v1/presentation/status',
-        '/v1/gamepad/settings',
+        '/v1/gamepad/settings', '/v1/user-profile',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
@@ -4632,6 +4661,18 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/user-profile' and isinstance(request, dict):
+            service = getattr(self.server, 'user_profile', None)
+            if service is None:
+                return self.reply(503, {'error': 'Uživatelský profil je dostupný jen v desktopu.'})
+            try:
+                if request == {'action': 'load'}:
+                    return self.reply(200, {'profile': service.load()})
+                if request.keys() == {'action', 'profile'} and request['action'] == 'save':
+                    return self.reply(200, {'profile': service.save(request['profile'])})
+                return self.send_error(400)
+            except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, scan_gamepads())
         if self.path == '/v1/gamepad/settings' and isinstance(request, dict):

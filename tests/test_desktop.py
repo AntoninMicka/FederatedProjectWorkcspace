@@ -18,7 +18,7 @@ from spikes.desktop import (google_authorization_url, native_action_name, native
                             presentation_pdf_js_request, presentation_pdf_paths, provider_key_url,
                             publish_presentation_pdf,
                             repairable_target_mode, request_policy)
-from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
+from spikes.desktop_ui import CSS, DESKTOP_BOOTSTRAP, DesktopHandler, HTML, JS
 from spikes.presentation_visual import SLIDE_JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
@@ -808,6 +808,11 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('preview_sha256:preview.preview_sha256', JS)
         self.assertIn("fields.secret.value=''", JS)
         self.assertIn("administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id)", JS)
+        self.assertIn('id="user-profile-form"', HTML)
+        self.assertIn("projectRequest('/v1/user-profile',{action:'load'})", JS)
+        self.assertIn("projectRequest('/v1/user-profile',{action:'save',profile})", JS)
+        self.assertIn("document.querySelector('#settings-profile-tab').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertNotIn('user-profile-open', HTML)
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
         self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
@@ -816,7 +821,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
         self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
-                         '/v1/chat/delete/confirm', '/v1/sources/import'} <= DesktopHandler.post_paths)
+                         '/v1/chat/delete/confirm', '/v1/sources/import',
+                         '/v1/user-profile'} <= DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
         self.assertNotIn('id="back-projects"', HTML)
