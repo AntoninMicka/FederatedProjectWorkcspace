@@ -857,7 +857,20 @@ def main():
                   if(!window.chatModesChecked){
                     const mode=document.querySelector('#chat-mode'),adapter=document.querySelector('#chat-run-adapter');
                     const routing=document.querySelector('#task-routing');
-                    if(mode.value!=='orchestration' || adapter.disabled || routing.hidden)return null;
+                    const action=document.querySelector('#task-action'),publicSource=document.querySelector('#task-source-public');
+                    const searchEditor=document.querySelector('#task-search-editor'),inputs=document.querySelector('#task-inputs');
+                    if(mode.value!=='orchestration' || adapter.disabled || routing.hidden ||
+                       action.value!=='answer' || publicSource.checked || !searchEditor.hidden ||
+                       document.querySelector('#task-input-count').textContent!=='1')return null;
+                    action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(!publicSource.checked || searchEditor.hidden ||
+                       !document.querySelector('#chat-orchestration-target').textContent.includes('SearXNG'))return null;
+                    action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    inputs.querySelector('summary').click();inputs.dispatchEvent(new Event('toggle'));
+                    if(!inputs.open || !promptForm.classList.contains('inputs-open'))return null;
+                    inputs.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+                    inputs.dispatchEvent(new Event('toggle'));
+                    if(inputs.open || promptForm.classList.contains('inputs-open'))return null;
                     mode.value='brainstorming';mode.dispatchEvent(new Event('change',{bubbles:true}));
                     if(adapter.disabled || !routing.hidden)return null;
                     mode.value='orchestration';mode.dispatchEvent(new Event('change',{bubbles:true}));

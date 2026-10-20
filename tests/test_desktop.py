@@ -578,7 +578,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible"', HTML)
         self.assertIn('id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible"', HTML)
         self.assertIn('id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden"', HTML)
-        self.assertIn('#prompt-widget{flex-shrink:0', CSS)
+        self.assertIn('#prompt-widget{position:relative;z-index:20;flex-shrink:0', CSS)
         self.assertIn('.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
         self.assertIn('.project-overview-description{grid-column:span 2', CSS)
         self.assertIn('@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}', CSS)
@@ -1033,7 +1033,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
     def test_orchestration_shows_the_configured_ollama_boundary(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
-        self.assertIn('Úkol použije ${chatBinding.model}', JS)
+        self.assertIn('${searchPrefix}${chatBinding.model}', JS)
         self.assertIn("lan?'privátní síť':'tento uzel'", JS)
         self.assertIn('${chatBinding.endpoint}', JS)
         for control in ('task-source-conversation', 'task-source-artifacts',
@@ -1044,6 +1044,29 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("execution:adapter==='ollama'?'local-ollama':'external-openai'", JS)
         self.assertIn('External task execution cannot include project artifacts',
                       Path('spikes/task_plan.py').read_text())
+
+    def test_prompt_widget_separates_inputs_action_output_privacy_and_target(self):
+        composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        for control in ('task-inputs', 'task-input-count', 'task-action',
+                        'task-output-kind', 'chat-privacy', 'chat-run-adapter',
+                        'chat-run-model', 'task-search-editor'):
+            self.assertIn('id="' + control + '"', composer)
+        self.assertIn('<option value="answer">Odpovědět</option>', composer)
+        self.assertIn('<option value="search">Vyhledat na webu</option>', composer)
+        self.assertNotIn('Výpočet', composer)
+        self.assertNotIn('Julia', composer)
+        self.assertIn('aria-label="Zpracovat zadání"', composer)
+        self.assertIn('Přesný veřejný dotaz', composer)
+        self.assertIn("document.querySelector('#task-source-public').checked=event.currentTarget.value==='search'", JS)
+        self.assertIn("action.value=publicSource.checked?'search':'answer'", JS)
+        self.assertIn("searchEditor.hidden=!publicSource.checked", JS)
+        self.assertIn('function updatePromptInputSummary()', JS)
+        self.assertIn("promptForm.classList.toggle('inputs-open',taskInputs.open)", JS)
+        self.assertIn("event.key==='Escape'&&taskInputs.open", JS)
+        self.assertIn('.prompt-toolbar{display:flex', CSS)
+        self.assertIn('#chat-composer.inputs-open{overflow:visible}', CSS)
+        self.assertIn('.prompt-search-editor{display:grid', CSS)
+        self.assertIn('@media(max-width:640px)', CSS)
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML

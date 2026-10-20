@@ -184,6 +184,23 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `git diff --check`; opt-in skutečný Qt WebEngine smoke prošel nad projektem s
   podklady i prázdným projektem a potvrdil historii, responzivní geometrii a
   nezměněný Git stav obou projektů.
+  Spodní prompt widget nyní podle schváleného uživatelského návrhu odděluje
+  režim, vícenásobné explicitní vstupy, akci, typ výsledku, soukromí a skutečný
+  backend/model. Vstupy jsou společný checkboxový výběr konverzace, konkrétních
+  podkladů a veřejných zdrojů se souhrnným počtem; nabídku lze zavřít klávesou
+  Escape. Akce **Odpovědět** a **Vyhledat na webu** mapují stávající uzavřený
+  task plán, zatímco neimplementovaný Julia runner ani oddělený obrazový editor
+  se v tomto společném widgetu nevydávají za dostupné schopnosti. Vyhledávání
+  rozbalí přímo ve widgetu pole přesného veřejného dotazu a zobrazuje řetězec
+  `SearXNG → backend/model`; stávající hash-bound náhled a potvrzení síťového
+  účinku zůstávají beze změny. Návrh výsledku se nadále ukládá nebo publikuje
+  až samostatnou explicitní akcí. Široké, střední a mobilní rozložení používá
+  jediný sdílený HTML/CSS/JS frontend; mobilní odeslání má nejméně 44 px a
+  vstupní nabídka nepřetéká mimo viewport. Cílená sada sdíleného desktop/web UI
+  prošla 83 testy (8 přeskočeno), JavaScript parser prošel a skutečný Qt
+  WebEngine ověřil desktopové přepnutí akcí, vstupní nabídku/Escape a mobilní
+  inline hledání při 390 px bez horizontálního přetečení. Následná celá sada
+  prošla **640 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

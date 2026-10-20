@@ -765,24 +765,38 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
 <section id="prompt-widget" aria-label="Prompt"><header class="prompt-widget-heading"><strong>Zadání</strong>
 <button id="prompt-widget-toggle" type="button" class="secondary-button" aria-controls="chat-composer" aria-expanded="true">Skrýt prompt</button></header>
-<form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
-<label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Zadání úkolu</option><option value="brainstorming">Volná konverzace</option></select>
-<label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
-<label for="chat-run-model">Model běhu</label><input id="chat-run-model" maxlength="128" list="external-models">
-<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
-<label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
-<fieldset id="task-routing"><legend>Explicitní routování úkolu</legend>
-<fieldset><legend>Zdroje</legend><label><input id="task-source-conversation" type="checkbox" checked> Konverzace</label>
-<label><input id="task-source-artifacts" type="checkbox"> Interní artefakty</label>
-<label><input id="task-source-public" type="checkbox"> Veřejný internet / načtené veřejné zdroje</label></fieldset>
-<label for="task-output-kind">Výstup</label><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select>
-<label id="task-search-query-label" for="task-search-query" hidden>Dotaz pro hledání na webu</label><input id="task-search-query" maxlength="4096" hidden placeholder="Co se má najít ve veřejných zdrojích?">
+<form id="chat-composer">
+<label class="visually-hidden" for="chat-draft">Zadání</label>
+<textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete zpracovat?"></textarea>
+<div class="prompt-toolbar">
+<label class="prompt-control" for="chat-mode"><span>Režim</span><select id="chat-mode"><option value="orchestration">Úkol</option><option value="brainstorming">Volná konverzace</option></select></label>
+<div id="task-routing" class="prompt-routing-controls">
+<details id="task-inputs" class="prompt-input-picker"><summary><span>Vstupy</span><output id="task-input-count">1</output></summary>
+<div class="prompt-input-menu"><fieldset><legend>Vybrané zdroje</legend>
+<label><input id="task-source-conversation" type="checkbox" checked> Aktuální konverzace</label>
+<label><input id="task-source-artifacts" type="checkbox"> Podklady projektu</label>
+<details id="task-artifacts" hidden><summary>Vybrat konkrétní podklady</summary><fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
+<label><input id="task-source-public" type="checkbox"> Veřejný web / načtené zdroje</label>
 <fieldset id="task-public-sources" hidden><legend>Již načtené veřejné zdroje</legend><div id="task-public-source-list"></div></fieldset>
-<p id="task-routing-note"></p></fieldset>
-<details id="task-artifacts" hidden><summary>Vybrat interní artefakty</summary>
-<fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
-<div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
-<button id="chat-submit" type="submit" disabled>Zpracovat</button></div>
+</fieldset></div></details>
+<label class="prompt-control" for="task-action"><span>Akce</span><select id="task-action"><option value="answer">Odpovědět</option><option value="search">Vyhledat na webu</option></select></label>
+<span class="prompt-route-arrow" aria-hidden="true">→</span>
+<label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select></label>
+</div>
+<label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
+<div class="prompt-execution-controls" aria-label="Cíl běhu">
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select></label>
+<label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
+</div>
+<button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání" disabled>↑</button>
+</div>
+<section id="task-search-editor" class="prompt-search-editor" aria-labelledby="task-search-heading" hidden>
+<div><strong id="task-search-heading">Vyhledávání na webu</strong><p>Oddělte pracovní zadání od přesného dotazu, který může opustit místní prostředí.</p></div>
+<label id="task-search-query-label" for="task-search-query">Přesný veřejný dotaz</label><input id="task-search-query" maxlength="4096" placeholder="Co se má najít ve veřejných zdrojích?">
+</section>
+<p id="task-selection-summary">Konverzace</p>
+<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
+<p id="task-routing-note"></p>
 <details id="advanced-external"><summary>Pokročilé ruční externí volání</summary>
 <button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
 <button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button>
@@ -919,11 +933,12 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
-#prompt-widget{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd}.prompt-widget-heading{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;color:#315f58}.prompt-widget-heading .secondary-button{margin:0;padding:7px 11px;min-height:0}#chat-composer{max-height:45vh;overflow:auto;padding:4px 20px 14px}#chat-composer label{font-weight:600;font-size:12px}
+#prompt-widget{position:relative;z-index:20;flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd}.prompt-widget-heading{display:flex;justify-content:space-between;align-items:center;padding:8px 20px;color:#315f58}.prompt-widget-heading .secondary-button{margin:0;padding:7px 11px;min-height:0}#chat-composer{max-height:52vh;overflow:auto;padding:4px 20px 14px}#chat-composer.inputs-open{overflow:visible}#chat-composer label{font-weight:600;font-size:12px}.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+#chat-draft{display:block;box-sizing:border-box;width:100%;min-height:68px;max-height:180px;resize:vertical;border:1px solid #bfcdc9;border-radius:10px;padding:11px 12px;background:#fff}
+.prompt-toolbar{display:flex;align-items:end;gap:8px;margin:9px 0 5px;min-width:0}.prompt-control{display:flex;flex-direction:column;gap:3px;min-width:0;color:#526675}.prompt-control>span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.prompt-control select,.prompt-control input{box-sizing:border-box;height:38px;min-width:0;max-width:180px;margin:0;padding:7px 28px 7px 9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746}.prompt-routing-controls,.prompt-execution-controls{display:flex;align-items:end;gap:8px;min-width:0}.prompt-routing-controls{flex:1}.prompt-execution-controls{margin-left:auto}.prompt-route-arrow{align-self:center;margin-top:14px;color:#688194;font-size:18px}.prompt-input-picker{position:relative;flex:0 0 auto}.prompt-input-picker>summary{display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:38px;min-width:108px;padding:5px 28px 5px 10px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746;cursor:pointer;list-style:none}.prompt-input-picker>summary::-webkit-details-marker{display:none}.prompt-input-picker>summary::after{content:'▾';position:absolute;right:10px;bottom:9px;color:#688194}.prompt-input-picker[open]>summary{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}.prompt-input-picker>summary span{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#526675}.prompt-input-picker>summary output{font-size:13px;font-weight:600}.prompt-input-menu{position:absolute;z-index:25;left:0;bottom:44px;width:min(390px,calc(100vw - 48px));max-height:min(360px,45vh);overflow:auto;border:1px solid #bfcdc9;border-radius:10px;padding:10px 12px;background:#fff;box-shadow:0 10px 28px #14263835}.prompt-input-menu fieldset{margin:0;padding:0;border:0}.prompt-input-menu fieldset>legend{font-weight:700;margin-bottom:8px}.prompt-input-menu label{display:block!important;margin:7px 0!important;font-weight:400!important}.prompt-input-menu #task-artifacts{margin:5px 0 9px 22px}.prompt-input-menu #task-artifacts summary{cursor:pointer;font-weight:600}.prompt-input-menu #task-artifacts fieldset,.prompt-input-menu #task-public-sources{max-height:160px;overflow:auto;margin:7px 0;padding:7px 10px;border-left:2px solid #dce3e9}.prompt-privacy-control select{max-width:155px}.prompt-execution-controls .prompt-control:first-child select{max-width:165px}.prompt-execution-controls .prompt-control:last-child input{max-width:150px;padding-right:9px}#chat-submit{flex:0 0 42px;width:42px;height:42px;min-height:42px;padding:0;border-radius:50%;font-size:22px;line-height:1}#chat-submit:disabled{opacity:.48;cursor:not-allowed}.prompt-search-editor{display:grid;grid-template-columns:minmax(180px,.6fr) minmax(260px,1.4fr);gap:8px 16px;align-items:end;margin:10px 0;padding:12px 14px;border:1px solid #d6b36a;border-radius:10px;background:#fffaf0}.prompt-search-editor div{grid-row:span 2;align-self:center}.prompt-search-editor strong{color:#315f58}.prompt-search-editor p{margin:4px 0;color:#627183;font-size:12px}.prompt-search-editor label{color:#526675}.prompt-search-editor input{box-sizing:border-box;width:100%;padding:9px;border:1px solid #bfcdc9;border-radius:8px;background:#fff}#task-selection-summary,#chat-orchestration-target,#task-routing-note{display:inline;margin:0 10px 0 0;color:#526675;font-size:11px}#task-selection-summary::after{content:' ·'}#task-routing-note{display:block;margin-top:4px}
 #external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
-#task-routing,#task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-routing fieldset,#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:160px;overflow:auto}#task-routing label,#task-artifact-list label,#task-public-source-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
-.prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
-.prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+#advanced-external{margin:8px 0;color:#456276;font-size:12px}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
+.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
 #chat-stream-status.chat-live-progress{display:flex;align-items:center;gap:10px;min-height:52px;color:#304657;font-weight:600}
 .chat-progress-spinner{width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
@@ -938,7 +953,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
-@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
+@media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}.prompt-search-editor{grid-template-columns:1fr 1.4fr}}
+@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
  #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
@@ -952,12 +968,12 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
  #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
- #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-history{display:flex!important;grid-column:1;grid-row:2;min-height:180px}.project-overview-history ol{max-height:none}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
+ #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-history{display:flex!important;grid-column:1;grid-row:2;min-height:180px}.project-overview-history ol{max-height:none}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none;padding:4px 14px 14px}.prompt-widget-heading{padding:8px 14px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
  #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
  .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}
  button{min-height:44px}input,select,textarea{font-size:16px;max-width:100%}fieldset{min-width:0}
- .prompt-row,.cms-domain-row{align-items:stretch}.prompt-row button,.cms-domain-row button{width:100%}
+ .prompt-toolbar{display:grid;grid-template-columns:1fr 1fr auto;align-items:end}.prompt-toolbar>.prompt-control:first-child{grid-column:1}.prompt-routing-controls{display:contents}.prompt-input-picker{grid-column:2}.prompt-routing-controls>.prompt-control{grid-column:1}.prompt-route-arrow{display:none}.prompt-routing-controls>.prompt-control:last-child{grid-column:2}.prompt-privacy-control{grid-column:1}.prompt-execution-controls{display:contents}.prompt-execution-controls>.prompt-control:first-child{grid-column:1}.prompt-execution-controls>.prompt-control:last-child{grid-column:2}.prompt-control select,.prompt-control input,.prompt-privacy-control select,.prompt-execution-controls .prompt-control:first-child select,.prompt-execution-controls .prompt-control:last-child input{width:100%;max-width:none}.prompt-input-picker>summary{width:100%}#chat-submit{grid-column:3;grid-row:3/span 2;align-self:end;width:44px;height:44px;min-height:44px}.prompt-search-editor{grid-template-columns:1fr}.prompt-search-editor div{grid-row:auto}.prompt-input-menu{position:fixed;z-index:70;left:14px;right:14px;bottom:14px;width:auto;max-height:70vh}.cms-domain-row{align-items:stretch}.cms-domain-row button{width:100%}
  .confirm{display:flex!important;align-items:flex-start;gap:10px;overflow-wrap:anywhere}.confirm input{flex:0 0 auto;margin-top:4px}
  pre,code,output,[role="status"],[role="alert"]{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
  #preview-content pre,#workflow-panel pre,#image-request-json,#image-result-metadata,#external-preview pre,#cms-request-preview{white-space:pre-wrap;overflow-x:auto}
@@ -1027,7 +1043,7 @@ PRESENTER_CSS = '''
 .presenter-audience #presenter-screen,.presenter-speaker #presenter-private-preview{width:100%;max-width:420px;aspect-ratio:16/9;align-self:center;display:flex;flex-direction:column;justify-content:center;background:#10222f;color:#f6faf8;padding:5%;border:1px solid #496072;border-radius:0;overflow:auto}.presenter-audience #presenter-screen h2,.presenter-speaker #presenter-private-preview h2{font-size:clamp(14px,1.8vw,30px);color:#79c9ac;margin:0 0 8px}.presenter-audience #presenter-screen p,.presenter-speaker #presenter-private-preview p{font-size:clamp(10px,1.2vw,20px);color:#c8d4df;line-height:1.35;margin:0;white-space:pre-wrap}.presenter-notes p{white-space:pre-wrap}#presenter-tab-content{flex:1;min-height:0;overflow:auto}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px){.presenter-layout{grid-template-columns:15% 25% minmax(0,1fr)}}
-@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
+@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
 '''
 CSS += PRESENTER_CSS
 JS = SLIDE_JS + '''const button=document.querySelector('#increment');
@@ -3063,6 +3079,7 @@ function renderTaskArtifactSources(){
   label.append(check,document.createTextNode(` ${item.title}`));list.append(label);
  }
  if(!currentArtifacts.length)list.textContent='Projekt zatím nemá podklady.';
+ updatePromptInputSummary();
 }
 function availablePublicSources(){
  const values=[];
@@ -3078,6 +3095,24 @@ function renderTaskPublicSources(){
   check.type='checkbox';check.value=source.run_id;check.checked=selected.has(source.run_id);
   label.append(check,document.createTextNode(` ${source.title} · ${source.url}`));list.append(label);}
  if(!sources.length)list.textContent='Zatím není načtený žádný veřejný zdroj. Zadejte dotaz; nejprve vznikne kontrolované webové hledání.';
+ updatePromptInputSummary();
+}
+function updatePromptInputSummary(){
+ const conversation=document.querySelector('#task-source-conversation')?.checked;
+ const artifacts=document.querySelector('#task-source-artifacts')?.checked;
+ const publicWeb=document.querySelector('#task-source-public')?.checked;
+ const artifactCount=artifacts?document.querySelectorAll('#task-artifact-list input:checked').length:0;
+ const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
+ const count=(conversation?1:0)+artifactCount+publicCount;
+ const countOutput=document.querySelector('#task-input-count');
+ const summary=document.querySelector('#task-selection-summary');
+ if(countOutput)countOutput.textContent=String(count);
+ if(!summary)return;
+ const parts=[];
+ if(conversation)parts.push('konverzace');
+ if(artifacts)parts.push(artifactCount?(artifactCount===1?'1 podklad':`${artifactCount} podkladů`):'vyberte podklady');
+ if(publicWeb)parts.push(publicCount?(publicCount===1?'1 veřejný zdroj':`${publicCount} veřejných zdrojů`):'nové webové hledání');
+ summary.textContent=parts.length?parts.join(' + '):'Nejsou vybrané žádné vstupy';
 }
 function replaceTaskProjection(projection){
  const index=taskOutcomes.findIndex(item=>item.task_id===projection.task_id);
@@ -3624,50 +3659,67 @@ function refreshChatModeControls(){
  const adapter=document.querySelector('#chat-run-adapter');
  const model=document.querySelector('#chat-run-model');
  const artifacts=document.querySelector('#task-artifacts');
+ const action=document.querySelector('#task-action');
  const ollamaOption=adapter.querySelector('option[value="ollama"]');
  const target=document.querySelector('#chat-orchestration-target');
  const routing=document.querySelector('#task-routing');
  const artifactSource=document.querySelector('#task-source-artifacts');
  const publicSource=document.querySelector('#task-source-public');
  const publicSources=document.querySelector('#task-public-sources');
+ const searchEditor=document.querySelector('#task-search-editor');
  const searchQuery=document.querySelector('#task-search-query');
- const searchLabel=document.querySelector('#task-search-query-label');
+ const selectionSummary=document.querySelector('#task-selection-summary');
  const routingNote=document.querySelector('#task-routing-note');
  const lan=chatBinding?.boundary==='private-network';
  ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
-  adapter.disabled=false;routing.hidden=false;
+  adapter.disabled=false;routing.hidden=false;selectionSummary.hidden=false;
   const external=adapter.value==='openai-responses';
   model.value=external ? (externalBinding?.model || model.value) : (chatBinding?.model || '');
   model.disabled=!external;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
   artifacts.hidden=!artifactSource.checked;
-  publicSources.hidden=!publicSource.checked;searchQuery.hidden=!publicSource.checked;
-  searchLabel.hidden=!publicSource.checked;
+  action.value=publicSource.checked?'search':'answer';
+  publicSources.hidden=!publicSource.checked;searchEditor.hidden=!publicSource.checked;
+  searchQuery.disabled=!publicSource.checked;
+  const searchPrefix=publicSource.checked?(searchBinding?'SearXNG → ':'SearXNG nenastaveno → '):'';
   target.hidden=false;target.textContent=external ? (externalBinding ?
-   `Úkol použije OpenAI ${model.value} po přesném náhledu a potvrzení.` :
-   'Externí úkol vyžaduje nejprve nastavit OpenAI backend.') : (chatBinding ?
-   `Úkol použije ${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
-   'Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
+   `${searchPrefix}OpenAI ${model.value} · před odesláním vznikne přesný náhled.` :
+   `${searchPrefix}externí úkol vyžaduje nejprve nastavit OpenAI backend.`) : (chatBinding ?
+   `${searchPrefix}${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
+   `${searchPrefix}lokální úkol vyžaduje nejprve nastavit Ollama backend.`);
   routingNote.textContent=external ?
    'Externímu modelu lze předat jen konverzaci a načtené veřejné zdroje; interní artefakty jsou zakázané.' :
    'Zdroj, výstup a backend jsou pevnou součástí plánu; model je sám nemění.';
  }else{
   target.hidden=true;target.textContent='';
-  adapter.disabled=false;model.disabled=false;routing.hidden=true;artifacts.hidden=true;
+  adapter.disabled=false;model.disabled=false;routing.hidden=true;artifacts.hidden=true;searchEditor.hidden=true;selectionSummary.hidden=true;
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
   if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
  }
+ updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
  document.querySelector('#chat-run-model').value=event.currentTarget.value==='openai-responses' ?
   (externalBinding?.model || '') : (chatBinding?.model || '');
  refreshChatModeControls();
 });
+document.querySelector('#task-action').addEventListener('change',event=>{
+ document.querySelector('#task-source-public').checked=event.currentTarget.value==='search';
+ renderTaskPublicSources();refreshChatModeControls();
+});
+document.querySelector('#task-source-conversation').addEventListener('change',updatePromptInputSummary);
 document.querySelector('#task-source-artifacts').addEventListener('change',refreshChatModeControls);
 document.querySelector('#task-source-public').addEventListener('change',()=>{
  renderTaskPublicSources();refreshChatModeControls();
+});
+document.querySelector('#task-artifact-list').addEventListener('change',updatePromptInputSummary);
+document.querySelector('#task-public-source-list').addEventListener('change',updatePromptInputSummary);
+const taskInputs=document.querySelector('#task-inputs');
+taskInputs.addEventListener('toggle',()=>promptForm.classList.toggle('inputs-open',taskInputs.open));
+taskInputs.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&taskInputs.open){event.preventDefault();taskInputs.open=false;taskInputs.querySelector('summary').focus();}
 });
 document.querySelector('#chat-mode').addEventListener('change',async event=>{
  pendingChatRequest=null;const mode=event.currentTarget.value;
