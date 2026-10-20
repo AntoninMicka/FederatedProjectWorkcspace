@@ -11,12 +11,15 @@ import uuid
 from spikes.configuration import committed_project
 from spikes.markdown_documents import main_todo_id, main_todo_view
 from spikes.journal import Journal, RecoveryConflict, snapshot
-from spikes.metadata import require, validate_snapshot, validate_transition
+from spikes.metadata import MAX_METADATA, require, validate_snapshot, validate_transition
 from spikes.storage import Git, Index, StaleIndex, projection
 
 
 class PendingOperation(RuntimeError):
     pass
+
+
+MAX_PROJECT_HISTORY = 20
 
 
 class Workspace:
@@ -186,12 +189,24 @@ class Workspace:
                 return dict(id=artifact_id, commit_id=commit, metadata=metadata,
                             path=path, raw=entries[path], sidecar=sidecar)
             todo = main_todo_view(files, entities, project_id)
+            revisions = self.git.run('rev-list', '--topo-order',
+                                     f'--max-count={MAX_PROJECT_HISTORY + 1}', commit).stdout.splitlines()
+            history = []
+            for revision in revisions[:MAX_PROJECT_HISTORY]:
+                require(len(revision) in {40, 64} and all(c in '0123456789abcdef' for c in revision),
+                        'Invalid commit ID')
+                require(int(self.git.run('cat-file', '-s', revision).stdout) <= MAX_METADATA,
+                        'Commit metadata exceeds 64 KiB')
+                info = self.git.run('show', '-s', '--format=%aI%x00%an%x00%s', revision).stdout.rstrip('\n')
+                date, author, subject = info.split('\0', 2)
+                history.append(dict(commit_id=revision, date=date, author=author, subject=subject))
             if self.git.head() != commit:
                 raise StaleIndex('HEAD changed while opening project; retry')
             artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
             return dict(id=project_id, title=meta['title'],
                         description=meta.get('description', ''), commit_id=commit,
                         main_todo_id=main_todo_id(project_id), main_todo=todo,
+                        history=dict(entries=history, truncated=len(revisions) > MAX_PROJECT_HISTORY),
                         artifacts=[dict(id=id_, title=title, kind=kind)
                                    for id_, title, kind in rows if id_ in artifact_ids])
 

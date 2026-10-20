@@ -76,6 +76,8 @@ class ProjectTests(unittest.TestCase):
             result = self.projects.open(id_)
             self.assertEqual(result['commit_id'], self.gits[i].head())
             self.assertEqual(result['description'], project().get('description', ''))
+            self.assertEqual([row['subject'] for row in result['history']['entries']], ['Existing project'])
+            self.assertFalse(result['history']['truncated'])
             self.assertEqual(result['artifacts'], [dict(id=id_, title=result['title'], kind='document')])
             self.assertEqual(self.gits[i].run('status', '--porcelain').stdout, '')
             self.assertEqual(Projects(self.node_path).open(id_), result)
@@ -87,8 +89,22 @@ class ProjectTests(unittest.TestCase):
         path.write_bytes(markdown(metadata('Uncommitted draft')))
         result = self.projects.open(ENTITY)
         self.assertEqual(result['commit_id'], head)
+        self.assertEqual(result['history']['entries'][0]['subject'], 'Change artifact')
         self.assertEqual(result['artifacts'][0]['title'], 'New committed title')
         self.assertEqual(self.projects.open(OTHER)['artifacts'][0]['title'], 'Druhý projekt')
+
+    def test_project_history_is_head_bound_and_bounded(self):
+        path = self.gits[0].root / 'artifacts' / ENTITY / 'note.md'
+        for index in range(22):
+            path.write_bytes(markdown(metadata(f'Title {index}')))
+            self.gits[0].commit(f'Change {index} <script>')
+        result = self.projects.open(ENTITY)
+        self.assertEqual(len(result['history']['entries']), 20)
+        self.assertTrue(result['history']['truncated'])
+        self.assertEqual(result['history']['entries'][0]['commit_id'], result['commit_id'])
+        self.assertEqual(result['history']['entries'][0]['subject'], 'Change 21 <script>')
+        self.assertEqual(result['history']['entries'][-1]['subject'], 'Change 2 <script>')
+        self.assertTrue(all(row['author'] == 'M0 Test' for row in result['history']['entries']))
 
     def test_invalid_registration_and_config_do_not_initialize_state(self):
         original = deepcopy(self.node)

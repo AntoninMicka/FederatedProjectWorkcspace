@@ -764,13 +764,15 @@ def main():
                   const overviewTasks=[...document.querySelectorAll('#project-overview-task-list .dashboard-task-row span')].map(item=>item.textContent);
                   if(!window.projectOverviewChecked){
                     const descriptionRect=document.querySelector('.project-overview-description').getBoundingClientRect();
-                    const placeholderRect=document.querySelector('.project-overview-placeholder').getBoundingClientRect();
+                    const historyRect=document.querySelector('.project-overview-history').getBoundingClientRect();
                     const tasksRect=document.querySelector('.project-overview-tasks').getBoundingClientRect();
+                    const historySubjects=[...document.querySelectorAll('#project-overview-history-list .project-history-row strong')].map(item=>item.textContent);
                     if(overviewPanel.hidden || overviewTab.getAttribute('aria-selected')!=='true' || promptForm.hidden ||
                        promptToggle.getAttribute('aria-expanded')!=='true' ||
-                       descriptionRect.width<placeholderRect.width*1.8 ||
-                       descriptionRect.bottom>placeholderRect.top ||
-                       Math.abs(placeholderRect.top-tasksRect.top)>2 ||
+                       descriptionRect.width<historyRect.width*1.8 ||
+                       descriptionRect.bottom>historyRect.top ||
+                       Math.abs(historyRect.top-tasksRect.top)>2 ||
+                       JSON.stringify(historySubjects)!==JSON.stringify(expected.history.entries.map(item=>item.subject||'Commit bez názvu')) ||
                        JSON.stringify(overviewTasks)!==JSON.stringify(openTodo.map(item=>item.title)))return null;
                     promptToggle.click();if(!promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false')return null;
                     promptToggle.click();if(promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='true')return null;

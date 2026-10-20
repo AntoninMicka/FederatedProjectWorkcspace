@@ -619,7 +619,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="project-overview-panel" role="tabpanel" aria-labelledby="project-overview-tab">
 <header class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1></header>
 <div class="project-overview-grid">
-<section class="dashboard-tile project-overview-placeholder" aria-hidden="true"></section>
+<section class="dashboard-tile project-overview-history"><span class="dashboard-kicker">Poslední aktivita</span>
+<h2>Historie změn</h2><p id="project-overview-history-status" role="status">Načítám historii…</p>
+<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol></section>
 <section class="project-overview-description" aria-label="Stručný popis projektu"><p id="project-description"></p></section>
 <section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
 <h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
@@ -911,7 +913,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
 #main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}
-#project-overview-panel{max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch}.project-overview-placeholder{grid-column:span 1;min-height:280px}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
+#project-overview-panel{max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch}.project-overview-history{grid-column:span 1;min-height:280px;overflow:hidden}.project-overview-history ol{list-style:none;margin:0;padding:0;overflow:auto;max-height:min(420px,42vh)}.project-history-row{padding:10px 0;border-top:1px solid #dce3e9}.project-history-row:first-child{border-top:0}.project-history-row strong,.project-history-row small{display:block;overflow-wrap:anywhere}.project-history-row small{margin-top:4px;color:#526675}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
 .project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:280px;overflow:hidden}.project-overview-tasks ul{max-height:min(420px,42vh)}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:auto}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
@@ -935,7 +937,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
-@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-placeholder{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
+@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
@@ -950,7 +952,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
  #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
- #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-placeholder{display:flex!important;grid-column:1;grid-row:2;min-height:180px}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
+ #project-overview-panel{padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-history{display:flex!important;grid-column:1;grid-row:2;min-height:180px}.project-overview-history ol{max-height:none}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px}.project-overview-tasks ul{max-height:none}#chat-composer{max-height:none}.prompt-widget-heading{padding:8px 14px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
  #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
  .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}
@@ -1630,6 +1632,23 @@ let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
 createTodo.addEventListener('click',()=>openMainTodoEditor());
 document.querySelector('#project-overview-edit-todo').addEventListener('click',()=>openMainTodoEditor());
+function renderProjectHistory(history){
+ const list=document.querySelector('#project-overview-history-list');
+ const status=document.querySelector('#project-overview-history-status');
+ list.replaceChildren();
+ if(!history){status.textContent='Otevřete projekt.';return;}
+ for(const item of history.entries){
+  const row=document.createElement('li');row.className='project-history-row';
+  const subject=document.createElement('strong');subject.textContent=item.subject||'Commit bez názvu';
+  const detail=document.createElement('small');
+  const parsed=new Date(item.date);const date=Number.isNaN(parsed.getTime()) ? item.date :
+   new Intl.DateTimeFormat('cs-CZ',{dateStyle:'medium',timeStyle:'short'}).format(parsed);
+  detail.textContent=`${date} · ${item.author} · ${item.commit_id.slice(0,8)}`;
+  row.append(subject,detail);list.append(row);
+ }
+ status.textContent=history.entries.length ? `${history.entries.length} posledních změn` : 'Projekt zatím nemá historii změn.';
+ if(history.truncated)status.textContent+=' Zobrazeno posledních 20 záznamů.';
+}
 function renderProjectOverview(todo){
  const list=document.querySelector('#project-overview-task-list');
  const status=document.querySelector('#project-overview-task-status');
@@ -1715,7 +1734,7 @@ function clearProject(){
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
- renderProjectOverview(null);
+ renderProjectOverview(null);renderProjectHistory(null);
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
  document.querySelector('#project-description').textContent='';
@@ -2005,7 +2024,7 @@ async function openRegisteredProject(projectId){
   if(request!==viewRequest)return;
   rememberRecentProject(projectId);
   activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id};
-  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderSidebarArtifacts(result.artifacts);
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;

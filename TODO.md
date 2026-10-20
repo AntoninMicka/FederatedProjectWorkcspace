@@ -176,6 +176,14 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   ověřila také střední layout `2 / 1 1`; po změně znovu prošlo všech **638
   testů** (27 přeskočeno), cílené layoutové testy, JavaScript parser, Python
   kompilace a `git diff --check`.
+  Volná levá dlaždice nyní zobrazuje nejvýše 20 posledních commitů projektu
+  dosažitelných z ověřeného HEAD: bezpečně vykreslený předmět, datum, autora a
+  zkrácené ID, bez cest a diffů. Backendový test ověřuje pořadí, limit i
+  indikaci zkrácení. Po této změně prošla celá sada **639 testy** (27
+  přeskočeno), cílené testy, JavaScript parser, Python kompilace a
+  `git diff --check`; opt-in skutečný Qt WebEngine smoke prošel nad projektem s
+  podklady i prázdným projektem a potvrdil historii, responzivní geometrii a
+  nezměněný Git stav obou projektů.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
