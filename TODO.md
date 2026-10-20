@@ -209,6 +209,14 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   odstranění jeho potvrzovací logiky. Opakovaná cílená desktop/web sada prošla
   66 testy (6 přeskočeno), skutečný Qt WebEngine prošel desktopovým i mobilním
   průchodem a celá sada po změně znovu prošla **640 testy** (27 přeskočeno).
+  Následující schválené zhuštění přesunulo trvale viditelné popisky Zadání,
+  Režim, Akce, Výsledek, Soukromí, Backend, Model a Přesný veřejný dotaz dovnitř
+  rámečků jejich ovládacích prvků. Samostatná hlavička promptu a ruční
+  skrývání byly odstraněny; deklarované automatické skrytí na specializovaných
+  záložkách zůstalo zachované. Cílená desktop/web sada po změně prošla 66 testy
+  (6 přeskočeno) a skutečný Qt WebEngine ověřil desktopovou i mobilní geometrii
+  vnitřních popisků, 44px ovládání a nepřítomnost starého přepínače. Následná
+  celá sada znovu prošla **640 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

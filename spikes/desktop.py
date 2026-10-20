@@ -759,23 +759,25 @@ def main():
                   const overviewTab=document.querySelector('#project-overview-tab');
                   const overviewPanel=document.querySelector('#project-overview-panel');
                   const promptForm=document.querySelector('#chat-composer');
-                  const promptToggle=document.querySelector('#prompt-widget-toggle');
                   const openTodo=expected.main_todo?.status==='ready' ? expected.main_todo.items.filter(item=>!item.checked) : [];
                   const overviewTasks=[...document.querySelectorAll('#project-overview-task-list .dashboard-task-row span')].map(item=>item.textContent);
                   if(!window.projectOverviewChecked){
                     const descriptionRect=document.querySelector('.project-overview-description').getBoundingClientRect();
                     const historyRect=document.querySelector('.project-overview-history').getBoundingClientRect();
                     const tasksRect=document.querySelector('.project-overview-tasks').getBoundingClientRect();
+                    const modeControl=document.querySelector('label[for="chat-mode"]');
+                    const modeControlRect=modeControl.getBoundingClientRect();
+                    const modeLabelRect=modeControl.querySelector('span').getBoundingClientRect();
                     const historySubjects=[...document.querySelectorAll('#project-overview-history-list .project-history-row strong')].map(item=>item.textContent);
                     if(overviewPanel.hidden || overviewTab.getAttribute('aria-selected')!=='true' || promptForm.hidden ||
-                       promptToggle.getAttribute('aria-expanded')!=='true' ||
+                       document.querySelector('#prompt-widget-toggle') ||
+                       modeControlRect.height!==44 || modeLabelRect.top<modeControlRect.top ||
+                       modeLabelRect.bottom>modeControlRect.bottom ||
                        descriptionRect.width<historyRect.width*1.8 ||
                        descriptionRect.bottom>historyRect.top ||
                        Math.abs(historyRect.top-tasksRect.top)>2 ||
                        JSON.stringify(historySubjects)!==JSON.stringify(expected.history.entries.map(item=>item.subject||'Commit bez názvu')) ||
                        JSON.stringify(overviewTasks)!==JSON.stringify(openTodo.map(item=>item.title)))return null;
-                    promptToggle.click();if(!promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false')return null;
-                    promptToggle.click();if(promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='true')return null;
                     window.projectOverviewChecked=true;
                   }
                   const projectsTab=document.querySelector('#projects-tab'),chatsTab=document.querySelector('#chats-tab');
@@ -882,7 +884,7 @@ def main():
                     const workflowTab=document.querySelector('#workflow-tab');workflowTab.click();
                     const workflowPanel=document.querySelector('#workflow-panel');
                     if(workflowPanel.hidden || workflowTab.getAttribute('aria-selected')!=='true' ||
-                       !promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false' ||
+                       !promptForm.hidden ||
                        !document.querySelector('#workflow-purpose') ||
                        !document.querySelector('#workflow-creator-artifacts') ||
                        !document.querySelector('#workflow-opponent-artifacts') ||
@@ -896,7 +898,7 @@ def main():
                     const imageTab=document.querySelector('#image-tab');imageTab.click();
                     const imagePanel=document.querySelector('#image-panel');
                     if(imagePanel.hidden || imageTab.getAttribute('aria-selected')!=='true' ||
-                       !promptForm.hidden || promptToggle.getAttribute('aria-expanded')!=='false' ||
+                       !promptForm.hidden ||
                        !document.querySelector('#image-prompt') ||
                        !document.querySelector('#image-request-preview').hidden ||
                        !document.querySelector('#image-result').hidden ||
