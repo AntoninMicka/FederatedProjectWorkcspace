@@ -922,7 +922,12 @@ def main():
                     if(!window.previewStarted){window.previewStarted=true;
                       document.querySelector('#sidebar-artifact-list button').click();return null;}
                     if(document.querySelector('#preview-title').textContent!==expected.artifacts[0].title ||
-                       document.querySelector('#preview-details').hidden)return null;
+                       document.querySelector('#preview-details').hidden ||
+                       document.querySelector('#task-source-current-file').hidden ||
+                       !document.querySelector('#task-source-current-file-title').textContent.includes(expected.artifacts[0].title))return null;
+                    const currentFileInput=document.querySelector('#task-source-current-file-input');
+                    if(!currentFileInput.checked)currentFileInput.click();
+                    if(!currentFileInput.checked || document.querySelector('#task-input-count').textContent!=='2')return null;
                     window.smokeSidebarStage='preview-basic';
                     if(expected.preview.metadata.import){
                       const details=document.querySelector('#preview-metadata').textContent;

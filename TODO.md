@@ -224,7 +224,13 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   potvrzení zůstávají zachované. Skutečný desktopový i mobilní Qt WebEngine
   ověřil přepnutí tohoto kontraktu, obnovu předchozího typu výsledku a
   responzivní geometrii; následná celá sada znovu prošla **640 testy**
-  (27 přeskočeno).
+  (27 přeskočeno). Pokud je v Náhledu otevřený podklad, nabídka Vstupy nově
+  zpřístupní také volitelný **Aktuální soubor** s jeho názvem. Při výběru se
+  jeho ID deduplikovaně přidá mezi projektové vstupy; bez otevřeného souboru,
+  při webovém hledání se položka nezobrazuje a pro externí běh ji nelze vybrat.
+  Skutečný desktopový Qt WebEngine ověřil zobrazení, zaškrtnutí a souhrnný
+  počet vstupů, mobilní Qt WebEngine zobrazení u otevřeného náhledu a celá sada
+  po změně prošla **640 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

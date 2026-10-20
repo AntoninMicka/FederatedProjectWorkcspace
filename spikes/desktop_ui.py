@@ -772,6 +772,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <details id="task-inputs" class="prompt-input-picker"><summary><span>Vstupy</span><output id="task-input-count">1</output></summary>
 <div class="prompt-input-menu"><fieldset><legend>Vybrané zdroje</legend>
 <label id="task-source-current-prompt" hidden><input type="checkbox" checked disabled> Aktuální zadání (povinné pro vyhledávání)</label>
+<label id="task-source-current-file" hidden><input id="task-source-current-file-input" type="checkbox"> <span id="task-source-current-file-title">Aktuální soubor</span></label>
 <label id="task-source-conversation-label"><input id="task-source-conversation" type="checkbox" checked> Aktuální konverzace</label>
 <label id="task-source-artifacts-label"><input id="task-source-artifacts" type="checkbox"> Podklady projektu</label>
 <details id="task-artifacts" hidden><summary>Vybrat konkrétní podklady</summary><fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
@@ -2718,6 +2719,7 @@ document.querySelector('#cms-deployment-run').addEventListener('click',async eve
 document.querySelector('#user-profile-open').addEventListener('click',()=>{location.hash='user-profile';});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
+ refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
  document.querySelector('#preview-title').textContent='';
  document.querySelector('#preview-metadata').replaceChildren();
@@ -2747,7 +2749,7 @@ function renderMarkdown(text){
 async function openPreview(id,page=1){
  if(!activeProject)return;
  const project=activeProject;
- clearPreview();selectedArtifact=id;
+ clearPreview();selectedArtifact=id;refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current',String(button.dataset.id===id));
  const request=previewRequest;
  selectMainTab(document.querySelector('#preview-tab'));previewStatus.textContent='Načítám náhled…';
@@ -3084,12 +3086,27 @@ function renderTaskPublicSources(){
  if(!sources.length)list.textContent='Zatím není načtený žádný veřejný zdroj. Zadejte dotaz; nejprve vznikne kontrolované webové hledání.';
  updatePromptInputSummary();
 }
+function refreshCurrentFileSource(){
+ const label=document.querySelector('#task-source-current-file');
+ const input=document.querySelector('#task-source-current-file-input');
+ const title=document.querySelector('#task-source-current-file-title');
+ if(!label||!input||!title)return;
+ const item=currentArtifacts.find(value=>value.id===selectedArtifact);
+ const searching=document.querySelector('#task-action')?.value==='search';
+ const external=document.querySelector('#chat-run-adapter')?.value==='openai-responses';
+ label.hidden=!item||searching;input.disabled=!item||external;
+ if(!item||external)input.checked=false;
+ input.value=item?.id || '';title.textContent=item?`Aktuální soubor: ${item.title}`:'Aktuální soubor';
+ updatePromptInputSummary();
+}
 function updatePromptInputSummary(){
  const searching=document.querySelector('#task-action')?.value==='search';
  const conversation=document.querySelector('#task-source-conversation')?.checked;
  const artifacts=document.querySelector('#task-source-artifacts')?.checked;
  const publicWeb=document.querySelector('#task-source-public')?.checked;
- const artifactCount=artifacts?document.querySelectorAll('#task-artifact-list input:checked').length:0;
+ const artifactIds=new Set(artifacts?[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value):[]);
+ if(document.querySelector('#task-source-current-file-input')?.checked&&selectedArtifact)artifactIds.add(selectedArtifact);
+ const artifactCount=artifactIds.size;
  const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
  const count=searching?1:(conversation?1:0)+artifactCount+publicCount;
  const countOutput=document.querySelector('#task-input-count');
@@ -3663,6 +3680,7 @@ function refreshChatModeControls(){
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
   action.value=publicSource.checked?'search':'answer';
   const searching=action.value==='search';
+  refreshCurrentFileSource();
   currentPromptSource.hidden=!searching;
   conversationSource.hidden=searching;artifactSourceLabel.hidden=searching;publicSourceLabel.hidden=searching;
   artifacts.hidden=searching||!artifactSource.checked;publicSources.hidden=true;publicSource.disabled=searching;
@@ -3699,6 +3717,7 @@ document.querySelector('#task-action').addEventListener('change',event=>{
  renderTaskPublicSources();refreshChatModeControls();
 });
 document.querySelector('#task-source-conversation').addEventListener('change',updatePromptInputSummary);
+document.querySelector('#task-source-current-file-input').addEventListener('change',updatePromptInputSummary);
 document.querySelector('#task-source-artifacts').addEventListener('change',refreshChatModeControls);
 document.querySelector('#task-source-public').addEventListener('change',()=>{
  renderTaskPublicSources();refreshChatModeControls();
@@ -4061,16 +4080,19 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
   const searching=document.querySelector('#task-action').value==='search';
   const useConversation=!searching&&document.querySelector('#task-source-conversation').checked;
-  const useArtifacts=!searching&&document.querySelector('#task-source-artifacts').checked;
+  const useCurrentFile=!searching&&document.querySelector('#task-source-current-file-input').checked&&selectedArtifact;
+  const includeSelectedArtifacts=!searching&&document.querySelector('#task-source-artifacts').checked;
   const usePublic=searching||document.querySelector('#task-source-public').checked;
-  const artifactIds=useArtifacts ? [...document.querySelectorAll('#task-artifact-list input:checked')]
-   .map(item=>item.value) : [];
+  const selectedArtifactIds=[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value);
+  const artifactIds=includeSelectedArtifacts ? selectedArtifactIds : [];
+  if(useCurrentFile)artifactIds.push(selectedArtifact);
+  const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0;
   const publicRunIds=usePublic&&!searching ? [...document.querySelectorAll('#task-public-source-list input:checked')]
    .map(item=>item.value) : [];
   const sourceKinds=[];if(useConversation)sourceKinds.push('conversation');
   if(useArtifacts)sourceKinds.push('artifacts');if(usePublic)sourceKinds.push('public-web');
   if(!sourceKinds.length){chatOperationStatus.textContent='Vyberte alespoň jeden zdroj úkolu.';return;}
-  if(useArtifacts && !artifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
+  if(includeSelectedArtifacts && !selectedArtifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
   const searchQuery=searching?draft.value.trim():null;
   if(usePublic && !publicRunIds.length && !searchQuery){
    chatOperationStatus.textContent='Zadejte zadání pro kontrolované hledání na webu.';return;
@@ -4080,7 +4102,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   thread_id:threadId,
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
   selected_message_ids:useConversation?selectedMessages.map(item=>item.message_id):[],
-  selected_artifact_ids:artifactIds,
+  selected_artifact_ids:uniqueArtifactIds,
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString(),run_choice:runChoice,
   task_plan:{schema_version:1,source_kinds:sourceKinds,

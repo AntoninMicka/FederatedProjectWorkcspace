@@ -1040,9 +1040,14 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("target.hidden=!warnings.length", controls)
         self.assertNotIn('chatBinding.endpoint', controls)
         for control in ('task-source-conversation', 'task-source-artifacts',
-                        'task-source-public', 'task-source-current-prompt', 'task-output-kind',
+                        'task-source-public', 'task-source-current-prompt',
+                        'task-source-current-file', 'task-source-current-file-input', 'task-output-kind',
                         'task-public-source-list'):
             self.assertIn('id="' + control + '"', HTML)
+        self.assertIn("currentArtifacts.find(value=>value.id===selectedArtifact)", JS)
+        self.assertIn("title.textContent=item?`Aktuální soubor: ${item.title}`", JS)
+        self.assertIn("if(useCurrentFile)artifactIds.push(selectedArtifact)", JS)
+        self.assertIn("selected_artifact_ids:uniqueArtifactIds", JS)
         self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
         self.assertIn("execution:adapter==='ollama'?'local-ollama':'external-openai'", JS)
         self.assertIn('External task execution cannot include project artifacts',
@@ -1065,6 +1070,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             self.assertIn('<span>' + label + '</span>', composer)
         self.assertIn('id="task-source-current-prompt" hidden', composer)
         self.assertIn('Aktuální zadání (povinné pro vyhledávání)', composer)
+        self.assertIn('id="task-source-current-file" hidden', composer)
+        self.assertIn('id="task-source-current-file-input" type="checkbox"', composer)
         self.assertNotIn('id="task-search-editor"', composer)
         self.assertNotIn('id="task-search-query"', composer)
         self.assertIn('id="advanced-external" hidden aria-hidden="true"', composer)
