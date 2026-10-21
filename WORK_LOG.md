@@ -13,7 +13,7 @@ uzavřel interaktivní revizi s tím, že byly odstraněny největší bolístky
 zbývající stránky se doladí až v budoucím opakování faceliftu. Posledním
 implementačním commitem je `d069693`; před tímto administrativním uzavřením
 obsahovala implementace 31 commitů nad `develop`. Feature akceptace je
-uzavřená a jediný PR do `develop` byl vytvořen, ale dosud nebyl sloučen.
+uzavřená a jediný PR #72 byl doručen do `develop` jako merge commit `9fb4262`.
 
 - [x] [completed] **UX-FACELIFT-01-A — A4 inventura všech formulářů
   (implemented).** Generátor odvozuje tiskový review balíček přímo ze

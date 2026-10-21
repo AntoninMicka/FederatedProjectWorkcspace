@@ -375,7 +375,9 @@ def main():
             app, window, public_window,
             configuration_callback=lambda result: page.runJavaScript(
                 'showPresenterDisplayConfiguration(' + json.dumps(result) + ')'),
-            closed_callback=lambda: page.runJavaScript('closePresenterDisplayConfiguration()'),
+            closed_callback=lambda: page.runJavaScript(
+                "typeof closePresenterDisplayConfiguration==='function'&&"
+                'closePresenterDisplayConfiguration()'),
             error_callback=lambda message: page.runJavaScript(
                 'setPresenterDisplayNativeError(' + json.dumps(message) + ')'))
         federation_transfer = FederationTransfer(
@@ -745,7 +747,7 @@ def main():
             def checked(value):
                 if value == '1' and server.counter == 1:
                     if args.smoke_create and not creation_result['receipt'] and not controller.busy:
-                        created_projects = [item for item in server.projects.list()
+                        created_projects = [item for item in server.projects.catalog()
                                             if item['title'] == 'Nový projekt ze společného formuláře']
                         if len(created_projects) == 1:
                             creation_result['receipt'] = created_projects[0]

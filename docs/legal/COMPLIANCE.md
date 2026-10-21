@@ -14,6 +14,28 @@ licenční audit, právní stanovisko nebo označení `production-ready`. Neře�
 FTO, ochranné známky, GDPR ani AI Act. Ty zůstávají v oddělených existujících evidencích.
 Tento dokument je podklad k existujícím release gates, ne další produktová roadmapa.
 
+## Release 0.1.0 candidate review 2026-10-21
+
+Release branch `release/0.1.0` starts at `9fb4262`. The prepared distribution keeps
+the previously reviewed model: a deterministic source archive and an unbundled
+Linux `.deb`; it adds no wheel, Qt/Chromium runtime, container or AppImage. The
+current source allowlist selects 257 regular UTF-8 files plus its generated manifest.
+The delta provenance check is recorded in [PROVENANCE.md](PROVENANCE.md).
+
+The reference machine matches the declared Ubuntu 26.04.1 arm64 profile. The newly
+added Segno dependency was resolved there to the OS package `python3-segno 1.6.6-2`;
+the installed Debian copyright record identifies its application sources as
+BSD-3-Clause. Segno remains unbundled by both builders. This closes the Segno-specific
+inventory gap for this profile, but does not authorize a bundled wheel or standalone
+runtime.
+
+**Candidate verdict: GO WITH CONDITIONS.** Version metadata, release notes and the
+distribution/compliance delta are prepared. CE-01 remains OPEN because the release
+commit, tag and final hashes can only be recorded after this diff is committed and
+both artifacts are rebuilt from that clean commit. The full regression and physical
+desktop/install checks likewise retain their actual result in TODO rather than being
+inferred from this review.
+
 ## Closure review 2026-09-13
 
 Review target: commit `128928e9fe88f9e353a22ca8bdd0db3922126301`, current

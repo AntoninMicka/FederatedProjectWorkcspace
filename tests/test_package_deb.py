@@ -12,6 +12,10 @@ from scripts.package_deb import build, NAME
 
 @unittest.skipUnless(shutil.which('dpkg-deb'), 'Requires Debian packaging tools')
 class DebianPackageTests(unittest.TestCase):
+    def test_extended_smoke_uses_catalog_labels(self):
+        desktop = (Path(__file__).parents[1] / 'spikes/desktop.py').read_text()
+        self.assertIn('created_projects = [item for item in server.projects.catalog()', desktop)
+
     def test_contents_and_no_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -22,8 +26,12 @@ class DebianPackageTests(unittest.TestCase):
             control = (tree / 'DEBIAN/control').read_text()
             self.assertIn('poppler-utils', control)
             self.assertIn('Maintainer: Federated workspace contributors', control)
+            self.assertIn('Version: 0.1.0\n', control)
             self.assertNotIn('noreply@example.invalid', control)
             self.assertTrue((tree / f'usr/lib/{NAME}/spikes/artifact_preview.py').exists())
+            self.assertEqual((tree / f'usr/lib/{NAME}/VERSION').read_text(), '0.1.0\n')
+            self.assertEqual((tree / f'usr/share/doc/{NAME}/VERSION').read_text(), '0.1.0\n')
+            self.assertIn('0.1.0', (tree / f'usr/share/doc/{NAME}/CHANGELOG.md').read_text())
             self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.module.json').exists())
             self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.source.json').exists())
             self.assertFalse((tree / 'home').exists())
@@ -34,6 +42,16 @@ class DebianPackageTests(unittest.TestCase):
             with self.assertRaises(FileExistsError): build(package)
             self.assertEqual(original, package.read_bytes())
             with self.assertRaises(ValueError): build(root / 'bad.deb', '1\nInjected: yes')
+
+    def test_explicit_candidate_version_updates_control_and_embedded_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            package = build(root / 'candidate.deb', '0.1.1~rc1')
+            subprocess.run(['dpkg-deb', '-R', str(package), str(root / 'unpacked')],
+                           check=True, capture_output=True)
+            tree = root / 'unpacked'
+            self.assertIn('Version: 0.1.1~rc1\n', (tree / 'DEBIAN/control').read_text())
+            self.assertEqual((tree / f'usr/lib/{NAME}/VERSION').read_text(), '0.1.1~rc1\n')
 
     @unittest.skipUnless(os.environ.get('M0_DEB_TEST') == '1', 'Requires installed Debian runtime dependencies')
     def test_isolated_dpkg_install_upgrade_remove_preserves_data(self):

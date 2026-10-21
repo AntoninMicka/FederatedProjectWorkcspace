@@ -268,6 +268,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("requestPresenterDisplayAction('presenter-displays-apply')", JS)
         self.assertIn("requestNativeAction('presenter-displays-cancel')", JS)
         self.assertIn('showPresenterDisplayConfiguration', JS)
+        self.assertIn("typeof closePresenterDisplayConfiguration==='function'", desktop)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'

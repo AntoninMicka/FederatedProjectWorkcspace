@@ -130,4 +130,7 @@ licensed under BSD-3-Clause; the application source archive and `.deb` do not
 bundle the library. Install it from requirements or the system `python3-segno`
 package. Upstream source and license: [Segno 1.6.6](https://github.com/heuer/segno/tree/1.6.6)
 and [LICENSE](https://github.com/heuer/segno/blob/1.6.6/LICENSE).
-The earlier reference runtime audit does not include this newly added dependency.
+For the 0.1.0 candidate profile, Ubuntu 26.04.1 arm64 supplies Segno as
+`python3-segno 1.6.6-2`; its installed Debian copyright record identifies the
+upstream sources used by the application as BSD-3-Clause. This does not approve
+bundling a wheel or copying Segno into a future standalone distribution.

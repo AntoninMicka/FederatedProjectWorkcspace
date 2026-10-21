@@ -53,6 +53,26 @@ recording rules above apply and this gate must be reopened for the affected file
 
 **Closure status for the current distributed set: PASS.**
 
+## Release 0.1.0 candidate delta review
+
+On 2026-10-21 the allowlist produced from release base `9fb4262` plus the
+release-preparation worktree selected 257 regular files, excluding the generated
+manifest. All selected files decoded as UTF-8; no binary asset, vendored dependency,
+font, model, media file or executable was selected. The two JSON module declarations
+cannot carry comment-form SPDX headers and `VERSION` is generated release metadata;
+the remaining project files carry an SPDX license declaration, while preserved
+third-party license texts retain their upstream terms.
+
+The delta since the historical 100-file audit consists of project implementation,
+tests, schemas/declarations and documentation already tracked by this repository,
+plus the release metadata in this batch. No copied Segno code is included: the
+source archive and `.deb` only declare/use an external installation. This review is
+bound to the named base and current release diff; its final commit ID and artifact
+hashes remain pending under CE-01 until a clean commit is built.
+
+**Candidate delta status: PASS for preparing the unbundled 0.1.0 artifacts; not a
+published-release approval.**
+
 ## AI-assisted development
 
 AI tools are used as development assistants. Contributors remain responsible
