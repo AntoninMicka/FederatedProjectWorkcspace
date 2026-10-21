@@ -1,0 +1,365 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# Projekty v desktopu
+
+## Přejmenování souboru dokumentu
+
+V záložce **Podklady** otevřete menu dokumentu a zvolte **Upravit / přejmenovat**. V editoru upravte **Název souboru (.md)** bez složek a s příponou `.md` (nejvýše 200 bajtů UTF-8). Potvrďte **Uložit**; zároveň můžete upravit text, titulek, popis i štítky. Titulek a název souboru jsou nezávislé. Historie, vazby přes identitu dokumentu i role hlavního seznamu úkolů zůstávají zachované. Ručně vložené odkazy na původní název souboru uvnitř textu upravte sami.
+
+Po nejasném výsledku použijte **Zopakovat uložení**, případně **Znovu načíst** pro obnovu připravené operace. Při konfliktu s cizí změnou se operace zastaví bez jejího přepsání. Podrobnosti a limity: [ADR 0016](adr/0016-markdown-editor.md#přejmenování-souboru-dokumentu--m1-06).
+
+## Vytvoření nového projektu
+
+Spusťte `./run.sh desktop` (z instalovaného balíku
+`federated-workspace-poc`). Na společné stránce **Projekty** vyplňte název.
+Výchozí vytvoření použije lokálně nakonfigurovaný kořen. Chcete-li přesný jiný
+cíl, zvolte **Vybrat existující prázdnou složku…**; otevře se systémový picker.
+Umístění může být mimo domácí složku, pokud splní níže uvedené vlastnictví a
+práva. Volba **Používat rodiče vybrané složky jako výchozí umístění** uloží
+rodiče do lokální konfigurace uzlu a použije jej pro další výchozí vytvoření.
+Nejprve stiskněte **Připravit vytvoření**, zkontrolujte název, přesný cíl a ID
+operace a až potom potvrďte **Vytvořit a otevřít projekt**.
+
+Cílová složka může být nová nebo již existující, ale existující musí být váš prázdný adresář bez symlinků; obsah, `.git` nebo souběžná změna se odmítnou bez přepsání. Její rodič musí existovat, patřit vám a nebýt zapisovatelný jinými uživateli. Aplikace vytvoří prázdný projekt s `project.json` a prvním commitem, zaregistruje jej a otevře. Zobrazí název, commit a zprávu o prázdném seznamu artefaktů. JSON ani Git příkazy zadávat nemusíte. Zavřete a znovu spusťte desktop; projekt zůstane v seznamu. Dokument vytvoříte v **Podklady → Nový dokument**.
+
+Výchozí `node.json` vznikne při prvním potvrzeném vytvoření v `$XDG_STATE_HOME/federated-workspace/`, jinak `~/.local/state/federated-workspace/`. Pouhé spuštění bez projektu nic neinicializuje. Vedle konfigurace se ukládá soukromý adresář `.node.json.operations` s uzlovým journalem a receipts. Projektový stav vznikne vedle cílové složky jako `.workspace-state-<project UUID>`; zůstává mimo Git na stejném filesystemu. Tyto stavové složky nejsou cache a nemají se mazat.
+
+Po potvrzení běží jediná uzamčená backendová operace. Při ztrátě odpovědi lze
+potvrdit stejný plán znovu; stejné operation ID vrátí tentýž receipt. Při
+násilném ukončení se dříve potvrzená operace při příštím běžném startu obnoví.
+Po chybě je dostupné také **Dokončit přerušenou operaci projektu**. Pokud se
+mezitím změnil cíl nebo konfigurace, aplikace změny zachová a zobrazí chybu;
+nepřepisujte ani nemažte journal kvůli jejímu obejití. Zrušení konfliktní
+pending operace ještě nemá vlastní UI. Osiřelé soukromé staging složky
+`.workspace-create-*` po přerušení před zápisem záměru se automaticky nemažou.
+
+Kontrakt, idempotence a hranice recovery: [ADR 0015](adr/0015-project-creation.md). Jde o lokální Linux PoC, nikoli produkční správu identit nebo úplné recovery po výpadku napájení.
+
+Webová varianta používá stejný formulář, ale cílovou cestu ani desktopový
+capability token od prohlížeče nepřijímá. Náhled i potvrzení směřují pouze pod
+správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
+`<adresář node.json>/projects`) a vytvoření je dostupné jen správci uzlu.
+
+## Bezpečné odstranění projektu
+
+V levém panelu otevřete u projektu menu se třemi tečkami a zvolte **Správa
+odstranění…**. Samostatnou stránku koše lze otevřít také tlačítkem **Koš
+projektů** v panelu Projekty nebo stejnojmennou dlaždicí na úvodním přehledu.
+Každá volba nejprve zobrazí přesný repozitář, projektový stav, HEAD, lokální
+záznamy a blokátory; bez checkboxu se nic nezmění.
+
+- **Obnovit odvozený index** odstraní jen obnovitelný `index.sqlite`; další
+  otevření jej sestaví z Gitu. Journal ani projekt nemaže.
+- **Pouze odregistrovat** odebere projekt ze seznamu, ale ponechá repozitář,
+  stav i node-local historii na původních cestách.
+- **Přesunout do obnovitelného koše** přesune repozitář a projektový stav
+  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Stránka
+  **Koš projektů** nabídne samostatně potvrzenou obnovu.
+
+Definitivní výmaz lze připravit jen nad položkou v koši a vyžaduje nový
+náhled i druhé potvrzení. Pokud k projektu zůstává chatová/AI historie,
+pending Workspace nebo Git přenos, `unknown` externí účinek, účet či aktivní
+federační mapování, backend akci zablokuje. Tyto záznamy ani sdílené
+credentials se nikdy nemažou jako vedlejší efekt.
+
+Lokální odstranění nemaže vzdálené, federované ani dříve sdílené kopie.
+Přerušenou již potvrzenou operaci obnoví durable journal se stejným operation
+ID; cizí změna cesty, inode nebo registrace se nepřepíše. Kontrakt a crash
+boundaries: [ADR 0031](adr/0031-recoverable-project-removal.md).
+
+## Načtení existujícího projektu a oprava cesty
+
+Tlačítko **Načíst projekt z umístění…** zaregistruje existující kořen běžného
+Git repozitáře. Musí obsahovat platný `project.json` v aktuálním commitu i
+shodnou pracovní kopii; aplikace projekt nekopíruje a jeho historii nemění.
+Vedle něj vytvoří nový soukromý lokální stav. Duplicitní project UUID se odmítne.
+
+Pokud jste již registrovaný repozitář přesunuli mimo aplikaci, zvolte
+**Opravit umístění projektu…**, vyberte registraci ze seznamu (dostupný i
+nedostupný projekt) a potom nový kořen stejného projektu. Aplikace ověří UUID a HEAD a
+zachová původní journal/index. Nový kořen proto musí být na stejném filesystemu
+jako existující stav. Oprava nepřesouvá data; přesun na jiný disk vyžaduje
+samostatně navržený bezpečný přesun stavu a tato verze jej odmítne. Přerušenou
+opravu dokončí stejná volba pro obnovu uzlové operace.
+
+Jestliže původní kořen skutečně zmizel, stejný dialog nabídne také
+**Odebrat pouze ze seznamu**. Volba atomicky odstraní jen registraci v tomto
+uzlu. Nemaže lokální stav, chaty, credentials ani případnou kopii Git
+repozitáře v jiném umístění. Pokud se data později najdou, lze projekt
+znovu načíst nebo jeho cestu opravit; nejde o bezpečné odstranění celého
+projektu.
+
+## Jiný uzel a již registrované projekty
+
+Explicitní konfiguraci lze vybrat z checkoutu:
+
+```sh
+./run.sh desktop --node /absolutni/cesta/node.json
+```
+
+Z nově sestaveného a nainstalovaného balíku:
+
+```sh
+federated-workspace-poc --node /absolutni/cesta/node.json
+```
+
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na dlaždici projektu nebo na jeho název v seznamu vlevo. Otevře se projektová stránka **Projekt** s názvem nahoře a pod ním široká mřížka `1–2–1`: dlaždice posledních změn projektu, neorámovaný stručný popis přes dvě pozice a dlaždice nehotových položek hlavního TODO. Ve střední šířce je popis přes celý první řádek a obě dlaždice pod ním; na telefonu jsou všechny tři části pod sebou. Historie ukazuje nejvýše 20 posledních commitů dosažitelných z právě ověřeného HEAD (předmět, datum, autora a zkrácené ID), bez diffů a cest. Uložený commit je dostupný v rozbalovacím detailu nahoře. Historie i úkoly vycházejí ze stejného validovaného Git snapshotu jako levý panel; úkoly vedou do společného editoru hlavního seznamu. Prázdný projekt a chybějící popis mají vlastní pravdivé hlášení. Při chybě se předchozí výsledek vymaže.
+
+## Markdown editor a checklisty
+
+Existující Markdown dokument upravíte v záložce **Podklady** přes jeho menu
+`⋮` → **Upravit / přejmenovat**. Společná stránka dovolí změnit název, obsah,
+název `.md` souboru, popis a štítky; **Zavřít editor** vrátí náhled dokumentu.
+Prázdný popis či seznam štítků jejich hodnotu vyčistí. Obsah a metadata se
+uloží společně do Gitu. Nový dokument zatím vytvoříte desktopovým tlačítkem
+**Podklady** → **Nový dokument**.
+
+Stejné menu nabízí **Kopírovat ID** a **Připravit smazání**. Smazání nejprve
+zobrazí dokument, ID a výchozí commit a vyžaduje checkbox i druhé potvrzovací
+tlačítko. Git historie zůstane zachovaná; dokument s příchozími vztahy backend
+odmítne. Webový čtenář smí náhled zobrazit, ale uložit či smazat může jen editor,
+project-admin nebo správce uzlu.
+
+Checklist pište přímo jako `- [ ] Úkol` a `- [x] Hotovo`, případně použijte **Přidat úkol**. Panel vpravo umožňuje položky zaškrtávat; změnu potvrďte tlačítkem **Uložit**. Text uvnitř fenced code bloků se jako checklist nezobrazuje. Editor zobrazuje zdrojový Markdown, ne HTML náhled.
+
+Záložka **Úkoly** nabízí **Vytvořit seznam úkolů**, nebo u existujícího seznamu **Upravit seznam úkolů**. Při prvním použití otevře návrh, který vznikne až uložením. Akce vždy míří na stejný dokument, i když změníte jeho název. Vedle něj můžete mít další dokumenty s vlastními checklisty.
+
+Při chybě uložení text zůstane v okně a **Zopakovat uložení** použije původní požadavek. **Znovu načíst** načte aktuální projekt a dokončí připravený zápis; před opuštěním rozepsaného textu žádá potvrzení. Při souběžné změně projektu si text před opětovným načtením zkopírujte, automatické sloučení editor zatím neumí. Po pádu desktopu znovu otevřete editor daného projektu; potvrzené pending uložení se obnoví. Pouhé otevření webového přehledu pending zápis nedokončuje.
+
+Levý panel má dvě záložky **Úkoly** a **Podklady**. Druhá zobrazuje názvy a ID všech uložených artefaktů projektu včetně zdrojů (například PDF); seznam je pouze pro čtení. Záložky přepnete kliknutím, šipkami vlevo/vpravo nebo klávesami Home/End. Při otevření projektu se nabídne seznam zdrojů/artefaktů. Bez otevřeného projektu je vlevo stručný seznam projektů. Při přepnutí projektu či chybě se starý obsah obou záložek vymaže.
+
+Po otevření projektu je hlavní TODO také v levém panelu: názvy položek, stav zaškrtnutí a počet hotových úkolů. Odsazené checklisty tvoří podúkoly; větve lze sbalit a rozbalit. Checkboxy zde slouží jen pro čtení, úpravy dělejte v editoru. Přehled ukazuje uložený Git stav a po uložení v editoru se obnoví. Po externí změně se vraťte na seznam projektů a projekt znovu otevřete. Pokud hlavní seznam chybí, záložka **Úkoly** nabízí **Vytvořit seznam úkolů**. Tlačítko otevře editor s návrhem; dokument vznikne až po **Uložit**. Zavřením bez uložení se nevytvoří. Existující seznam bez úkolů i nepodporovaný formát mají vlastní hlášení; tlačítko vytvoření se u nich nenabízí. U velkého seznamu se zobrazí prvních 1000 položek s upozorněním.
+
+Ověření pro uživatele: vytvořte hlavní TODO, zaškrtněte položku, uložte, zavřete a znovu spusťte desktop. V záložce **Úkoly** zvolte **Upravit seznam úkolů** a ověřte text i zaškrtnutí. Editor podporuje document artefakty v Markdownu do 1 MiB těla. Podrobný kontrakt a limity: [ADR 0016](adr/0016-markdown-editor.md).
+
+## Historie dokumentu
+
+V záložce **Podklady** otevřete akční menu uloženého Markdown dokumentu a
+klikněte na **Zobrazit historii**. Samostatná společná stránka ve webu i desktopu
+uvádí datum, autora, krátké ID commitu a zprávu. Vyberte **Starší / výchozí
+verzi** a **Zobrazenou verzi**, potom **Zobrazit a porovnat**.
+
+Stránka ukazuje původní obsah zobrazené verze, její metadata, rozdíl uložených
+souborů a úplnou zprávu commitu. Pro samotné prohlédnutí jediné verze můžete v
+obou seznamech vybrat stejný commit. Rozepsaný text editoru zůstává mimo
+požadavek a historie jej neukládá ani nepřepisuje. Nový dosud neuložený dokument
+v podkladech není, a proto nemá vstup do historie.
+
+Historie je pouze pro čtení. Při změně projektu nebo pending operaci stránka
+zobrazí chybu; vraťte se do projektu a znovu jej načtěte, případně nejprve
+dokončete obnovu. Neplatné starší verze jsou označené a nelze je zobrazit jako
+validní dokument. Seznam ukazuje nejvýše 100 záznamů, případné zkrácení oznámí.
+Tlačítko **Zavřít historii** vrátí přímo náhled stejného dokumentu. Podrobnosti:
+[ADR 0017](adr/0017-artifact-history.md).
+
+## Existující data
+
+`node.json` zůstává mimo projektový Git. Pro zapisující operace musí jít o váš běžný soubor bez symlinků/hardlinků a bez práva zápisu jiných uživatelů; nové konfigurace mají 0600. Příklad (nahraďte absolutní cesty):
+
+```json
+{
+  "schema_version": 1,
+  "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "name": "Lokální desktop",
+  "projects": [{
+    "project_id": "11111111-1111-4111-8111-111111111111",
+    "root": "/absolutni/cesta/projekt",
+    "state_dir": "/absolutni/cesta/lokalni-stav"
+  }]
+}
+```
+
+Kořen projektu musí být vlastní běžný Git repozitář s commitem na větvi a následujícím commitnutým `project.json` (stejné ID jako v registraci):
+
+```json
+{
+  "schema_version": 1,
+  "id": "11111111-1111-4111-8111-111111111111",
+  "title": "První projekt",
+  "created_at": "2026-09-09T12:00:00Z",
+  "author_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+}
+```
+
+Autor ID je metadata, nikoli oprávnění. Schéma a požadavky na artefakty popisuje [datový model](../DATA_MODEL.md); konfigurace [ADR 0004](adr/0004-project-node-config.md). Staré storage demo bez `project.json` není automaticky migrováno.
+
+Stavový adresář musí již existovat, patřit běžnému uživateli a mít práva 0700; kořen projektu a `.git` nesmějí být zapisovatelné jinými uživateli. Root/state musí být vzájemně oddělené, bez symlinků a na stejném filesystemu. Použijte existující stav daného projektu, pokud už má journal — nepřesměrujte jej na prázdný adresář kvůli obejití pending operace. Všechny aplikace nad stejným projektem musí sdílet stejný stav a zámek.
+
+Při otevření mohou vzniknout lokální `journal.sqlite`, `writer.lock` a `index.sqlite`. Nový lock/index mají 0600. Existující stavové soubory musejí být soukromé běžné soubory bez hardlinků; aplikace jim automaticky nemění práva. Chybějící/stale index se obnoví z validovaného HEAD. Pending operaci obnoví otevření nativního editoru podle ADR 0003; neplatný či poškozený index se nevydává za aktuální. Kvůli chybě nemažte journal.
+
+Původní index pouze s ID/titulkem se při prvním rebuild nahradí relační projekcí
+metadat, cest, štítků a vztahů. Migrace mění pouze `index.sqlite` a potvrzuje
+celou projekci s commit ID v jedné transakci; projektové soubory a journal
+zachovává. Přerušený rebuild lze opakovat, nepodporovaná budoucí verze se odmítne
+bez automatického smazání nebo downgrade. Viz [ADR 0022](adr/0022-relational-index.md).
+
+## Izolovaná ukázka bez zásahu do existujících projektů
+
+Z kořene checkoutu spusťte následující blok Pythonem s PyYAML 6.0.3 (`python3`, případně `.venv/bin/python`). Vytvoří pouze vlastní adresář pod `/tmp`, ukázkový Git projekt a oddělený stav; vytiskne příkaz pro spuštění. Data zůstanou pro restart desktopu, systém je může později odstranit jako dočasná.
+
+```sh
+python3 - <<'PY'
+import json
+from pathlib import Path
+import shlex
+import tempfile
+from spikes.storage import Git
+
+base = Path(tempfile.mkdtemp(prefix='workspace-m1-'))
+root, state = base / 'project', base / 'state'
+root.mkdir(mode=0o755)
+state.mkdir(mode=0o700)
+project_id = '11111111-1111-4111-8111-111111111111'
+author_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+meta = dict(schema_version=1, id=project_id, title='První projekt',
+            created_at='2026-09-09T12:00:00Z', author_id=author_id)
+(root / 'project.json').write_text(json.dumps(meta), encoding='utf-8')
+folder = root / 'artifacts' / project_id
+folder.mkdir(parents=True)
+artifact = dict(meta, title='První poznámka', kind='document', privacy='project', provenance='user')
+(folder / 'note.md').write_text('---\n' + json.dumps(artifact) + '\n---\nObsah poznámky.\n', encoding='utf-8')
+git = Git(root)
+git.run('init', '--initial-branch=main')
+(root / '.git').chmod(0o755)
+git.commit('Initialize isolated desktop example')
+node = base / 'node.json'
+node.write_text(json.dumps(dict(schema_version=1, id=author_id, name='Ukázkový uzel',
+    projects=[dict(project_id=project_id, root=str(root), state_dir=str(state))])), encoding='utf-8')
+print('./run.sh desktop --node ' + shlex.quote(str(node)))
+PY
+```
+
+Po spuštění ověřte otevření, název, commit a „První poznámka“. Zavřete aplikaci a spusťte vypsaný příkaz znovu; údaje zůstanou stejné. V menu poznámky zvolte **Upravit / přejmenovat**; po uložení a restartu ověřte změněný obsah. Limity a recovery: [ADR 0014](adr/0014-project-read.md).
+
+## Hlavní panel a náhled artefaktu
+
+V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Podrobnosti**. U zdroje schema v2 jsou zde samostatně „Importováno do projektu“ a případný „Doložený čas vzniku zdroje“, který může být starší; dále aktér importu, SHA-256 původních bajtů, importér a všechny doložené volitelné údaje. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
+
+Společný prompt **Zadání** zůstává ve spodní části projektového pracovního
+panelu. Tlačítkem **Skrýt prompt** / **Zobrazit prompt** jej lze ručně sbalit a
+rozbalit. Stránky **Projekt**, **Náhled** a **Chat** jej při vstupu standardně
+zobrazí; specializované stránky workflow, souhrnu, extrakce, obrázku,
+prezentace a metadat jej standardně sbalí. Psaní zachová právě otevřený náhled
+nebo záložku; teprve Enter nebo **Zpracovat** přepne na **Chat**.
+Shift+Enter vytvoří nový řádek. Globální tlačítko **Nastavení** je dostupné i bez
+otevřeného projektu. Stránka má rovnocenné záložky **AI backend**,
+**Uživatelé** a **Federace**; obsah se zobrazuje přímo v hlavní ploše. Web ukáže
+administrační záložky jen příslušné přihlášené roli. Pro Ollamu na stejném
+počítači zvolte v **AI backendu** hranici „Stejný počítač“, ponechte endpoint
+`http://127.0.0.1:11434`, zadejte přesný název modelu a nastavení uložte. Chat
+zobrazuje stav a odkaz zpět do této záložky. Privátní síť vyžaduje číselnou
+privátní HTTPS adresu, UUID cíle a SHA-256 certifikátu; `local-only` obsah do ní
+odeslat nelze. Neplatné nastavení server odmítne a UI znovu načte poslední
+potvrzený binding.
+
+V nativním nastavení uzlu může správce samostatně uložit OpenAI Admin API klíč
+a načíst přehled usage a nákladů za posledních 30 dní. Tento klíč není generační
+API klíč, server jej nevrací a účetní údaje zůstávají v node-local cache mimo
+projektový Git. Přehled vždy označuje account scope, období, čas načtení,
+jednotky a měnu; providerový účet ani project ID se nevydávají za workspace.
+Chyba nebo rate limit zachová poslední platný přehled jako zastaralý a neovlivní
+chat ani routing. Ollama zobrazuje jen usage konkrétního dokončeného běhu;
+chybějící billing není nulový náklad.
+
+Stejný stručný indikátor je po přihlášení dostupný také ve webové variantě, ale
+pouze uživatelům s rolí `node-admin` nebo `federation-admin`. Server ověřuje
+oprávnění u každého status/configure/refresh requestu; skrytí indikátoru v UI
+není bezpečnostní hranice. Běžný člen ani projektová role účetní cache neobdrží.
+
+V composeru zvolte režim. **Orchestrace** vždy použije uloženou Ollamu na
+stejném počítači; model zde nelze přepsat a lze explicitně zaškrtnout projektové
+podklady. **Brainstorming** dovolí pro konkrétní běh zadat model lokální Ollamy
+nebo nakonfigurovaného OpenAI backendu, ale podklady projektu skryje a do
+manifestu je nepřijme. Text zadání a vědomě vybrané zprávy jsou jeho explicitní
+textový kontext. Odeslání externího brainstormingového tahu po serverové
+kontrole proběhne přímo; u odpovědi lze i po restartu rozbalit přesné odeslané
+JSON body bez credentialu a autorizačních hlaviček. Pokročilý ruční externí
+náhled a task workflow si své samostatné potvrzení ponechávají. `local-only` se
+externě neodešle. Pokud backend ohlásí podporu streamování, desktop i web
+zobrazují textové delty průběžně. Rozpracovaný text je pouze dočasný; do historie
+se uloží až validovaná finální odpověď. Přerušení proto nezanechá částečnou
+asistentovu zprávu a backend bez této schopnosti použije běžnou celou odpověď.
+Ve webové variantě je přímý externí chat do zavedení oddělené
+identity chat store omezen na administrátora uzlu. Přepnutí z brainstormingu do
+orchestrace archivuje původní vlákno a založí nové prázdné vlákno. Aktivní nebo
+neurčitý běh přechod zastaví; historie ani model se do nové orchestrace
+nepřenášejí.
+
+Záložka **Uživatelé** spravuje lokální účty a role, záložka **Federace** peery,
+důvěru a oboustranná mapování. Přístupové klíče a privátní podpisové klíče
+zůstávají mimo projektový Git; samotné skrytí záložky nenahrazuje serverovou
+autorizaci. Návrat z nastavení obnoví předchozí seznam projektů nebo otevřený
+projekt a jeho aktivní pracovní záložku.
+
+Potvrzené zprávy a stavy běhů zůstávají v chráněném lokálním stavu uzlu mimo
+projektový Git a po restartu se znovu načtou. Každý běh explicitně manifestuje
+dosavadní zprávy vlákna a aktuální projektový commit. Změna projektu před
+odesláním, změna cíle nebo neznámý výsledek se odmítne bez tichého fallbacku či
+automatického opakování. Rozepsaný draft trvalý není. Tlačítko **Zpět na seznam
+projektů** dole zavře projekt a vrátí úvodní karty i stručný seznam vlevo.
+Lokální vlákno samo není projektový artefakt; tlačítka pro otisk nebo poslední
+odpověď jej nejprve explicitně přiřadí projektu a uloží oddělený verzovaný
+záznam. Popis v metadatech je uložený popis, nikoli nově generovaný souhrn.
+
+Záložka **Souhrn** umožňuje explicitně vybrat jeden až 64 podkladů, případně
+všechny zprávy právě otevřeného chatu, a volitelně přidat zaměření s vlastní
+privacy. Souhrn používá pouze Ollama backend na stejném počítači. Nejprve vznikne
+node-local náhled, který projekt nemění. Až tlačítko **Uložit do projektu** po
+kontrole náhledu vytvoří Markdown dokument v novém Git commitu. Dokument dědí
+nejpřísnější privacy vstupů, obsahuje neměnnou omezenou provenance obálku a u
+projektových podkladů vztahy `summarizes`. Neurčitý LLM běh se automaticky
+neopakuje; ztracená odpověď během projektové publikace se obnoví přes stejný
+operation ID bez druhého dokumentu nebo commitu.
+
+Záložka **Extrakce** pracuje obdobně, ale uživatel předem volí jedno z uzavřených
+schémat `facts-v1` nebo `action-items-v1` a explicitní projektové podklady.
+Modelový výstup musí být striktní JSON se source reference pouze na tento výběr;
+neznámá pole, chybějící hodnoty, Markdown obálka nebo cizí zdroj se odmítnou.
+Bezpečně vykreslený node-local náhled projekt nemění. Potvrzením vznikne neměnný
+JSON artefakt druhu `source` s provenance `llm-generated`, zděděnou nejpřísnější
+privacy a vztahy `derived-from`. Publikace znovu kontroluje HEAD i původní bajty
+zdrojů a stejné task/operation ID obnoví přerušený zápis bez duplicity.
+
+Záložka **Metadata** vytvoří pro jeden explicitně vybraný artefakt lokální návrh
+popisu a nových štítků. Náhled ukáže původní i navržený popis; jeho použití je
+samostatná volba. Každý nový štítek se potvrzuje zvlášť a přidává se ke
+stávajícím hodnotám — návrh je automaticky nemaže ani nepřejmenovává. Bez
+alespoň jedné vybrané změny nelze nic uložit. Model nemění název, typ, privacy
+ani provenance artefaktu. Před potvrzeným commitem se znovu ověří projektový
+HEAD, původní metadata i obsah; zastaralý návrh proto nepřepíše mezitím
+provedenou ruční změnu. Přerušený zápis lze zopakovat se stejnou operací bez
+druhého metadata commitu.
+
+První odpověď po načtení většího modelu může trvat déle. Adapter čeká na Ollama
+generate až 180 sekund a desktopový požadavek 210 sekund, aby klient neukončil
+spojení dříve než backend. Timeout po zahájení dispatch zůstává stavem `unknown`;
+aplikace jej kvůli riziku duplicitního běhu automaticky neopakuje.
+Tlačítko **Nové vlákno** začne čistý kontext bez odstranění předchozí lokální
+historie; hodí se také po chybné nebo neurčité odpovědi.
+
+Náhled nic nezapisuje do projektu. Pokud se projekt změnil, znovu jej otevřete; nedokončený zápis se řeší obnovou v editoru. Necommitnuté změny nejsou vydávány za uloženou verzi.
+
+## Odstranění dokumentu
+
+V nativním editoru vyberte uložený dokument a stiskněte **Smazat dokument**.
+Potvrzení odstraní obsah i metadata, neuložené úpravy se neukládají. Dokument,
+na který vedou strukturované vztahy jiných artefaktů, nejprve vyžaduje vyřešení
+těchto vztahů. Git historie zůstane zachovaná; volné textové odkazy se neopravují.
+
+Při přerušené operaci použijte **Zopakovat smazání** nebo **Znovu načíst**.
+Načtení dokončí již připravenou operaci; není to její zrušení ani rollback.
+Nový, dosud neuložený dokument se nemaže touto operací. Webový náhled nemá
+novou mazací route. Lokální ověření včetně skutečného Qt a procesní recovery
+dokládá [F-M1-DELETE-01/M1-08](../WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). Smazaný dokument se v editorové
+historii již nenabízí; jeho dřívější obsah zůstává dostupný v Git historii.
+
+## Import původních zdrojů
+
+V záložce **Podklady** nabízí desktop i web stejné tlačítko **Importovat zdroj**,
+které otevře samostatnou společnou stránku; webový zápis vyžaduje roli
+editor/project-admin nebo správce uzlu.
+[Podporované soubory, zachování bajtů, privacy a recovery](native-source-import.md).
+Po úspěchu se zdroj objeví v Podkladech; nativní editor jeho obsah nemění.

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Single-writer Linux M0 file journal; caller commits/indexes after successful recovery."""
 from contextlib import contextmanager
 import fcntl
@@ -45,7 +48,8 @@ def snapshot(root):
 
 
 class Journal:
-    def __init__(self, root, state):
+    def __init__(self, root, state, *, blocking=True):
+        self.blocking = blocking
         self.root = Path(root).resolve(strict=True)
         self.state = Path(state).resolve()
         require(not self.state.is_relative_to(self.root) and not self.root.is_relative_to(self.state),
@@ -57,6 +61,9 @@ class Journal:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS owner (root TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS pending (path TEXT PRIMARY KEY, before BLOB, after BLOB);
+                CREATE TABLE IF NOT EXISTS operations (
+                    id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
+                CREATE UNIQUE INDEX IF NOT EXISTS one_active_operation ON operations(done) WHERE done=0;
             ''')
             owner = db.execute('SELECT root FROM owner').fetchone()
             if owner is None:
@@ -68,7 +75,7 @@ class Journal:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.database)
+        db = sqlite3.connect(self.database, timeout=2)
         db.execute('PRAGMA synchronous=FULL')
         try:
             with db:
@@ -78,8 +85,9 @@ class Journal:
 
     @contextmanager
     def lock(self):
-        with (self.state / 'writer.lock').open('a+b') as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
+        fd = os.open(self.state / 'writer.lock', os.O_CREAT | os.O_RDWR, 0o600)
+        with os.fdopen(fd, 'a+b') as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | (0 if self.blocking else fcntl.LOCK_NB))
             try:
                 yield
             finally:
@@ -98,29 +106,37 @@ class Journal:
         """Validate whole resulting projection, persist intent, then roll forward."""
         with self.lock(), self.connect() as db:
             require(not db.execute('SELECT 1 FROM pending LIMIT 1').fetchone(), 'Recovery required')
-            before = snapshot(self.root)
-            after = dict(before)
-            rows = []
-            for path, data in sorted(changes.items()):
-                self.target(path)
-                require(data is None or isinstance(data, bytes), 'Expected bytes or deletion')
-                if data is None:
-                    after.pop(path, None)
-                else:
-                    after[path] = data
-                if before.get(path) != data:
-                    rows.append((path, before.get(path), data))
-            validate_snapshot(after)
-            db.executemany('INSERT INTO pending VALUES (?, ?, ?)', rows)
+            require(not db.execute('SELECT 1 FROM operations WHERE done=0').fetchone(),
+                    'Workspace recovery required')
+            self._prepare(db, changes)
             db.commit()
             checkpoint('prepared')
             self._recover(db, checkpoint)
 
+    def _prepare(self, db, changes):
+        before = snapshot(self.root)
+        after = dict(before)
+        rows = []
+        for path, data in sorted(changes.items()):
+            self.target(path)
+            require(data is None or isinstance(data, bytes), 'Expected bytes or deletion')
+            if data is None:
+                after.pop(path, None)
+            else:
+                after[path] = data
+            if before.get(path) != data:
+                rows.append((path, before.get(path), data))
+        validate_snapshot(after)
+        db.executemany('INSERT INTO pending VALUES (?, ?, ?)', rows)
+        return [row[0] for row in rows]
+
     def recover(self, checkpoint=lambda stage: None):
         with self.lock(), self.connect() as db:
+            require(not db.execute('SELECT 1 FROM operations WHERE done=0').fetchone(),
+                    'Workspace recovery required')
             return self._recover(db, checkpoint)
 
-    def _recover(self, db, checkpoint):
+    def _recover(self, db, checkpoint, *, clear=True):
         rows = db.execute('SELECT path, before, after FROM pending ORDER BY path').fetchall()
         if not rows:
             return False
@@ -158,7 +174,8 @@ class Journal:
             checkpoint(f'file:{index}')
         validate_snapshot(snapshot(self.root))
         checkpoint('applied')
-        db.execute('DELETE FROM pending')
-        db.commit()
-        checkpoint('completed')
+        if clear:
+            db.execute('DELETE FROM pending')
+            db.commit()
+            checkpoint('completed')
         return True

@@ -1,18 +1,60 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Architektura — pracovní návrh M0
 
 ## Hranice systému
 
 Jeden uzel je samostatný backend s lokálními daty. Desktop spouští stejný backend jako server a přidává obal UI. První desktopový cíl pro ověření je Linux; Windows a macOS vyžadují samostatné ověření balení.
 
-Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Konkrétní jazyk a framework zůstávají otevřené.
+Výchozí návrh má jeden backendový proces a moduly Project/Artifact, GitStore, MetadataIndex, Identity/RBAC, Federation, BackendRegistry, ContextBuilder a Workflow. UI používá aplikační služby přes verzované API. Jádro pro M1 používá Python dle [ADR 0013](docs/adr/0013-m1-stack.md); doménové služby jsou nezávislé na HTTP adaptéru. Produkční serverový framework se bude vybírat proti konkrétním požadavkům V-10/M1. Výchozí Git adapter pro navazující implementaci zůstává Git CLI podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md); C++/libgit2 je srovnaná alternativa. Testovací C++ executable nezavádí produkční hybrid ani další backendový proces.
+
+Současné moduly zůstávají v hlavní roadmapě. Jen nově výslovně vytipovaný
+externě verzovaný modul má vlastní roadmapu a implementační autoritu mimo tento
+repozitář: jeho pracovní adresář nebo symlink leží v ignorovaném
+`modules.local/`. Hlavní roadmapa ani jednotné API nepřebírají jeho doslovný
+popis funkčnosti; evidují pouze ověřenou generalizaci nutnou pro společný
+kontrakt a dokumentaci. Modul se připojuje přes verzované capability API, nikoli
+přímým přístupem k projektovému Gitu, indexu, journalům nebo credentials.
+Kontrakt zahrnuje identitu/verzi modulu, capabilities, vstupní a výstupní
+schémata, oprávnění, privacy/execution boundary, limity, idempotenci a stavy
+včetně `unknown`, provenance a kompatibilitu. Bezpečné adresáře modulů lze
+automaticky prohlédnout a zobrazit jejich deklarovanou přítomnost; to samo modul
+nepovoluje, neimportuje ani nespouští. Podrobnosti:
+[ADR 0026](docs/adr/0026-module-unified-api.md).
+
+`MOD-01` implementuje striktní manifest v1 a read-only load-time kontrolu proti
+API modulu. Portable manifest neobsahuje endpoint ani credentials; PoC runtime
+binding je omezený na explicitní literal loopback HTTP a musí vrátit přesně
+shodnou deklaraci. Kontrola sama modul nespouští ani neregistruje capability.
+
+`MOD-01-UI` přidává úzký same-node invocation bridge pouze pro
+`publication-sites.preview` a `publication-sites.generate`. Před spuštěním
+automaticky zjistí přítomnost reviewovaného modulu a vyžaduje jeho explicitní
+povolení. Kompatibilita se řídí identitou/verzí manifestu, přesnou deklarací a
+reviewovaným hashem celé množiny Python runtime souborů a šablony, nikoli Git
+commitem; interpret běží izolovaně. Node-local konfigurace, SQLite operation
+journal, exact-preview hash a explicitní potvrzení oddělují náhled od
+deterministického lokálního generování. Výstup `dist/sites` není deploy ani
+projektový artefakt. CMS zatím zůstává nadprojektové; obecné spouštění jiných
+capabilities zůstává neimplementované. Podrobnosti:
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+
+Lokální transportní PoC podle [ADR 0006](docs/adr/0006-local-api-transport.md) porovnává Unix socket a loopback HTTP. Pro sdílené webové UI preferuje HTTP se stejným originem; Unix socket zůstává alternativou pro nativní bridge. Obal PySide6 a nativní předání tokenu jsou ověřeny v ADR 0010; volbu stacku uzavírá ADR 0013. Experiment mění pouze čítač v paměti, není napojen na aplikační služby.
 
 ## Data a zápis
 
 Git drží projektové artefakty, jejich metadata, registry a schválené LLM výstupy. SQLite indexuje pouze validovaný commit. Identita uzlu, credentials a rozpracované operace jsou lokální autoritativní stav mimo projektový Git i index.
 
-Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem existuje souborový journal a obnova v `spikes/journal.py`. Propojení journalu, commitu a indexace do jedné aplikační operace zatím chybí.
+Jeden zapisující proces serializuje operace nad projektem. Návrh toku: validace vstupu → zápis s obnovitelným záznamem operace → validace projektu → commit → transakční aktualizace indexu. Pád po commitu se řeší obnovou indexu z HEAD. Pro pád před commitem existuje souborový journal a obnova v `spikes/journal.py`. Propojení pro kontrolovaný Linux PoC poskytuje `spikes/workspace.py`: journal drží operaci a kandidátní commit před compare-and-swap posunem větve, payloady maže až po indexaci. Společný zámek chrání apply/recover/read; pending operace blokuje čtení projekce přes Workspace. Podrobnosti a crash boundaries: [ADR 0003](docs/adr/0003-coordinated-operation.md). Produkční aplikační integrace zůstává otevřená.
 
 Index musí nést commit ID. Dotazy při nesouladu vracejí stav obnovy, nikoli tiše stará data. Necommitnuté změny má editor zobrazovat odděleně. Synchronizace se připravuje v izolovaném pracovním prostoru a publikuje až po validaci a kontrole nezměněného výchozího HEAD.
+
+## Odvozená lokální cache
+
+Navržené materializované kompiláty jsou zahoditelné soubory odvozené ze zdrojů podle zachovaného zadání. Výsledky leží mimo projektový Git, neverzují se ani nesynchronizují; aktualizují se ručně. Nejsou projektovým indexem ani autoritativním journalem/run recordem. [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje aktuálnost, privacy, obnovu po pádu a explicitní uložení výsledku jako artefaktu. Stav je designed, bez implementace.
 
 ## LLM rozhraní
 
@@ -22,4 +64,14 @@ Backend adapter poskytuje capabilities a generate(request); ContextBuilder aplik
 
 ## Stav implementace
 
-`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci, import cizích repozitářů ani schémata konfigurace projektu/uzlu. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
+`spikes/storage.py` je izolovaný experiment nad řízenými testovacími repozitáři. Neobsahuje produkční API, autentizaci ani import cizích repozitářů. Minimální schémata konfigurace projektu/uzlu validuje samostatně `spikes/configuration.py` podle [ADR 0004](docs/adr/0004-project-node-config.md); nejsou zatím napojena na storage lifecycle. Artefakty a registry již používají společný validátor v `spikes/metadata.py`. Produkční nasazení není připraveno.
+
+Desktopové PoC spouští `./run.sh desktop`: Qt/WebEngine obal a backendové vlákno ve stejném Python procesu, token předán přímo nativnímu request interceptoru. Viz [ADR 0007](docs/adr/0007-desktop-poc.md). Jde o ověřený lifecycle statického UI a paměťového API; PySide6 a .deb jsou zvolený základ pro M1 dle ADR 0013; napojení projektových služeb a veřejný release zůstávají otevřené.
+
+## Kontrakty M0-08
+
+Závazné návrhové kontrakty Backend/Role/Context Manifest a tok deterministického orchestrátoru vymezuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md). Odděluje přenositelnou definici od lokálního bindingu, capabilities od execution boundary a ukládá manifest přesného požadavku mimo Git. Implementace LLM a RBAC zůstává otevřená.
+
+Posouzení distribuční cesty v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md) doporučuje zachovat Python jádro a ověřit PySide6/WebEngine s nativním linuxovým balíkem. Toto původní doporučení následně ověřily ADR 0010–0012 a jako základ pro M1 přijímá ADR 0013.
+
+Desktopové PoC nyní používá PySide6 dle [ADR 0010](docs/adr/0010-pyside-desktop-validation.md). Přechod zachovává API a životní cyklus; historický PyQt experiment ADR 0007 zůstává podkladem návrhu.

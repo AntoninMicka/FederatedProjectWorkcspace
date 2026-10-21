@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Read-only validation of an M0 working-tree artifact/registry projection."""
 import argparse
 from pathlib import Path

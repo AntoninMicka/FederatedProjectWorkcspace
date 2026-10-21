@@ -1,0 +1,110 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# ADR 0016 — Markdown editor, checklisty a hlavní TODO
+
+Stav: přijato pro M1-03, lokální Linux PoC. Rozšiřuje nativní vstup ADR 0015 a koordinovanou operaci [ADR 0003](0003-coordinated-operation.md); nemění autoritu Gitu ani schéma v1.
+
+## Dokumenty a hlavní TODO
+
+Editor vytváří `artifacts/<UUID>/content.md` a `metadata.json` jako jednu operaci. Nový artefakt má kind document, privacy project, provenance user a stabilního lokálního autora z uzlového journalu vytváření, nikoli node UUID. Existující Markdown s frontmatterem i sidecarem zachová umístění a všechna metadata kromě explicitně upraveného názvu a od M1-05 popisu/štítků. Čtení obsahu a metadat vychází z jednoho validovaného commitu; SQLite zůstává projekcí. PoC editor omezuje tělo na 1 MiB; není editorem PDF, sources nebo registrů.
+
+Hlavní TODO je běžný document se zvláštním stabilním ID: UUIDv5 s namespace rovným project UUID a názvem `federated-workspace:main-todo:v1`. Tato konvence nevyžaduje změnu project.json, zvláštní databázi ani nový metadata field. Název souboru ani titulek neurčuje roli; přejmenování titulku ji zachová. Jeden projekt může mít nejvýše jeden artefakt tohoto ID díky existující validaci unikátních ID. Rezervované ID obsazené nekompatibilním artefaktem se nepřepíše. Změna project UUID není migrací tohoto kontraktu a není podporována.
+
+Hlavní TODO se nabídne samostatným tlačítkem i u starého/prázdného projektu a vznikne až potvrzeným uložením. Vytvoření projektu podle ADR 0015 zůstává prázdné. Jiné checklisty mohou být v libovolném editovaném dokumentu. Podporovaná syntaxe je `- [ ]`, `- [x]` / `- [X]`, také odrážky `+`/`*` a odsazené seznamy. Backtick/tilde fenced code bloky se neinterpretují jako úkoly. Checklist panel mění pouze stavový znak původního textu; nejde o převod na task registry nebo o synchronizaci samostatných entit. Číslované seznamy, úplná CommonMark/GFM interpretace a bohatý preview nejsou součástí tohoto kroku.
+
+## Nativní mutující kontrakt a autorizace
+
+Uživatel v desktopu vybere registrovaný projekt a otevře nativní dialog. Z rendereru se převezme pouze vybrané ID, které služba znovu ověří proti lokální registraci. Cesty nejsou parametry editoru. Ověření vlastnictví, disjunktních root/state, soukromého stavu, konfigurace a commitnuté identity adaptuje Projects a ADR 0014/0015. Jde o oprávnění lokálního uživatele, nikoli plné RBAC či ochranu před nekooperujícím FS útočníkem (V-06).
+
+Při uložení dialog zmrazí požadavek `{project_id, artifact_id, base_head, title, body, new}` a přidělí operation UUID. Workspace pod společným zámkem sváže ID s SHA-256 kanonického JSON požadavku včetně lokálního author ID. Stejné ID/parametry dokončí pending operaci nebo vrátí trvalý receipt, i když odpověď zmizela a mezitím vznikl další commit. Stejné ID s jinými parametry odmítne. Kontrola base HEAD probíhá pod zámkem před sestavením změn a znovu při přípravě journalu. Změna HEAD nezpůsobí tichý overwrite ani automatický rebase rozepsaného textu.
+
+Jeden dialog má nejvýše jeden worker, po dobu práce blokuje mutující ovládání a běžné zavření. Modalita brání souběžným dialogům ve stejném okně. Další proces dostane neblokující busy nebo stale/pending chybu. Nejasný výsledek ponechá text a původní požadavek; opakování použije stejné operation ID. Při přepnutí dokumentu, opětovném načtení nebo zavření s neuloženými změnami je nutné potvrdit jejich zahození. Rozpracovaný text před uložením není trvalý draft.
+
+Otevření nativního editoru nebo tlačítko obnovy dokončí journal a načte aktuální commit. Webový přehled nadále pending odmítá a sám projektové zápisy neobnovuje. HTTP nemá editor mutation endpoint, credentials ani celý Markdown nevstupují do WebEngine. QPlainTextEdit a checklist položky zobrazují text; HTML se nespouští, odkazy ani obrázky nevyvolávají síťové požadavky.
+
+## Crash boundaries a recovery
+
+Hranice ADR 0003 zůstávají beze změny. Rozšíření před implementací bylo vymezeno takto:
+
+- Před transakcí journalu může vzniknout lokální author ID; projektové soubory ani HEAD se nemění. GUI draft se při pádu může ztratit.
+- V `prepared` se digest požadavku, operation ID a přesné payloady potvrzují společně. Recovery nevyžaduje opětovné sestavení metadat ani původní dialog.
+- Mezi zápisem obsahu/sidecaru, vytvořením kandidáta, posunem větve a indexací se pokračuje dle ADR 0003. Cizí změny operaci zastaví a zůstanou zachovány.
+- Po `completed`, před doručením odpovědi do GUI, existuje trvalý receipt. Retry ani nové otevření nevytvoří druhý commit stejné operace.
+
+Git operace sdílejí deadline 60 sekund, SQLite čekání má limit 2 sekundy, flock editoru je neblokující. Deadline není preempce blokujícího filesystemového syscallu. Žádná z těchto záruk nedokládá výpadek napájení či odolnost proti pádu uvnitř libovolného Git podprocesu; retence receipts zůstává V-07.
+
+## Reuse a ověření
+
+Adaptovány Workspace/Journal/Git/Index, Projects, lokální author z ProjectCreation a nativní Qt widgets. Nový parser pouze mapuje checklisty na pozice textu; nepřibývá Markdown renderer, závislost nebo cizí framework. Soukromá inventura neposkytuje potřebný důvod nahrazovat existující storage či Qt cestu.
+
+`tests/test_artifacts.py` ověřuje nové/změněné dokumenty, metadata, stabilní TODO, retry/receipt, stale/busy, odmítnuté vstupy, cizí editace, obnovu indexu, procesní pády na hranicích ADR 0003 a skutečný Qt editor s checkboxem i ztracenou odpovědí. Aktuální běhy a readiness drží [WORK_LOG](../../WORK_LOG.md). Obecné mutující HTTP API, plné RBAC, preview, registry úkolů a produkční provoz zůstávají mimo tento PoC.
+
+## Read-only strom hlavního TODO — M1-03a
+
+Na požadavek uživatele přidává levý panel přehled checklistů. `Workspace.read_project` vrací `main_todo` ze stejného validovaného snapshotu jako artefakty a commit ID, pod stejným zámkem a s původním odmítnutím pending. Crash boundaries ani zápisový kontrakt se nemění; případná inicializace/indexace čtení zůstává dle ADR 0014. Přehled nikdy nevolá editorové `Artifacts.open`, které by spustilo recovery.
+
+Čisté funkce pro document, hlavní TODO ID a checklisty jsou sdílené v `markdown_documents.py`. Renderer dostává pouze titulek, texty položek, stavy a hloubku stromu; nedostává celé tělo, metadata, cesty ani credentials. Hierarchie vychází z odsazení checklistových položek (tabulátor = čtyři mezery); nadpisy a běžný text se nezobrazují jako uzly. Zobrazuje se prvních 1000 položek, souhrn počítá celý checklist; limit těla zůstává 1 MiB. Nepodporovaný formát/velikost má vlastní stav, neblokuje ostatní validní artefakty projektu.
+
+UI používá textContent, disabled checkboxy a nativní HTML details/summary pro sbalení větví. Výběr projektu, nové načtení i chyba odstraní předchozí obsah; opožděná odpověď patřící staršímu požadavku se zahodí. Úspěšné uložení v nativním editoru využívá existující refresh přehledu. Externí změny se načtou opětovným otevřením projektu, periodické dotazování nevzniká. [Testy artefaktů](../../tests/test_artifacts.py) a rozšířený WebEngine smoke ověřují strom, stavy, readonly vykreslení a obnovení; výsledky drží WORK_LOG.
+
+## Editace metadat — M1-05
+
+Nativní požadavek přijímá volitelný objekt `metadata` pouze s klíči `description` a `tags`. Vynechaná pole zůstávají beze změny (včetně jejich absence); prázdný řetězec a prázdný seznam explicitně vyčistí hodnotu. Původní požadavky bez tohoto objektu zůstávají podporované a jejich digest se nemění. Přítomný objekt je součástí digestu operation ID. Identita, vytvoření, autor, privacy, provenance, source_url a vztahy se přebírají z validovaného výchozího commitu; klient je tímto vstupem nemůže změnit.
+
+UI má záložky Obsah a Metadata. Popis je prostý text, štítky mají jeden řádek na položku; při explicitní editaci štítků se oříznou okrajové mezery a vynechají prázdné řádky. Nedotčené hodnoty se neposílají a zachovají i původní neobvyklé formátování. Uložená metadata jsou zároveň zobrazena pouze pro čtení. Změna metadat aktivuje uložení i ochranu před zahozením; při pending se pole zamknou společně s obsahem. Po úspěšném zápisu se načte validovaný projekt, takže editor zobrazuje skutečné uložené hodnoty. Selhání následného čtení zachová původní požadavek pro idempotentní retry.
+
+Crash boundaries ADR 0003 a výše uvedený recovery kontrakt se nemění: obsah a metadata procházejí společnou validací před přípravou journalu a jedním commitem. Limit metadat 64 KiB platí i po doplnění popisu/štítků. Stejný postup podporuje sidecar i frontmatter bez nového schématu či HTTP endpointu. Reuse/adapt stávající služby Artifacts, Workspace, validátorů a Qt widgetů; externí komponenta není pro tuto změnu potřeba. Výsledky ověření M1-05 drží [aktuální dávka TODO](../../TODO.md).
+
+## Společné vytvoření dokumentu a hlavního seznamu — UX-UNIFIED-02D
+
+Server i desktop používají jedinou stránku editoru ve sdíleném frontendu. Nový dokument se otevírá nad klientem vytvořeným stabilním UUID, hlavní TODO nad deterministickým `main_todo_id`; existující TODO se otevírá jako běžný document artefakt. Kliknutí samo nic nezapisuje. Save požadavek nese `base_head`, příznak `new` a stabilní `operation_id`; `ArtifactActions` před přípravou nového zápisu znovu autorizuje projekt a ověří aktuální HEAD. Vlastní zápis, journal, Git CAS, index a idempotentní receipt nadále zajišťují `Artifacts`/`Workspace` podle ADR 0003.
+
+Rozepsaný text je pouze paměť rendereru, nikoli durable recovery. Navigace a zavření stránky vyžádají potvrzení, pokud se formulář změnil nebo existuje neuzavřený pokus; odmítnutý zápis ponechá vstupy i stejné operation ID pro bezpečné opakování. Úspěšný zápis obnoví projekt z validovaného HEAD. Obecný Qt `EditorDialog`, jeho toolbarová tlačítka a fragment `#create-main-todo` byly po dosažení parity odstraněny; Qt zůstává jen pro desktop-only systémové capability.
+
+## Přejmenování souboru dokumentu — M1-06
+
+Volitelné pole `filename` v požadavku save určuje jediný název souboru uvnitř stávajícího adresáře UUID. Musí končit `.md`, mít nejvýše 200 bajtů UTF-8 a projít stávající validací bezpečné cesty; složky a řídicí znaky jsou odmítnuty. Vynechané pole zachová cestu i původní kontrakt digestu. Nový dokument může zvolit název již při prvním uložení. Pole Název souboru (.md) je v záložce Popis a štítky; změna se provede až společným Uložit a podléhá stejné ochraně draftu, pending a retry jako obsah. Titulek dokumentu je samostatná hodnota.
+
+Přejmenování zachová UUID, privacy, provenance, autora, vytvoření a všechny strukturované vztahy přes target_id. Sidecar zůstane na `metadata.json` a jeho `file` se aktualizuje ve stejném commitu jako odstranění staré cesty a zápis nové. Frontmatter se přesune společně s obsahem; při samotném přejmenování služba zachová původní bajty včetně formátování YAML. Současná editace obsahu/metadat používá dosavadní serializaci editoru. Qt textové pole může normalizovat konce řádků; přesné zachování bajtů platí pro požadavek s nezměněným tělem. Historie pracuje přes adresář UUID, hlavní TODO přes rezervované UUID, takže přejmenování jejich identitu nemění. Volné odkazy na názvy souborů uvnitř textu se automaticky nepřepisují; uživatel je musí upravit explicitně. Nejde o přesun mezi artefakty, přejmenování source/PDF ani mazání.
+
+Crash boundaries ADR 0003 se nemění: před prepared nejsou projektové změny; journal společně drží smazání původní cesty, cílové bajty a změnu sidecaru. Recovery dokončí všechny vlastněné cesty, validuje výsledný snapshot a publikuje jeden commit; po publikaci obnoví index a vrátí receipt. Existující cíl, cizí pracovní změny, symlinky, změněný HEAD nebo cizí staging nejsou přepsány. Pád mezi odstraněním a vytvořením souboru nevyžaduje původní dialog. Testy přerušují proces na všech třinácti checkpointech sidecarového přejmenování včetně tří jednotlivých souborových změn. Neprokazují pád uvnitř syscallu ani výpadek napájení.
+
+Reuse/adapt služby Artifacts, Qt editoru, safe_path, Workspace/Journal a historie; katalog ani soukromá inventura nedávají důvod přebírat jinou storage či editor. Ověření a omezení tohoto kroku drží [TODO](../../TODO.md); mazání, import a úplná produkční projekce metadat zůstávají otevřenou prací M1.
+
+## Odstranění dokumentu — M1-08
+
+Nativní editor nabízí potvrzené odstranění uloženého dokumentu. Adaptuje stávající
+Artifacts/Workspace, nikoli nový zápisový mechanismus. Odstraní pouze soubory
+verzované pod UUID dokumentu; obsah a sidecar metadata tvoří jediný Git commit.
+Příchozí strukturované vztahy odstranění blokují. Výsledný snapshot se validuje
+před přípravou journalu. Volné textové odkazy se automaticky neopravují.
+
+Crash boundaries z ADR 0003 zůstávají stejné: před commitem je autoritativní
+journal, rozpracované odstranění obnoví native open; po změně Git ref se index
+obnoví z validovaného commitu. Cizí změny se nesmějí přepsat. Retry používá stejné
+operation_id a intent odlišený od ukládání, takže ztracená odpověď nevytvoří další
+commit. Reload ani zavření dialogu nejsou rollback již připravené operace.
+Historie zůstává v Gitu; tento krok nezavádí koš ani nové UI obnovy smazaného
+artefaktu. Samostatné testy [test_artifact_deletion.py](../../tests/test_artifact_deletion.py)
+ověřují sidecar/frontmatter, vztahy v artefaktech i registrech, ochranu cizích
+změn, receipt a skutečný Qt dialog. Procesní přerušení pokrývají také jednotlivé
+souborové změny a atomickou publikaci relačního indexu. Aktuální akceptaci a
+omezení drží [F-M1-DELETE-01/M1-08](../../WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). Dílčí backendové ověření odstranění
+a blokování příchozího vztahu je součástí uzavřené indexní dávky
+[F-M1-INDEX-01](../../WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15).
+
+## Společné akce existujícího dokumentu — UX-UNIFIED-01-E
+
+Webový i desktopový shell otevírá z per-document menu stejnou stránku pro
+editaci/přejmenování a potvrzené smazání. Úzce typované endpointy nepřijímají
+filesystemovou cestu; čtení je vázané na project ID, artifact ID a expected
+HEAD. Uložení předává stávající `Artifacts.save` úplný požadavek a stabilní
+operation ID. Smazání nejprve vrátí textový náhled s digestem svázaným s
+projektem, dokumentem a base HEAD a potvrzení jej znovu ověří před
+`Artifacts.delete`. Retry po receipt neprovádí novou mutaci. Webové čtení
+zachovává project membership a síťovou `local-only` kontrolu; zápis vyžaduje
+editor/project-admin nebo správce uzlu. Nová storage ani recovery hranice
+nevzniká. Vytvoření nového dokumentu a hlavního TODO zatím zůstává v Qt dialogu.

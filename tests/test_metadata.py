@@ -1,7 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
+import hashlib
 import unittest
 
 from spikes.metadata import (MAX_METADATA, ValidationError, frontmatter, parse_json,
-                             validate_metadata, validate_snapshot)
+                             validate_metadata, validate_snapshot, validate_transition)
 from tests.fixtures import ENTITY, OTHER, encoded, markdown, metadata, registry, source
 
 
@@ -34,7 +38,7 @@ class MetadataTests(unittest.TestCase):
                 parse_json(data)
 
     def test_schema_rejects_invalid_values(self):
-        for key, value in [('schema_version', True), ('schema_version', 2), ('id', 'bad'),
+        for key, value in [('schema_version', True), ('schema_version', 3), ('id', 'bad'),
                            ('created_at', '2026-02-30T12:00:00Z'), ('created_at', '2026-09-09'),
                            ('privacy', 'secret'), ('title', ''), ('tags', 'tag'),
                            ('relations', [{'type': 'source', 'target_id': 'bad'}]),
@@ -44,6 +48,62 @@ class MetadataTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValidationError):
                 validate_metadata(meta)
         self.assertEqual(validate_metadata(frontmatter(markdown()))['created_at'], '2026-09-09T12:00:00Z')
+
+    def test_v2_import_provenance_is_strict_and_binds_source_bytes(self):
+        raw = b'%PDF-1.7\noriginal\n'
+        imported = dict(imported_at='2026-09-09T12:00:00Z', imported_by='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                        content_sha256=hashlib.sha256(raw).hexdigest(), source_author='External author',
+                        source_created_at='2026-09-08T09:00:00Z', source_revision='r7',
+                        importer={'name': 'workspace-native-import', 'version': '2'})
+        meta = metadata(file='source.pdf')
+        meta.update(schema_version=2, kind='source', provenance='external')
+        meta['import'] = imported
+        files = {f'artifacts/{ENTITY}/source.pdf': raw,
+                 f'artifacts/{ENTITY}/metadata.json': encoded(meta),
+                 f'artifacts/{OTHER}/document.md': markdown(metadata(entity_id=OTHER))}
+        result = validate_snapshot(files)
+        self.assertEqual(result[ENTITY]['import'], imported)
+        self.assertEqual(result[OTHER]['schema_version'], 1)
+
+        invalid = [dict(meta, schema_version=1), dict(meta, provenance='user'),
+                   dict(meta, **{'import': dict(imported, unknown='x')}),
+                   dict(meta, **{'import': dict(imported, content_sha256='A' * 64)}),
+                   dict(meta, **{'import': dict(imported, imported_by=OTHER)}),
+                   dict(meta, **{'import': dict(imported, imported_at='2026-09-08T09:00:00Z')})]
+        for candidate in invalid:
+            with self.subTest(candidate=candidate), self.assertRaises(ValidationError):
+                validate_metadata(candidate, sidecar=True)
+        changed = dict(files); changed[f'artifacts/{ENTITY}/source.pdf'] = raw + b'changed'
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            validate_snapshot(changed)
+        external_without_import = metadata()
+        external_without_import.update(schema_version=2, provenance='external')
+        with self.assertRaises(ValidationError):
+            validate_metadata(external_without_import)
+
+    def test_source_transition_preserves_bytes_identity_and_v2_provenance(self):
+        base = source()
+        allowed = dict(base)
+        meta = parse_json(allowed[f'artifacts/{ENTITY}/metadata.json'])
+        meta.update(title='Updated title', description='Project annotation', tags=['reviewed'])
+        allowed[f'artifacts/{ENTITY}/metadata.json'] = encoded(meta)
+        self.assertIn(ENTITY, validate_transition(base, allowed))
+
+        for path, value, message in [
+                (f'artifacts/{ENTITY}/source.pdf', b'%PDF-changed', 'content'),
+                (f'artifacts/{ENTITY}/metadata.json', encoded(dict(meta, author_id=OTHER)), 'metadata')]:
+            changed = dict(allowed); changed[path] = value
+            with self.subTest(message=message), self.assertRaisesRegex(ValidationError, 'Immutable source'):
+                validate_transition(base, changed)
+
+        relaxed = dict(allowed)
+        relaxed_meta = dict(meta, privacy='public')
+        relaxed[f'artifacts/{ENTITY}/metadata.json'] = encoded(relaxed_meta)
+        with self.assertRaisesRegex(ValidationError, 'privacy relaxation'):
+            validate_transition(base, relaxed)
+        self.assertIn(ENTITY, validate_transition(base, relaxed, allow_privacy_relaxation=True))
+        with self.assertRaisesRegex(ValidationError, 'removal'):
+            validate_transition(base, {})
 
     def test_sidecar_paths_orphans_and_identity(self):
         for filename in ['../escape', '/tmp/escape', '.git', 'C:\\escape', 'metadata.json']:

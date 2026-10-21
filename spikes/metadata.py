@@ -1,5 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
 """Executable M0 schema and bounded metadata parsing, independent of storage."""
 from datetime import datetime
+import hashlib
 import json
 from pathlib import PurePosixPath
 import re
@@ -23,6 +27,9 @@ STATES = {
 }
 REQUIRED = {'schema_version', 'id', 'title', 'kind', 'created_at', 'author_id', 'privacy', 'provenance'}
 OPTIONAL = {'description', 'tags', 'source_url', 'relations'}
+IMPORT_REQUIRED = {'imported_at', 'imported_by', 'content_sha256', 'importer'}
+IMPORT_OPTIONAL = {'source_author', 'source_created_at', 'source_revision',
+                   'source_mime_type', 'export_mime_type'}
 
 
 class ValidationError(ValueError):
@@ -39,6 +46,92 @@ def uuid(value):
         require(isinstance(value, str) and str(UUID(value)) == value, 'Expected canonical UUID')
     except (ValueError, AttributeError) as exc:
         raise ValidationError('Expected canonical UUID') from exc
+
+
+def timestamp(value, field='created_at'):
+    require(isinstance(value, str) and bool(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', value)),
+            f'{field} must be UTC RFC3339 ending in Z')
+    try:
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise ValidationError('Invalid calendar timestamp') from exc
+
+
+def validate_import(value):
+    require(isinstance(value, dict) and IMPORT_REQUIRED <= value.keys()
+            and value.keys() <= IMPORT_REQUIRED | IMPORT_OPTIONAL, 'Invalid import provenance')
+    timestamp(value['imported_at'], 'imported_at')
+    uuid(value['imported_by'])
+    require(isinstance(value['content_sha256'], str)
+            and bool(re.fullmatch(r'[0-9a-f]{64}', value['content_sha256'])), 'Invalid content_sha256')
+    importer = value['importer']
+    require(isinstance(importer, dict) and importer.keys() in ({'name'}, {'name', 'version'}),
+            'Invalid importer')
+    for key in ('name', 'version'):
+        if key in importer:
+            require(isinstance(importer[key], str) and bool(importer[key].strip()), f'Invalid importer {key}')
+    for key in ('source_author', 'source_revision', 'source_mime_type',
+                'export_mime_type'):
+        if key in value:
+            require(isinstance(value[key], str) and bool(value[key].strip()), f'Invalid {key}')
+    require('export_mime_type' not in value or 'source_mime_type' in value,
+            'Export MIME type requires source MIME type')
+    if 'source_created_at' in value:
+        timestamp(value['source_created_at'], 'source_created_at')
+    return value
+
+
+def validate_generation(value):
+    required = {'schema', 'adapter', 'binding_id', 'binding_revision',
+                'capability_revision', 'run_id', 'request_sha256',
+                'manifest_sha256', 'size', 'quality', 'seed', 'result_sha256',
+                'target'}
+    require(isinstance(value, dict) and set(value) in (required, required | {'workflow'}),
+            'Invalid image generation provenance')
+    require(value['schema'] == 'fpw-image-generation-v1'
+            and value['adapter'] in {'openai-images', 'comfyui'},
+            'Unsupported image generation provenance')
+    for key in ('binding_id', 'run_id'):
+        uuid(value[key])
+    for key in ('binding_revision', 'capability_revision'):
+        require(isinstance(value[key], str) and bool(value[key].strip())
+                and not any(char in value[key] for char in '\0\r\n'),
+                f'Invalid generation {key}')
+    for key in ('request_sha256', 'manifest_sha256', 'result_sha256'):
+        require(isinstance(value[key], str) and bool(re.fullmatch(r'[0-9a-f]{64}', value[key])),
+                f'Invalid generation {key}')
+    require(value['size'] in {'1024x1024', '1536x1024', '1024x1536'}
+            and value['quality'] in {'auto', 'low', 'medium', 'high'}
+            and (value['seed'] is None or
+                 (type(value['seed']) is int and 0 <= value['seed'] < 2 ** 63)),
+            'Invalid image generation parameters')
+    target = value['target']
+    require(isinstance(target, dict) and set(target) == {'binding_id',
+        'binding_revision', 'boundary', 'target_id', 'model'}
+        and target['binding_id'] == value['binding_id']
+        and target['binding_revision'] == value['binding_revision']
+        and target['boundary'] in {'same-node', 'private-network',
+                                   'trusted-federation', 'external-provider'}
+        and all(isinstance(target[key], str) and bool(target[key].strip())
+                and not any(char in target[key] for char in '\0\r\n')
+                for key in ('binding_revision', 'target_id', 'model')),
+        'Invalid image generation target')
+    if value['adapter'] == 'comfyui':
+        workflow = value.get('workflow')
+        require(isinstance(workflow, dict)
+                and set(workflow) == {'revision', 'sha256', 'prompt_id', 'output'}
+                and isinstance(workflow['revision'], str) and bool(workflow['revision'])
+                and isinstance(workflow['sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', workflow['sha256']))
+                and isinstance(workflow['prompt_id'], str) and bool(workflow['prompt_id'])
+                and isinstance(workflow['output'], dict)
+                and set(workflow['output']) >= {'filename', 'subfolder', 'type'}
+                and all(isinstance(workflow['output'][key], str)
+                        for key in ('filename', 'subfolder', 'type')),
+                'Invalid ComfyUI generation provenance')
+    else:
+        require('workflow' not in value, 'OpenAI image provenance cannot contain a workflow')
+    return value
 
 
 def safe_path(value):
@@ -58,16 +151,17 @@ def pairs(items):
     return result
 
 
-def bounded(data):
-    require(isinstance(data, bytes) and len(data) <= MAX_METADATA, 'Metadata exceeds 64 KiB')
+def bounded(data, maximum=MAX_METADATA):
+    message = 'Metadata exceeds 64 KiB' if maximum == MAX_METADATA else 'Input exceeds allowed size'
+    require(isinstance(data, bytes) and len(data) <= maximum, message)
     try:
         return data.decode('utf-8')
     except UnicodeError as exc:
         raise ValidationError('Metadata must be UTF-8') from exc
 
 
-def parse_json(data):
-    text = bounded(data)
+def parse_json(data, maximum=MAX_METADATA):
+    text = bounded(data, maximum)
     # Limit nesting before the recursive JSON decoder, ignoring quoted brackets.
     depth, quoted, escape = 0, False, False
     for char in text:
@@ -140,21 +234,34 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     require(isinstance(meta, dict), 'Metadata must be an object')
     extra = {'file'} if sidecar else ({'status', 'body'} if registry else set())
     require(REQUIRED | extra <= meta.keys(), 'Missing required metadata')
-    require(meta.keys() <= REQUIRED | OPTIONAL | extra, 'Unknown metadata field')
-    require(type(meta['schema_version']) is int and meta['schema_version'] == 1, 'Unknown schema version')
+    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2, 3}, 'Unknown schema version')
+    allowed = REQUIRED | OPTIONAL | extra
+    if meta['schema_version'] == 2: allowed |= {'import'}
+    if meta['schema_version'] == 3: allowed |= {'generation'}
+    require(meta.keys() <= allowed, 'Unknown metadata field')
     uuid(meta['id'])
     uuid(meta['author_id'])
     for key in ['title', 'kind', 'created_at', 'privacy', 'provenance']:
         require(isinstance(meta[key], str) and bool(meta[key].strip()), f'Invalid {key}')
-    require(bool(re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z', meta['created_at'])),
-            'created_at must be UTC RFC3339 ending in Z')
-    try:
-        datetime.fromisoformat(meta['created_at'].replace('Z', '+00:00'))
-    except ValueError as exc:
-        raise ValidationError('Invalid calendar timestamp') from exc
+    timestamp(meta['created_at'])
     require(meta['privacy'] in {'public', 'project', 'confidential', 'local-only'}, 'Invalid privacy')
     require(meta['provenance'] in {'user', 'external', 'llm-generated', 'llm-transformed', 'snapshot'},
             'Invalid provenance')
+    if meta['schema_version'] == 2 and meta['provenance'] == 'external':
+        require('import' in meta, 'External v2 metadata requires import provenance')
+        imported = validate_import(meta['import'])
+        require(imported['imported_at'] == meta['created_at'], 'imported_at must match created_at')
+        require(imported['imported_by'] == meta['author_id'], 'imported_by must match author_id')
+    else:
+        require('import' not in meta, 'Import provenance is only valid for external v2 metadata')
+    if meta['schema_version'] == 3:
+        require(meta['kind'] == 'source' and meta['provenance'] == 'llm-generated'
+                and meta.get('file') == 'image.png' and 'generation' in meta,
+                'Generated image metadata requires source kind and LLM provenance')
+        validate_generation(meta['generation'])
+    else:
+        require('generation' not in meta,
+                'Generation provenance is only valid for generated image metadata')
     for key in ('description', 'source_url'):
         if key in meta:
             require(isinstance(meta[key], str), f'Invalid {key}')
@@ -206,14 +313,80 @@ def validate_snapshot(files):
         if 'metadata.json' in entries:
             meta = validate_metadata(parse_json(entries['metadata.json']), sidecar=True)
             require(set(entries) == {'metadata.json', meta['file']}, 'Missing or extra sidecar content')
+            if meta['schema_version'] == 2 and meta['kind'] == 'source':
+                digest = hashlib.sha256(entries[meta['file']]).hexdigest()
+                require(meta['import']['content_sha256'] == digest, 'Source content differs from import provenance')
+            if meta['schema_version'] == 3:
+                digest = hashlib.sha256(entries[meta['file']]).hexdigest()
+                require(meta['generation']['result_sha256'] == digest,
+                        'Generated image content differs from provenance')
+                require(entries[meta['file']].startswith(b'\x89PNG\r\n\x1a\n'),
+                        'Generated image content is not PNG')
         else:
             require(len(entries) == 1, 'Expected one Markdown artifact')
             name, data = next(iter(entries.items()))
             require(name.endswith('.md'), 'Binary artifact needs sidecar')
             meta = validate_metadata(frontmatter(data))
+            require(not (meta['schema_version'] == 2 and meta['kind'] == 'source'),
+                    'External v2 source requires sidecar metadata')
         require(meta['id'] == artifact_id, 'Artifact directory must match ID')
         insert(meta)
     for meta in entities.values():
         for relation in meta.get('relations', []):
             require(relation['target_id'] in entities, 'Dangling relation')
     return entities
+
+
+def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation=False):
+    """Enforce invariants that require comparing two valid project snapshots."""
+    base = validate_snapshot(base_files)
+    candidate = validate_snapshot(candidate_files)
+    privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
+    immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
+                 'generation')
+
+    def content(files, meta):
+        prefix = f"artifacts/{meta['id']}/"
+        if 'file' in meta:
+            return files[prefix + meta['file']]
+        paths = [path for path in files if path.startswith(prefix)]
+        require(len(paths) == 1, 'Unsupported source layout')
+        return files[paths[0]]
+
+    def output_provenance(data):
+        markers = [marker for marker in
+                   (b'<!-- fpw-chat-output-v1\n', b'<!-- fpw-summary-v1\n')
+                   if marker in data]
+        if not markers:
+            return None
+        require(len(markers) == 1, 'Multiple LLM provenance records')
+        marker = markers[0]
+        require(data.count(marker) == 1, 'Duplicate LLM output provenance')
+        tail = data.split(marker, 1)[1]
+        require(b'\n-->\n' in tail, 'Unclosed LLM output provenance')
+        return marker + tail.split(b'\n-->\n', 1)[0]
+
+    for id_, before in base.items():
+        after = candidate.get(id_)
+        if (before['kind'] == 'document'
+                and before['provenance'] in {'llm-generated', 'llm-transformed'}):
+            before_record = output_provenance(content(base_files, before))
+            if before_record is not None:
+                require(after is not None and after['kind'] == 'document',
+                        'LLM output removal is unsupported')
+                require(output_provenance(content(candidate_files, after)) == before_record,
+                        'LLM output provenance changed')
+        if before['kind'] not in {'source', 'snapshot'}:
+            continue
+        label = before['kind'].capitalize()
+        require(after is not None, f'{label} removal is unsupported')
+        require(all(before.get(key) == after.get(key) for key in immutable),
+                f'Immutable {before["kind"]} metadata changed')
+        require(content(base_files, before) == content(candidate_files, after),
+                f'Immutable {before["kind"]} content changed')
+        if before['kind'] == 'source' and before['schema_version'] == 2:
+            require(after['schema_version'] == 2 and before['import'] == after.get('import'),
+                    'Immutable source import provenance changed')
+        require(allow_privacy_relaxation or privacy[after['privacy']] >= privacy[before['privacy']],
+                f'{label} privacy relaxation requires explicit authorization')
+    return candidate

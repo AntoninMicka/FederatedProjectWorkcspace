@@ -1,12 +1,255 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Federovaný projektový LLM workspace
 
 Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a desktopovým uzlem federace.
 
-Projekt je ve fázi **M0 — Architecture spike**. Zatím obsahuje návrh a spustitelný storage experiment, nikoli hotovou aplikaci.
+Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu; společný webový frontend zobrazuje historii/diffy uložených dokumentů ve webu i desktopovém obalu.
 
-## Spuštění experimentu
+## Desktop
 
-Vyžaduje Linux, Python 3.11+, Git v PATH a PyYAML 6.0.3:
+```sh
+./run.sh desktop
+```
+
+Na stránce **Projekty** zadejte název, připravte přesný náhled a potvrďte
+**Vytvořit a otevřít projekt**. Stejný formulář používá web i desktop. Desktop
+navíc může systémovým pickerem vybrat existující prázdnou cílovou složku;
+renderer dostane pouze token pro tuto jednu volbu, nikoli obecný přístup k
+filesystemu. Aplikace připraví Git, projektová metadata, lokální stav a
+registraci; po restartu projekt zůstane dostupný. JSON není nutné psát ručně.
+Výchozí uzel se ukládá do `$XDG_STATE_HOME/federated-workspace/node.json`, jinak
+`~/.local/state/federated-workspace/node.json`. Volba `--node /cesta/node.json`
+vybere jiný uzel.
+
+[Postup, obnova a izolovaná ukázka](docs/project-opening.md) popisují umístění dat a omezení. Přerušené vytvoření se při běžném restartu obnovuje; existující neprázdná nebo změněná cílová složka se nepřepisuje. V otevřeném projektu použijte v levém panelu **Podklady → Nový dokument** nebo v záložce **Úkoly** společnou akci vytvoření či úpravy hlavního seznamu; změny potvrďte tlačítkem **Uložit**. Tlačítko **Ověřit spojení** zůstává jako test lokálního backendu. Návrh: [ADR 0015](docs/adr/0015-project-creation.md), desktopový binding: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+
+Desktop nyní vyžaduje PySide6, bez fallbacku na PyQt6. Na ověřeném Ubuntu jsou potřebné moduly dostupné v repozitáři; pro běžné spuštění je připravte explicitně (při ověřování byly pouze rozbaleny do /tmp):
+
+```sh
+sudo apt-get install python3-pyside6.qtwebenginewidgets poppler-utils python3-segno
+```
+
+Wrapper preferuje `.venv/bin/python`; pokud v něm Qt chybí, použije systémový `python3` pouze tehdy, pokud má WebEngine i požadovaný PyYAML 6.0.3; desktop dále vyžaduje Segno pro QR kontakty. Jinak skončí s chybou. `./run.sh setup` připravuje Python závislosti, Qt neinstaluje. Desktop vyžaduje běžného uživatele a grafickou relaci; nespouštět přes sudo. Automatické vypínání Chromium sandboxu ani TLS kontrol není použito.
+
+Grafické ověření (Python s dostupným Qt):
+
+```sh
+M0_DESKTOP_TEST=1 python3 -m unittest tests.test_desktop -v
+python3 -m spikes.desktop --smoke
+```
+
+Volitelně `--smoke --screenshot /tmp/workspace-desktop.png` uloží snímek vlastního okna. Bez `M0_DESKTOP_TEST=1` se grafický test v celé sadě přeskočí; ostatní desktopové testy běží vždy. `demo` zůstává výchozím příkazem wrapperu.
+
+### Import celého projektu z osobního NotebookLM
+
+Google Takeout TGZ lze v desktopu otevřít tlačítkem **Importovat NotebookLM**
+v levém panelu; import má vlastní stránku mimo přehled projektů.
+Nejdřív se zobrazí bounded read-only přehled všech projektů (v Takeoutu jsou
+uložené jako jednotlivé NotebookLM notebooky); potom se vybere právě jeden
+projekt, nová cílová složka a privacy. Projekt vznikne až po
+kontrole přesného plánu a explicitním potvrzení; samostatný řádek **Cíl
+projektu** vždy ukáže výslednou cestu plánu. Desktop kontroluje prázdnost a
+bezpečná práva vybraného cíle už při výběru; u vlastní prázdné složky s příliš
+otevřenými právy nabídne po výslovném souhlasu změnu na `0700`. Webová varianta
+je dostupná jen správci uzlu a přijímá absolutní cestu k TGZ, který už je
+bezpečně uložený na serveru; archiv se neposílá jako velký JSON přes prohlížeč.
+
+Import zachová přesné Takeout bajty zdrojů, výstupů, chatu a discovered sources
+v oddělených neměnných artefaktech. Původní metadata jsou vratně uložena v
+base64 obálce a odvozený soupis je jasně označen jako snapshot. Takeout v
+ověřeném osobním formátu poskytuje HTML/JSON reprezentace zdrojů, nikoli původní
+PDF, obrázky nebo Google dokumenty; samostatné notes ve vzorku chyběly. HTML se
+nikdy nespouští. Artifact source UUID nelze bezpečně propojit, protože zdroje v
+exportu nemají odpovídající stabilní ID. Kontrakt, limity, duplicate pravidla a
+recovery popisuje [ADR 0029](docs/adr/0029-notebooklm-takeout-project-import.md).
+
+Po otevření importovaného projektu lze jednotlivé podklady vybrat v levém
+seznamu. JSON se v odvozeném Markdown náhledu pouze přeformátuje do code blocku,
+bez ztráty polí. Z HTML server bounded způsobem odvodí Markdown s nadpisy,
+odstavci, seznamy a bezpečnými textovými odkazy. Původní HTML se nikdy nevloží
+do stránky ani nespustí a Markdown renderer používá pouze `textContent`.
+Skripty, styly, vložené rámce a další neviditelný obsah se do projekce nepřenášejí;
+původní bajty zůstávají beze změny autoritou uloženou v projektu.
+
+Soukromý regresní vzorek lze ověřit bez přidání archivu do Gitu:
+
+```sh
+NOTEBOOKLM_TAKEOUT_SAMPLE=/cesta/takeout.tgz \
+  python3 -m unittest tests.test_notebooklm_import.ActualNotebookLMTakeoutTests -v
+```
+
+### Markdown prezentace a presenter
+
+Desktopová záložka **Prezentace** nabízí integrovaný editor verzovaných
+Markdown decků, spuštění přesně uložené revize a oddělené zobrazení řečníka a
+publika. Presenter podporuje hlavní linii, backupy, postupné odhalování,
+soukromé poznámky, stabilní layouty, klávesnici i volitelně mapovaný gamepad.
+
+V režimu **Orchestrace** lze vybrat projektové podklady a zadat například
+`vytvoř z daného dokumentu prezentaci`. Explicitní požadavek na vytvoření nebo
+aktualizaci decku používá presentation-only výstupní schema. Ollama připraví
+pouze návrh; aplikace následně ověří zdroje, layouty, privacy, přesnou Git
+revizi a digest. Teprve samostatné tlačítko **Schválit a vytvořit** nebo
+**Schválit aktualizaci** provede jeden obnovitelný projektový zápis. Změněná
+revize nebo digest se odmítne a opakování stejné operace nevytvoří druhý commit.
+
+Každé skutečné spuštění uloženého decku vytváří samostatný záznam potvrzených
+veřejných snapshotů. Editor je zobrazuje u příslušné prezentace a nabízí jejich
+potvrzené smazání a tisk. Do PDF lze exportovat buď kanonickou hlavní linii,
+nebo přesný průběh konkrétní relace; cíl a případné přepsání se potvrzují před
+atomickou publikací souboru. Úplný postup editoru, displejů, orchestrace,
+recovery a fyzické akceptace je v
+[návodu presenteru](docs/gamepad-demo-presenter.md).
+
+### Streamovaný lokální chat
+
+Přímý brainstorming přes Ollamu zobrazuje odpověď průběžně a rozlišuje přípravu
+kontextu, připojování, čekání na první část, generování a dokončení. Průběžný
+text je pouze dočasná projekce; assistant zpráva a usage vzniknou až po
+validním finálním Ollama NDJSON rámci. Přerušený stream po dispatch hranici
+zůstane `unknown`, torzo se nepublikuje a aplikace stejný run automaticky
+nepřipojí ani neopakuje. Postup obsahuje
+[checklist streamované Ollamy](docs/ollama-streaming-acceptance.md), kontrakt
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
+
+### Řízené webové hledání
+
+V **Nastavení → AI backend → Řízené webové hledání** uložte explicitní SearXNG
+endpoint. Lokální instalace může používat například číselný loopback endpoint;
+Workspace neodvozuje adresu z názvu kontejneru. Test odešle pouze pevný veřejný
+dotaz `SearXNG` a binding neuloží.
+
+V režimu **Zadání úkolu** uživatel explicitně volí zdroje (konverzace, interní
+artefakty, veřejný internet), výstup (konverzace, dokument, prezentace) a
+vykonání (lokální Ollama nebo OpenAI). Aplikace zvolí jediné výstupní schéma;
+model druh výsledku nehádá. Externí vykonání dovoluje jen konverzaci a načtené
+veřejné zdroje, interní artefakty jsou viditelně zakázané.
+
+Volba veřejného internetu bez již načteného zdroje připraví webové hledání.
+Samotný návrh nic neodesílá: zobrazí přesný dotaz, privacy, endpoint a limit. Teprve po
+zaškrtnutí potvrzení Workspace provede jeden bounded search, uloží jeho
+provenance a předá přesné výsledky Ollamě v novém Context Manifestu. URL ani
+stránky automaticky neotevírá. `local-only` dotaz je vždy odmítnut a neurčitý
+síťový výsledek se automaticky neopakuje. Praktická akceptace je v
+[checklistu SearXNG hledání](docs/searxng-search-acceptance.md).
+
+U jednotlivého HTTPS výsledku lze zvolit **Načíst stránku**. Workspace nejprve
+zobrazí přesný plán se samostatným `robots.txt` preflightem, cílovým GET,
+privacy a limity; síť použije až po potvrzení. Reader nepoužívá přihlášení,
+cookies, JavaScript, redirecty ani další odkazy a přijímá pouze bounded statické
+HTML nebo UTF-8 text. Výsledek zůstává node-local jako inertní nedůvěryhodný
+text, může být přesně zahrnut do Context Manifestu a sám nevytváří projektový
+artefakt. Úspěšný reader run lze následně zvolit jako veřejný podklad nového
+úkolu a kombinovat jej s libovolným explicitním výstupem. Postup a očekávané chyby jsou v
+[checklistu Public Source Readeru](docs/public-source-reader-acceptance.md).
+
+Izolovaný živý průchod s výchozími loopback endpointy lze ověřit příkazem
+`python3 scripts/searxng_search_smoke.py`; vytvoří pouze dočasný projekt, odešle
+veřejný dotaz a po skončení testovací stav odstraní.
+
+### Creator → opponent workflow (PoC)
+
+Po otevření projektu nabízí karta **Creator → opponent** řízený dvoukrokový
+workflow. Nejdřív v **Nastavení** uložte explicitní Ollama binding. Ve workflow
+vyberte podklady a model creatoru, zkontrolujte celý request a potvrďte dispatch.
+Teprve nad uloženým a hashovaným výsledkem lze připravit samostatný opponent
+handoff, případně s nově explicitně vybranými podklady a jiným modelem. Opponent
+nedostává původní chat ani skryté zdroje. Publikace creator nebo opponent
+výsledku do projektového Gitu je třetí samostatná akce.
+
+Workflow nepoužívá fallback ani automatický retry neurčitého providerového
+účinku. Stav `unknown` vyžaduje vědomě nový workflow s novými identitami.
+Ollamu na jiném stroji lze připojit pouze jako explicitní `private-network`
+backend přes HTTPS a připnutý certifikát; přípravu serveru, pin a diagnostiku
+popisuje [návod pro Ollamu v LAN](docs/ollama-lan.md).
+Opakovatelný živý smoke proti same-node Ollamě je opt-in:
+
+```sh
+WORKFLOW_OLLAMA_TEST=1 WORKFLOW_OLLAMA_MODEL=phi:latest \
+  python3 -m unittest \
+  tests.test_role_workflow_service.RoleWorkflowServiceTests.test_live_ollama_creator_opponent_handoff -v
+```
+
+Test vytváří pouze dočasný projekt a journal; zvolený model musí být v Ollamě
+již dostupný. Kontrakt, privacy a recovery hranice popisuje
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+
+### Generování obrázků (PoC)
+
+Po otevření projektu nabízí karta **Obrázek** samostatný tok **připravit přesný
+požadavek → potvrdit dispatch → zkontrolovat validovaný výsledek → uložit do
+projektu**. Pouhé vytvoření preview provider nevolá. Publikace je další
+explicitní krok a ukládá původní validovaný PNG s generation provenance; prompt
+se do projektových metadat neukládá.
+
+OpenAI Images používá existující node-local OpenAI credential, ale vlastní
+explicitní obrazový binding v **Nastavení**. ComfyUI vyžaduje tamtéž explicitní
+literal-loopback endpoint nebo schválenou privátní adresu, verzovanou workflow
+šablonu, její SHA-256, mapu allowlisted vstupů a output node. Workspace neposílá
+libovolný workflow ani custom node a mezi providery automaticky nepřepíná.
+`local-only` lze odeslat pouze same-node ComfyUI.
+
+Výsledek musí být jediný PNG v jednom z podporovaných rozměrů a nejvýše 16 MiB.
+Inline UI preview je omezeno na 4 MiB; větší platný obrázek lze po kontrole
+metadat stále publikovat. Timeout nebo ztracená odpověď zůstává `unknown` a
+stejný run se automaticky neopakuje. Nový pokus musí mít nový approval i run ID.
+Pád při publikaci se obnovuje stejným operation ID bez druhého providerového
+volání. Kontrakt a hranice popisuje [ADR 0008](docs/adr/0008-context-and-publication-contracts.md),
+ruční akceptaci [checklist obrazové capability](docs/image-generation-acceptance.md).
+
+Read-only output router používá staticky reviewovaný capability katalog a
+typovaný acyklický plán. Návrh planneru není oprávnění: aplikace jej znovu
+ověří proti přesné policy, HEAD a snapshotům zdrojů, sama odvodí vysvětlení a
+vrátí pouze handoff `not-authorized`. Bezpečný smoke a ruční kontroly obsahuje
+[checklist output routeru](docs/output-router-acceptance.md). Tato fáze nic
+nerenderuje ani nespouští; execution zůstává navazující feature.
+
+## Spuštění storage experimentu
+
+Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a závislosti z `requirements.txt` (PyYAML 6.0.3, Segno 1.6.6). Spouštěcí wrapper [run.sh](run.sh):
+
+```sh
+./run.sh setup                 # jednorázová příprava .venv a instalace závislostí
+./run.sh                       # dočasné storage demo (totéž jako ./run.sh demo)
+./run.sh test                  # celá sada testů
+./run.sh check "/cesta/k/projektu"
+./run.sh config project "/cesta/k/projektu/project.json"
+./run.sh config node "/cesta/k/lokalnimu/node.json"
+./run.sh module-check modules/priklad.module.json [http://127.0.0.1:PORT]
+./run.sh help
+```
+
+Pokud už jsou závislosti dostupné, krok `setup` lze vynechat. Použije se `.venv/bin/python`, pokud existuje, jinak `python3`; běžné spuštění nic neinstaluje. `setup` potřebuje podporu Python venv/pip a přístup ke zdroji balíčků; instaluje pouze do `.venv`.
+
+Výchozí demo přes `spikes/demo.py` založí izolovaný dočasný Git repozitář, uloží Markdown artefakt přes Workspace a vypíše commit, index po znovuotevření a historii. Po dokončení se demo data odstraní. **Nespouští se webový server ani desktopové UI; nejde zatím o aplikaci pro běžnou práci.** Při násilném ukončení může zůstat dočasný adresář uvedený ve výstupu; demo není určeno k uchování dat.
+
+Wrapper lze zavolat absolutní cestou z jiného adresáře; relativní cesta u `check` se vztahuje k adresáři volajícího. `check` vrací 0 pro platnou projekci a 1 při chybě validace, neplatné argumenty wrapperu vracejí 2.
+
+`module-check` bez URL pouze striktně ověří obecný modulový manifest. S URL
+načte pevný manifest endpoint API a vyžaduje přesnou shodu celé reviewované
+deklarace. PoC přijímá jen literal loopback HTTP adresu s explicitním portem,
+nesleduje redirect a neobsahuje instalaci, discovery ani spuštění modulu.
+
+První publikační modul má navíc úzce vymezené CMS UI v **Nastavení → Weby**.
+Workspace automaticky zjistí jeho přítomnost v `modules.local/`, ale nespustí jej,
+dokud jej uživatel výslovně nepovolí. Ověří identitu a verzi manifestu, přesnou
+reviewovanou deklaraci capabilities a hashe runtime souborů; Git commit není
+součástí kompatibility. Poté lze v jedné správě přidávat domény a pro každou
+nezávisle povolit části Profil, CV a Timeline, vytvořit izolovaný
+náhled, zkontrolovat přesný request a samostatně potvrdit lokální generování do
+modulového `dist/sites`. CMS je zatím nadprojektové node-local nastavení. Webové
+UI je dostupné pouze administrátorovi. Generování nic nenasazuje a nemění DNS;
+recovery a bezpečnostní hranice popisuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+[ADR 0028](docs/adr/0028-cloudflare-publication-portal.md) vymezuje jeden
+host-routed Cloudflare Worker pro jeden publikační portál a bezpečnou hranici
+potvrzení/recovery externího deploymentu.
+
+Ruční příprava a spuštění bez wrapperu:
 
 ```sh
 python3 -m venv .venv
@@ -14,9 +257,9 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Pokud už je požadovaný PyYAML dostupný, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
+Pokud už jsou závislosti z `requirements.txt` dostupné, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
 
-Testy vytvářejí izolované dočasné repozitáře a SQLite databáze. Nepoužívají síť ani nemění globální Git konfiguraci.
+Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada používá dočasné Unix sockety a porty na `127.0.0.1` pro [lokální API PoC](docs/adr/0006-local-api-transport.md); nepotřebuje internet. Sandbox musí povolit lokální bind, jinak jde o selhání testu. Cíleně: `python3 -m unittest tests.test_local_api -v`. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 
 Pracovní projekci existujícího projektu lze ověřit bez zápisu:
 
@@ -26,6 +269,26 @@ Pracovní projekci existujícího projektu lze ověřit bez zápisu:
 
 Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zatím `project.json` ani konfiguraci uzlu. Neplatná projekce vrací exit code 1.
 
+## Kontrola konfigurace
+
+`./run.sh config project CESTA` a `./run.sh config node CESTA` validují samostatný JSON soubor podle [kontraktu v1](DATA_MODEL.md). Alternativně použijte `python3 -m spikes.check_config project CESTA` nebo `node CESTA` (s příslušným Python prostředím). Cesty jsou relativní k adresáři volajícího. Úspěch vrací 0, neplatný/nečitelný soubor 1 a chybné argumenty 2.
+
+Kontrola nic nevytváří ani nemigruje. `node.json` musí ležet mimo registrované projekty a obsahovat pouze lokální odkazy na credentials. Ověření skutečné identity, dostupnosti klíčů a shody projektových registrací patří do budoucí aplikační integrace. Dosavadní `check` i dočasné demo zůstávají artefaktovým/registry PoC bez povinné konfigurace.
+
+## Koordinovaný storage PoC
+
+`spikes.workspace.Workspace(root, state)` poskytuje `apply(changes, author_name=..., author_email=..., message=...)`, `recover()`, `read()` a `receipt(operation_id)`. Změny jsou mapa projektových cest na bajty nebo `None` pro smazání; validuje se celý výsledný artefaktový/registry snapshot i přechod proti výchozímu commitu, včetně neměnnosti zdrojů. `apply` vrátí receipt s operation ID, výsledným commit ID a stavem `indexed`. `recover` dokončí pending operaci nebo vrátí `None`. Konflikt zachová journal a vyžaduje lidské řešení; `read` při pending stavu vyvolá `PendingOperation`.
+
+`read_projection()` vrací commit ID, mapu entit na metadata/cestu a explicitní
+směrované vztahy. `read_relations(entity_id, direction='outgoing', relation_type=None)`
+filtruje odchozí nebo (`direction='incoming'`) příchozí vztahy a vrací jejich
+commit ID. Oba lokální backendové vstupy sdílejí pending/rebuild hranici původního
+čtení; nejde o nové HTTP API. Stará ID/title projekce se při rebuild atomicky
+nahradí z HEAD, neznámá verze DB se nepřepisuje. Kontrakt a recovery:
+[ADR 0022](docs/adr/0022-relational-index.md).
+
+Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi, čistým worktree/staging a jediným soukromým stavovým adresářem mimo projekt na stejném filesystemu. Všechny aplikační zápisy a čtení musí procházet tímto vstupem; samostatné `Git.commit`, `Journal` a `Index` zůstávají nízkoúrovňovými experimenty. Nejde o podporu cizích repozitářů, síťové federace ani produkční aplikaci. Crash boundaries a ověření: [ADR 0003](docs/adr/0003-coordinated-operation.md).
+
 ## Dokumentace
 
 - [Architektura](ARCHITECTURE.md)
@@ -33,10 +296,112 @@ Kontrola zahrnuje artefakty, sidecary, registry a jejich vztahy. Neověřuje zat
 - [Federace a konfliktové UI](FEDERATION.md)
 - [Bezpečnost](SECURITY.md)
 - [Katalog reuse](REUSE_CATALOG.md)
+- [Compliance evidence](docs/legal/COMPLIANCE.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [IP, defensive publication a crowdfunding roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>)
 - [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md)
 - [Defensive Disclosures](docs/IP/DEFENSIVE_DISCLOSURES.md)
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)
 - [Metadata a journal: chování, ověření a omezení](docs/adr/0002-metadata-journal.md)
 
-Další krok: propojit journal, validaci, Git commit a index do jedné aplikační operace. V M0 zbývá také libgit2 PoC, lokální transport a ověření na cílovém Turris/LXC; poté uzavřít stack a začít M1.
+Aktuální dávku (milník), její průběžné výsledky a ad-hoc úkoly drží [TODO](TODO.md), další dávky [BACKLOG](BACKLOG.md) a uzavřené dávky s ověřením [WORK_LOG](WORK_LOG.md). Archivace a načtení další dávky probíhají až při jejím uzavření. Lokální API, desktopový instalační kandidát i cílový storage probe na Turris/LXC jsou ověřené v rozsahu M0. M1 nyní propojuje čtení registrovaných projektů s desktopem; produkční release zůstává otevřený.
+
+## Ruční deploy na Omnii
+
+Volitelný HTTPS webový náhled v LXC a dlaždici s aktuální adresou kontejneru popisuje [návod webového nasazení](docs/lxc-web.md). Jde o development PoC; cílová akceptace zůstává otevřená v M1-07.
+
+Pro existující **běžící Debian LXC** na SSD připojeném na routeru jako `/srv`:
+
+```sh
+./run.sh deploy-omnia root@ADRESA_ROUTERU --container workspace-m0 --dry-run
+./run.sh deploy-omnia root@ADRESA_ROUTERU --container workspace-m0
+```
+
+První příkaz pouze vypíše plán a seznam přenášených souborů. Druhý se připojí přes SSH (může požádat o heslo), ověří Btrfs mount `/srv`, běžící kontejner a shodu zařízení jeho kořenového filesystemu s SSD. Existující SSH host key musí být v known_hosts. Používá `ssh -F /dev/null`, tedy bez uživatelských aliasů/proxy nastavení; host zadávejte přímo. Hesla se neukládají. Příkazy se nespouštějí automaticky při startu desktopu.
+
+Přenáší aktuální obsah `spikes/*.py`, `requirements.txt` a `LICENSE`, včetně případných lokálních úprav těchto souborů. Soukromý katalog, `.git`, `.venv`, jiné lokální repozitáře a projektová data se neposílají. V kontejneru vytvoří nové `/opt/federated-workspace/releases/<id>`, přes apt připraví Python/venv/Git/CA a přes pip závislosti, poté spustí dočasné storage demo. Instalace potřebuje internet v kontejneru a mění jeho balíčky; na routeru žádné balíčky neinstaluje, kontejner nevytváří ani nerestartuje.
+
+Odkaz `/opt/federated-workspace/current` přepne atomicky až po úspěšném demu. Při selhání zůstává předchozí odkaz a nedokončené vydání pro diagnostiku. Změny apt/pip nejsou transakčně vráceny; žádná uživatelská data ani starší vydání se automaticky nemažou. Souběžná úspěšná nasazení mají vlastní adresáře, poslední přepnutí určuje current.
+
+Jde o **instalaci headless PoC**, ne produkční služby: daemon, síťové API ani Qt na routeru nespouští. Demo lze ručně zopakovat na routeru:
+
+```sh
+lxc-attach -P /srv/lxc -n workspace-m0 -- sh -c \
+  'cd /opt/federated-workspace/current && .venv/bin/python -m spikes.demo'
+```
+
+Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem; důkaz a omezení drží WORK_LOG u M0-05. Potvrzen je také běh s TMPDIR=/var/tmp/workspace-poc na SSD/Btrfs. Výchozí /tmp je v ověřeném kontejneru tmpfs; měření tohoto běhu nelze vydávat za výkon SSD. Provozní měření a recovery na cílovém zařízení zbývají.
+
+## Zdrojový balíček desktopového PoC
+
+```sh
+./run.sh package-desktop
+# nebo vlastní cesta (existující soubor se nikdy nepřepíše):
+./run.sh package-desktop --output /tmp/workspace-poc-0.1.0.tar.gz
+```
+
+Výchozí výstup je `dist/federated-workspace-poc-0.1.0.tar.gz` (ignorovaný
+Gitem); verze se čte z jediného souboru `VERSION`. Stejná verze tvoří kořen
+archivu a výchozí metadata `.deb`. Obsahuje zdrojový kód, testy a veřejnou
+dokumentaci; nepřenáší `.git`, `.venv`, privátní katalog ani Qt knihovny.
+SHA256 každého souboru je v `MANIFEST.sha256.json`, hash archivu vypíše příkaz.
+Stejné bajty zdrojů vytvoří stejný archiv bez závislosti na čase sestavení.
+Hash dokládá integritu, není to podpis vydavatele.
+
+Po rozbalení do nového adresáře spusťte `./run.sh desktop` uvnitř
+`federated-workspace-poc-0.1.0`. Platí stejné systémové závislosti jako v sekci
+Desktop; případný `./run.sh setup` připraví pouze Python závislosti. Balíček
+neobsahuje vlastní Python/Qt runtime, není to AppImage ani instalátor a není
+určen jako schválené produkční vydání.
+
+Sestavení bere aktuální obsah vybraných zdrojů včetně necommitnutých změn. Kompletní archiv se nejprve zapíše do dočasného souboru ve výstupním adresáři a teprve poté zveřejní pod cílovým názvem bez přepsání existujícího souboru. Pád může zanechat `.package-*`; projektová data se nemění.
+
+## Instalační kandidát .deb (Ubuntu 26.04 arm64)
+
+```sh
+./run.sh package-deb
+sudo apt install ./dist/federated-workspace-poc_0.1.0_all.deb
+federated-workspace-poc
+```
+
+Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samostatně, aplikaci jako běžný uživatel. Závislosti dodává systém, včetně PySide6 WebEngine, PyYAML 6.0.3 a python3-segno >=1.6.6. Balík přidává také položku Projektový workspace PoC do nabídky aplikací. UI nabízí projekty, Markdown editor, checklisty a hlavní TODO; testovací čítač zůstává pro kontrolu spojení.
+
+Aktualizační kanál je v této fázi explicitně **ruční**: nový release se instaluje opět přes nový `.deb` soubor a aktivní verzi pak řeší `apt install`/`dpkg`. `federated-workspace-poc` zatím nemá vlastní update feed ani auto-updater.
+
+Pro jednorázový kandidát lze verzi explicitně přepsat; builder existující
+soubor nepřepisuje a hodnota musí odpovídat omezenému formátu například
+`0.1.1~rc1`:
+
+```sh
+./run.sh package-deb --version 0.1.1~rc1 --output /tmp/workspace-next.deb
+sudo apt install /tmp/workspace-next.deb
+sudo apt remove federated-workspace-poc
+```
+
+Před upgradem aplikaci zavřete. Balík nemá migrační/odinstalační skripty ani vlastnictví uživatelských projektů. Důkazy a omezení izolovaného dpkg testu: [ADR 0011](docs/adr/0011-debian-package.md). Čistá instalace, offline běh a upgrade/purge v Ubuntu 26.04 arm64 kontejneru jsou ověřeny v [ADR 0012](docs/adr/0012-clean-os-validation.md); produkční release zatím není připraven. Lokální balík není podepsaný repozitář ani automatický updater.
+
+Volitelné ověření dpkg lifecycle na hostu s připravenými systémovými závislostmi: `M0_DEB_TEST=1 M0_DESKTOP_TEST=1 python3 -m unittest tests.test_package_deb -v`. Použije dočasný kořen, nikoli systémovou instalaci.
+
+Offline grafický test bez odpojování hostitelské sítě (Linux, lokální X11 socket, `unshare`, `setpriv`, `ip`, `dpkg-deb` a připravené desktopové závislosti):
+
+```sh
+M0_OFFLINE_TEST=1 python3 -m unittest tests.test_desktop_offline -v
+```
+
+Test vyžaduje povolené user/network namespaces. Běží jako běžný uživatel, odmítá vzdálené/přesměrované DISPLAY a spustí rozbalený `.deb` pouze s loopbackem. Nemění hostitelské síťové rozhraní. Bez explicitní volby je přeskočen. Podrobnosti a hranice důkazu jsou v ADR 0011.
+
+## Měření a recovery na Omnii (ruční M0-05)
+
+Po nasazení aktuálních zdrojů přes `run.sh deploy-omnia` spusťte **uvnitř Debian kontejneru**:
+
+```sh
+cd /opt/federated-workspace/current
+mkdir -p /var/tmp/workspace-poc
+.venv/bin/python -m spikes.target_probe --base /var/tmp/workspace-poc
+```
+
+Probe vyžaduje Btrfs; nesouhlas filesystemu odmítne před vytvořením projektu. Pracuje jen ve vlastním novém adresáři, který při úspěchu odstraní. Při chybě adresář ponechá a vypíše jeho cestu pro diagnostiku. Nevypíná kontejner ani jiné procesy, nepřistupuje k síti. Disk musí být SSD podle ověřeného mountu; samotný typ Btrfs neprokazuje fyzické médium.
+
+Výstup obsahuje prostředí, tři měření zápisu a 12 přerušení vlastního procesu na hranicích ADR 0003. Kontroluje pending čtení, zachování kandidáta, přesné bajty, jediný commit operace, opakovanou recovery a rebuild smazaného indexu. `process_s` zahrnuje start Pythonu, inicializaci dočasného Git projektu a apply; `apply_s` jen apply; `recovery_s` jednu recover operaci v řídicím procesu. `python_peak_rss_kib` je peak RSS Python workeru, nezahrnuje součet Git podprocesů ani paměť kontejneru. Nejde o benchmark velkých dat, trvalou službu ani výpadek napájení.
+
+Úspěch končí `target probe: PASS; 3 measured runs, 12 crash boundaries; temporary data removed`. Výstup pošlete k vyhodnocení M0-05; lokální test tohoto nástroje sám neuzavírá cílové ověření. Volba `--expected-fstype` slouží pro explicitní ověření na jiném filesystemu, například v lokálních testech; na Omnii ponechte výchozí Btrfs.

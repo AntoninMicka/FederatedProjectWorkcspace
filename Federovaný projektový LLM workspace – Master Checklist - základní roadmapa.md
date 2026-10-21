@@ -1,11 +1,18 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální milník: **M0 — Architecture spike**. Operativní úkoly, chyby a ověřovací kroky jsou v [TODO.md](TODO.md); pravidla vývoje v [AGENTS.md](AGENTS.md).
+Aktuální implementační práce: **M2 — Local AI**; Gate M1 zůstává otevřený kvůli odložené cílové restartové akceptaci. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
 
-Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Nové implementační podrobnosti patří do TODO. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
+Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
-Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v TODO; administrativa zůstává v `docs/IP`.
+Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její dva registry. Navazuje na významná architektonická rozhodnutí (FTO screening a posouzení disclosure), veřejné releases (archivace commit/tag/release a případného DOI) a přípravu kampaně (Gate C0, IP freeze a crowdfunding readiness). Tyto kontroly nemění pořadí M0–M6 ani neprokazují splnění produktových gates. Technické integrační úkoly jsou v BACKLOG; administrativa zůstává v `docs/IP`.
+
+Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 22. Jde o plánované schopnosti nad stávajícím jádrem, nikoli druhou roadmapu nebo implementovaný mail klient. Původní návrh patche označoval kontrakt jako M0-10; protože Gate M0 je již uzavřen, je požadavek veden jako navazující návrhová práce v BACKLOG a zpětně M0 neotevírá.
 
 ## 0. Cíl MVP
 
@@ -30,6 +37,10 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Core orchestrace systému nesmí být závislá na dostupnosti LLM; deterministický aplikační orchestrátor musí fungovat i bez lokálního nebo externího modelu.
 - [ ] Konverzační orchestraci („orchestrator chat“) navrhnout jako volitelnou LLM vrstvu nad deterministickým aplikačním orchestrátorem.
 - [ ] Nedostupnost lokálního LLM nesmí způsobit tichý fallback na externího providera; změna execution boundary musí být explicitně povolená policy.
+- [ ] Budoucí autonomie orchestrace musí být vždy opt-in a řízená
+  explicitní policy. Vytvoření každého uživatelsky adresovatelného lokálního
+  souboru, dokumentu nebo artefaktu vyžaduje samostatné schválení konkrétního
+  výstupu; countdown ani obecný souhlas s automatickým režimem je nenahrazují.
 - [ ] Lokální Ollama používat primárně jako:
   - [ ] klasifikátor,
   - [ ] extraktor,
@@ -90,10 +101,10 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## 2A. Git jako primární projektový datastore
 
-**Stav M0:** autoritativní Git a lokální index jsou přijatý návrh. `spikes/storage.py` má PoC validated obnovu indexu validovaného commitu a kontrolu jeho ID vůči HEAD. Index zatím obsahuje pouze ID/název entity; úplné dotazy nad metadaty a vztahy ani jednotná aplikační operace nejsou hotové.
+**Stav M0/M1:** autoritativní Git a lokální index jsou přijatý návrh; relační projekce metadat a vztahů v1 je lokálně PoC validated dle ADR 0022. F-M1-META-01 upřesňuje význam v1 a navrhuje kompatibilní importní provenance v2 v [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md); v2 parser, index ani migrace nejsou implementovány.
 
 - [ ] Jeden projekt reprezentovat Git repozitářem.
-- [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; schéma project.json zbývá.
+- [x] Definovat základní adresářovou strukturu — designed pro M0 v DATA_MODEL.md; minimální project.json/node.json v1 a samostatná validace viz ADR 0004.
 - [ ] Oddělit:
   - [ ] aktivní projektové dokumenty,
   - [ ] zdroje,
@@ -149,11 +160,11 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 **Stav M0: PoC validated.** Frontmatter/sidecar parser, společné schéma, registry po entitách a kontrola vztahů jsou implementované v `spikes/metadata.py`. Zachování bajtů importu a obnova souborových změn jsou ověřené. Níže uvedené aplikační schopnosti zůstávají otevřené do integrace; neimplementovat znovu jejich PoC. Přejmenování v journalu není ověřením distribuovaného merge.
 
 - [ ] Pro editovatelné projektové Markdown dokumenty používat YAML frontmatter jako jediné místo autoritativních metadat dokumentu.
-- [ ] Importované zdroje, které mají zůstat beze změny, zachovat v původních bajtech včetně Markdownu; jejich projektová metadata uložit do sidecaru.
+- [ ] Importované zdroje, které mají zůstat beze změny, zachovat v původních bajtech včetně Markdownu; jejich projektová metadata uložit do sidecaru — import PoC validated, pravidla následných změn a verzí designed v [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md), transition validátor není implementován.
 - [ ] Pro PDF, obrázky a další formáty bez vhodných editovatelných metadat použít sidecar se stabilním ID artefaktu.
 - [x] V M0 určit povinná pole, verzi schématu a konvenci umístění sidecaru; vazbu založit na stabilním ID s evidencí aktuální cesty souboru — PoC validated, ADR 0002.
 - [ ] Přejmenování nebo smazání artefaktu promítnout do sidecaru a odkazů v jednom commitu; před commitem ověřit konzistenci.
-- [x] Navrhnout obnovu přerušené změny souboru a sidecaru — PoC validated pomocí journalu (ADR 0002); integrace celé operace s commitem je otevřená.
+- [x] Navrhnout obnovu přerušené změny souboru a sidecaru — PoC validated pomocí journalu (ADR 0002); koordinace celé operace s commitem/indexem je Linux PoC validated v ADR 0003.
 - [ ] Konflikty změna–smazání, přejmenování–úprava a osiřelý sidecar řešit explicitně; metadata nesmějí být tiše zahozena.
 - [ ] Metadata neduplikovat mezi frontmatter a sidecarem; použít společné logické schéma pro oba způsoby uložení.
 - [ ] Strukturované entity registrů ukládat jako JSON s vlastními poli ID a verze schématu; nepřidávat k nim duplicitní sidecar.
@@ -168,11 +179,122 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Pro velké binární soubory zvážit Git LFS.
 - [ ] Připravit diff-friendly reprezentaci vybraných komplikovaných formátů.
 
+
+## 2E. Materializované kompiláty
+
+**Stav: designed, neimplementováno.** [ADR 0018](docs/adr/0018-materialized-compilations.md) vymezuje lokální zahoditelné výsledky zpracování zdrojů podle zadání, například orientační rozpočtové obálky. Stejný základ má sloužit projektovým webům, prezentacím, reportům a dalším složeným výstupům; nejde o samostatné paralelní publikační mechanismy. Návrh vznikl z ad-hoc požadavku M1-AH-01 a byl rozšířen uživatelským požadavkem na projektové výstupy z 2026-09-30; důkaz původní návrhové kontroly drží [WORK_LOG](WORK_LOG.md).
+
+- [ ] Uchovat zadání a pravidlo výběru zdrojů odděleně od výsledku; přenositelné definice verzovat, výstupní soubory ukládat jako lokální cache mimo projektový Git.
+- [ ] Nabídnout ruční aktualizaci z aktuálních verzí i nových zdrojů odpovídajících pravidlu výběru. Neprovádět automatický výpočet při otevření či restartu.
+- [ ] Zobrazit použitou verzi vstupů, stáří, neaktuálnost a stav výpočtu; změnu/odstranění zdroje neskrývat.
+- [ ] Cache neverzovat ani nepřenášet při federaci/exportu; umožnit její odstranění a nový výpočet bez ztráty zdrojů či zadání.
+- [ ] Respektovat privacy a oprávnění vstupů, Context Manifest pro LLM a recovery oddělené od autoritativního journalu/run recordu.
+- [ ] Výsledek určený k trvalému uchování uložit pouze explicitní akcí jako běžný verzovaný artefakt s provenance.
+- [ ] V každém projektu nabídnout sekci **Výstupy**, ve které lze spravovat jednu nebo více verzovaných definic výstupu. Definice určí typ rendereru, explicitně vybrané artefakty, jejich pořadí a role/sekce; skryté automatické prohledání celého projektu není zdrojem reprodukovatelného výstupu.
+- [ ] Oddělit obecné sestavení zmrazených projektových artefaktů od rendereru. Projektový web, prezentace nebo report jsou adaptéry nad stejnou definicí, manifestem a cache lifecycle; jejich specifické rozvržení ani publikační provider se nesmí propsat do obecného kompilačního kontraktu.
+- [ ] Ukázat samostatné stavové ukazatele definice (`draft / saved / invalid`), každého zdroje (`available / changed / missing / forbidden`), kompilace (`missing / current / outdated / running / failed`), náhledu (`unavailable / current / stale`) a případné publikace (`not configured / unpublished / current / outdated / unknown / unavailable`). Jeden souhrnný stav nesmí zakrýt chybějící zdroj nebo neurčitý externí účinek.
+- [ ] Akce zpřístupnit podle doloženého stavu: definici lze uložit až po validaci, kompilovat pouze uloženou definici s dostupnými oprávněnými zdroji a publikovat pouze aktuální úplnou generaci. Změna definice, zdrojů nebo rendereru označí náhled i publikaci jako neaktuální, ale sama nic nepřepočítá ani nenasazuje.
+- [ ] Před publikací nebo exportem zobrazit úplný náhled výsledku a vedle něj seznam použitých artefaktů v pořadí, sestavené sekce/slidy, kompilační manifest s revizemi a hashy a přesný plán zamýšlené externí operace. Náhled není potvrzení publikace.
+- [ ] První webový renderer umožní spravovat vlastní stránku uvnitř konkrétního projektu, například stránku průzkumu složenou z metodiky, dat, grafů a závěrů. Obsah, kompilace, náhled a publikace patří do projektu; globální Nastavení obsahuje jen dostupnost modulu/provideru a node-local credentials.
+- [ ] Prezentační renderer podle sekce 22C znovu použije stejný výběr zdrojů, pořadí, manifest, indikaci neaktuálnosti a úplný privátní náhled. Audience view, poznámky řečníka, postupné odhalení a disclosure evidence zůstávají prezentačně specifické schopnosti.
+
+### 2E.1 Deklarativní katalog výstupních capability a kompoziční router
+
+**Stav: descriptor, fail-closed katalog, read-only DAG, planner boundary a první
+lokální durable execution `renderer.web-static@1.0` jsou PoC validated.**
+F-M4-OUTPUT-ROUTER-01/02 dodávají uzavřený v1 kontrakt, statický katalog,
+validaci typovaného acyklického plánu proti samostatné policy, aplikační review
+nedůvěryhodného návrhu, hash-bound preview/confirmation, node-local journal a
+atomickou materializaci mimo Git; hranice a reuse zaznamenává [ADR
+0030](docs/adr/0030-output-capability-catalog.md). Web,
+prezentace, obrázek, report ani jiný výstupní modul nemají být pro Ollamu či
+jiný planner známé pouze textem v globálním promptu. Každý výstupní renderer a
+integrovaný nástroj poskytne verzovaný, validovaný a staticky načitatelný
+capability descriptor. Descriptor je vstup deterministického aplikačního
+routeru; není executable pluginem, oprávněním ke spuštění ani náhradou aplikační
+validace.
+
+- [x] Descriptor nese stabilní ID a verzi capability/modulu, lidský popis,
+  podporované záměry a příklady pokynů (např. „vygeneruj prezentaci na téma…“),
+  výslovně nepodporované použití, vstupní a výstupní schéma/MIME, formát
+  výsledku, dostupné šablony s verzí a hashem, požadované role a backendové
+  capability, limity, privacy/execution boundary, oprávnění, cost/side-effect
+  třídu, provenance a potřebu preview či lidského potvrzení.
+- [x] Promptové/instrukční šablony evidovat jako verzované reference s hashem a
+  očekávaným strukturovaným výstupem, nikoli jako skrytý volný text vložený
+  pluginem do libovolného požadavku. Node-local binding modelu, endpoint,
+  credentials a runtime dostupnost zůstávají oddělené od přenosného descriptoru.
+- [x] Rozlišit výstupní renderery (`web`, `presentation`, `image`, `report`) od
+  transformačních a výpočetních nástrojů (LLM role, extraktor, Julia runner,
+  graf/tabulka). Stejný kontrakt smí popsat jejich typované vstupy a výstupy,
+  ale nesmí zaměnit LLM run, deterministický výpočet a publikační externí účinek.
+- [x] Planner/Ollama může nad schváleným katalogem vrátit pouze strukturovaný
+  návrh kompozičního plánu. Aplikační router znovu ověří existenci a verzi každé
+  capability, kompatibilitu hran, oprávnění, privacy, dostupnost vstupů a policy;
+  model sám nespouští nástroj, nepřidává neznámý plugin ani nezeslabuje hranice.
+- [x] Kompozici reprezentovat jako verzovaný orientovaný acyklický graf se
+  stabilním plan/step ID. Každá hrana předává explicitní artefakt nebo zmrazený
+  materializovaný výstup s formátem, schématem, privacy, revizí a hashem; skryté
+  sdílení celé konverzace nebo projektu není dovoleno.
+- [ ] Podporovat například plán „z účetních dat za rok XXXX spusť schválený Julia
+  skript YYY, vypočítej výtěžnost jednotlivých her, z výsledné tabulky/grafů
+  sestav prezentaci podle šablony Z“. Preview před spuštěním ukáže přesné zdroje,
+  kroky, nástroje/modely, šablony, mezivýstupy, execution boundaries, očekávané
+  externí účinky a místa samostatného potvrzení.
+- [x] Každý krok má vlastní Context Manifest nebo deterministický run contract,
+  stav a receipt. `unknown`, stale vstup, zamítnutí či nevalidní výstup zastaví
+  závislé kroky; router nesmí automaticky opakovat neurčitý externí účinek ani
+  tajně zvolit jiný model, plugin nebo nástroj. Obnova naváže pouze na doložené
+  dokončené kroky a znovu ověří jejich hashe a oprávnění. PoC runtime tímto
+  dokládá pouze lokální `renderer.web-static@1.0`; Julia, LLM a externí účinky
+  potřebují vlastní adaptéry a journal kontrakty.
+- [ ] UI vysvětlí, proč byla capability navržena, které alternativy jsou
+  kompatibilní a co uživatel potvrzuje. Uživatel může plán nebo konkrétní
+  binding/model změnit před spuštěním; automatický výběr dostupného backendu
+  není souhlas se změnou privacy, ceny ani execution boundary.
+
+První implementační dávka má definovat descriptor/schema, validaci katalogu a
+read-only návrh plánu bez spouštění. Teprve navazující dávka propojí execution
+s workflow engine, materializovanými kompiláty, Julia runnerem a výstupními
+renderery. Obrazová dávka `F-M3-MEDIA-01` zachová kompatibilní capability
+metadata, ale obecný kompoziční router není její součástí.
+
+Navazuje na zdroje a metadata M1, případné LLM zpracování na M2/M3. Nezavádí novou podmínku Gate M1 ani povinný LLM backend. Konkrétní implementační kroky patří do pracovní dávky podle priority.
+
+## 2F. Read-only artefakty sdílené mezi projekty
+
+**Stav: designed / plánováno, neimplementováno.** Cílem je umožnit použít jeden autoritativní artefakt ve více projektech bez tichého vytvoření editovatelných kopií. Jde o aplikační meziprojektovou referenci podobnou symlinku, nikoli o filesystemový symlink; ten současné bezpečnostní a validační kontrakty nadále odmítají.
+
+- [ ] Konzumující projekt ukládá verzovaný referenční záznam, který identifikuje zdrojový projekt/repozitář, artifact ID, úplný Git commit, očekávaný hash obsahu a rozsah reference. Samotná lokální cesta, název projektu, branch nebo pohyblivý `HEAD` nestačí.
+- [ ] Výchozí reference je připnutá na konkrétní revizi a v cílovém projektu pouze pro čtení. Volitelné sledování zdroje smí nabídnout novou revizi, ale nesmí bez potvrzení přepsat použitý obsah ani reprodukovatelnost starého commitu.
+- [ ] Oprávnění kontrolovat při vytvoření i každém rozlišení reference. Přístup cílového projektu nezakládá přístup ke zdrojovému projektu; efektivní privacy nesmí být méně přísná než u zdroje. Revokovaný, smazaný nebo nedostupný zdroj zobrazit jako nerozlišenou/stale referenci, ne jako prázdný či nový artefakt.
+- [ ] Offline cache je pouze lokální ověřená projekce konkrétní revize s hashem a stavem stáří; není druhou autoritativní kopií a nesmí se automaticky commitnout do konzumenta nebo federovat bez oprávnění.
+- [ ] Pokus o editaci nabídne explicitní vytvoření vlastní kopie/forku s novým artifact ID a provenance na přesnou zdrojovou revizi. Původní reference zůstává beze změny; zpětný zápis do zdrojového projektu není součástí této schopnosti.
+- [ ] Index, hledání, Context Builder a export musejí odlišit vlastní artefakt, read-only referenci, lokální cache a explicitní snapshot. Do LLM kontextu nebo exportu lze zahrnout jen znovu autorizované bajty přesné revize; bez nich se přenáší pouze reference a stav nedostupnosti.
+
+První implementační rozsah je sdílení mezi dvěma lokálně registrovanými projekty na jednom uzlu. Vzdálené rozlišení reference a federace cache navazují na M5; obecný externí katalog a cross-repo identity koordinovat s ER-00/ER-01. Konkrétní dávku drží BACKLOG XREF-01.
+
+## 2G. Modelování a výpočty v Julii
+
+**Stav: Julia zvolena jako preferovaný výpočetní backend; integrace je designed / plánována, neimplementována.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace.
+
+- [ ] Verzovat zdrojový model jako běžné projektové artefakty (`.jl` a související dokumentace), jeho deklarované vstupy a reprodukovatelné Julia prostředí. Minimální kontrakt prostředí zahrne `Project.toml` a odpovídající `Manifest.toml`; credentials, registry cache, stažené balíčky, compiled cache a uživatelský startup do projektového Gitu nepatří.
+- [ ] První rozsah realizovat jako lokální CLI runner pro explicitně zvolený entry point, parametry a zmrazené revize vstupů. Notebookové UI (např. Pluto/Jupyter) ani interaktivní MATLAB-like desktop nejsou podmínkou prvního PoC a vyžadují samostatné capability, bezpečnostní a distribuční posouzení.
+- [ ] Run record uchová project/operation/run ID, commit modelu, artifact ID a hash každého vstupu, entry point a parametry, verzi Julia/runtime a platformu, hash prostředí, volitelný seed, časy, stav/exit code, stdout/stderr a hashe výstupů. Shodné vstupy ani seed samy negarantují bitově shodný numerický výsledek napříč verzemi, platformami a knihovnami.
+- [ ] Výstupy nejprve publikovat jako atomickou lokální generaci materializovaného kompilátu mimo projektový Git. Tabulku, graf, report, dataset nebo jiný výsledek uložit jako verzovaný projektový artefakt pouze explicitní akcí s provenance na run record, model, prostředí a přesné vstupy.
+- [ ] Julia kód považovat za spustitelný a potenciálně nedůvěryhodný. Import ani otevření projektu jej nesmí spustit; běh vyžaduje explicitní potvrzení, execution policy, limity času/procesů/paměti/výstupu, izolovaný pracovní adresář a výchozí zákaz sítě. Izolaci nevydávat za bezpečný sandbox bez samostatného ověření cílového OS.
+- [ ] Privacy a oprávnění vstupů znovu ověřit před během i před publikací; výstup nesmí automaticky dostat slabší privacy než nejpřísnější vstup. Nedostupný runtime/balíček, změna HEAD, timeout, pád, neúplný výstup a přerušený běh musí mít rozlišitelné stavy a bezpečný retry bez vydávání staré cache za aktuální.
+- [ ] Způsob instalace Julia runtime a balíčků, podporované verze/platformy, offline depot, aktualizace, licence a distribuční velikost rozhodnout a ověřit před přidáním do `.deb`; vývojová instalace na jednom stroji není důkazem podporované distribuce.
+
+Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí evidenčně smíchat s LLM run records.
+
 ---
 
 # 3. Metadata a zdrojování
 
 ## 3A. Metadata dokumentu
+
+**Stav F-M1-META-01: designed.** Současné `created_at` je vznik entity v projektu a u nativního importu čas importu; `author_id` je projektový aktér/importér, nikoli původní autor zdroje. Podrobná importní provenance vyžaduje verzované schéma v2 podle ADR 0023; v1 zůstává beze změny platné.
 
 - [ ] Každému souboru umožnit přiřadit:
   - [ ] ID,
@@ -181,7 +303,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
   - [ ] typ,
   - [ ] autora,
   - [ ] datum vzniku,
-  - [ ] datum importu,
+  - [x] datum importu — designed pro v2 v ADR 0023; implementace a migrace zůstávají otevřené,
   - [ ] zdroj,
   - [ ] URL/reference,
   - [ ] tagy,
@@ -213,6 +335,34 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ---
 
+## 3C. Import z Google služeb, NotebookLM a chatbotů
+
+**Stav: `IMP-02` bylo doručeno PR #48. `IMP-01` je k 2026-10-14 PoC validated
+na skutečném osobním Drive: explicitní desktopový Picker výběr, náhled a
+potvrzený import 13 položek vytvořily 13 unikátních artefaktů v jednom commitu;
+feature PR do `develop` zatím nebyl vytvořen. Ostatní konektory a automatické
+zařazení zůstávají plánované.** „Gemini notebook“ zde znamená NotebookLM. Dávka
+importuje jeden kompletní notebook osobního Google AI plánu přes Google One ze
+skutečného Takeout exportu jako nový Workspace projekt; necílí na Google Cloud
+Enterprise. Operativní důkazy dokončených `IMP-01` a `IMP-02` drží WORK_LOG a
+ostatní `IMP-*` BACKLOG.
+
+- [ ] Google služby podporovat dvěma vstupními cestami: přímý konektor přes oficiální API, pokud pro konkrétní službu a edici existuje, a lokální import uživatelem dodaného exportu (např. Google Takeout nebo nativní export služby). Každou službu, scope, formát a omezení ověřovat samostatně; Data Portability API ani Drive API nepovažovat za univerzální přístup ke všem datům účtu.
+- [x] Google Drive: explicitní výběr souborů/složek, stažení binárních souborů a export podporovaných Google Docs/Sheets/Slides přes oficiální API jsou PoC validated pro osobní Drive. U nativních Workspace dokumentů se eviduje exportní formát a transformace; export se neoznačuje za původní bajty zdroje. Další Google služby přidávat po samostatném ověření API nebo skutečného exportu, nikoli jen podle názvu produktu.
+- [x] NotebookLM: osobní Takeout import PoC validated pro dostupné zdroje, generované výstupy a chat jako odlišné artefakty; zachovává poskytované vazby a nedostupné části uvádí v přehledu. Desktop a web používají jednu stránku a autorizované preview/plan/confirm API; desktop předává pouze přesnou picker capability, ne obecnou lokální cestu. Skutečný vzorek neobsahoval notes ani původní binární bajty za HTML/JSON reprezentacemi, proto je import nevymýšlí. Přímý konektor a Enterprise zůstávají mimo ověřený rozsah; existence Enterprise API není důkaz stejné funkce pro osobní účet.
+- [ ] Chatboty: podporovat import uživatelem získaných exportů (např. ChatGPT nebo Gemini/Takeout) a ručně dodaného textu/Markdownu. Konkrétní formáty potvrdit na vzorcích; odlišit archiv konverzace od samostatné odpovědi. Zachovat role, pořadí, čas, větvení, přílohy a zdrojová ID, pokud je export obsahuje; chybějící hodnoty nevymýšlet.
+- [ ] Dostupnost čtení historie ověřovat samostatně pro každý produkt a edici. Generační API modelu není automaticky přístup k historii jeho webového chatbota. Při chybějícím oficiálním API nabídnout souborový import; nevyžadovat session cookies ani neoficiální interní endpointy.
+- [ ] Import s aktivním projektem nejprve nabídne náhled výběru, cílový projekt a privacy třídu. Oprávnění cloudového zdroje nepřenášet automaticky na projektové RBAC; OAuth credentials držet mimo Git, používat minimální potřebná oprávnění a zvládnout odvolání přístupu.
+- [ ] Podporovat také import bez aktivního projektu do lokální soukromé vstupní fronty. Přijatá data se před rozhodnutím nesmějí zapsat do projektového Gitu ani automaticky sdílet; fronta musí mít doložený lifecycle, limity, karanténu chyb, obnovu po pádu a explicitní odstranění.
+- [ ] Volitelný lokální LLM nad vstupní frontou navrhne zařazení do nuly, jednoho nebo více projektů, včetně důvodu, confidence, navržené privacy třídy a metadat. Smí posuzovat pouze projekty, do nichž má aktér právo zapisovat; `local-only` obsah nesmí opustit stejný uzel a nedostupnost lokálního modelu nesmí vyvolat externí fallback. Návrh sám nic nezapisuje a uživatel jej může upravit, odmítnout nebo ponechat nezařazený.
+- [ ] Potvrzené zařazení do více projektů provést jako samostatné obnovitelné Workspace operace s výsledkem pro každý projekt; částečný úspěch neskrývat ani kompenzačně nemažat již publikovaný commit. Společný vstup, hash a bezpečný identifikátor příjmu musí umožnit dohledání a idempotentní retry bez předstírání jedné atomické transakce napříč repozitáři.
+- [ ] Evidovat původní službu/ID/URL, zdrojovou revizi, doložený `source_created_at` a dostupné zdrojové časy změny/exportu odděleně od `imported_at`, dále hash importovaných bajtů a způsob převodu. Časy vzniku mohou importu předcházet a chybějící hodnoty se neodhadují z času importu ani souborového mtime. Uchovat přijatý export jako neměnný zdroj a odvozený text odděleně. U LLM výstupů nepředpokládat dostupnost modelu, promptu či úplného Context Manifestu.
+- [ ] Opakovaný import musí rozpoznat duplicity a nabídnout novou verzi při změně zdroje; lokální editace nesmí tiše přepsat. Import není obousměrná synchronizace ani automatický zápis zpět do cloudu. Importované dokumenty se bez explicitního dalšího kroku neposílají LLM.
+
+Podklady ověřené 2026-09-17: [Drive download/export](https://developers.google.com/workspace/drive/api/guides/manage-downloads), [Google Takeout](https://support.google.com/accounts/answer/3024190?hl=en), [Data Portability API](https://developers.google.com/data-portability/user-guide/overview), [Notebook Enterprise API — preview](https://docs.cloud.google.com/gemini/enterprise/notebooklm-enterprise/docs/api-notebooks), [ChatGPT export](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data), [Gemini Apps export přes Takeout](https://support.google.com/gemini/answer/16920332?hl=en). Tyto podklady potvrzují dílčí rozhraní/exporty, nikoli jejich dostupnost pro každý produkt, region, edici nebo účet ani úplnost importu.
+
+---
+
 # 4. Projektové registry
 
 - [ ] Zavést registr předpokladů.
@@ -224,6 +374,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Zavést registr externích zdrojů.
 - [ ] Zavést registr témat vyžadujících odborné ověření.
 - [ ] Zavést registr úkolů.
+- [ ] Navázat registry partnerů, vztahů, schůzek a sdílení konkrétních revizí podle sekce 22; adresář a prezentační či komunikační UI mají používat společné entity, ne paralelní databáze.
 - [ ] Umožnit vztahy typu:
   - [ ] dokument → předpoklad,
   - [ ] předpoklad → rozhodnutí,
@@ -287,6 +438,13 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
   - [ ] projekty,
   - [ ] stav synchronizace.
 - [ ] Definovat trust model mezi uzly.
+- [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat capability profil federačního vztahu `same-company-same-team`, `same-company`, `trusted-partner`, `holding-partner` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčený profil zůstává explicitně `unspecified` a je fail-closed.
+- [ ] `same-company-same-team` smí federovat identity uživatelů a jejich projektové role; credentials, session a vzdálené přihlášení zůstávají lokální. `same-company` federuje data, ale vzdálené uživatele pouze eviduje pro provenance a audit, nepřebírá je jako lokální účty ani nesynchronizuje jejich role.
+- [ ] Rozlišit neměnný původ serveru. Server instalovaný desktopovou aplikací je osobní uzel právě jednoho uživatele a jednoho vlastnického aplikačního účtu; druhý lokální uživatel se odmítne. Desktop smí pro stejného vlastníka založit více serverů v jedné podepsané deployment skupině. Desktop a jeho přímí členové mohou mít `same-company-same-team` vazby navzájem pro primární/záložní provoz, každý server však má vlastní node identity a členství nesmí vydat, delegovat, importovat ani rozšířit. Mimo skupinu se osobní server posuzuje jako desktop, tedy nejvýše `same-company`. Server instalovaný z CLI může hostit více uživatelů a federovat s dalšími servery podle běžně schválených profilů a policies; do osobní skupiny se automaticky nezařazuje a nelze jej do ní dodatečně povýšit pouhou policy. Společný původ sám neuděluje projektová práva ani nespouští replikaci.
+- [ ] `trusted-partner` smí obdržet jen vybraná data konkrétně mapovanými příjemci. `holding-partner` smí obdržet jen vybraná data, ale grant lze udělit také ověřené společnosti jako celku; členství společnosti musí být časově vymezené a verzované. `partner` má jen chat a obsah explicitně odeslaný nebo nasdílený uživatelem, bez background synchronizace a procházení projektu.
+- [ ] Pro `trusted-partner` a `holding-partner` určit na přijímajícím uzlu aktivního místního styčného uživatele. Převzatá data nezpřístupnit ostatním automaticky; styčný uživatel jim přiděluje a odnímá lokální práva jen jako podmnožinu origin ACL, privacy, povolených akcí a exportních omezení. Jeho určení, výměna, deaktivace a změny grantů jsou verzované a auditované; bez aktivního styčného uživatele se nové granty odmítnou.
+- [ ] Profil vztahu svázat s verzovanou lokální policy, nikoli s implicitním přístupem. Přenos `project`/`confidential` vyžaduje konkrétní project/branch scope, příslušné mapování uživatele či organizačního příjemce a právo `export`; `local-only` federaci nikdy neopouští.
+- [ ] Autorizovat celý dosažitelný Git graf vybraného refu, nejen HEAD. Změna úrovně, scope, mapování nebo revokace nesmí zpětně zpřístupnit dříve odmítnutou historii bez nového explicitního rozhodnutí.
 
 ## 6B. Transport
 
@@ -302,6 +460,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
   - [ ] uživatelů,
   - [ ] node konfigurace,
   - [ ] federation metadata.
+
 - [ ] Definovat:
   - [ ] pull,
   - [ ] push,
@@ -318,6 +477,16 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Již v M0 navrhnout UI konfliktu s verzemi „moje“, „příchozí“ a společným základem, náhledem výsledku a možností řešení odložit.
 - [ ] Pro binární soubory nabídnout výběr verze nebo zachování obou jako samostatných artefaktů.
 - [ ] Nevyřešený merge nepublikovat jako aktuální projektový stav; zachovat původní data a zobrazit blokovanou synchronizaci.
+
+## 6D. Federovaný uživatelský chat
+
+- [ ] Umožnit chat mezi explicitně mapovanými lokálními uživateli schválených peerů; federace nezavádí vzdálené přihlášení, globální účet ani přenos credentials.
+- [ ] První rozsah tvoří přímé a explicitně založené skupinové vlákno. Každá zpráva má stabilní ID, kvalifikovaného autora, thread ID, lokální pořadí, čas přijetí a podpis/transportní provenance; samotné hodiny uzlů neurčují globální pořadí.
+- [ ] Zprávy přenášet přes durable outbox/inbox s idempotentním doručením, deduplikací, stavy pending/sent/delivered/failed/unknown, offline pokračováním a revokací dalšího přístupu. Již přijatou historii tiše nepřepisovat ani nevydávat odvolání za kryptografické smazání cizí kopie.
+- [ ] Vlákno bez jiného účelu klasifikovat jako `brainstorming`. Lidský chat funguje bez LLM; volitelné shrnutí nebo návrh zadání smí použít jen backend povolený privacy a execution-boundary policy.
+- [ ] Nabídnout explicitní uložení vybraného rozsahu konverzace, shrnutí, zadání nebo jiného podporovaného typu artefaktu. Před zápisem zobrazit cílový projekt, typ, obsah, provenance, účastníky a výslednou privacy; samotná zpráva ani LLM návrh nic nepublikuje.
+- [ ] Publikovaný artefakt váže thread/message ID a přesné revize vstupů, dědí nejpřísnější privacy a průnik oprávnění použitých zpráv/příloh a zapisuje se standardním Workspace expected-HEAD/journal/CAS/index/receipt lifecycle. Libovolný artefakt znamená pouze typ podporovaný schématem a oprávněními, nikoli spustitelný či nevalidovaný obsah.
+- [ ] Oddělit lokální pracovní stav chatu, federované doručení a Git artefakt. Snapshot či shrnutí v projektu není autoritativní kopií živého vlákna a jeho editace nepřepisuje původní zprávy.
 
 ---
 
@@ -356,6 +525,16 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Backend konfiguraci rozdělit na:
   - [ ] synchronizovatelnou definici,
   - [ ] lokální credentials.
+
+## 7C. Usage & billing — volitelná indikace
+
+- [x] U backendů, kde to dává smysl a lze údaje získat podporovaným rozhraním, zobrazovat spotřebu a billing podle dostupných capabilities; podporu usage a billing rozlišovat samostatně — M3-UB-01 lokálně PoC validated, živý OpenAI Admin API refresh neověřen.
+- [x] Usage může zahrnovat vstupní/výstupní tokeny, počet požadavků nebo jiné backendem poskytované jednotky; billing náklady za období, zbývající kredit či čerpání kvóty, pokud jsou dostupné.
+- [x] Rozlišovat spotřebu konkrétního běhu/workspace od souhrnu poskytovatele za účet nebo organizaci. U hodnot uvádět rozsah, období, jednotku/měnu, zdroj a čas poslední aktualizace; souhrn účtu nevydávat za spotřebu projektu.
+- [x] Oddělit poskytovatelem hlášené náklady od odhadu podle ceníku; odhad jasně označit a uvést použitý ceník/verzi. Lokální backend ani chybějící billing údaj automaticky neznamenají nulové náklady.
+- [x] V UI odlišit nepodporováno, chybějící oprávnění, dočasně nedostupné a zastaralé údaje od skutečné nuly. Výpadek načítání přehledu sám o sobě neblokuje použití backendu ani nemění routing či existující cost policy.
+- [x] Účetní souhrny zobrazovat pouze oprávněným uživatelům; oprávnění používat backend samo nedává přístup k billingu celého účtu. Případné další credentials držet lokálně mimo projektový Git; účetní data automaticky nesynchronizovat s projektem.
+- [x] Přehled zpřístupnit v detailu backendu a stručnou indikaci při jeho výběru; dostupné usage konkrétního běhu také u výsledku. Jde o přehled, nikoli správu plateb nebo změny předplatného.
 
 ---
 
@@ -478,6 +657,145 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Každý krok musí mít explicitní vstupní artefakty.
 - [ ] Nepřenášet implicitně kompletní historii předchozí role.
 - [ ] Umožnit checkpoint člověka mezi jednotlivými rolemi.
+- [ ] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace:** všechny
+  orchestrační akce mohou používat společnou opt-in frontu a bounded
+  automatický režim pouze tehdy, když jejich uzavřený action registry záznam
+  výslovně dovoluje automatický dispatch. Každá položka fronty zobrazuje akci,
+  vstupy, účinek, cíl, privacy, oprávnění, budget a mezivýsledek; LLM pouze
+  navrhuje, deterministický orchestrátor autorizuje a vykonává.
+- [ ] Automatika musí mít viditelný stav, pause/resume/cancel, limity kroků,
+  času a nákladů a fail-closed recovery při změně oprávnění, privacy, vstupů,
+  ztrátě UI nebo restartu. Neznámá akce ani `unknown` účinek se automaticky
+  nespustí či neopakuje.
+- [ ] **Povinný lidský checkpoint pro lokální obsah:** vytvoření každého
+  uživatelsky adresovatelného lokálního souboru, dokumentu nebo artefaktu musí
+  uživatel samostatně schválit nad přesným cílem, typem, obsahem/hash, privacy
+  a provenance. Countdown ani obecný souhlas s automatikou toto potvrzení
+  nenahrazují. Interní bounded recovery journal není obsahovým výstupem;
+  stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
+
+---
+
+# 11A. Konverzační vlákna, persistence a projektové otisky
+
+Konverzační vlákno je samostatný uživatelský objekt nad posloupností LLM běhů. Není totožné s jedním run recordem, Context Manifestem ani s výsledným projektovým artefaktem. Implementační dávky a jejich závislosti drží BACKLOG; tato sekce je strategický kontrakt, nikoli tvrzení o hotové implementaci.
+
+Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi používá stejné principy explicitního otisku a publikace, ale má vlastní zprávový transport, identity a recovery v sekci 6D; lidská zpráva není LLM run record.
+
+- [x] Umožnit běžnou vícekolovou konverzaci s vybraným backendem/modelem a po restartu bezpečně navázat na lokálně perzistentní vlákno — F-M2-CHAT-01, PR #29.
+- [x] Samostatnou konverzaci bez explicitního workflow nebo projektové role inicializovat jako `brainstorming`; klasifikace popisuje účel vlákna a sama nemění oprávnění, privacy ani roli jednotlivého LLM běhu — F-M2-CHAT-01.
+- [x] Lokální pracovní stav vlákna držet mimo projektový Git a mimo obnovitelný projektový index. Oddělit jej od autoritativních run recordů; pád ani ztracená odpověď nesmí způsobit automatické zopakování `unknown` volání — F-M2-CHAT-01.
+- [x] Umožnit vlákno explicitně přiřadit ke konkrétnímu projektu jako živé vlákno s možností navázání. Projektová reprezentace historie má být verzovaný Markdown s omezenými strukturovanými metadaty; lokální credentials, provider session tokeny a nepublikovaný provozní stav do Gitu nepatří — F-M2-CHAT-02.
+- [ ] Každé pokračování má explicitně určené zprávy a artefakty v Context Manifestu. Backend nesmí skrytě doplnit celou starší historii ani obsah z jiného projektu.
+- [x] Umožnit explicitní projektový otisk vlákna jako neměnný snapshot — F-M2-CHAT-02:
+  - [x] kompletní otisk zvolené verze vlákna,
+  - [x] rozdílový otisk od explicitního základního otisku/verze.
+- [x] Rozdílový otisk musí nést ID a hash základu, rozsah zpráv a dostatečnou provenance. Chybějící nebo neshodný základ se nesmí tiše vydávat za kompletní konverzaci — F-M2-CHAT-02.
+- [x] Rozlišit pokračující živé vlákno, jeho historický otisk a samostatný výstup konkrétního úkolu. Oponentura, brainstormingový souhrn, teze, analýza a podobné editovatelné výstupy se ukládají jako samostatné Markdown artefakty s vazbou na zdrojové vlákno/run, vstupy a Context Manifest; nejsou pouze zprávou uvnitř chatu — F-M2-CHAT-02.
+- [x] Uživatelská editace odvozeného Markdown výstupu vytváří další projektovou verzi a zachová původní LLM provenance. Faktickou historii zpráv nepřepisovat bez auditovatelné nové verze — F-M2-CHAT-02.
+- [x] Při přiřazení, navázání, otisku i odvození uplatnit standardní RBAC/privacy, expected-HEAD, serializovaný Git zápis, validaci a recovery. Privacy odvozeniny nesmí být slabší než nejpřísnější použitý vstup bez explicitní reklasifikace — lokální vlastník a projektová hranice PoC ověřeny ve F-M2-CHAT-02; úplné RBAC zůstává širším navazujícím rozsahem.
+- [x] Před implementací rozšířit ADR 0008 o verzi a retenci vlákna, vazbu lokálního stavu na projektovou reprezentaci, full/delta kontrakt a crash boundaries publikace — F-M2-CHAT-02-A.
+- [x] Režimy chatu jsou `orchestration` a `brainstorming` — F-M3-CHAT-MODES-01,
+  PR #40.
+  Původní dávka používala výhradně lokální `same-node` LLM; navazující
+  F-M3-OLLAMA-ORCH-LAN-01 povolila také explicitně vybranou TLS připnutou
+  `private-network` Ollamu. Explicitní artefaktový kontext slouží pro přípravu
+  kontextu/dat, kompilaci návrhu artefaktu a filtraci;
+  LLM pouze navrhuje, deterministický orchestrátor vykonává autorizované akce.
+  Brainstorming dovoluje pro každý běh vybrat libovolný policy-povolený model,
+  ale může přijmout explicitně připravený textový/chatový kontext; nesmí přijmout
+  projektové artefakty ani jejich automaticky odvozený context. Přepnutí
+  `orchestration` → `brainstorming` vždy znovu sestaví
+  manifest a nepřenáší historii ani artefakty implicitně. Návrat
+  `brainstorming` → `orchestration` vyžaduje ukončit a lokálně archivovat
+  brainstormingové vlákno; případný Git otisk je samostatné potvrzení. Poté
+  vznikne nové prázdné orchestration vlákno bez kontextu ukončeného vlákna.
+  Každý budoucí vstup se znovu autorizuje a uloží do vlastního Context Manifestu.
+- [x] Přímý externí brainstormingový dispatch, historie přesného sanitizovaného
+  provider requestu a capability-gated streamované zobrazení —
+  F-M3-CHAT-DIRECT-01. Přímé odeslání neruší aplikační RBAC/privacy kontrolu ani
+  Context Manifest; projektové artefakty a `local-only` zůstávají zakázané.
+  Streamované delty nejsou durable finální odpověď a přerušený síťový účinek se
+  nesmí automaticky opakovat.
+- [x] Streamovaný přímý brainstorming přes Ollamu —
+  F-M3-OLLAMA-STREAM-01 PoC validated na feature větvi: bounded NDJSON delty
+  jsou pouze ephemerální projekce, durable assistant zpráva vzniká až po
+  validním finálním rámci a `unknown` běh se automaticky neopakuje. UI ukazuje
+  capability i uloženou volbu, telemetrii doručení a sleduje konec dlouhé
+  odpovědi s pozastavením při ručním odscrollování. Fyzickou desktopovou
+  akceptaci uživatel potvrdil; evidence je ve WORK_LOG, doručení PR do
+  `develop` dosud není uzavřené.
+- [ ] **F-M2-CHAT-LANGUAGE-01:** definovat explicitní provider-neutral jazyk
+  odpovědi a precedence uzel/projekt/vlákno/běh. Požadovaný BCP 47 jazyk má
+  být viditelný v UI a dohledatelný v Context Manifestu, provider requestu a
+  run provenance; první cílový scénář je čeština na Gemmě, která dnes
+  občas odpoví slovensky. Nedodržení modelem nesmí vést ke skrytému překladu
+  ani k nepravdivé garanci jazyka.
+- [x] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03 lokálně PoC validated: nové/navázané vlákno je vědomá volba; samostatná záložka Chaty v pevném levém panelu odděluje zařazená a nezařazená vlákna a zachovává aktivní/archivovaný stav. Scrollují jen vnitřní seznamy a návrat k projektům zůstává nahoře. Potvrzené smazání koordinovaně odstraní podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable journal a idempotentní recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií; „úplné“ není příslib forenzního přepsání média. Evidence je ve WORK_LOG; dávka byla doručena PR #51.
+- [x] **F-M3-OLLAMA-ORCH-LAN-01 lokálně PoC validated:** orchestration přijímá explicitně zvolenou TLS připnutou `private-network` Ollamu. Request váže přesné binding ID/revizi a změna před dispatch se odmítne; LAN cíl zůstává odlišný od `same-node`, každý vědomý pokus má nový Context Manifest/run, `local-only` se odmítá a `unknown` se bez fallbacku automaticky neopakuje. Automatické testy jsou uzavřené ve WORK_LOG; živá LAN/TLS/firewall akceptace nebyla provedena.
+
+---
+
+# 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
+
+**Stav: designed / plánováno, neimplementováno.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+
+- [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
+- [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
+- [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
+- [ ] Vytvořit rozšíření pro společný podporovaný průnik Extension API Microsoft Visual Studio Code a VSCodium. V IDE zobrazí projekt, roadmapové entity a úkoly, umožní vybrat/exportovat implementační balíček, spustit povolené předání agentovi a zkontrolovat/importovat výsledek. Komunikuje s autorizovaným lokálním workspace API a nesmí obcházet Workspace/Journal/Git/index zápisovou cestu.
+- [ ] Distribuci rozšíření navrhnout pro ověřené kanály obou IDE a offline instalovatelný balíček; dostupnost konkrétního marketplace, API a značky ověřit v době implementace. Rozdíly VS Code/VSCodium nesmějí měnit doménový kontrakt ani bezpečnostní policy.
+- [ ] Konkrétní Codex adaptér držet odděleně od IDE rozšíření a realizovat přes v době implementace oficiálně podporované a ověřené rozhraní. Produktový kontrakt nevázat napevno na jednu dnešní podobu integrace ani na jediného providera; stejné IDE rozšíření může později použít jiný kompatibilní coding-agent adaptér.
+- [ ] Výsledek běhu importovat jako oddělený run record a návrh aktualizace projektových dat: stav, shrnutí, diff/změněné soubory, testy a jejich skutečné výsledky, vytvořené commity/PR pouze pokud byly povoleny, omezení a vazbu na původní task ID a vstupní revizi. Přerušený běh má stav `unknown`, nikoli automaticky failed nebo completed.
+- [ ] Workspace označí úkol za dokončený až po validaci deklarovaných důkazů a lidském nebo explicitně schváleném policy rozhodnutí. Text reportu agenta, úspěšný exit code ani existence commitu samy nejsou důkazem splnění akceptace.
+- [ ] Ošetřit stale vstupní commit, souběžnou změnu roadmapy/úkolu, opakované předání, restart, duplicitní výsledek a částečně provedené externí akce. Každý export i import výsledku musí mít stabilní operation/run ID a idempotentní receipt.
+
+Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG DEV-01 až DEV-04.
+
+---
+
+# 11C. Externě verzované moduly a jednotné API
+
+**Stav: PoC validated v MOD-01; úzké CMS runtime volání implementováno v MOD-01-UI, obecný runtime ne.** Dosavadní moduly a jejich
+požadavky zůstávají v této hlavní roadmapě. Pouze nově výslovně vytipovaný modul
+může mít samostatný repozitář a roadmapu; jeho pracovní kopie nebo symlink leží
+v lokální, Gitem ignorované složce `modules.local/`. Hlavní plán jej neobsahuje
+jako kopii a jeho konkrétní funkčnost sem nepřepisuje.
+
+- [x] Pro každý externí modul evidovat jen stabilní identitu, verzi/revizi,
+  odkaz na jeho vlastní roadmapu, deklarované capability, závislosti a stav
+  kompatibility s jednotným API. Text společné dokumentace musí být zobecněním
+  potřebným pro API, ne doslovným přepisem modulové specifikace.
+- [x] Jednotné API verzovat a pro každou capability určit vstupní a výstupní
+  schéma, chyby a limity, oprávnění, privacy/execution boundary, idempotenci,
+  `unknown` externí účinek a provenance. Modul nepřistupuje přímo k projektovému
+  Gitu, indexu, journalu ani credentials; mutace používají autorizované
+  aplikační služby a Workspace lifecycle.
+- [x] `modules.local/` je pouze lokální convenienční adresář: může obsahovat
+  symlinky nebo samostatně verzované checkouty, ale jejich obsah, Git historie,
+  credentials, build výstupy a roadmapy nejsou součástí tohoto repozitáře ani
+  distribučního balíku. Symlink není důkaz kompatibility, oprávnění ani trusted
+  execution boundary a nesmí se sledovat při balení, importu či automatickém
+  načítání kódu.
+- [x] Před přijetím capability modulu provést její samostatné reuse, bezpečnostní,
+  licenční a kompatibilitní review; odmítnutý nebo nedostupný modul nesmí změnit
+  chování jádra ani spustit fallback.
+- [ ] Rozšířit jednotné API o staticky načitatelný Output Capability Descriptor
+  a typované vazby podle sekce 2E.1. Descriptor smí planneru popsat účel, formát,
+  šablony a příklady pokynů, ale nesmí mu předat credentials, executable kód ani
+  oprávnění obejít aplikační router, Context Manifest nebo potvrzení uživatele.
+
+Podrobný kontrakt a hranice PoC drží
+[ADR 0026](docs/adr/0026-module-unified-api.md); ověření `MOD-01` drží
+[WORK_LOG](WORK_LOG.md#mod-01--kontrakt-externě-verzovaných-modulů--2026-09-29).
+Připnutý preview/generate bridge prvního publikačního modulu vymezuje
+[ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md); nejde o obecný
+loader, discovery, deploy ani produkční distribuci. Dosavadní umístění
+obsahové správy a deploymentu do globálního Nastavení nebylo uživatelsky
+akceptováno jako použitelný workflow. Provider adapter zůstává využitelnou
+infrastrukturou, ale cílové UI a lifecycle se přesouvají do projektových
+Výstupů podle sekce 2E; samotné lokální testy dosavadního UI tuto akceptaci
+nenahrazují.
 
 ---
 
@@ -493,6 +811,8 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Metadata editor.
 - [ ] Git history.
 - [ ] LLM action panel.
+- [ ] Konverzační pohled se seznamem lokálních a projektových vláken, stavem persistence, klasifikací, backendem/modelem a akcemi navázat, přiřadit k projektu, uložit kompletní otisk nebo uložit rozdíl od zvoleného základu.
+- [ ] Indikace usage & billing u podporovaných backendů podle sekce 7C, v rozsahu oprávnění uživatele.
 - [ ] Context preview.
 - [ ] Výběr:
   - [ ] role,
@@ -508,6 +828,26 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Projekt nesmí působit primárně jako „chat s AI“.
 - [ ] Chat je pouze jeden z možných pohledů.
 - [ ] Orchestrator chat je volitelný; bez dostupného/povoleného LLM musí stejné základní projektové operace zůstat dostupné deterministickým UI/workflow.
+- [x] Sdílené webové UI přizpůsobit úzkému dotykovému viewportu telefonu;
+  prioritně ověřit na skutečně používaném importu, seznamu projektu, náhledu
+  artefaktu a potvrzovacích tocích. Zachovat stejné serverové RBAC/privacy
+  hranice, klávesnicovou přístupnost a bezpečné textové vykreslení jako na
+  desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
+  UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
+  [WORK_LOG](WORK_LOG.md).
+- [x] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
+  obrazovky a prioritní průchody a podle průběžných uživatelských rozhodnutí
+  provést vizuální facelift a zjednodušení ovládání. Scope se předem nezamyká;
+  po vymezení uceleného reviewovatelného řezu se zaznamenají jeho hranice a
+  akceptace pro vlastní feature větev/PR. Nevytvářet konkurenční redesign a
+  zachovat jeden sdílený web/desktop frontend, mobilní chování, klávesnicovou
+  přístupnost a stávající bezpečnostní a recovery hranice. Uživatel rozsah
+  akceptoval 2026-10-21; evidence je ve [WORK_LOG](WORK_LOG.md). Doručení PR je
+  samostatný dosud neuzavřený stav.
+- [ ] **UX-FACELIFT-02:** v budoucím samostatném kole uživatelsky vybrat a
+  doladit zbývající stránky nad novou inventurou skutečného UI. Jde o
+  odloženou samostatnou feature v BACKLOGu, nikoli znovuotevření akceptovaného
+  UX-FACELIFT-01.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -515,7 +855,34 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 # 12A. Desktopová aplikace jako uzel sítě
 
-- [ ] Sdílet aplikační jádro a UI s webovou/serverovou variantou.
+- [ ] Sjednotit webovou/serverovou a desktopovou aplikaci nad jedním sdíleným
+  frontendem a stejnými uživatelskými workflow. Varianty smějí mít odlišný
+  bootstrap, autentizovaný transport, balení a capability dostupné jen na
+  konkrétním uzlu, nikoli paralelní implementace stejné obrazovky nebo
+  dodatečné skládání webového HTML/JavaScriptu z desktopové varianty.
+  - [x] `UX-UNIFIED-01` odstranilo textové transformace assetů a lokálně
+    PoC validovalo společný HTML/CSS shell s explicitním webovým a desktopovým
+    bootstrapem, společnou samostatnou stránku importu zdroje a strom chatů;
+    původní Qt importní dialog byl odstraněn. Evidence je ve
+    [WORK_LOG](WORK_LOG.md). Dávka byla na přání uživatele rozšířena o historii
+    a vytvoření projektu; široký bod zůstává otevřený už jen pro samostatnou
+    pozdější migraci zbytku editoru a NotebookLM.
+  - [x] `UX-UNIFIED-01-E`: v téže feature větvi a jediném PR převést
+    read-only historii podporovaného artefaktu na společnou stránku nad
+    `ArtifactHistory`; zachovat HEAD-bound validaci, topologickou historii,
+    bezpečné textové zobrazení a nulové projektové zápisy; po dosažení parity
+    byl Qt `HistoryDialog` odstraněn.
+  - [x] `UX-UNIFIED-01-F`: vytvoření projektu používá společný formulář,
+    backendem vydaný preview plán a recovery kontrakt `ProjectCreation`.
+    Výchozí umístění a pokračování operace jsou společné; systémový výběr
+    vlastního adresáře zůstal omezenou desktopovou capability bez paralelního
+    dialogového workflow a bez přijetí libovolné cesty z rendereru. Evidence je
+    ve [WORK_LOG](WORK_LOG.md).
+- [ ] Qt/PySide dialogy používat pouze pro vědomě vymezené **desktop-only**
+  funkce závislé na integraci s lokálním operačním systémem nebo desktopovým
+  lifecyclem. Funkce dostupná také na webovém/serverovém uzlu musí používat
+  společný frontend i v desktopovém WebEngine obalu; případná výjimka vyžaduje
+  konkrétní zdůvodnění hranice a samostatné ověření obou variant.
 - [ ] Přibalit lokální backend pro správu projektů, Git operace, metadata a federaci.
 - [ ] Umožnit založení a editaci lokálního projektu bez dostupnosti jiného uzlu.
 - [ ] Ukládat projektové repozitáře a stav uzlu do persistentního uživatelského adresáře.
@@ -527,7 +894,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 - [ ] Offline zpřístupnit lokální artefakty a lokální backendy; u vzdálených akcí jasně zobrazit nedostupnost.
 - [ ] Stanovit chování při zavření okna: ukončení uzlu nebo volitelný běh na pozadí.
 - [ ] Lokální API zpřístupnit pouze aplikaci přes autentizované lokální spojení; síťový endpoint federace spravovat odděleně.
-- [ ] V M0 posoudit lokální socket/IPC oproti HTTP na loopbacku podle zvoleného desktopového obalu.
+- [x] Posoudit lokální socket/IPC oproti HTTP na loopbacku — protokolový PoC a podmíněná preference HTTP pro same-origin UI v [ADR 0006](docs/adr/0006-local-api-transport.md); ověření konkrétního obalu zůstává M0-06.
 - [ ] Při použití HTTP vázat lokální API pouze na loopback, ověřovat Host a povolený Origin a zavést ochranu proti CSRF; CORS nepovažovat za autentizaci.
 - [ ] Vyžadovat náhodný token pro každé spuštění lokálního API, předat jej aplikaci chráněným kanálem a nevkládat jej do URL ani logů.
 - [ ] Pokud je token předáván souborem, omezit přístup na uživatele aplikace (na Unixu režim 0600, na Windows odpovídající ACL).
@@ -560,6 +927,7 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 # 14. Turris Omnia / LXC deployment
 
 - [ ] Vytvořit minimální LXC image/container setup.
+- [ ] Integrovat dlaždici aplikace na uvítací stránce routeru s odkazem na aktuální adresu LXC služby, včetně změny IP, restartu a nedostupnosti kontejneru (zbývající úkol M1-07 v [BACKLOG](BACKLOG.md)).
 - [ ] Oddělit persistentní:
   - [ ] Git repositories,
   - [ ] DB,
@@ -621,28 +989,33 @@ Podpůrnou IP, publikační a crowdfundingovou agendu drží [IP roadmapa](<docs
 
 ## Milestone M0 – Architecture spike
 
-Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md) a `tests/`. Aktuálně ověřeno 19 testů; podrobné výsledky a zbývající kroky drží [TODO.md](TODO.md). **Gate M0 zůstává otevřený.**
+Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 0002](docs/adr/0002-metadata-journal.md), [ADR 0003](docs/adr/0003-coordinated-operation.md) a `tests/`. Výsledky ověření drží [WORK_LOG.md](WORK_LOG.md), zbývající kroky [TODO.md](TODO.md) a [BACKLOG.md](BACKLOG.md). **Gate M0 splněn dle [závěrečného review M0-09R](WORK_LOG.md#gate-m0); navazuje M1.**
 
 - [x] Návrh layoutu a hranic autoritativních projektových dat / lokálního stavu — designed v DATA_MODEL a ARCHITECTURE.
-- [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; úplné schéma projektu/uzlu zbývá.
+- [x] Artefaktová metadata, frontmatter/sidecar, registry a obnova SQLite indexu — PoC validated; minimální schéma projektu/uzlu v1 a samostatná validace viz ADR 0004, storage integrace zbývá.
 - [x] Obnova souborových změn před commitem — Linux PoC validated, včetně pádu procesu; nejde o celou aplikační transakci.
 - [x] Popsat uživatelský scénář konfliktu a ověřit divergenci stejné entity — designed + Git CLI PoC validated; UI není implementované.
-- [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed. Jazyk, obal UI a balení zůstávají otevřené.
+- [x] Vymezit společné jádro desktopu/serveru a výchozí jeden backendový proces — designed; Python, PySide6 a .deb jako základ pro M1 dle ADR 0013.
 - [x] Počáteční threat model — designed v SECURITY; ověření transportu a produkčních ochran zbývá.
-- [ ] Uzavřít datové kontrakty projektu/uzlu a návrhové kontrakty Backend, Role a Context Manifest; současné návrhy zachovat.
-- [ ] Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
-- [ ] V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
-- [ ] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu.
-- [ ] Doplnit návrh pravidel větví a ověřit konflikty obsahu/sidecaru včetně sémanticky neplatného merge. Implementace síťové federace zůstává M5.
-- [ ] Ověřit bezpečný lokální transport/API pro desktop podle SECURITY a sekce 12A.
-- [ ] Uzavřít Git implementaci na základě porovnání C++/libgit2 s existujícím Git CLI PoC, včetně autentizace a distribuce závislostí.
-- [ ] Ověřit Turris Omnia/LXC a desktop: paměť, start, instalaci a provoz.
-- [ ] Uzavřít stack, první desktopový OS, obal sdíleného UI a životní cyklus backendu. Linux je navržený první cíl; Qt/WebView kandidát. Hybrid C++/Python vyžaduje doložený přínos; podrobnosti porovnání jsou v TODO M0-03 až M0-06.
-- [ ] Zaznamenat konečná rozhodnutí a vyhodnotit připravenost pro M1.
+- [x] Minimální datové kontrakty projektu/uzlu v1, verzování a pravidla migrací — designed + samostatná validace PoC validated, [ADR 0004](docs/adr/0004-project-node-config.md); aplikační lifecycle zbývá BACKLOG V-08.
+- [x] Návrhové kontrakty Backend, Role a Context Manifest — designed v [ADR 0008](docs/adr/0008-context-and-publication-contracts.md); implementace zbývá M2–M4.
+- [x] Designed dle ADR 0008: Uzavřít kontrakt `UI / orchestrator chat → application orchestrator → Context Builder / workflow → LLM backend`: deterministický orchestrátor funguje bez LLM, orchestrator chat je volitelná capability a externí/federovaný fallback vyžaduje explicitní policy.
+- [x] Designed dle ADR 0008: V M0 rozlišit backend capability od execution boundary a ověřit návrh pro uzel bez LLM, uzel s lokální Ollamou, zakázaný externí fallback, explicitně povolený externí backend, trusted-federation backend a `local-only` kontext.
+- [x] Propojit journal, validaci, Git commit a index do jedné obnovitelné operace se společným řízením přístupu — Linux PoC validated, Workspace a ADR 0003; produkční integrace a hardening zbývají.
+- [x] Designed dle ADR 0008: Uzavřít pravidla větví a publikace (M0-08). Konflikty obsahu/sidecaru včetně textově čistého sémanticky neplatného merge jsou PoC validated v M0-07, scénáře a limity ve [FEDERATION](FEDERATION.md); produkční synchronizace zůstává M5.
+- [x] Ověřit lokální transport/API podle SECURITY a sekce 12A — PoC validated, [ADR 0006](docs/adr/0006-local-api-transport.md); browser/obal a bootstrap ověřeny v ADR 0010; aplikační integrace zbývá v BACKLOG V-10.
+- [x] Vybrat výchozí Git adapter na základě C++/libgit2 vs. Git CLI PoC — Git CLI, [ADR 0005](docs/adr/0005-git-adapter-comparison.md). Lokální přenos/autentizace a náklady distribuce posouzeny; cílové ověření a PoC balení dokončeny v M0-05/M0-06; produkční TLS/SSH a release zbývají v BACKLOG V-09/V-11.
+- [x] Turris Omnia/LXC a desktop — PoC validated pro zvolený stack: cílový SSD probe M0-05, desktopové měření ADR 0010 a čistá instalace ADR 0012. Přesné metriky a hranice důkazů drží WORK_LOG; nejde o produkční kapacitní test.
+- [x] Stack pro M1 uzavřen — designed v [ADR 0013](docs/adr/0013-m1-stack.md): Python, Git CLI/SQLite, Linux PySide6/WebEngine a .deb. Lifecycle a čistá/offline instalace jsou PoC validated dle ADR 0010–0012. Cílové měření M0-05 je PoC validated; produkční release zůstává otevřený.
+- [x] Připravenost pro M1 schválena v závěrečném review M0-09R: cílové ověření M0-05 a stack M0-06 doloženy. Historická negativní review a aktuální důkazy drží [WORK_LOG](WORK_LOG.md).
 
 **Gate M0:** existuje zaznamenaná volba stacku podložená PoC, schéma autoritativních dat a obnovy indexu, návrh bezpečného lokálního API a průchod scénářem konfliktu stejné entity i dvojice soubor–sidecar. Je uzavřen kontrakt deterministické orchestrace bez LLM, volitelného orchestrator chatu a execution boundaries; dostupnost backendu nesmí sama měnit autorizaci ani trust policy. Implementace federace zůstává v M5.
 
 ## Milestone M1 – Single-node project workspace
+
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
+
+Aktualizace 2026-10-11: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený, ale druhý skutečný restart po application-only aktualizaci opět naběhl bez kontejnerů; cílová akceptace a dodatečný návod k nastavení zůstávají pod `M1-07-C` v BACKLOG. M1-LXC-DNS-TLS-01 lokálně PoC validated doplňuje generování certifikátu s IP i explicitním DNS SAN a přesnou DNS Host/Origin autoritu; skutečné vydání certifikátu a přístup oběma URL zůstávají součástí stejné cílové akceptace. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce, návrhy metadat, centralizovaná nastavení a externí provider jsou po PR #26–#36 začleněné. F-M1-PROJECT-LOCATION-01 doplnila umístění/registraci projektů a webový source import bez tvrzení o splnění Gate M1.
 
 - [ ] LXC deployment.
 - [ ] Jeden uživatel.
@@ -652,53 +1025,205 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Metadata.
 - [ ] Git history.
 - [ ] Web UI.
-- [ ] Desktopové balení se spuštěním lokálního uzlu a sdíleným UI.
+- [ ] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
+  podle sekce 12A; Qt/PySide ponechat pouze pro desktop-only integrační funkce.
 - [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
-- [ ] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu.
+- [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování, indexu a odstranění drží WORK_LOG.
 - [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
+- [x] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
+  odregistrování, odstranění obnovitelného lokálního stavu, přesun repozitáře do
+  koše a definitivní výmaz. Preview musí zahrnout projektová i chatová data,
+  credentials, sdílené reference, pending operace a známé federované kopie;
+  operace přes registraci/filesystem/Git/SQLite má durable journal a idempotentní
+  recovery. Lokální smazání nesmí předstírat výmaz dříve publikovaných,
+  sdílených nebo vzdálených revizí. Lokální PoC byl fyzicky akceptován
+  2026-10-14; důkazy a omezení drží WORK_LOG a ADR 0031.
 
 **Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
 
 ## Milestone M2 – Local AI
 
-- [ ] Ollama backend.
-- [ ] Summarizer.
-- [ ] Extractor.
-- [ ] Auto-description.
-- [ ] Tagging.
-- [ ] Context builder.
+- [x] Ollama backend — PoC adapter váže autorizovaný Context Manifest handoff na přesný model/cíl a vede durable run journal; F-M3-OLLAMA-ROBUST-01 navíc živě ověřilo lokální službu, restart hostitele a odpověď modelu. Jde o PoC validated, nikoli obecný produkční provoz.
+- [x] Bezpečně rozlišit skutečný `same-node` Ollama proces od Ollama endpointu v lokální síti — PoC vynucuje číselný loopback proti privátní číselné HTTPS adrese, připnutý certifikát a identitu cíle; odmítá DNS, redirect, fallback a `local-only` na LAN. F-M3-OLLAMA-ROBUST-01 živě ověřilo LAN/TLS katalog a modelovou odpověď z Workspace na Omnii, restart AI hostitele a zdrojové firewallové omezení portu proxy; evidence je ve WORK_LOG a dávka byla doručena PR #50.
+- [x] Lokálně perzistentní vícekolová konverzace s výchozí klasifikací `brainstorming` a bezpečným navázáním po restartu — F-M2-CHAT-01, PR #29.
+- [x] Explicitní přiřazení živého vlákna k projektu a uložení kompletního nebo rozdílového otisku; editovatelné výstupy konkrétních úkolů ukládat primárně jako Markdown artefakty — F-M2-CHAT-02, PR #30.
+- [x] Summarizer — F-M2-SUMMARY-01 lokálně PoC validated a začleněn PR #31: explicitní artifact/message výběr, same-node preview, potvrzená recovery-safe publikace a desktopové API/UI.
+- [x] Extractor — F-M2-EXTRACT-01 lokálně PoC validated: uzavřený schema kontrakt, lokální validovaný preview a potvrzená recovery-safe publikace s provenance a desktopovým API/UI; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
+- [x] Auto-description — F-M2-META-AI-01 lokálně PoC validated: durable same-node návrh, bezpečný diff a potvrzený recovery-safe metadata commit; živý Ollama a skutečný Qt/WebEngine průchod zůstávají neověřené.
+- [x] Tagging — F-M2-META-AI-01 lokálně PoC validated; v1 ukládá pouze jednotlivě potvrzené aditivní štítky bez automatického mazání.
+- [x] Context builder — lokální read-only PoC fixuje přesné bajty a manifest a před dispatch handoffem znovu ověřuje HEAD, autoritu, privacy, policy a cíl; Ollama adapter a durable run record jsou navázány přes provider-neutral kontrakt F-M3-BACKEND-01. První externí provider zůstává další práce.
 
-**Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt a sestavit relevantní kontext; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
+**Gate M2:** systém dokáže při dostupném lokálním LLM lokálně zpracovat projekt, sestavit relevantní kontext a obnovit lokální konverzační vlákno bez záměny skutečného `same-node` backendu za LAN službu. Živé projektové vlákno, full/delta otisk a odvozený Markdown výstup zachovávají provenance a privacy; bez lokálního LLM zůstává funkční M1 workspace a orchestrator chat je pouze nedostupná volitelná capability.
 
 ## Milestone M3 – External LLM
 
-- [ ] Backend abstraction.
-- [ ] První externí provider.
-- [ ] Role.
-- [ ] Context preview.
-- [ ] Privacy filter.
+Aktualizace 2026-09-19: centralizovaná node-local nastavení byla začleněna PR
+#34. Dávka `F-M3-BACKEND-01` byla začleněna PR #35 a lokálně PoC validuje
+provider-neutral backend, explicitní capabilities, role a durable execution
+identitu nad současnou Ollamou. `F-M3-EXTERNAL-01` je po PR #36 začleněn:
+implementuje první externí textový provider, context preview, privacy filtr a
+striktní návrh přes Ollamu. Uživatel živě potvrdil přímou odpověď, publikaci
+artefaktového návrhu, potvrzený OpenAI request, restart návrhu i obnovené
+zobrazení externí odpovědi. F-M3-CHAT-MODES-01 je po PR #40 začleněn a odděluje
+lokální orchestrace od brainstormingu s per-run modelem. M3-UB-01 implementuje
+a lokálně PoC validuje usage/billing. F-M3-CHAT-DIRECT-01 je po PR #43 a
+navazující akceptaci PoC validovaný: externí brainstorming používá přímý
+dispatch s dohledatelným requestem a volitelným streamováním; živý desktopový
+OpenAI stream uživatel potvrdil, živý webový stream zůstává neověřený. Obrazové
+capability přes oddělené OpenAI Images a ComfyUI adaptery jsou ve
+F-M3-MEDIA-01 PoC validated včetně živého smoke obou providerů a po PR #46
+začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
+feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
+F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`.
+F-M3-SEARCH-02 je PoC validated a bylo doručeno PR #67 do `develop` jako merge
+commit `6c94047`. Volitelný automatický dispatch `F-M3-SEARCH-03`, obecné
+zpracování veřejných zdrojů, explicitní jazyk odpovědi a obecný workflow
+zůstávají samostatné navazující schopnosti. Gate M3 proto není vydáván za celý
+uzavřený.
+
+- [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
+- [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
+  OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
+  artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
+- [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
+- [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
+- [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
+- [x] Privacy filter — F-M3-EXTERNAL-01-C: `local-only` fail-closed před preview; `project` a `confidential` pouze po explicitním potvrzení přesného hashe.
+- [x] Přímý brainstormingový dispatch, historie requestu a streamované
+  zobrazení — F-M3-CHAT-DIRECT-01 PoC validated po PR #43 a navazující
+  acceptance; výjimka z dosavadního
+  preview/confirm platí pouze pro explicitní brainstormingový tah po serverové
+  autorizaci a privacy kontrole.
+- [x] Streamovaná odpověď Ollamy — F-M3-OLLAMA-STREAM-01 PoC validated na
+  feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
+  zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
+  UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
+- [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
+  explicitní SearXNG
+  binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
+  výsledky a následná Ollama syntéza přes nový Context Manifest bez skrytého
+  tool callu, fallbacku nebo oslabení `local-only`.
+- [x] Inteligentní iterativní hledání — F-M3-SEARCH-02 PoC validated na feature
+  větvi: Ollama klasifikuje
+  každou bounded sadu výsledků jako `final`, `intermediate` nebo
+  `insufficient`, doloží úsudek konkrétními zdroji a může navrhnout další
+  bounded dotazy. Všechny mezivýsledky, hodnocení a návaznosti zůstávají
+  viditelné a durable; modelové `final` není garance pravdivosti. Živý průchod
+  se SearXNG a Gemmou ověřil mezivýsledek i ruční zpřesnění. Výstup je omezený
+  na titulky, URL a úryvky search výsledků: cílové stránky automaticky nečte a
+  bez další capability proto negarantuje konkrétní údaje ukryté za odkazem.
+- [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
+  hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
+  s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
+  dotaz zkontrolovat/upravit, ihned odeslat nebo zrušit. Ztráta viditelnosti,
+  odpojení či restart odpočet fail-closed pozastaví; odeslaný síťový účinek
+  nelze odvolat a `unknown` se automaticky neopakuje. Jde o první vertikální
+  použití společného kontraktu F-M4-AUTONOMY-01; případné vytvoření lokálního
+  výstupu zůstává vždy za samostatným explicitním potvrzením.
+- [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
+  ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
+  `unknown` bez retry a samostatná recovery-safe publikace s generation
+  provenance. Automatická regrese, skutečný Qt/WebEngine a živý smoke obou
+  providerů jsou PoC validated; PR #46 je sloučený do `develop`.
 - [ ] Provenance.
+- [x] Řízené webové hledání — F-M3-SEARCH-01: konfigurovatelný SearXNG
+  adaptér kompatibilní s lokální službou používanou Open WebUI. Ollama může
+  navrhnout samostatný výstup `web-search`, ale nevolá síť ani nástroj přímo;
+  aplikace před dispatch ověří privacy/policy a po návratu předá Ollamě pouze
+  přesný bounded výsledek přes Context Manifest. Evidovat dotaz, čas, URL,
+  titulky, úryvky a provenance; obsah výsledků je nedůvěryhodný vstup, nikoli
+  instrukce ani automaticky projektový zdroj. Search run má vlastní durable stav,
+  timeout a `unknown` hranici a nesmí se zaměnit s placeným externím LLM během.
+- [x] **F-M3-SEARCH-02 — Inteligentní iterativní vyhledávání:** nad výsledky
+  F-M3-SEARCH-01 přidat uzavřený evaluator/planner kontrakt s výsledkem
+  `final` / `intermediate` / `insufficient`, odkazy na použité source IDs,
+  omezeními a navrženými follow-up queries. Každé kolo musí mít vlastní přesný
+  Context Manifest, search/LLM run provenance a parent/child vazbu; UI zobrazí
+  i mezivýsledky a důvod pokračování. Orchestrátor vynutí uživatelsky viditelné
+  limity kol, dotazů, výsledků a času a zastaví se při vyčerpání budgetu,
+  změně privacy/policy/binding nebo `unknown` účinku.
+- [x] **F-M3-PUBLIC-SOURCES-01 — Průzkum obecných API a kontrakt veřejných
+  zdrojů:** pro relevantní třídy služeb ověřil dostupnost podporovaných
+  obecných či oficiálních API, jejich
+  podmínky, autentizaci, rate limits, licenci, formát a provenance. Navrhnout
+  provider-neutral read-only capability pro bounded získání a extrakci
+  veřejného obsahu s ochranou proti SSRF, redirectům, nečekanému MIME,
+  nadměrnému obsahu a prompt injection. Statický page reader, strukturované API
+  a doménový adaptér jsou odlišné capability; browserová automatizace,
+  session cookies a neoficiální interní endpointy nejsou implicitní fallback.
+  Speciální vyhledávání dopravních spojů se neplánuje, pokud průzkum nedoloží
+  vhodné obecné a podporované rozhraní. Cílem je obecné zpracování veřejných
+  zdrojů, nikoli konektor vytvořený jen pro jeden ukázkový dotaz. Designed
+  výsledek je v [ADR 0033](docs/adr/0033-public-source-retrieval.md) a
+  [průzkumu](docs/public-sources-research.md): strukturované adaptéry mají
+  přednost, omezený statický reader je explicitní fallback a browser automation
+  se nezavádí.
+- [x] **F-M3-PUBLIC-SOURCE-READER-01 — Bounded statický reader:** implementovat
+  první vertikálu ADR 0033 pro jediný potvrzený HTTPS výsledek SearXNG,
+  samostatný durable run, SSRF/DNS/robots/content limity a inertní Context
+  Manifest vstup bez automatické projektové publikace. Dávka dosáhla
+  2026-10-17 úrovně PoC validated; evidence je ve [WORK_LOG](WORK_LOG.md).
+  Uživatel schválil její společné doručení s explicitním task routingem z
+  konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
+  `8b24452`.
+- [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
+  aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
+  vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.
+  Dávka dosáhla 2026-10-17 úrovně PoC validated podle
+  [ADR 0034](docs/adr/0034-explicit-task-routing.md) a evidence ve
+  [WORK_LOG](WORK_LOG.md). Uživatel schválil její společné doručení s readerem
+  z konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
+  `8b24452`.
+- [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
+  a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
+  s odloženým odesláním.
+  Každý automatický dotaz musí být před sítí viditelný spolu s přesným cílem,
+  privacy, kolem a budgetem a mít uživatelsky zvolený countdown 3–5 sekund.
+  Akce pause/review, edit, send-now a cancel jsou dostupné po celý countdown;
+  pause zastaví i další frontu. Fronta je durable a fail-closed při skrytí UI,
+  odpojení či restartu. Stav po dispatch respektuje stávající hranici
+  `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
+  Uložení výsledku jako lokálního dokumentu/artefaktu automatizovat nelze.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
 ## Milestone M4 – Multi-role workflow
 
-- [ ] Creator.
-- [ ] Opponent.
+Akceptovaná dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitní
+creator → opponent handoff přes hashovaný materializovaný výstup a samostatné
+Context Manifesty; nejde o implicitní sdílení celé konverzace ani o obecný
+pluginový router. Evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-workflow-01--artifact-based-creatoropponent-handoff--2026-10-07);
+začlenění feature větve do `develop` zůstává otevřené.
+
+- [x] Creator — jeden explicitně potvrzený bounded krok přes Context Manifest.
+- [x] Opponent — nový run pouze nad hashovaným creator výstupem a explicitními zdroji.
 - [ ] Analyst.
 - [ ] Editor.
-- [ ] Workflow handoff.
-- [ ] Human approval.
-- [ ] Artifact-based context isolation.
+- [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
+- [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
+- [ ] Obecná řízená autonomie — F-M4-AUTONOMY-01: opt-in bounded fronta pro
+  všechny registrované orchestrační akce s fail-closed action policy;
+  vytvoření každého uživatelsky adresovatelného lokálního souboru, dokumentu
+  nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
+- [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
-**Gate M4:** lze provést nezávislou oponenturu bez sdílení původní konverzační historie.
+**Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
+sdílení původní konverzační historie; automatická regrese, skutečný
+Qt/WebEngine panel a same-node Ollama smoke prošly. Produkční/private-network
+akceptace a merge do `develop` zůstávají otevřené.
 
 ## Milestone M5 – Federation
 
 - [ ] Node identity.
 - [ ] Trust.
+- [ ] Capability profily `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner` oddělené od peer trust state a explicitních oprávnění.
 - [ ] Git sync.
 - [ ] Shared users.
+- [ ] Federovaný uživatelský chat s offline doručením.
+- [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné
+  capability profily `same-company-same-team` a `same-company`; profily obecně
+  netvoří pořadový žebříček a tato transportní policy sama neuděluje přístup.
+- [ ] Explicitní publikace chatu, shrnutí, zadání nebo jiného podporovaného artefaktu do projektu.
 - [ ] Node-local backend registry.
 - [ ] Federation status.
 - [ ] Offline/reconnect.
@@ -708,7 +1233,7 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
-**Gate M5:** desktopový a serverový uzel mohou sdílet projekt a uživatele, používat rozdílné LLM backendy a synchronizovat změny po offline práci bez ztráty historie.
+**Gate M5:** desktopový a serverový uzel mohou podle explicitního capability profilu a relationship/branch policy sdílet jen povolená data. `same-company-same-team` může uvnitř jedné neměnným desktopovým původem a vlastníkem doložené osobní deployment skupiny propojit desktop i více jeho osobních serverů pro primární/záložní provoz. Každý osobní server má právě jednoho uživatele a vlastní node identity; cross-owner, cross-desktop, tranzitivní, importované nebo dodatečně povýšené členství se odmítne. CLI server může být víceuživatelský a federovat podle běžně schválených profilů a policies, ale do osobní skupiny se automaticky nezařadí. Společný původ ani profil samy neudělují projektová práva a nespouštějí replikaci; ostatní profily zachovají své užší hranice. Uzly mohou používat rozdílné LLM backendy, synchronizovat změny po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení, explicitní sdílení či odvození do projektu je auditovatelné a neobchází privacy ani lidskou akceptaci.
 
 ## Milestone M6 – Project intelligence
 
@@ -719,8 +1244,14 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Relations.
 - [ ] Impact analysis.
 - [ ] Advanced context selection.
+- [ ] Reprodukovatelné modelování a numerické výpočty s preferovaným Julia backendem.
+- [ ] Převod roadmapy na projektové entity a export TODO/task balíčků.
+- [ ] Provider-neutral předání implementačního úkolu coding agentovi a import ověřitelného výsledku.
+- [ ] Rozšíření pro Microsoft Visual Studio Code/VSCodium a volitelné coding-agent adaptéry včetně Codexu, bez převzetí autority nad plánem a akceptací.
+- [ ] Verzionované jednotné API pro nově vytipované externě verzované moduly,
+  při zachování dosavadních modulů v hlavní roadmapě.
 
-**Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine.
+**Gate M6:** systém už není pouze „Git + LLM“, ale projektový knowledge/decision engine. Umí také převést schválený plán na dohledatelné projektové úkoly a bezpečně předat implementaci coding agentovi, aniž by jeho report automaticky měnil autoritativní stav nebo obcházel lidskou akceptaci.
 
 ---
 
@@ -735,16 +1266,17 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 - [ ] Vlastní model training.
 - [ ] Plnohodnotný replacement GitHub/GitLab.
 - [ ] Automatickou synchronizaci secrets.
-- [ ] Mobilní aplikaci.
+- [ ] Mobilní aplikaci. Toto odložení se netýká responzivní optimalizace
+  existujícího webového UI pro telefon dle sekce 12.
 
 ---
 
 # 19. Operativní práce a návaznost na implementaci
 
-Konkrétní úkoly byly přesunuty do [TODO.md](TODO.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
+Konkrétní otevřené úkoly drží [BACKLOG.md](BACKLOG.md), aktuální dávku [TODO.md](TODO.md) a uzavřené dávky [WORK_LOG.md](WORK_LOG.md), včetně původních položek pro deployment, desktop, Project/Artifact/Git služby, UI, Ollama, role a Context Builder. Zde se již neduplikuje jejich průběžný stav.
 
 - [x] Pracovní architektonické dokumenty, ADR, reuse katalog a kostra experimentů — designed / implemented.
-- [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a TODO.
+- [x] Frontmatter/sidecar validátor, obnovitelný index, souborový journal a CLI kontrola projekce — implemented v M0; ověření a limity viz ADR 0002 a WORK_LOG.
 - [ ] Integrovaná aplikace a nasazení podle M1; existující experimenty adaptovat podle finálního stacku.
 
 ---
@@ -826,3 +1358,173 @@ a
 Open WebUI tedy může sloužit jako alternativní konverzační frontend nad projektovými daty, ale **workspace zůstává autoritou pro projektová data, oprávnění, provenance, rozhodnutí a verzování**.
 
 Integrace nesmí vytvořit druhý paralelní systém projektového stavu uvnitř Open WebUI. Konverzační historie může zůstat vlastnictvím externího klienta; do workspace se vracejí explicitně vybrané výsledky, artefakty a jejich dohledatelná provenance.
+
+---
+
+# 22. Externí vztahy, komunikace a řízené sdílení
+
+**Stav: plánovaný rozsah; návrhový kontrakt a implementace jsou budoucí práce.** Cílem je dohledat, komu byl jaký obsah v konkrétní revizi zpřístupněn, v jakém rozsahu, jakým kanálem a s jakým dokladem. Evidence předání není tvrzení o skutečných znalostech příjemce. Datové podklady jsou v [DATA_MODEL.md](DATA_MODEL.md), bezpečnostní mantinely v [SECURITY.md](SECURITY.md) a implementační úkoly ER-01 až ER-08 v [BACKLOG.md](BACKLOG.md).
+
+## 22A. Relationship Registry a schůzky
+
+- [ ] Evidovat osoby, organizace, jejich role a časově vymezené vztahy, kontaktní body, zdroje údajů a vazby na projekty. Partner může být firma, samostatná osoba, poradce nebo veřejná instituce; partner není automaticky uživatel workspace.
+- [ ] Adresář realizovat jako pohled na tento registr. E-mailovou adresu nepoužívat jako identitu člověka; sloučení osob a změna organizace vyžadují kontrolu.
+- [ ] Oddělit soukromý katalog kontaktů od projektově sdílených informací. Meziprojektové propojení nesmí automaticky zpřístupnit cizí korespondenci nebo vztahy.
+- [ ] Schůzku propojit s projektem, skutečnými účastníky, agendou, zdrojovou komunikací, revizí prezentace, poznámkami a následnými úkoly. Interní poznámky nepatří automaticky do pozvánky.
+
+## 22B. Disclosure Registry
+
+- [ ] Evidovat odchozí i přijaté informace, včetně případných omezení jejich dalšího použití. U příjmu zachovat zdroj a původní bajty vybraného importovaného artefaktu.
+- [ ] Odkazovat na stabilní ID projektu nebo repozitáře a artefaktu, úplný Git commit ID a přesný předaný snapshot s hashem. Samotný název, větev nebo štítek revize nestačí.
+- [ ] Rozlišovat `full`, `excerpt`, `summary`, `derived`; prezentace odvozeného shrnutí neznamená předání celého zdrojového modelu. Evidovat konkrétní výřez nebo slide a jeho zdrojové revize.
+- [ ] Rozlišovat přípravu, export, promítnutí, předání dopravnímu serveru, potvrzené doručení nebo přístup a ručně zaznamenané ústní sdělení. Neurčitý výsledek ponechat jako neověřený.
+- [ ] Události zapisovat append-only aplikační cestou s idempotentními ID; opravy přidávat jako navazující události, nikoli přepisovat původní historii. Git sám není nezměnitelný auditní systém.
+- [ ] Nabídnout pohled partnera na evidované sdílení, rozsah a poslední předanou revizi, včetně rozdílu vůči nové verzi. Nepředpokládat, že obsah znají všichni zaměstnanci nebo všechny společnosti skupiny.
+- [ ] Navázat veřejné publikace na existující administrativní registr `docs/IP/DEFENSIVE_DISCLOSURES.md` referencí, nikoli založením jeho konkurenční kopie. Citlivá partner data nepatří do veřejného vývojového repozitáře.
+
+## 22C. Disclosure Presenter
+
+**Stav omezeného základu: PoC validated (F-M4-PRESENTER-01 a
+F-M4-PRESENTER-PDF-01, 2026-10-17).**
+Desktop má verzovaný Markdown deck, integrovaný editor, stabilní layouty,
+oddělený speaker/audience renderer, backupy, reveal kroky, lokálně mapovaný
+gamepad a explicitně schvalované návrhy vytvoření či aktualizace z orchestrace.
+Fyzický průchod na notebooku se dvěma displeji ověřil editor, starší deck,
+vytvoření i aktualizaci, spuštění, navigaci, soukromý speaker obsah, odpojení
+displeje a gamepad. Navazující dávka doplnila durable záznam potvrzených
+audience snapshotů, obnovu přerušené relace, správu relací a potvrzovaný
+kanonický i relační PDF export; podrobné automatické a fyzické důkazy drží
+[WORK_LOG](WORK_LOG.md). Tento omezený základ neimplementuje obecnou projektovou
+kompilaci, Disclosure Registry, expozici/semafor, obecnou trvalou relaci
+schůzky, obecný rozhodovací strom ani PPTX export; níže uvedené širší požadavky
+proto zůstávají otevřené.
+
+- [ ] Přípravu decku realizovat jako prezentační renderer obecné projektové kompilace ze sekce 2E. Sdílet definici zdrojů, jejich pořadí, manifest, stavy dostupnosti/neaktuálnosti a atomickou lokální generaci; prezentační runtime a disclosure evidence zůstávají samostatnou nadstavbou.
+- [ ] Přidat modul pro přípravu verzovaných prezentací: skládat deck z projektových artefaktů a médií, spravovat pořadí, šablonu, poznámky řečníka a kroky postupného odhalení a před spuštěním ověřit chybějící zdroje i přesné revize. Vytvořený deck a jeho bezpečný export nesmějí obsahovat privátní scénář, poznámky nebo skryté backupy, pokud je uživatel výslovně nezahrne do oprávněného výstupu.
+- [x] F-M4-PRESENTER-PDF-01 doplnilo dva bezpečné PDF výstupy: nativní (kanonický) deck pouze z hlavních slidů v uloženém pořadí a přesný záznam skutečně odprezentovaných audience snapshotů včetně promítnutých backupů, opakování a stavu postupného odhalení. Druhá varianta nedomýšlí historii z aktuálního decku ani nezahrnuje privátní preview, notes nebo nezobrazený obsah. Před vznikem každého lokálního PDF uživatel explicitně potvrzuje režim, zdrojovou revizi, rozsah, cílovou cestu a případné přepsání; export sám není důkaz doručení ani DisclosureEvent. Feature je PoC validated; důkazy jsou ve WORK_LOG.
+- [ ] Dvě oddělená zobrazení: publikum vidí pouze schválený aktuální slide; řečník poznámky, privátní náhled, nabídku backupů, jejich triggery a návrat do hlavní linie.
+- [ ] Zachovat lineární hlavní prezentaci a doplnit interní verzovaný rozhodovací scénář se stabilními ID uzlů. Uzel rozlišuje otázku řečníka a očekávanou otázku protistrany, možné odpovědi, stručnou a podrobnou reakci, navazující větve a volitelné backupy; povinná je cesta pro jinou odpověď, „nevím“ nebo odmítnutí odpovědi.
+- [ ] Backup ponechat volitelný: větev může pokračovat doplňující otázkou, ústní odpovědí, odložením tématu nebo návratem bez dalšího slidu. Odkazovat na existující obsah v konkrétní revizi; jeden backup smí sloužit více slidům a větvím bez kopií.
+- [ ] Ke každému slidu i backupu umožnit kontextové doplňující otázky, interní poznámky/zdroje a veřejné doplňky. Vedle nich držet globální knihovnu „Všechny backupy“ dostupnou odkudkoli, s hledáním podle tématu/otázky, filtrem citlivosti a označením již použité revize.
+- [ ] Kokpit nabídne pohledy „K tomuto slidu“, „Všechny backupy“ a „Odložené otázky“. Zobrazí aktuální otázku, připravenou reakci a nejbližší možnosti; celý strom zůstane rozbalitelný. Neočekávanou otázku lze stručně poznamenat nebo odložit bez editace celého scénáře.
+- [ ] Větev vybírá řečník ručně. Focus, výběr, privátní náhled a akce „Zobrazit publiku“ jsou rozdílné stavy; šipky, hledání ani volba možné odpovědi nesmějí promítat obsah nebo tvrdit, že odpověď skutečně zazněla. Klávesnicové ovládání a focus/selection model navrhnout podle [W3C APG Tree View](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/).
+- [ ] Ovládání prezentace abstrahovat na významové akce (`další/předchozí krok`, `privátní náhled`, `zobrazit publiku`, `backup`, `návrat`, `neutral/blackout`) a vedle klávesnice nabídnout volitelný gamepad adaptér s lokálním mapováním a testem tlačítek. Samotný vstup z gamepadu nesmí obejít autorizaci, disclosure potvrzení ani oddělení preview/audience; odpojení, ztráta focusu, opakování tlačítka nebo neznámý ovladač nesmějí automaticky posunout či odhalit obsah a vždy zůstává dostupné klávesnicové ovládání.
+- [ ] Akce „Doplňující otázka“ uloží přesný návratový bod včetně slidu, kroku postupného odhalení a rozehrané větve. Zachovat historii zanoření a samostatné akce „zpět o úroveň“, „návrat k přerušenému výkladu“ a „pokračovat hlavní prezentací“; předběhnutý pozdější slide pouze označit, ne automaticky přeskočit.
+- [ ] Základní deck připravovat jako zelený po kontrole obsahu. Každý backup má vlastní `green / orange / red`; změněná nebo nezkontrolovaná revize nesmí zdědit automatické schválení.
+- [ ] Kumulativní globální semafor: zelený slide +0, oranžový +0,5, červený +1 stupeň. Prahy a režim schůzky nastavit předem a evidovat jejich verzi.
+- [ ] Přírůstek účtovat až při evidovaném zobrazení publiku, ne při privátním náhledu. Opakování totožného obsahu stejnému publiku během stejné schůzky logovat, ale nezapočítávat znovu; nová revize, nový rozsah či příjemce vyžadují nové posouzení.
+- [ ] Před zobrazením ukázat přírůstek a výslednou expozici; u navržené sekvence také předpokládaný součet bez započtení nevybraných alternativ. Citlivou ústní odpověď započítat pouze po ruční akci „Sděleno ústně“. Citlivý obsah nebo překročený měkký limit může vyžadovat potvrzení, autorizační zákaz jím obejít nelze.
+- [ ] Skóre pouhým zavřením slidu, přechodem mezi větvemi nebo návratem nesnižovat. Oddělit expozici aktuální schůzky od historie partnera a samostatně sledovat čas, počet odboček a hloubku zanoření. Upozornění nabídne stručnou odpověď, doplňující otázku, odložení nebo návrat.
+- [ ] Dříve sdílený červený obsah zůstává červený; stav předání je samostatná osa. „Známá revize“ není povolení k dalšímu odeslání nebo reklasifikace na public.
+- [ ] Navigační historii oddělit od evidence sdílení a očekávanou odpověď od samostatně potvrzené skutečné odpovědi. Strom, interní reakce a vyjednávací poznámky ponechat pouze řečníkovi; nesmějí být skrytým obsahem audience rendereru ani exportovaného decku.
+- [ ] Zajistit offline provoz, obnovu konkrétní revize decku/scénáře, aktuální větve, návratových bodů, odložených témat a expozice po pádu, bezpečný neutrální výstup a explicitní stav neověřeného promítnutí.
+- [ ] Přidat zkušební režim s kontextovými i obecnými doplňujícími otázkami, simulovaným semaforem, časem odboček a návratem. Nácvik je oddělen od skutečné relace a nikdy nezapisuje DisclosureEvent ani tvrzení, že partner obsah obdržel.
+
+## 22D. Communications Hub — plnohodnotný klient
+
+- [ ] Mail: více účtů, IMAP synchronizace, SMTP odesílání, složky, hledání, vlákna, přílohy, odpovědi a přeposílání, koncepty a odchozí fronta. Výchozí obsah a činnosti jsou soukromé; přiřazení projektu je explicitní nebo potvrzené pravidlo.
+- [ ] Připojení stavět na standardních protokolech a capability adaptéru. TLS a podporovaný způsob autentizace včetně OAuth2 řešit už pro prvního cílového poskytovatele; neslibovat univerzální kompatibilitu bez ověření.
+- [ ] Kalendář: CalDAV, více kalendářů, pozvánky a odpovědi, opakování, časová pásma a vazba na interní schůzku. Kontakty: CardDAV pohled nad Relationship Registry, mapování polí a řízené konflikty bez druhého CRM.
+- [ ] XMPP rozdělit na dvě samostatně konfigurované a auditované hranice. Interní
+  adaptér může přenášet federovaná lidská vlákna F-M5-CHAT-01 pouze mezi uzly,
+  jejichž konkrétní bilaterální vztah má profil `same-company-same-team` nebo
+  `same-company`; uživatelsky jde o „nejvyšší dva“ interní profily, nikoli o
+  zavedení obecného pořadí profilů. Každé spojení nadále vyžaduje schváleného
+  peera, mapovanou identitu a explicitní thread/project scope a nesmí zpřístupnit
+  credentials, session, role ani projektová data mimo jednotlivé zprávy a vědomě
+  přiložený obsah.
+- [ ] Veřejný XMPP klient/federační edge provozovat pod oddělenou doménou, účty,
+  credentials, úložištěm a policy jako vnější kanál pro komunikaci s veřejností.
+  Vnější JID není workspace účet ani federovaný uzel; příchozí zpráva je
+  nedůvěryhodný externí vstup a bez explicitního importu nemá přístup k projektu,
+  Context Manifestu, LLM, pluginům ani nástrojům. Počítat s moderací, blokováním,
+  rate limits/anti-spam, pravidly retence, souhlasem, bezpečnou prací s odkazy a
+  přílohami a se stavy doručení včetně `unknown` bez slepého opakování odeslání.
+- [ ] Mezi interním a veřejným XMPP nezavádět implicitní bridge, sdílený adresář
+  ani automatické přeposílání. Přenos zprávy nebo jejího výsledku přes hranici
+  musí mít preview, potvrzenou cílovou identitu a rozsah, provenance, zděděnou
+  privacy a disclosure událost; interní JID, topologie uzlů a membership se
+  veřejnosti nezveřejňují. Před implementací ověřit interoperabilitu server-to-
+  server federace, DNS/TLS, MUC, příloh a zvoleného end-to-end šifrování a popsat,
+  která metadata zůstávají viditelná serverům.
+- [ ] Před odesláním zkontrolovat konkrétní příjemce, citovaný text, přílohy a jejich revize. Pozvánka i sdílený kontakt jsou rovněž možné externí přenosy.
+- [ ] Do projektového Gitu ukládat jen vědomě vybrané komunikační artefakty, metadata a disclosure události. Celá schránka, cache, synchronizační kurzory, koncepty a odchozí fronta mají oddělený lokální nebo poskytovatelský životní cyklus.
+
+## 22E. Zařazení a produktové gates rozšíření
+
+Jde o navazující schopnosti v této master roadmapě, nikoli přejmenování M1–M6. M4 zůstává Multi-role workflow a M6 Project intelligence. Implementace se plánuje až po nezbytném aplikačním základu; samostatný Presenter nepotřebuje dokončený mail klient ani LLM.
+
+| Rozsah | Návaznost | Podmínka použitelnosti rozšíření |
+| --- | --- | --- |
+| Kontrakty | BACKLOG ER-00 | Zaznamenané entity, revize, privacy hranice a migrace; bez zpětného otevření Gate M0. |
+| Registry a ruční evidence | Po M1; ER-01 až ER-03 | Partner, schůzka, přesný snapshot a oprava události projdou autorizovaným zápisem, restartem a obnovou indexu. |
+| Presenter MVP | Po registry a policy základu; ER-04 | Dvě zobrazení, váhy 0/0,5/1, privátní preview bez započítání, verzovaný scénář, kontextové i globální backupy, návrat z přerušení a restart bez ztráty relace. |
+| Mail, kalendář, kontakty | Po registry a policy základu; ER-05 a ER-06 | Ověřené cílové účty, konflikty a offline návrat; bez opakovaného odeslání při neurčitém výsledku bez rozhodnutí uživatele. |
+| Interní a veřejný XMPP | Interní adaptér navazuje na F-M5-TRUST-01 a F-M5-CHAT-01/02; veřejný edge na ER-00 až ER-03 | Oddělené identity, domény, credentials, úložiště a policy; interní provoz jen pro dva přesně povolené profily, veřejný vstup bez implicitního přístupu a žádný automatický bridge. |
+| Federované vztahy a evidence | Navazuje na M5; ER-07 | Autorizovaný přenos událostí, deduplikace, oddělení soukromých dat a žádný implicitní přenos zdrojového repozitáře. |
+| Kontext vztahu a LLM poradce | Volitelně navazuje na M2–M4/M6; ER-08 | Kontext z oprávněných revizí, explicitní manifest a pouze návrhy; chybějící LLM nesmí blokovat deterministický provoz. |
+
+Reciprocita je dobrovolná poznámka řečníka, ne automatický „kredit“ dovolující zveřejnit další data. Přijaté citlivé informace nesmějí snižovat policy ochranu. Obecný CRM prodejní pipeline, hromadné kampaně ani vlastní mail server nejsou součástí tohoto rozšíření.
+
+---
+
+# 23. Periodický monitoring a analytický reporting
+
+**Stav: plánovaný rozsah navazující na M6; nejde o implementovaný scheduler, webový výzkum ani automatickou publikaci.** Reporting Framework je obecná schopnost workspace, zatímco Reporting Task je samostatná verzovaná definice tématu, zdrojů, periodicity, hodnoticích kritérií a výstupů. První referenční task je Humanoid Robotics Watch; další doménové moduly mohou dodávat časové řady síťových měření, mapových vrstev nebo satelitních pozorování. Implementační dávky `MON-00` až `MON-07` drží [BACKLOG](BACKLOG.md).
+
+## 23A. Události, zdroje a dlouhodobé příběhy
+
+- [ ] Evidovat každý poznatek jako samostatnou událost se stabilním ID a `task_id`; oddělit čas zjištění `detected_at`, doložený čas události `event_date` a čas importu. Neznámé či pouze odhadované datum výslovně označit a neodvozovat je z času stažení.
+- [ ] Událost nese titulek, shrnutí, kategorii, entity, geografii, relevance, confidence, maturity, novelty, impact, evidence, tagy a provenance. Původní dokument, přesná citace, screenshot, fotografie, video či PDF jsou samostatné zdroje/artefakty s vlastní privacy a hashem, nikoli neověřená součást shrnutí.
+- [ ] Rozlišit primární, sekundární a komunitní zdroje. Komunitní zdroj je signál; zásadní tvrzení má nést nezávislý či primární důkaz, případně zůstat výslovně neověřené.
+- [ ] Oddělit oznámení, demonstraci, laboratorní výsledek, řízené demo, pilot, omezené produkční nasazení a nezávisle ověřený provoz. Marketingové tvrzení se nesmí automaticky změnit na prokázanou schopnost.
+- [ ] Použít verzovanou škálu zralosti 0–5 od konceptu po běžně použitelnou technologii. Hodnocení relevance, novosti, praktického dopadu a confidence uchovat společně s použitou revizí pravidel a důkazy.
+- [ ] Deduplikace vytváří jednu událost s více `Sources[]`; neodstraňuje ani nepřepisuje původní zdroje. Nové zjištění je nová událost/revize nebo explicitní vazba na předchozí záznam. Události se propojují do dlouhodobých `Story / Development Thread`, aby šel rekonstruovat vývoj, nikoli jen seznam článků.
+
+## 23B. Reportingové vrstvy a neměnné snapshoty
+
+- [ ] Týdenní noticka obsahuje jen významné změny oproti předchozímu uzavřenému reportu, typicky 3–7 položek: co se stalo, význam, stav důkazu, možný dopad a zdroj.
+- [ ] Měsíční report je nová syntéza, nikoli spojení týdenních textů. Obsahuje executive summary, události, vývoj oblastí a zralosti, produkty/projekty, piloty/nasazení, výzkum, problémy/neúspěchy, trendy a výhled; výslovně hodnotí změnu trendu.
+- [ ] Každý třetí měsíční report může přidat kvartální srovnání a realistickou vizuální case study. Výroční zpráva je samostatný analytický dokument se stavem na začátku roku, milníky, ekonomikou/dostupností, regulací, bezpečností, slepými cestami, posunem k praxi, výhledem a archivem hlavních zdrojů.
+- [ ] Vydaný report je připnutý neměnný snapshot s obdobím, časovým pásmem, query/cutoff, revizí tasku, revizí hodnoticích pravidel, přesnými vstupními event/source ID a Context Manifest/run provenance. Oprava vytvoří následníka; nepřepisuje vydaný report. Editovatelný draft a vydaný snapshot jsou rozdílné stavy.
+- [ ] Report bez nového vývoje nesmí vyrábět falešnou novinku. Pozdně nalezená starší událost zachová skutečné `event_date`, pozdější `detected_at` a je viditelně označena jako doplnění, aby nebyl zkreslen trend.
+
+## 23C. Scheduler, sběr a recovery
+
+- [ ] Scheduler spouští konkrétní Reporting Task s typem `weekly`, `monthly`, `quarterly` nebo `annual`, stabilním run ID, časovým pásmem a vypočteným intervalem. DST, zmeškaný běh, souběh, ruční opakování a změna konfigurace nesmějí vytvořit dvojí vydání stejného tasku/období.
+- [ ] Pipeline odděluje sběr, extrakci, deduplikaci, hodnocení důkazů, aktualizaci story, generaci reportu, volitelnou vizualizaci, lidskou kontrolu a publikaci. Částečný výsledek zůstává draft/failed/unknown; neposune „poslední vydaný report“.
+- [ ] Externí rešerše a stažení mají allowlist zdrojů, limity, rate limiting, respektování přístupových pravidel/licencí a ochranu proti prompt injection. Stažený obsah je nedůvěryhodný vstup a nesmí měnit task, policy, scheduler ani sám spouštět akce.
+- [ ] Automatické publikování je výslovná per-task policy. Výchozí režim vyžaduje lidské schválení; nedostupný LLM, zdroj nebo generátor obrázků nesmí vést k implicitnímu externímu fallbacku ani k vydání neúplného reportu jako hotového.
+
+## 23D. Vizualizace a federované provedení
+
+- [ ] Generovaná či dokumentární case study ukládá prompt/zadání, datum, model/nástroj, seed a parametry podle dostupnosti, vstupní důkazy, vztah k přesnému reportu a popis scénáře. Dokumentární asset zachová licenci a zdroj; syntetický obraz je viditelně označen.
+- [ ] Realistická case study popisuje prostředí, úlohy systému, činnosti člověka, bezpečnostní omezení a technologické limity. Smí zobrazit prokázané schopnosti, současný pilot nebo explicitně označený krátkodobý výhled; nesmí vydávat sci-fi či marketing za doložený stav.
+- [ ] Federované uzly mohou plnit role collector, extractor, evidence evaluator, story tracker, report generator a visualization generator pouze podle Context Manifestu, privacy a execution boundary. Citlivý zdroj zůstává lokální; odvozenina dědí nejpřísnější omezení a federovaný výsledek se před přijetím znovu validuje.
+
+## 23E. Referenční task Humanoid Robotics Watch
+
+- [ ] Sledovat humanoidní a humanlike robotiku se zaměřením na housekeeping, péči o seniory/pacienty, domácí a kancelářskou asistenci; dynamicky evidovat významné výrobce a projekty bez automatického tvrzení o jejich relevanci či úspěchu.
+- [ ] Verzovat benchmarky humanlike interakce, manipulace, lokomoce, housekeeping a care. U přímé fyzické péče (hygiena, vstávání, transfer, prevence pádu a práce s nepohyblivým pacientem) vyžadovat zvláštní bezpečnostní klasifikaci a nezávislé důkazy; report není klinické ani bezpečnostní schválení.
+- [ ] Výstupy: Humanoid Robotics Weekly Notes, Monthly Report, kvartální Hospital Room case study a Annual Report se čtyřmi case studies Hotel/Hospital/Home/Office. Konkrétní názvy firem, schopnosti, ceny a predikce jsou data tasku v dané revizi, nikoli trvalá fakta roadmapy.
+- [ ] Dlouhodobé dotazy nad event/story registry musí umět doložit první výskyt a vývoj schopnosti, nasazení, ceny, autonomie, problémů a rozdílu mezi opakovaným provozem a demonstrací; odpověď odkazuje na přesné události a zdroje a přizná mezery v datech.
+
+## 23F. Doménové observační moduly
+
+- [ ] Reporting Framework musí přijímat moduly přes verzovaný provider-neutral kontrakt `ObservationSource`, nikoli zabudovat API jednoho poskytovatele do tasku. Modul deklaruje capabilities, prostorový a časový rozsah, jednotky, limity, licenci, privacy, credential reference a způsob získání; tajemství ani providerový runtime stav nepatří do projektového Gitu.
+- [ ] Síťový modul může adaptovat samostatně vyvíjený RIPE Atlas Webcockpit pro dlouhodobé sledování dostupnosti, latence, tras a změn pozorovaných z explicitní množiny probes. Jednorázové aktivní měření je externí účinek vyžadující samostatné oprávnění, limity a durable run stav; veřejné výsledky nejsou automaticky důkazem příčiny ani stavu celé sítě.
+- [ ] Geospatial modul může připínat verzované mapové vrstvy, výřezy a odvozené geometrie s CRS, bbox/zoom, časem platnosti, licencí a hashem. Interaktivní mapa je projekce; autoritativní pozorování a použitá revize vrstvy musí zůstat reprodukovatelné i bez poskytovatele.
+- [ ] Earth-observation modul může sledovat časové řady satelitních snímků a odvozených produktů. Musí evidovat platformu/senzor, acquisition time oddělený od publication/import time, footprint, pásma/produkt, rozlišení, cloud/quality masku, zpracovatelskou úroveň a licenci. Změnová detekce je odvozené tvrzení s vlastní provenance a confidence, nikoli náhrada původního snímku.
+- [ ] Různé moduly lze spojit do jedné story pouze explicitní časoprostorovou vazbou a s přiznáním rozdílného pokrytí, rozlišení a nejistoty. Shoda na mapě nebo v čase sama neprokazuje kauzalitu; LLM smí korelaci pouze navrhnout k validaci.
+
+## 23G. Gate rozšíření
+
+| Rozsah | Návaznost | Podmínka použitelnosti |
+| --- | --- | --- |
+| Kontrakt a ruční task | Po M1; MON-00/MON-01 | Striktní verze schémat, oddělené časy, provenance, append-only opravy a ručně spustitelný report bez LLM. |
+| Sběr a evidence | M2–M4/M6; MON-02/MON-03 | Bezpečný source adapter, deduplikace se zachováním zdrojů, evidence/maturity review a reprodukovatelný story update. |
+| Scheduler a reporty | Po stabilním run recovery; MON-04/MON-05 | Idempotentní perioda, restart/souběh/missed run, draft versus vydání a report připnutý na přesné vstupy. |
+| Vizualizace a federace | Volitelně po M5/M6; MON-06 | Auditovatelná realistická case study a rozdělené provedení bez úniku privacy či implicitního fallbacku. |
+| Doménové observační moduly | Po MON-00 až MON-04; MON-07 | Alespoň síťový modul projde dvěma periodami se stabilní provenance; mapové a satelitní adaptéry zůstávají samostatné capabilities s licenčními, časovými a prostorovými metadaty. |
+
+**Gate periodického reportingu:** jeden obecný task a Humanoid Robotics Watch projdou alespoň dvěma po sobě jdoucími periodami; opakovaný či přerušený běh nevytvoří duplicitní vydání, zdrojové události a pozdní doplnění zůstanou dohledatelné, report lze reprodukovat z připnutých vstupů a žádné tvrzení ani vizualizace nejsou vydány jako ověřené bez odpovídající evidence a policy rozhodnutí.

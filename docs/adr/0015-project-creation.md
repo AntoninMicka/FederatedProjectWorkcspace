@@ -1,0 +1,89 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# ADR 0015 — Vytvoření a registrace projektu
+
+Stav: přijato pro M1-02, omezený Linux PoC. Doplňuje inicializaci, kterou ADR 0003/0004 výslovně vynechaly. Další změny existujícího projektu nadále řídí Workspace.
+
+## Vstup a lokální autorita
+
+Web i desktop používají společný formulář s odděleným náhledem a potvrzením.
+Náhled váže název, přesný cíl, volbu výchozího rodiče a operation UUID serverovým
+digestem. Web používá pouze serverem určený kořen a nemůže dodat cestu ani
+desktopovou capability. Desktop může systémovým Qt pickerem vybrat existující
+prázdnou cílovou složku; native obal předá rendereru neprůhledný in-process token
+vázaný na jedinou operaci a přesný výsledek pickeru, nikoli obecný filesystemový
+most. Služba vytváření zůstává nezávislá na Qt. Opakování stejného ID/parametrů
+vrací stejný receipt, jiné parametry se odmítají. Jeden uzel má jeden neblokující
+procesní flock a nejvýše jednu nedokončenou operaci. Druhý klient dostane
+busy/pending chybu. Ztráta odpovědi neznamená nový pokus s novým ID: při restartu
+se obnoví uložená operace.
+
+Výchozí konfigurace je `$XDG_STATE_HOME/federated-workspace/node.json` (jinak `~/.local/state/federated-workspace/node.json`). Pouhé zobrazení bez registrace nic nevytváří; první potvrzené vytvoření založí lokální konfiguraci. `--node` ji explicitně nahrazuje. Vedle ní je soukromý adresář operací s SQLite journalem, odděleným od projektového journalu i obnovitelného indexu. Drží lokální author UUID a receipts; není v projektovém Gitu. Author UUID není Node UUID ani síťová identita. Node ID i project ID jsou stabilní a nevznikají znovu při recovery.
+
+Cesty jsou absolutní, bez symlinků, kořeny/stavy disjunktní vůči všem registracím i konfiguraci/journalu uzlu. Cílový rodič může ležet mimo home, ale musí existovat, patřit uživateli a nebýt zapisovatelný jinými uživateli. Potvrzený rodič lze uložit jako node-local `projects_root`; nejde do projektového Gitu ani federace. Lokální stav vzniká vedle projektu pod skrytým jménem s project UUID, na stejném filesystemu. Existující cíl lze přijmout jen jako prázdný, vlastněný adresář bez symlinků: jeho inode je zapsán do journalu, hotový staging se s ním atomicky vymění a původní prázdný adresář se odstraní až po ověření své identity. Cíl s obsahem, Git repozitář nebo změněný inode jsou konfliktem a nikdy se nepřepisují.
+
+Registrace existujícího projektu ověřuje běžný Git root, commitnutý a pracovní
+`project.json`, stabilní project UUID a vytvoří nový lokální stav vedle něj.
+Oprava umístění je určena pro tentýž již přesunutý repozitář: ověří stejné UUID
+a HEAD, zachová existující stav a povolí jen nový root na stejném filesystemu.
+Nejde o kopírování ani přesun repozitáře aplikací.
+
+Oprava cesty má dva persistentní kroky. Po `prepared` uzlový journal drží staré
+i nové bajty registrace a přesný root/state. Pod zámkem projektového writeru se
+nejprve odmítnou pending změny a journal owner se přepíše na nový root
+(`state-rebound`); poté se atomicky publikuje node konfigurace (`node-published`).
+Pád mezi nimi obnoví stejná operation ID a dokončí pouze chybějící krok. Cizí
+projekt, změněný HEAD, jiný owner stavu nebo jiný filesystem se odmítne bez
+přepsání dat.
+
+Pokud registrovaný root doslova neexistuje, lze jako omezenou opravu odebrat
+pouze jeho node registraci. Uzlový journal uloží původní a cílové bajty
+konfigurace a atomicky publikuje konfiguraci bez dané vazby. Lokální stav,
+Git data nalezená později, chaty ani credentials se nemažou. Objeví-li se root
+znovu před publikací, operace se zastaví; po `node-published` recovery pouze
+dokončí receipt již zveřejněného odebrání. Jde o jednokrokovou opravu
+registrace, nikoli o lifecycle bezpečného odstranění projektu.
+
+## Crash boundaries před implementací
+
+| Hranice | Recovery |
+| --- | --- |
+| Před `prepared` | Pouze lokální bootstrap journalu a případná prázdná soukromá staging složka. Projekt ani registrace neexistují. Osiřelá staging složka se nemaže bez doloženého vlastnictví; retence V-07. |
+| `prepared` | Journal obsahuje UUID, parametry, přesné původní/cílové bajty node konfigurace, projektová metadata a staging inode/dev. Lze znovu sestavit pouze tento soukromý, dosud nepublikovaný staging. |
+| `built`, před uložením `ready` | Vlastní rozpracovaný staging lze znovu sestavit; deterministická metadata/autor/čas dávají stejný initial commit. Žádný existující projekt není upravován. |
+| `ready` | Commit ID a inode připraveného repo/state jsou uložené; již se nepřestavují. Publikace používá Linux renameat2 RENAME_NOREPLACE a fsync rodiče. |
+| `root-published`, `state-published` | Chybějící staging cesta a shoda inode/dev cíle prokazují dokončený rename i před uložením dalšího stavu. Cizí cíl/změna dat znamenají konflikt, ne overwrite. |
+| `indexed` | Journal/index projektu se inicializují stávajícím Workspace až na konečném umístění, aby owner nebyl navázán na staging. Rebuild transakce je opakovatelný dle ADR 0014. |
+| `node-published` | Node JSON se nahradí atomicky z kompletního fsync souboru pouze při shodě původních bajtů pod zámkem; nový soubor se publikuje bez přepisu existujícího cíle. Pokud již odpovídá cílovým bajtům, recovery pokračuje bez druhé registrace. Cizí změna se zachová a recovery odmítne pokračovat. |
+| `completed` | Receipt je trvale uložen; stejné ID/parametry vrací stejný výsledek bez zápisů. Staging po dokončení lze uklidit pouze dle uloženého vlastnictví; selhání tohoto volitelného úklidu neruší receipt. |
+
+Do projektu jde pouze `project.json` a počáteční Git commit s explicitním lokálním autorem, nikoli node konfigurace nebo credentials. Nový projekt je záměrně prázdný. Úplná validace konfigurace a první projekce předchází registraci.
+
+## Běh a omezení
+
+Potvrzené vytvoření provádí jediný backendový proces přes uzavřený endpoint;
+ztráta HTTP odpovědi zachová operation ID i journal pro shodný retry nebo startup
+recovery. Nativní controller dál mimo Qt event loop obsluhuje obnovu a ostatní
+desktop-only operace. Obnova dříve potvrzené operace se při restartu spustí
+automaticky, chyba se zobrazí v nativním okně. Služba má celkový deadline pro
+aplikační kroky a Git subprocessy; timeout zachová pending operaci. Zámek je
+neblokující a SQLite čekání omezené. Nejde o preempci libovolného blokujícího
+filesystemového syscallu ani důkaz výpadku napájení.
+
+Tím je vymezen mutující lifecycle potřebný pro M1-02 a
+F-M1-PROJECT-LOCATION-01. Webové vytvoření a import mají uzavřené konkrétní
+endpointy; nezavádějí obecný filesystemový most. Produkční hardening proti
+nekooperujícím FS útočníkům zůstává V-06. Stejný node/root/state musí sdílet
+všichni kooperující klienti. Nezavádí se nový framework, Git adapter ani druhý
+backendový proces. Reuse: konfigurační validátory, Git, Workspace a fsync/flock
+vzor stávajícího journalu; uzlový journal má jiný lifecycle než projektové změny.
+
+Ověření: `tests/test_project_creation.py` prochází procesními pády na všech
+uvedených checkpointech a běžným startem s automatickou obnovou;
+`tests/test_project_creation_actions.py` ověřuje preview digest, webovou hranici,
+desktopovou capability a idempotentní receipt. Volitelný WebEngine smoke prochází
+společným formulářem. Test `.deb` ověřuje vytvoření a zachování dat po
+odinstalaci. Aktuální výsledky a zbylá omezení drží [WORK_LOG](../../WORK_LOG.md).

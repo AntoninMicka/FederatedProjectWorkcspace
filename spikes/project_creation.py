@@ -1,0 +1,783 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+#
+"""Recoverable creation of a new local project, separate from artifact mutations."""
+from contextlib import contextmanager
+import ctypes
+from datetime import datetime, timezone
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import sqlite3
+import stat
+import tempfile
+import time
+from uuid import uuid4
+
+from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
+from spikes.journal import sync_dir
+from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, safe_path, uuid, validate_snapshot
+from spikes.projects import directory, missing
+from spikes.storage import Git
+from spikes.workspace import Workspace
+
+STAGES = ('prepared', 'built', 'ready', 'root-published', 'state-published',
+          'indexed', 'node-published', 'completed')
+
+
+class CreationConflict(ValueError):
+    pass
+
+
+def check(condition, message):
+    if not condition:
+        raise CreationConflict(message)
+
+
+def encoded(value):
+    return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
+
+
+def default_node_path():
+    base = os.environ.get('XDG_STATE_HOME')
+    if not base or not Path(base).is_absolute():
+        base = Path.home() / '.local' / 'state'
+    return Path(base) / 'federated-workspace' / 'node.json'
+
+
+def identity(path):
+    info = path.lstat()
+    check(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid(), 'Neplatná pracovní složka.')
+    return [info.st_dev, info.st_ino]
+
+
+def regular(path, *, private=True):
+    info = path.lstat()
+    mask = 0o077 if private else 0o022
+    check(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.getuid()
+          and not info.st_mode & mask, 'Neplatný vlastník, typ nebo práva lokálního souboru.')
+
+
+def rename_new(source, target):
+    """Linux atomic directory publication: never replace even an empty directory."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    rename = libc.renameat2
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(-100, os.fsencode(source), -100, os.fsencode(target), 1):
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    sync_dir(target.parent)
+    if source.parent != target.parent:
+        sync_dir(source.parent)
+
+
+def rename_exchange(source, target):
+    """Atomically exchange two owned directories without replacing either one."""
+    libc = ctypes.CDLL(None, use_errno=True)
+    rename = libc.renameat2
+    rename.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+    rename.restype = ctypes.c_int
+    if rename(-100, os.fsencode(source), -100, os.fsencode(target), 2):
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    sync_dir(target.parent)
+
+
+def sync_tree(root):
+    for parent, dirs, files in os.walk(root, topdown=False, followlinks=False):
+        for name in files:
+            fd = os.open(Path(parent) / name, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        sync_dir(parent)
+
+
+def seed_manifest(files):
+    """Validate an unpublished initial snapshot and bind its exact bytes."""
+    check(isinstance(files, dict), 'Počáteční snapshot musí být mapa souborů.')
+    manifest, total = [], 0
+    for name, raw in sorted(files.items()):
+        safe_path(name)
+        check(name not in {'project.json', '.git'} and not name.startswith('.git/'),
+              'Počáteční snapshot nesmí nahradit konfiguraci ani Git metadata.')
+        check(isinstance(raw, bytes) and len(raw) <= MAX_FILE,
+              'Soubor počátečního snapshotu přesahuje 16 MiB.')
+        total += len(raw)
+        check(total <= MAX_SNAPSHOT, 'Počáteční snapshot přesahuje 64 MiB.')
+        manifest.append({'path': name, 'size': len(raw),
+                         'sha256': hashlib.sha256(raw).hexdigest()})
+    return manifest
+
+
+def write_seed(root, files):
+    for name, raw in sorted(files.items()):
+        target = root.joinpath(*safe_path(name))
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'wb') as handle:
+            handle.write(raw); handle.flush(); os.fsync(handle.fileno())
+    sync_tree(root)
+
+
+def read_seed(root, expected):
+    files, total = {}, 0
+    for parent, dirs, names in os.walk(root, followlinks=False):
+        for dirname in dirs:
+            check(not (Path(parent) / dirname).is_symlink(), 'Počáteční snapshot obsahuje symlink.')
+        for name in names:
+            path = Path(parent) / name
+            regular(path)
+            relative = path.relative_to(root).as_posix()
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            with os.fdopen(fd, 'rb') as handle:
+                raw = handle.read(MAX_FILE + 1)
+            check(len(raw) <= MAX_FILE, 'Soubor počátečního snapshotu přesahuje 16 MiB.')
+            total += len(raw)
+            check(total <= MAX_SNAPSHOT, 'Počáteční snapshot přesahuje 64 MiB.')
+            files[relative] = raw
+    check(seed_manifest(files) == expected, 'Počáteční snapshot operace se změnil.')
+    return files
+
+
+class ProjectCreation:
+    def __init__(self, node_path, *, timeout=60):
+        self.node_path = Path(node_path).absolute()
+        self.runtime = self.node_path.parent / ('.' + self.node_path.name + '.operations')
+        self.database = self.runtime / 'creation.sqlite'
+        self.timeout = timeout
+
+    def _node(self):
+        if not os.path.lexists(self.node_path):
+            return None, None
+        regular(self.node_path, private=False)
+        data = read_config(self.node_path)
+        return data, parse_node(data, location=self.node_path)
+
+    @contextmanager
+    def _locked(self):
+        check(self.node_path == self.node_path.resolve(), 'Konfigurace uzlu nesmí vést přes symlink.')
+        before, node = self._node()
+        if node:
+            for binding in node['projects']:
+                for key in ('root', 'state_dir'):
+                    check(not overlap(self.runtime, local_path(binding[key])),
+                          'Journal uzlu musí být mimo projekt a jeho stav.')
+        missing, parent = [], self.node_path.parent
+        while not parent.exists():
+            missing.append(parent)
+            parent = parent.parent
+        directory(parent)
+        for path in reversed(missing):
+            path.mkdir(mode=0o700)
+            sync_dir(path.parent)
+        self.runtime.mkdir(mode=0o700, exist_ok=True)
+        directory(self.runtime, private=True)
+        sync_dir(self.runtime.parent)
+        for path in self.runtime.iterdir():
+            regular(path)
+        fd = os.open(self.runtime / 'writer.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, 'a+b') as lock:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise CreationConflict('Jiná operace uzlu právě probíhá. Zkuste to později.') from exc
+            fd = os.open(self.database, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+            os.close(fd)
+            db = sqlite3.connect(self.database, timeout=2)
+            try:
+                db.execute('PRAGMA synchronous=FULL')
+                version = db.execute('PRAGMA user_version').fetchone()[0]
+                check(version in (0, 1, 2), 'Nepodporovaná verze journalu operací projektu.')
+                db.executescript('''
+                    CREATE TABLE IF NOT EXISTS local_author (id TEXT NOT NULL);
+                    CREATE TABLE IF NOT EXISTS creations (
+                        id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
+                    CREATE UNIQUE INDEX IF NOT EXISTS one_pending_creation ON creations(done) WHERE done=0;
+                    CREATE TABLE IF NOT EXISTS project_deletions (
+                        id TEXT PRIMARY KEY, record TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0);
+                    CREATE UNIQUE INDEX IF NOT EXISTS one_pending_project_deletion
+                        ON project_deletions(done) WHERE done=0;
+                    PRAGMA user_version=2;
+                ''')
+                if db.execute('SELECT id FROM local_author').fetchone() is None:
+                    db.execute('INSERT INTO local_author VALUES (?)', (str(uuid4()),))
+                db.commit()
+                sync_dir(self.runtime)
+                yield db
+            finally:
+                db.close()
+
+    def initialize_node(self, name='Desktop workspace'):
+        """Bootstrap an empty node under the creation lock; never replace state."""
+        with self._locked() as db:
+            _, existing = self._node()
+            if existing:
+                return existing
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
+            node = {'schema_version': 1, 'id': str(uuid4()), 'name': name, 'projects': []}
+            parse_node(encoded(node), location=self.node_path)
+            with tempfile.NamedTemporaryFile(dir=self.node_path.parent, delete=False) as handle:
+                temporary = Path(handle.name)
+                handle.write(encoded(node)); handle.flush(); os.fsync(handle.fileno())
+            try:
+                try:
+                    os.link(temporary, self.node_path)
+                except FileExistsError:
+                    pass
+                sync_dir(self.node_path.parent)
+            finally:
+                temporary.unlink(missing_ok=True)
+            return self._node()[1]
+
+    def author_id(self):
+        """Reuse the durable local author, never substitute the node UUID."""
+        with self._locked() as db:
+            return db.execute('SELECT id FROM local_author').fetchone()[0]
+
+    def _save(self, db, record, *, done=False):
+        db.execute('INSERT OR REPLACE INTO creations VALUES (?, ?, ?)',
+                   (record['operation_id'], json.dumps(record), int(done)))
+        db.commit()
+
+    def _read_existing_project(self, root, deadline):
+        git = Git(root, deadline=deadline)
+        require(Path(git.run('rev-parse', '--show-toplevel').stdout.strip()) == root,
+                'Registrace musí odkazovat na kořen Git repozitáře')
+        require(git.run('rev-parse', '--is-bare-repository').stdout.strip() == 'false',
+                'Projekt nesmí být bare repository')
+        commit = git.head()
+        entry = git.run('ls-tree', commit, '--', 'project.json').stdout.strip()
+        require(bool(entry), 'V projektu chybí project.json')
+        info, name = entry.split('\t', 1)
+        mode, kind, oid = info.split()
+        require(name == 'project.json' and mode in {'100644', '100755'} and kind == 'blob',
+                'Project.json musí být Git blob v kořeni projektu')
+        data = git.run('cat-file', 'blob', oid, binary=True).stdout
+        meta = parse_project(data)
+        require(read_config(root / 'project.json') == data,
+                'Pracovní project.json nesouhlasí s commitem')
+        return git, commit, meta
+
+    def configured_projects_root(self):
+        """Return the explicitly saved creation parent, if any."""
+        _, node = self._node()
+        if node and 'projects_root' in node:
+            return Path(node['projects_root'])
+        return None
+
+    def default_projects_root(self):
+        """Return the saved creation parent or the desktop home fallback."""
+        return self.configured_projects_root() or Path.home()
+
+    def create(self, title, root, operation_id, *, remember_parent=False,
+               initial_files=None, project_id=None, created_at=None,
+               request_digest=None, commit_message='Initialize project',
+               checkpoint=lambda stage: None):
+        uuid(operation_id)
+        check(isinstance(title, str) and bool(title.strip()) and len(title) <= 200
+              and not any(ord(c) < 32 for c in title), 'Zadejte název projektu (nejvýše 200 znaků).')
+        seeded = initial_files is not None
+        files = initial_files if seeded else {}
+        manifest = seed_manifest(files)
+        seed_digest = hashlib.sha256(encoded(manifest)).hexdigest() if seeded else None
+        check(isinstance(commit_message, str) and bool(commit_message.strip())
+              and len(commit_message) <= 200 and '\n' not in commit_message and '\r' not in commit_message,
+              'Neplatná zpráva počátečního commitu.')
+        if seeded:
+            check(bool(files), 'Seeded vytvoření vyžaduje neprázdný počáteční snapshot.')
+            uuid(project_id)
+            check(isinstance(created_at, str) and isinstance(request_digest, str)
+                  and len(request_digest) == 64
+                  and all(char in '0123456789abcdef' for char in request_digest),
+                  'Seeded vytvoření vyžaduje platný identifikátor, čas a digest požadavku.')
+            validate_snapshot(files)
+        else:
+            check(project_id is None and created_at is None and request_digest is None
+                  and commit_message == 'Initialize project',
+                  'Počáteční metadata lze zadat pouze se seeded snapshotem.')
+        root = Path(root)
+        check(root.is_absolute() and root == local_path(str(root)), 'Zadejte absolutní cestu bez symlinků.')
+        try:
+            directory(root.parent)
+        except ValueError as exc:
+            raise CreationConflict(str(exc)) from exc
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type', 'create') == 'create' and record['root'] == str(root)
+                      and record['title'] == title and record.get('remember_parent', False) == remember_parent
+                      and record.get('seed_digest') == seed_digest
+                      and record.get('request_digest') == request_digest
+                      and record.get('commit_message', 'Initialize project') == commit_message
+                      and (project_id is None or record['meta']['id'] == project_id),
+                      'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
+            existing_root = os.path.lexists(root)
+            if existing_root:
+                try:
+                    directory(root)
+                except ValueError as exc:
+                    raise CreationConflict(str(exc)) from exc
+                check(not list(root.iterdir()),
+                      'Existující cílová složka musí být prázdná.')
+            before, node = self._node()
+            node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
+            if remember_parent:
+                node['projects_root'] = str(root.parent)
+            project_id = project_id or str(uuid4())
+            state = root.parent / ('.workspace-state-' + project_id)
+            check(not os.path.lexists(state), 'Cílový lokální stav již existuje.')
+            node['projects'].append(dict(project_id=project_id, root=str(root), state_dir=str(state)))
+            after = encoded(node)
+            parse_node(after, location=self.node_path)
+            for binding in node['projects']:
+                for key in ('root', 'state_dir'):
+                    check(not overlap(self.runtime, local_path(binding[key])),
+                          'Projekt ani stav nesmí překrývat journal uzlu.')
+            meta = dict(schema_version=1, id=project_id, title=title,
+                        created_at=created_at or datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z'),
+                        author_id=db.execute('SELECT id FROM local_author').fetchone()[0])
+            parse_project(encoded(meta))
+            stage = Path(tempfile.mkdtemp(prefix='.workspace-create-' + operation_id + '-', dir=root.parent))
+            try:
+                (stage / 'repo').mkdir(mode=0o700)
+                (stage / 'state').mkdir(mode=0o700)
+                if seeded:
+                    (stage / 'seed').mkdir(mode=0o700)
+                    write_seed(stage / 'seed', files)
+                sync_dir(stage)
+                sync_dir(stage.parent)
+            except Exception:
+                shutil.rmtree(stage)
+                raise
+            record = dict(operation_id=operation_id, title=title, root=str(root), state=str(state),
+                          stage=str(stage), stage_identity=identity(stage), meta=meta,
+                          before=before.decode() if before is not None else None, after=after.decode(),
+                          type='create', remember_parent=remember_parent, ready=False, receipt=None,
+                          seed_manifest=manifest if seeded else None, seed_digest=seed_digest,
+                          request_digest=request_digest, commit_message=commit_message,
+                          existing_root=existing_root,
+                          target_identity=identity(root) if existing_root else None)
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
+    def resume_seeded(self, title, root, operation_id, project_id, request_digest,
+                      *, checkpoint=lambda stage: None):
+        """Return/recover a matching seeded creation without its original input bundle."""
+        uuid(operation_id); uuid(project_id)
+        root = Path(root)
+        check(root.is_absolute() and isinstance(request_digest, str)
+              and len(request_digest) == 64
+              and all(char in '0123456789abcdef' for char in request_digest),
+              'Neplatný požadavek na obnovu seeded projektu.')
+        if not self.database.exists():
+            return None
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?',
+                             (operation_id,)).fetchone()
+            if row is None:
+                return None
+            record = json.loads(row[0])
+            check(record.get('type', 'create') == 'create'
+                  and record.get('seed_manifest') is not None
+                  and record['root'] == str(root) and record['title'] == title
+                  and record['meta']['id'] == project_id
+                  and record.get('request_digest') == request_digest,
+                  'ID operace už patří jinému požadavku.')
+            return record['receipt'] if row[1] else self._finish(
+                db, record, deadline, checkpoint)
+
+    def register(self, root, operation_id, *, checkpoint=lambda stage: None):
+        uuid(operation_id)
+        root = Path(root)
+        check(root.is_absolute() and root == local_path(str(root)), 'Zadejte absolutní cestu bez symlinků.')
+        check(root.exists(), 'Projektový kořen neexistuje.')
+        directory(root.parent)
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type') == 'register' and record['root'] == str(root),
+                      'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené vytvoření projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
+            before, node = self._node()
+            node = node or dict(schema_version=1, id=str(uuid4()), name='Lokální uzel', projects=[])
+            git, commit, meta = self._read_existing_project(root, deadline)
+            project_id = meta['id']
+            check(not any(binding['project_id'] == project_id for binding in node['projects']),
+                  'Projekt je již registrovaný.')
+            state = root.parent / ('.workspace-state-' + project_id)
+            check(not os.path.lexists(state), 'Cílový lokální stav již existuje.')
+            node['projects'].append(dict(project_id=project_id, root=str(root), state_dir=str(state)))
+            after = encoded(node)
+            parse_node(after, location=self.node_path)
+            for binding in node['projects']:
+                for key in ('root', 'state_dir'):
+                    check(not overlap(self.runtime, local_path(binding[key])),
+                          'Projekt ani stav nesmí překrývat journal uzlu.')
+            record = dict(operation_id=operation_id, root=str(root), state=str(state), project_id=project_id,
+                          commit_id=commit, meta=meta, ready=False, receipt=None, type='register',
+                          before=before.decode() if before is not None else None, after=after.decode())
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
+    def relocate(self, project_id, root, operation_id, *, checkpoint=lambda stage: None):
+        """Atomically repair one registration after its repository was moved.
+
+        The existing state is retained, so relocation is limited to the same
+        filesystem. No project bytes, Git refs, journal or index are moved.
+        """
+        uuid(project_id)
+        uuid(operation_id)
+        root = Path(root)
+        check(root.is_absolute() and root == local_path(str(root)),
+              'Zadejte absolutní cestu bez symlinků.')
+        check(root.exists(), 'Projektový kořen neexistuje.')
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type') == 'relocate' and record['project_id'] == project_id
+                      and record['root'] == str(root), 'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušenou operaci projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
+            before, node = self._node()
+            check(node is not None, 'Uzel zatím nemá registraci projektů.')
+            binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
+            check(binding is not None, 'Projekt není registrovaný.')
+            directory(root); directory(root / '.git')
+            _, commit, meta = self._read_existing_project(root, deadline)
+            check(meta['id'] == project_id, 'Vybraná složka patří jinému projektu.')
+            state = directory(binding['state_dir'], private=True)
+            check(state.stat().st_dev == root.stat().st_dev,
+                  'Nové umístění je na jiném filesystemu než lokální stav; použijte bezpečný přesun stavu.')
+            for other in node['projects']:
+                if other is not binding:
+                    check(not overlap(root, local_path(other['root']))
+                          and not overlap(root, local_path(other['state_dir'])),
+                          'Nové umístění se překrývá s jiným projektem nebo stavem.')
+            if Path(binding['root']) == root:
+                return dict(operation_id=operation_id, id=project_id, title=meta['title'], commit_id=commit)
+            updated = dict(node, projects=[dict(item, root=str(root)) if item['project_id'] == project_id
+                                           else item for item in node['projects']])
+            after = encoded(updated)
+            parse_node(after, location=self.node_path)
+            record = dict(operation_id=operation_id, project_id=project_id, root=str(root),
+                          old_root=binding['root'], state=binding['state_dir'], title=meta['title'],
+                          commit_id=commit, before=before.decode(), after=after.decode(),
+                          type='relocate', receipt=None)
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
+    def registration_root_missing(self, project_id):
+        """Report only literal disappearance; invalid or inaccessible roots stay registered."""
+        uuid(project_id)
+        _, node = self._node()
+        check(node is not None, 'Uzel zatím nemá registraci projektů.')
+        binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
+        check(binding is not None, 'Projekt není registrovaný.')
+        return missing(binding['root'])
+
+    def unregister_missing(self, project_id, operation_id, *, checkpoint=lambda stage: None):
+        """Remove only a missing-root registration; preserve all filesystem state."""
+        uuid(project_id)
+        uuid(operation_id)
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record, done FROM creations WHERE id=?', (operation_id,)).fetchone()
+            if row:
+                record = json.loads(row[0])
+                check(record.get('type') == 'unregister-missing'
+                      and record['project_id'] == project_id,
+                      'ID operace už patří jinému požadavku.')
+                if row[1]:
+                    return record['receipt']
+                return self._finish(db, record, deadline, checkpoint)
+            check(not db.execute('SELECT 1 FROM creations WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušenou operaci projektu.')
+            check(not db.execute('SELECT 1 FROM project_deletions WHERE done=0').fetchone(),
+                  'Nejprve dokončete přerušené odstranění projektu.')
+            before, node = self._node()
+            check(node is not None, 'Uzel zatím nemá registraci projektů.')
+            binding = next((item for item in node['projects'] if item['project_id'] == project_id), None)
+            check(binding is not None, 'Projekt není registrovaný.')
+            check(missing(binding['root']),
+                  'Projektové umístění stále existuje; odebrání je dostupné pouze pro ztracený kořen.')
+            updated = dict(node, projects=[item for item in node['projects']
+                                           if item['project_id'] != project_id])
+            after = encoded(updated)
+            parse_node(after, location=self.node_path)
+            record = dict(operation_id=operation_id, project_id=project_id,
+                          root=binding['root'], state=binding['state_dir'],
+                          before=before.decode(), after=after.decode(),
+                          type='unregister-missing', receipt=None)
+            self._save(db, record)
+            checkpoint('prepared')
+            return self._finish(db, record, deadline, checkpoint)
+
+    def recover(self, *, checkpoint=lambda stage: None):
+        if not self.database.exists():
+            return None
+        deadline = time.monotonic() + self.timeout
+        with self._locked() as db:
+            row = db.execute('SELECT record FROM creations WHERE done=0').fetchone()
+            return self._finish(db, json.loads(row[0]), deadline, checkpoint) if row else None
+
+    def _finish(self, db, record, deadline, checkpoint):
+        def boundary(stage):
+            if time.monotonic() >= deadline:
+                raise TimeoutError('Vytvoření překročilo časový limit; operace zůstala k obnově.')
+            checkpoint(stage)
+
+        if record.get('type') == 'register':
+            return self._finish_register(db, record, deadline, boundary)
+        if record.get('type') == 'relocate':
+            return self._finish_relocate(db, record, deadline, boundary)
+        if record.get('type') == 'unregister-missing':
+            return self._finish_unregister_missing(db, record, boundary)
+
+        root, state, stage = (Path(record[k]) for k in ('root', 'state', 'stage'))
+        directory(root.parent)
+        check(stage.parent == root.parent and stage.name.startswith('.workspace-create-' + record['operation_id'] + '-')
+              and identity(stage) == record['stage_identity'], 'Pracovní složka operace se změnila.')
+        before, _ = self._node()
+        check(before in (None if record['before'] is None else record['before'].encode(), record['after'].encode()),
+              'Konfigurace uzlu se mezitím změnila. Cizí změny byly zachovány.')
+        if not record['ready']:
+            if record.get('existing_root'):
+                check(os.path.lexists(root) and identity(root) == record['target_identity']
+                      and not list(root.iterdir()),
+                      'Existující cílová složka se mezitím změnila.')
+            else:
+                check(not os.path.lexists(root), 'Cíl přerušené operace je obsazený.')
+            check(not os.path.lexists(state), 'Cílový lokální stav je obsazený.')
+            allowed = {'repo', 'state'} | ({'seed'} if record.get('seed_manifest') is not None else set())
+            check({p.name for p in stage.iterdir()} <= allowed, 'Pracovní složka má cizí soubory.')
+            # Before ready, these are solely unpublished disposable files owned by the recorded staging inode.
+            if (stage / 'repo').exists():
+                check(not (stage / 'repo').is_symlink(), 'Neplatný staging projektu.')
+                shutil.rmtree(stage / 'repo')
+            (stage / 'repo').mkdir(mode=0o700)
+            check(not list((stage / 'state').iterdir()), 'Pracovní stav není prázdný.')
+            repo = stage / 'repo'
+            seed_files = (read_seed(stage / 'seed', record['seed_manifest'])
+                          if record.get('seed_manifest') is not None else {})
+            if seed_files:
+                write_seed(repo, seed_files)
+            (repo / 'project.json').write_bytes(encoded(record['meta']))
+            validate_snapshot(seed_files)
+            git = Git(repo, deadline=deadline)
+            git.run('init', '--template=', '--initial-branch=main')
+            (repo / '.git').chmod(0o700)
+            git.run('add', '--all')
+            author = record['meta']['author_id']
+            date = record['meta']['created_at']
+            git.run('commit', '-m', record.get('commit_message', 'Initialize project')
+                    + '\n\nWorkspace-Creation: ' + record['operation_id'],
+                    env_extra=dict(GIT_AUTHOR_NAME='Local user', GIT_COMMITTER_NAME='Local user',
+                                   GIT_AUTHOR_EMAIL=author + '@local.invalid', GIT_COMMITTER_EMAIL=author + '@local.invalid',
+                                   GIT_AUTHOR_DATE=date, GIT_COMMITTER_DATE=date))
+            commit = git.head()
+            sync_tree(stage)
+            boundary('built')
+            record.update(ready=True, commit_id=commit, root_identity=identity(repo),
+                          state_identity=identity(stage / 'state'))
+            self._save(db, record)
+            boundary('ready')
+        for name, target, expected in [('repo', root, record['root_identity']),
+                                       ('state', state, record['state_identity'])]:
+            source = stage / name
+            if os.path.lexists(source):
+                if name == 'repo' and record.get('existing_root'):
+                    if identity(target) != expected:
+                        check(identity(source) == expected
+                              and identity(target) == record['target_identity']
+                              and not list(target.iterdir()),
+                              'Existující cílová složka se mezitím změnila.')
+                        rename_exchange(source, target)
+                else:
+                    check(identity(source) == expected, 'Pracovní data operace se změnila.')
+                    rename_new(source, target)
+            check(identity(target) == expected, 'Cílovou složku nahradila jiná data.')
+            boundary('root-published' if name == 'repo' else 'state-published')
+        git = Git(root, deadline=deadline)
+        check(git.head() == record['commit_id'] and not git.run('status', '--porcelain', '--untracked-files=all').stdout,
+              'Nově založený projekt byl mezitím změněn; změny byly zachovány.')
+        check(read_config(root / 'project.json') == encoded(record['meta']), 'Projektová konfigurace byla změněna.')
+        ws = Workspace(root, state)
+        ws.git = git
+        result = ws.read_project(record['meta']['id'])
+        boundary('indexed')
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=result['id'],
+                                 title=result['title'], commit_id=result['commit_id'])
+        self._save(db, record, done=True)
+        # Receipt is authoritative even if optional staging cleanup is interrupted.
+        try:
+            seed = stage / 'seed'
+            if seed.exists() and record.get('seed_manifest') is not None:
+                read_seed(seed, record['seed_manifest'])
+                for item in reversed(record['seed_manifest']):
+                    path = seed / item['path']
+                    path.unlink()
+                    parent = path.parent
+                    while parent != seed:
+                        try:
+                            parent.rmdir()
+                        except OSError:
+                            break
+                        parent = parent.parent
+                seed.rmdir()
+            if record.get('existing_root'):
+                displaced = stage / 'repo'
+                if displaced.exists() and identity(displaced) == record['target_identity']:
+                    check(not list(displaced.iterdir()), 'Původní cílová složka se mezitím změnila.')
+                    displaced.rmdir()
+            stage.rmdir()
+            sync_dir(stage.parent)
+        except OSError:
+            pass  # Never delete unexpected files; retained for later explicit cleanup.
+        boundary('completed')
+        return record['receipt']
+
+    def _finish_register(self, db, record, deadline, boundary):
+        root, state = Path(record['root']), Path(record['state'])
+        before, _ = self._node()
+        check(before in (None if record['before'] is None else record['before'].encode(), record['after'].encode()),
+              'Konfigurace uzlu se mezitím změnila. Cizí změny byly zachovány.')
+        project_id = record['project_id']
+        if not record['ready']:
+            _, commit, meta = self._read_existing_project(root, deadline)
+            check(commit == record['commit_id'], 'Projekt byl po zahájení registrace změněn.')
+            check(meta['id'] == project_id, 'ID projektu se nezměnilo.')
+            if not state.exists():
+                directory(state.parent)
+                state.mkdir(mode=0o700)
+            else:
+                check(state.is_dir(), 'Cílový lokální stav má chybný formát.')
+                check(state.stat().st_mode & 0o777 == 0o700, 'Lokální stav má neplatný režim.')
+            check(state.stat().st_dev == root.stat().st_dev, 'Projektový stav je mimo filesystem projektu.')
+            ws = Workspace(root, state, blocking=True, deadline=deadline)
+            ws.read_project(project_id)
+            boundary('indexed')
+            record.update(ready=True, title=meta['title'], state_identity=identity(state))
+            self._save(db, record)
+        else:
+            check(identity(state) == record['state_identity'], 'Lokální stav byl změněn.')
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=project_id,
+                                 title=record.get('title'), commit_id=record['commit_id'])
+        self._save(db, record, done=True)
+        boundary('completed')
+        return record['receipt']
+
+    def _finish_relocate(self, db, record, deadline, boundary):
+        root, state = Path(record['root']), Path(record['state'])
+        directory(root); directory(root / '.git')
+        _, commit, meta = self._read_existing_project(root, deadline)
+        check(commit == record['commit_id'] and meta['id'] == record['project_id'],
+              'Projekt se po zahájení opravy umístění změnil.')
+        directory(state, private=True)
+        check(state.stat().st_dev == root.stat().st_dev,
+              'Projektový stav je mimo filesystem nového umístění.')
+        lock_fd = os.open(state / 'writer.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(lock_fd, 'a+b') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            journal = state / 'journal.sqlite'
+            regular(journal)
+            with sqlite3.connect(journal, timeout=2) as project_db:
+                project_db.execute('PRAGMA synchronous=FULL')
+                owner = project_db.execute('SELECT root FROM owner').fetchone()
+                check(owner and owner[0] in {record['old_root'], record['root']},
+                      'Lokální stav patří jinému umístění projektu.')
+                check(not project_db.execute('SELECT 1 FROM pending LIMIT 1').fetchone()
+                      and not project_db.execute('SELECT 1 FROM operations WHERE done=0').fetchone(),
+                      'Projekt má nedokončenou operaci; nejprve ji obnovte v původním umístění.')
+                if owner[0] != record['root']:
+                    project_db.execute('UPDATE owner SET root=?', (record['root'],))
+                    project_db.commit()
+            sync_dir(state)
+        boundary('state-rebound')
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=record['project_id'],
+                                 title=record['title'], commit_id=record['commit_id'])
+        self._save(db, record, done=True)
+        boundary('completed')
+        return record['receipt']
+
+    def _finish_unregister_missing(self, db, record, boundary):
+        before, _ = self._node()
+        after = record['after'].encode()
+        if before != after:
+            check(before == record['before'].encode(),
+                  'Konfigurace uzlu se mezitím změnila; nebyla přepsána.')
+            check(missing(record['root']),
+                  'Projektové umístění se znovu objevilo; registrace nebyla odebrána.')
+        # State, Git data elsewhere, chat stores and credentials are deliberately untouched.
+        self._publish_node(record)
+        boundary('node-published')
+        record['receipt'] = dict(operation_id=record['operation_id'], id=record['project_id'],
+                                 unregistered=True, state_preserved=record['state'])
+        self._save(db, record, done=True)
+        boundary('completed')
+        return record['receipt']
+
+    def _publish_node(self, record):
+        before, _ = self._node()
+        after = record['after'].encode()
+        if before == after:
+            return
+        check(before == (None if record['before'] is None else record['before'].encode()),
+              'Konfigurace uzlu se mezitím změnila; nebyla přepsána.')
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(prefix='.node-write-', dir=self.node_path.parent, delete=False) as file:
+                temporary = Path(file.name)
+                file.write(after)
+                file.flush()
+                os.fsync(file.fileno())
+            if before is None:
+                rename_new(temporary, self.node_path)
+            else:
+                os.replace(temporary, self.node_path)
+            sync_dir(self.node_path.parent)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)

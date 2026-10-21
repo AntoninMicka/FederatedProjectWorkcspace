@@ -1,12 +1,521 @@
-# Katalog reuse
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# Veřejný katalog reuse
+
+Katalog verzovaný v Gitu obsahuje technologie, komponenty tohoto workspace a pouze externí zdrojové repozitáře s ověřenou veřejnou dostupností.
+
+## Externí zdrojové repozitáře
+
+Zatím žádné. Před zařazením uvést veřejnou URL, ověřit přístup bez přihlášení a zaznamenat licenci, revizi a důvod reuse/adapt/reject. Samotná veřejná dostupnost neznamená oprávnění k převzetí kódu.
+
+Soukromou lokální inventuru drží volitelný soubor `REUSE_CATALOG.private.md`, ignorovaný Gitem. Jeho absence v čerstvém klonu je očekávaná. Lokální cesty, neveřejné názvy repozitářů a podrobnosti jejich posouzení se do verzovaných dokumentů nepřenášejí.
+
+## Technologie a závislosti
 
 | Kandidát | Stav | Účel | Co zbývá ověřit |
 | --- | --- | --- | --- |
-| Git CLI | evaluate | Referenční storage PoC | Produkční izolace, autentizace, cílové balení |
-| libgit2 / C++ | evaluate | Alternativní Git adapter | Knihovna není v prostředí dostupná přes pkg-config; sestavení a srovnávací PoC |
-| Python stdlib SQLite | evaluate | Obnovitelný projektový index (`spikes/storage.py`) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Integrace zápisu, úplná projekce metadat/vztahů, výkon a paměť na Turrisu |
-| PyYAML 6.0.3 | evaluate | Omezený frontmatter parser v M0 | Produkční distribuce a audit závislosti před vydáním |
+| Git CLI | adapt (výchozí adapter, ADR 0005) | Referenční storage a Workspace; reuse wrapperu, vlastní staging a compare-and-swap podle ADR 0003 | Produkční izolace, autentizace, cílové balení |
+| libgit2 / C++ | evaluate (PoC validated) | Ověřená alternativa, `spikes/libgit2/probe.cpp`, ADR 0005 | Runtime 1.9.1 dostupný; chybějící dev headers rozbaleny do /tmp. Produkční port Workspace, cílové balení a TLS/SSH neověřeny |
+| Python stdlib SQLite | adapt (M0/M1 PoC) | Obnovitelný relační projektový index (`spikes/storage.py`, ADR 0022) a oddělený autoritativní lokální journal rozpracovaných operací (`spikes/journal.py`), viz ADR 0002 | Koordinace ověřena v Workspace (ADR 0003); ověření metadat/vztahů ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15), zbývá produkční integrace, výkon a paměť na Turrisu |
+| PyYAML 6.0.3 | approved | Omezený frontmatter parser v M0 | Produkční release: doplnit evidence licenčních textů/notice pro všechny distribuované třetí strany; aktuálně je pro PyYAML 6.0.3 v M1 audit potvrzen jako MIT-approved (2026-09-10). |
+| Segno 1.6.6 | reuse (presenter PoC) | Lokální QR kontaktů, čistý Python bez dalších runtime závislostí; [veřejný upstream](https://github.com/heuer/segno), BSD-3-Clause, dostupnost a licence ověřeny 2026-09-26 | Cílové systémové balení; knihovna se nekopíruje do zdrojů projektu |
 | Qt / WebView | candidate | Desktopový obal sdíleného UI | Distribuce, IPC, paměť |
-| Vlastní starší projekty | candidate | Potenciální reuse | Repozitáře zatím nejsou určeny; licence a kompatibilita neověřeny |
+
+Nad rámec komponent najdeš evidenci compliance závislostí v [docs/legal/DEPENDENCIES.toml](docs/legal/DEPENDENCIES.toml).
 
 Žádná komponenta zatím nemá schválený produkční status reuse. Licence a verze závislostí zaznamenat před zařazením do distribuované aplikace.
+
+M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich testy: zachovává validátor, fsync/recovery a commitovou projekci, přidává trvalý operation record a nadřazený zámek. Rewrite by opakoval ověřený PoC.
+
+Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.
+
+M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
+
+M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+
+## Již používané vlastní komponenty
+
+Zdrojem je tento repozitář, základ průzkumu `384370e`. Závislosti: Python 3.11+, stdlib včetně sqlite3 a Linux fcntl, Git CLI; deklarované pip závislosti jsou PyYAML 6.0.3 a Segno 1.6.6 v [requirements.txt](requirements.txt). Bash zajišťuje launcher. C++17/libgit2 je volitelný srovnávací experiment podle [ADR 0005](docs/adr/0005-git-adapter-comparison.md).
+
+| Komponenta / zdroj | Rozhodnutí a důvod | Důkazy a omezení |
+| --- | --- | --- |
+| [Validace metadat](spikes/metadata.py) | **adapt**: společný omezený JSON/YAML parser, UUID a vztahy; nepřidávat další parser | [Testy](tests/test_metadata.py); V-04/V-05: kontrakt provenance a neměnnost zdrojů |
+| [Journal](spikes/journal.py) a [Workspace](spikes/workspace.py) | **adapt**: zachovat společnou serializaci a obnovitelnou operaci | [ADR 0003](docs/adr/0003-coordinated-operation.md), [testy](tests/test_workspace.py); V-06/V-07: produkční ochrany a lifecycle |
+| [Git a SQLite index](spikes/storage.py) | **adapt**: validovaný commit a atomický rebuild relační projekce místo druhé autority | [Testy](tests/test_storage.py), [relační testy](tests/test_index_projection.py), [ADR 0022](docs/adr/0022-relational-index.md); F-M1-INDEX-01/V-03: ověření a omezení ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15) |
+| [Konfigurace](spikes/configuration.py) | **adapt**: sdílená validační primitiva, oddělený projekt a uzel | [ADR 0004](docs/adr/0004-project-node-config.md), [testy](tests/test_configuration.py); V-08: zapojení do lifecycle |
+| [Launcher](run.sh), [demo](spikes/demo.py), [check_project](spikes/check_project.py), [check_config](spikes/check_config.py) | **reuse** v nynějším vývojovém workflow | Příkazy v [README](README.md), důkazy ve [WORK_LOG](WORK_LOG.md); [BACKLOG](BACKLOG.md) V-01: automatizace CLI validátoru; není to aplikační server/UI |
+
+Stavy těchto komponent jsou implemented / PoC validated dle odkazovaných ADR a WORK_LOG. Tento dokument nezaznamenává nový běh testů ani novou volbu stacku. Navazující úkoly drží TODO/BACKLOG, výsledky ověření WORK_LOG.
+
+M0-04 **adaptuje** omezený JSON parser z `spikes/metadata.py` a **reuse** stdlib HTTP/socketserver pro izolovaný [transportní experiment](spikes/local_api.py). Vlastní minimální handler odděluje zkoušku autentizace od aplikačního stacku; nejde o přenos cizího serveru ani produkční volbu frameworku. Rozhodnutí a limity: [ADR 0006](docs/adr/0006-local-api-transport.md).
+
+M0-06a **adaptuje** `spikes/local_api.py` s odděleným statickým UI handlerem a **evaluate** systémový PyQt6/Qt WebEngine pro desktopový PoC. Důvodem je dostupný binding a zachování Python backendu bez portu či dalšího aplikačního procesu. Ověření a licenční/distribuční omezení: [ADR 0007](docs/adr/0007-desktop-poc.md); produkční Qt binding zatím není vybrán.
+
+Ruční deploy **reuse** existující `spikes.demo` a requirements; **adapt** launcheru přidává transport omezeného archivu a oddělená vydání bez nové storage implementace. Aktualizace current nastává až po úspěšném demu; vzdálené ověření zůstává M0-05.
+
+M1-07 a M1-LXC-DNS-TLS-01 **adapt/reuse** Projects, Workspace, statického UI, HTTP validačního handleru, ručního deploye, TLS bootstrapu a licenčního allowlistu; síťový režim přidává kontrolu local-only nad čteným commitem a volitelnou přesnou DNS autoritu vedle IP. Nový vlastní routerový helper používá LXC CLI a registrační formát [Turris WebApps](https://gitlab.nic.cz/turris/webapps/-/blob/master/README.md), ověřený 2026-09-10. Soukromá inventura posloužila k posouzení integračních vzorů, žádný externí aplikační kód ani asset se nepřenášel. Nový framework není pro omezený LAN náhled potřebný; nejde o produkční server. Hranice, TLS a recovery: [ADR 0020](docs/adr/0020-lxc-web-viewer.md).
+
+F-M2-CONTEXT-01 **adaptuje** existující `Workspace` writer lock, validaci
+projektového snapshotu, Git commit identity a omezený `require`/UUID kontrakt.
+Context Manifest a kanonický payload jsou nový malý stdlib modul; další storage,
+vektorová databáze ani externí framework nejsou potřeba. Modul je read-only a
+nepředstírá backend adapter, RBAC službu ani durable run recovery; ty zůstávají
+navazujícími schopnostmi podle ADR 0008.
+
+F-M2-OLLAMA-01 **adaptuje** Context Builder `Target` a validační primitiva;
+endpoint parsing používá pouze Python stdlib `urllib.parse` a `ipaddress`.
+PoC nezavádí discovery knihovnu ani obecný HTTP framework: číselné adresy a
+explicitní TLS pin jsou záměrná ochrana před DNS rebindingem. Transport musí
+zakázat redirect a ověřit skutečný socketový cíl. Adapter používá stdlib
+`http.client`, `ssl` a autoritativní lokální SQLite run journal; nevytváří další
+projektové úložiště ani implicitní retry/fallback vrstvu. Perzistence bindingu
+adaptuje stejný bezpečný vzor node-local stavu: omezená oprávnění, bounded read,
+striktní revalidace a atomické nahrazení po `fsync`; není obnovitelným projektovým
+indexem ani synchronizovanou konfigurací.
+
+F-M2-CHAT-01 **adaptuje** bezpečnostní vzor node-local SQLite run journalu,
+striktní UUID/text/privacy validaci Context Builderu a jeho explicitní výběr
+přesných bajtů. Thread store je samostatná autorita pro vlákna, zprávy a turny;
+nesmí sdílet tabulky ani recovery s obnovitelným projektovým indexem a nesmí
+předstírat atomickou transakci s backendovým run storem. Vazba přes stabilní run
+ID a idempotentní reconciliation řeší crash boundary bez externí databáze či
+message-queue závislosti. Implementovaný `spikes/chat_threads.py` používá stdlib
+SQLite jako samostatný node-local store; UI draft se nereusuje jako persistentní
+zpráva.
+
+F-M2-CHAT-02 **reuse/adaptuje** `ChatThreads`, standardní artifact metadata,
+`Artifacts` a jediný `Workspace`/Journal/Index lifecycle. Projektový full/delta
+otisk je validovaný Markdown snapshot v existujícím Gitu, nikoli nová databáze
+nebo content-addressed storage; editovatelný výstup zůstává běžný Markdown
+document. Obecné Git utility se nepřebírají, protože nenahrazují explicitní
+vlastněné cesty, expected HEAD, kandidátní validaci a recovery ADR 0003.
+
+F-M2-CHAT-03 **reuse/adaptuje** vlastnictví a revize `ChatThreads`, explicitní
+vazby `TaskOutcomes`/`ExternalDispatches` na backendové run journals a stávající
+bezpečný desktop/web panel. Nový omezený `ThreadLifecycle` journal koordinuje
+jen odstranění podporovaného node-local stavu a idempotentní obnovu; není
+projektovým indexem ani náhradou Workspace journalu. Publikované Git snapshoty
+a výstupy pouze inventarizuje a zachovává. Obecný cleanup framework, message
+queue ani externí databáze se nepřebírají, protože by nepřidaly přesný ownership,
+preview digest, fail-closed `unknown` hranici ani vazbu na zdejší schémata.
+
+F-M2-SUMMARY-01 **reuse/adaptuje** Context Builder a jeho dvoufázovou
+revalidaci, `OllamaBindings`/`OllamaAdapter`/`OllamaRuns`, Workspace a běžný
+Markdown document lifecycle. Backendově neutrální task/preview journal adaptuje
+striktní node-local SQLite vzor `ChatThreads`, ale zůstává samostatnou autoritou
+a nesdílí chatové tabulky ani projektový index. Kanonická provenance obálka a
+její transition ochrana adaptují `fpw-chat-output-v1`. Soukromá inventura byla
+zohledněna bez přenosu názvů či cest: obecné backendové utility nemají potřebný
+Context Manifest, aplikační autorizaci ani recovery a jejich licence nejsou pro
+převzetí doložené. Nová vektorová DB, RAG, message queue, externí parser či
+framework nejsou pro explicitní summarizer v1 potřebné.
+
+F-M2-META-AI-01 **reuse/adaptuje** Context Builder, same-node Ollama lifecycle,
+striktní JSON/metadata validaci, oddělený task/preview vzor extractoru a jediný
+Workspace/Journal/Index metadata commit. Editorový `Artifacts.save` je zdroj
+ověřeného metadata patch vzoru, ale nepoužije se přímo, protože vyžaduje
+Markdown body a nepokrývá source artefakty ani vazbu na potvrzený AI preview.
+Nová databáze, tagovací knihovna, schema framework, RAG či externí klient nejsou
+pro explicitní návrh jednoho artefaktu potřeba.
+
+F-UX-SETTINGS-01 **reuse/adaptuje** existující bezpečně vykreslovaný DOM,
+autentizované same-origin API, `ChatService.configure/status` a atomicky ukládaný
+node-local `OllamaBindings`. Formulář se přesune, nebude duplikován a nevznikne
+druhá autorita konfigurace, projektový zápis, databáze ani UI knihovna.
+
+F-M3-BACKEND-01-A **reuse/adaptuje** `ContextBuilder.Target` a
+`DispatchHandoff`, striktní `OllamaBinding`, právě-jednou hranici
+`OllamaAdapter`/`OllamaRuns` a existující role služeb. Společný kontrakt bude
+malé interní Python rozhraní a registr, ne nový framework, SDK, routing service
+ani storage. Soukromá inventura byla znovu posouzena: dostupné obecné backendové
+abstrakce mohou posloužit jen jako srovnání tvaru capabilities; nepřebírají se,
+protože nedokládají Context Manifest, aplikační privacy autorizaci, přesnou
+identitu bindingu ani durable `unknown` recovery. Existující Ollama kód se
+adaptuje za provider-neutral rozhraní bez kopie transportu a bez automatického
+fallbacku. Rozhodnutí a kompatibilní migrace: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#provider-neutral-aplikační-kontrakt-v1).
+
+F-M3-OLLAMA-ROBUST-01 **reuse/adaptuje** jediný `OllamaBinding`,
+`OllamaAdapter`/`OllamaRuns`, provider-neutral chybové báze a centralizované
+nastavení. Diagnostika rozšiřuje stávající stdlib HTTP/TLS transport a SQLite
+journal; read-only `/api/tags` probe nevytváří druhého klienta ani konfiguraci.
+Obecný backend pool a automatický fallback se odmítají, protože by obcházely
+přesný Target, Context Manifest a privacy boundary. Soukromá inventura byla
+zohledněna pouze srovnávacím posouzením; žádný kód ani její neveřejné detaily se
+nepřenášejí. Provozní topologie a omezení: [Ollama v LAN](docs/ollama-lan.md).
+
+F-M3-OLLAMA-ORCH-LAN-01 **reuse/adaptuje** tentýž potvrzený `OllamaBinding`,
+TLS pinning/probe, `ChatRunChoice`, `ContextBuilder`, `OllamaRuns` a task router.
+LAN orchestrace nepřidává transport, backend pool ani druhou konfiguraci: request
+váže přesné binding ID a revizi a stávající privacy autorizace odmítne
+`local-only`. Automatický fallback a automatický retry `unknown` se odmítají,
+protože by změnily schválený target nebo zopakovaly neurčitý síťový účinek.
+
+F-M4-OUTPUT-ROUTER-01 **adaptuje** bounded JSON parser a validační primitiva
+`module_manifest`, přesné role/backend capability z ADR 0008 a explicitní
+artefaktové předání F-M4-WORKFLOW-01. Output descriptor je samostatná statická
+deklarace pro deterministický router, nikoli executable plugin nebo náhrada
+module API manifestu. Runtime discovery, nový plugin framework a externí kód se
+odmítají jako nepotřebné pro read-only katalog a plán. Kontrakt a hranice:
+[ADR 0030](docs/adr/0030-output-capability-catalog.md).
+
+F-M4-OUTPUT-ROUTER-02 **reuse/adaptuje** přesný katalog a DAG z předchozí
+dávky, durable journal/approval vzor F-M4-WORKFLOW-01 a privátní atomickou
+generaci ADR 0018. Projektový `Workspace` zůstává pouze autoritou případné
+pozdější explicitní publikace; lokální materializaci nezapisuje do Gitu.
+Publication CMS/Cloudflare adaptéry se odmítají jako renderer, protože mají
+jiná oprávnění a externí účinky. Soukromá inventura nedokládá shodný execution,
+manifest, approval a `unknown` recovery kontrakt, proto se z ní nepřebírá kód.
+První přesný same-process renderer používá jen Python stdlib, bez plugin
+frameworku, fronty nebo další persistence. Rozhodnutí: [ADR
+0030](docs/adr/0030-output-capability-catalog.md#execution-persistence-a-recovery).
+
+F-M3-EXTERNAL-01-A **adaptuje pouze ověřené koncepty**, nikoli cizí kód:
+soukromá inventura obsahuje obecné backendové capability, textový a obrazový
+adapter i prioritní pool, ale nedokládá licenci pro převzetí a postrádá Context
+Manifest, explicitní privacy autorizaci, přesný target a durable `unknown`
+recovery. Automatický výběr prvního dostupného backendu, odhad capabilities z
+názvu modelu, převod chyb na prázdný výsledek a stahování libovolné URL se
+odmítají. První textový adapter se napíše nad společným interním kontraktem a
+aktuálním oficiálním [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create);
+obrazová capability zůstává oddělená podle [Images API](https://developers.openai.com/api/reference/resources/images/methods/generate).
+Ze soukromého adapteru se později adaptoval pouze koncept explicitního načtení
+seznamu přes oficiální [Models API](https://developers.openai.com/api/reference/resources/models/methods/list):
+nová implementace je bounded, fail-closed, cachovaná mimo Git a neodvozuje
+capability pouze z názvu. Seznam je pomůcka UI a nemění binding bez potvrzení.
+Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
+Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
+
+F-M3-MEDIA-01-A **adaptuje protokol, nikoli implementaci ComfyUI**: vedle
+OpenAI Images bude `generate-image` poskytovat samostatný ComfyUI adapter nad
+oficiálním serverovým API. Reuse se omezuje na dokumentované request/history/
+output rozhraní; workspace nepřebírá serverový kód, custom nodes, UI ani správu
+modelů. Oficiální ComfyUI repozitář uvádí licenci
+[GPL-3.0](https://github.com/Comfy-Org/ComfyUI/blob/master/LICENSE); protože se
+implementuje nový stdlib klient pouze podle protokolu a nekopíruje se serverový
+kód ani příklady, nevzniká v této dávce nová vendored/runtime závislost.
+Lokálně nalezený checkout není podkladem pro kopírování. Libovolný
+LLM-generovaný workflow, automatický fallback a obecné stahování URL se
+odmítají; použijí se jen verzované allowlisted šablony, explicitní binding a
+bounded výstupy svázané s konkrétním runem.
+Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md).
+
+F-M4-PRESENTER-01-C **adaptuje existující projektový deck a sdílený bezpečný
+renderer**. Šablony zůstávají součástí stejného validovaného dokumentu a
+speaker, editor i audience používají `presentation_visual.py`; nevzniká druhý
+renderer ani externí template engine. Volné HTML/CSS šablony byly odmítnuty,
+protože by rozbily stabilní zóny a rozšířily veřejný projekční povrch. Nový
+omezený kontrakt dovoluje pouze allowlisted preset, zarovnání, hustotu a barvy.
+
+F-M4-PRESENTER-01-B **reuse/adaptuje schválený PyYAML `StrictLoader` a
+`Artifacts.save`**. Čitelný formát v2 používá omezený YAML frontmatter,
+allowlisted YAML metadata jednotlivých slidů a malou vlastní gramatiku Markdown
+nadpisu a odrážek; nepřidává obecný Markdown/HTML renderer ani novou závislost.
+Legacy JSON se čte bezzápisově a migruje se pouze explicitním uložením stejného
+artefaktu přes stávající Workspace/Journal/Git/index recovery hranici.
+
+F-M4-PRESENTER-01-D/D4 **reuse/adaptuje existující `ContextBuilder`, registr
+rolí, `OllamaRuns` a task router**. Pro obecný router zůstává společné uzavřené
+schema výsledků; explicitní vytvoření či aktualizace prezentace vybírá zvlášť
+verzovanou roli s presentation-only JSON Schema. PDF vstup používá existující
+lokální Poppler projekci v bounded režimu, ale manifest dál autorizuje a
+hashuje původní artefakt. Nevznikl nový provider, druhý context mechanismus ani
+automatický fallback. Modelový návrh není autoritou zdrojových ID, layoutů,
+privacy, HEAD ani kanonického Markdownu; ty znovu ověřuje aplikace.
+
+F-M4-PRESENTER-01-E **reuse/adaptuje `TaskOutcomes`, `PresentationDocuments` a
+`Artifacts.save`**. Schvalovací diff se odvozuje z validovaného historického
+Git snapshotu bez obnovy indexu nebo zápisu a váže se na base revision, deck
+digest a approval digest. Potvrzený create/update používá jedinou existující
+Workspace/Journal/Git/index hranici a stabilní operation ID; nevznikl druhý
+journal ani presenterový ukládací subsystém. Volné modelové ukládání, skryté
+automatické potvrzení a druhý template engine byly odmítnuty.
+
+F-M4-PRESENTER-PDF-01 **reuse/adaptuje `PresentationDocuments`,
+`Artifacts.save`, `Workspace.transact` a společný `presentation_visual.py`**.
+Živá relace má malý lokální SQLite journal pouze do okamžiku, kdy se přesný
+veřejný průběh materializuje jako verzovaný projektový dokument; nevzniká
+druhý projektový zapisovač. Kanonický i relační PDF export používají stejný
+allowlisted model slidu a Qt WebEngine, který desktop již distribuuje. Obecný
+HTML/PDF template engine a nová runtime závislost byly odmítnuty. PDF se
+nejprve dokončí ve stejné cílové složce a až potom se publikuje atomickým
+nahrazením.
+
+UX-FACELIFT-01-A **reuse aktuální `spikes.desktop_ui.HTML` a `CSS`** a
+**adaptuje** lokální Chromium print cestu na A4 inventuru pro ruční anotaci.
+Generátor nekopíruje webové formuláře do paralelní šablony a testuje úplné
+pokrytí všech `<form id>`. Používané nativní PySide6 dialogy převádí pouze na
+statický seznam jejich skutečných polí, protože jejich vzhled závisí na OS
+tématu a displeji. Nový aplikační PDF engine ani runtime závislost byly
+odmítnuty; HTML/PDF v `dist/` jsou ignorované lokální designové build artefakty.
+
+UX-FACELIFT-01-C **reuse sdílené HTML/CSS/JS formuláře a stávající
+`PresenterDisplays`**. Převod rolí displejů adaptuje původní Qt správu
+obrazovek na úzký jednorázově tokenovaný most: web pouze vybírá a validuje
+role, Qt nadále zjišťuje fyzické obrazovky, zobrazuje identifikátory a přesouvá
+okna. Nový HTTP endpoint, persistentní nastavení rolí a další UI framework byly
+odmítnuty, protože přiřazení je záměrně jen stavem aktuální presenter relace.
+
+Stejný řez **reuse/adaptuje `git_transfer.transfer`, `transfer_outbox` a
+`DeploymentTargets`** pro webovou stránku přechodového přenosu v nové desktopové
+záložce Federace. Webová vrstva dostává pouze omezený katalog a potvrzený
+tokenovaný výběr; SSH, Git bundle, SQLite outbox a recovery zůstávají v nativní
+vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy federovaných
+projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
+verze, nikoli rozšíření tohoto jednosměrného přenosu.
+
+Stejná dávka dále **reuse/adaptuje `NetworkBackend`, `DeploymentTargets`,
+`Administration`, `federation_probe.check_peer` a `peer_diagnostics.check_both`**
+pro druhou stránku desktopové záložky Federace. Webový formulář nenahrazuje
+doménovou ani síťovou autoritu: nativní controller znovu validuje přesné schéma,
+jednorázový token, nezměněný seznam cílů a schválený fingerprint. Generování TLS,
+atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stávajících
+službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
+klíči byly odmítnuty.
+
+Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
+`DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
+stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a
+fingerprintů a předá potvrzené hodnoty přes jednorázový fragmentový most;
+SSH session, bundle, vzdálené příkazy, host-key policy, pairing a atomické
+lokální preference zůstávají nativní. Nový HTTP writer, druhý deploy engine a
+přenos SSH credentials do WebEngine byly odmítnuty.
+
+Akce **Projekt z umístění**, **Opravit umístění** a bezpečné odregistrování
+reuse/adaptují existující `ProjectCreation.register`, `relocate`,
+`unregister_missing`, `CreationController` a nativní `QFileDialog`. Sdílené UI
+předává jen validované ID konkrétní registrace přes allowlistovaný fragmentový
+most; pouze doslova chybějící kořen dostane opravné akce a destruktivní varianta
+má vlastní webové potvrzení. Původní Qt výběr projektu a rozhodovací dialog byly
+odmítnuty jako duplicitní. Nový HTTP writer ani druhý registrační workflow
+nevznikají.
+
+Redukovaný hlavní panel **reuse/adaptuje stejný sdílený sidebar, tabpanely a
+položková menu**; nevytváří druhou navigaci ani desktopovou kopii. V úzkém
+desktopovém/webovém režimu se existující panel vybrané sekce pouze zobrazí jako
+ukotvené menu vedle pásu ikon. Volba platí pro aktuální stránku a kvůli
+prezentaci nevzniká nový serverový zápis ani použití webového úložiště. Mobilní
+drawer zůstává samostatným responzivním stavem. Stav a opakování
+`CreationController` byly přesunuté z poslední Qt toolbar do panelu Projekty,
+zatímco journal a automatická startup recovery se nemění.
+
+Nastavení dostupnosti aplikace **reuse/adaptuje existující před-TLS kontrolu
+klienta ve `WebServer.get_request`, privátní síť z `--lan` a node-local SQLite
+vzor nastavení**. Výchozí režim proto zachovává dosavadní localhost + jednu
+konfigurovanou privátní síť. Allowlist přijímá pouze validované číselné IP/CIDR
+hodnoty a změna prochází přesným náhledem svázaným s revizí a adresou
+klienta. TLS a autentizace se žádným režimem nevypínají. Automatická změna
+listeneru, firewallu, routingu a vzdálené zpřístupnění desktopu byly odmítnuty:
+desktop zůstává pevně na localhostu a skutečný dosah serveru může být užší
+než zvolená aplikační politika. Samostatný federation probe si zachovává
+vlastní pevný privátní LAN kontrakt.
+
+M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
+`OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
+transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
+druhý run journal. Account usage/costs jsou samostatné read-only OpenAI Admin
+API adaptéry s odděleným credentialem a cache. Soukromá inventura nedokládá
+hotovou usage/billing implementaci ani licenci k převzetí, proto z ní nebude
+kopírován kód a obecný backend pool se odmítá: účetní oprávnění ani dostupnost
+se nesmí odvozovat z routingu. Ollama account billing a odhad ceny podle názvu
+modelu jsou bez podporovaného zdroje `unsupported`. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#usage-a-billing-kontrakt-v1).
+
+F-M3-CHAT-DIRECT-01-A **adaptuje** existující `OpenAIAdapter`, `OpenAIRuns`,
+Context Manifest, mode policy a vlastnictví chatového vlákna. Nevytváří druhý
+provider adapter ani druhý run journal. Pro streamovaný transport používá
+stdlib HTTPS a bounded parser server-sent events podle aktuálního oficiálního
+[OpenAI streaming guide](https://developers.openai.com/api/docs/guides/streaming-responses);
+SDK ani obecný SSE/websocket framework není pro první PoC potřeba. Dosavadní
+external preview store zůstává pouze pro task workflow a historické záznamy;
+neadaptuje se jako skryté potvrzení přímého brainstormingu. Soukromá inventura
+nedokládá kompatibilní streaming/recovery kontrakt ani licenci k převzetí, proto
+se z ní nekopíruje kód. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#přímý-brainstorming-request-record-a-streaming--f-m3-chat-direct-01).
+
+F-M3-OLLAMA-STREAM-01 **reuse/adaptuje** `OllamaAdapter`, jediný
+`OllamaRuns` journal, přímý brainstormingový Context Manifest a existující
+workspace NDJSON kanál do UI. Providerový transport zůstává samostatný:
+Ollama `/api/generate` používá řádkové JSON rámce, nikoli OpenAI SSE, takže se
+SSE parser ani externí request store nekopírují. Nová závislost ani druhý run
+journal nevzniká; standardní knihovna zajišťuje HTTP/TLS a fragmentaci čtení,
+aplikace doplňuje vlastní limity, finální validaci a `unknown` hranici podle
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
+
+F-M3-SEARCH-01 **reuse/adaptuje** uzavřený `AITaskOutcome`, task router,
+`ContextBuilder`, `TaskOutcomes`, jediný `OllamaAdapter`/`OllamaRuns` journal,
+atomický node-local binding vzor a společné desktop/web UI. Skutečný dostupný
+SearXNG JSON endpoint byl read-only ověřen pro pole `query` a `results` s
+`title`, `url` a `content`; nepřebírá se správa kontejneru, Open WebUI
+tool-calling ani jeho síťová konfigurace. Nový malý stdlib klient a samostatný
+search journal jsou nutné, protože search GET je jiný síťový účinek než LLM
+run. Obecný crawler, RAG/embedding databáze, stahovač stránek, provider SDK a
+automatický fallback se odmítají. Soukromá inventura neobsahuje komponentu se
+shodným preview/privacy/`unknown`/Context Manifest kontraktem; žádný její kód
+ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#řízené-webové-hledání-přes-searxng--f-m3-search-01).
+
+F-M3-EXPLICIT-TASK-ROUTING-01 **reuse/adaptuje** `ChatRunChoice`,
+`ContextBuilder`, `TaskOutcomes`, existující lokální/externí backend journaly,
+external approval, řízené hledání, Public Source Reader a prezentační
+validátor. Přidává malý uzavřený `ExplicitTaskPlan` a tři output role; nepřidává
+nový adapter, context mechanismus ani workflow framework. Modelový výběr
+outcome druhu, heuristická oprava, automatický web fetch, externí předání
+interních artefaktů a automatický provider fallback se odmítají, protože by
+měnily explicitní plán nebo obcházely privacy/recovery hranici. Rozhodnutí:
+[ADR 0034](docs/adr/0034-explicit-task-routing.md).
+
+F-M3-SEARCH-02 **reuse/adaptuje** existující `SearchRuns`, `OllamaRuns`,
+`ContextBuilder`, `TaskOutcomes`, thread deletion recovery a bezpečné společné
+desktop/web vykreslování. Workflow a kola jsou nové tabulky ve stejném search
+journalu; search ani modelový účinek nedostává druhou autoritu. Stabilní source
+ID se odvozuje z již validované URL a evaluator je uzavřený JSON kontrakt.
+Agent framework, crawler, RAG, skrytý tool call i automatické odesílání dotazů
+se odmítají: pro bounded ruční iteraci nepřinášejí potřebný recovery kontrakt a
+automatika má vlastní navazující dávku. Soukromá inventura neposkytuje shodnou
+implementaci s preview/privacy/`unknown` hranicí; žádný její kód ani neveřejné
+detaily se nepřenášejí. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#bounded-iterativní-hledání--f-m3-search-02).
+
+F-M3-PUBLIC-SOURCE-READER-01 **reuse/adaptuje** stavový a no-retry recovery
+vzor `SearchRuns`, standardní knihovnu pro HTTP/TLS, `ContextBuilder` a bezpečné
+textové vykreslení společného desktop/web UI. Používá však samostatný
+`PublicSourceRuns` journal a run-scoped fsync staging, protože fetch dokumentu
+má jiné requesty, bajty, výsledky a recovery než search snippet. Nové jsou
+SSRF-safe DNS validace a connect pinning, sekvenční robots preflight a bounded
+`static-html-v1` projekce. Obecný crawler, headless browser, cookies/login,
+automatické redirecty, MIME sniffing a automatická projektová publikace se
+odmítají. Rozhodnutí: [ADR 0033](docs/adr/0033-public-source-retrieval.md).
+
+F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
+provider-neutral `RoleRegistry` a backend adapter/run journals, durable
+prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný
+textový preview/RBAC desktopu i webu. `SummaryTasks` zůstává autoritou jediného
+tasku/runu; nekopíruje se na dvoukrokový workflow bez nového striktního schématu.
+`ChatThreads` se odmítá jako workflow autorita, protože opponent nesmí dostat
+implicitní creator konverzaci. Nový malý node-local workflow journal bude
+autoritou pouze workflow/step/approval/handoff evidence; backend run store a
+Workspace journal si zachovají své oddělené účinky a recovery. Soukromá
+inventura neobsahuje komponentu s doloženým Context Manifest, aplikačním RBAC,
+trojím potvrzením, durable `unknown` a Workspace recovery; nepřebírá se z ní
+kód ani názvy. Agent framework, message queue, provider pool, vektorová DB a
+druhý Git writer se pro v1 odmítají. Rozhodnutí:
+[ADR 0008](docs/adr/0008-context-and-publication-contracts.md#artifact-based-creatoropponent-handoff--f-m4-workflow-01-a).
+
+IMP-02 **reuse/adaptuje** `ProjectCreation`, validaci snapshotu,
+Workspace/Journal/Index, standardní immutable source/snapshot artefakty a
+existující desktop/web autorizační hranice. `ProjectCreation` přijímá předem
+validovaný počáteční snapshot, uloží jej do vlastního durable stagingu a vytvoří
+jediný počáteční commit; nevzniká druhý Git writer ani importní databáze. Nový
+společný UI adaptér reuseuje stejnou službu a `ProjectCreation` journal; pouze
+rozlišuje server-local cestu od přesné desktopové in-process capability.
+Nevzniká druhý importér ani persistentní autorita. Nový
+stdlib parser je omezený na doložený osobní NotebookLM Google Takeout formát a
+HTML ukládá jako data; společný artifact preview z něj stdlib parserem odvozuje
+jen bounded Markdown a klient jej vykresluje vlastními DOM uzly přes
+`textContent`. Enterprise
+API, session cookies, scraping,
+spojování podle názvu, automatické rozbalování nested archivů a obecný ETL
+framework byly odmítnuty. Soukromá inventura neposkytla komponentu se stejným
+formátem, provenance a recovery kontraktem; nebyl z ní převzat kód ani názvy.
+Rozhodnutí: [ADR 0029](docs/adr/0029-notebooklm-takeout-project-import.md).
+
+MOD-01 **reuse/adaptuje** bounded striktní JSON parser, fail-closed validaci a
+verzované capability hranice tohoto repozitáře. Pro read-only load-time kontrolu
+používá Python stdlib HTTP bez nové runtime závislosti; redirect a nelokální
+endpoint odmítá. První externí modul používá Python stdlib a standardní
+Cloudflare Worker API, ale nepřebírá cizí kód ani provider SDK. Soukromá
+inventura byla použita jen ke kontrole, že obecné backendové a lokální API
+komponenty neřeší tento manifest/kompatibilitní kontrakt; jejich převzetí bylo
+odmítnuto kvůli odlišné autoritě, recovery a licenčnímu kontextu. Rozhodnutí:
+[ADR 0026](docs/adr/0026-module-unified-api.md).
+
+MOD-01-UI **reuse/adaptuje** existující same-origin autentizované UI/API,
+node-local atomické bindingy, SQLite run journal a explicitní preview/confirm
+tok externích operací. Generátor ani jeho doménový model se nekopírují do hosta:
+Workspace automaticky zjistí přítomnost modulu, ale spustí jeho pevný entrypoint
+až po explicitním povolení a kontrole verze manifestu, přesné deklarace a
+reviewovaných SHA-256 runtime souborů. Git commit není runtime kontraktem.
+Obecný plugin loader, shell příkaz z konfigurace a přímý zápis do projektového
+Gitu byly odmítnuty.
+Rozhodnutí: [ADR 0027](docs/adr/0027-pinned-publication-cms-invocation.md).
+
+M0-06b **reuse** stávající launcher a desktopový kód ve zdrojovém archivu. Samostatný allowlist zdrojové distribuce zahrnuje testy a veřejné dokumenty; užší allowlist Omnia deploye zůstává oddělený, protože nepřenáší celý vývojový balíček. Nezavádí se bundler ani kopie Qt runtime.
+
+M0-07 **adaptuje** existující storage scénáře a fixtures, **reuse** Git/Index/validate_snapshot. Nové případy ověřují konflikt páru obsah/sidecar a sémantickou validaci bez dalšího Git adapteru nebo kopírování cizí synchronizační vrstvy.
+
+M0-06c **adapt**: doporučení zachovat Python/Git/SQLite a Qt UI, ověřit PySide6 místo portu jádra. **Evaluate** systémové závislosti a .deb; runtime bundler odložen do doložené potřeby. Důvody, oficiální licenční podklady a neověřené části jsou v [ADR 0009](docs/adr/0009-desktop-distribution-assessment.md).
+
+M0-06d **adaptuje** stávající Qt obal na PySide6 a shiboken6; sdílené UI/API beze změny. Použity distribuční binding moduly rozbalené do /tmp, bez převzetí cizího aplikačního kódu. Ověření a měření: [ADR 0010](docs/adr/0010-pyside-desktop-validation.md).
+
+Instalační .deb **reuse** stávající spikes a systémové dpkg-deb; **adapt** vzoru úplného dočasného artefaktu s hardlink publikací. Balík má užší runtime allowlist než zdrojový archiv; neobsahuje další kopii Qt ani instalační framework. Viz [ADR 0011](docs/adr/0011-debian-package.md).
+
+Offline test **reuse** .deb builder a existující WebEngine smoke, **adapt** Linux unshare/setpriv/ip pro oddělenou síť s lokálním X11 socketem. Nezavádí druhý desktop ani produkční sandbox; hranice v ADR 0011.
+
+M0-06 uzavírá **adapt/reuse** Python/Git CLI/SQLite a PySide6 pro M1 dle [ADR 0013](docs/adr/0013-m1-stack.md). C++ port ani hybrid se bez doloženého problému nezahajují. Produkční status reuse tím není přiznán.
+
+Cílový probe **adaptuje** scénář z `tests/test_workspace.py` a dvojici obsah/sidecar z testových fixtures; **reuse** Workspace, Git a snapshot. Samostatný modul ve spikes lze přenést stávajícím deploy allowlistem bez rozšíření přístupu na jiná data nebo přidání nové storage vrstvy. Měření rozlišuje čas celé pomocné operace a apply/recover; Python RSS není součet všech procesů.
+
+M1-01 **adaptuje** konfiguraci v1, Workspace/Index a autentizovaný lokální handler. Služba Projects pouze propojuje existující validaci a koordinované čtení; nepřebírá cizí storage/API framework. UI používá stávající PySide obal a bezpečné textové vykreslení. Soukromá inventura nepřidává pro tento omezený krok potřebnou komponentu; žádný externí kód nebyl kopírován. Kontrakt: [ADR 0014](docs/adr/0014-project-read.md).
+
+M1-02 **adaptuje** Git, Workspace, konfigurační validátory a fsync/flock vzor journalu. Nový uzlový journal řídí inicializaci a registraci (odlišný lifecycle od změn artefaktů); neslouží jako druhý projektový index. Dávka UX-UNIFIED-01 znovu používá tuto doménovou službu a její receipt/recovery ve společném preview/confirm adaptéru; Qt zůstává pouze systémovým pickerem, který vydá přesnou operation-scoped capability. Přenos cizího frameworku ani komponenty z lokální inventury není pro tento kontrakt potřebný. [ADR 0015](docs/adr/0015-project-creation.md).
+
+F-M1-PROJECT-LOCATION-01 **reuse/adaptuje** `ProjectCreation.register`, jeho
+uzlový operation journal, validaci `Projects` a immutable `Sources` →
+`Workspace` import. Oprava cesty přidává recovery mezi ownerem existujícího
+projektového journalu a atomickou node registrací; nekopíruje Git data ani stav
+mezi filesystemy. Odebrání doslova chybějícího rootu reuse stejný uzlový
+journal a mění pouze registraci; stav ani data nemaže a nenahrazuje pozdější
+bezpečné odstranění projektu. Webový upload je jediný bounded endpoint nad
+stejným importním kontraktem, ne obecný filesystemový most, nová databáze nebo
+další framework.
+
+F-M1-PROJECT-DELETE-01 **reuse/adaptuje** jediný node writer lock a atomickou
+publikaci `ProjectCreation`, Workspace/Journal pending kontrolu, Git/Index a
+existující preview/confirm UI. Nová tabulka ve stejném node-local operation
+journalu koordinuje pouze odstranění, koš, obnovu a purge; není projektovým
+indexem ani druhým Git writerem. Node-local chat/AI/transfer/administration
+autority se inventarizují a aktivní nebo `unknown` účinky blokují operaci;
+dokončené záznamy se nemažou napříč databázemi. Obecný cleanup framework a
+nová storage závislost byly odmítnuty, protože by nezajistily přesné ownership,
+inode-bound recovery a fail-closed hranici. Rozhodnutí: [ADR 0031](docs/adr/0031-recoverable-project-removal.md).
+
+M1-03/UX-UNIFIED-01-E **adaptuje** Workspace transakce o stabilní ID/digest požadavku, Projects o sdílený autorizovaný přístup a editor existujícího dokumentu o společnou stránku a úzce typované HTTP adaptéry. **Reuse** Artifacts save/delete, Git/Index, journal/receipt, metadatové validátory a lokálního autora z ProjectCreation; potvrzené smazání přidává pouze preview digest, ne nový zápisový mechanismus. Hlavní TODO používá rezervované UUIDv5 uvnitř existujícího schématu; nová storage ani cizí editor nejsou potřeba. Vytvoření dokumentu/TODO zůstává do úplné parity nativní. [ADR 0016](docs/adr/0016-markdown-editor.md).
+
+M1-03a **reuse/adapt**: společné čisté Markdown funkce z editoru přesunuty do `spikes/markdown_documents.py`, čtení TODO rozšiřuje existující Workspace snapshot a autentizovaný projektový přehled. HTML details/summary poskytují sbalitelné větve bez nové knihovny, parseru nebo mutujícího endpointu. [Kontrakt](docs/adr/0016-markdown-editor.md).
+
+M1-04/UX-UNIFIED-01-E **reuse/adapt**: ArtifactHistory používá autorizovaný Workspace, Git wrapper, validaci snapshotu a sdílený Markdown document reader. Společná read-only stránka a dva úzce typované endpointy nahradily Qt viewer; síťový adaptér přidal fail-closed `local-only` kontrolu. Git diff pracuje jen s adresářem vybraného UUID bez externích driverů; historické project.json používá stejný validátor se samostatným ověřením dnešní konfigurace. Žádná další storage/framework ani externí komponenta není potřebná. [ADR 0017](docs/adr/0017-artifact-history.md).
+
+M1-03b **reuse/adapt**: záložky levého panelu používají stejný `result.artifacts` a `main_todo` ze stávajícího projektového čtení. DOM textContent zachovává bezpečné vykreslení názvů/ID, ARIA záložky doplňují klávesnicové přepínání. Bez další knihovny, API, parseru nebo zápisové cesty.
+
+F-M1-DELETE-01/M1-08 **reuse/adapt** existujícího odstranění v Artifacts, Workspace/Journal/Index a nativního potvrzení Qt. Samostatné [akceptační testy](tests/test_artifact_deletion.py) rozšiřují ověření o odstranění sidecar/frontmatter a procesní recovery bez nové storage nebo knihovny. Kontrakt ADR 0003/0016 se nemění; výsledky drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15).
+
+F-M1-META-01/V-04 **reuse/adapt** současného striktního validátoru metadat, importního request digestu, Git blobů a Workspace/Journal/Index recovery. Designed výstup [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md) nepřidává parser, storage ani externí závislost; zachovává v1 a vyhrazuje novou verzi pro podrobnou importní provenance. Implementace v2 a migrace jsou samostatná navazující feature.
+
+F-M1-SOURCE-01/V-05 **reuse/adapt** nativního importu, validátoru metadat, Git historie, Workspace/Journal/Index a relačních vztahů. [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md) definuje neměnné bajty pod jedním UUID, novou verzi jako nový artefakt a transition validaci bez nové databáze nebo content-addressed storage. Implementace vynucení a UI zůstává navazující feature.
+
+IMP-01 **reuse/adaptuje** `Sources`, Workspace journal/receipt, Git/Index,
+striktní metadata v2, same-origin API, RBAC a sdílené desktop/web UI. Nový
+node-local journal řeší pouze OAuth selection, bounded download a staging před
+jedinou Workspace publikací; není projektovým indexem ani sync databází.
+Systémový prohlížeč a oficiální Google REST kontrakty nahrazují provider SDK,
+široký cloud file manager i login ve WebEngine. Soukromá inventura nenabídla
+komponentu se stejným per-file OAuth, provenance a recovery kontraktem; nebyl
+převzat cizí kód ani neveřejné názvy. Rozhodnutí: [ADR 0032](docs/adr/0032-google-drive-import.md).
+
+F-M3-PUBLIC-SOURCES-01 **reuse/adaptuje návrhové vzory**, nikoli jednu
+existující implementaci: durable stavový automat `SearchRuns`, stdlib HTTP/TLS
+validaci backendů, Context Manifest, immutable `Sources` a jedinou
+Workspace/Journal/Git/index publikační hranici. Search run ani LLM run se
+nerozšíří o jiný síťový účinek; bounded získání zdroje potřebuje vlastní
+`PublicSourceRuns` autoritu. Oficiální CKAN/DCAT, MediaWiki, Crossref a Atom
+kontrakty byly posouzeny jako budoucí malé adaptéry. První doporučená vertikála
+je explicitní statická HTTPS stránka bez redirectů, credentials, JavaScriptu,
+assetů a link traversal. Obecný crawler, browser automation, provider SDK pool,
+RAG/vector DB, MIME sniffing a automatická publikace byly odmítnuty. Soukromá
+inventura neposkytla shodnou preview/privacy/SSRF/recovery/provenance
+komponentu; žádný kód ani neveřejné detaily se nepřenášejí. Rozhodnutí:
+[ADR 0033](docs/adr/0033-public-source-retrieval.md), podklady:
+[průzkum zdrojů](docs/public-sources-research.md).

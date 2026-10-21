@@ -1,0 +1,1286 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# ADR 0008 — Backend, Role, Context Manifest a publikace
+
+Datum: 2026-09-09. Stav: přijato jako **designed** pro M0-08; přesné snapshoty
+a dvoufázová revalidace Context Builderu jsou implementované jako lokální PoC
+ve F-M2-CONTEXT-01. Navazující dávky lokálně PoC validovaly Ollama adapter,
+vlákna a jejich projektové výstupy, task služby, provider-neutral runtime, první
+externí textový provider, usage/billing, přímý brainstorming i obrazovou
+capability. F-M4-WORKFLOW-01-A uzavřela návrh prvního artifact-based
+creator/opponent handoffu a část B implementovala jeho node-local journal a
+aplikační službu pro explicitní Ollama textové bindingy. Část C doplnila
+desktopové/webové UI, autentizované API a explicitní Workspace publikaci. Část
+D lokálně PoC validovala regresní hranice, skutečné Qt/WebEngine vykreslení a
+same-node Ollama creator/opponent běh. Produkční nebo private-network akceptace,
+obecný agent framework ani pluginový router tím nevznikají.
+
+## Rozsah a návaznost
+
+Zpřesňuje [ARCHITECTURE](../../ARCHITECTURE.md), [FEDERATION](../../FEDERATION.md) a [SECURITY](../../SECURITY.md). Zachovává koordinaci a crash boundaries [ADR 0003](0003-coordinated-operation.md) i rozdělení konfigurace [ADR 0004](0004-project-node-config.md). Nemění existující validátory ani schéma project.json/node.json. Kontrakty níže jsou logické v1; jejich budoucí serializace musí mít explicitní verzi, odmítat neznámé verze a nesmí potichu migrovat data.
+
+Reuse: zachovat Workspace, validaci celého kandidátního stromu a compare-and-swap (CAS). Nové LLM kontrakty nejsou důvod přepisovat storage ani přebírat cizí adapter. Přesná serializace a její testy vzniknou v M2/M3, propojení publikace v M1/M5.
+
+## Backend a role
+
+| Kontrakt | Povinný význam |
+| --- | --- |
+| BackendDefinition | Stabilní ID, revize definice, název, typ adapteru/provider, model nebo pravidlo jeho výběru; deklarované účely (např. role execution, orchestrator chat, extraction), formáty a limity. Přenositelná definice neobsahuje secrets ani soukromé adresy uzlu. |
+| BackendBinding | Lokální vazba definice na spravující node ID, endpoint, skutečný model, ověřené capabilities, dostupnost a execution boundary. Credentials pouze jako lokální opaque reference mimo Git; binding se automaticky nesynchronizuje. |
+| ExecutionBoundary | `same-node`: zpracování i obsah zůstávají na původním uzlu; `private-network`: explicitní připnutá služba v privátní síti, která není lokální ani federovaným peerem; `trusted-federation`: konkrétní autentizovaný a povolený peer; `external-provider`: konkrétní externí služba. Localhost proxy sama nedokládá same-node. Přesměrování ani další zpracovatel nesmějí nepozorovaně změnit schválený cíl. |
+| RoleDefinition | Stabilní ID a revize, verzovaná šablona instrukcí, povolené zdroje, povinné/volitelné vstupy, výstupní formát, požadované capabilities, preference modelu/backendu a omezení privacy. Projektový override má vlastní revizi a dohledatelný základ. |
+
+Role zahrnují creator, opponent, analyst, researcher, editor, extractor, summarizer, classifier a issue-spotter. Role ani projektový override neudělují uživateli další oprávnění. Backend preference není souhlas s přenosem. Efektivní povolení je průnik aktuálních oprávnění uživatele, projektu, uzlu, role a pravidel cíle; zákaz má přednost. Stejná capability může existovat ve všech třech boundaries. Dostupnost ani nízká cena nejsou autorizace.
+
+Pro Ollama znamená `same-node` pouze explicitní číselný loopback endpoint na
+původním uzlu; hostname `localhost`, LAN adresa ani proxy tuto boundary
+nedokládají. `private-network` používá výhradně číselnou privátní IP, HTTPS,
+připnutý SHA-256 certifikátu a stabilní ID cílového uzlu/služby. DNS se pro tuto
+boundary nepoužívá. Redirect je zakázán a změna adresy, pinu, modelu či identity
+je změnou bindingu vyžadující nový Context Manifest. `local-only` smí pouze na
+`same-node`; důvěryhodná LAN není výjimka. Binding je node-local mimo projektový
+Git a nesmí obsahovat credentials. Jeho soubor se publikuje atomickým nahrazením
+po `fsync` dat i adresáře; při každém načtení se kontroluje vlastník, režim,
+velikost a celý kontrakt, takže restart nepřebírá nevalidovaný cíl. Adapter nemá
+implicitní LAN/cloud fallback.
+Ollama dispatch přijímá pouze autorizovaný Context Builder handoff nesoucí run ID
+a přesný Target. Node-local SQLite journal potvrdí stav `dispatching` před prvním
+síťovým bajtem; timeout či ztracená odpověď přejdou do `unknown` a stejný run se
+automaticky neopakuje. Známé HTTP/redirect/response odmítnutí je `failed` a také
+vyžaduje nový explicitní run. U `private-network` se TLS spojení naváže a pin
+certifikátu ověří ještě před odesláním requestu. Úspěšná odpověď je durable a
+opakované načtení stejného run ID ji vrátí bez dalšího volání.
+
+F-M3-OLLAMA-ROBUST-01 zachovává stejné crash hranice a doplňuje durable
+`error_code` do existujícího run journalu. Selhání connectu, TLS/pinu nebo
+jednoznačná HTTP/response chyba jsou `failed`; timeout či přerušený transport
+po zahájení generačního requestu jsou `unknown`. Read-only test kandidátního
+bindingu smí volat pouze `/api/tags`, neposílá Context Manifest ani projektová
+data a binding neukládá. UI smí po chybě zachovat původní draft a výběr, ale
+nový dispatch vznikne jen vědomou akcí s novými run identitami. Diagnostika
+nesmí spustit fallback ani oslabit schválenou execution boundary.
+
+Usage a billing jsou dvě samostatné volitelné capabilities. Výsledek přehledu nese stav (available, unsupported, forbidden, unavailable, stale), rozsah (run/project/account), zdroj, období, čas zjištění a jednotky; peněžní údaj také měnu a rozlišení hlášené hodnoty/odhadu s verzí ceníku. Chybějící hodnota není nula. Právo generate nezahrnuje účetní souhrny. Výpadek přehledu nemění routing ani cost policy; její vlastní požadavky se stále vyhodnotí. Provider review a kontrakt uzavírá M3-UB-01-A; implementace obnovování a cache zůstává M3-UB-01-B.
+
+### Usage a billing kontrakt v1
+
+M3-UB-01-A odděluje provozní evidence jednoho běhu od vzdáleného účetního
+přehledu. Nejde o další operace `BackendCapabilities` pro generování: jejich
+přidání by mylně dovolilo odvodit účetní právo z práva spouštět model. Samostatný
+`BackendTelemetryCapabilities` váže na přesnou revizi adapteru a bindingu dvě
+nezávislé volitelné capability `usage` a `billing`; scope je vlastnost reportu,
+nikoli další capability. Neznámá
+capability nebo nedoložený provider zůstane `unsupported`.
+
+Normalizovaný `BackendMetricReport` v1 obsahuje právě jeden `kind` (`usage`
+nebo `billing`), `status` (`available`, `unsupported`, `unauthorized`,
+`forbidden`, `rate-limited`, `unavailable`, `stale`), `scope` (`run`,
+`provider-project`, `account`), zdrojový
+adapter/binding a provider, čas zjištění a explicitní začátek/konec období.
+Každá metrika má stabilní provider-neutral název, nezápornou číselnou hodnotu a
+jednotku; billing navíc ISO-4217 měnu. `actual` znamená providerem hlášenou
+hodnotu. Případný budoucí `estimated` údaj musí nést vlastní ceník a jeho revizi
+a nesmí se sčítat s `actual`. Prázdný seznam metrik je platná dostupná nula jen
+tehdy, když provider úspěšně odpověděl pro přesné období; chyba, chybějící pole
+nebo chybějící oprávnění nulu nevytváří.
+
+V1 podporuje tyto zdroje:
+
+- Ollama [`POST /api/generate`](https://docs.ollama.com/api/generate) vrací
+  `prompt_eval_count`, `eval_count` a doby v
+  nanosekundách. Adapter je může normalizovat jen jako `run` usage uložené spolu
+  s úspěšnou odpovědí. Ollama zde nemá doložené account usage ani billing API;
+  `billing` je proto explicitně `unsupported`, nikoli nula.
+- OpenAI Responses již vrací token usage jednoho dokončeného běhu; zůstává
+  součástí durable run evidence. Oficiální organization
+  [`GET /organization/usage/completions`](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage)
+  poskytuje agregované tokeny a počet požadavků a oddělené
+  [`GET /organization/costs`](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/usage)
+  providerem hlášené náklady. Obě administrativní cesty používají
+  [OpenAI Admin API key](https://developers.openai.com/api/reference/resources/admin/subresources/organization/subresources/admin_api_keys),
+  který může vytvořit a použít pouze vlastník organizace. Generační credential
+  se na admin credential automaticky nepovýší ani z něj účetní capability
+  neodhadne.
+
+OpenAI organization údaje smějí mít pouze `provider-project` nebo `account`
+scope. Provider project ID není workspace/project UUID; mapování bez samostatné
+ověřené konfigurace je zakázané. V1 proto nezobrazuje organization agregát jako
+spotřebu workspace a nepočítá cenu jednotlivého runu z veřejného ceníku.
+
+Admin credential má samostatnou opaque referenci, revizi a write-only
+node-local uložení mimo Git. Čtení account reportu vyžaduje explicitní
+aplikační oprávnění `backend-accounting:read`; role `generate` ani projektové
+čtení nestačí. UI nesmí vracet report ani poslední cache neoprávněnému uživateli.
+
+Úspěšný vzdálený účetní report se ukládá do bounded node-local cache mimo
+projektový Git společně s hashem přesného provider requestu, binding/admin
+credential revizí, obdobím, stránkováním a `fetched_at`. Publikace celé odpovědi
+je atomická až po validaci všech stránek; částečný refresh předchozí úspěch
+nepřepíše. HTTP 401 je `unauthorized`, 403 `forbidden` a 429 `rate-limited`;
+timeout, jiná HTTP/JSON chyba nebo restart je `unavailable`. Pokud existuje
+poslední validní report, vrátí se jako `stale` s odděleným důvodem selhání
+obnovy. Protože jde o read-only GET bez aplikačního vedlejšího účinku, opakování
+refresh není `unknown` dispatch; nikdy však nemění run journal, routing ani cost
+policy. Retence a přesné TTL budou parametry implementace M3-UB-01-B, nikoli
+providerem nezdůvodněná konstanta v kontraktu.
+
+### Provider-neutral aplikační kontrakt v1
+
+F-M3-BACKEND-01 zachová `ContextBuilder`, `Target` a `DispatchHandoff` jako
+provider-neutral bezpečnostní hranici. Nad nimi zavede následující malé interní
+kontrakty; nejde o nové projektové entity ani o provider discovery:
+
+| Kontrakt | Povinný význam a validace |
+| --- | --- |
+| `BackendBinding` | Striktně verzovaná node-local konfigurace s `binding_id`, `revision`, `adapter_id`, boundary, přesným endpointem/cílem a modelem. Providerová pole validuje parser konkrétního adapteru. Z bindingu vzniká dosavadní `Target`; jeho identita, boundary ani model se nesmějí po autorizaci změnit. |
+| `BackendCapabilities` | Neměnný, striktně verzovaný výsledek průniku capabilities deklarovaných adapterem a ověřených pro konkrétní revizi bindingu. V1 zná pouze `generate-text` a výstupní formáty `text` a `json`; neznámá capability, formát, schema verze nebo neověřená podpora se odmítne. Usage a billing zůstávají samostatná pozdější rozšíření, nikoli implicitní součást generování. |
+| `RoleDefinition` | Neměnná registrace `role_id` a `revision`, požadované capability a výstupního formátu. Přesná instrukce a privacy omezení zůstávají ve verzované aplikační službě a Context Manifestu. V1 registruje dosavadní task role `summarizer`, `extractor` a `metadata-advisor`; role z requestu musí přesně odpovídat podporované revizi služby. `brainstorming` zůstává klasifikací vlákna, nikoli rolí. Role nevybírá adapter, neuděluje oprávnění a sama nemění execution boundary. |
+| `BackendAdapter` | Adapter má stabilní `adapter_id`; validuje/normalizuje vlastní binding, deklaruje capabilities a z autorizovaného handoffu deterministicky připraví finální provider request. `prepare` trvale sváže run ID s adapterem, binding/target revizí, capability/role revizí, manifest hashem a digestem skutečného requestu; `dispatch` provede nejvýše jeden povolený externí účinek a vrátí normalizovanou odpověď. |
+| `BackendRunStore` | Jediná node-local autorita stavu backendového běhu mimo projektový Git. Zachová stavy a právě-jednou hranici níže; klíč runu nesmí být sdílen jiným adapterem, bindingem, rolí, capability sadou, manifestem nebo request digestem. |
+
+Aplikační služba nejprve načte binding přes společný registr adapterů, pro
+role-based task vyžádá konkrétní roli a pro každý běh požadované capabilities a
+až potom sestaví Context Manifest. Běžný chat bez task role vyžaduje přímo
+`generate-text`; jeho klasifikace vlákna se do role nepřevádí. Registr
+odmítne neznámý `adapter_id`, roli, revizi, capability i nejednoznačný binding;
+nezkouší jiný adapter, model ani endpoint. Bezprostředně před dispatch znovu
+načte stejnou revizi bindingu a ověří `Target`, capabilities, roli, autorizovaný
+handoff a provider request digest. Providerový transport nikdy nedostane
+Workspace, credentials jiného adapteru ani možnost sám doplnit kontext.
+
+Chat, souhrn, extrakce a návrh metadat budou používat stejný orchestrátor
+`prepare/dispatch/status`; jejich vlastní task journal a publikační recovery
+zůstávají oddělené. Validace strukturovaného JSON výstupu patří nadále službě a
+jejímu uzavřenému schématu, zatímco adapter ověřuje transportní obálku, model,
+velikost a deklarovaný formát. Tím se obecný adapter nestává druhou autoritou
+artefaktů, tasků ani rolí.
+
+### První externí provider a řízený návrh volání
+
+F-M3-EXTERNAL-01 volí pro první implementaci adapter `openai-responses` a
+capability `generate-text` s výstupy `text` a `json`. Použije výhradně endpoint
+`POST https://api.openai.com/v1/responses` podle aktuálního oficiálního
+[Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create).
+V1 nepřijímá vlastní `base_url`, proxy deklarovanou jako OpenAI, redirect ani
+provider discovery. OpenAI-compatible služba je jiný adapter a binding, nikoli
+nepozorovaná změna cíle.
+
+Binding má boundary `external-provider`, přesný endpoint, explicitní providerové
+modelové ID, limity vstupu/výstupu, timeout a opaque `credential_ref`. Pokud
+provider zveřejňuje datovaný snapshot, lze jej připnout; nedatované oficiální ID
+se nesmí nahrazovat vymyšleným datem a jeho pohyblivost musí být v UI přiznaná.
+Reference je
+náhodné stabilní ID mapované v node-local credential store; do Gitu, manifestu,
+DOM, logu ani run response se nesmí dostat hodnota secretu ani její čitelná
+lokální cesta. Deployment může hodnotu dodat z prostředí nebo write-only UI,
+ale veřejný stav vrací pouze ID reference, existenci a čas poslední změny.
+Změna reference nebo hodnoty vytvoří novou revizi bindingu a zneplatní souhlas.
+
+UI může na explicitní požadavek uživatele načíst přes uloženou credential
+reference `GET https://api.openai.com/v1/models`. Provider vrací jen dostupnost
+a základní metadata, nikoli spolehlivé capability, proto se výsledek pouze
+konzervativně zužuje na kandidáty textového Responses adapteru a ruční modelové
+ID zůstává možné. Seznam je omezený, validovaný a atomicky cachovaný mimo Git se
+svou revizí credential a časem načtení; není součástí bindingu ani autorizace.
+Neúspěšné nebo přerušené načtení zachová poslední cache i potvrzený binding a
+nikdy automaticky nepřepne model. Cache je obnovitelná projekce vzdáleného
+seznamu: pád před atomickým přejmenováním ponechá starou verzi, po něm je nová
+verze úplná a nepotřebuje journal.
+
+Adapter sestaví kanonický UTF-8 JSON request pouze z autorizovaného handoffu.
+Povinně nastaví přesný `model`, `store: false`,
+`truncation: "disabled"` a omezené `max_output_tokens`; `instructions`, `input`
+a textový/JSON formát musí přesně odpovídat autorizovanému request recordu.
+Task workflow a legacy preview cesta nastavují `stream: false`; výjimku pro
+přímý brainstormingový textový běh definuje F-M3-CHAT-DIRECT-01 níže. V1 neposílá
+`previous_response_id`, providerovou conversation, vzdálené URL/soubory,
+built-in ani function tools, background request nebo další metadata. Překročení
+limitu se odmítne místo tichého ořezu. Digest zahrne celé request body i
+významné transportní parametry, ne autorizační hlavičku.
+
+Transport před sítí durable uloží `dispatching`, zakáže redirect a použije
+systémové ověření TLS pro přesný host. Odpověď přijme jen při úspěšném HTTP
+stavu, povolené velikosti, dokončeném provider stavu a výhradně očekávaných
+message/text položkách; tool call nebo jiný aktivní výstup je chyba. Eviduje
+provider response ID, požadovaný i providerem hlášený model, dostupné token usage
+a hash odpovědi, nikdy secret. Neshoda hlášeného modelu s explicitním ID v
+bindingu je fail-closed. Timeout, přerušené spojení nebo pád po
+`dispatching` znamená `unknown` bez automatického retry. Známé odmítnutí před
+odesláním je `failed`; nový pokus je nový run a nové potvrzení.
+
+Ollama nesmí tento adapter volat. Smí vrátit pouze striktní
+`ExternalCallProposal` v1 s `purpose`, podporovaným `role_id` a revizí,
+`capability`, výstupním formátem a seřazeným seznamem explicitních message/entity
+ID. Neobsahuje endpoint, credential reference, secret, volný název toolu,
+provider request ani oprávnění. Parser odmítne neznámou verzi, pole, akci,
+capability, roli či ID. Aplikační orchestrátor návrh považuje za nedůvěryhodný,
+znovu ověří session a práva, uživateli umožní výběr upravit a sám z allowlistu
+zvolí binding. Poté vytvoří nový Context Manifest, přesný provider request a
+preview. U task workflow teprve samostatné lidské potvrzení jejich hashů může
+autorizovat jeden dispatch; změna návrhu, zdroje, HEAD, policy, role, modelu,
+bindingu nebo credential reference potvrzení ruší. Přímý brainstorming je
+úzce vymezená výjimka popsaná níže, nikoli oslabení potvrzení tasku či
+publikace. Text modelu ani providerem vrácený tool call proto nikdy není
+autoritou operace.
+
+### Přímý brainstorming, request record a streaming — F-M3-CHAT-DIRECT-01
+
+Explicitní uživatelské odeslání textového tahu ve vlákně klasifikovaném jako
+`brainstorming` samo autorizuje právě jeden dispatch po opětovné serverové
+kontrole vlastníka vlákna, vybraných message ID, Context Manifestu, privacy,
+bindingu, modelu a credential revision. Samostatné externí preview/confirm se
+pro tento tah nevyžaduje. Výjimka se nevztahuje na task role, projektové
+artefakty, publikaci, návrh externího volání z Ollamy ani jiný režim;
+`local-only` se nadále odmítne před sítí a brainstormingový manifest musí mít
+prázdný seznam projektových vstupů.
+
+Před přechodem runu do `dispatching` se durable uloží kanonický provider request
+record svázaný s run ID, manifest hashem, execution identitou a request digestem.
+Record obsahuje přesné odesílané JSON body včetně `stream`, ale nikdy
+`Authorization`, secret ani jiné transportní hlavičky. Vlastník vlákna jej může
+zobrazit z historie po stejném autorizačním rozhodnutí jako zprávy vlákna.
+Starší preview/approval záznamy se nemigrují ani nemažou; zůstávají historickou
+evidencí původního workflow a nový přímý tah dostane nové run ID.
+
+Streaming je capability konkrétní revize adapteru, nikoli vlastnost odhadovaná
+z názvu modelu. První adapter používá HTTP SSE z Responses API s `stream: true`
+podle oficiálního [streaming guide](https://developers.openai.com/api/docs/guides/streaming-responses).
+UI smí průběžně zobrazit pouze pořadově zpracované `response.output_text.delta`;
+neznámé budoucí event typy se neinterpretují jako text. Limity platí pro počet
+eventů, velikost jednoho eventu i celkový sestavený výstup. `response.completed`
+musí dodat finální response objekt, který projde stejnou validací ID, modelu,
+stavu, output položek, textu a usage jako ne-streamovaná odpověď; sestavené
+delty se s finálním textem musí shodovat. Refusal, tool call, chyba, neúplný
+výsledek, neplatné SSE/UTF-8, překročení limitu nebo neshoda jsou známé selhání
+jen tehdy, pokud je lze doložit bez nejistoty síťového účinku.
+
+Delty jsou ephemerální prezentační stav a samy nevytvářejí assistant message ani
+durable úspěch. `dispatching` se zapíše před otevřením sítě; timeout, zavření
+klienta, pád procesu nebo ztráta streamu po tomto bodě ponechá run `unknown`,
+pokud adapter nemá validovanou finální response. Automatický reconnect, retry,
+fallback ani převod částečného textu na výsledek nejsou dovoleny. Provider bez
+deklarované streaming capability použije dosavadní bounded celou odpověď se
+stejným request/run/history kontraktem.
+
+### Ollama NDJSON streaming — F-M3-OLLAMA-STREAM-01
+
+Přímý `brainstorming` tah přes explicitní Ollama binding může použít samostatný
+streamovaný transport `POST /api/generate` s `stream: true`. Podle
+[oficiálního Ollama API](https://docs.ollama.com/api/generate) přichází série
+JSON objektů po řádcích; průběžné rámce nesou text v `response` a `done:false`,
+poslední rámec má `done:true`, prázdné `response` a providerové statistiky.
+Implementace nesdílí parser s OpenAI SSE a nemění význam provider-neutral
+capability `generate-text`.
+
+Kanonický request včetně volby `stream` je součástí request digestu. Stejné run
+ID tedy nelze zaměnit mezi streamovaným a celistvým requestem. `OllamaRuns`
+zůstává jedinou autoritou: před otevřením transportu přechází run atomicky do
+`dispatching`; jednotlivé delty ani stavové události se neukládají. Teprve
+validní finální rámec se normalizuje tak, že jeho prázdné `response` nahradí
+přesně pořadově složený text, a celý výsledek včetně usage se jedním přechodem
+uloží jako `succeeded`. Assistant message vznikne až potom.
+
+Parser omezuje jeden NDJSON řádek na 1 MiB, počet rámců na 65 536 a celý stream
+i složený UTF-8 text na 16 MiB. Model, `created_at`, `response` a booleovský
+`done` musí být platné v každém rámci; providerová chyba, neplatný JSON,
+neshodný model, text ve finálním rámci nebo překročení limitu jsou doložené
+`failed`. Timeout spojení před odesláním je rovněž známé selhání. Timeout při
+čekání na první rámec, idle timeout, EOF před finálním rámcem, chyba klientského
+callbacku nebo jiné přerušení po dispatch hranici jsou `unknown`; torzo se
+nepublikuje a stejné run ID se po restartu nepřipojuje ani neopakuje.
+
+HTTP odpověď workspace směrem k UI je vlastní bounded NDJSON kanál se stavovými
+událostmi `preparing`, `connecting`, `waiting-first-token`, `generating` a
+`completed`, textovými deltami a jediným finálním výsledkem. Textová projekce
+je `aria-live="off"`; samostatný stručný stav je `aria-live="polite"`, aby
+čtečka neoznamovala každý token. Zavření klienta může přerušit callback, ale
+nemění je na potvrzené zrušení providerového běhu.
+
+### Řízené webové hledání přes SearXNG — F-M3-SEARCH-01
+
+Webové hledání je samostatná aplikační capability, nikoli capability LLM
+backendu ani skrytý modelový tool call. `task-router-v1` smí vrátit uzavřený
+outcome `web-search` s účelem, dotazem a seřazenými ID povolených zpráv a
+artefaktů. Tím síťový účinek nevzniká. Aplikace nejprve zobrazí přesný dotaz,
+privacy, výsledek limit, endpoint a revizi explicitního `searxng` bindingu;
+teprve potvrzení jeho SHA-256 preview připraví síťový dispatch.
+
+Binding je node-local mimo projektový Git. `same-node` vyžaduje číselný
+loopback HTTP endpoint a stabilní `local-process`; `private-network` vyžaduje
+číselnou privátní HTTPS adresu, explicitní target UUID a připnutý SHA-256
+certifikát. Název Docker služby ani dostupnost Open WebUI nejsou execution
+identita. Pevný diagnostický probe smí po stisku správce odeslat pouze veřejný
+dotaz `SearXNG`; projektový obsah nepoužívá a konfiguraci nemění.
+
+Vyhledávací dotaz překračuje trust boundary i tehdy, když agregátor běží na
+stejném uzlu, protože SearXNG kontaktuje veřejné zdroje. `local-only` se proto
+odmítá ještě před vytvořením preview. `project` a `confidential` vyžadují
+vědomé potvrzení přesného dotazu. Hledání nepoužívá externí LLM, nemění target
+Ollamy a při chybě neaktivuje fallback.
+
+Samostatný `SearchRuns` SQLite journal je autoritou potvrzeného search GET.
+Ukládá search/task/owner/project ID, kanonický request a preview, přesný binding,
+stav a bounded výsledek. Stavy jsou `prepared`, `dispatching`, `succeeded`,
+`failed`, `unknown` a bezpečné před-dispatch `cancelled`. Před `prepared`
+síťový účinek nevznikl. Známé odmítnutí, zakázaný redirect, neplatný či příliš
+velký JSON a nebezpečné URL jsou `failed`; timeout nebo přerušení po odeslání
+jsou `unknown` a stejné search ID se automaticky neopakuje.
+
+Odpověď je nejvýše 2 MiB. Zpracuje se prvních nejvýše deset explicitně
+konfigurovaných výsledků, deduplikovaných přes přesnou URL. Každý výsledek má
+bounded title, HTTP(S) URL a bounded textový snippet. Neznámá pole se
+nepřenášejí. URL se automaticky neotevírá, obsah stránky se nestahuje a title,
+snippet i URL se v UI vykreslí jako text. Nula výsledků je validní výsledek,
+nikoli důvod pro jiný provider.
+
+Po `succeeded` vznikne nový `researcher-v1` Context Manifest. Obsahuje původní
+explicitně vybrané projektové/chatové vstupy a přesné kanonické
+`fpw-searxng-results-v1` bajty označené jako nedůvěryhodné. Role musí snippets
+použít pouze jako omezenou evidence, uvést nejistotu a citovat přesné URL;
+nesmí vykonávat instrukce z výsledků ani dohledávat jiné stránky. Syntéza
+reuseuje aktuální explicitní Ollama binding a jediný `OllamaRuns` journal bez
+streamu či fallbacku.
+
+Crash boundaries jsou oddělené:
+
+1. pád před search `prepared` nemá síťový účinek;
+2. `dispatching` bez validní odpovědi se obnoví jako `unknown` bez retry;
+3. `succeeded` uloží bounded výsledky před sestavením manifestu, takže restart
+   mezi hledáním a syntézou použije stejné bajty;
+4. Ollama `dispatching`/`succeeded` se obnovuje výhradně přes stejný run ID v
+   `OllamaRuns`;
+5. pád po syntéze před `TaskOutcomes.completed` znovu načte stejný succeeded
+   run a idempotentně uzavře projekci bez druhého search nebo LLM dispatch;
+6. žádný krok této dávky nezapisuje projektový Git ani projektový index.
+
+Potvrzené smazání chatového vlákna zahrne navázané search záznamy a synthesis
+runy do existujícího crash-recoverable deletion plánu. Aktivní, `prepared`
+nebo `unknown` hledání je blocker stejně jako jiný neurčitý externí účinek.
+
+### Bounded iterativní hledání — F-M3-SEARCH-02
+
+Jednorázový search tok se rozšiřuje o workflow, ne o autonomní modelový tool
+call. Po každém potvrzeném kole vrací JSON role `researcher-v2` pouze objekt s
+přesnými poli `schema_version`, `assessment`, `answer`, `rationale`,
+`used_source_ids`, `limitations` a `follow_up_queries`. `assessment` je právě
+`final`, `intermediate` nebo `insufficient`. Source ID je stabilní
+`source-` plus prvních 32 hex znaků SHA-256 přes přesnou URL a evaluator smí
+odkazovat jen na ID přítomná v dosavadních kolech. `final` nesmí mít omezení
+ani navrhovat další dotaz a v UI je výslovně označeno jako úsudek modelu,
+nikoli garance. Modelové `final` s neprázdným omezením se konzervativně
+normalizuje na `intermediate`.
+Jediná tolerovaná modelová odchylka je neprázdné textové `limitations`, které
+se bezpečně normalizuje na jednoprvkový seznam; jiná pole a typy zůstávají
+fail-closed.
+
+Workflow používá v existujícím `search-runs.sqlite` tabulky
+`search_workflows` a `search_rounds`; druhý search journal nevzniká. Kořenové
+task ID váže neměnný owner, projekt, privacy, HEAD a přesný SearXNG binding.
+Každé kolo má vlastní search ID, interní search-task ID, pořadí, dotaz,
+parent search ID a vlastní synthesis run i Context Manifest ID. Context
+`fpw-iterative-search-context-v1` obsahuje všechny dosavadní bounded search
+výsledky a již uložená hodnocení a znovu je označuje jako nedůvěryhodná data.
+
+Pevný budget v této verzi je nejvýše tři kola, tři odeslané dotazy, třicet
+výsledků a 300 sekund od přípravy prvního preview. Vyčerpání kteréhokoli limitu
+uzavře workflow posledním dostupným hodnocením a přesným důvodem. Modelový
+follow-up se pouze zobrazí; uživatel může ve stejném composeru napsat i vlastní
+zpřesnění. To vytvoří nové preview navázané na poslední kolo a odeslání stále
+vyžaduje ruční kontrolu a potvrzení jeho hashe. UI tento stav označí přímo u
+karty i v placeholderu composeru; evaluator dostává explicitní pokyn zachovat
+jazyk uživatelova focus požadavku.
+Automatický dispatch a countdown patří až do F-M3-SEARCH-03.
+
+Crash/recovery zachovává původní autority. `SearchRuns.succeeded` předchází
+modelovému Context Manifestu a po restartu se znovu použije bez search retry.
+Každý evaluator má vlastní stabilní `OllamaRuns` ID; jeho succeeded odpověď se
+znovu validuje a evaluation se idempotentně uloží ke kolu. Až potom může vzniknout
+další ručně kontrolované preview nebo terminální `TaskOutcomes` výsledek.
+Terminální task se uloží před označením workflow jako `completed`, takže pád v
+tomto okně dokončí pouze stav workflow. Deletion plán zahrne všechna kola a
+evaluator runy. Změna HEAD, privacy nebo bindingu a search/model `unknown`
+zastaví tok bez automatického opakování.
+Vypršení časového budgetu zakazuje nový search nebo dosud neodeslaný evaluator,
+ale nesmí zabránit vyhodnocení už uloženého terminálního či neurčitého běhu;
+taková recovery nevytváří nový externí účinek.
+
+Obrázky jsou samostatná navazující capability `generate-image`. Oficiální
+[Images API](https://developers.openai.com/api/reference/resources/images/methods/generate)
+má modelově odlišné parametry a může vracet base64 data nebo dočasnou URL;
+F-M3-MEDIA-01 musí před implementací uzavřít MIME, rozměry, byte limity,
+provenance a bezpečné přijetí bajtů. První verze nesmí převzít obecné stahování
+libovolné providerové URL.
+
+Stejnou capability může poskytovat samostatný ComfyUI adapter podle jeho
+oficiálního [serverového API](https://docs.comfy.org/development/comfyui-server/comms_routes)
+a referenčního [API příkladu](https://github.com/Comfy-Org/ComfyUI/blob/master/script_examples/basic_api_example.py).
+ComfyUI není fallback za externí provider a blízkost v LAN sama neuděluje
+důvěru. Binding určuje explicitní endpoint a execution boundary; dispatch smí
+použít pouze verzovanou správcem schválenou workflow šablonu a allowlisted
+parametry. LLM nesmí dodat ani spustit workflow JSON, měnit node class ani
+vybírat custom node. Run evidence váže workflow hash/revizi, parametry,
+`prompt_id`, endpoint a přesné výstupy z historie. Bajty se přijmou jen z
+konkrétní výstupní identity vrácené pro tento run, s bounded limity a bez
+obecného následování URL. Custom nodes a samotný ComfyUI proces jsou samostatná
+provozní a supply-chain hranice mimo automatickou správu workspace.
+
+### Obrazová capability v1 — rozhodnutí F-M3-MEDIA-01-A
+
+První verze implementuje pouze provider-neutral operaci `generate-image` s
+výstupním formátem `image/png`. `image-to-text`, editace/maska, více výsledků,
+video a obecný multimodální chat jsou odloženy jako samostatné capability;
+nesmějí se vydávat za variantu textového `generate-text`. Capability revision
+musí určit adapter, podporované parametry a limity, binding explicitně určuje
+provider/model nebo ComfyUI endpoint/workflow. Model ani capability se
+neodvozují pouze z názvu a mezi adaptery není automatický fallback.
+
+Společný request v1 obsahuje stabilní `run_id`, `approval_id`, přesný UTF-8
+prompt do 32 KiB, právě jeden rozměr z množiny `1024x1024`, `1536x1024` a
+`1024x1536`, privacy, binding/revision a provider-neutral volbu kvality
+`auto|low|medium|high`. Vytváří právě jeden obrázek. Preview ukáže prompt,
+provider/endpoint boundary, model nebo workflow revision/hash, rozměr, kvalitu,
+privacy a přesný sanitizovaný provider request bez credentialu. Potvrzení váže
+Context Manifest, request hash, binding hash a credential/workflow revision;
+`local-only` smí pouze na skutečný `same-node` ComfyUI binding, nikdy na
+externího providera ani pouze blízký LAN endpoint.
+
+OpenAI Images adapter používá pouze přesný endpoint uvedený bindingem a
+vyžaduje inline `b64_json`; dočasné URL odmítne. Request fixuje `n=1`,
+`output_format=png` a schválené model/size/quality hodnoty. Limit odpovědi je
+24 MiB JSON a dekódovaný obrázek nejvýše 16 MiB. Model z odpovědi nebo
+providerová metadata se nesmějí použít k tiché změně schváleného bindingu.
+
+ComfyUI adapter používá pro v1 bounded polling, nikoli povinný WebSocket:
+`POST /prompt` vrátí jedno `prompt_id`, `GET /history/{prompt_id}` musí doložit
+dokončený schválený output node a `GET /view` smí načíst pouze jeho přesnou
+trojici `filename/subfolder/type=output` ze stejného bindingu. Každý request má
+deadline, nejvýše 120 pollů a nejvýše jeden výsledný soubor. Workflow API JSON
+je node-local verzovaná šablona do 1 MiB s SHA-256, deklarovanou revision,
+výstupním node ID a mapou povolených parametrů. Workspace nahradí jen prompt,
+width, height a seed; všechny class types, model/checkpoint, sampler a hrany
+grafu zůstávají neměnné. Seed je explicitní 64bitové nezáporné číslo generované
+aplikací nebo zadané uživatelem a je součástí requestu i provenance. Přijetí
+šablony je administrátorská operace; neinstaluje modely ani custom nodes a
+neprokazuje jejich bezpečnost.
+
+Výstup musí mít PNG signaturu, jediný IHDR jako první chunk, kladnou šířku a
+výšku přesně shodnou se schváleným rozměrem a celkovou délku nejvýše 16 MiB.
+Parser kontroluje bounded strukturu chunků, délky, CRC a závěrečný IEND; žádná
+metadata obrázku se nevydávají za důvěryhodnou provenance. Náhled používá až
+takto validované bajty a vlastní 4MiB prezentační limit může zobrazit jen
+zmenšenou odvozeninu, nikdy nahradit původní výsledek.
+
+Obrazové runy a approval mají samostatné node-local SQLite úložiště se
+`synchronous=FULL`. Run se před sítí atomicky přepne na `dispatching`; po úplném
+přijetí a validaci se metadata a PNG BLOB uloží v jedné transakci jako
+`succeeded`. Timeout, pád procesu, ztracená odpověď nebo zavření klienta po
+začátku síťového účinku zanechá `unknown`; malformed či oversized odpověď s
+jednoznačně přijatým výsledkem je `failed`. Ani jeden stav se automaticky
+neopakuje. Nový vědomý pokus má nové run/approval ID.
+
+Úspěšný node-local výsledek není projektovým artefaktem. Samostatná potvrzená
+publikace adaptuje Workspace/source-import transakci a vloží původní PNG bajty
+pod novým artifact UUID. Metadata nové verze provenance evidují adapter,
+binding/revision, capability revision, run ID, request SHA-256, model nebo
+workflow revision/hash, seed, rozměr, quality a SHA-256 výsledných bajtů; prompt
+se do Gitu nekopíruje automaticky. Pád před Workspace intentem nic nepublikuje,
+pád během publikace obnoví stejný operation ID a bajty z durable úspěšného runu
+bez druhého providerového dispatch. Změněný HEAD nebo privacy vyžadují nové
+publikační potvrzení, nikoli nový obrazový běh.
+
+Usage a billing zůstávají oddělené capability
+M3-UB-01; token usage z jednoho runu je provozní evidence, nikoli účetní přehled
+ani spolehlivý výpočet ceny.
+
+Úkol F-M3-EXTERNAL-01-B implementuje binding, credential lifecycle, textový
+adapter a samostatný durable run journal. Úkol C přidává oddělené durable preview
+a potvrzení: UI zobrazí přesné vstupy, odvozenou privacy, target/model a skutečné
+provider request body bez autorizační hlavičky. Potvrzení váže jejich hash a
+znovu kontroluje HEAD, vlastníka vlákna, policy, binding, model, credential
+revizi, manifest i request bajty. `local-only` se odmítne před preview;
+`project` a `confidential` vyžadují zaškrtnutí explicitního souhlasu. Zrušení
+nezakládá chatový turn. Preview, turn a provider run jsou oddělené persistentní
+vrstvy: před provider dispatch lze bezpečně zopakovat přípravu, po durable
+`dispatching` rozhoduje run journal a neznámý výsledek se neopakuje. Pád po
+úspěšném provider runu, ale před dokončením vlákna se obnoví z durable výsledku
+bez druhého síťového účinku.
+
+Desktopová Nastavení zobrazují write-only konfiguraci a bezpečný stav bez
+secretu. Úkol D implementuje samostatný explicitně vyžádaný návrh přes lokální
+roli `external-call-planner`. Ollama dostane konverzaci jako nedůvěryhodná data,
+odpověď musí projít přesným parserem `ExternalCallProposal` a její message ID
+musí být seřazenou podmnožinou dostupných zpráv obsahující novou uživatelskou
+zprávu. Člověk může výběr upravit nebo návrh zahodit. Až upravený výběr vstupuje
+do nového manifestu a autoritativního preview z úkolu C; hash návrhu se záměrně
+nestává oprávněním ani částí externího approval, protože oprávnění váže až přesné
+výsledné vstupy a provider request. Durable Ollama run lze po restartu bezpečně
+přečíst bez dalšího síťového volání; `unknown` se automaticky neopakuje.
+
+Navazující úprava flow rozšiřuje tento úzce externí návrh na jednotné lokální
+zpracování. Uživatel odešle jedno zadání, explicitně zvolené zprávy a volitelné
+doplňující projektové artefakty. Ollama vrátí přes striktní diskriminovaný
+kontrakt právě jeden z výsledků: `direct-answer`, `artifact-draft` nebo
+`external-request`. Přímá odpověď se může dokončit jako běžný lokální chatový
+turn. Návrh artefaktu obsahuje pouze podporovaný typ, název a tělo a před zápisem
+se zobrazí jako preview; vlastní Git zápis provede až existující potvrzená
+recovery-safe operace. Externí varianta obsahuje účel, hotový dotaz a explicitní
+ID zdrojů, ale žádný provider, credential ani oprávnění. Aplikace z ní znovu
+sestaví Context Manifest a autoritativní externí preview.
+
+> **Nahrazeno pro nové task plány:** modelový výběr druhu výsledku popsaný v
+> předchozím odstavci nahrazuje [ADR 0034](0034-explicit-task-routing.md).
+> Aplikace nyní před dispatch zvolí jediný output a roli; web a externí cíl jsou
+> explicitní zdrojová/execution volba, nikoli modelový outcome.
+
+Výstupy AI nemusí být krátké. Pouze `direct-answer` je běžná trvalá chatová
+odpověď. Celý `artifact-draft` a `external-request` se před rozhodnutím promítnou
+do chatu jako jasně označené dočasné zprávy; UI je smí sbalit nebo rolovat, ale
+nesmí jejich obsah skrytě zkrátit. Vstupní a výstupní byte limity zůstávají
+explicitní ochranou zdrojů a překročení limitu je chyba, nikoli tiché oříznutí.
+Autoritativní plný obsah drží durable preview/run evidence mimo běžný chatový
+transkript, aby reload nebo restart obnovil stejný návrh.
+
+Po lidském potvrzení se dočasná projekce atomicky nahradí redukovanou trvalou
+zprávou. Pro artefakt obsahuje odkaz a stabilní ID potvrzeně vytvořeného
+projektového artefaktu, ne kopii jeho těla. Pro externí větev obsahuje pouze
+sdělení, že externí volání proběhlo, a bezpečné neobsahové provozní údaje jako
+run ID a stav; přesný dotaz ani provider request se do chatového vlákna znovu
+nekopírují. Zůstávají v oddělené approval/run evidenci pro recovery a audit.
+Zamítnutý návrh z běžné projekce vlákna zmizí, zatímco durable stav zaznamená
+zamítnutí. Náhrada musí být restart-safe: po pádu se nesmí současně zobrazit
+plná dočasná i redukovaná potvrzená varianta ani zopakovat Git či síťový účinek.
+
+Implementace E3 ukládá tyto projekce do node-local `TaskOutcomes`, svázané s
+uživatelem, uzlem, projektem, vláknem, přesným routed requestem, runem, manifestem
+a projektovým commitem. SQLite přechod `prepared` → `completed`/`cancelled` je
+jediným bodem viditelnosti redukované projekce. U artefaktu může pád po Git
+commitu a před tímto přechodem ponechat plný návrh; opakování stejného
+`operation_id` načte receipt existující Workspace operace a projekci dokončí bez
+druhého commitu. U externí větve může analogicky zůstat approval `prepared`;
+durable provider run vrátí výsledek bez druhého requestu a teprve potom se uloží
+redukovaný záznam. Nový sjednocený tok nezapisuje plný externí dotaz ani odpověď
+do běžného `ChatThreads`; auditní kopie zůstává pouze v oddělené approval/run
+evidenci. Starší ruční externí chat si své dosavadní transcriptové chování
+zachovává.
+
+Privacy výsledku je nejméně nejsilnější privacy ze všech skutečně použitých
+zpráv a artefaktů. Změna HEAD, výběru nebo obsahu ruší navazující preview.
+Neznámá varianta, pole, typ artefaktu nebo ID selže uzavřeně. Ollama tedy smí
+rozhodnout pouze o tvaru navrženého výsledku, nikdy o provedení zápisu nebo
+externího dispatch. Přímé ruční externí preview může zůstat pokročilou záložní
+akcí, nikoli paralelním výchozím workflow.
+Provider může nabídnout přesný allowlistovaný HTTPS odkaz pro vytvoření nebo
+správu klíče, který desktop otevře v odděleném systémovém prohlížeči. Workspace
+nepřebírá webovou session, nesmí číst obsah cizí stránky ani automaticky vložit
+zobrazený klíč. Programové vytváření service-account klíčů pomocí Admin API key
+je samostatná privilegovaná administrativní capability a není součástí tohoto
+uživatelského credential workflow.
+
+### Kompatibilní migrace Ollamy
+
+Existující `ollama-binding.json` se schématem v1 zůstane kanonickým node-local
+vstupem a nebude se při načtení automaticky přepisovat. Kompatibilní parser jej
+normalizuje jako `BackendBinding(adapter_id="ollama")`; jeho `binding_id`,
+`revision`, endpoint, model, target ID, TLS pin i význam `same-node` a
+`private-network` zůstávají beze změny. Změna kterékoliv z těchto hodnot nadále
+vyžaduje novou revizi a nový Context Manifest. První implementace nepřidává
+další binding ani automatický výběr mezi backendy.
+
+Současný `ollama-runs.sqlite` zůstane autoritativním run storem. Případná
+schema migrace je lokální, transakční a doplňuje provider-neutral identitu;
+nepřejmenovává run ID ani nepřepisuje request digest, odpověď nebo stav.
+Dokončený historický běh je pouze čitelný jako legacy Ollama evidence.
+`dispatching` a `unknown` zůstávají `unknown` a nikdy se automaticky neopakují.
+Legacy `prepared` lze dokončit jen tehdy, pokud se z původního handoffu a
+nezměněného Ollama bindingu znovu odvodí shodný request digest; jinak se odmítne
+a uživatel musí založit nový run. Selhání migrace ponechá původní databázi
+čitelnou předchozí implementací a nesmí částečně publikovat novou konfiguraci.
+
+Context Manifest v této dávce nemění schéma: přesný `binding_id`, jeho revize,
+boundary, target a model už dnes vážou autorizovaný obsah k cíli. Identita
+adapteru, capability a role se doplní do provider-neutral run evidence a digestu
+requestu. Změna manifestu bude nutná teprve pro přenosný BackendDefinition,
+externí provider nebo jiný nový údaj ovlivňující autorizaci; taková změna musí
+mít vlastní verzi a migrační rozhodnutí.
+
+## Context Manifest a odeslání
+
+Každý LLM běh včetně lokálního má manifest. Manifest identifikuje **konkrétní připravený požadavek**, nikoli pouze seznam názvů dokumentů.
+
+| Část manifestu | Povinný obsah |
+| --- | --- |
+| Identita | Verze kontraktu, manifest ID, run ID, project ID, žádající user ID, původní node ID, čas vytvoření. ID uživatele musí být navázané na ověřenou session. |
+| Role a cíl | ID/revize role a override, backend definition/binding revize, požadovaný a skutečně zvolený model, execution boundary a identita cíle. Neznámou přesnou verzi provider modelu přiznat. |
+| Vstupy | Projektový commit ID; pro každý zdroj entity ID, cesta, blob ID, privacy, vybraná část a transformace. Instrukce, explicitní dotaz, vybrané zprávy a dosud necommitnuté vstupy mají vlastní neměnný snapshot a hash bajtů; nepředstírají Git verzi. |
+| Připravený obsah | Pořadí zpráv/rolí, přesné texty, přílohy a parametry ovlivňující generování. Uchované finální obsahové bajty a jejich SHA-256, typ/kódování a velikost; odkazy na uchované přílohy s hash a velikostí. Credentials a transportní autentizační hlavičky se nearchivují. |
+| Rozhodnutí | Revize použitých politik, povolený rozsah, vyhodnocení privacy a cost policy, zahrnuté/vynechané volitelné vstupy s důvodem, potvrzení výběru a případné explicitní reklasifikace. Audit nesmí zpřístupnit identitu či obsah zdrojů, které čtenář nesmí vidět. |
+
+Hash bez uchovaných bajtů neumožňuje rekonstrukci. Plný manifest a snapshoty jsou chráněný lokální stav mimo projektový Git, se stejnými či přísnějšími oprávněními než vstupy. Jejich retence nesmí být zaměňována s obnovitelným indexem. Redigovaný/exportovaný audit musí přiznat, že není plně reprodukovatelný. Reprodukce požadavku nezaručuje stejný výstup modelu. Schválený výstup může do Gitu nést manifest ID/hash a bezpečnou provenance; úplný manifest se nepřikládá automaticky.
+
+Tok: `UI / volitelný orchestrator chat → application orchestrator → Context Builder / workflow → backend adapter`.
+
+1. Aplikační orchestrátor ověří session, požadovanou akci a oprávnění. Funguje bez LLM. Chat navrhuje strukturované akce; nedostává přímý přístup ke Gitu, shellu ani oprávnění obcházet aplikační služby.
+2. Context Builder kontroluje právo číst ještě před načtením zdroje, vytvoří snapshot a deterministicky vybere povolený kontext. LLM může navrhnout výběr, ale jeho vlastní vstup vyžaduje manifest a stejnou kontrolu. Nesmí být povinným předpokladem Context Builderu.
+3. Vyhodnotí skutečný cíl a privacy všech vstupů včetně uživatelského dotazu. Odvozeniny dědí nejpřísnější omezení a průnik přístupů zdrojů. Shrnutí ani prompt nemění klasifikaci. Překročení limitu nesmí tiše zahodit povinný vstup; vyžaduje změnu výběru. Volitelné vynechání je viditelné v manifestu.
+4. Adapter připraví finální obsah požadavku bez síťového odeslání. Po kontrole formátů/limitů se zafixují bajty a manifest; žádné skryté přidání konverzace, vzdálené přílohy nebo instrukcí po schválení.
+5. Bezprostředně před odesláním aplikace znovu ověří aktuální autorizaci, binding/cíl, policy a shodu bajtů s manifestem. Lokální změny policy a přechod do odesílání musí sdílet synchronizaci. Změna relevantních podmínek znamená odmítnutí a nové posouzení, případně nový manifest/souhlas. Odvolání po skutečném odeslání nemůže stáhnout již předaná data.
+6. Adapter provede pouze schválené generate; vrátí výstup, stav, dostupné usage a provider request/model ID. Výstup je nedůvěryhodný návrh. Uložení jako projektový artefakt vyžaduje validaci, oprávnění a explicitní přijetí přes běžnou zápisovou operaci.
+
+F-M2-CONTEXT-01 realizuje kroky 2–5 jako backendově neutrální read-only PoC v
+`spikes/context_builder.py`. `prepare` pod projektovým writer lockem fixuje HEAD,
+explicitně vybrané projektové a ad-hoc bajty, jejich velikosti/SHA-256, privacy,
+autoritu, policy revision a přesný binding/cíl. Obsah je součástí kanonického
+payloadu; samotný hash není snapshot. `authorize_for_dispatch` pod stejným
+zámkem znovu ověří HEAD, session/user/node, čtecí oprávnění, policy, binding,
+cíl, privacy a shodu bajtů a vydá pouze handoff. Nic neposílá ani trvale
+nezapisuje run. Volitelný nedostupný vstup je uveden s důvodem; chybějící
+povinný vstup operaci odmítne. Skutečný adapter musí před sítí použít právě tento
+handoff a dodat vlastní durable přechod `dispatching`/`unknown`.
+
+Fallback je ve výchozím stavu zakázaný. Explicitní pravidlo může povolit náhradní backend/cíl a nákladový rozsah; i potom se sestaví nový manifest a znovu ověří celý požadavek. Uživatelský výběr backendu nepřebíjí zákaz projektu. `local-only` nikdy nejde na peer ani provider bez explicitní, oprávněné a auditované reklasifikace konkrétních dat. Pouhé potvrzení „odeslat“ nestačí.
+
+Lokální run record rozlišuje prepared, authorized, dispatching, succeeded, failed, cancelled a unknown. Přechod dispatching se trvale zaznamená před síťovým pokusem. Pád v této fázi nebo ztráta odpovědi znamená unknown, pokud provider nedoloží výsledek; není důvod automaticky opakovat potenciálně placený požadavek. Cancel requested není potvrzené cancelled. Ollama PoC tyto hranice realizuje vlastním node-local journalem; každý další adapter je musí doložit samostatně. Git journal z ADR 0003 nezajišťuje právě-jednou síťové volání.
+
+## Artifact-based creator/opponent handoff — F-M4-WORKFLOW-01-A
+
+První multi-role workflow je deterministicky řízená aplikační operace se dvěma
+oddělenými LLM kroky, nikoli konverzace modelů. V1 má právě jeden povinný
+`creator` krok a nejvýše jeden `opponent` krok. Aplikace nepouští autonomní
+loop, paralelní agenty, background pokračování, provider discovery ani
+fallback. Uživatel potvrzuje creator dispatch, následný opponent handoff a
+případnou projektovou publikaci jako tři různé účinky.
+
+### Identity a uzavřená schémata v1
+
+Workflow request `fpw-role-workflow-v1` obsahuje stabilní UUID `workflow_id`,
+`project_id`, výchozí `expected_head`, žádajícího uživatele/uzel odvozené ze
+session, uživatelský účel a privacy a přesně dva předem přidělené step sloty.
+Creator slot je povinný, opponent slot lze vědomě nepoužít. Každý slot má
+vlastní stabilní UUID `step_id`, pořadí (`creator` = 1, `opponent` = 2),
+`run_id`, `manifest_id`, přesnou `role_id`/revision, explicitní adapter/binding
+revision a model, vybraný vstupní seznam a vlastní approval digest. ID jednoho
+kroku se nesmí použít v jiném workflow, roli nebo backendovém runu.
+
+`creator-v1` zůstává textová role `generate-text`/`text`. Nová role
+`opponent-v1` má stejnou capability a formát, ale pevnou verzovanou instrukci:
+kriticky posoudit předaný creator výstup vůči explicitním podkladům, uvést
+konkrétní slabiny, nepodložená tvrzení, rizika a návrhy opravy. Role sama
+nevybírá backend, nepřidává zdroj, neuděluje oprávnění a nesmí vydat tool call
+nebo akci. Část B ji přidala do `RoleRegistry`; využívá ji pouze explicitně
+volaná workflow služba, nikoli automatický router.
+
+Výstup kroku `fpw-workflow-step-output-v1` je neměnný neprázdný UTF-8 Markdown
+nejvýše 1 MiB. Durable záznam váže přesné bajty a SHA-256 na workflow/step/run/
+manifest ID, role revision, execution identitu, provider response evidenci,
+privacy, `created_at` a seznam přesných vstupních referencí s hashi. Providerem
+vrácený text je nedůvěryhodný obsah; HTML se nevykonává. Změna jediného bajtu,
+identity nebo provenance vytváří jiný výstup a ruší navazující approval.
+
+### Context isolation a approvals
+
+Creator Context Manifest smí obsahovat jen explicitně zvolených nejvýše 64
+projektových artefaktů z jednoho `expected_head` a samostatný uživatelský účel.
+V1 nepřijímá chat thread ani implicitní historii. Preview před prvním dispatch
+zobrazuje přesné vstupy, role/instruction revision, privacy, cíl/model a celý
+secret-free provider request. Jeho kanonický approval digest se uloží spolu s
+manifestem a payloadem; potvrzení jiné revize se odmítne.
+
+Opponent Context Manifest má jako povinný ad-hoc vstup přesné durable creator
+output bajty identifikované creator `step_id` a SHA-256. Navíc smí obsahovat
+jen nový explicitně seřazený výběr nula až 64 projektových artefaktů ze stejného
+`expected_head`. Nedostane creator prompt, provider request/response obálku,
+jiné zprávy, celý projekt ani skrytý výběr původního creator kontextu. Pokud má
+opponent vidět původní zdroj, musí být jednotlivě uveden v jeho vlastním preview
+a manifestu. Preview handoffu ukáže celý creator výstup, přidané zdroje,
+instruction, cíl/model, privacy a přesný opponent provider request; změna
+kterékoli položky po uložení preview vyžaduje nové workflow se dvěma novými
+step sloty a nové potvrzení. V1 nemění identitu ani obsah připraveného slotu.
+
+Každý krok znovu vyhodnotí session, RBAC, HEAD, policy, binding/capabilities,
+execution boundary a přesné bajty bezprostředně před dispatch. Privacy creator
+výstupu je nejpřísnější privacy creator účelu a skutečných vstupů. Opponent
+výstup zdědí nejpřísnější privacy creator výstupu a všech svých dalších vstupů;
+opponent binding nesmí rozšířit povolenou boundary. `local-only` lze použít jen
+se `same-node` bindingem. V1 neobsahuje reklasifikaci.
+
+### Durable autority a crash boundaries
+
+Nový vlastněný mode-0600 SQLite workflow journal mimo projektový Git je jediná
+autorita workflow requestu, vlastnictví, step identit, přesných manifest/payload
+bajtů, approval digestů, materializovaných výstupů a publikace. Není
+obnovitelným indexem ani backend run storem. Backendové journals zůstávají
+jedinou autoritou síťového účinku a Workspace journal jedinou autoritou
+rozpracované projektové publikace; žádná SQLite transakce nepředstírá atomický
+commit přes tyto tři vrstvy.
+
+Workflow journal používá schéma v1 se dvěma tabulkami: jeden `workflows` řádek
+pro workflow/owner/project/base HEAD a případný fixovaný publikační request a
+receipt, a přesně dva `steps` řádky pro předem přidělené creator/opponent sloty,
+pořadí, role/execution identitu, request digest, manifest/payload, privacy, stav,
+approval digest a result bajty/hash. Nepoužitý opponent slot zůstává `unused`;
+creator začíná `prepared` a opponent do něj přejde až po sestavení handoffu.
+Stav spuštěného kroku je uzavřený
+`prepared → run-bound → succeeded | failed | unknown`; potvrzené `cancelled` je
+možné jen před dispatch. Publikační stav workflow je odvozeně `unpublished`,
+`publishing` nebo `published`. Průběh creator/opponent se odvozuje ze step řádků
+a neukládá se podruhé jako konkurenční globální stav.
+
+Pořadí durable hranic kroku je:
+
+1. pod projektovým writer lockem vytvořit Context Manifest/payload, exact
+   provider request a approval digest a atomicky uložit `prepared` step;
+2. připravit a svázat přesný backend run, poté uložit `run-bound` ještě bez
+   síťového účinku;
+3. po potvrzení znovu autorizovat původní PreparedContext a tentýž binding,
+   následně smí backend adapter přejít do `dispatching` a volat nejvýše jednou;
+4. po doloženém backend `succeeded` validovat a atomicky uložit přesné output
+   bajty/hash jako step `succeeded`;
+5. opponent preview čte pouze tento uložený creator výstup. Pád před jeho
+   uložením nevytvoří handoff; pád po backend úspěchu se obnoví opětovným čtením
+   stejného runu bez druhého providerového volání;
+6. `dispatching`, timeout nebo ztracená odpověď zůstává `unknown`. Stejný step
+   ani run se neopakuje; vědomý nový pokus v1 vytvoří nové workflow se dvěma
+   novými step/run/manifest identitami a původní evidence zůstane zachována.
+
+### Publikace a provenance
+
+Publikace je povolena jen pro `succeeded` creator nebo opponent output, který
+uživatel zvolí podle přesného `step_id` a result SHA-256. Preview publikace
+obsahuje projekt/expected HEAD, cílové artifact/operation ID, title, privacy a
+vybraný výstup. Workspace zapíše běžný Markdown artefakt s neměnnou
+`fpw-role-workflow-provenance-v1`: workflow ID, vybraný i předchozí step ID,
+run/manifest ID a hashe, role/binding/capability revision, vstupní reference a
+result hash; předchozí step ID je u creator výstupu prázdné. Plný prompt,
+Context Manifest, secret ani nepoužitý mezivýstup se do Gitu nekopíruje.
+
+Workflow journal fixuje publikační request/digest před Workspace operací. Pád
+před Workspace nemění projekt; pád uvnitř se obnovuje stejným operation ID;
+pád po Workspace commitu před uložením receipt načte stejný receipt bez dalšího
+LLM dispatch nebo druhého commitu. Změněný HEAD, result hash, artifact ID,
+privacy nebo operation ID není retry původní publikace.
+
+### Reuse rozhodnutí
+
+Implementace má adaptovat `ContextBuilder`/`PreparedContext`, explicitní
+`RoleRegistry`, stávající provider-neutral adaptery a jejich run journals,
+durable prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a
+bezpečný textový preview/RBAC desktopu a webu. `SummaryTasks` se nerozšíří o
+druhý krok: jeho one-task/one-run schéma neumí atomicky vynutit dvě role a
+hashovaný handoff, proto vznikne úzce zaměřený workflow journal se stejnými
+bezpečnostními primitivy. `ChatThreads` se odmítá jako workflow autorita,
+protože konverzace není povoleným implicitním předáním.
+
+Není doložena potřeba cizího agent frameworku, message queue, provider poolu,
+vektorové DB ani nového Git writeru. Soukromá inventura neposkytla komponentu s
+kompatibilním Context Manifest/RBAC/approval/`unknown`/Workspace recovery
+kontraktem; žádný kód ani neveřejný název se nepřebírá.
+
+Část B implementuje schéma v `RoleWorkflows` a orchestrace
+`RoleWorkflowService`. Příprava nevykonává providerový účinek; creator a
+opponent dispatch vyžadují vlastní approval digest přes preview a přesné
+provider request bajty. Restart čte doložený stav backend run journalu: úspěch
+materializuje bez druhého volání, zatímco `dispatching`/`unknown` uzavře workflow
+krok jako `unknown`. Opponent manifest se při dispatchi znovu váže na SHA-256 a
+privacy uloženého creator výsledku. Implementace části B nezapisuje projektový
+Git.
+
+Část C zpřístupňuje stejnou službu autentizovaným desktopovým a webovým routám.
+Webový actor musí mít write oprávnění ke konkrétnímu projektu, vlastní oddělený
+workflow stav a nesmí přes web načíst ani spustit `local-only` workflow. Target
+obou kroků musí vycházet z node-local uloženého Ollama bindingu; volitelný
+per-run model má deterministickou odvozenou revision, ale request nesmí změnit
+endpoint, binding ID, boundary, pin ani target ID.
+
+UI zobrazuje role, explicitní zdroje, privacy, model a celý provider request
+pomocí textového vykreslení. Creator dispatch, opponent handoff/dispatch a
+publikace jsou tři samostatná potvrzení; změna vstupních polí zahodí připravený
+UI stav a vyžaduje nové workflow identity. Publikace fixuje request v workflow
+journalu a používá standardní Workspace operation ID/recovery. Journal se kvůli
+publikačnímu requestu a receiptu transakčně migruje ze schématu 1 na 2; pád před
+SQLite commitem zachová celé v1 a opakované otevření migraci bezpečně dokončí.
+Git artefakt má
+`fpw-role-workflow-provenance-v1`, odkazuje na vybraný a případný předchozí krok
+a jejich hashe, ale neobsahuje prompt, mezivýstup, endpoint ani TLS pin.
+
+Část D doplňuje regresi stejného i odlišného explicitního modelu, nulového
+implicitního kontextu, stale HEAD/selection/policy/binding, známého providerového
+selhání, oversized výstupu, `unknown`, vědomě nového runu a restartu po každém
+dispatch checkpointu i obou publikačních hranicích. Opt-in Qt/WebEngine smoke
+skutečně otevřel projekt a přepnul na workflow panel. Oddělený živý service
+smoke provedl oba kroky přes same-node Ollamu s `phi:latest` a ověřil, že
+opponent request obsahuje materializovaný creator výstup, nikoli původní účel.
+Nešlo o private-network Ollamu ani o klikací end-to-end dispatch z Qt UI; tyto
+širší produkční varianty nejsou podmínkou tohoto úzkého PoC.
+
+## Lokální živé vlákno, zprávy a turn
+
+F-M2-CHAT-01 zavádí autoritativní node-local thread store mimo projektový Git.
+Není obnovitelným indexem, backendovým run storem ani projektovým artefaktem a
+automaticky se nesynchronizuje. V1 má explicitní verzi schématu a odmítá
+neznámou verzi nebo poškozené vazby. Každé vlákno nese stabilní UUID, vlastnící
+node/user UUID, klasifikaci (výchozí `brainstorming`), stav active/archived,
+čas vytvoření a monotónní revizi. Čas je informativní; autoritativní pořadí tvoří
+transakčně přidělené celé pořadové číslo v rámci vlákna.
+
+Zpráva je po potvrzení neměnná: stabilní UUID, thread ID, pořadí, role `user`
+nebo `assistant`, přesné UTF-8 bajty, jejich SHA-256, privacy, autor a čas přijetí.
+Oprava vytváří novou zprávu s vazbou na předchůdce; nepřepisuje historii.
+UI draft není zpráva ani auditní záznam, v první verzi zůstává jen v paměti a po
+pádu se může ztratit. Credentials, skryté provider instrukce a provider session
+tokeny do thread store nepatří. Limity velikosti zprávy, počtu vybraných zpráv a
+celého manifestu se kontrolují před trvalým přijetím nebo dispatch handoffem.
+
+Jeden turn váže právě jednu uživatelskou zprávu, volitelný backendový run ID a
+nejvýše jednu assistant zprávu. Jeho lokální stav je `prepared`, `run-bound`,
+`completed`, `failed`, `cancelled` nebo `unknown`; není náhradou detailního stavu
+backendového runu. Uživatelská zpráva a `prepared` turn vzniknou jednou SQLite
+transakcí. Následně se vytvoří nový run a jeho ID se připne k turnu ještě před
+dispatch. Pád před vznikem run recordu znamená bezpečně neodeslaný prepared turn.
+Po připnutí se při obnově načte durable backendový stav: `dispatching` nebo
+`unknown` se nikdy automaticky neopakuje, `failed` nevytvoří assistant zprávu a
+`succeeded` lze idempotentně dokončit. Assistant zpráva a stav `completed`
+vzniknou jednou thread-store transakcí s unikátní vazbou na turn; opakovaná
+reconciliation tak nevytvoří duplikát.
+
+Pokračování konverzace není implicitní přeposlání celého vlákna. Každý nový běh
+explicitně vybere seřazené message UUID a jejich přesné bajty; Context Manifest
+nese thread ID/revizi, message ID/pořadí/hash/privacy a nový uživatelský vstup.
+Před dispatch se znovu ověří vlastník, nezměněná revize/výběr, privacy, policy a
+přesný backend binding/model/boundary. Změna cíle vytváří nový manifest a run,
+nikoli fallback. Projektové zdroje případně vybrané pro jednotlivý run zůstávají
+samostatnými manifest inputs; v této dávce tím vlákno nevzniká jako projektový
+artefakt ani nezískává trvalé přiřazení k projektu.
+
+V1 uchovává potvrzená vlákna, zprávy a turny bez automatického časového mazání.
+Archivace pouze uzavře vlákno pro další zápis; zůstává vědomě dostupné v seznamu.
+Explicitní odstranění vlastníkem doplňuje F-M2-CHAT-03 podle samostatného
+recovery kontraktu níže. Provozní limit nebo nedostatek místa musí odmítnout
+nový zápis, nikoli tiše odstraňovat starší kontext. Projektový snapshot či
+odvozený artefakt a jeho retence patří do F-M2-CHAT-02 a běžného Workspace
+lifecycle a odstraněním lokálního vlákna se nemění.
+
+### Režimy konverzace a přechody — F-M3-CHAT-MODES-01 a F-M3-OLLAMA-ORCH-LAN-01
+
+Chat rozlišuje dva účely, které nejsou task rolemi: `orchestration` a
+`brainstorming`. Orchestrace používá potvrzený Ollama binding s boundary
+`same-node` nebo explicitně vybraný TLS připnutý `private-network`; může přes
+Context Builder získat explicitně vybrané projektové artefakty pro přípravu
+kontextu, dat pro další zpracování, kompilaci návrhu artefaktu a filtraci. LAN
+cíl zůstává síťovou hranicí a nesmí přijmout `local-only`. Model pouze navrhuje
+akce; jejich provedení zůstává v deterministickém aplikačním orchestrátoru.
+Brainstorming dovoluje zvolit pro každý nový běh libovolný jinak povolený
+binding a model a smí obsahovat explicitně připravený textový/chatový kontext.
+Jeho Context Manifest však nesmí obsahovat projektový artefakt, jeho bajty ani
+automaticky odvozený artifact context.
+
+Pro nové explicitní task plány rozšiřuje [ADR 0034](0034-explicit-task-routing.md)
+orchestration také o `external-openai`, vždy přes samostatný přesný preview a
+potvrzení a bez projektových artefaktů. Následující omezení orchestrace jen na
+Ollamu proto platí pro původní chat-mode kontrakt, nikoli pro tento nový task
+execution řez.
+
+Výběr běhu je uzavřený objekt `{mode, adapter, model}` a pro orchestration může
+navíc nést `{binding_id, binding_revision}`. Orchestrace přijímá jen adapter
+`ollama`, nepřijímá model z requestu a načte přesný potvrzený binding. Pro
+`private-network` jsou ID a revize povinné a musí se shodovat s aktuální
+konfigurací; UI je posílá i pro `same-node`. Chybějící LAN výběr nebo změněný
+binding se odmítne před přípravou kontextu a vyžaduje nový manifest/run, nikdy
+automatický fallback. Brainstorming vyžaduje explicitní model a smí vybrat
+nakonfigurovaný Ollama nebo OpenAI Responses adapter. Základní binding se
+nemění: služba vytvoří pro běh odvozenou immutable revizi zahrnující hash
+vybraného modelu a zachová endpoint, target i credential revision. Manifest a
+backend run record proto vážou přesný model; změna základního bindingu před
+pozdějším potvrzením či recovery je konflikt, nikoli důvod použít nový model.
+
+Režimová policy přijímá oddělené seznamy projektových a textových vstupů.
+Brainstorming vyžaduje prázdný seznam projektových vstupů, ale dovoluje
+explicitně připravený text a vybrané zprávy jako `ad-hoc` vstupy. Orchestrace
+smí přijmout oba druhy. Každý běh vyžaduje alespoň jeden explicitní vstup;
+žádný režim nedoplňuje kontext automaticky.
+
+Přechod `orchestration` → `brainstorming` vytváří nový manifest a znovu
+vyhodnotí explicitně vybrané zprávy vůči cíli; historie ani artefaktový obsah
+se nepřenášejí automaticky. `local-only` ani jiný vstup zakázaný vybraným cílem
+se nepředá. Přechod `brainstorming` → `orchestration` není povolen uvnitř
+vlákna: uživatel nejdříve vlákno vědomě ukončí a lokálně archivuje; jeho
+projektový otisk vznikne jen samostatným výslovným potvrzením. Aplikace pak
+založí nové prázdné orchestration vlákno bez vybraných zpráv, artefaktů nebo
+jiného kontextu z ukončeného brainstormu. Každý budoucí explicitní vstup se
+znovu autorizuje a zachytí vlastním manifestem. Přechod proto není
+reklasifikací starých zpráv ani mechanismem pro obcházení privacy policy.
+
+Implementace F-M2-CHAT-01 v `spikes/chat_threads.py` používá samostatný SQLite
+soubor s vlastněným režimem 0600 ve vlastněném stavovém adresáři 0700,
+`foreign_keys=ON`, `synchronous=FULL` a `BEGIN IMMEDIATE` pro serializované
+přechody. Při otevření kontroluje přesnou sadu tabulek/sloupců a verzi schématu;
+neznámý, neúplný, symlinkovaný nebo příliš otevřený stav odmítne. Jde o
+backendově neutrální storage/recovery vrstvu. `spikes/chat_service.py` váže nový
+turn na explicitně seřazený výběr zpráv; manifest nese thread ID, revizi a
+message ID, následně se revize před autorizací znovu ověří. Desktop ukládá
+node-local Ollama binding a zobrazuje lokálně trvalé vlákno. UI nepřidává
+projektové artefakty, neprovádí automatický retry neurčitého běhu a nepoužívá
+náhradní cíl.
+Ollama adapter z konverzačního payloadu deterministicky dekóduje přesné UTF-8
+bajty a sestaví čitelný transcript `User`/`Assistant`; interní JSON a Base64
+nepředává modelu jako uživatelský text. Odvozený request zůstává spolu s hashem
+manifestu součástí durable request digestu.
+
+### Správa a úplné aplikační odstranění vlákna — F-M2-CHAT-03
+
+Seznam vláken je samostatná třetí záložka levého panelu vedle úkolů a podkladů.
+Odděluje zařazená a nezařazená vlákna a u každého rozlišuje vlastníka,
+přiřazený projekt, režim a stav `active`/`archived`. Načtení existujícího vlákna
+a založení nového jsou dvě vědomé UI akce; aplikace po otevření projektu sama
+nevybere poslední vlákno. Výběr v mobilním draweru přepne hlavní panel na chat
+a navigaci zavře při zachování obvyklé obnovy focusu tlačítkem draweru. Sidebar
+má pevnou výšku a sám se neposouvá; scroll patří jednotlivým seznamům v
+dostupném prostoru panelu. Návrat na seznam projektů je pevná akce nahoře před
+záložkami, nikoli prvek na konci hlavního projektového obsahu.
+Archivované vlákno a vlákno přiřazené jinému projektu je v daném projektu pouze
+pro čtení. Archivace odmítne rozpracovaný turn a používá očekávanou revizi.
+
+Odstranění má read-only preview a samostatný confirm. Preview váže vlastníka,
+thread ID a revizi na SHA-256 kanonického plánu. Uvádí počty zpráv, turnů,
+task outcomes, approval/preview a navázaných Ollama/OpenAI run záznamů. Ze
+současného projektového HEAD navíc vypíše rozpoznané `fpw-chat-snapshot-v1` a
+`fpw-chat-output-v1`; tyto artefakty ani dřívější Git historie se nemažou.
+`prepared`, `run-bound`, `dispatching` a každý `unknown` účinek operaci blokují.
+„Úplné“ zde znamená odstranění podporovaného aplikačního stavu, nikoli
+forenzní přepsání SQLite stránek nebo média.
+
+`thread-lifecycle.sqlite` je autoritativní node-local journal potvrzeného
+odstranění. Nejprve durable uloží operation ID, vlastníka, preview digest a
+přesná ID plánovaných záznamů. Potom `chat-threads.sqlite` přidá deletion marker;
+běžné čtení a mutace označeného vlákna selžou zavřeně. Následují idempotentní
+commity approval, task outcome, backend run a nakonec thread/message/turn
+store. Journal se posune až po durable commitu daného kroku. Pád po commitu a
+před posunem journalu krok bezpečně zopakuje. Při restartu `ChatService.status`
+dokončí již potvrzenou nezablokovanou operaci; změna mezi potvrzením journalu a
+deletion markerem se znovu ověří a místo smazání skončí fail-closed. Receipt
+uchová pouze operation/thread ID, digest, počty a seznam zachovaných publikací,
+nikoli obsah zpráv.
+
+Reuse/adaptuje se existující striktní SQLite ownership, `synchronous=FULL`,
+stabilní UUID, task/approval/run vazba a bezpečné textové UI. Projektový
+Workspace journal se nepoužije: žádný projektový zápis zde nevzniká a projektový
+Git je naopak záměrně read-only zachovaná historie. Nová externí databáze,
+message queue ani background retence nejsou potřeba.
+
+`F-M3-OLLAMA-ORCH-LAN-01` rozšířil orchestration také na explicitně zvolený TLS
+připnutý `private-network` Ollama binding. LAN se nevydává za lokální proces;
+`local-only` odmítá `ContextBuilder` a změnu binding ID nebo revize režimová
+policy odmítne před dispatch. Každý vědomý nový pokus používá nový Context
+Manifest a run; durable `unknown` se automaticky neopakuje a žádný jiný backend
+se nevybírá jako fallback. Automatické testy používají řízený transport; živý
+LAN/TLS/firewall průchod zůstává samostatnou cílovou akceptací.
+
+## Projektové přiřazení, otisk a odvozený Markdown — F-M2-CHAT-02
+
+Explicitní přiřazení živého vlákna k projektu je node-local pracovní vazba,
+nikoli automatická publikace historie. Thread store je její autorita a v nové
+verzi schématu uchová nejvýše jedno `project_id` spolu s revizí přiřazení.
+Přiřazení vyžaduje aktuálně registrovaný a čitelný projekt, stejného vlastníka
+vlákna a explicitní uživatelskou akci. Změna projektu zvýší revizi vlákna;
+nepřenáší starší projektové artefakty ani nemaže již publikované otisky. Po
+restartu se vazba znovu ověří proti registraci projektu. Cizí, odstraněný nebo
+nově nedostupný projekt se zobrazí jako stale vazba a nesmí dodat kontext ani
+umožnit publikaci.
+
+Projektový otisk je nový artefakt `kind: snapshot`, `provenance: snapshot` se
+standardním sidecarem a verzovaným souborem `snapshot.md`. Nepřidává neznámá
+pole do metadata v1/v2. Markdown obsahuje čitelný transcript a jeden omezený,
+kanonický JSON záznam `fpw-chat-snapshot-v1`, z něhož je transcript
+deterministicky odvozen a při čtení znovu ověřen. Záznam nese:
+
+- snapshot/artifact, project, thread ID a přesnou thread revizi,
+- druh `full` nebo `delta`, seřazené message ID/sequence/role, přesné UTF-8
+  bajty, SHA-256, privacy, autora a čas,
+- pro příslušné turny turn ID, run ID, assistant message ID a manifest ID,
+- nejpřísnější privacy všech zahrnutých zpráv a SHA-256 kanonického záznamu,
+- u `delta` navíc artifact ID a hash kanonického záznamu základu, základní a
+  výslednou thread revizi a navazující rozsah sequence.
+
+`full` je samostatně čitelný a obsahuje všechny zvolené zprávy od počátku
+vlákna do jedné potvrzené revize. `delta` obsahuje pouze souvislé nové zprávy po
+revizi kompletního nebo delta základu. Před přípravou journalu se základ načte z
+aktuálního validovaného projektového HEAD, ověří se jeho druh, project/thread ID,
+kanonický hash a přesné pokračování sequence. Chybějící, změněný, cizí nebo
+nesouvislý základ operaci odmítne; delta se nikdy nepovýší na full. Otisk je po
+publikaci obsahově neměnný. Nový výběr či oprava vytváří nové UUID; běžné
+anotace mohou vzniknout jen novou verzí metadat bez změny kanonického záznamu.
+
+Samostatný výstup úkolu je `kind: document` a `provenance: llm-generated` nebo
+`llm-transformed`. Jeho editovatelný Markdown před vlastním tělem nese omezenou
+provenance obálku `fpw-chat-output-v1`: source thread/revision, přesná message a
+turn/run/manifest ID, případný snapshot artifact ID/hash a privacy vstupů.
+Projektová metadata používají vztah `derived-from` na existující snapshot,
+pokud je snapshot součástí stejné nebo starší validované projektové verze.
+Editace dokumentu zachová tuto původní obálku; změna zdrojového výběru je nový
+odvozený výstup, nikoli přepsání historie chatu. Výstup dědí nejpřísnější
+privacy zahrnutých zpráv a vstupů; oslabení vyžaduje samostatnou autorizovanou
+reklasifikaci mimo tuto dávku.
+
+Publikace reuse/adaptuje jedinou Workspace operaci z ADR 0003. Request předem
+fixuje operation ID, expected HEAD, thread ID/revizi, výběr, výsledné UUID/cesty
+a přesné cílové bajty. Pod writer lockem se znovu ověří projektový HEAD,
+vlastník, přiřazení a nezměněná revize/výběr; celý kandidátní strom a přechod se
+validují před uložením journalu. Pád před CAS nepublikuje částečný otisk či
+dokument. Po CAS recovery rozpozná stejný commit, dokončí index/receipt a
+nevytvoří druhé UUID ani commit. Git commit a node-local thread DB nejsou jedna
+transakce: publikovaný snapshot je neměnný záznam zvolené revize, nikoli příslib,
+že živé vlákno zůstalo beze změny. Credentials, backend binding, provider
+session token a úplný soukromý Context Manifest se nepublikují.
+
+Reuse rozhodnutí: adaptovat `ChatThreads`, `Artifacts`, striktní metadata a
+`Workspace`/Journal/Index. Nová databáze, content-addressed store, Markdown
+parser nebo externí komponenta nejsou potřeba; posouzené obecné Git utility
+nenahrazují koordinovaný Workspace lifecycle této publikační cesty.
+
+Implementace F-M2-CHAT-02-B v `spikes/chat_records.py` tento kontrakt realizuje
+pro přiřazení a full/delta snapshoty. `ChatThreads` migruje přesné schéma v1 na
+v2 v jedné SQLite transakci, ukládá `project_id`, revizi přiřazení a manifest ID
+turnu; samotná DB se do projektu nekopíruje. `ChatRecords` před založením
+journalu ověří registrovaný projekt, expected HEAD, vlastníka, přiřazení a
+thread revizi. Delta navíc čte a validuje kanonický záznam základu z aktuálního
+HEAD. Snapshot a jeho privacy jsou po publikaci neměnné přechodovým validátorem;
+opakování stejného operation ID používá běžný Workspace receipt/recovery.
+F-M2-CHAT-02-C doplňuje editovatelný `fpw-chat-output-v1`. Jeho omezená
+kanonická obálka nese thread revizi, vybrané message ID, odpovídající
+turn/run/manifest vazby, privacy a volitelný snapshot ID/hash; běžný Markdown
+za obálkou zůstává editovatelný. Přechodový validátor odmítne odstranění nebo
+změnu původní obálky. Autentizované desktopové API/UI provádí explicitní
+přiřazení, full snapshot a uložení poslední odpovědi, poté načte nový projektový
+HEAD. Průběžný stav LLM požadavku je u promptu, nikoli ve scrollující historii.
+
+## Lokální summarizer, náhled a potvrzená publikace — F-M2-SUMMARY-01
+
+První summarizer je explicitní jednorázový úkol, nikoli background indexace ani
+automatický metadata hook. Kanonický request `fpw-summary-request-v1` nese
+stabilní task/run/manifest ID, project ID a expected HEAD, verzi role
+`summarizer-v1`, přesný same-node cíl a volitelný uživatelský focus. Focus je
+samostatný UTF-8 vstup nejvýše 16 KiB s explicitní privacy a je zahrnutý v
+manifestu; není skrytou instrukcí mimo request. V1 přijímá právě
+jeden ze dvou druhů seřazeného výběru:
+
+- jeden až 64 projektových artifact ID z jediného validovaného HEAD, nebo
+- jedno vlastní živé vlákno s přesnou revizí a jedním až 64 seřazenými message
+  ID.
+
+Smíšený výběr projektových artefaktů a zpráv v jednom běhu v1 nepodporuje;
+nesmí být emulován skrytým přidáním vstupů. Aplikace sestaví čitelnou,
+verzovanou instrukci role a fixuje ji spolu s přesnými vstupními bajty v
+Context Manifestu. První implementace přijímá pouze binding s execution
+boundary `same-node`; nedostupnost lokálního backendu neaktivuje LAN ani cloud
+fallback. Oprávněné entity odvozuje z aktuální aplikační autority,
+nikoli z klientem deklarovaného seznamu. Platí existující limit kontextu 16 MiB;
+výstup musí být neprázdný UTF-8 Markdown nejvýše 1 MiB. Překročení limitu,
+nečitelný vstup nebo změna výběru vyžaduje nový task a manifest, nikoli tiché
+zkrácení. V1 nepoužívá embeddings, RAG ani automatickou volbu zdrojů.
+
+### Node-local task a síťový běh
+
+Backendově neutrální task journal je autorita pracovního requestu, přesného
+manifestu, náhledu a potvrzení publikace. Je node-local mimo projektový Git,
+má striktně verzované SQLite schéma, vlastněný soubor 0600 ve stavovém adresáři
+0700 a serializované přechody. Nejde o obnovitelný projektový index ani o kopii
+projektových dat. Ukládá request digest, přesné manifest a payload bytes/hash,
+privacy, stav, výstup/hash a případný fixovaný publikační request/receipt.
+Credentials, provider session tokeny a transportní hlavičky neukládá.
+
+Stavy jsou `prepared`, `run-bound`, `succeeded`, `failed`, `cancelled`,
+`unknown`, `publishing` a `published`. `cancelled` je bezpečné jen před
+dispatch nebo po doloženém potvrzení backendu, nikoli po pouhém požadavku na
+zrušení. Task vznikne trvale před vazbou na backendový run.
+Context Builder připraví a bezprostředně před odesláním znovu autorizuje přesný
+handoff. Existující `OllamaRuns` zůstává jedinou autoritou síťového účinku:
+`dispatching` či ztracená odpověď znamená `unknown` a žádný automatický retry.
+Pád po úspěchu backendu, ale před uložením preview se obnoví opětovným čtením
+stejného succeeded runu; nevznikne druhé volání. Validní odpověď se jako bounded
+preview uloží do task journalu a zobrazí se jako nedůvěryhodný Markdown bez
+aktivního HTML. Preview samo nemění Git, index ani metadata projektu.
+
+### Potvrzení a projektový artefakt
+
+Uživatel potvrzuje přesný preview SHA-256, cílové artifact UUID, title,
+operation ID a expected HEAD. Tím se task atomicky přepne do `publishing` a
+fixuje se request digest; před voláním Workspace se tasková SQL transakce
+uzavře, aby nevzniklo vzájemné držení zámků. Jiný publish request pro stejný
+task se odmítne. Workspace pod svým writer lockem znovu ověří expected HEAD,
+projekt, oprávnění, původní entity či thread/message revizi, manifest a preview
+hash. Poté publikuje `kind: document`, `provenance: llm-generated` se sidecarem
+a Markdownem obsahujícím omezenou kanonickou obálku `fpw-summary-v1`.
+
+Obálka nese task/run/manifest ID a hash, role ID/revizi, project commit,
+seřazené bezpečné source reference s ID/hash/privacy, binding/model/target,
+preview hash a výslednou privacy. Úplné vstupní bajty, celý soukromý manifest a
+credentials se do artefaktu nekopírují. Projektové vstupy dostanou vztah
+`summarizes`; message ID z node-local chatu zůstávají pouze v obálce. Privacy
+artefaktu je nejpřísnější privacy vstupů a focusu. Shrnutí ji samo nesnižuje.
+Pozdější běžná editace mění čitelnou část dokumentu v nové Git verzi, ale
+přechodový validátor zachová původní `fpw-summary-v1` obálku beze změny.
+
+Crash boundaries záměrně oddělují LLM a Git:
+
+1. před durable `run-bound` nevznikl síťový účinek; po něm se stav rekonciluje
+   podle `OllamaRuns`, nikoli opakováním volání,
+2. před Workspace journalem není projektový zápis připraven a task může zůstat
+   bezpečně `succeeded` nebo `publishing`,
+3. journal před CAS vlastní přesné výsledné bajty; pád před posunem refu nic
+   nepublikuje,
+4. po CAS Workspace recovery dokončí index/receipt bez druhého commitu a stejný
+   receipt následně idempotentně dokončí task jako `published`.
+
+Reuse/adapt rozhodnutí: rozšířit Context Builder o verzovaný task/role vstup,
+reuse jeho manifest a revalidaci, `OllamaBindings`/`OllamaAdapter`/`OllamaRuns`
+pro přesný lokální cíl a síťový lifecycle a Workspace/Artifacts/metadata pro
+jedinou projektovou publikační cestu. Task journal adaptuje striktní SQLite vzor
+`ChatThreads`, ale nesdílí jeho tabulky ani význam. Existující chatový output
+kontrakt lze adaptovat pro kanonickou obálku a její neměnnost. Obecné backendové
+utility ze soukromé inventury nepřinášejí potřebný manifest, autorizaci ani
+recovery a jejich licence nejsou pro přenos doložené; kód se nepřebírá. Nová
+vektorová databáze, message queue, parser, externí framework ani další
+projektové úložiště nejsou potřeba.
+
+## Lokální strukturovaná extrakce — F-M2-EXTRACT-01
+
+Extractor je explicitní jednorázový úkol nad stejnou autorizační a recovery
+hranicí jako summarizer. Kanonický `fpw-extraction-request-v1` nese stabilní
+task/run/manifest ID, project ID a expected HEAD, `extractor-v1`, přesný
+same-node binding, právě jeden artifact nebo thread/message výběr a předem
+zvolené `schema_id`/`schema_revision`. V1 nepřijímá uživatelské JSON Schema,
+automaticky nevolí schéma ani zdroje a nepoužívá RAG. Volitelný focus zůstává
+samostatným manifestovaným vstupem nejvýše 16 KiB s vlastní privacy.
+
+Podporovaný katalog v1 je záměrně uzavřený:
+
+- `facts` / `facts-v1`: přesný objekt `{"schema":"facts-v1","items":[...]}`;
+  každá položka má právě `statement` a `source_ids`,
+- `action-items` / `action-items-v1`: přesný objekt
+  `{"schema":"action-items-v1","items":[...]}`; každá položka má právě
+  `title`, `details` a `source_ids`.
+
+`items` obsahuje 0 až 128 objektů. Texty jsou neprázdné, bez NUL, `title`
+nejvýše 200 bajtů UTF-8 a ostatní textové pole nejvýše 4096 bajtů. Každý
+`source_ids` je neprázdný seřazený unikátní seznam UUID z explicitně vybraných
+zdrojů; focus ID není zdrojová reference. Parser přijímá právě jeden UTF-8 JSON
+objekt nejvýše 1 MiB, odmítá Markdown fence, trailing data, duplicitní klíče,
+neznámá pole, špatný schema tag, chybějící pole a nečíselné konstanty. Teprve
+po této validaci uloží task journal kanonické JSON bajty a jejich SHA-256 jako
+preview; původní provider response zůstává dohledatelná pouze v odděleném
+`OllamaRuns`. Nevalidní známá odpověď je `failed`, nikoli preview k potvrzení.
+
+Potvrzení váže task ID, preview hash, artifact ID, title, operation ID a
+expected HEAD. Workspace znovu ověří původní zdroje či přesnou thread revizi,
+manifest, schema revision a nejpřísnější privacy. Publikuje neměnný
+`kind: source`, `provenance: llm-generated`, soubor `extraction.json` jako
+kanonický objekt `fpw-extraction-v1` s omezenou provenance (task/run/manifest a
+hash, role/schema, project commit, bezpečné source ID/hash/privacy, přesný cíl,
+preview hash/privacy) a validovanými daty. Projektové vstupy dostanou vztah
+`derived-from`; message ID zůstanou pouze v obálce. Celý výstup je neměnný pod
+stejným UUID stejně jako jiné source artefakty; oprava nebo jiné schéma znamená
+nový task a nové UUID.
+
+Task journal adaptuje schéma a přechody `SummaryTasks`, ale extractor má vlastní
+store a význam, aby se role, validátor a publikace nemohly zaměnit. Reuse
+ContextBuilderu, Ollama binding/run lifecycle, Workspace a omezeného JSON
+parseru/UUID primitiv z `metadata.py` je přímý; summarizer orchestrace se
+adaptuje společnými malými helpery pouze tam, kde nezamlží odlišnou validaci.
+Soukromě inventarizovaný jednoduchý Ollama klient ani externí schema framework
+neřeší manifest, oprávnění, přesný recovery lifecycle či omezený katalog; kód
+se nepřebírá a nová runtime závislost nevzniká. Crash boundaries jsou stejné:
+`unknown` síťový účinek se neopakuje, preview nemění Git a stejný publish
+request po pádu před/po CAS pouze dokončí Workspace receipt a task.
+
+## Lokální návrhy popisu a štítků — F-M2-META-AI-01
+
+Metadata advisor je explicitní jednorázový návrh pro právě jeden artefakt,
+nikoli background hook ani oprávnění modelu zapisovat do projektu. Kanonický
+`fpw-metadata-suggestion-request-v1` váže task/run/manifest ID, project ID,
+expected HEAD, jediné artifact ID, roli `metadata-advisor-v1` a přesný
+`same-node` binding. Server do Context Manifestu vloží přesné bajty obsahu a
+kanonický snapshot aktuálních polí `title`, `description`, `tags`, `kind`,
+`privacy` a `provenance`; jejich hash je součástí tasku. Model nedostane možnost
+navrhovat změnu title, privacy, provenance, druhu ani identity artefaktu. V1
+nevybírá artefakty automaticky, neprochází celý projekt a nepoužívá RAG.
+
+Odpověď je jediný striktní JSON objekt nejvýše 1 MiB s přesným tvarem
+`{"schema":"metadata-suggestions-v1","description":string|null,"tags":[]}`.
+Description je buď `null` (bez návrhu), nebo oříznutý neprázdný UTF-8 text bez
+NUL nejvýše 4096 bajtů. Tags obsahují nejvýše 16 oříznutých neprázdných UTF-8
+řetězců bez řídicích znaků, každý nejvýše 64 bajtů; duplicity podle Unicode
+`casefold` se odmítnou. Markdown fence, trailing data, duplicitní klíče,
+neznámá pole, neplatný schema tag a překročení limitu znamenají `failed`, ne
+náhled. Prázdný seznam je platný stav „žádné nové štítky“, nikoli pokyn smazat
+stávající hodnoty. Validovaný výstup se kanonizuje a uloží jako node-local
+preview oddělené od projektového Gitu.
+
+UI ukáže přesný původní a navržený popis a množiny existujících a nových
+štítků bezpečným textovým vykreslením. Popis se nikdy nepřepíše automaticky;
+uživatel jej musí samostatně zaškrtnout, zvlášť pokud již existuje ruční
+hodnota. U štítků uživatel vybírá podmnožinu nových návrhů, která se přidá ke
+stávajícím štítkům v jejich původním pořadí. V1 štítky automaticky
+neodstraňuje ani nepřejmenovává. Potvrzení musí vybrat alespoň jednu skutečnou
+změnu a nese task ID, preview SHA-256, project/artifact ID, expected HEAD,
+operation ID, boolean pro popis a přesný seznam vybraných navržených tagů.
+
+Workspace před journalem znovu ověří HEAD, celý původní metadata snapshot a
+hash obsahu. Zachová všechna jiná pole včetně privacy a provenance a připraví
+jedinou změnu stávajícího sidecaru nebo frontmatteru. Kandidátní strom projde
+standardní validací metadat; stejný operation ID po pádu obnoví stejný commit a
+receipt. Změněný HEAD či metadata vyžadují nový návrh, aby starý diff nepřepsal
+ruční práci. Task se fixuje do `publishing` před Workspace, po potvrzeném
+receiptu do `published`; síťový stav `unknown` se automaticky neopakuje.
+
+Reuse/adapt rozhodnutí: použít Context Builder, `OllamaBindings`/adapter/run
+lifecycle, striktní JSON/UUID primitiva a Workspace/Journal/Index; adaptovat
+oddělený task/preview vzor extractoru a metadata patch z `Artifacts.save` tak,
+aby fungoval pro validovaný artefakt bez změny obsahu. Přímé volání editoru se
+odmítá, protože vyžaduje Markdown body a neumí potvrzení AI preview pro source
+artefakty. Nová databáze, schema framework, tagovací knihovna, vektorová DB ani
+externí klient nejsou potřeba. Soukromá inventura nenabízí komponentu s tímto
+Context Manifest, potvrzením a recovery kontraktem; žádný kód se nepřebírá.
+
+Implementace F-M2-META-AI-01-B používá `MetadataSuggestionService` nad
+společnou preview orchestrací, ale vlastní SQLite task store. Serverový hook
+přidává kanonický metadata snapshot jako ad-hoc vstup se stejnou privacy jako
+artefakt; klient určuje pouze jeho nové UUID, nikoli obsah. Striktní validátor
+ukládá až kanonický návrh a projekce preview vrací původní hodnoty a přesný diff
+bez projektového zápisu. Summary a extractor bez hooku zachovávají původní
+payload i chování.
+
+## Větve a publikace při změně HEAD
+
+Publikace zde znamená posun autoritativní projektové větve **na jednom uzlu**. Není současně síťovým odesláním ani atomickou transakcí všech peerů. Projekt má explicitně zvolený plný ref (výchozí pro nový projekt `refs/heads/main`); nepředpokládat, že každý existující projekt používá main. Detached/unborn HEAD a probíhající merge/rebase dosavadní Workspace odmítá.
+
+Přijaté peer refs a kandidáti jsou oddělení od projektové větve. Jméno větve nedokládá identitu peeru; příjem musí navázat commit na autentizovaný přenos a povolený projekt. Cizí objekty se nejprve validují v izolovaném prostoru. Fetch nesmí sám posunout projektovou větev ani index. Přenos celého Gitu zpřístupní i historii: před síťovým přenosem musí být povolen celý dosažitelný obsah, nejen současný strom. Projekt s local-only nebo jiným zakázaným historickým obsahem nelze sdílet běžným clone/push; případný filtrovaný export je samostatná explicitní operace, nikoli přepsání historie tohoto projektu.
+
+Zápisový záměr nese operation ID, project ID, plný ref, expected HEAD, vlastněné cesty, autora a kandidáta. Uživatelské řešení konfliktu je vázané na přesné base/mine/theirs commit IDs. Pod společným zámkem se ověří oprávnění, čistý/povolený lokální stav a celý kandidátní strom (schéma, ID, obsah/sidecar, vztahy). Fast-forward vyžaduje stejné kontroly jako merge. Divergentní historie se slučuje commitem se dvěma rodiči; konfliktní rodiče se nezahazují a force-push se nepoužívá.
+
+Kandidát se uloží do journalu **před** CAS posunem refu z expected HEAD. Změna refu nebo HEAD znamená konflikt; kandidát nesmí přepsat novou historii. Nový pokus načte nový základ, znovu sestaví a validuje kandidáta; původní lidské schválení odlišného konfliktu nepřebírá automaticky. Pending stav se řeší recovery/explicitním vyřešením, nikoli smazáním journalu. Abort zachová vstupní historie i cizí práci.
+
+Crash boundaries z ADR 0003 zůstávají: před CAS není kandidát publikovaný; po CAS recovery rozpozná uložený kandidát, nevytváří duplicitní commit a dokončí index/receipt. Při jiném HEAD/větvi se zastaví s konfliktem. Index lze obnovit z validovaného publikovaného commitu; pending nebo stale projekce nesmí vydávat data za aktuální. Produkční merge musí tento lifecycle adaptovat v M5; dnešní Workspace merge neimplementuje. Nejde o ochranu proti nekooperujícímu procesu měnícímu filesystem nebo Git ref mimo aplikační zámek.
+
+## Návrhová kontrola scénářů
+
+Tabulka je review rozhodnutí, nikoli záznam spuštěných testů.
+
+| Situace | Očekávané rozhodnutí |
+| --- | --- |
+| Uzel bez LLM | Projektové operace fungují, AI akce hlásí nedostupnost. |
+| Lokální Ollama se schopností sumarizace | Po autorizaci a manifestu lze použít same-node; není nutný orchestrator chat. |
+| Lokální backend nedostupný, cloud fallback nepovolený | Neodeslat; nabídnout změnu dostupnosti/výběru v mezích policy. |
+| Explicitně povolený cloud a project data | Odeslat pouze při oprávnění, povolené boundary, cost policy a manifestu pro tento cíl. |
+| Důvěryhodný peer a project data | Důvěra nestačí: ověřit uživatele/projekt/cíl a policy, vytvořit manifest. |
+| local-only vstup nebo jeho shrnutí na peer/cloud | Odmítnout; nejprve explicitní oprávněná reklasifikace. |
+| Role opponent navazuje na creator | Nový běh a manifest pouze s explicitně předanými artefakty; nepřidat celou konverzaci. |
+| Policy/cíl změněný po náhledu | Zastavit odeslání a znovu vyhodnotit, nepoužít staré schválení. |
+| Timeout po zahájení odesílání | Unknown, žádný automatický placený retry po restartu. |
+| Billing nedostupný nebo bez oprávnění | Ukázat odpovídající stav; ne nulu, neposkytnout účetní data běžnému uživateli. |
+| HEAD změněný po přípravě merge | CAS odmítne publikaci; nový základ a nové posouzení řešení. |
+| Textově čistý merge s neplatným vztahem | Nepublikovat; starý index zachovat a nepovažovat za aktuální vůči jinému HEAD. |
+| Zakázaný obsah pouze ve staré Git historii | Odmítnout přenos dosažitelných objektů, kontrola HEAD samotného nestačí. |
+
+Návazná akceptace: M1/V-10 integrují klientské operation ID a receipts; M2 ověří manifest, přesné bajty a zákaz fallbacku; M3/M4 role, autorizaci a hranice; M3-UB-01 přehledy; M5 publikaci, historický rozsah přenosu a revokaci. Před implementací rozpracovat tyto scénáře do testů včetně selhání a restartu. Gate review M0-09 musí nadále zohlednit otevřené M0-05/M0-06.

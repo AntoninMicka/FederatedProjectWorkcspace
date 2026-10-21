@@ -1,88 +1,74 @@
-# TODO — operativní práce
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
 
-Aktuální milník: **M0 — Architecture spike**, Gate M0 je otevřený. Strategii a gates drží [master roadmapa](<Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md>); návrhová rozhodnutí drží [ADR 0001](docs/adr/0001-m0-baseline.md) a [ADR 0002](docs/adr/0002-metadata-journal.md). Tento soubor je průběžný operativní stav, ne další roadmapa.
+# TODO — V-11 / release 0.1.0
 
-Stavy: `[ ] [planned]`, `[ ] [in progress]`, `[x] [completed]`, `[ ] [blocked]`. Úroveň výsledku je samostatná: designed / implemented / PoC validated / production-ready. Žádná aplikační část zatím není označena production-ready. Následující úkoly nejsou zahájené ani prokazatelně blokované jen kvůli svým závislostem.
+Aktivní release dávka připravuje první veřejné vydání `0.1.0` z aktuálního
+`develop` po akceptovaném faceliftu. Skutečná větev je `release/0.1.0`, základ
+je commit `9fb4262` (PR #72) a cílem předávacího PR je `main`. Stará vzdálená
+větev `release/0.1.0-prep` je plně obsažená v `develop` a nepoužije se ani
+nepřepíše.
 
-## Nejbližší úkol M0
+Rozsah vydání je omezený na deterministický zdrojový archiv a nebundlovaný
+Linux `.deb`, jehož runtime závislosti dodává operační systém. Dávka nepřidává
+AppImage, kontejner, vlastní Python/Qt/Chromium runtime, podepsaný repozitář ani
+automatické aktualizace a neoznačuje PoC za production-ready. Tag `v0.1.0`,
+GitHub Release, push, PR a merge se provedou pouze po samostatném výslovném
+souhlasu nad ověřeným kandidátem.
 
-- [ ] **[planned] M0-01 — Jedna koordinovaná operace journal → validace → Git commit → index.**
-  Navázat na `Journal`, `Git` a `Index`, nepsat je znovu. Výstup: jeden aplikační vstup pro zápis a obnovu v Linux PoC, jednotné řízení přístupu a doložitelný výsledek operace.
+- [x] [completed] **V-11-A — jediný kontrakt verze a release balíčků
+  (cílová úroveň: implemented).** Zavést jediný validovaný údaj `0.1.0`, použít
+  jej jako výchozí verzi `.deb`, propsat jej do verzovaného názvu a kořene
+  zdrojového archivu a testy odmítnout nesoulad či neplatnou verzi. Zachovat
+  explicitní `--version` pouze pro vědomé sestavení jiného kandidáta. Soubor
+  `VERSION` je jediný výchozí zdroj; explicitní kandidátní verze se propíše do
+  názvu/kořene, `.deb` control i obou vnitřních kopií `VERSION`.
+- [x] [completed] **V-11-B — aktuální distribuční a compliance review
+  (cílová úroveň: designed → PoC validated).** Znovu inventarizovat dnešní
+  allowlist source/`.deb`, provenance, notices a nebundlované runtime
+  závislosti. Uzavřít novou závislost Segno pro skutečný cílový profil a
+  oddělit historický audit commitu `128928e9` od kandidáta 0.1.0. CE-01 zůstane
+  otevřené do sestavení finálních artefaktů z přesného čistého commitu.
+  Allowlist má 257 regulárních UTF-8 souborů plus generovaný manifest a bez
+  binárního/vendovaného payloadu; Ubuntu 26.04.1 arm64 poskytuje Segno jako
+  `python3-segno 1.6.6-2` s BSD-3-Clause notice.
+- [x] [completed] **V-11-C — release notes a uživatelské předání
+  (cílová úroveň: implemented).** Přidat changelog/release notes s hlavními
+  schopnostmi, podporovaným distribučním rozsahem, instalací/upgrade cestou,
+  známými limity a bezpečnostními hranicemi. Nevymýšlet DOI, archivní ID,
+  autory ani stav cílových ověření. Přidány `CHANGELOG.md`, veřejný release
+  checklist a aktualizované příklady sestavení/instalace v README.
+- [ ] [in progress] **V-11-D — kandidát a regresní důkazy
+  (cílová úroveň: PoC validated).** Na finálním diffu spustit úplnou sadu,
+  balicí/licenční testy a relevantní desktopový/dpkg smoke. Z čistého přesného
+  commitu vytvořit source archiv a `.deb`, ověřit manifest, obsah/control,
+  notices a SHA-256 a zaznamenat platformu a výsledky bez soukromých údajů.
+  Po opravě dvou vazeb rozšířeného desktop smoku prošlo 667 testů, 27 opt-in
+  scénářů bylo přeskočeno; samostatně prošel rozbalený WebEngine smoke i
+  izolovaný `.deb` install/upgrade/start/purge se zachováním dat. Preflight
+  obou artefaktů a 257 položek manifestu prošel, ale jeho hashe nejsou release
+  důkaz: čistý commit `ecacde57` při sběru přesného runtime inventáře odhalil,
+  že `python3-segno 1.6.6-2` je architekturně nezávislý balík `all`, nikoli
+  `arm64`. Oprava evidence je commitnutá v `3520a7e`; finální kandidát čeká na
+  nové čisté sestavení, kontrolu a externí záznam hashů tohoto následného
+  commitu.
+- [ ] [planned] **V-11-E — doručení veřejného vydání
+  (cílová úroveň: implemented).** Po uživatelském potvrzení kandidáta pushnout
+  release větev, otevřít jediný PR `release/0.1.0 -> main`, po jeho merge
+  vytvořit immutable tag `v0.1.0` na přesném release commitu a odpovídající
+  GitHub Release s ověřenými artefakty a hashi. Bez těchto důkazů netvrdit, že
+  vydání existuje.
 
-  Operace musí mít stabilní `operation_id` a explicitní stavový životní cyklus. Minimálně musí být možné po restartu rozlišit:
+## Podmínky dokončení
 
-  `prepared → files-applied → committed → indexed`
-
-  Implementace nemusí použít přesně tyto názvy, ale stav musí být obnovitelný bez odhadu podle neúplných vedlejších efektů.
-
-  Journal / operation record nesmí být definitivně odstraněn pouze proto, že byly úspěšně zapsány soubory. Musí zůstat dost informace k rozpoznání, zda příslušný Git commit již vznikl a zda byl index aktualizován.
-
-  Operace eviduje minimálně:
-  - operation ID,
-  - výchozí HEAD,
-  - zamýšlené změněné cesty,
-  - stav operace,
-  - po commitu výsledný commit ID.
-
-  Recovery musí být idempotentní: opakovaný restart nesmí vytvořit další commit stejné operace.
-
-  Git commit nesmí používat neomezené `git add --all`. Musí commitnout pouze cesty vlastněné aktuální operací, nebo operaci bezpečně odmítnout, pokud nelze oddělit cizí změny.
-
-  Před commitem ověřit, že HEAD stále odpovídá výchozímu HEAD operace. Změna HEAD během operace nesmí být tiše přepsána.
-
-  Akceptace: zámek pokrývá celý životní cyklus, pending stav brání publikaci neúplného projektu; commit obsahuje pouze zamýšlené změny a explicitního autora; restart po zápisu/před commitem i po commitu/před indexací neztratí změny ani nevytvoří duplicitní commit. Ověřit změnu HEAD, cizí rozpracované změny, opakovanou obnovu a dva kooperující zapisovatele. Podklad: ADR 0002, `Git.commit` nyní volá `add --all` s testovací identitou a journal se vyčistí ještě před commitem.
-
-## Další zbývající práce M0
-
-- [ ] **[planned] M0-02 — Doplnit schéma project.json a minimální konfigurace uzlu.** Určit verze, migrace, oddělení přenositelné definice od lokální identity/credentials a validaci. Artefaktové/registry schéma už existuje. Nepřidávat nyní síťovou distribuci uživatelů.
-- [ ] **[planned] M0-03 — Srovnat libgit2/C++ s existujícím Git CLI PoC.** Nejprve ověřit dostupnost závislosti a reuse katalog; použít stejné scénáře commit/branch/conflict/abort/recovery, přenos a autentizaci. Zapsat výsledky a rozhodnutí o Git adaptéru včetně balení; nedostupnost knihovny v minulém prostředí není zamítnutí technologie.
-- [ ] **[planned] M0-04 — Lokální transport/API PoC.** Porovnat IPC/socket s loopback HTTP pro desktop; ověřit autentizaci a nepovolené volání. U HTTP testovat token, Host/Origin a CSRF. Oddělit lokální spojení od budoucí federace. Podklad: SECURITY a roadmapa 12A.
-- [ ] **[planned] M0-05 — Ověřit cílové prostředí Turris Omnia/LXC.** Určit dostupný testovací cíl a zaznamenat HW/OS/architekturu. Změřit start, paměť, instalaci a provoz srovnávaných variant, včetně omezení journalu (Linux, lokální souborový systém, společný filesystem pro stav a projekt). Běh aarch64 na vývojovém hostu není tento důkaz.
-- [ ] **[planned] M0-06 — Uzavřít backendový stack a desktopový obal.** Linux je první navržený desktopový cíl; zbývá balení, životní cyklus backendu a ověření Qt/WebView se sdíleným UI. Výchozí jeden proces zachovat; hybrid C++/Python přijmout jen s doloženým přínosem a náklady IPC, diagnostiky, obnovy a aktualizací. Závisí na M0-03 až M0-05.
-- [ ] **[planned] M0-07 — Ověřit zbývající konfliktové scénáře.** Existuje textový UX scénář a test divergence stejné entity. Doplnit simulaci změna–smazání a přejmenování–úprava páru obsah/sidecar, textově čistý merge s neplatnými vztahy a postup lidského rozhodnutí. Obnova lokálního přejmenování v journalu není distribuovaný merge. Síťová federace zůstává M5.
-- [ ] **[planned] M0-08 — Zpřesnit návrhové kontrakty.** Doplnit pravidla větví a publikace při změně HEAD; uzavřít kontrakty Backend/Role/Context Manifest a lokální hranici důvěry v návaznosti na ARCHITECTURE, FEDERATION a SECURITY. LLM adapter ani RBAC engine tímto úkolem neimplementovat.
-- [ ] **[planned] M0-09 — Gate review před M1.** Po ověření předchozích výstupů projít Gate M0, zaznamenat důkazy, otevřená omezení a rozhodnutí o připravenosti. Nepřejít do M1 jen na základě zelených spike testů.
-
-## Zjištěné mezery a navazující ověření
-
-- [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
-- [ ] **[planned] V-02 — Upřesnit test neplatného indexovaného stavu.** `test_invalid_merge_projection_does_not_replace_previous_index` dnes narazí na nesoulad názvu souboru s ID, nikoli nutně na duplicitu ID. Samostatný test validátoru duplicitu pokrývá; doplnit integrační test indexu, který prokáže zamýšlený důvod odmítnutí. Žádný dosavadní test neprokazuje skutečný textově čistý, významově chybný merge (M0-07).
-- [ ] **[planned] V-03 — Vyjasnit omezení projekce indexu.** Index nyní validuje vztahy, ale ukládá pouze id/title a commit ID. Před relačními dotazy navrhnout a otestovat rozšíření projekce; neoznačovat existující index za kompletní databázi vztahů.
-- [ ] **[planned] V-04 — Sjednotit přesný kontrakt metadat.** DATA_MODEL uvádí u registrů status/body/relations, implementace vyžaduje status/body a relations ponechává volitelné. Upřesnit znění nebo rozhodnout o změně schématu; nic tiše nezpřísňovat. Dále rozhodnout o datu importu a podrobném manifestu provenance, které roadmapa požaduje, ale současné schéma nepodporuje.
-- [ ] **[planned] V-05 — Vymezit neměnnost zdrojů při následných úpravách.** Import zachovává bajty a je testovaný. Journal ale obecně přijímá změnu obsahu i provenance; nevynucuje celoživotní neměnnost zdroje. Zaznamenat pravidla aktualizace/verzí a doplnit odpovídající validaci až v implementačním úkolu.
-- [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
-- [ ] **[planned] R-01 — Identifikovat starší zdrojové projekty pro reuse.** Katalog zatím neobsahuje konkrétní repository/cesty těchto projektů. Po jejich identifikaci prověřit licence, závislosti, kompatibilitu a důvod reuse/adapt/rewrite/reject. Nevyvozovat, že inventura proběhla.
-
-## Pozdější operativní backlog — nezahajovat místo M0
-
-Přeneseno z původní sekce 19 roadmapy; nejde o rozšíření aktuálního úkolu. Milníky a gates zůstávají v roadmapě.
-
-- [ ] **[planned] M1 — Aplikační základ:** vytvořit LXC development deployment, desktopový launcher/balení, persistentní identitu a úložiště uzlu; implementovat Project/Artifact služby a Git službu adaptací ověřených PoC. Po volbě stacku doplnit frontend, Markdown editor/viewer a Git history UI. Produkční integrace metadat/indexu zůstává otevřená, jejich PoC se neopakuje.
-- [ ] **[planned] M2 — Lokální AI:** Ollama adapter, auto-summary/description a Context Builder PoC dle explicitního manifestu a pravidel privacy.
-- [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely nad kontrakty uzavřenými v M0 a následné předávání artefaktů mezi rolemi.
-
-## Podpůrné IP / release integrace — nepřebírají prioritu M0
-
-Podrobnou administrativu, screening a crowdfundingové checklisty drží [IP roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>) a její registry. Níže jsou pouze konkrétní integrace do repozitáře; žádná publikační automatizace zatím neexistuje.
-
-- [ ] [planned] **IP-01 — Release a citation metadata (cílová úroveň: implemented).** Před prvním publikačním releasem určit archiv a ověřené autory, licenci, repository URL a verzi; doplnit CITATION.cff a/nebo metadata zvoleného archivu. Akceptace: metadata odkazují na konkrétní disclosure, tag a commit, neobsahují vymyšlené identifikátory a projdou validací zvoleného formátu.
-- [ ] [planned] **IP-02 — Archive/release workflow a DOI integrace (cílová úroveň: implemented).** Po určení archivu z IP-01 připravit kontrolu verzí a referencí, následně automatizaci podle sekce 29 IP roadmapy. Akceptace: kontrola odmítne nesoulad tag/commit/disclosure; případné DOI je propojeno obousměrně. Samotné vytvoření tohoto úkolu nepublikuje release ani DOI.
-- [ ] [planned] **IP-03 — Propojit financovaný scope s produktovými milníky (cílová úroveň: designed).** Při přípravě kampaně přiřadit schválené balíčky ke stávajícím M1–M6 a určit zařazení Open WebUI integrace; odlišit hotové, financované a budoucí schopnosti. Akceptace: jeden konzistentní rozsah s rozpočtem a readiness review podle IP roadmapy, desktopový základ zůstává M1. Kampaň ani její spuštění tím nejsou schválené.
-
-## Dokončené výstupy a důkazy
-
-- [x] [completed] **IP-00 — Implemented: dokumentační integrace IP roadmapy.** Zachována podpůrná roadmapa v `docs/IP`, založeny PATENT_RISK_REGISTER a DEFENSIVE_DISCLOSURES s neověřeným watchlistem a rezervovanými DD náměty; propojeny master roadmapa, README a CONTRIBUTING. Zohledněna existující MPL-2.0. Ověřeny lokální odkazy, věcná konzistence a diff; patentová rešerše, publikace, DOI a crowdfunding zůstávají neprovedené.
-
-- [x] **[completed] Designed — základní návrhy a kostra experimentů.** ARCHITECTURE, DATA_MODEL, FEDERATION, SECURITY, REUSE_CATALOG a ADR 0001/0002 existují; aplikační skeleton, síť ani UI tím nejsou hotové.
-- [x] **[completed] PoC validated — Git divergence a historie.** `tests/test_storage.py`: dvě lokální repo kopie, tři konfliktní verze, abort, merge se dvěma rodiči. Žádná síťová federace/autentizace.
-- [x] **[completed] PoC validated — validace artefaktů a registrů.** `spikes/metadata.py`, `tests/test_metadata.py`: schéma, UUID, JSON/YAML duplicity, limity, frontmatter, sidecar a vztahy.
-- [x] **[completed] PoC validated — SQLite index.** `spikes/storage.py`, `tests/test_storage.py`: validovaný commit, stale detection, obnova z HEAD i po odstranění databáze, oddělení necommitnutých změn.
-- [x] **[completed] PoC validated — souborový journal.** `spikes/journal.py`, `tests/test_journal.py`: vytvoření, přejmenování, smazání, přerušená obnova, cizí editace, zachování binárních bajtů a návazný ručně koordinovaný commit/index. Testy používají skutečné `os._exit` v pomocném procesu.
-- [x] **[completed] Implemented, ručně ověřeno — CLI validátor projekce.** `spikes/check_project.py`; důkaz smoke testu v ADR 0002, automatizace zbývá V-01.
-- [x] **[completed] Implemented — vývojový workflow.** AGENTS.md, tento TODO a reconciliace roadmapy vůči kódu; architektura, ADR a experimenty zachovány.
-
-## Posouzení repozitáře k 2026-09-09
-
-Výchozí HEAD posouzení: `71424f2`; pracovní strom byl čistý. Přečteny dokumenty, oba ADR, všechny spikes a testy. Opětovně spuštěno `python3 -m unittest discover -s tests -v`: **19 testů prošlo** na současném vývojovém hostu. Repozitář neobsahuje nakonfigurovaný build/lint/CI. Přehled neprohlašuje produkční připravenost.
-
-Rozpory a opravy stavu: nezaškrtnuté frontmatter/sidecar, index a definice metadat v roadmapě jsou nyní výslovně PoC validated; původní operativní seznam sekce 19 je převeden sem. Návrhové body backendu, federace, desktopu a bezpečnosti jsou designed, ne implementované. Katalog SQLite nyní zahrnuje i lokální autoritativní journal, což nemění rozhodnutí o neautoritativním projektovém indexu. Věcné otevřené mezery metadat, indexu a testových důkazů jsou V-01 až V-06. Historické počty testů v ADR 0001/0002 zachovávají význam výsledků jednotlivých experimentů.
+- verze, názvy balíčků, `.deb` metadata, release notes, tag a hashe si
+  neodporují;
+- oba artefakty vzniknou ze stejného čistého release commitu a source manifest
+  odpovídá skutečným bajtům;
+- aktuální distribuční set projde SPDX, provenance, notices a licenčními
+  kontrolami pro deklarovaný nebundlovaný rozsah;
+- úplná sada a relevantní instalační/desktopové kontroly mají skutečný
+  zaznamenaný výsledek; neprovedené cílové testy zůstávají přiznané;
+- zveřejnění, tag a merge se neprovedou bez samostatného potvrzení uživatele.

@@ -1,3 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Antonín Mička
+# SPDX-License-Identifier: MPL-2.0
+
 __pycache__/
 *.py[cod]
 .venv/
+
+# Soukromá lokální inventura zdrojových repozitářů
+/REUSE_CATALOG.private.md
+
+# Soukromé skutečné exportní vzorky; nikdy je necommitovat
+/samples.local/
+
+# Volitelné externě verzované moduly; jejich vlastní roadmapy a Git historie
+# nepatří do tohoto repozitáře.
+/modules.local/
+
+# Locally built release archives
+/dist/

@@ -1,6 +1,13 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
 # ADR 0002 — Validace metadat a obnova souborových operací
 
 Datum: 2026-09-09. Stav: implementováno jako Linux M0 PoC, produkční integrace otevřená.
+
+Následná koordinace celé operace je popsána v [ADR 0003](0003-coordinated-operation.md). Níže zůstává zachován rozsah a výsledek původního samostatného journalového experimentu.
 
 ## Rozhodnutí
 

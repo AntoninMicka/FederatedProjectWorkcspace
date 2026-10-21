@@ -1,0 +1,384 @@
+<!--
+SPDX-FileCopyrightText: 2026 Antonín Mička
+SPDX-License-Identifier: MPL-2.0
+-->
+
+# Presenter a demo gamepad driver patch
+
+Tento dokument začínal jako scénář ukázkové prezentace o gamepad patchi.
+Sekce 9 a další nyní tvoří uživatelský návod obecného projektového presenteru;
+demo obsah není produktová šablona ani autoritativní obsah jiných projektů.
+
+## 1. Cíl demo
+
+Ukázat, jak patch pro Linux gamepad driver přidává základní podporu pro ovladač typu joystick/gamepad do aplikace nebo desktopového prostředí s nízkou integrační zátěží.
+
+Tento konkrétní patch pracuje se zařízením přes `udev` a `evdev`, detekuje layout ovladače, odvozuje osy pro pohyb, spouští overlay klávesnice a umožňuje simulaci myši a kláves pro přístupnost a alternativní ovládání.
+
+---
+
+## 2. Krátký příběh pro prezentaci
+
+"V jednom projektu jsme potřebovali podpořit gamepad jako běžné vstupní zařízení pro desktopové aplikace. Místo hardcoded mapování pro jediný model ovladače jsme přidali automatickou detekci zařízení a přizpůsobení layoutu podle skutečných `input` os a tlačítek. Výsledek je univerzální vstupní vrstva, která najde levý/pravý stick, trigger, D-pad a propojí ho s existujícím UI event systémem."
+
+---
+
+## 3. Co patch přidává
+
+### 3.1. Detekce zařízení přes udev
+
+Patch rozšiřuje build konfiguraci o knihovny `udev` a `evdev` a přiřazuje je do projektu:
+
+- přidá hledání knihoven ve build systému,
+- vynutí kompilaci s definicí `WITH_UDEV`,
+- připojí zdrojové soubory pro správu gamepadu,
+- naváže linkování na `Pkg::udev` a `Pkg::evdev`.
+
+To je důležité, protože Linux zařízení neřešíme jen jako obecný `stdin`, ale jako konkrétní HID/joystick event stream.
+
+### 3.2. Autodetekce layoutu ovladače
+
+V `EvdevGamepad` se čtou data z `/dev/input` event zařízení, zjišťují se ABS osy a následně se odvozují:
+
+- levý stick: `ABS_X` / `ABS_Y`,
+- pravý stick: `ABS_RX` / `ABS_RY`, `ABS_Z` / `ABS_RZ` nebo varianty `ABS_THROTTLE` / `ABS_RUDDER`,
+- levý a pravý trigger: osy typu trigger,
+- D-pad: buď přes `ABS_HAT0X` / `ABS_HAT0Y`, nebo přes tlačítka typu `BTN_DPAD_*`.
+
+To umožňuje přístup i pro různé gamepady bez ručního hardcoded mapování.
+
+### 3.3. Režim ovládání a emulace vstupu
+
+Patch navíc propojuje gamepad s komponentami pro:
+
+- simulaci kláves a myši,
+- vykreslení overlay klávesnice,
+- zpracování osových dat přes pravidelný timer,
+- přepínání mezi joystick mode a alternativním přístupovým režimem.
+
+Z pohledu demo je to klíčová část: gamepad se nepoužívá jen jako input pro hru, ale jako vstupní rozhraní pro obecnou aplikaci.
+
+---
+
+## 4. Proč je to užitečné
+
+### Business value
+
+- přístupnost pro uživatele bez klasické klávesnice nebo myši,
+- kompatibilita s více typy joysticků na Linuxu,
+- snadnější integrace do desktopových aplikací,
+- méně manuálních konfigurací u různých zařízení.
+
+### Technická hodnota
+
+- přidává robustní vrstvu nad Linux `evdev` API,
+- sleduje skutečné hardwarové vlastnosti zařízení,
+- používá deklarativní mapování namísto statických konstant pro jeden model.
+
+---
+
+## 5. Ukázka demového scénáře
+
+### Demo flow (2–3 min)
+
+1. Zahájení prezentace: "Na Linuxu máme několik joysticků, ale každý má jiné ABS osy. Potřebujeme generickou vrstvu."
+2. Ukázat, že patch detekuje ovladač přes udev a event interface.
+3. Popsat, jak se odvozuje layout ovladače z hodnot `ABS_*`.
+4. Předvést, že se D-pad a spouštěče rozpoznají bez přesného modelu.
+5. Ukázat, že data mohou být převedena do myš/klávesní emulace přes overlay a tlačítka.
+6. Uzavření: "Výsledek je zařízení-agnostický input abstraction, které může sloužit pro UX, přístupnost i jednoduché hraní."
+
+---
+
+## 6. Rizika a omezení
+
+- patch je založený na Linux specifických API, takže není zcela multiplatformní,
+- `udev` a `evdev` musí být dostupné v cílovém prostředí,
+- autodetekce může být citlivá na neobvyklé nebo nekompletní HID mapování,
+- pokud zařízení nepublikuje standardní ABS hodnoty, bude nutná ruční korekce layoutu.
+
+Toto je vhodné uvést jako "good engineering baseline, not final universal HID abstraction".
+
+---
+
+## 7. Co by následovalo dál
+
+- přidat konfiguraci slotů a mapování pro jednotlivé modely,
+- exportovat standardní mapping profile pro gaming i accessibility mode,
+- otestovat více zařízení a edge cases (wired, wireless, emulované střední zařízení),
+- rozšířit event pipeline o deadzone a smoothing pro analogové osy,
+- oddělit input abstraction od UI akce a zlepšit přenositelnost do dalších projektů.
+
+---
+
+## 8. Shrnutí pro presenter
+
+"Tento patch není jen o gamepadu. Je to ukázka robustního přístupu k hardware input API: detekce zařízení, statické mapování z metadat, adaptivní layout a konverze do univerzálního UX event stream. To je přesně ten druh řešení, který se dá znovu použít i v jiném projektu."
+
+## 9. Displeje řečníka a diváků
+
+Po otevření presenteru se zobrazí nativní dialog **Displeje a role prezentace**.
+Vyberte displej pro řečníka (ovládání a soukromé poznámky) a jiný displej pro
+publikum (pouze schválený slide). Čísla odpovídají indikátorům na obrazovkách;
+indikátory ukazují navrhovanou roli, po čtyřech sekundách zmizí a lze je znovu
+zobrazit tlačítkem **Identifikovat displeje**. Změny platí až po **Použít role**.
+
+Výchozí volba je **Bez promítání**; hodí se i pro nácvik na jednom monitoru.
+Veřejné okno se otevře přes celou zvolenou obrazovku, řečníkovo okno se
+maximalizuje na jeho displeji. Nastavení lze znovu otevřít tlačítkem
+**Displeje a role…** v presenteru. Zrušení dialogu ponechá veřejné okno skryté.
+
+Připojení, odpojení nebo změna geometrie displejů během prezentace skryje
+veřejné okno a nabídne nové přiřazení. Zavření presenteru skryje promítání a
+obnoví původní geometrii hlavního okna. Role žijí jen po dobu běhu aplikace;
+restart vyžaduje nový výběr. Pro oddělené zobrazení nastavte v systému rozšířenou
+plochu: zrcadlení displejů aplikace nevypíná. Umístění oken může omezovat správce
+oken, zejména na Waylandu; fyzické zapojení je nutné před přednáškou vyzkoušet.
+
+## 10. Základní editor prezentací
+
+Záložka **Prezentace** v levém bočním panelu zobrazuje uložené prezentace
+otevřeného projektu. U každé nabízí přímé akce **Upravit** a **Spustit**.
+Úprava se otevře v záložce **Prezentace** hlavního panelu. Tlačítka
+**Prezentace…** v horní liště desktopu a **Editor prezentací…** v panelu
+promítání vedou přímo do stejného integrovaného editoru; samostatný dialog
+se již neotevírá. Bez otevřeného projektu editor nevytvoří žádný soubor a vyzve
+k jeho výběru. V horním seznamu editoru lze přepínat uložené prezentace nebo
+založit novou; projektový dokument vznikne až explicitním uložením.
+
+- Přidávejte hlavní slidy a backupy. Každý slide má nadpis, odrážky (jednu na
+  řádek), soukromé poznámky, barvu pozadí, barvu textu a volitelnou tapetu.
+  **Zobrazení odrážek** volí všechny řádky najednou nebo postupné odhalování.
+  **Povolit opakované promítnutí** výslovně povolí opětovné nabízení slidu.
+- Tapetu vyberte z místního PNG souboru do 190 KiB. Editor vloží jeho kopii
+  přímo do prezentace; pozdější přesun původního obrázku ji neporuší. Tapeta
+  překrývá barvu pozadí, po jejím odebrání je barva opět vidět. Síťové URL ani
+  SVG se nepoužívají.
+- Každý slide vybírá pojmenovanou šablonu layoutu. Deck začíná pěti
+  předlohami: **Titulní slide**, **Nadpis a obsah**, **Dva sloupce**,
+  **Obrázek / graf** a **Závěrečný slide**. Layout obrázku/grafu vloží zvolené
+  PNG do pevné středové zóny a ponechá nadpis nahoře a popisek dole. V části
+  **Šablony layoutu** lze předlohu přejmenovat,
+  změnit její typ, zarovnání, hustotu, pozadí, text a akcent nebo vytvořit
+  vlastní kopii. Nejde o volný CSS editor: šablona zůstává v omezeném
+  verzovaném kontraktu a nemůže vložit HTML, skript ani síťový zdroj.
+- U dvousloupcového layoutu určuje pole **Levý sloupec – počet odrážek**, kde
+  začne pravý sloupec; hodnota 0 rozdělí obsah automaticky. Zóny nadpisu a
+  obsahu mají stabilní pozici ve všech třech náhledech. Změna výchozí barvy
+  šablony aktualizuje slidy, které ještě nemají vlastní barevnou odchylku.
+- Tlačítky **Dříve** a **Později** měňte pořadí hlavní linie. Vazby `next`
+  editor dopočítá automaticky; hlavní linie proto nemá dvě konkurenční pořadí
+  ani cykly.
+- U hlavního slidu zaškrtněte jeho backupy. U backupu lze stejnou vazbu upravit
+  z opačné strany v **Backup pro / návrat k**. Jeden backup může patřit k více
+  hlavním slidům; výchozí návrat v presenteru vede ke slidu, odkud byl vyvolán.
+  Nepřiřazený backup zůstává dostupný v celkové knihovně. Odstranění slidu
+  odstraní jeho vazby; poslední hlavní slide odstranit nelze.
+- **Uložit do projektu** uloží celý deck v jedné projektové operaci a vytvoří
+  jeho verzi v Gitu. Samotné psaní, náhled a uložení nemění divácký výstup.
+  **Spustit uloženou prezentaci** zahájí novou relaci presenteru z uložené
+  verze a nabídne role displejů. Neuložený koncept spustit nelze.
+
+Při chybě uložení zůstává koncept i identita operace v editoru. Tlačítko
+**Opakovat stejné uložení** opakuje tutéž operaci; nevytváří další commit po
+ztraceném potvrzení. **Znovu načíst** po potvrzení opuštění konceptu obnoví
+případnou připravenou operaci a načte aktuální projekt. Při změně HEAD se cizí
+úpravy nepřepisují. Po restartu aplikace otevřete uloženou prezentaci z editoru
+znovu; pracovní pozice presenteru se neobnovuje, ale již potvrzené veřejné
+snapshoty rozpracované relace se z lokálního journalu uzavřou jako přerušený
+projektový záznam.
+
+Jde o základní integrovaný editor: nejvýše 100 slidů, 12 odrážek po 500 znacích,
+256 KiB vložené tapety na slide a přibližně 1 MiB na celý dokument. Dlouhý obsah je nutné zkrátit nebo
+rozdělit do více slidů. Editorový náhled je 16:9, presenter přebírá poměr
+projekčního displeje. Nejde o plný graf zanořených scénářů, animace ani editor PPTX.
+
+### Formát a ukládání
+
+Deck je běžný projektový dokument `artifacts/<id>/content.md` ve formátu
+`fpw-presentation` verze 2. YAML frontmatter obsahuje verzi decku, jeho název a
+pojmenované layouty. Každý slide má vlastní omezený blok `fpw-slide` se
+stabilním UUID, typem `main`/`backup`, soukromými poznámkami, vzhledem a vazbami;
+za ním následuje běžný Markdown nadpis `##` a seznam odrážek. Nadpis i odrážky
+lze upravit v textovém editoru bez editace jedné neprůhledné JSON řádky.
+Každý slide nese `title`, `bullets`, `notes`, `background`, `foreground`,
+`wallpaper`, `next`, `backups`, `layout` a `column_break`.
+Volitelná pole `repeat` (boolean, výchozí `false`) a `reveal` (`all` nebo `step`,
+výchozí `all`) určují přehrávání. Starší blok `fpw-presentation-v1` s JSONem
+zůstává čitelný a pouhé otevření jej nemění. Až explicitní uložení v editoru
+zapíše formát v2 do stejného artefaktu jako novou Git revizi; původní v1 bajty
+zůstávají v historii.
+`Previous` a opačné přiřazení backupu jsou odvozené pohledy, nikoli druhá kopie
+stejné vazby. Formát není export pro publikum: obsahuje i poznámky a backupy.
+Divácké API vrací pouze vizuální obsah výslovně promítnutého slidu.
+
+Zápis adaptuje `Artifacts.save` → `Workspace.transact`; crash boundaries,
+serializace zápisů a recovery zůstávají podle
+[ADR 0003](adr/0003-coordinated-operation.md). Validace editoru před zápisem
+ověřuje ID, cíle vazeb, souvislou hlavní linii, barvy a limity. YAML parser
+odmítá duplicitní klíče, kotvy, aliasy, explicitní tagy, nadměrné zanoření a
+neznámá pole. Tělo slidu přijímá pouze nadpis a odrážky; vložené HTML zůstává
+obyčejným textem a nikdy se neinterpretuje. Ručně poškozený dokument se v
+editoru označí jako neplatný a automaticky se neopravuje.
+Tento formát nerozšiřuje obecný validátor projektových dokumentů o celé schéma
+prezentace; nejde o dokončení Disclosure Presenter MVP z roadmapy 22C.
+
+### Záznamy relací a PDF export
+
+Spuštění přesně uložené prezentace založí novou relaci. Do její historie se
+zapisuje až potvrzená změna veřejného audience výstupu: konkrétní slide,
+skutečně odhalené odrážky, vzhled, poměr stran a čas. Soukromý výběr, preview,
+poznámky, nepromítnuté backupy ani pouhé zatemnění se nezapisují. **Zpět do
+workspace** relaci uzavře a jednou materializuje jako dokument
+`fpw-presentation-session-v1` v projektu. Pád aplikace před ukončením zachová
+potvrzené snapshoty v lokálním `<node>.presentation-sessions.sqlite3`; při
+dalším startu vznikne záznam se stavem **Přerušená**. Nejistý výsledek po Git
+commitu se opakuje se stejným ID operace a nevytvoří druhý artefakt.
+
+Editor pod deckem zobrazuje jeho uskutečněné relace, čas, stav a počet stran.
+**Smazat** nejprve zobrazí identitu relace a výchozí commit, vyžádá druhé
+potvrzení a odstraní pouze aktuální verzi; Git historie zůstává zachovaná.
+
+**Vytisknout prezentaci** připraví kanonické PDF pouze z hlavní `next` linie,
+bez backupů, notes a automatického závěru. **Vytisknout** u relace použije
+přesné uložené snapshoty v jejich skutečném pořadí, včetně promítnutých
+backupů, opakování, reveal kroků a závěru. Náhled plánu ukáže režim, zdrojovou
+revizi, počet i pořadí stran. Potom se samostatně vybere cílový `.pdf`; editor
+zobrazí úplnou cestu a zda se bude přepisovat. Teprve zaškrtnutí potvrzení a
+**Vytvořit PDF** spustí offline renderer. Výstup nejprve vzniká v jednoznačně
+pojmenovaném dočasném souboru ve stejné složce a hotový PDF atomicky nahradí
+cíl. Zrušení výběru ani známá chyba cílový soubor nemění.
+
+## 11. Výběr a postup během prezentace
+
+Levá páčka nahoru/dolů vybírá další slide z dostupné hlavní linie. Náhled je
+soukromý; promítnutí potvrďte tlačítkem **A** (tlačítko 0 standardního gamepadu)
+nebo **Zobrazit další slide**. Levá páčka doprava promítne vybraný další slide,
+doleva předchozí skutečně promítnutý slide v historii. Pravá páčka mění
+záložky a výběr backupu.
+Každé gesto vyžaduje návrat do neutrální polohy; držení tlačítka neopakuje akci.
+Šipka doprava a tlačítko **Další** promítnou právě vybranou možnost.
+
+Výchozí mapování není povinné. V soukromém kokpitu rozbalte **Nastavení
+gamepadu**: lze vybrat konkrétní zařízení, přiřadit samostatnou osu ke každé
+akci, obrátit její směr, změnit potvrzovací tlačítko a nastavit neutrální i
+aktivační práh. **Použít nyní** změní jen běžící relaci a nic nevytváří.
+Teprve explicitní volba **Uložit na tomto uzlu** zapíše nastavení do lokálního
+souboru `node.gamepad.sqlite3` mimo projektový Git. Načtení výchozí konfigurace
+je bez vedlejších účinků. Zápis je jedna SQLite transakce se synchronním commitem;
+při pádu před commitem zůstane platná předchozí konfigurace a při prvním
+nedokončeném zápisu může zůstat pouze prázdná databáze, která se čte jako výchozí
+nastavení. Živý náhled os a stisknutých tlačítek pomáhá určit jejich čísla.
+
+Celé dočasné pořadí zůstává viditelné: promítnutá historie včetně backupů
+a návratů i dosud nepromítnutá hlavní linie. Vybraný hlavní slide se při
+promítnutí přesune za konec potvrzené historie; přeskočené slidy zůstanou na
+později. Již dokončený slide se bez povoleného opakování nenabízí jako nová
+volba (v pořadí je vidět jako neaktivní položka); platí to i pro backupy.
+**Krok zpět je výjimka:** prochází skutečnou historii i přes dokončené slidy,
+bez přeuspořádání či smazání pořadí. Další nová projekce pokračuje na konci
+historie, dopředná nabídka nadále přeskakuje dokončené jednorázové slidy.
+Druhou výjimkou je návrat z backupu: výchozí další volba
+je slide, ze kterého byl backup otevřen, i když byl již dokončen.
+Výběrem jiného slidu lze tento návrat přeskočit.
+
+V postupném režimu první promítnutí ukáže první odrážku. Další potvrzení
+přidá jednu odrážku a ponechá předchozí viditelné. Po odbočce se pokračuje
+následujícím dosud neodhaleným řádkem; nedokončený slide zůstává dostupný.
+Po posledním řádku se bez povoleného opakování vyřadí. Výjimečný návrat z backupu
+na již dokončený slide ukáže všechny jeho řádky. Opakování odhalené řádky
+neresetuje. Prázdný slide se dokončí prvním promítnutím.
+
+Počet odhalených řádků a navštívené slidy platí pro jednu relaci. Nové spuštění
+nebo reload je vynuluje; uložený deck se navigací nemění. Selhání potvrzení
+výstupu neposune místní postup; při ztracené odpovědi zkontrolujte veřejné okno.
+
+## 12. Profil a automatický závěrečný slide
+
+V desktopovém **Nastavení → Profil → Upravit profil…** vyplňte jméno,
+e-mail, telefon a web. Údaje patří lokálnímu uživateli desktopu; nejsou
+součástí projektové prezentace, registru uživatelů ani identity Git autora.
+Profil se ukládá vedle konfigurace uzlu do `node.profile.sqlite3` (pro jiný
+název konfiguračního souboru odpovídající `<název>.profile.sqlite3`).
+Zavření dialogu bez uložení původní profil nemění. Uložení je jedna SQLite
+transakce; po pádu před commitem zůstává původní profil, po commitu nový.
+
+Při každém spuštění se za hlavní linii přidá generický závěrečný slide:
+uprostřed **Prostor pro Vaše dotazy**, vpravo dole textové kontakty a QR.
+Závěr se nabízí po dokončení hlavních slidů včetně jejich postupných řádků;
+nepromítnuté volitelné backupy jej neblokují. Není to nový uložený slide decku.
+QR obsahuje přesně zobrazené jméno a kontakty jako text v UTF-8 a vzniká
+lokálně prostřednictvím Segno. Prázdná pole se vynechají; prázdný profil
+vytvoří pouze nadpis, bez vymyšlených kontaktů a bez QR.
+
+Relace používá kopii profilu z okamžiku spuštění. Změna profilu nemění právě
+promítaný ani připravený závěrečný slide; pro nové údaje spusťte prezentaci
+znovu. Kontakty se publiku zobrazí až výslovným promítnutím závěru.
+
+Generování QR vyžaduje `segno==1.6.6` z `requirements.txt`; při systémovém
+Pythonu použijte balíček `python3-segno` (>=1.6.6). Závislost doplňuje i
+instalační `.deb`; běžný start aplikace nic nestahuje.
+
+## 13. Návrh a aktualizace prezentace z orchestrace
+
+V otevřeném projektu přejděte do chatu, zvolte režim **Orchestrace**, vyberte
+jen podklady, které smí být součástí kontextu, a zadejte explicitní požadavek,
+například `vytvoř z daného dokumentu prezentaci`. Pro aktualizaci vyberte také
+právě jednu existující prezentaci a výslovně požádejte o její úpravu.
+
+Explicitní požadavek na vytvoření nebo aktualizaci prezentace používá
+samostatnou verzovanou routerovou roli. Ollama dostane uzavřené JSON Schema,
+ve kterém je povolen pouze `presentation-proposal`; nemůže platně přepnout na
+obecný dokument. PDF podklad se do promptu promítne jako bounded inertní text,
+zatímco Context Manifest dál váže ID, privacy, původní bajty, SHA-256 a Git
+revizi zdroje. Selhání extrakce nemá fallback na jiný zdroj nebo provider.
+
+Platný výsledek se nejdřív zobrazí jako **Návrh prezentace**. Karta obsahuje
+název, slidy, layouty, výchozí revizi, digest decku a rozbalitelný přesný
+before/after diff. Náhled sám nevytvoří projektový dokument ani Git commit.
+Volba **Zahodit** návrh ukončí bez zápisu.
+
+Samostatné tlačítko **Schválit a vytvořit** nebo **Schválit aktualizaci** váže
+potvrzení na task ID, base revision, deck digest a approval digest. Aplikace
+před zápisem znovu ověří aktuální HEAD a přesný cíl. Stale projekt, pozměněný
+návrh nebo jiný cíl se odmítne. Nový deck zdědí privacy nejsilnějšího vstupu a
+provenance `llm-generated`; aktualizace zachová metadata existujícího decku.
+
+Potvrzený zápis používá stejnou `Artifacts.save` → `Workspace.transact`
+hranici jako ruční editor. Stabilní artifact ID a operation ID se při chybě
+zachovají. Pokud proces skončí po projektovém commitu, ale před uzavřením
+výsledku úlohy, stejné potvrzení po restartu obnoví výsledek bez druhého
+commitu. Automatické opakování modelového běhu ani potvrzení neprobíhá.
+
+Aktualizace v tomto PoC mění pouze existující hlavní slidy a jejich obsah;
+strukturální přidávání či mazání slidů modelem není podporováno. Ruční editor
+zůstává autoritativní cestou pro následné úpravy struktury. PPTX, obecná trvalá
+relace schůzky, disclosure semafor a obecný rozhodovací strom jsou mimo rozsah
+této feature; omezený záznam presenterové relace a PDF export popisuje sekce
+výše.
+
+## 14. Ověřený fyzický průchod
+
+Dne 2026-10-15 a 2026-10-16 uživatel na Linux notebooku fyzicky ověřil:
+
+- vytvoření i aktualizaci prezentace z vybraného dokumentu přes orchestration
+  náhled a explicitní potvrzení;
+- integrovaný editor a načtení starší uložené prezentace;
+- spuštění a procházení prezentace na dvou displejích;
+- oddělení soukromého speaker obsahu od audience výstupu;
+- stabilní presenterový tok při odpojení displeje;
+- ovládání fyzickým gamepadem.
+
+Dne 2026-10-17 uživatel na stejném desktopovém toku dále fyzicky ověřil:
+
+- dokončenou relaci i relaci přerušenou zavřením aplikace a obnovenou po
+  restartu;
+- kanonický export hlavní linie i export přesného audience průběhu relace;
+- vizuální shodu relačního PDF s promítnutým výstupem;
+- zrušení výběru cíle, potvrzené přepsání existujícího PDF a potvrzené smazání
+  relace se zachovanou Git historií.
+
+Průchod skončil bez hlášeného omezení. Další vizuální a dispoziční změny
+editoru byly vědomě odloženy do `UX-FACELIFT-01`; nejsou součástí této
+akceptace. Automatické testy nenahrazují tuto fyzickou kontrolu a tento průchod
+nedokládá širší Disclosure Presenter z roadmapy 22C.
