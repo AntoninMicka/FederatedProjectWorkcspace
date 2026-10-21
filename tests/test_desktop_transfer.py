@@ -5,7 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from spikes.desktop_transfer import FederationTransfer
+try:
+    from spikes.desktop_transfer import FederationTransfer
+except ModuleNotFoundError as exc:
+    if exc.name != 'PySide6':
+        raise
+    FederationTransfer = None
 
 
 class SignalStub:
@@ -35,6 +40,7 @@ class WorkerStub:
         return True
 
 
+@unittest.skipIf(FederationTransfer is None, 'PySide6 is unavailable')
 class FederationTransferTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)

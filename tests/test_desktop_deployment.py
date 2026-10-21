@@ -5,7 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from spikes.desktop_deployment import FederationDeployment
+try:
+    from spikes.desktop_deployment import FederationDeployment
+except ModuleNotFoundError as exc:
+    if exc.name != 'PySide6':
+        raise
+    FederationDeployment = None
 
 
 class SignalStub:
@@ -36,6 +41,7 @@ class WorkerStub:
         return True
 
 
+@unittest.skipIf(FederationDeployment is None, 'PySide6 is unavailable')
 class FederationDeploymentTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)

@@ -5,7 +5,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from spikes.desktop_network import FederationNetwork
+try:
+    from spikes.desktop_network import FederationNetwork
+except ModuleNotFoundError as exc:
+    if exc.name != 'PySide6':
+        raise
+    FederationNetwork = None
 
 
 class SignalStub:
@@ -66,6 +71,7 @@ class BackendStub:
         self.endpoint = f"https://{config['bind']}:{config['port']}" if config['enabled'] else ''
 
 
+@unittest.skipIf(FederationNetwork is None, 'PySide6 is unavailable')
 class FederationNetworkTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)

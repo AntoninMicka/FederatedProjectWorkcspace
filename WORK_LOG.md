@@ -13,7 +13,7 @@ uzavřel interaktivní revizi s tím, že byly odstraněny největší bolístky
 zbývající stránky se doladí až v budoucím opakování faceliftu. Posledním
 implementačním commitem je `d069693`; před tímto administrativním uzavřením
 obsahovala implementace 31 commitů nad `develop`. Feature akceptace je
-uzavřená, ale jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
+uzavřená a jediný PR do `develop` byl vytvořen, ale dosud nebyl sloučen.
 
 - [x] [completed] **UX-FACELIFT-01-A — A4 inventura všech formulářů
   (implemented).** Generátor odvozuje tiskový review balíček přímo ze
@@ -57,7 +57,16 @@ uzavřená, ale jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
   testů bylo přeskočeno. Prošly oba výsledné JavaScripty přes `node
   --check`, Python kompilace, skutečný Qt WebEngine desktopový restart smoke a
   serverové HTTPS přihlášení/odhlášení. Uživatel následně potvrdil
-  splnění cílů faceliftu a přijal odklad zbývajících stránek.
+  splnění cílů faceliftu a přijal odklad zbývajících stránek. První CI běh PR
+  následně odhalil, že tři nové desktopové testovací moduly importovaly PySide6
+  povinně, přestože obecné CI instaluje jen přenosné závislosti. Testy nyní
+  přesně přeskočí pouze při chybějícím modulu `PySide6`; jiné importní chyby
+  zůstávají viditelné. Simulace prostředí bez site-packages přeskočila všech
+  12 dotčených testů, lokální běh s PySide6 stejných 12 testů provedl a celá
+  sada mimo socketové omezení sandboxu znovu prošla: **661 testů**, 27
+  volitelných testů bylo přeskočeno. CI používá Node.js 24 varianty oficiálních
+  actions a explicitní obraz `ubuntu-24.04`, takže otevřený PR není vystaven
+  ohlášenému automatickému přechodu `ubuntu-latest` na Ubuntu 26.
 
 ### Výsledek, recovery a omezení
 

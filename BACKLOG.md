@@ -45,8 +45,9 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
 ve WORK_LOG. `UX-FACELIFT-01` je uživatelsky akceptované a archivované ve
-WORK_LOG; jeho PR dosud nebyl vytvořen ani sloučen a TODO čeká na doručení.
-Další nesouvisející dávka proto zatím nebyla aktivována.
+WORK_LOG; jeho PR byl vytvořen, po opravě CI portability však dosud nebyl
+sloučen a TODO čeká na doručení. Další nesouvisející dávka proto zatím nebyla
+aktivována.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
