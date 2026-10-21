@@ -283,6 +283,12 @@ SSH session, bundle, vzdálené příkazy, host-key policy, pairing a atomické
 lokální preference zůstávají nativní. Nový HTTP writer, druhý deploy engine a
 přenos SSH credentials do WebEngine byly odmítnuty.
 
+Přesun akce **Načíst projekt z umístění** reuse/adaptuje existující
+`ProjectCreation.register`, `CreationController` a nativní `QFileDialog`.
+Sdílené UI pouze vyvolá přes allowlistovaný jednorázový fragmentový most
+desktopovou akci; na serveru zůstává tlačítko skryté. Nový HTTP writer ani druhý
+registrační workflow nevznikají.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

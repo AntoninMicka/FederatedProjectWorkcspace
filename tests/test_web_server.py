@@ -167,6 +167,9 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="federation-tab" role="tab" aria-label="Federace"', WEB_HTML)
         self.assertIn('id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden', WEB_HTML)
         self.assertNotIn("querySelector('#federation-tab').hidden=false", WEB_JS)
+        register = WEB_HTML.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
+        self.assertIn('hidden', register)
+        self.assertNotIn("getElementById('sidebar-register-project').hidden=false", WEB_JS)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
@@ -267,7 +270,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("event.key==='Escape'", WEB_JS)
         self.assertIn("const visible=mainTabs.filter(item=>!item.hidden)", WEB_JS)
         self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", WEB_JS)
-        self.assertIn("#open-notebooklm-import,#sidebar-create-project,#resource-monitor-open", WEB_JS)
+        self.assertIn("#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open", WEB_JS)
         self.assertIn(".sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar()",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)

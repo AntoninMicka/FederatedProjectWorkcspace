@@ -35,7 +35,8 @@ from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
-NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
+NATIVE_ACTIONS = frozenset({'register-project-location', 'choose-project-location',
+                            'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
                             'export-presentation-pdf', 'presenter-displays-identify',
                             'presenter-displays-apply', 'presenter-displays-cancel',
@@ -425,7 +426,6 @@ def main():
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
         project_toolbar = controller.toolbar
-        register_button = QPushButton('Načíst projekt z umístění…')
         def register_project():
             if controller.busy:
                 return
@@ -433,8 +433,6 @@ def main():
                                                        str(controller.service.default_projects_root()))
             if folder:
                 controller.start(lambda: controller.service.register(folder, str(uuid4())))
-        register_button.clicked.connect(register_project)
-        project_toolbar.addWidget(register_button)
         relocate_button = QPushButton('Opravit umístění projektu…')
         def relocate_project():
             if controller.busy:
@@ -488,7 +486,9 @@ def main():
                 return
             action = request['action']
             page.runJavaScript("history.replaceState(null, '', '/');")
-            if action == 'choose-project-location':
+            if action == 'register-project-location':
+                register_project()
+            elif action == 'choose-project-location':
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
                         return
@@ -797,13 +797,14 @@ def main():
                   window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
+                    const registerProject=document.querySelector('#sidebar-register-project');
                     const federationTab=document.querySelector('#federation-tab');
                     const federationItem=document.querySelector('#open-federation-transfer');
                     const federationNetworkItem=document.querySelector('#open-federation-network');
                     const federationDeploymentItem=document.querySelector('#open-federation-deployment');
                     const projectsTab=document.querySelector('#projects-tab');
                     if(!window.federationTransferSmokeOpened){
-                      if(federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
+                      if(!registerProject || registerProject.hidden || federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
                       window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
                     }
                     if(!window.federationTransferSmokeChecked){

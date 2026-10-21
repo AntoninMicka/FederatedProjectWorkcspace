@@ -16,6 +16,7 @@ for(const id of ['settings-cms-tab','settings-profile-tab','settings-users-tab',
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
 document.getElementById('project-location-controls').hidden=false;
 document.getElementById('open-notebooklm-import').hidden=false;
+document.getElementById('sidebar-register-project').hidden=false;
 '''
 
 # HTML and CSS are exactly the same assets served by the browser deployment.
