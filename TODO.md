@@ -250,7 +250,16 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   zůstane viditelná, a teprve poté načte a uloží formulář. Tento skutečný
   desktopový průchod prošel a následná celá sada po opravě znovu prošla
   **641 testy** (27 přeskočeno); parser výsledného desktopového JavaScriptu,
-  Python kompilace a `git diff --check` také prošly.
+  Python kompilace a `git diff --check` také prošly. Úvodní stránka otevřeného
+  projektu následně dostala rozdílné chování podle šířky: na desktopu zůstává
+  celý přehled pevný a samostatně se posouvají pouze seznamy Historie změn a
+  Úkoly; na mobilu nemají karty ani jejich seznamy vlastní scroll a stránka
+  vykreslí nejvýše pět posledních změn a pět nehotových úkolů. Stav přitom dál
+  uvádí celkový počet a při změně breakpointu se projekce přepočítá. Skutečný
+  desktopový Qt WebEngine ověřil uzamčený vnější panel a oba vnitřní scrolly;
+  390px webový Qt WebEngine ověřil limit pěti položek, viditelné overflow a
+  jediný scroll celé stránky. Následná celá sada znovu prošla **641 testy**
+  (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

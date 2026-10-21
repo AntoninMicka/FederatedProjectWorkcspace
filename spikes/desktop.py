@@ -775,12 +775,19 @@ def main():
                     const descriptionRect=document.querySelector('.project-overview-description').getBoundingClientRect();
                     const historyRect=document.querySelector('.project-overview-history').getBoundingClientRect();
                     const tasksRect=document.querySelector('.project-overview-tasks').getBoundingClientRect();
+                    const mainPanelContent=document.querySelector('#main-panel-content');
+                    const historyList=document.querySelector('#project-overview-history-list');
+                    const taskList=document.querySelector('#project-overview-task-list');
                     const modeControl=document.querySelector('label[for="chat-mode"]');
                     const modeControlRect=modeControl.getBoundingClientRect();
                     const modeLabelRect=modeControl.querySelector('span').getBoundingClientRect();
                     const historySubjects=[...document.querySelectorAll('#project-overview-history-list .project-history-row strong')].map(item=>item.textContent);
                     if(overviewPanel.hidden || overviewTab.getAttribute('aria-selected')!=='true' || promptForm.hidden ||
                        document.querySelector('#prompt-widget-toggle') ||
+                       !mainPanelContent.classList.contains('project-overview-active') ||
+                       getComputedStyle(mainPanelContent).overflowY!=='hidden' ||
+                       getComputedStyle(historyList).overflowY!=='auto' ||
+                       getComputedStyle(taskList).overflowY!=='auto' ||
                        modeControlRect.height!==44 || modeLabelRect.top<modeControlRect.top ||
                        modeLabelRect.bottom>modeControlRect.bottom ||
                        descriptionRect.width<historyRect.width*1.8 ||
