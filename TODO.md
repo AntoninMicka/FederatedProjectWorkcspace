@@ -277,7 +277,7 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   také prošly.
   Třetí převod odstranil nativní dialog **Přenos veřejného projektu do LXC**.
   Desktop nyní na konec pásu přidává osmou ikonu **Federace**; server ji drží
-  skrytou. Její zatím jediná položka otevírá samostatnou webovou stránku s
+  skrytou. Její první položka otevírá samostatnou webovou stránku s
   výběrem projektu, zapamatovaného LXC a veřejné CA, přesným náhledem a
   explicitním potvrzením celé veřejné Git historie. Stránka pravdivě uvádí,
   že jde o přechodovou funkci před plnohodnotnou správou federace projektů v
@@ -295,6 +295,27 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `git diff --check` a skutečný Qt WebEngine průchod nové ikony, stránky a
   nativně dodaného katalogu také prošly. Následná celá sada prošla **643 testy**
   (27 přeskočeno).
+  Čtvrtý převod odstranil nativní dialog **Síťový backend a spojení** a přidal
+  jej jako druhou položku desktopové záložky Federace. Sdílená stránka odděluje
+  node-local nastavení opt-in HTTPS listeneru od diagnostiky zapamatovaného LXC;
+  serverová varianta zůstává se skrytou záložkou bez nové HTTP zapisovací cesty.
+  Přes jednorázově tokenovaný a přesně validovaný fragmentový most přechází jen
+  hodnoty formuláře, index peeru a veřejná CA. Generování certifikátů, atomické
+  uložení konfigurace, ověření schváleného pinu, HTTPS probe a obousměrný SSH
+  test zůstávají v nativním controlleru. Obousměrný test má samostatné potvrzení
+  přesného routeru, kontejneru a desktopového endpointu. Persistentní hranice
+  jsou ve stránce výslovné: nově vygenerovaná, ale dosud nepoužitá TLS složka
+  může po následné chybě zůstat; `NetworkBackend.configure` při chybě spuštění
+  nebo atomického publish obnoví předchozí listener. Jednosměrná diagnostika je
+  read-only. Obousměrná diagnostika může po pozdější chybě zanechat na LXC již
+  aktualizovanou veřejnou CA a adresu, ale nemění identity, práva, soukromé
+  klíče, firewall ani projektová data. A4 inventura nyní eviduje 21. sdílený
+  formulář a jako nativní ponechává už jen LXC deploy. Cílených 74 testů
+  controlleru, mostu, sdíleného UI, inventury a serverových hranic prošlo;
+  parser výsledného JavaScriptu a Python kompilace také prošly. Skutečný Qt
+  WebEngine ve dvou projektových stavech kliknutím otevřel obě položky Federace,
+  načetl síťový formulář z nativní vrstvy a nezměnil projektové Git repozitáře.
+  Následná celá sada prošla **648 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

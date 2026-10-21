@@ -13,7 +13,7 @@ class FaceliftFormsTests(unittest.TestCase):
     def test_every_current_html_form_is_assigned_to_a_print_sheet(self):
         validate_inventory()
         self.assertEqual(form_ids(HTML), covered_form_ids())
-        self.assertEqual(20, len(covered_form_ids()))
+        self.assertEqual(21, len(covered_form_ids()))
 
     def test_pack_has_unique_sheets_a4_css_and_native_dialogs(self):
         keys = [item['key'] for item in SHEETS]
@@ -21,7 +21,8 @@ class FaceliftFormsTests(unittest.TestCase):
         self.assertGreaterEqual(len(keys), 30)
         rendered = render_html()
         self.assertIn('@page { size: A4 portrait;', rendered)
-        self.assertIn('Nativní dialog — síťový backend a spojení', rendered)
+        self.assertIn('Federace — síťový backend a spojení', rendered)
+        self.assertNotIn('Nativní dialog — síťový backend a spojení', rendered)
         self.assertIn('Nastavení — uživatelský profil', rendered)
         self.assertNotIn('Nativní dialog — uživatelský profil', rendered)
         self.assertIn('Presenter — nastavení gamepadu', rendered)

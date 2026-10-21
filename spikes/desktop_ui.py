@@ -280,6 +280,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-federation-list" aria-label="Nástroje federace"><li class="sidebar-list-row">
 <button id="open-federation-transfer" class="sidebar-list-main" type="button">Přenos veřejného projektu do LXC</button>
 <details class="sidebar-item-menu"><summary aria-label="Akce přenosu veřejného projektu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-transfer-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li><li class="sidebar-list-row">
+<button id="open-federation-network" class="sidebar-list-main" type="button">Síťový backend a spojení</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce síťového backendu a spojení">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-network-menu" type="button" role="menuitem">Otevřít</button></div></details>
 </li></ul></div></div>
 <section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
 <button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
@@ -390,6 +393,39 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="federation-transfer-start" type="submit" disabled>Potvrdit a přenést</button><button id="federation-transfer-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="federation-transfer-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
 <pre id="federation-transfer-log" aria-label="Průběh přenosu"></pre>
+</form></section></div>
+<div id="federation-network-view" hidden>
+<header><span class="badge">Federace</span><span>Lokální nastavení desktopového uzlu</span></header>
+<section class="standalone-form federation-network-page"><div class="eyebrow">SÍŤ A DŮVĚRA</div>
+<h1>Síťový backend a spojení</h1>
+<p>Backend sdílí identitu desktopu a vystavuje pouze podepsaný test spojení, nikoli projekty, účty ani synchronizaci. Firewall se nemění.</p>
+<form id="federation-network-form">
+<fieldset><legend>HTTPS backend desktopu</legend>
+<label class="confirm"><input name="enabled" type="checkbox"> Povolit HTTPS backend při běhu desktopu</label>
+<label>Naslouchací privátní IPv4 <input name="bind" type="text" list="federation-network-addresses" maxlength="45" required autocomplete="off"></label>
+<datalist id="federation-network-addresses"></datalist>
+<label>Port <input name="port" type="number" min="1024" max="65535" required></label>
+<label>Povolená LAN klientů <input name="lan" type="text" maxlength="64" required autocomplete="off"></label>
+<label>TLS certifikát <input name="cert" type="text" maxlength="4096" autocomplete="off"></label>
+<label>TLS soukromý klíč <input name="key" type="text" maxlength="4096" autocomplete="off"></label>
+<label>Veřejná CA desktopu <input name="ca" type="text" maxlength="4096" autocomplete="off"></label>
+<label class="confirm"><input name="generate" type="checkbox"> Vytvořit novou lokální CA a TLS certifikát pro zvolenou IP</label>
+<p class="form-warning">Nové TLS změní důvěryhodnou CA. Pokud následné spuštění nebo uložení selže, nově vytvořená nepoužitá TLS složka může zůstat na disku; předchozí listener se obnoví.</p>
+<button id="federation-network-apply" type="submit">Použít a uložit nastavení</button>
+</fieldset>
+<fieldset><legend>Diagnostika protějšího uzlu</legend>
+<label>Zapamatovaný LXC uzel <select name="target"></select></label>
+<label>Důvěryhodná veřejná CA LXC <input name="peer_ca" type="text" maxlength="4096" autocomplete="off"></label>
+<div class="form-actions"><button id="federation-network-check" type="button">Ověřit HTTPS a identitu</button>
+<button id="federation-network-bilateral-preview" type="button" class="secondary-button">Ověřit oba směry…</button></div>
+<section id="federation-network-confirmation" class="creation-preview" hidden><h2>Potvrdit obousměrný test přes SSH</h2>
+<pre id="federation-network-details"></pre>
+<p>Přenese se pouze veřejná CA desktopu a aktualizuje adresa již schváleného peeru. Identity, práva, soukromé klíče ani firewall se nemění. Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.</p>
+<label class="confirm"><input id="federation-network-confirm" type="checkbox"> Potvrzuji uvedený LXC uzel, veřejné CA a jedno SSH spojení.</label>
+<div class="form-actions"><button id="federation-network-bilateral" type="button" disabled>Potvrdit a ověřit oba směry</button><button id="federation-network-cancel" type="button" class="secondary-button">Zrušit</button></div>
+</section></fieldset>
+<p id="federation-network-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-network-log" aria-label="Výsledek síťové operace"></pre>
 </form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
@@ -987,7 +1023,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
-.federation-transfer-page{max-width:860px}.federation-transfer-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input{display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}#federation-transfer-log:empty{display:none}
+.federation-transfer-page,.federation-network-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty{display:none}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
@@ -1675,13 +1711,17 @@ mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mo
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
 let federationTransferRunning=false;
+let federationNetworkRunning=false;
 function selectSidebarTab(selected){
  if(!selected || selected.disabled)return;
- if(federationTransferRunning&&selected.id!=='federation-tab'){
-  document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return;
+ if((federationTransferRunning||federationNetworkRunning)&&selected.id!=='federation-tab'){
+  if(federationTransferRunning)document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';
+  if(federationNetworkRunning)document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';
+  return;
  }
- if(selected.id!=='federation-tab'&&!document.querySelector('#federation-view').hidden){
-  document.querySelector('#federation-view').hidden=true;
+ const federationPages=[document.querySelector('#federation-view'),document.querySelector('#federation-network-view')];
+ if(selected.id!=='federation-tab'&&federationPages.some(view=>!view.hidden)){
+  for(const view of federationPages)view.hidden=true;
   if(activeProject)projectView.hidden=false;else document.querySelector('#project-home').hidden=false;
  }
  for(const tab of sidebarTabs){
@@ -2062,8 +2102,9 @@ function canLeaveArtifactEditor(){
  return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
 }
 function canLeaveFederationTransfer(){
- if(!federationTransferRunning)return true;
- document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;
+ if(federationTransferRunning){document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;}
+ if(federationNetworkRunning){document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';return false;}
+ return true;
 }
 function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTransfer();}
 function fillArtifactEditor(doc,isNew=false){
@@ -2386,6 +2427,7 @@ function requestNativeAction(action,payload={}){
  const fields=new URLSearchParams({...payload,nonce:crypto.randomUUID()});location.hash=`${action}?${fields}`;
 }
 const federationView=document.querySelector('#federation-view');
+const federationNetworkView=document.querySelector('#federation-network-view');
 const federationTransferForm=document.querySelector('#federation-transfer-form');
 const federationTransferStatus=document.querySelector('#federation-transfer-status');
 const federationTransferLog=document.querySelector('#federation-transfer-log');
@@ -2439,7 +2481,7 @@ function openFederationTransfer(){
  if(!canLeaveWorkspaceEditors())return;
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
- historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=false;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
  federationTransferLog.textContent='';resetFederationTransferPreview('Načítám projekty a federační uzly…');
  requestNativeAction('federation-transfer-open');
@@ -2465,6 +2507,116 @@ federationTransferForm.addEventListener('submit',event=>{
  event.preventDefault();const request=federationTransferRequest();if(!request?.confirmed)return;
  federationTransferRunning=true;setFederationTransferLocked(true);document.querySelector('#federation-transfer-start').disabled=true;
  federationTransferStatus.textContent='Předávám potvrzenou operaci nativní vrstvě…';requestNativeAction('federation-transfer-start');
+});
+const federationNetworkForm=document.querySelector('#federation-network-form');
+const federationNetworkStatus=document.querySelector('#federation-network-status');
+const federationNetworkLog=document.querySelector('#federation-network-log');
+const federationNetworkConfirmation=document.querySelector('#federation-network-confirmation');
+let federationNetworkConfiguration=null;
+function resetFederationNetworkConfirmation(message=''){
+ federationNetworkConfirmation.hidden=true;document.querySelector('#federation-network-confirm').checked=false;
+ document.querySelector('#federation-network-bilateral').disabled=true;
+ if(message)federationNetworkStatus.textContent=message;
+}
+function federationNetworkConfigureRequest(){
+ if(!federationNetworkConfiguration)return null;
+ return {token:federationNetworkConfiguration.token,action:'configure',config:{
+  enabled:federationNetworkForm.elements.enabled.checked,
+  bind:federationNetworkForm.elements.bind.value.trim(),
+  port:Number(federationNetworkForm.elements.port.value),
+  lan:federationNetworkForm.elements.lan.value.trim(),cert:federationNetworkForm.elements.cert.value.trim(),
+  key:federationNetworkForm.elements.key.value.trim(),ca:federationNetworkForm.elements.ca.value.trim()},
+  generate:federationNetworkForm.elements.generate.checked};
+}
+function federationNetworkDiagnosticRequest(action){
+ if(!federationNetworkConfiguration)return null;
+ const request={token:federationNetworkConfiguration.token,action,
+  target:Number(federationNetworkForm.elements.target.value),ca:federationNetworkForm.elements.peer_ca.value.trim()};
+ if(action==='check-bilateral')request.confirmed=document.querySelector('#federation-network-confirm').checked;
+ return request;
+}
+function federationNetworkRequest(){
+ const action=federationNetworkForm.dataset.action;
+ return action==='configure'?federationNetworkConfigureRequest():federationNetworkDiagnosticRequest(action);
+}
+function setFederationNetworkLocked(locked){
+ for(const field of federationNetworkForm.querySelectorAll('input,select,button'))field.disabled=locked;
+}
+function showFederationNetworkConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!configuration.config||!Array.isArray(configuration.addresses)||!Array.isArray(configuration.targets)){
+  setFederationNetworkError('Nativní vrstva neposkytla platné síťové nastavení.');return;
+ }
+ federationNetworkConfiguration=configuration;federationNetworkRunning=false;setFederationNetworkLocked(false);
+ const config=configuration.config;
+ for(const key of ['bind','port','lan','cert','key','ca'])federationNetworkForm.elements[key].value=config[key]??'';
+ federationNetworkForm.elements.enabled.checked=Boolean(config.enabled);
+ federationNetworkForm.elements.generate.checked=Boolean(configuration.generate);
+ const addresses=document.querySelector('#federation-network-addresses');addresses.replaceChildren();
+ for(const value of configuration.addresses)addresses.append(new Option(value,value));
+ const targets=federationNetworkForm.elements.target;targets.replaceChildren();
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ federationNetworkForm.elements.peer_ca.value=configuration.targets[0]?.ca||'';
+ document.querySelector('#federation-network-check').disabled=!configuration.targets.length;
+ document.querySelector('#federation-network-bilateral-preview').disabled=!configuration.targets.length||!configuration.endpoint;
+ resetFederationNetworkConfirmation(configuration.endpoint?`Aktivní backend: ${configuration.endpoint}`:'Aktivní backend: vypnutý');
+}
+function setFederationNetworkProgress(message){
+ federationNetworkRunning=true;setFederationNetworkLocked(true);federationNetworkStatus.textContent=message;
+}
+function setFederationNetworkError(message){
+ federationNetworkRunning=false;setFederationNetworkLocked(false);federationNetworkStatus.textContent=message||'Síťovou operaci nelze provést.';
+}
+function finishFederationNetwork(success,message){
+ federationNetworkRunning=false;setFederationNetworkLocked(false);
+ federationNetworkStatus.textContent=success?'Síťová operace byla dokončena.':'Síťová operace nebyla dokončena.';
+ federationNetworkLog.textContent=message;
+ if(federationNetworkConfiguration){
+  const available=federationNetworkConfiguration.targets.length>0;
+  document.querySelector('#federation-network-check').disabled=!available;
+  document.querySelector('#federation-network-bilateral-preview').disabled=!available||!federationNetworkConfiguration.endpoint;
+ }
+}
+function runFederationNetwork(request,message){
+ if(!request)return;federationNetworkForm.dataset.action=request.action;
+ federationNetworkRunning=true;setFederationNetworkLocked(true);federationNetworkStatus.textContent=message;
+ requestNativeAction('federation-network-run');
+}
+function openFederationNetwork(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationNetworkConfiguration=null;
+ federationNetworkLog.textContent='';resetFederationNetworkConfirmation('Načítám lokální síťové nastavení…');
+ requestNativeAction('federation-network-open');
+}
+document.querySelector('#open-federation-network').addEventListener('click',openFederationNetwork);
+document.querySelector('#open-federation-network-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationNetwork();});
+federationNetworkForm.addEventListener('submit',event=>{
+ event.preventDefault();runFederationNetwork(federationNetworkConfigureRequest(),'Předávám nastavení nativní vrstvě…');
+});
+federationNetworkForm.elements.target.addEventListener('change',event=>{
+ const target=federationNetworkConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ federationNetworkForm.elements.peer_ca.value=target?.ca||'';resetFederationNetworkConfirmation('Výběr uzlu se změnil.');
+});
+federationNetworkForm.elements.peer_ca.addEventListener('input',()=>resetFederationNetworkConfirmation('Veřejná CA protějšího uzlu se změnila.'));
+document.querySelector('#federation-network-check').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check');
+ if(!request?.ca){federationNetworkStatus.textContent='Vyberte LXC uzel a jeho důvěryhodnou veřejnou CA.';return;}
+ runFederationNetwork(request,'Předávám diagnostiku nativní vrstvě…');
+});
+document.querySelector('#federation-network-bilateral-preview').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check-bilateral');
+ if(!request?.ca){federationNetworkStatus.textContent='Vyberte LXC uzel a jeho důvěryhodnou veřejnou CA.';return;}
+ const target=federationNetworkConfiguration.targets.find(item=>item.index===request.target);
+ document.querySelector('#federation-network-details').textContent=`Router: ${target.host}\nKontejner: ${target.container}\nDesktop: ${federationNetworkConfiguration.endpoint}\nVeřejná CA LXC: ${request.ca}`;
+ federationNetworkConfirmation.hidden=false;federationNetworkStatus.textContent='Zkontrolujte přesný rozsah a potvrďte obousměrný test.';
+});
+document.querySelector('#federation-network-confirm').addEventListener('change',event=>{document.querySelector('#federation-network-bilateral').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-network-cancel').addEventListener('click',()=>resetFederationNetworkConfirmation('Potvrzení bylo zrušeno.'));
+document.querySelector('#federation-network-bilateral').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check-bilateral');if(!request?.confirmed)return;
+ runFederationNetwork(request,'Předávám potvrzený obousměrný test nativní vrstvě…');
 });
 function openNotebookLMImport(){
  if(!canLeaveWorkspaceEditors())return;

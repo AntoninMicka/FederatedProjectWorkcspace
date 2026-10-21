@@ -39,7 +39,8 @@ NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archiv
                             'choose-notebooklm-target', 'choose-presentation-pdf',
                             'export-presentation-pdf', 'presenter-displays-identify',
                             'presenter-displays-apply', 'presenter-displays-cancel',
-                            'federation-transfer-open', 'federation-transfer-start'})
+                            'federation-transfer-open', 'federation-transfer-start',
+                            'federation-network-open', 'federation-network-run'})
 
 
 def presentation_pdf_paths(target, nonce):
@@ -245,7 +246,7 @@ def main():
         from spikes.presentation_sessions import PresentationSessions
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
-        from spikes.desktop_network import NetworkDialog
+        from spikes.desktop_network import FederationNetwork
         from spikes.desktop_transfer import FederationTransfer
         from spikes.network_backend import NetworkBackend
     except ImportError as exc:
@@ -286,8 +287,12 @@ def main():
             super().closeEvent(event)
 
     class Window(QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.native_operation_guards = []
+
         def closeEvent(self, event):
-            if controller.busy:
+            if controller.busy or any(guard() for guard in self.native_operation_guards):
                 event.ignore()
                 return
             view.closing = True
@@ -380,6 +385,19 @@ def main():
                     network_backend.start(network_config)
             except Exception as exc:
                 QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
+        federation_network = FederationNetwork(
+            network_backend, parent=window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showFederationNetworkConfiguration(' + json.dumps(result) + ')'),
+            progress_callback=lambda message: page.runJavaScript(
+                'setFederationNetworkProgress(' + json.dumps(message) + ')'),
+            finished_callback=lambda success, message: page.runJavaScript(
+                'finishFederationNetwork(' + json.dumps(bool(success)) + ',' +
+                json.dumps(message) + ')'))
+        window.native_operation_guards.extend([
+            lambda: bool(federation_transfer.worker and federation_transfer.worker.isRunning()),
+            lambda: bool(federation_network.worker and federation_network.worker.isRunning()),
+        ])
         app.aboutToQuit.connect(network_backend.stop)
         app.aboutToQuit.connect(public_window.close)
         creation_result = {'receipt': None, 'loaded': False}
@@ -454,17 +472,6 @@ def main():
             dialog.deleteLater()
         deploy_button.clicked.connect(deploy_node)
         editor_toolbar.addWidget(deploy_button)
-        network_button = QPushButton('Síť a test spojení…')
-        def network_settings():
-            if controller.busy:
-                return
-            dialog = NetworkDialog(network_backend, window)
-            dialog.exec()
-            if dialog.worker:
-                dialog.worker.wait()
-            dialog.deleteLater()
-        network_button.clicked.connect(network_settings)
-        editor_toolbar.addWidget(network_button)
         def edit_presentation():
             if controller.busy:
                 return
@@ -583,6 +590,20 @@ def main():
                         page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
                 page.runJavaScript('JSON.stringify(federationTransferRequest())', 0,
                                    start_federation_transfer)
+            elif action == 'federation-network-open':
+                try:
+                    federation_network.open()
+                except (ValueError, OSError) as exc:
+                    page.runJavaScript('setFederationNetworkError(' + json.dumps(str(exc)) + ')')
+            elif action == 'federation-network-run':
+                def run_federation_network(raw_request):
+                    try:
+                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
+                        federation_network.run(payload)
+                    except (ValueError, OSError, json.JSONDecodeError) as exc:
+                        page.runJavaScript('setFederationNetworkError(' + json.dumps(str(exc)) + ')')
+                page.runJavaScript('JSON.stringify(federationNetworkRequest())', 0,
+                                   run_federation_network)
             elif action == 'export-presentation-pdf':
                 selected = presentation_pdf_targets.get(request['nonce'])
                 if selected is None:
@@ -772,9 +793,10 @@ def main():
                   if(!window.projectSmokeStarted && card){
                     const federationTab=document.querySelector('#federation-tab');
                     const federationItem=document.querySelector('#open-federation-transfer');
+                    const federationNetworkItem=document.querySelector('#open-federation-network');
                     const projectsTab=document.querySelector('#projects-tab');
                     if(!window.federationTransferSmokeOpened){
-                      if(federationTab.hidden || !federationItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
+                      if(federationTab.hidden || !federationItem || !federationNetworkItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
                       window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
                     }
                     if(!window.federationTransferSmokeChecked){
@@ -782,7 +804,14 @@ def main():
                       if(document.querySelector('#federation-view').hidden || form.elements.project.options.length<1 ||
                          !document.querySelector('.federation-transfer-page').textContent.includes('plnohodnotnou správou federace projektů') ||
                          document.querySelector('#federation-transfer-status').textContent.includes('Načítám'))return null;
-                      window.federationTransferSmokeChecked=true;projectsTab.click();return null;
+                      window.federationTransferSmokeChecked=true;federationNetworkItem.click();return null;
+                    }
+                    if(!window.federationNetworkSmokeChecked){
+                      const form=document.querySelector('#federation-network-form');
+                      if(document.querySelector('#federation-network-view').hidden ||
+                         form.elements.port.value!=='8443' ||
+                         document.querySelector('#federation-network-status').textContent.includes('Načítám'))return null;
+                      window.federationNetworkSmokeChecked=true;projectsTab.click();return null;
                     }
                     const settingsTab=document.querySelector('#settings-sidebar-tab');
                     const monitor=document.querySelector('#resource-monitor-open');
@@ -1115,6 +1144,7 @@ def main():
         result = app.exec()
         controller.wait()
         federation_transfer.wait()
+        federation_network.wait()
         view.closing = True
         window.close()
         # Destroy pages before their off-the-record profile.

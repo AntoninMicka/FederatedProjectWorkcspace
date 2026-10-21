@@ -266,6 +266,15 @@ vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy feder
 projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
 verze, nikoli rozšíření tohoto jednosměrného přenosu.
 
+Stejná dávka dále **reuse/adaptuje `NetworkBackend`, `DeploymentTargets`,
+`Administration`, `federation_probe.check_peer` a `peer_diagnostics.check_both`**
+pro druhou stránku desktopové záložky Federace. Webový formulář nenahrazuje
+doménovou ani síťovou autoritu: nativní controller znovu validuje přesné schéma,
+jednorázový token, nezměněný seznam cílů a schválený fingerprint. Generování TLS,
+atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stávajících
+službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
+klíči byly odmítnuty.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

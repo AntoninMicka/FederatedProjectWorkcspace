@@ -111,21 +111,10 @@ SHEETS = [
              ("Operace", "select", ("První instalace a propojení", "Aktualizovat pouze aplikaci",
                                       "Obnovit přerušené nasazení", "Resetovat stav", "Aktualizovat adresu"))),
             ("Zobrazit souhrn a spustit",), notice="Výstup / průběh vzdálené operace")),
-    sheet(
-        "native-network", "Nativní dialog — síťový backend a spojení", source="PySide6 desktop", scale=.68,
-        native_html=native_form(
-            "Nastavení opt-in HTTPS backendu desktopu a diagnostika spojení s protějším uzlem.",
-            (("Backend", "check", "Povolit HTTPS backend při běhu desktopu"),
-             ("Naslouchací IPv4", "text", "192.168.100.2"), ("Port", "text", "8443"),
-             ("Povolená LAN klientů", "text", "192.168.100.0/24"), ("TLS certifikát", "text", ""),
-             ("TLS soukromý klíč", "text", ""), ("Veřejná CA", "text", ""),
-             ("Nové TLS", "check", "Vytvořit lokální CA a TLS certifikát pro zvolenou IP"),
-             ("Protější uzel", "select", ("workspace-m0 — https://…",)),
-             ("CA protějšího uzlu", "text", "")),
-            ("Použít a uložit nastavení", "Ověřit HTTPS a identitu", "Ověřit oba směry"),
-            notice="Firewall ani projektová synchronizace se tímto dialogem automaticky nemění.")),
     sheet("federation-transfer", "Federace — přenos veřejného projektu do LXC",
           ("#federation-view",), ("federation-transfer-form",), scale=.78),
+    sheet("federation-network", "Federace — síťový backend a spojení",
+          ("#federation-network-view",), ("federation-network-form",), scale=.65),
     sheet("presenter-displays", "Presenter — displeje a role",
           ("#presenter-display-dialog",), ("presenter-display-form",), scale=.86),
 ]
