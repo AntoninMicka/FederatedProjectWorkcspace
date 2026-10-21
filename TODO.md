@@ -319,6 +319,26 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Po fyzické kontrole bylo z horní Qt lišty odstraněno již neúčinné tlačítko
   **Prezentace…**; webový editor prezentací a záložka Výstupy zůstávají beze
   změny. Cílené ověření integrovaného editoru a Python kompilace prošly.
+  Pátý převod odstranil poslední používaný nativní formulář **Nasazení LXC
+  uzlu**. Je dostupný jako třetí položka desktopové záložky Federace a zachovává
+  výběr zapamatovaného cíle, ruční SSH cíl, kontejner, privátní LAN, skutečný
+  desktopový HTTPS endpoint i pět původních režimů. Web předává přes přesně
+  validovaný jednorázový token pouze potvrzené hodnoty formuláře; SSH relace,
+  bundle, vzdálené příkazy, host-key kontrola, identita a ukládání lokálních
+  preferencí zůstávají v nativní vrstvě. Controller před spuštěním znovu ověří
+  nezměněný seznam cílů a nedovolí tiše přepsat host/kontejner vybrané
+  zapamatované identity. Recovery hranice zůstávají beze změny a jsou ve
+  stránce výslovné: po neúspěšném deployi se nejprve používá Recover, Reset
+  zahodí rollback snapshot a není rollback; pokud aplikace vznikla a selže až
+  párování, funkční instalace se automaticky nemaže. Selhání lokálního uložení
+  preferencí po úspěšné vzdálené operaci je pouze samostatně hlášené omezení.
+  A4 inventura nyní eviduje 22 sdílených formulářů a žádný používaný nativní Qt
+  formulář. Cílených 11 testů controlleru, mostu, UI, inventury a serverových
+  hranic prošlo; parser výsledného JavaScriptu a Python kompilace také prošly.
+  Skutečný Qt WebEngine ve dvou projektových stavech otevřel všechny tři stránky
+  Federace bez spuštění SSH a bez změny projektových Git repozitářů. Následná
+  celá sada prošla **653 testy** (27 přeskočeno). Fyzické SSH nasazení zůstává
+  součástí uživatelské akceptace.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

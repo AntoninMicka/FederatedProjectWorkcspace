@@ -310,7 +310,8 @@ class DesktopTests(unittest.TestCase):
                           'operation_id': operation})
         for action in ('choose-notebooklm-archive', 'choose-project-location',
                        'federation-transfer-open', 'federation-transfer-start',
-                       'federation-network-open', 'federation-network-run'):
+                       'federation-network-open', 'federation-network-run',
+                       'federation-deployment-open', 'federation-deployment-start'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
@@ -893,6 +894,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="sidebar-federation"', HTML)
         self.assertIn('id="open-federation-transfer"', HTML)
         self.assertIn('id="open-federation-network"', HTML)
+        self.assertIn('id="open-federation-deployment"', HTML)
         self.assertEqual(HTML.count('Přenos veřejného projektu do LXC'), 2)
         self.assertIn('id="federation-transfer-form"', HTML)
         self.assertIn('plnohodnotnou správou federace projektů', HTML)
@@ -902,10 +904,16 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.', HTML)
         self.assertIn("requestNativeAction('federation-network-open')", JS)
         self.assertIn("requestNativeAction('federation-network-run')", JS)
+        self.assertIn('id="federation-deployment-form"', HTML)
+        self.assertIn('Reset zahodí recovery snapshot', HTML)
+        self.assertIn("requestNativeAction('federation-deployment-open')", JS)
+        self.assertIn("requestNativeAction('federation-deployment-start')", JS)
         self.assertIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
         self.assertIn('JSON.stringify(federationNetworkRequest())', Path('spikes/desktop.py').read_text())
+        self.assertIn('JSON.stringify(federationDeploymentRequest())', Path('spikes/desktop.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_network.py').read_text())
+        self.assertNotIn('QDialog', Path('spikes/desktop_deployment.py').read_text())
         self.assertIn('<h2>Výstupy</h2><h3>Prezentace</h3>', HTML)
         self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)

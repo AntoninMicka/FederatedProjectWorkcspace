@@ -275,6 +275,14 @@ atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stá
 službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
 klíči byly odmítnuty.
 
+Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
+`DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
+stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a
+fingerprintů a předá potvrzené hodnoty přes jednorázový fragmentový most;
+SSH session, bundle, vzdálené příkazy, host-key policy, pairing a atomické
+lokální preference zůstávají nativní. Nový HTTP writer, druhý deploy engine a
+přenos SSH credentials do WebEngine byly odmítnuty.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

@@ -100,21 +100,12 @@ SHEETS = [
     sheet("gamepad", "Presenter — nastavení gamepadu", (".presenter-gamepad-settings",), scale=.78),
     sheet("profile", "Nastavení — uživatelský profil", ("#settings-profile-panel",),
           ("user-profile-form",), scale=.82),
-    sheet(
-        "native-deploy", "Nativní dialog — nasazení LXC uzlu", source="PySide6 desktop", scale=.75,
-        native_html=native_form(
-            "Jedno SSH spojení; cílový kontejner a operace se vždy potvrzují samostatně.",
-            (("Zapamatovaný uzel", "select", ("Nový / ručně zadaný uzel", "workspace-m0 — host")),
-             ("SSH router", "text", "root@192.168.100.1"), ("Kontejner", "text", "workspace-m0"),
-             ("Privátní LAN", "text", "192.168.100.0/24"),
-             ("Adresa desktopového uzlu", "text", "https://192.168.100.2:8443"),
-             ("Operace", "select", ("První instalace a propojení", "Aktualizovat pouze aplikaci",
-                                      "Obnovit přerušené nasazení", "Resetovat stav", "Aktualizovat adresu"))),
-            ("Zobrazit souhrn a spustit",), notice="Výstup / průběh vzdálené operace")),
     sheet("federation-transfer", "Federace — přenos veřejného projektu do LXC",
           ("#federation-view",), ("federation-transfer-form",), scale=.78),
     sheet("federation-network", "Federace — síťový backend a spojení",
           ("#federation-network-view",), ("federation-network-form",), scale=.65),
+    sheet("federation-deployment", "Federace — nasazení LXC uzlu",
+          ("#federation-deployment-view",), ("federation-deployment-form",), scale=.68),
     sheet("presenter-displays", "Presenter — displeje a role",
           ("#presenter-display-dialog",), ("presenter-display-form",), scale=.86),
 ]

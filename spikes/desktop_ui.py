@@ -283,6 +283,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </li><li class="sidebar-list-row">
 <button id="open-federation-network" class="sidebar-list-main" type="button">Síťový backend a spojení</button>
 <details class="sidebar-item-menu"><summary aria-label="Akce síťového backendu a spojení">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-network-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li><li class="sidebar-list-row">
+<button id="open-federation-deployment" class="sidebar-list-main" type="button">Nasadit LXC uzel</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce nasazení LXC uzlu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-deployment-menu" type="button" role="menuitem">Otevřít</button></div></details>
 </li></ul></div></div>
 <section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
 <button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
@@ -426,6 +429,31 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section></fieldset>
 <p id="federation-network-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
 <pre id="federation-network-log" aria-label="Výsledek síťové operace"></pre>
+</form></section></div>
+<div id="federation-deployment-view" hidden>
+<header><span class="badge">Federace</span><span>Desktopový nástroj pro vzdálený uzel</span></header>
+<section class="standalone-form federation-deployment-page"><div class="eyebrow">LXC UZEL</div>
+<h1>Nasadit LXC uzel</h1>
+<p>Operace používá jedno SSH spojení. IP kontejneru zjistí automaticky; router musí mít Python 3 a jeho SSH host key musí být předem důvěryhodný v <code>known_hosts</code>. Heslo se neukládá.</p>
+<form id="federation-deployment-form">
+<label>Zapamatovaný uzel <select name="target"><option value="-1">Nový / ručně zadaný uzel</option></select></label>
+<label>SSH router <input name="host" type="text" maxlength="255" required autocomplete="off" placeholder="root@192.168.100.1"></label>
+<label>Kontejner <input name="container" type="text" maxlength="63" required value="workspace-m0" autocomplete="off"></label>
+<label>Privátní LAN <input name="lan" type="text" maxlength="64" required value="192.168.100.0/24" autocomplete="off"></label>
+<label>Adresa desktopového uzlu <input name="endpoint" type="text" list="federation-deployment-endpoints" maxlength="4096" autocomplete="off" placeholder="https://192.168.100.2:8443"></label>
+<datalist id="federation-deployment-endpoints"></datalist>
+<label>Operace <select name="mode" required></select></label>
+<p class="form-warning">První instalace vytvoří lokálního správce a schválí peery na obou uzlech. Existující účty a důvěra se nepřepisují. Projektová synchronizace se nezapíná.</p>
+<p class="form-warning">Reset zahodí recovery snapshot a zastaví službu; není rollback. Po selhání instalace použijte nejprve Obnovit. Aktualizace adresy neinstaluje software, ale vyžaduje zapamatovaný uzel a ověří TLS i identitu.</p>
+<button id="federation-deployment-preview" type="button" disabled>Zobrazit souhrn</button>
+<section id="federation-deployment-confirmation" class="creation-preview" hidden><h2>Potvrdit vzdálené změny</h2>
+<pre id="federation-deployment-details"></pre>
+<p>Instalace nebo aktualizace restartuje pouze webovou službu. První instalace navíc vytvoří správce a oboustrannou důvěru. Změna adresy upraví schválený desktopový peer bez instalace softwaru.</p>
+<label class="confirm"><input id="federation-deployment-confirm" type="checkbox"> Potvrzuji přesný SSH cíl, kontejner, LAN, endpoint a zvolenou operaci.</label>
+<div class="form-actions"><button id="federation-deployment-start" type="submit" disabled>Potvrdit a spustit</button><button id="federation-deployment-cancel" type="button" class="secondary-button">Zrušit</button></div>
+</section>
+<p id="federation-deployment-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-deployment-log" aria-label="Průběh nasazení"></pre>
 </form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
@@ -1023,7 +1051,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
-.federation-transfer-page,.federation-network-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty{display:none}
+.federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
@@ -1712,14 +1740,16 @@ syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
 let federationTransferRunning=false;
 let federationNetworkRunning=false;
+let federationDeploymentRunning=false;
 function selectSidebarTab(selected){
  if(!selected || selected.disabled)return;
- if((federationTransferRunning||federationNetworkRunning)&&selected.id!=='federation-tab'){
+ if((federationTransferRunning||federationNetworkRunning||federationDeploymentRunning)&&selected.id!=='federation-tab'){
   if(federationTransferRunning)document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';
   if(federationNetworkRunning)document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';
+  if(federationDeploymentRunning)document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';
   return;
  }
- const federationPages=[document.querySelector('#federation-view'),document.querySelector('#federation-network-view')];
+ const federationPages=[document.querySelector('#federation-view'),document.querySelector('#federation-network-view'),document.querySelector('#federation-deployment-view')];
  if(selected.id!=='federation-tab'&&federationPages.some(view=>!view.hidden)){
   for(const view of federationPages)view.hidden=true;
   if(activeProject)projectView.hidden=false;else document.querySelector('#project-home').hidden=false;
@@ -2104,6 +2134,7 @@ function canLeaveArtifactEditor(){
 function canLeaveFederationTransfer(){
  if(federationTransferRunning){document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;}
  if(federationNetworkRunning){document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';return false;}
+ if(federationDeploymentRunning){document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';return false;}
  return true;
 }
 function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTransfer();}
@@ -2428,6 +2459,7 @@ function requestNativeAction(action,payload={}){
 }
 const federationView=document.querySelector('#federation-view');
 const federationNetworkView=document.querySelector('#federation-network-view');
+const federationDeploymentView=document.querySelector('#federation-deployment-view');
 const federationTransferForm=document.querySelector('#federation-transfer-form');
 const federationTransferStatus=document.querySelector('#federation-transfer-status');
 const federationTransferLog=document.querySelector('#federation-transfer-log');
@@ -2481,7 +2513,7 @@ function openFederationTransfer(){
  if(!canLeaveWorkspaceEditors())return;
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
- historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationView.hidden=false;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
  federationTransferLog.textContent='';resetFederationTransferPreview('Načítám projekty a federační uzly…');
  requestNativeAction('federation-transfer-open');
@@ -2585,7 +2617,7 @@ function openFederationNetwork(){
  if(!canLeaveWorkspaceEditors())return;
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
- historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=false;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationDeploymentView.hidden=true;federationNetworkView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationNetworkConfiguration=null;
  federationNetworkLog.textContent='';resetFederationNetworkConfirmation('Načítám lokální síťové nastavení…');
  requestNativeAction('federation-network-open');
@@ -2617,6 +2649,100 @@ document.querySelector('#federation-network-cancel').addEventListener('click',()
 document.querySelector('#federation-network-bilateral').addEventListener('click',()=>{
  const request=federationNetworkDiagnosticRequest('check-bilateral');if(!request?.confirmed)return;
  runFederationNetwork(request,'Předávám potvrzený obousměrný test nativní vrstvě…');
+});
+const federationDeploymentForm=document.querySelector('#federation-deployment-form');
+const federationDeploymentStatus=document.querySelector('#federation-deployment-status');
+const federationDeploymentLog=document.querySelector('#federation-deployment-log');
+const federationDeploymentConfirmation=document.querySelector('#federation-deployment-confirmation');
+let federationDeploymentConfiguration=null;
+function resetFederationDeploymentConfirmation(message=''){
+ federationDeploymentConfirmation.hidden=true;document.querySelector('#federation-deployment-confirm').checked=false;
+ document.querySelector('#federation-deployment-start').disabled=true;
+ if(message)federationDeploymentStatus.textContent=message;
+}
+function federationDeploymentRequest(){
+ if(!federationDeploymentConfiguration)return null;
+ return {token:federationDeploymentConfiguration.token,
+  target:Number(federationDeploymentForm.elements.target.value),
+  host:federationDeploymentForm.elements.host.value.trim(),
+  container:federationDeploymentForm.elements.container.value.trim(),
+  lan:federationDeploymentForm.elements.lan.value.trim(),
+  endpoint:federationDeploymentForm.elements.endpoint.value.trim(),
+  mode:federationDeploymentForm.elements.mode.value,
+  confirmed:document.querySelector('#federation-deployment-confirm').checked};
+}
+function setFederationDeploymentLocked(locked){
+ for(const field of federationDeploymentForm.querySelectorAll('input,select,button'))field.disabled=locked;
+}
+function showFederationDeploymentConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.targets)||!Array.isArray(configuration.modes)||!Array.isArray(configuration.endpoints)){
+  setFederationDeploymentError('Nativní vrstva neposkytla platné nastavení nasazení.');return;
+ }
+ federationDeploymentConfiguration=configuration;federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ const targets=federationDeploymentForm.elements.target;targets.replaceChildren(new Option('Nový / ručně zadaný uzel',-1));
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ const modes=federationDeploymentForm.elements.mode;modes.replaceChildren();
+ for(const item of configuration.modes)modes.append(new Option(item.label,item.value));
+ const endpoints=document.querySelector('#federation-deployment-endpoints');endpoints.replaceChildren();
+ for(const value of configuration.endpoints)endpoints.append(new Option(value,value));
+ if(configuration.endpoint)federationDeploymentForm.elements.endpoint.value=configuration.endpoint;
+ document.querySelector('#federation-deployment-preview').disabled=false;
+ resetFederationDeploymentConfirmation('Vyberte nebo zadejte cílový uzel a připravte souhrn.');
+}
+function setFederationDeploymentProgress(message){
+ federationDeploymentRunning=true;setFederationDeploymentLocked(true);
+ federationDeploymentStatus.textContent='Vzdálená operace probíhá…';
+ federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+message;
+}
+function setFederationDeploymentError(message){
+ federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ resetFederationDeploymentConfirmation(message||'Nasazení nelze připravit nebo spustit.');
+ if(federationDeploymentConfiguration)document.querySelector('#federation-deployment-preview').disabled=false;
+}
+function finishFederationDeployment(success,message){
+ federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ if(message)federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+message;
+ resetFederationDeploymentConfirmation(success?'Vzdálená operace byla dokončena. Připravte nový souhrn pro případné opakování.':'Vzdálená operace nebyla dokončena. Zkontrolujte průběh a připravte nový souhrn.');
+ if(federationDeploymentConfiguration)document.querySelector('#federation-deployment-preview').disabled=false;
+}
+function openFederationDeployment(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationDeploymentConfiguration=null;
+ federationDeploymentLog.textContent='';resetFederationDeploymentConfirmation('Načítám cílové uzly a lokální endpoint…');
+ requestNativeAction('federation-deployment-open');
+}
+document.querySelector('#open-federation-deployment').addEventListener('click',openFederationDeployment);
+document.querySelector('#open-federation-deployment-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationDeployment();});
+federationDeploymentForm.elements.target.addEventListener('change',event=>{
+ const target=federationDeploymentConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ if(target){
+  federationDeploymentForm.elements.host.value=target.host;federationDeploymentForm.elements.container.value=target.container;
+  federationDeploymentForm.elements.lan.value=target.lan;
+  federationDeploymentForm.elements.endpoint.value=federationDeploymentConfiguration.endpoint||target.desktop_endpoint;
+  federationDeploymentForm.elements.mode.value='update';
+  federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+`Zapamatovaná adresa kontejneru: ${target.endpoint}`;
+ }
+ resetFederationDeploymentConfirmation('Výběr cílového uzlu se změnil.');
+});
+for(const field of federationDeploymentForm.querySelectorAll('input[name],select[name="mode"]'))field.addEventListener('input',()=>resetFederationDeploymentConfirmation('Nastavení se změnilo; připravte nový souhrn.'));
+document.querySelector('#federation-deployment-preview').addEventListener('click',()=>{
+ const request=federationDeploymentRequest();
+ if(!request||!request.host||!request.container||!request.lan){federationDeploymentStatus.textContent='Vyplňte SSH cíl, kontejner a privátní LAN.';return;}
+ if(request.mode==='install'&&!request.endpoint){federationDeploymentStatus.textContent='První instalace vyžaduje skutečný HTTPS endpoint desktopového backendu.';return;}
+ if(request.mode==='address'&&request.target<0){federationDeploymentStatus.textContent='Aktualizace adresy vyžaduje zapamatovaný cílový uzel.';return;}
+ const mode=federationDeploymentConfiguration.modes.find(item=>item.value===request.mode);
+ document.querySelector('#federation-deployment-details').textContent=`SSH cíl: ${request.host}\\nKontejner: ${request.container}\\nLAN: ${request.lan}\\nDesktopový endpoint: ${request.endpoint||'nepoužije se'}\\nOperace: ${mode?.label||request.mode}`;
+ federationDeploymentConfirmation.hidden=false;federationDeploymentStatus.textContent='Zkontrolujte přesný rozsah vzdálených změn a potvrďte operaci.';
+});
+document.querySelector('#federation-deployment-confirm').addEventListener('change',event=>{document.querySelector('#federation-deployment-start').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-deployment-cancel').addEventListener('click',()=>resetFederationDeploymentConfirmation('Souhrn byl zrušen.'));
+federationDeploymentForm.addEventListener('submit',event=>{
+ event.preventDefault();const request=federationDeploymentRequest();if(!request?.confirmed)return;
+ federationDeploymentRunning=true;setFederationDeploymentLocked(true);
+ federationDeploymentStatus.textContent='Předávám potvrzené nasazení nativní vrstvě…';requestNativeAction('federation-deployment-start');
 });
 function openNotebookLMImport(){
  if(!canLeaveWorkspaceEditors())return;
