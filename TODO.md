@@ -91,8 +91,8 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   levého panelu je implementovaný ve sdíleném desktop/web shellu: sedm základních
   záložek je viditelných v určeném pořadí, Projekty a Chaty zůstávají dostupné
   bez projektu a ostatní položky se odemykají až po jeho otevření. Projekty
-  mají akce Nový projekt, Importovat projekt s aktuální možností NotebookLM,
-  desktopové Načíst projekt z umístění a Koš projektů;
+  mají akce Nový projekt, Importovat projekt a Koš projektů; Import nabízí
+  NotebookLM a na desktopu také existující projekt z umístění;
   Chaty zachovávají globální přehled vláken, ale vytvoření a otevření vlákna
   bez projektu je bezpečně zablokované podle stávajícího backendového
   kontraktu. Úkoly a Podklady používají původní obsah, Nástroje mají pravdivý
@@ -133,7 +133,7 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   `/v1/projects/open` a projekci hlavního Markdown checklistu, takže nevzniká
   druhá autorita úkolů ani nový storage formát. Koš má samostatnou stránku,
   dostupnou z panelu Projekty i dashboardu, při zachování původního
-  preview/confirm/recovery kontraktu. Čtyři primární projektové akce jsou v panelu
+  preview/confirm/recovery kontraktu. Tři primární projektové akce jsou v panelu
   v jediné řadě jako ikonová tlačítka; jejich názvy zůstávají v přístupném
   `aria-label` a zobrazují se jako tooltip při najetí i zaměření klávesnicí.
   Diagnostické demo bloky byly z úvodu
@@ -340,13 +340,16 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Federace bez spuštění SSH a bez změny projektových Git repozitářů. Následná
   celá sada prošla **653 testy** (27 přeskočeno). Fyzické SSH nasazení zůstává
   součástí uživatelské akceptace.
-  Nativní akce **Načíst projekt z umístění** byla přesunuta z horní Qt lišty
-  mezi Import a Koš v panelu Projekty. Sdílené tlačítko je na serveru skryté a
-  desktop přes allowlistovaný fragmentový most pouze otevře původní systémový
-  výběr složky; registrační služba, journal a recovery hranice se nemění a
-  nevznikl nový HTTP writer. Cílených 5 testů prošlo, stejně jako Python
-  kompilace, JavaScript parser, skutečný Qt WebEngine průchod nad dvěma
-  projektovými stavy a následná celá sada **653 testů** (27 přeskočeno).
+  Nativní akce **Načíst projekt z umístění** je nyní desktopovou variantou
+  nabídky Import. U registrace, jejíž kořen skutečně zmizel, nabízí menu přímo
+  **Opravit umístění…** a **Odebrat nedostupnou registraci…**. Oprava zná ID
+  zvolené položky a otevírá rovnou systémový výběr složky; odregistrování má
+  vlastní webové potvrzení. Obecná nedostupnost se za chybějící cestu nevydává,
+  původní Qt výběr projektu i Qt rozhodovací dialog byly odstraněné. Registrační
+  služba, journal a recovery hranice se nemění a nevznikl nový HTTP writer.
+  Cílených 44 testů prošlo (4 přeskočeny), stejně jako Python kompilace,
+  JavaScript parser a skutečný Qt WebEngine průchod nad dvěma projektovými
+  stavy; následná celá sada prošla **654 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
@@ -357,6 +360,13 @@ položku A a není souhlasem s konkrétním redesignem.
 
 ## K předání do backlogu
 
+- [ ] [planned] **UX-PROJECT-REPAIR-01 — kontrola a oprava poškozených projektů
+  (cílová úroveň: designed).** Navrhnout obecný nástroj Check & Repair pro
+  registrované projekty, které jsou nedostupné z jiného důvodu než chybějící
+  umístění. Musí nejprve bezpečně rozlišit a vysvětlit konkrétní problém
+  (repozitář, metadata, oprávnění, cesta, lokální stav nebo index), oddělit
+  diagnostiku od navržených oprav a každou persistentní změnu provést až po
+  explicitním náhledu a potvrzení s popsanou recovery hranicí.
 - [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
   (cílová úroveň: designed).** Budoucí serverový web má dostat kategorii
   Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle

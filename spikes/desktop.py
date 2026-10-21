@@ -35,7 +35,8 @@ from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
-NATIVE_ACTIONS = frozenset({'register-project-location', 'choose-project-location',
+NATIVE_ACTIONS = frozenset({'register-project-location', 'relocate-project-location',
+                            'unregister-missing-project', 'choose-project-location',
                             'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
                             'export-presentation-pdf', 'presenter-displays-identify',
@@ -140,6 +141,8 @@ def native_action_request(url, origin):
         fields = parse_qs(query, strict_parsing=True)
         if action == 'choose-notebooklm-target':
             expected_fields = {'nonce', 'operation_id'}
+        elif action in {'relocate-project-location', 'unregister-missing-project'}:
+            expected_fields = {'nonce', 'project_id'}
         elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
             expected_fields = {'nonce', 'token', 'speaker', 'audience'}
         else:
@@ -155,6 +158,11 @@ def native_action_request(url, origin):
             if str(UUID(operation_id)) != operation_id:
                 return None
             request['operation_id'] = operation_id
+        elif action in {'relocate-project-location', 'unregister-missing-project'}:
+            project_id = fields['project_id'][0]
+            if str(UUID(project_id)) != project_id:
+                return None
+            request['project_id'] = project_id
         elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
             token = fields['token'][0]
             if str(UUID(token)) != token:
@@ -234,8 +242,8 @@ def main():
     try:
         from PySide6.QtCore import Qt, QTimer, QUrl, QMarginsF, QSizeF
         from PySide6.QtGui import QDesktopServices, QPageLayout, QPageSize
-        from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
-                                       QFileDialog, QInputDialog)
+        from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow,
+                                       QFileDialog)
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -425,7 +433,6 @@ def main():
             else:
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
         controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
-        project_toolbar = controller.toolbar
         def register_project():
             if controller.busy:
                 return
@@ -433,42 +440,29 @@ def main():
                                                        str(controller.service.default_projects_root()))
             if folder:
                 controller.start(lambda: controller.service.register(folder, str(uuid4())))
-        relocate_button = QPushButton('Opravit umístění projektu…')
-        def relocate_project():
+            else:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Výběr projektu byl zrušen.'))
+        def relocate_project(project_id):
             if controller.busy:
                 return
-            rows = server.projects.catalog()
-            if not rows:
-                QMessageBox.information(window, 'Umístění projektu', 'Uzel nemá žádný registrovaný projekt.')
+            try:
+                location_missing = controller.service.registration_root_missing(project_id)
+            except ValueError:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Registrace projektu už není dostupná. Obnovte seznam.'))
                 return
-            labels = [row['title'] + ' — ' + row['id'] for row in rows]
-            label, accepted = QInputDialog.getItem(window, 'Umístění projektu',
-                                                   'Registrovaný projekt', labels, 0, False)
-            if not accepted:
+            if not location_missing:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Projekt už nemá chybějící umístění. Obnovte seznam.'))
                 return
-            project_id = rows[labels.index(label)]['id']
-            if controller.service.registration_root_missing(project_id):
-                choice = QMessageBox(window)
-                choice.setWindowTitle('Chybějící projekt')
-                choice.setTextFormat(Qt.TextFormat.PlainText)
-                choice.setText('Původní umístění tohoto projektu na disku neexistuje.\n\n'
-                               'Můžete vybrat nové umístění stejného projektu, nebo odebrat pouze jeho '
-                               'registraci ze seznamu. Lokální stav a případná data jinde se nemažou.')
-                repair = choice.addButton('Vybrat nové umístění', QMessageBox.ButtonRole.AcceptRole)
-                remove = choice.addButton('Odebrat pouze ze seznamu', QMessageBox.ButtonRole.DestructiveRole)
-                choice.addButton(QMessageBox.StandardButton.Cancel)
-                choice.exec()
-                if choice.clickedButton() is remove:
-                    controller.start(lambda: controller.service.unregister_missing(project_id, str(uuid4())))
-                    return
-                if choice.clickedButton() is not repair:
-                    return
             folder = QFileDialog.getExistingDirectory(window, 'Vyberte nové umístění stejného projektu',
                                                        str(controller.service.default_projects_root()))
             if folder:
                 controller.start(lambda: controller.service.relocate(project_id, folder, str(uuid4())))
-        relocate_button.clicked.connect(relocate_project)
-        project_toolbar.addWidget(relocate_button)
+            else:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Oprava umístění byla zrušena.'))
         def native_action(url):
             actions = {
                 '/#presenter-open': displays.open,
@@ -488,6 +482,12 @@ def main():
             page.runJavaScript("history.replaceState(null, '', '/');")
             if action == 'register-project-location':
                 register_project()
+            elif action == 'relocate-project-location':
+                relocate_project(request['project_id'])
+            elif action == 'unregister-missing-project':
+                if not controller.busy:
+                    controller.start(lambda: controller.service.unregister_missing(
+                        request['project_id'], str(uuid4())))
             elif action == 'choose-project-location':
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
@@ -798,13 +798,24 @@ def main():
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
                     const registerProject=document.querySelector('#sidebar-register-project');
+                    const importOptions=document.querySelector('#sidebar-project-import-options');
+                    const importProject=document.querySelector('#sidebar-import-project');
                     const federationTab=document.querySelector('#federation-tab');
                     const federationItem=document.querySelector('#open-federation-transfer');
                     const federationNetworkItem=document.querySelector('#open-federation-network');
                     const federationDeploymentItem=document.querySelector('#open-federation-deployment');
                     const projectsTab=document.querySelector('#projects-tab');
+                    if(!window.projectImportSmokeOpened){
+                      if(!registerProject || registerProject.hidden || !importOptions.hidden ||
+                         document.querySelectorAll('.sidebar-project-primary-actions .project-action-icon').length!==3)return null;
+                      window.projectImportSmokeOpened=true;importProject.click();return null;
+                    }
+                    if(!window.projectImportSmokeChecked){
+                      if(importOptions.hidden || registerProject.getClientRects().length===0)return null;
+                      window.projectImportSmokeChecked=true;importProject.click();return null;
+                    }
                     if(!window.federationTransferSmokeOpened){
-                      if(!registerProject || registerProject.hidden || federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
+                      if(!importOptions.hidden || federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
                       window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
                     }
                     if(!window.federationTransferSmokeChecked){

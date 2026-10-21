@@ -283,11 +283,14 @@ SSH session, bundle, vzdálené příkazy, host-key policy, pairing a atomické
 lokální preference zůstávají nativní. Nový HTTP writer, druhý deploy engine a
 přenos SSH credentials do WebEngine byly odmítnuty.
 
-Přesun akce **Načíst projekt z umístění** reuse/adaptuje existující
-`ProjectCreation.register`, `CreationController` a nativní `QFileDialog`.
-Sdílené UI pouze vyvolá přes allowlistovaný jednorázový fragmentový most
-desktopovou akci; na serveru zůstává tlačítko skryté. Nový HTTP writer ani druhý
-registrační workflow nevznikají.
+Akce **Projekt z umístění**, **Opravit umístění** a bezpečné odregistrování
+reuse/adaptují existující `ProjectCreation.register`, `relocate`,
+`unregister_missing`, `CreationController` a nativní `QFileDialog`. Sdílené UI
+předává jen validované ID konkrétní registrace přes allowlistovaný fragmentový
+most; pouze doslova chybějící kořen dostane opravné akce a destruktivní varianta
+má vlastní webové potvrzení. Původní Qt výběr projektu a rozhodovací dialog byly
+odmítnuty jako duplicitní. Nový HTTP writer ani druhý registrační workflow
+nevznikají.
 
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS

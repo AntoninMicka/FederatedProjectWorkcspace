@@ -317,6 +317,13 @@ class DesktopTests(unittest.TestCase):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
                     {'action': action, 'nonce': nonce})
+        for action in ('relocate-project-location', 'unregister-missing-project'):
+            with self.subTest(action=action):
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?project_id={operation}&nonce={nonce}', origin),
+                    {'action': action, 'nonce': nonce, 'project_id': operation})
+                self.assertIsNone(native_action_request(
+                    f'{origin}/#{action}?project_id=bad&nonce={nonce}', origin))
         for action in ('choose-presentation-pdf', 'export-presentation-pdf'):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
@@ -878,22 +885,22 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertLess(projects.index('id="sidebar-create-project"'),
                         projects.index('id="sidebar-project-list"'))
         self.assertLess(projects.index('id="sidebar-import-project"'),
-                        projects.index('id="sidebar-register-project"'))
-        self.assertLess(projects.index('id="sidebar-register-project"'),
                         projects.index('id="sidebar-project-trash"'))
         self.assertLess(projects.index('id="sidebar-project-trash"'),
+                        projects.index('id="sidebar-register-project"'))
+        self.assertLess(projects.index('id="sidebar-register-project"'),
                         projects.index('id="sidebar-project-list"'))
-        self.assertEqual(projects.count('class="project-action-icon"'), 4)
-        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 4)
-        for label in ('Nový projekt', 'Importovat projekt', 'Načíst projekt z umístění',
-                      'Koš projektů'):
+        self.assertEqual(projects.count('class="project-action-icon"'), 3)
+        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 3)
+        for label in ('Nový projekt', 'Importovat projekt', 'Koš projektů'):
             self.assertIn(f'aria-label="{label}"', projects)
             self.assertIn(f'role="tooltip">{label}</span>', projects)
         register = projects.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
         self.assertIn('hidden', register)
+        self.assertIn('>Projekt z umístění', register)
         self.assertIn("requestNativeAction('register-project-location')", JS)
         self.assertIn('.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
-        self.assertIn('body[data-runtime="desktop"] .sidebar-project-primary-actions{grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
+        self.assertNotIn('body[data-runtime="desktop"] .sidebar-project-primary-actions', CSS)
         self.assertIn('.sidebar-project-primary-actions button:hover .project-action-label', CSS)
         self.assertIn('.sidebar-project-primary-actions button:focus-visible .project-action-label', CSS)
         self.assertIn('id="open-notebooklm-import"', projects)
@@ -1184,8 +1191,16 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("getElementById('sidebar-register-project').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn('id="project-create-preview"', HTML)
         self.assertIn("requestNativeAction('choose-project-location')", JS)
-        self.assertNotIn("QPushButton('Načíst projekt z umístění…')",
-                         Path('spikes/desktop.py').read_text())
+        desktop_source = Path('spikes/desktop.py').read_text()
+        self.assertNotIn('QInputDialog', desktop_source)
+        self.assertNotIn("QPushButton('Načíst projekt z umístění…')", desktop_source)
+        self.assertNotIn("QPushButton('Opravit umístění projektu…')", desktop_source)
+        self.assertIn("requestNativeAction('relocate-project-location'", JS)
+        self.assertIn("requestNativeAction('unregister-missing-project'", JS)
+        self.assertIn('if(item.location_missing)actions.splice', JS)
+        self.assertIn("label:'Opravit umístění…'", JS)
+        self.assertIn("label:'Odebrat nedostupnou registraci…'", JS)
+        self.assertIn('id="project-registration-remove-dialog"', HTML)
         self.assertNotIn('CreationDialog', Path('spikes/desktop_creation.py').read_text())
         self.assertIn('#resource-monitor{flex:none', ASSETS['/app.css'][1])
         self.assertIn('#resource-monitor-dialog{width:min(760px', ASSETS['/app.css'][1])

@@ -59,16 +59,27 @@ class ProjectTests(unittest.TestCase):
         self.assertEqual([r['id'] for r in rows], [ENTITY, OTHER])
         self.assertEqual(rows[0]['title'], '<img src=x onerror=alert(1)>')
         self.assertTrue(all(r['available'] for r in rows))
+        self.assertFalse(any(r['location_missing'] for r in rows))
         self.assertEqual(list(self.state().iterdir()), [])
         self.assertEqual(list(self.state(1).iterdir()), [])
         # An invalid registration must not suppress other projects or leak its path.
         (self.gits[0].root / 'project.json').write_bytes(b'bad')
         rows = self.projects.catalog()
         self.assertFalse(rows[0]['available'])
+        self.assertFalse(rows[0]['location_missing'])
         self.assertEqual(rows[0]['title'], 'Nedostupný projekt')
         self.assertTrue(rows[1]['available'])
         self.assertNotIn(str(self.base), str(rows))
         self.assertEqual(list(self.state().iterdir()), [])
+
+    def test_catalog_distinguishes_missing_location_from_other_failures(self):
+        moved = self.base / 'moved-project'
+        self.gits[0].root.rename(moved)
+        rows = self.projects.catalog()
+        self.assertFalse(rows[0]['available'])
+        self.assertTrue(rows[0]['location_missing'])
+        self.assertFalse(rows[1]['location_missing'])
+        self.assertNotIn(str(self.base), str(rows))
 
     def test_two_projects_restart_missing_and_stale_index(self):
         self.assertEqual(self.projects.list(), [{'id': ENTITY}, {'id': OTHER}])

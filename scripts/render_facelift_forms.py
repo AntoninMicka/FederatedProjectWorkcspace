@@ -60,7 +60,8 @@ def native_form(intro, fields, buttons, *, notice=""):
 
 SHEETS = [
     sheet("login", "Přihlášení", ("#login",), ("login-form",), scale=.92),
-    sheet("project", "Projekt — vytvoření a bezpečná akce", ("#create-project", "#project-delete-panel"),
+    sheet("project", "Projekt — vytvoření a bezpečná akce",
+          ("#create-project", "#project-delete-panel", "#project-registration-remove-dialog"),
           ("create-project",), scale=.82),
     sheet("notebooklm", "Import celého projektu z NotebookLM", ("#notebooklm-import",), scale=.72),
     sheet("ollama", "Nastavení — lokální AI backend", ("#chat-backend-form",), ("chat-backend-form",), scale=.9),

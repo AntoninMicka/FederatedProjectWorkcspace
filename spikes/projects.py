@@ -23,6 +23,15 @@ def directory(value, *, private=False):
     return path
 
 
+def missing(path):
+    """Distinguish an absent path from permission and other filesystem failures."""
+    try:
+        Path(path).lstat()
+    except (FileNotFoundError, NotADirectoryError):
+        return True
+    return False
+
+
 class Projects:
     def __init__(self, node_path=None, *, network=False):
         self.node_path = Path(node_path).absolute() if node_path else None
@@ -47,6 +56,8 @@ class Projects:
         rows = []
         for binding in self._bindings():
             row = dict(id=binding['project_id'], title='Nedostupný projekt', description='', available=False)
+            if not self.network:
+                row['location_missing'] = missing(binding['root'])
             try:
                 root = directory(binding['root']); directory(root / '.git')
                 git = Git(root, deadline=deadline)

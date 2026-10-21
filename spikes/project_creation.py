@@ -20,7 +20,7 @@ from uuid import uuid4
 from spikes.configuration import local_path, overlap, parse_node, parse_project, read_config
 from spikes.journal import sync_dir
 from spikes.metadata import MAX_FILE, MAX_SNAPSHOT, require, safe_path, uuid, validate_snapshot
-from spikes.projects import directory
+from spikes.projects import directory, missing
 from spikes.storage import Git
 from spikes.workspace import Workspace
 
@@ -39,15 +39,6 @@ def check(condition, message):
 
 def encoded(value):
     return (json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n').encode()
-
-
-def missing(path):
-    """Distinguish an absent path from permission and other filesystem failures."""
-    try:
-        Path(path).lstat()
-    except (FileNotFoundError, NotADirectoryError):
-        return True
-    return False
 
 
 def default_node_path():

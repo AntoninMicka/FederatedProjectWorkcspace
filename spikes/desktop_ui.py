@@ -243,9 +243,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button" aria-label="Nový projekt"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 12v5M9.5 14.5h5"/></svg><span class="project-action-label" role="tooltip">Nový projekt</span></button>
 <button id="sidebar-import-project" type="button" aria-label="Importovat projekt" aria-expanded="false" aria-controls="sidebar-project-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 3v10M8.5 9.5 12 13l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat projekt</span></button>
-<button id="sidebar-register-project" type="button" aria-label="Načíst projekt z umístění" hidden><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h7l2 2h9v10H3zM12 12v4M10 14h4M18 4v4M16 6h4"/></svg><span class="project-action-label" role="tooltip">Načíst projekt z umístění</span></button>
 <button id="sidebar-project-trash" type="button" aria-label="Koš projektů"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span class="project-action-label" role="tooltip">Koš projektů</span></button></div>
-<div id="sidebar-project-import-options" hidden><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
+<div id="sidebar-project-import-options" hidden><button id="sidebar-register-project" type="button" hidden>Projekt z umístění</button><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
 <p id="sidebar-project-status" role="status">Načítám projekty…</p><ul id="sidebar-project-list"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Načítám uložená vlákna…</p>
@@ -310,6 +309,12 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section><h3>Systémové monitory</h3><p class="resource-placeholder-note">CPU, GPU, RAM, VRAM, DISK a NET jsou zatím pouze připravená místa. Aplikace dosud systémovou telemetrii nesbírá.</p>
 <div id="system-monitor-detail"></div></section>
 </dialog>
+<dialog id="project-registration-remove-dialog" aria-labelledby="project-registration-remove-title">
+<form method="dialog"><h2 id="project-registration-remove-title">Odebrat nedostupnou registraci</h2>
+<p>Odebere se pouze registrace z tohoto uzlu. Lokální stav projektu a případná data v jiném umístění zůstanou zachované.</p>
+<p>Projekt: <code id="project-registration-remove-id"></code></p>
+<div class="form-actions"><button value="cancel" class="secondary-button">Zrušit</button><button id="project-registration-remove-confirm" type="button" class="danger">Odebrat registraci</button></div>
+</form></dialog>
 <main><div id="project-home">
 <header><span class="badge">Pracovní prostor</span></header>
 <div class="home-heading"><h1>Přehled</h1></div>
@@ -974,6 +979,8 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
 .resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;gap:5px;align-items:center;margin:2px 0;font-size:8px;color:#9eb5c7}.resource-mini-row progress{width:100%;height:5px;accent-color:#79c9ac}.resource-mini-row output{text-align:right;color:#7891a3}
 #resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
+#project-registration-remove-dialog{width:min(560px,calc(100vw - 32px));padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#project-registration-remove-dialog::backdrop{background:#07131fa8}#project-registration-remove-dialog h2{margin-top:0}#project-registration-remove-dialog code{overflow-wrap:anywhere}
+#project-registration-remove-confirm{background:#8b3030}
 #resource-monitor-dialog::backdrop{background:#07131fa8}.resource-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.resource-dialog-heading h2{margin:5px 0 12px}.resource-dialog-heading button{flex:none}
 #resource-monitor-dialog>section{margin-top:16px;padding:15px;border:1px solid #dce5eb;border-radius:12px;background:white}#resource-monitor-dialog h3{margin:0 0 12px}
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
@@ -996,7 +1003,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}body[data-runtime="desktop"] .sidebar-project-primary-actions{grid-template-columns:repeat(4,minmax(0,1fr))}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
+.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
 #sidebar-project-import-options{margin-top:6px}#sidebar-project-import-options button{width:100%;padding:8px 6px;font-size:11px}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
@@ -2211,6 +2218,25 @@ function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
 let recentProjectOrder=[];
+let projectRegistrationRemoveTarget=null;
+const projectRegistrationRemoveDialog=document.querySelector('#project-registration-remove-dialog');
+function repairProjectLocation(item){
+ document.querySelector('#sidebar-project-status').textContent='Otevírám systémový výběr nového umístění…';
+ requestNativeAction('relocate-project-location',{project_id:item.id});
+}
+function confirmMissingProjectUnregister(item){
+ projectRegistrationRemoveTarget=item;
+ document.querySelector('#project-registration-remove-id').textContent=item.id;
+ projectRegistrationRemoveDialog.showModal();
+}
+projectRegistrationRemoveDialog.addEventListener('close',()=>{projectRegistrationRemoveTarget=null;});
+document.querySelector('#project-registration-remove-confirm').addEventListener('click',()=>{
+ if(!projectRegistrationRemoveTarget)return;
+ const projectId=projectRegistrationRemoveTarget.id;
+ projectRegistrationRemoveDialog.close();
+ document.querySelector('#sidebar-project-status').textContent='Odebírám potvrzenou nedostupnou registraci…';
+ requestNativeAction('unregister-missing-project',{project_id:projectId});
+});
 function recentProjectIds(){return recentProjectOrder;}
 function rememberRecentProject(projectId){
  recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
@@ -2244,11 +2270,15 @@ function renderProjectCatalog(items){
   const row=document.createElement('li');row.className='sidebar-list-row';
   const compact=document.createElement('button');compact.type='button';compact.className='sidebar-list-main';compact.dataset.id=item.id;
   compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));
-  const menu=sidebarItemMenu(item.title,[
+  const actions=[
    {label:item.available?'Otevřít':'Zkusit otevřít',run:()=>openRegisteredProject(item.id)},
    {label:'Správa odstranění…',run:()=>openProjectDeletion(item)},
    {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);document.querySelector('#sidebar-project-status').textContent='ID projektu bylo zkopírováno.';}catch(error){document.querySelector('#sidebar-project-status').textContent=`ID projektu: ${item.id}`;}}}
-  ],'sidebar-project-menu');
+  ];
+  if(item.location_missing)actions.splice(1,1,
+   {label:'Opravit umístění…',run:()=>repairProjectLocation(item)},
+   {label:'Odebrat nedostupnou registraci…',run:()=>confirmMissingProjectUnregister(item)});
+  const menu=sidebarItemMenu(item.title,actions,'sidebar-project-menu');
   row.append(compact,menu);sidebarProjects.append(row);
  }
  const byId=new Map(items.map(item=>[item.id,item]));
@@ -2364,6 +2394,8 @@ async function loadProjects(selectedId=null){
 document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
 document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
 document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
+ document.querySelector('#sidebar-project-import-options').hidden=true;
+ document.querySelector('#sidebar-import-project').setAttribute('aria-expanded','false');
  document.querySelector('#sidebar-project-status').textContent='Otevírám systémový výběr projektu…';
  requestNativeAction('register-project-location');
 });
