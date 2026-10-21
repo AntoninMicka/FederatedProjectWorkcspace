@@ -5,7 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0035 — Kontrola a oprava registrovaného projektu
 
-Datum: 2026-10-21. Stav: navrženo v dávce `UX-PROJECT-REPAIR-01`.
+Datum: 2026-10-21. Stav: přijato 2026-10-22 v dávce
+`UX-PROJECT-REPAIR-01` na úrovni designed.
 
 ## Kontext
 

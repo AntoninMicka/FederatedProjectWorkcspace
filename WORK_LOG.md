@@ -5,6 +5,49 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-PROJECT-REPAIR-01 — návrh Check & Repair — 2026-10-22
+
+Návrhová dávka vznikla na větvi `feature/ux-project-repair-01` z lokálního
+`develop` `d24ad26` po administrativním začlenění release změn a dosáhla úrovně
+**designed**. Uživatel 2026-10-22 přijal ADR 0035 a vymezení prvního
+implementačního řezu. Větev byla pushnuta s návrhovým commitem `4b20a62`, ale
+PR ani merge do `develop` zatím nejsou doložené; stav feature akceptace a
+doručení zůstávají oddělené.
+
+- [x] [completed] **UX-PROJECT-REPAIR-01-A — inventura a reuse rozhodnutí
+  (designed).** Prověřeny `Projects`, validační CLI, konfigurace a metadata,
+  Git adapter, `Workspace`/`Journal`, `ProjectCreation` a atomický rebuild
+  indexu. Návrh je reuse/adaptuje a nezavádí druhý journal, index, framework
+  ani univerzální filesystemový opravář.
+- [x] [completed] **UX-PROJECT-REPAIR-01-B — read-only diagnostický kontrakt
+  (designed).** ADR 0035 určuje pevné vrstvy sond, stabilní kódy, stavy
+  `healthy`, `repairable`, `manual` a `retry`, bezpečný síťový výstup a
+  `check_token`. Diagnostika nesmí inicializovat `Workspace`, `Journal` ani
+  `Index` a nesmí vytvořit soubor, zámek, SQLite strukturu nebo Git objekt.
+- [x] [completed] **UX-PROJECT-REPAIR-01-C — opravné a recovery hranice
+  (designed).** První implementace smí po novém náhledu, autorizaci, potvrzení
+  a revalidaci tokenu pouze atomicky rebuildovat odvozený index nebo pokračovat
+  v existujícím přesně svázaném journalovém intentu. Oprava chybějící cesty
+  reuseuje dnešní `relocate`; Git obsah, práva, identity a neznámá schémata se
+  automaticky neopravují.
+- [x] [completed] **UX-PROJECT-REPAIR-01-D — review a implementační návaznost
+  (designed).** Uživatel přijal diagnostické kategorie, povolené opravy i vstup
+  **Zkontrolovat projekt…** v menu nedostupného projektu. Implementace byla
+  předána do BACKLOG jako samostatná dávka `UX-PROJECT-REPAIR-02`, aby se nový
+  persistentní zápis nemíchal do návrhového PR.
+
+### Ověření a omezení
+
+Dokumentační konzistence, odkazy a `git diff --check` byly ověřeny. Cílené
+`tests.test_spdx` a `tests.test_license_packaging` prošly: **13 testů**, bez
+chyb a přeskočení. Úplná sada nebyla po čistě dokumentačních změnách znovu
+spuštěna; předchozí release výsledky nejsou vydávány za test tohoto návrhu.
+
+Dávka neimplementuje backend, UI ani opravnou operaci a neprokazuje nulové
+mutace diagnostiky na reálném projektu; to je akceptační podmínka
+`UX-PROJECT-REPAIR-02`. Projektový Git zůstává autoritou dat, journal autoritou
+nedokončeného intentu a index pouze obnovitelnou projekcí validovaného `HEAD`.
+
 ## V-11 / release 0.1.0 — veřejné vydání — 2026-10-21
 
 Release dávka vznikla z akceptovaného `develop` na větvi `release/0.1.0` a
