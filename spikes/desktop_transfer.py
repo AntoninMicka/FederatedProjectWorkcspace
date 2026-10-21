@@ -1,93 +1,110 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Explicit native UI for the first public-project Git transfer."""
+"""Session-only native transfer controller behind the shared federation form."""
 from pathlib import Path
 from uuid import uuid4
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QComboBox, QLineEdit,
-                               QPushButton, QPlainTextEdit, QMessageBox, QLabel)
-from spikes.desktop_network import NetworkWorker
+
+from PySide6.QtCore import QObject, QThread, Signal
+
 from spikes.deployment_targets import DeploymentTargets
 from spikes.git_transfer import transfer
 from spikes.projects import Projects
 from spikes.transfer_outbox import pending_operation
 
 
-class TransferDialog(QDialog):
-    def __init__(self, node, parent=None):
+class TransferWorker(QThread):
+    done = Signal(bool, str)
+
+    def __init__(self, action, parent):
         super().__init__(parent)
-        self.node, self.worker, self.pending = node, None, None
-        self.setWindowTitle('Přenést veřejný projekt do LXC'); self.resize(800, 570)
-        layout = QVBoxLayout(self); form = QFormLayout()
-        self.projects = QComboBox(); self.targets = QComboBox(); self.ca = QLineEdit()
-        self.log = QPlainTextEdit(); self.log.setReadOnly(True)
+        self.action = action
+
+    def run(self):
         try:
-            for project in Projects(node).catalog():
-                if project['available']:
-                    self.projects.addItem(project['title'], project['id'])
-            for target in DeploymentTargets(node).load():
-                self.targets.addItem(target['container'] + ' — ' + target['endpoint'], target)
+            self.done.emit(True, self.action())
         except Exception as exc:
-            self.log.appendPlainText(str(exc))
-        form.addRow('Projekt desktopu', self.projects); form.addRow('Cílový LXC uzel', self.targets)
-        form.addRow('Důvěryhodná veřejná CA LXC', self.ca); layout.addLayout(form)
-        notice = QLabel('První přenos nativním Gitem bez hooků/merge. Cíl musí být nový projekt.\n'
-                        'Celá historie musí mít pouze public entity a klasifikované projektové soubory.\n'
-                        'Project/confidential/local-only i ve starém commitu přenos zastaví.\n'
-                        'Commit messages a projektové názvy se přenášejí také; před potvrzením posuďte jejich zveřejnění.\n'
-                        'Neproběhne automatická reklasifikace ani přenos credentials/indexu/journalu.\n'
-                        'Nejprve aktualizujte LXC na vydání s touto funkcí.')
-        notice.setWordWrap(True); layout.addWidget(notice)
-        self.start = QPushButton('Potvrdit a přenést'); layout.addWidget(self.start); layout.addWidget(self.log)
-        self.targets.currentIndexChanged.connect(self.target_changed); self.target_changed()
-        self.start.clicked.connect(self.launch)
+            self.done.emit(False, 'Operace selhala: ' + str(exc))
 
-    def target_changed(self, *_):
-        target = self.targets.currentData()
-        if target:
-            root = Path(self.node).absolute().parent / ('.' + Path(self.node).name + '.network')
-            self.ca.setText(str(root / (target['node_id'] + '-ca.pem')))
 
-    def launch(self):
+class FederationTransfer(QObject):
+    """Keep SSH/Git work native while exposing only bounded form data to WebEngine."""
+
+    def __init__(self, node, *, configuration_callback=None, progress_callback=None,
+                 finished_callback=None, parent=None):
+        super().__init__(parent)
+        self.node = node
+        self.configuration_callback = configuration_callback or (lambda _configuration: None)
+        self.progress_callback = progress_callback or (lambda _message: None)
+        self.finished_callback = finished_callback or (lambda _success, _message: None)
+        self.worker = None
+        self.token = None
+        self.projects = []
+        self.targets = []
+        self.pending = None
+        self.pending_selection = None
+
+    def open(self):
+        if self.worker and self.worker.isRunning():
+            self.progress_callback('Přenos právě probíhá; stránku nelze opustit.')
+            return
+        self.projects = [item for item in Projects(self.node).catalog() if item['available']]
+        self.targets = DeploymentTargets(self.node).load()
+        self.token = str(uuid4())
+        self.pending = None
+        self.pending_selection = None
+        root = Path(self.node).absolute().parent / ('.' + Path(self.node).name + '.network')
+        targets = []
+        for index, target in enumerate(self.targets):
+            targets.append({
+                'index': index,
+                'label': target['container'] + ' — ' + target['endpoint'],
+                'container': target['container'],
+                'host': target['host'],
+                'ca': str(root / (target['node_id'] + '-ca.pem')),
+            })
+        self.configuration_callback({
+            'token': self.token,
+            'projects': [{'index': index, 'id': item['id'], 'title': item['title']}
+                         for index, item in enumerate(self.projects)],
+            'targets': targets,
+        })
+
+    def _selection(self, request):
+        if (not isinstance(request, dict)
+                or set(request) != {'token', 'project', 'target', 'ca', 'confirmed'}
+                or request.get('token') != self.token
+                or request.get('confirmed') is not True
+                or not isinstance(request.get('project'), int)
+                or isinstance(request.get('project'), bool)
+                or not isinstance(request.get('target'), int)
+                or isinstance(request.get('target'), bool)
+                or not isinstance(request.get('ca'), str)
+                or not request['ca'] or len(request['ca']) > 4096 or '\0' in request['ca']
+                or not 0 <= request['project'] < len(self.projects)
+                or not 0 <= request['target'] < len(self.targets)):
+            raise ValueError('Výběr přenosu už neodpovídá aktuálnímu formuláři.')
+        current_projects = [item for item in Projects(self.node).catalog() if item['available']]
+        current_targets = DeploymentTargets(self.node).load()
+        if current_projects != self.projects or current_targets != self.targets:
+            raise ValueError('Seznam projektů nebo federačních uzlů se změnil; načtěte stránku znovu.')
+        return self.projects[request['project']], self.targets[request['target']]
+
+    def start(self, request):
         if self.worker and self.worker.isRunning():
             return
+        project, target = self._selection(request)
+        selection = (project['id'], target['node_id'], request['ca'])
+        if self.pending_selection is not None and selection != self.pending_selection:
+            raise ValueError('Opakování musí použít stejný projekt, uzel a veřejnou CA.')
         if self.pending is None:
-            target = self.targets.currentData(); project = self.projects.currentData(); ca = self.ca.text().strip()
-            if not target or not project or not ca:
-                self.log.appendPlainText('Vyberte projekt, LXC a jeho veřejnou CA.'); return
-            confirmation = QMessageBox(self)
-            confirmation.setWindowTitle('Potvrdit přenos celé veřejné historie')
-            confirmation.setTextFormat(Qt.TextFormat.PlainText)
-            confirmation.setText('Projekt: ' + self.projects.currentText() + '\nLXC: ' + target['container'] +
-                                 '\nSSH: ' + target['host'] + '\n\n'
-                                 'Přenést celou historii veřejného projektu a zaregistrovat nový projekt na LXC?\n'
-                                 'Existující projekt se nepřepíše. Metadata autorů a zprávy commitů jsou součástí historie.\n'
-                                 'Nedokončený přenos stejného projektu/uzlu bude pokračovat s původním bundle a ID operace.')
-            confirmation.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
-            confirmation.setDefaultButton(QMessageBox.StandardButton.Cancel)
-            if confirmation.exec() != QMessageBox.StandardButton.Yes:
-                return
-            try:
-                operation = pending_operation(self.node, project, target['node_id'])
-            except Exception as exc:
-                self.log.appendPlainText('Journal přenosu nelze načíst: ' + str(exc)); return
-            if operation:
-                self.log.appendPlainText('Pokračuji v uloženém přenosu: ' + operation)
-            self.pending = (target, project, operation or str(uuid4()), ca)
-        for widget in (self.projects, self.targets, self.ca, self.start):
-            widget.setEnabled(False)
-        self.log.appendPlainText('Ověřuji historii a přenáším nativní Git bundle…')
-        self.worker = NetworkWorker(lambda: transfer(self.node, *self.pending), self)
-        self.worker.done.connect(self.log.appendPlainText)
-        self.worker.finished.connect(lambda: (self.start.setEnabled(True), self.start.setText('Zopakovat stejnou operaci')))
+            self.pending = pending_operation(self.node, project['id'], target['node_id']) or str(uuid4())
+            self.pending_selection = selection
+        values = (target, project['id'], self.pending, request['ca'])
+        self.progress_callback('Ověřuji veřejnou historii a přenáším nativní Git bundle…')
+        self.worker = TransferWorker(lambda: transfer(self.node, *values), self)
+        self.worker.done.connect(self.finished_callback)
         self.worker.start()
 
-    def reject(self):
-        if not self.worker or not self.worker.isRunning():
-            super().reject()
-
-    def closeEvent(self, event):
-        if self.worker and self.worker.isRunning():
-            event.ignore()
-        else:
-            event.accept()
+    def wait(self):
+        if self.worker:
+            self.worker.wait()

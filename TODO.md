@@ -43,7 +43,8 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   hlavního panelu:
 
   - panel vždy zobrazuje ve stejném pořadí záložky **Projekty**, **Chaty**,
-    **Úkoly**, **Podklady**, **Nástroje**, **Výstupy** a **Nastavení**;
+    **Úkoly**, **Podklady**, **Nástroje**, **Výstupy** a **Nastavení**; desktop
+    za ně přidává osmou capability záložku **Federace**;
   - **Projekty** a **Chaty** jsou dostupné i bez zvoleného projektu, zatímco
     ostatní záložky se zpřístupní až po jeho zvolení;
   - **Projekty** obsahují tlačítko pro vytvoření projektu, tlačítko pro import
@@ -87,8 +88,8 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   (cílová úroveň: implemented).** Promítnout schválené anotace do jediného
   sdíleného frontendu a zachovat mobilní layout, klávesnicovou přístupnost,
   bezpečné textové vykreslení a aplikační autorizační hranice. První řez
-  levého panelu je implementovaný ve sdíleném desktop/web shellu: sedm záložek
-  je trvale viditelných v určeném pořadí, Projekty a Chaty zůstávají dostupné
+  levého panelu je implementovaný ve sdíleném desktop/web shellu: sedm základních
+  záložek je viditelných v určeném pořadí, Projekty a Chaty zůstávají dostupné
   bez projektu a ostatní položky se odemykají až po jeho otevření. Projekty
   mají akce Nový projekt a Importovat projekt s aktuální možností NotebookLM;
   Chaty zachovávají globální přehled vláken, ale vytvoření a otevření vlákna
@@ -96,7 +97,7 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   kontraktu. Úkoly a Podklady používají původní obsah, Nástroje mají pravdivý
   prázdný katalog bez předstíraného runneru, Výstupy obsahují prezentace a
   Nastavení scrollovatelný seznam dostupných sekcí respektující runtime role.
-  Panel je nyní rozdělený do dvou souběžných částí: vlevo je úzký pás sedmi
+  Panel je nyní rozdělený do dvou souběžných částí: vlevo je úzký pás základních
   ikonových tlačítek a vpravo obsah zvolené záložky. Každá ikona má přístupný
   název a při najetí myší i při klávesnicovém zaměření zobrazí popisek
   příslušné záložky.
@@ -274,6 +275,26 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   most. Následná celá sada znovu prošla **641 testy** (27 přeskočeno), parser
   výsledného desktopového JavaScriptu, Python kompilace a `git diff --check`
   také prošly.
+  Třetí převod odstranil nativní dialog **Přenos veřejného projektu do LXC**.
+  Desktop nyní na konec pásu přidává osmou ikonu **Federace**; server ji drží
+  skrytou. Její zatím jediná položka otevírá samostatnou webovou stránku s
+  výběrem projektu, zapamatovaného LXC a veřejné CA, přesným náhledem a
+  explicitním potvrzením celé veřejné Git historie. Stránka pravdivě uvádí,
+  že jde o přechodovou funkci před plnohodnotnou správou federace projektů v
+  další verzi. Web nedostává SSH ani Git writer: jednorázově tokenovaný most
+  předá pouze potvrzené indexy a CA, nativní controller znovu ověří nezměněné
+  katalogy a teprve potom spustí stávající `git_transfer.transfer`.
+  Crash hranice zůstávají beze změny: před commitem lokálního SQLite outboxu
+  nevzniká durable přenos; po jeho commitu retry používá stejné operation ID,
+  source HEAD, digest a bundle; vzdálená publikace a registrace se obnovují
+  existujícím cílovým stagingem a chyba lokálního completion ponechá journal k
+  bezpečnému opakování. Běžící operace zamyká opuštění stránky. A4 inventura
+  nyní eviduje 20. sdílený formulář a jako nativní ponechává už jen LXC deploy
+  a nastavení síťového backendu. Cílených osm testů controlleru, mostu, UI a
+  inventury prošlo; parser výsledného JavaScriptu, Python kompilace,
+  `git diff --check` a skutečný Qt WebEngine průchod nové ikony, stránky a
+  nativně dodaného katalogu také prošly. Následná celá sada prošla **643 testy**
+  (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
@@ -281,3 +302,14 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
 Akceptace celé dávky zůstává otevřená do dokončení interaktivní revize a
 uživatelem schváleného implementačního řezu. Samotný A4 balíček dokončuje jen
 položku A a není souhlasem s konkrétním redesignem.
+
+## K předání do backlogu
+
+- [ ] [planned] **UX-FEDERATION-02 — plnohodnotná správa federace projektů
+  (cílová úroveň: designed).** Uživatelský požadavek pro další verzi: nahradit
+  přechodovou stránku jednosměrného veřejného přenosu správou federovaných
+  projektů. Při přípravě dávky konsolidovat, nikoli duplikovat, otevřené
+  kontrakty M1-AH-14/M1-AH-15 a schopnosti roadmapy M5; výslovně navrhnout
+  discovery, vztahy uzlů a projektů, směry operací, oprávnění, konflikty,
+  stav/recovery a audit. Podmínkou dokončení návrhu je samostatná reviewovatelná
+  feature dávka s vymezením proti pouhému prvnímu Git přenosu.

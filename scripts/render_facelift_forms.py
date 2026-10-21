@@ -124,14 +124,8 @@ SHEETS = [
              ("CA protějšího uzlu", "text", "")),
             ("Použít a uložit nastavení", "Ověřit HTTPS a identitu", "Ověřit oba směry"),
             notice="Firewall ani projektová synchronizace se tímto dialogem automaticky nemění.")),
-    sheet(
-        "native-transfer", "Nativní dialog — přenos veřejného projektu do LXC", source="PySide6 desktop", scale=.8,
-        native_html=native_form(
-            "Přenos celé veřejné Git historie bez credentials, lokálního indexu a journalu.",
-            (("Projekt desktopu", "select", ("Veřejný projekt",)),
-             ("Cílový LXC uzel", "select", ("workspace-m0 — https://…",)),
-             ("Důvěryhodná veřejná CA LXC", "text", "")),
-            ("Potvrdit a přenést",), notice="Cíl musí být nový projekt; neveřejná historie přenos zastaví.")),
+    sheet("federation-transfer", "Federace — přenos veřejného projektu do LXC",
+          ("#federation-view",), ("federation-transfer-form",), scale=.78),
     sheet("presenter-displays", "Presenter — displeje a role",
           ("#presenter-display-dialog",), ("presenter-display-form",), scale=.86),
 ]

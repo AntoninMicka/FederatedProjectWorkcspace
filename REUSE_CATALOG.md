@@ -258,6 +258,14 @@ role, Qt nadále zjišťuje fyzické obrazovky, zobrazuje identifikátory a pře
 okna. Nový HTTP endpoint, persistentní nastavení rolí a další UI framework byly
 odmítnuty, protože přiřazení je záměrně jen stavem aktuální presenter relace.
 
+Stejný řez **reuse/adaptuje `git_transfer.transfer`, `transfer_outbox` a
+`DeploymentTargets`** pro webovou stránku přechodového přenosu v nové desktopové
+záložce Federace. Webová vrstva dostává pouze omezený katalog a potvrzený
+tokenovaný výběr; SSH, Git bundle, SQLite outbox a recovery zůstávají v nativní
+vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy federovaných
+projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
+verze, nikoli rozšíření tohoto jednosměrného přenosu.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

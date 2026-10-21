@@ -308,7 +308,8 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(native_action_request(target_url, origin),
                          {'action': 'choose-notebooklm-target', 'nonce': nonce,
                           'operation_id': operation})
-        for action in ('choose-notebooklm-archive', 'choose-project-location'):
+        for action in ('choose-notebooklm-archive', 'choose-project-location',
+                       'federation-transfer-open', 'federation-transfer-start'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
@@ -857,7 +858,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chats-tab"', HTML)
         self.assertNotIn('id="back-projects"', HTML)
         sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
-        labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení']
+        labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení', 'Federace']
         self.assertEqual([label for _, label in sorted(
             (sidebar_tabs.index(f'aria-label="{label}"'), label) for label in labels)], labels)
         self.assertEqual(sidebar_tabs.count('class="sidebar-tab-icon"'), len(labels))
@@ -866,6 +867,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('disabled', sidebar_tabs.split('id="projects-tab"', 1)[1].split('</button>', 1)[0])
         self.assertNotIn('disabled', sidebar_tabs.split('id="chats-tab"', 1)[1].split('</button>', 1)[0])
         self.assertNotIn('disabled', sidebar_tabs.split('id="settings-sidebar-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertIn('hidden', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertNotIn('disabled', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
         for tab in ('todo-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab'):
             self.assertIn('disabled', sidebar_tabs.split(f'id="{tab}"', 1)[1].split('</button>', 1)[0])
         projects = HTML.split('id="sidebar-projects"', 1)[1].split('id="sidebar-chats"', 1)[0]
@@ -886,6 +889,15 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="open-notebooklm-import"', projects)
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
+        self.assertIn('id="sidebar-federation"', HTML)
+        self.assertIn('id="open-federation-transfer"', HTML)
+        self.assertEqual(HTML.count('Přenos veřejného projektu do LXC'), 2)
+        self.assertIn('id="federation-transfer-form"', HTML)
+        self.assertIn('plnohodnotnou správou federace projektů', HTML)
+        self.assertIn("requestNativeAction('federation-transfer-open')", JS)
+        self.assertIn("requestNativeAction('federation-transfer-start')", JS)
+        self.assertIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
+        self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
         self.assertIn('<h2>Výstupy</h2><h3>Prezentace</h3>', HTML)
         self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)
@@ -1143,6 +1155,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("'settings-cms-tab','settings-profile-tab','settings-users-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn("'openai-resource-provider','presenter-fullscreen'", DESKTOP_BOOTSTRAP)
+        self.assertIn("'federation-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("getElementById('project-location-controls').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn('id="project-create-preview"', HTML)
         self.assertIn("requestNativeAction('choose-project-location')", JS)

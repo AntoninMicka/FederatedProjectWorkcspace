@@ -237,7 +237,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="artifacts-tab" role="tab" aria-label="Podklady" aria-controls="sidebar-artifacts" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7M9 16h7"/></svg><span class="sidebar-tab-label" role="tooltip">Podklady</span></button>
 <button id="tools-tab" role="tab" aria-label="Nástroje" aria-controls="sidebar-tools" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 3-4-4z"/></svg><span class="sidebar-tab-label" role="tooltip">Nástroje</span></button>
 <button id="presentations-tab" role="tab" aria-label="Výstupy" aria-controls="sidebar-presentations" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9h4v10M10 19V4h4v15M16 19v-7h4v7"/></svg><span class="sidebar-tab-label" role="tooltip">Výstupy</span></button>
-<button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button></div>
+<button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button>
+<button id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.7 10.7 6.6-3.4M8.7 13.3l6.6 3.4"/></svg><span class="sidebar-tab-label" role="tooltip">Federace</span></button></div>
 <div id="sidebar-projects" role="tabpanel" aria-labelledby="projects-tab" tabindex="0">
 <h2>Projekty</h2><div class="sidebar-project-primary-actions">
 <button id="sidebar-create-project" type="button" aria-label="Nový projekt"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 12v5M9.5 14.5h5"/></svg><span class="project-action-label" role="tooltip">Nový projekt</span></button>
@@ -273,7 +274,13 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-users-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-users-tab">Uživatelé</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Uživatelé">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-users-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-federation-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-federation-tab">Federace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Federace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-federation-tab">Otevřít</button></div></details></li>
-</ul></div></div>
+</ul></div>
+<div id="sidebar-federation" role="tabpanel" aria-labelledby="federation-tab" tabindex="0" hidden>
+<h2>Federace</h2><p>V této verzi jsou dostupné jednotlivé přechodové nástroje.</p>
+<ul id="sidebar-federation-list" aria-label="Nástroje federace"><li class="sidebar-list-row">
+<button id="open-federation-transfer" class="sidebar-list-main" type="button">Přenos veřejného projektu do LXC</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce přenosu veřejného projektu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-transfer-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li></ul></div></div>
 <section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
 <button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
 <span class="resource-monitor-heading">Zdroje <small>detail</small></span>
@@ -365,6 +372,25 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
 <button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="create-project-status" role="status"> </p></form></section></div>
+<div id="federation-view" hidden>
+<header><span class="badge">Federace</span><span>Desktopový nástroj</span></header>
+<section class="standalone-form federation-transfer-page"><div class="eyebrow">PŘECHODOVÁ FUNKCE</div>
+<h1>Přenos veřejného projektu do LXC</h1>
+<p>Tato stránka bude v další verzi nahrazena plnohodnotnou správou federace projektů.</p>
+<p>Přenese se celá veřejná Git historie bez credentials, lokálního indexu a journalu. Cíl musí být nový projekt; neveřejná nebo neklasifikovaná historie přenos zastaví.</p>
+<form id="federation-transfer-form">
+<label>Projekt desktopu <select name="project" required></select></label>
+<label>Cílový LXC uzel <select name="target" required></select></label>
+<label>Důvěryhodná veřejná CA LXC <input name="ca" type="text" maxlength="4096" required autocomplete="off"></label>
+<button id="federation-transfer-preview" type="button" disabled>Připravit potvrzení</button>
+<section id="federation-transfer-confirmation" class="creation-preview" hidden><h2>Potvrdit přenos celé veřejné historie</h2>
+<pre id="federation-transfer-details"></pre>
+<p>Existující projekt se nepřepíše. Metadata autorů, názvy projektu a zprávy commitů jsou součástí historie. Nedokončený přenos stejného projektu a uzlu pokračuje s původním bundle a ID operace.</p>
+<label class="confirm"><input id="federation-transfer-confirm" type="checkbox"> Potvrzuji projekt, cílový uzel, veřejnou CA a přenos celé historie.</label>
+<div class="form-actions"><button id="federation-transfer-start" type="submit" disabled>Potvrdit a přenést</button><button id="federation-transfer-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
+<p id="federation-transfer-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-transfer-log" aria-label="Průběh přenosu"></pre>
+</form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
 <button id="notebooklm-import-back" type="button" class="back-button">← Zpět na projekty</button>
@@ -898,9 +924,9 @@ button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-
 .trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash-list{margin-top:8px}.project-trash-page{margin-top:18px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
-#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
-#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button,#sidebar-federation-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
+#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover,#sidebar-federation-list button:hover{background:#274154}
 .sidebar-list-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-list-main{min-width:0}.sidebar-list-main[aria-current="true"]{background:#274154!important;border-left:3px solid #79c9ac}.sidebar-item-id{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
 .sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
@@ -922,11 +948,12 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #sidebar-tabs button:disabled{opacity:.42}#sidebar-tabs button:disabled:hover{background:transparent}
 #sidebar-project-tools{flex:1;min-height:0;display:grid;grid-template-columns:51px minmax(0,1fr);column-gap:10px;overflow:hidden}
 #sidebar-project-tools>[role="tabpanel"]:not([hidden]){grid-column:2;grid-row:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list{flex:1}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list{flex:1}
+#sidebar-settings-list{flex:1}
 #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
 #sidebar-settings-list button{display:block;width:100%;padding:10px 8px;text-align:left;background:transparent;color:#dce8f1;font-size:13px}#sidebar-settings-list button:hover{background:#274154}#sidebar-settings-list li[hidden]{display:none}
-#sidebar-tools h2,#sidebar-presentations h2,#sidebar-settings h2{margin-bottom:4px}#sidebar-presentations h3{font-size:13px;color:#dce8f1;margin:8px 0 0}
+#sidebar-tools h2,#sidebar-presentations h2,#sidebar-settings h2,#sidebar-federation h2{margin-bottom:4px}#sidebar-presentations h3{font-size:13px;color:#dce8f1;margin:8px 0 0}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
 #todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%;padding:7px 5px;border-radius:7px;cursor:pointer}.todo-label:hover,.todo-label:focus-visible{background:#274154;outline:none}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
@@ -960,6 +987,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
+.federation-transfer-page{max-width:860px}.federation-transfer-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input{display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}#federation-transfer-log:empty{display:none}
 @media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
@@ -1006,7 +1034,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#project-create-view,#project-trash-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#project-create-view,#project-trash-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view,#federation-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -1646,8 +1674,16 @@ workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
+let federationTransferRunning=false;
 function selectSidebarTab(selected){
  if(!selected || selected.disabled)return;
+ if(federationTransferRunning&&selected.id!=='federation-tab'){
+  document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return;
+ }
+ if(selected.id!=='federation-tab'&&!document.querySelector('#federation-view').hidden){
+  document.querySelector('#federation-view').hidden=true;
+  if(activeProject)projectView.hidden=false;else document.querySelector('#project-home').hidden=false;
+ }
  for(const tab of sidebarTabs){
   const active=tab===selected;
   tab.setAttribute('aria-selected',String(active));tab.tabIndex=active ? 0 : -1;
@@ -2025,7 +2061,11 @@ function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
  return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
 }
-function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor();}
+function canLeaveFederationTransfer(){
+ if(!federationTransferRunning)return true;
+ document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;
+}
+function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTransfer();}
 function fillArtifactEditor(doc,isNew=false){
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
@@ -2345,6 +2385,87 @@ let notebookArchiveCapability=null,notebookTargetCapability=null;
 function requestNativeAction(action,payload={}){
  const fields=new URLSearchParams({...payload,nonce:crypto.randomUUID()});location.hash=`${action}?${fields}`;
 }
+const federationView=document.querySelector('#federation-view');
+const federationTransferForm=document.querySelector('#federation-transfer-form');
+const federationTransferStatus=document.querySelector('#federation-transfer-status');
+const federationTransferLog=document.querySelector('#federation-transfer-log');
+const federationTransferConfirmation=document.querySelector('#federation-transfer-confirmation');
+let federationTransferConfiguration=null;
+function resetFederationTransferPreview(message=''){
+ federationTransferConfirmation.hidden=true;document.querySelector('#federation-transfer-confirm').checked=false;
+ document.querySelector('#federation-transfer-start').disabled=true;
+ if(message)federationTransferStatus.textContent=message;
+}
+function federationTransferRequest(){
+ if(!federationTransferConfiguration)return null;
+ return {token:federationTransferConfiguration.token,
+  project:Number(federationTransferForm.elements.project.value),
+  target:Number(federationTransferForm.elements.target.value),
+  ca:federationTransferForm.elements.ca.value.trim(),
+  confirmed:document.querySelector('#federation-transfer-confirm').checked};
+}
+function setFederationTransferLocked(locked){
+ for(const field of federationTransferForm.querySelectorAll('select,input,#federation-transfer-preview,#federation-transfer-cancel'))field.disabled=locked;
+}
+function showFederationTransferConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.projects)||!Array.isArray(configuration.targets)){
+  setFederationTransferError('Nativní vrstva neposkytla platný seznam pro přenos.');return;
+ }
+ federationTransferConfiguration=configuration;federationTransferLog.textContent='';federationTransferRunning=false;setFederationTransferLocked(false);
+ const projects=federationTransferForm.elements.project,targets=federationTransferForm.elements.target;
+ projects.replaceChildren();targets.replaceChildren();
+ for(const item of configuration.projects)projects.append(new Option(item.title,item.index));
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ const available=Boolean(configuration.projects.length&&configuration.targets.length);
+ document.querySelector('#federation-transfer-preview').disabled=!available;
+ if(configuration.targets.length)federationTransferForm.elements.ca.value=configuration.targets[0].ca;
+ else federationTransferForm.elements.ca.value='';
+ resetFederationTransferPreview(available?'Vyberte projekt a cílový uzel.':'Přenos vyžaduje dostupný projekt a zapamatovaný LXC uzel.');
+}
+function setFederationTransferProgress(message){
+ federationTransferRunning=true;setFederationTransferLocked(true);federationTransferStatus.textContent=message;
+}
+function setFederationTransferError(message){
+ federationTransferRunning=false;setFederationTransferLocked(false);
+ federationTransferStatus.textContent=message||'Přenos nelze připravit nebo spustit.';
+ if(federationTransferConfiguration)document.querySelector('#federation-transfer-preview').disabled=false;
+}
+function finishFederationTransfer(success,message){
+ federationTransferRunning=false;federationTransferStatus.textContent=success?'Přenos byl dokončen.':'Přenos nebyl dokončen; lze zopakovat stejnou operaci.';
+ federationTransferLog.textContent=message;document.querySelector('#federation-transfer-start').disabled=false;
+ document.querySelector('#federation-transfer-start').textContent='Zopakovat stejnou operaci';
+}
+function openFederationTransfer(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
+ federationTransferLog.textContent='';resetFederationTransferPreview('Načítám projekty a federační uzly…');
+ requestNativeAction('federation-transfer-open');
+}
+document.querySelector('#open-federation-transfer').addEventListener('click',openFederationTransfer);
+document.querySelector('#open-federation-transfer-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationTransfer();});
+federationTransferForm.elements.target.addEventListener('change',event=>{
+ const target=federationTransferConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ federationTransferForm.elements.ca.value=target?.ca||'';resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.');
+});
+federationTransferForm.elements.project.addEventListener('change',()=>resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.'));
+federationTransferForm.elements.ca.addEventListener('input',()=>resetFederationTransferPreview('Veřejná CA se změnila; připravte nové potvrzení.'));
+document.querySelector('#federation-transfer-preview').addEventListener('click',()=>{
+ const request=federationTransferRequest();if(!request||!request.ca){federationTransferStatus.textContent='Vyberte projekt, LXC a jeho veřejnou CA.';return;}
+ const project=federationTransferConfiguration.projects.find(item=>item.index===request.project);
+ const target=federationTransferConfiguration.targets.find(item=>item.index===request.target);
+ document.querySelector('#federation-transfer-details').textContent=`Projekt: ${project.title}\nID projektu: ${project.id}\nLXC: ${target.container}\nSSH: ${target.host}\nVeřejná CA: ${request.ca}`;
+ federationTransferConfirmation.hidden=false;federationTransferStatus.textContent='Zkontrolujte přesný rozsah a potvrďte přenos.';
+});
+document.querySelector('#federation-transfer-confirm').addEventListener('change',event=>{document.querySelector('#federation-transfer-start').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-transfer-cancel').addEventListener('click',()=>resetFederationTransferPreview('Náhled byl zrušen.'));
+federationTransferForm.addEventListener('submit',event=>{
+ event.preventDefault();const request=federationTransferRequest();if(!request?.confirmed)return;
+ federationTransferRunning=true;setFederationTransferLocked(true);document.querySelector('#federation-transfer-start').disabled=true;
+ federationTransferStatus.textContent='Předávám potvrzenou operaci nativní vrstvě…';requestNativeAction('federation-transfer-start');
+});
 function openNotebookLMImport(){
  if(!canLeaveWorkspaceEditors())return;
  clearProject();
@@ -4660,6 +4781,7 @@ DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
 document.querySelector('#presenter-fullscreen').hidden=false;
+document.querySelector('#federation-tab').hidden=false;
 """
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = SLIDE_JS + '''

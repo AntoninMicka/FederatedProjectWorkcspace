@@ -38,7 +38,8 @@ PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
 NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
                             'export-presentation-pdf', 'presenter-displays-identify',
-                            'presenter-displays-apply', 'presenter-displays-cancel'})
+                            'presenter-displays-apply', 'presenter-displays-cancel',
+                            'federation-transfer-open', 'federation-transfer-start'})
 
 
 def presentation_pdf_paths(target, nonce):
@@ -245,7 +246,7 @@ def main():
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import DeploymentDialog
         from spikes.desktop_network import NetworkDialog
-        from spikes.desktop_transfer import TransferDialog
+        from spikes.desktop_transfer import FederationTransfer
         from spikes.network_backend import NetworkBackend
     except ImportError as exc:
         print('Nelze načíst interní modul desktopu: ' + str(exc), file=sys.stderr)
@@ -361,6 +362,15 @@ def main():
             closed_callback=lambda: page.runJavaScript('closePresenterDisplayConfiguration()'),
             error_callback=lambda message: page.runJavaScript(
                 'setPresenterDisplayNativeError(' + json.dumps(message) + ')'))
+        federation_transfer = FederationTransfer(
+            node_path, parent=window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showFederationTransferConfiguration(' + json.dumps(result) + ')'),
+            progress_callback=lambda message: page.runJavaScript(
+                'setFederationTransferProgress(' + json.dumps(message) + ')'),
+            finished_callback=lambda success, message: page.runJavaScript(
+                'finishFederationTransfer(' + json.dumps(bool(success)) + ',' +
+                json.dumps(message) + ')'))
         public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
@@ -455,17 +465,6 @@ def main():
             dialog.deleteLater()
         network_button.clicked.connect(network_settings)
         editor_toolbar.addWidget(network_button)
-        transfer_button = QPushButton('Přenést veřejný projekt…')
-        def transfer_project():
-            if controller.busy:
-                return
-            dialog = TransferDialog(node_path, window)
-            dialog.exec()
-            if dialog.worker:
-                dialog.worker.wait()
-            dialog.deleteLater()
-        transfer_button.clicked.connect(transfer_project)
-        editor_toolbar.addWidget(transfer_button)
         def edit_presentation():
             if controller.busy:
                 return
@@ -570,6 +569,20 @@ def main():
                     displays.configure()
             elif action == 'presenter-displays-cancel':
                 displays.cancel_configuration()
+            elif action == 'federation-transfer-open':
+                try:
+                    federation_transfer.open()
+                except (ValueError, OSError) as exc:
+                    page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
+            elif action == 'federation-transfer-start':
+                def start_federation_transfer(raw_request):
+                    try:
+                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
+                        federation_transfer.start(payload)
+                    except (ValueError, OSError, json.JSONDecodeError) as exc:
+                        page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
+                page.runJavaScript('JSON.stringify(federationTransferRequest())', 0,
+                                   start_federation_transfer)
             elif action == 'export-presentation-pdf':
                 selected = presentation_pdf_targets.get(request['nonce'])
                 if selected is None:
@@ -757,6 +770,20 @@ def main():
                   window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
+                    const federationTab=document.querySelector('#federation-tab');
+                    const federationItem=document.querySelector('#open-federation-transfer');
+                    const projectsTab=document.querySelector('#projects-tab');
+                    if(!window.federationTransferSmokeOpened){
+                      if(federationTab.hidden || !federationItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
+                      window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
+                    }
+                    if(!window.federationTransferSmokeChecked){
+                      const form=document.querySelector('#federation-transfer-form');
+                      if(document.querySelector('#federation-view').hidden || form.elements.project.options.length<1 ||
+                         !document.querySelector('.federation-transfer-page').textContent.includes('plnohodnotnou správou federace projektů') ||
+                         document.querySelector('#federation-transfer-status').textContent.includes('Načítám'))return null;
+                      window.federationTransferSmokeChecked=true;projectsTab.click();return null;
+                    }
                     const settingsTab=document.querySelector('#settings-sidebar-tab');
                     const monitor=document.querySelector('#resource-monitor-open');
                     const monitorDialog=document.querySelector('#resource-monitor-dialog');
@@ -893,6 +920,9 @@ def main():
                   }else if(todoRows.length) return null;
                   window.smokeSidebarStage='todo-content';
                   todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
+                  const federationTab=document.querySelector('#federation-tab');
+                  if(document.querySelector('#sidebar-federation').hidden || document.activeElement!==federationTab) return null;
+                  federationTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
                   if(document.querySelector('#sidebar-settings').hidden || document.activeElement!==document.querySelector('#settings-sidebar-tab')) return null;
                   window.smokeSidebarStage='end';
                   if(!window.sidebarReloaded){
@@ -1084,6 +1114,7 @@ def main():
             QTimer.singleShot(0, controller.recover)
         result = app.exec()
         controller.wait()
+        federation_transfer.wait()
         view.closing = True
         window.close()
         # Destroy pages before their off-the-record profile.
