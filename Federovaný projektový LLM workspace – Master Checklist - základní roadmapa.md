@@ -835,13 +835,19 @@ nenahrazují.
   desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
   UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
   [WORK_LOG](WORK_LOG.md).
-- [ ] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
+- [x] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
   obrazovky a prioritní průchody a podle průběžných uživatelských rozhodnutí
   provést vizuální facelift a zjednodušení ovládání. Scope se předem nezamyká;
   po vymezení uceleného reviewovatelného řezu se zaznamenají jeho hranice a
   akceptace pro vlastní feature větev/PR. Nevytvářet konkurenční redesign a
   zachovat jeden sdílený web/desktop frontend, mobilní chování, klávesnicovou
-  přístupnost a stávající bezpečnostní a recovery hranice.
+  přístupnost a stávající bezpečnostní a recovery hranice. Uživatel rozsah
+  akceptoval 2026-10-21; evidence je ve [WORK_LOG](WORK_LOG.md). Doručení PR je
+  samostatný dosud neuzavřený stav.
+- [ ] **UX-FACELIFT-02:** v budoucím samostatném kole uživatelsky vybrat a
+  doladit zbývající stránky nad novou inventurou skutečného UI. Jde o
+  odloženou samostatnou feature v BACKLOGu, nikoli znovuotevření akceptovaného
+  UX-FACELIFT-01.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 

@@ -138,7 +138,7 @@ class FederationNetworkTests(unittest.TestCase):
         administration = Mock()
         administration.request.return_value = {'peers': [{
             'id': self.targets[0]['node_id'], 'trust': 'approved',
-            'fingerprint': self.targets[0]['fingerprint'], 'endpoint': self.targets[0]['endpoint']}]} 
+            'fingerprint': self.targets[0]['fingerprint'], 'endpoint': self.targets[0]['endpoint']}]}
         with patch('spikes.desktop_network.NetworkWorker', WorkerStub), \
              patch('spikes.desktop_network.Administration', return_value=administration), \
              patch('spikes.desktop_network.check_peer', return_value='Spojení ověřeno') as probe:
