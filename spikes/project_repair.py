@@ -4,6 +4,7 @@
 from contextlib import closing, contextmanager
 import fcntl
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -13,8 +14,10 @@ import subprocess
 import time
 
 from spikes.configuration import parse_node, parse_project, read_config
-from spikes.metadata import MAX_METADATA, safe_path, uuid, validate_snapshot
+from spikes.journal import Journal
+from spikes.metadata import MAX_METADATA, require, safe_path, uuid, validate_snapshot
 from spikes.storage import Git, Index, projection
+from spikes.workspace import Workspace
 
 
 SCHEMA_VERSION = 1
@@ -343,7 +346,7 @@ class ProjectDiagnostics:
             add('index-invalid', 'index',
                 'Index má poškozené nebo nerozpoznané schéma či obsah.')
 
-    def check(self, project_id):
+    def _check(self, project_id, *, lock_held=False):
         uuid(project_id)
         findings = []
 
@@ -369,7 +372,7 @@ class ProjectDiagnostics:
                 else 'Registrace projektů je neplatná nebo ji nelze bezpečně přečíst.')
 
         before = self._fingerprint(binding)
-        head = files = entities = None
+        head = files = entities = intent = None
         root_ok = state_ok = git_ok = project_ok = journal_ok = False
         writer_busy = False
         if binding is not None:
@@ -404,11 +407,19 @@ class ProjectDiagnostics:
                 state_ok = False
             if state_ok:
                 try:
-                    writer_busy = self._writer_busy(state / 'writer.lock')
-                    if writer_busy:
-                        add('writer-busy', 'consistency',
-                            'Projekt právě používá jiná zapisující operace.',
-                            action='none')
+                    lock_path = state / 'writer.lock'
+                    if not os.path.lexists(lock_path):
+                        add('state-unsafe', 'filesystem',
+                            'Lokální stav neobsahuje existující bezpečný writer lock.')
+                        state_ok = False
+                    elif not self._safe_state_file(lock_path):
+                        raise ValueError('unsafe writer lock')
+                    elif not lock_held:
+                        writer_busy = self._writer_busy(lock_path)
+                        if writer_busy:
+                            add('writer-busy', 'consistency',
+                                'Projekt právě používá jiná zapisující operace.',
+                                action='none')
                 except (OSError, ValueError):
                     add('state-unsafe', 'filesystem',
                         'Writer lock projektu nemá bezpečný typ, vlastníka nebo práva.')
@@ -505,7 +516,6 @@ class ProjectDiagnostics:
                     add('project-config-invalid', 'project',
                         'Committed projektová konfigurace je neplatná nebo ji nelze přečíst.')
 
-            intent = None
             if state_ok and not writer_busy:
                 journal_ok, intent = self._inspect_journal(root, state, add)
                 if journal_ok and project_ok and intent is not None \
@@ -534,6 +544,245 @@ class ProjectDiagnostics:
             'manual': 'Projekt vyžaduje ruční kontrolu; automatická oprava není povolená.',
             'retry': 'Stav není stabilní; kontrolu zopakujte po dokončení jiné operace.',
         }[status]
-        return {'schema_version': SCHEMA_VERSION, 'project_id': project_id,
-                'status': status, 'summary': summary,
-                'findings': findings, 'check_token': token}
+        report = {'schema_version': SCHEMA_VERSION, 'project_id': project_id,
+                  'status': status, 'summary': summary,
+                  'findings': findings, 'check_token': token}
+        return report, {'binding': binding, 'head': head, 'intent': intent}
+
+    def check(self, project_id):
+        report, _ = self._check(project_id)
+        return report
+
+
+class ProjectRepairActions:
+    """Preview and confirm the two bounded repairs accepted by ADR 0035."""
+
+    ACTIONS = {'rebuild-index', 'resume-operation'}
+
+    def __init__(self, node_path, *, timeout=30):
+        self.diagnostics = ProjectDiagnostics(node_path, timeout=timeout)
+        self._previews = {}
+
+    @staticmethod
+    def _allowed(report, action):
+        return (report['status'] == 'repairable'
+                and len(report['findings']) == 1
+                and report['findings'][0]['action'] == action)
+
+    @staticmethod
+    def _plan_digest(plan):
+        return _digest({key: value for key, value in plan.items()
+                        if key != 'preview_sha256'})
+
+    def preview(self, request):
+        require(isinstance(request, dict) and set(request) == {
+            'project_id', 'action', 'operation_id', 'check_token'},
+            'Invalid project repair preview request')
+        project_id, action = request['project_id'], request['action']
+        operation_id, check_token = request['operation_id'], request['check_token']
+        uuid(project_id); uuid(operation_id)
+        require(action in self.ACTIONS, 'Unsupported project repair action')
+        require(isinstance(check_token, str) and len(check_token) == 64
+                and all(char in '0123456789abcdef' for char in check_token),
+                'Invalid project repair token')
+        report, context = self.diagnostics._check(project_id)
+        require(hmac.compare_digest(report['check_token'], check_token),
+                'Project changed; run the check again')
+        require(self._allowed(report, action),
+                'The checked project does not permit this repair')
+        intent = context['intent'] or {'operation_id': None,
+                                       'pending_sha256': _digest([])}
+        require(operation_id != intent['operation_id'],
+                'Repair operation ID must differ from the recovered operation')
+        descriptions = {
+            'rebuild-index': (
+                'index',
+                'Atomicky znovu sestaví pouze odvozený index z validovaného HEAD.',
+                'Pád ponechá starou nebo novou celou SQLite transakci; opakování '
+                'ověří výsledek proti stejnému commitu.'),
+            'resume-operation': (
+                'journal',
+                'Pokračuje pouze v přesném nedokončeném intentu stávajícího journalu.',
+                'Původní Workspace nebo Journal recovery zachová intent při konfliktu; '
+                'opakování načte trvalý receipt.'),
+        }
+        layer, effect, recovery = descriptions[action]
+        plan = {
+            'schema_version': 1,
+            'project_id': project_id,
+            'action': action,
+            'operation_id': operation_id,
+            'check_token': check_token,
+            'expected_head': context['head'],
+            'intent_operation_id': intent['operation_id'],
+            'pending_sha256': intent['pending_sha256'],
+            'layer': layer,
+            'effect': effect,
+            'preconditions': [
+                'Registrace a bezpečnost cest se nezměnily.',
+                'HEAD, pracovní strom, journal a index odpovídají kontrole.',
+                'Writer lock je volný a stále patří tomuto projektu.',
+            ],
+            'recovery': recovery,
+        }
+        plan['preview_sha256'] = self._plan_digest(plan)
+        self._previews[operation_id] = dict(plan)
+        return plan
+
+    @staticmethod
+    def _existing(db, operation_id, request_digest):
+        row = db.execute('SELECT record,done FROM operations WHERE id=?',
+                         (operation_id,)).fetchone()
+        if row is None:
+            return None
+        record = json.loads(row[0])
+        require(row[1] == 1 and record.get('kind') == 'project-repair'
+                and record.get('request_digest') == request_digest,
+                'Operation ID belongs to another operation')
+        return record
+
+    @staticmethod
+    def _store(db, receipt):
+        db.execute('INSERT INTO operations(id,record,done) VALUES (?,?,1)',
+                   (receipt['operation_id'], _canonical(receipt)))
+
+    def receipt(self, project_id, operation_id):
+        """Return one durable repair receipt without replaying its effect."""
+        uuid(project_id); uuid(operation_id)
+        _, context = self.diagnostics._check(project_id)
+        binding = context['binding']
+        require(binding is not None, 'Project registration changed')
+        journal = Journal.attach(binding['root'], binding['state_dir'], blocking=False)
+        with journal.lock(), journal.connect() as db:
+            row = db.execute('SELECT record,done FROM operations WHERE id=?',
+                             (operation_id,)).fetchone()
+            if row is None:
+                return None
+            record = json.loads(row[0])
+            require(row[1] == 1 and record.get('kind') == 'project-repair'
+                    and record.get('project_id') == project_id,
+                    'Operation ID does not identify a repair receipt')
+            return record
+
+    @staticmethod
+    def _receipt(plan, commit_id, *, reconciled=False):
+        return {
+            'schema_version': 1,
+            'kind': 'project-repair',
+            'operation_id': plan['operation_id'],
+            'project_id': plan['project_id'],
+            'action': plan['action'],
+            'request_digest': plan['preview_sha256'],
+            'check_token': plan['check_token'],
+            'commit_id': commit_id,
+            'intent_operation_id': plan['intent_operation_id'],
+            'pending_sha256': plan['pending_sha256'],
+            'reconciled': reconciled,
+            'state': 'completed',
+        }
+
+    @staticmethod
+    def _intent_completed(db, operation_id):
+        if operation_id is None:
+            return False
+        row = db.execute('SELECT record,done FROM operations WHERE id=?',
+                         (operation_id,)).fetchone()
+        if row is None or row[1] != 1:
+            return False
+        try:
+            record = json.loads(row[0])
+            return record.get('operation_id') == operation_id
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+    def _reconciled(self, db, plan, report, context):
+        """Recognize an effect completed before its wrapper receipt was stored."""
+        intent = context['intent'] or {}
+        empty = intent.get('operation_id') is None \
+            and intent.get('pending_sha256') == _digest([])
+        if plan['action'] == 'rebuild-index':
+            completed = (report['status'] == 'healthy'
+                         and context['head'] == plan['expected_head'] and empty)
+        else:
+            completed = (plan['intent_operation_id'] is not None
+                         and self._intent_completed(db, plan['intent_operation_id'])
+                         and empty)
+        if not completed:
+            return None
+        receipt = self._receipt(plan, context['head'], reconciled=True)
+        self._store(db, receipt)
+        db.commit()
+        return receipt
+
+    def confirm(self, plan, *, checkpoint=lambda stage: None):
+        require(isinstance(plan, dict) and set(plan) == {
+            'schema_version', 'project_id', 'action', 'operation_id', 'check_token',
+            'expected_head', 'intent_operation_id', 'pending_sha256', 'layer',
+            'effect', 'preconditions', 'recovery', 'preview_sha256'},
+            'Invalid project repair plan')
+        issued = self._previews.get(plan.get('operation_id'))
+        require(issued is not None and issued == plan
+                and hmac.compare_digest(plan['preview_sha256'],
+                                        self._plan_digest(plan)),
+                'Repair preview was not issued by this backend or changed')
+
+        # Resolve the existing lock from a stable read; the same token is checked
+        # again after acquiring it, before any repair object may initialize state.
+        report, context = self.diagnostics._check(plan['project_id'])
+        binding = context['binding']
+        require(binding is not None, 'Project registration changed')
+        journal = Journal.attach(binding['root'], binding['state_dir'], blocking=False)
+        with journal.lock(), journal.connect() as db:
+            existing = self._existing(db, plan['operation_id'],
+                                      plan['preview_sha256'])
+            if existing is not None:
+                final = self.diagnostics._check(plan['project_id'], lock_held=True)[0]
+                return {'receipt': existing, 'report': final}
+
+            current, locked = self.diagnostics._check(plan['project_id'],
+                                                       lock_held=True)
+            if not hmac.compare_digest(current['check_token'], plan['check_token']):
+                receipt = self._reconciled(db, plan, current, locked)
+                require(receipt is not None,
+                        'Project changed after preview; run the check again')
+                final = self.diagnostics._check(plan['project_id'],
+                                                 lock_held=True)[0]
+                return {'receipt': receipt, 'report': final}
+            require(self._allowed(current, plan['action'])
+                    and locked['head'] == plan['expected_head'],
+                    'Repair preconditions changed; run the check again')
+
+            if plan['action'] == 'rebuild-index':
+                workspace = Workspace.attach(binding['root'], binding['state_dir'],
+                                             blocking=False,
+                                             deadline=time.monotonic() + self.diagnostics.timeout,
+                                             index=True)
+                commit = workspace.index.rebuild(workspace.git, checkpoint=checkpoint)
+                require(commit == plan['expected_head'],
+                        'Project changed during index rebuild')
+                checkpoint('effect-completed')
+                receipt = self._receipt(plan, commit)
+                self._store(db, receipt)
+                db.commit()
+            elif plan['intent_operation_id'] is not None:
+                workspace = Workspace.attach(binding['root'], binding['state_dir'],
+                                             blocking=False,
+                                             deadline=time.monotonic() + self.diagnostics.timeout,
+                                             index=True)
+                row = db.execute('SELECT record FROM operations WHERE id=? AND done=0',
+                                 (plan['intent_operation_id'],)).fetchone()
+                require(row is not None, 'Workspace recovery intent changed')
+                workspace_receipt = workspace._recover(db, json.loads(row[0]), checkpoint)
+                receipt = self._receipt(plan, workspace_receipt['commit_id'])
+                self._store(db, receipt)
+                db.commit()
+            else:
+                receipt = self._receipt(plan, locked['head'])
+
+                def complete(connection):
+                    self._store(connection, receipt)
+
+                journal._recover(db, checkpoint, complete=complete)
+
+            final = self.diagnostics._check(plan['project_id'], lock_held=True)[0]
+            return {'receipt': receipt, 'report': final}

@@ -16,8 +16,9 @@ from uuid import uuid4
 
 from spikes.configuration import parse_node, read_config
 from spikes.project_creation import ProjectCreation
-from spikes.project_repair import ProjectDiagnostics
+from spikes.project_repair import ProjectDiagnostics, ProjectRepairActions
 from spikes.storage import Git
+from spikes.workspace import Workspace
 from tests.fixtures import ENTITY, encoded, markdown, metadata
 
 
@@ -226,6 +227,137 @@ class ProjectDiagnosticsTests(unittest.TestCase):
         result = self.service.check(self.project_id)
         self.assertIn('state-unsafe', self.codes(result))
         self.assertEqual(result['status'], 'manual')
+
+
+class ProjectRepairActionsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='project repair actions ')
+        self.addCleanup(self.temp.cleanup)
+        self.base = Path(self.temp.name)
+        self.node = self.base / 'node.json'
+        self.root = self.base / 'project'
+        created = ProjectCreation(self.node).create(
+            'Repair fixture', self.root, str(uuid4()))
+        self.project_id = created['id']
+        binding = parse_node(read_config(self.node), location=self.node)['projects'][0]
+        self.state = Path(binding['state_dir'])
+        self.actions = ProjectRepairActions(self.node)
+
+    def plan(self, action):
+        report = self.actions.diagnostics.check(self.project_id)
+        return self.actions.preview({
+            'project_id': self.project_id,
+            'action': action,
+            'operation_id': str(uuid4()),
+            'check_token': report['check_token'],
+        })
+
+    def test_rebuild_preview_is_read_only_and_confirm_retry_has_one_receipt(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        before = filesystem_snapshot(self.node, self.root, self.state)
+        plan = self.plan('rebuild-index')
+        self.assertEqual(filesystem_snapshot(self.node, self.root, self.state), before)
+        self.assertEqual(plan['layer'], 'index')
+        self.assertNotIn(str(self.base), json.dumps(plan))
+
+        first = self.actions.confirm(plan)
+        second = self.actions.confirm(plan)
+        self.assertEqual(first, second)
+        self.assertEqual(first['receipt']['action'], 'rebuild-index')
+        self.assertEqual(first['report']['status'], 'healthy')
+        self.assertEqual(ProjectRepairActions(self.node).receipt(
+            self.project_id, plan['operation_id']), first['receipt'])
+        with closing(sqlite3.connect(self.state / 'journal.sqlite')) as db:
+            self.assertEqual(db.execute(
+                'SELECT count(*) FROM operations WHERE id=? AND done=1',
+                (plan['operation_id'],)).fetchone(), (1,))
+
+    def test_changed_state_and_tampered_plan_are_rejected_before_effect(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        plan = self.plan('rebuild-index')
+        changed = dict(plan, effect='Jiný účinek')
+        with self.assertRaises(ValueError):
+            self.actions.confirm(changed)
+        self.assertFalse(index.exists())
+
+        (self.root / 'foreign.txt').write_text('user work')
+        with self.assertRaisesRegex(ValueError, 'changed after preview'):
+            self.actions.confirm(plan)
+        self.assertFalse(index.exists())
+
+    def test_rebuild_lost_response_is_reconciled_without_second_effect(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        plan = self.plan('rebuild-index')
+
+        def lost(stage):
+            if stage == 'effect-completed':
+                raise RuntimeError('lost response')
+
+        with self.assertRaisesRegex(RuntimeError, 'lost response'):
+            self.actions.confirm(plan, checkpoint=lost)
+        first_bytes = index.read_bytes()
+        result = self.actions.confirm(plan)
+        self.assertTrue(result['receipt']['reconciled'])
+        self.assertEqual(result['report']['status'], 'healthy')
+        self.assertEqual(index.read_bytes(), first_bytes)
+
+    def test_standalone_journal_recovery_stores_receipt_with_clear(self):
+        journal = self.state / 'journal.sqlite'
+        relative = f'artifacts/{ENTITY}/document.md'
+        content = markdown(metadata('Recovered', ENTITY))
+        with closing(sqlite3.connect(journal)) as db, db:
+            db.execute('INSERT INTO pending VALUES (?,?,?)',
+                       (relative, None, content))
+        plan = self.plan('resume-operation')
+        self.assertIsNone(plan['intent_operation_id'])
+
+        def lost(stage):
+            if stage == 'completed':
+                raise RuntimeError('lost response')
+
+        with self.assertRaisesRegex(RuntimeError, 'lost response'):
+            self.actions.confirm(plan, checkpoint=lost)
+        self.assertEqual((self.root / relative).read_bytes(), content)
+        durable = ProjectRepairActions(self.node).receipt(
+            self.project_id, plan['operation_id'])
+        self.assertIsNotNone(durable)
+        result = self.actions.confirm(plan)
+        self.assertEqual(result['receipt'], durable)
+        self.assertEqual(result['receipt']['action'], 'resume-operation')
+        self.assertFalse(result['receipt']['reconciled'])
+        self.assertEqual(result['report']['status'], 'manual')
+
+    def test_workspace_recovery_lost_response_uses_exact_completed_intent(self):
+        relative = f'artifacts/{ENTITY}/document.md'
+        intent = str(uuid4())
+
+        def stop(stage):
+            if stage == 'prepared':
+                raise RuntimeError('prepared')
+
+        workspace = Workspace(self.root, self.state)
+        with self.assertRaisesRegex(RuntimeError, 'prepared'):
+            workspace.transact(intent, {'fixture': True},
+                lambda _: ({relative: markdown(metadata('Recovered', ENTITY))},
+                           'Repair Test', 'repair@example.invalid', 'Recover fixture'),
+                checkpoint=stop)
+        plan = self.plan('resume-operation')
+        self.assertEqual(plan['intent_operation_id'], intent)
+
+        def lost(stage):
+            if stage == 'completed':
+                raise RuntimeError('lost response')
+
+        with self.assertRaisesRegex(RuntimeError, 'lost response'):
+            self.actions.confirm(plan, checkpoint=lost)
+        result = self.actions.confirm(plan)
+        self.assertTrue(result['receipt']['reconciled'])
+        self.assertEqual(result['receipt']['intent_operation_id'], intent)
+        self.assertEqual(result['report']['status'], 'healthy')
+        self.assertEqual(Git(self.root).run('rev-list', '--count', 'HEAD').stdout.strip(), '2')
 
 
 if __name__ == '__main__':

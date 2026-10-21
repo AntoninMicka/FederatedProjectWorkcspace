@@ -25,10 +25,17 @@ heuristická oprava obsahu, přepis identity a mazání dat jsou mimo rozsah.
   v `spikes/project_repair.py` používá read-only SQLite URI, zakazuje volitelné
   Git locky a před/po kontrole porovnává otisk sledovaného stavu. Rozlišuje
   zdravý, opravitelný, ruční a nestabilní stav bez zveřejnění lokálních cest.
-- [ ] [planned] **UX-PROJECT-REPAIR-02-B — potvrzené opravy a receipt
+- [x] [completed] **UX-PROJECT-REPAIR-02-B — potvrzené opravy a receipt
   (cílová úroveň: implemented).** Revalidovat preview a token pod writer
   lockem, podporovat pouze `rebuild-index` a `resume-operation`, bezpečný retry
   po lost response a následnou úplnou kontrolu. Neznámý stav zůstane `manual`.
+  `ProjectRepairActions` váže náhled na projekt, akci, HEAD, journalový intent a
+  `check_token`; potvrzení znovu kontroluje celý stav pod existujícím
+  neblokujícím writer lockem. Rebuild používá `Index.rebuild`, recovery původní
+  `Workspace`/`Journal` cestu a receipt zůstává v existující tabulce operací.
+  Standalone vyčištění intentu a receipt sdílejí jednu SQLite transakci;
+  dokončený Workspace intent nebo index bez wrapper receipt lze bezpečně
+  rekoncilovat po ztracené odpovědi a vždy následuje nová úplná diagnostika.
 - [ ] [planned] **UX-PROJECT-REPAIR-02-C — desktopové API a sdílené webové UI
   (cílová úroveň: implemented).** Přidat položku do menu nedostupného projektu,
   vrstvený report, přesný náhled účinku a samostatné potvrzení. Endpointy
@@ -74,9 +81,17 @@ heuristická oprava obsahu, přepis identity a mazání dat jsou mimo rozsah.
   2 Qt testy byly očekávaně přeskočeny;
 - `python3 -m py_compile spikes/project_repair.py
   tests/test_project_repair.py` a `git diff --check` — prošlo.
+- `python3 -m unittest tests.test_project_repair tests.test_journal
+  tests.test_workspace tests.test_storage tests.test_index_projection
+  tests.test_spdx` — 51 testů prošlo; zahrnují změněný/tamperovaný plán,
+  restartově čitelný receipt, lost response pro rebuild, standalone journal i
+  Workspace recovery a přesnou vazbu operation ID;
+- `python3 -m unittest discover -s tests` — 680 testů prošlo, 27 bylo
+  přeskočeno; výstup obsahoval existující `ResourceWarning` z mockovaných
+  SQLite spojení, testovací CLI chyby a recovery logy, návratový kód byl 0.
 
-Úplná sada a skutečný Qt WebEngine průchod náleží až závěrečné akceptaci
-úkolu `UX-PROJECT-REPAIR-02-D`, protože dávka zatím nemá opravné API ani UI.
+Úplná sada bude po integraci API/UI zopakována a skutečný Qt WebEngine průchod
+náleží až závěrečné akceptaci úkolu `UX-PROJECT-REPAIR-02-D`.
 
 ## K předání do backlogu
 

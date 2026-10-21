@@ -73,6 +73,22 @@ class Journal:
         os.chmod(self.database, 0o600)
         sync_dir(self.state)
 
+    @classmethod
+    def attach(cls, root, state, *, blocking=True):
+        """Attach to a validated existing journal without initializing any state."""
+        journal = cls.__new__(cls)
+        journal.blocking = blocking
+        journal.root = Path(root).resolve(strict=True)
+        journal.state = Path(state).resolve(strict=True)
+        require(not journal.state.is_relative_to(journal.root)
+                and not journal.root.is_relative_to(journal.state),
+                'Journal directory must be outside project')
+        require(journal.state.stat().st_dev == journal.root.stat().st_dev,
+                'Journal must be on same filesystem')
+        journal.database = journal.state / 'journal.sqlite'
+        require(journal.database.is_file(), 'Existing journal is required')
+        return journal
+
     @contextmanager
     def connect(self):
         db = sqlite3.connect(self.database, timeout=2)
@@ -136,7 +152,7 @@ class Journal:
                     'Workspace recovery required')
             return self._recover(db, checkpoint)
 
-    def _recover(self, db, checkpoint, *, clear=True):
+    def _recover(self, db, checkpoint, *, clear=True, complete=None):
         rows = db.execute('SELECT path, before, after FROM pending ORDER BY path').fetchall()
         if not rows:
             return False
@@ -176,6 +192,8 @@ class Journal:
         checkpoint('applied')
         if clear:
             db.execute('DELETE FROM pending')
+            if complete is not None:
+                complete(db)
             db.commit()
             checkpoint('completed')
         return True

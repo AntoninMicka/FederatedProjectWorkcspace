@@ -28,6 +28,16 @@ class Workspace:
         self.git = Git(self.journal.root, deadline=deadline)
         self.index = Index(self.journal.state / 'index.sqlite')
 
+    @classmethod
+    def attach(cls, root, state, *, blocking=True, deadline=None, index=False):
+        """Attach to existing state without running journal initialization."""
+        workspace = cls.__new__(cls)
+        workspace.journal = Journal.attach(root, state, blocking=blocking)
+        workspace.git = Git(workspace.journal.root, deadline=deadline)
+        workspace.index = (Index(workspace.journal.state / 'index.sqlite')
+                           if index else None)
+        return workspace
+
     def _active(self, db):
         row = db.execute('SELECT record FROM operations WHERE done=0').fetchone()
         return json.loads(row[0]) if row else None
