@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 try:
-    from PySide6.QtWidgets import QApplication, QMainWindow, QComboBox, QDialogButtonBox
+    from PySide6.QtWidgets import QApplication, QMainWindow
     from spikes.desktop_displays import PresenterDisplays
 except ImportError:
     PresenterDisplays = None
@@ -23,7 +23,14 @@ class PresenterDisplayTests(unittest.TestCase):
         self.speaker = QMainWindow()
         self.audience = QMainWindow()
         self.speaker.show()
-        self.manager = PresenterDisplays(self.app, self.speaker, self.audience)
+        self.configurations = []
+        self.closed = []
+        self.errors = []
+        self.manager = PresenterDisplays(
+            self.app, self.speaker, self.audience,
+            configuration_callback=self.configurations.append,
+            closed_callback=lambda: self.closed.append(True),
+            error_callback=self.errors.append)
 
     def tearDown(self):
         self.manager.stop()
@@ -31,36 +38,33 @@ class PresenterDisplayTests(unittest.TestCase):
         self.audience.close()
         self.app.processEvents()
 
-    def controls(self):
-        speaker, audience = self.manager.dialog.findChildren(QComboBox)
-        buttons = self.manager.dialog.findChild(QDialogButtonBox)
-        return speaker, audience, buttons
-
     def test_open_identifies_and_rejects_same_screen(self):
         self.assertFalse(self.audience.isVisible())
         self.manager.open()
-        speaker, audience, buttons = self.controls()
+        configuration = self.configurations[-1]
+        self.assertEqual(configuration['speaker'], 0)
+        self.assertEqual(configuration['audience'], -1)
+        self.assertEqual(len(configuration['screens']), len(self.app.screens()))
+        self.manager.identify_selection(configuration['token'], 0, -1)
         self.assertEqual(len(self.manager.markers), len(self.app.screens()))
         self.assertIn('Displej 1', self.manager.markers[0].text())
-        audience.setCurrentIndex(speaker.currentIndex() + 1)
-        self.assertFalse(buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled())
-        audience.setCurrentIndex(0)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).click()
-        self.assertIsNone(self.manager.dialog)
+        with self.assertRaises(ValueError):
+            self.manager.apply_selection(configuration['token'], 0, 0)
+        self.manager.apply_selection(configuration['token'], 0, -1)
+        self.assertTrue(self.closed)
         self.assertFalse(self.audience.isVisible())
         self.assertTrue(self.speaker.isVisible())
         self.assertEqual(self.manager.markers, [])
 
     def test_change_hides_output_and_reopens_selector_cancel_stays_hidden(self):
         self.manager.open()
-        self.manager.dialog.reject()
         self.audience.show()
         self.manager.changed()
         self.assertFalse(self.audience.isVisible())
         self.assertTrue(self.manager.refresh.isActive())
         self.manager.configure()
-        self.assertIsNotNone(self.manager.dialog)
-        self.manager.dialog.reject()
+        self.assertGreaterEqual(len(self.configurations), 2)
+        self.manager.cancel_configuration()
         self.assertFalse(self.audience.isVisible())
         self.manager.stop()
         self.manager.changed()
@@ -77,18 +81,17 @@ class PresenterDisplayTests(unittest.TestCase):
         self.manager.app = app
         with patch.object(self.manager, 'identify'), patch.object(self.manager, 'place') as place:
             self.manager.open()
-            _, audience, buttons = self.controls()
-            audience.setCurrentIndex(2)
-            buttons.button(QDialogButtonBox.StandardButton.Ok).click()
+            configuration = self.configurations[-1]
+            self.manager.apply_selection(configuration['token'], 0, 1)
             self.assertEqual(place.call_count, 2)
             self.assertEqual(place.call_args.args, (self.audience, extra_screen))
             self.assertEqual(place.call_args.kwargs, {'fullscreen': True})
             app.screens.return_value = [real_screen]
             self.manager.changed()
             self.manager.configure()
-            _, audience, _ = self.controls()
-            self.assertEqual(audience.currentData(), -1)
-            self.assertEqual(audience.count(), 2)
+            configuration = self.configurations[-1]
+            self.assertEqual(configuration['audience'], -1)
+            self.assertEqual(len(configuration['screens']), 1)
 
     def test_stop_cancels_pending_dialog_and_identifiers(self):
         self.manager.open()
@@ -96,6 +99,6 @@ class PresenterDisplayTests(unittest.TestCase):
         self.manager.stop()
         self.assertFalse(self.manager.active)
         self.assertFalse(self.manager.refresh.isActive())
-        self.assertIsNone(self.manager.dialog)
+        self.assertIsNone(self.manager.selection_token)
         self.assertEqual(self.manager.markers, [])
         self.assertFalse(self.audience.isVisible())

@@ -827,7 +827,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section class="presenter-audience" aria-label="Náhled veřejného výstupu"><div class="presenter-kicker">ZMENŠENÝ NÁHLED VEŘEJNÉHO VÝSTUPU</div>
 <div class="presenter-slide-preview" id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
-<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
+<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" hidden disabled>Displeje a role…</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
 <aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p>
 <details id="presenter-gamepad-settings" class="presenter-gamepad-settings"><summary>Nastavení gamepadu</summary>
 <div class="presenter-gamepad-grid"><label class="presenter-gamepad-wide"><input id="presenter-gamepad-enabled" type="checkbox"> Používat gamepad</label>
@@ -845,6 +845,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section><section class="presenter-next-selector"><h3 id="presenter-next-title">Další slide podle plánu</h3><div class="presenter-slide-widget"><div class="presenter-slide-preview" id="presenter-private-preview"></div><section class="presenter-notes"><h2>Poznámky k vybranému slidu</h2><p id="presenter-next-notes"></p></section></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-next-preview" type="button">Zobrazit další slide</button><button id="presenter-show-private" type="button" hidden disabled>Zobrazit publiku</button></section></aside>
 </div>
 <footer class="presenter-footer"><button id="presenter-return" type="button">Návrat na původní slide</button><span>Otázky: <strong id="presenter-question-count">0</strong></span><span>Odložené: <strong>0</strong></span><span id="presenter-blackout-state">Veřejný výstup aktivní</span></footer>
+<dialog id="presenter-display-dialog" aria-labelledby="presenter-display-title"><form id="presenter-display-form" method="dialog">
+<h2 id="presenter-display-title">Displeje a role prezentace</h2>
+<p>Přiřaďte displej řečníkovi a divákům. Ostatní displeje zůstanou nepoužité. Na jednom displeji ponechte veřejný výstup vypnutý.</p>
+<label>Řečník — ovládání a poznámky <select name="speaker" required></select></label>
+<label>Diváci — schválený slide <select name="audience" required></select></label>
+<p id="presenter-display-status" role="status" aria-live="polite"></p>
+<div class="form-actions"><button id="presenter-display-identify" type="button" class="secondary-button">Identifikovat displeje</button><button id="presenter-display-cancel" type="button" class="secondary-button">Zrušit</button><button id="presenter-display-apply" type="submit">Použít role</button></div>
+</form></dialog>
 </div>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
@@ -1030,6 +1038,7 @@ PRESENTER_CSS = '''
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:8px 12px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:3px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:3px;flex:0 0 auto}.presenter-tabs button{font-size:11px;padding:7px 9px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:flex;align-items:center;gap:4px;min-width:110px;margin:0;font-size:11px;color:#627183}.presenter-search input{width:100px;padding:6px;margin:0;border:1px solid #bfcdc9;border-radius:7px}#presenter-tab-status,#presenter-backup-status{display:none}.presenter-private-preview{background:#f4f7fa;padding:8px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:4px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .presenter-gamepad-status{font-size:11px!important;color:#627183;margin:4px 0!important}.presenter-gamepad-selected{outline:3px solid #59b6aa!important;outline-offset:2px}
 .presenter-gamepad-settings{font-size:11px;color:#456276;border:1px solid #dce3e9;border-radius:8px;padding:6px 8px;margin:4px 0}.presenter-gamepad-settings summary{cursor:pointer;font-weight:700;color:#176b60}.presenter-gamepad-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:8px}.presenter-gamepad-grid label{display:flex;align-items:center;justify-content:space-between;gap:6px}.presenter-gamepad-grid input[type="number"]{width:64px;padding:4px}.presenter-gamepad-grid select{min-width:0;max-width:230px;padding:4px}.presenter-gamepad-wide{grid-column:1/-1}.presenter-gamepad-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.presenter-gamepad-actions button{font-size:11px;padding:7px 9px}.presenter-gamepad-settings p{font-size:11px;margin:6px 0!important}.presenter-gamepad-settings output{display:block;overflow-wrap:anywhere;color:#627183}
+#presenter-display-dialog{width:min(620px,calc(100vw - 32px));padding:0;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#presenter-display-dialog::backdrop{background:#07131fa8}#presenter-display-form{padding:22px}#presenter-display-form h2{margin-top:0}#presenter-display-form label{display:block;margin:14px 0;font-weight:650}#presenter-display-form select{display:block;width:100%;margin-top:6px;padding:9px}#presenter-display-status{min-height:24px;color:#8b3030}#presenter-display-form .form-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .presenter-next-selector h3{border-top:0!important;padding-top:0!important;margin:0 0 4px!important}.presenter-next-selector #presenter-next-preview{display:block;min-height:48px;line-height:1.25;cursor:pointer}
 .presenter-speaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden}
 .presenter-panel-head{grid-column:1/-1}
@@ -1173,6 +1182,10 @@ const presenterBackupStatus=document.querySelector('#presenter-backup-status');
 const presenterPrevButton=document.querySelector('#presenter-prev');
 const presenterNextButton=document.querySelector('#presenter-next');
 const presenterFullscreenButton=document.querySelector('#presenter-fullscreen');
+const presenterDisplayDialog=document.querySelector('#presenter-display-dialog');
+const presenterDisplayForm=document.querySelector('#presenter-display-form');
+const presenterDisplayStatus=document.querySelector('#presenter-display-status');
+let presenterDisplayConfiguration=null;
 let presenterSlides=[];
 let presenterBackupsData=[];
 let presenterIndex=0;
@@ -1463,8 +1476,52 @@ presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
 presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
 presenterNextButton.addEventListener('click',()=>movePresenter(1));
-presenterFullscreenButton.textContent='Displeje a role…';
 presenterFullscreenButton.addEventListener('click',()=>{location.hash='presenter-displays';});
+function presenterDisplaySelection(){return presenterDisplayConfiguration?{
+ token:presenterDisplayConfiguration.token,
+ speaker:Number(presenterDisplayForm.elements.speaker.value),
+ audience:Number(presenterDisplayForm.elements.audience.value)}:null;}
+function validatePresenterDisplaySelection(){
+ const selection=presenterDisplaySelection();
+ const same=selection&&selection.speaker===selection.audience;
+ document.querySelector('#presenter-display-apply').disabled=!selection||same;
+ presenterDisplayStatus.textContent=same?'Řečník a diváci musí mít různé displeje.':'';
+}
+function showPresenterDisplayConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.screens)||!configuration.screens.length)return;
+ presenterDisplayConfiguration=configuration;
+ const speaker=presenterDisplayForm.elements.speaker,audience=presenterDisplayForm.elements.audience;
+ speaker.replaceChildren();audience.replaceChildren();
+ const disabled=document.createElement('option');disabled.value='-1';disabled.textContent='Bez promítání';audience.append(disabled);
+ for(const screen of configuration.screens){
+  const left=document.createElement('option'),right=document.createElement('option');
+  left.value=right.value=String(screen.index);left.textContent=right.textContent=screen.label;speaker.append(left);audience.append(right);
+ }
+ speaker.value=String(configuration.speaker);audience.value=String(configuration.audience);
+ presenterDisplayStatus.textContent='Veřejný výstup zůstává skrytý do potvrzení rolí.';
+ validatePresenterDisplaySelection();if(!presenterDisplayDialog.open)presenterDisplayDialog.showModal();
+}
+function closePresenterDisplayConfiguration(){
+ presenterDisplayConfiguration=null;if(presenterDisplayDialog.open)presenterDisplayDialog.close();
+}
+function setPresenterDisplayNativeError(message){
+ presenterDisplayStatus.textContent=message||'Nastavení displejů se nepodařilo použít.';
+ document.querySelector('#presenter-display-apply').disabled=false;
+}
+function requestPresenterDisplayAction(action){
+ const selection=presenterDisplaySelection();if(!selection)return;
+ requestNativeAction(action,selection);
+}
+presenterDisplayForm.elements.speaker.addEventListener('change',validatePresenterDisplaySelection);
+presenterDisplayForm.elements.audience.addEventListener('change',validatePresenterDisplaySelection);
+document.querySelector('#presenter-display-identify').addEventListener('click',()=>requestPresenterDisplayAction('presenter-displays-identify'));
+document.querySelector('#presenter-display-cancel').addEventListener('click',()=>requestNativeAction('presenter-displays-cancel'));
+presenterDisplayDialog.addEventListener('cancel',event=>{event.preventDefault();requestNativeAction('presenter-displays-cancel');});
+presenterDisplayForm.addEventListener('submit',event=>{event.preventDefault();validatePresenterDisplaySelection();
+ if(document.querySelector('#presenter-display-apply').disabled)return;
+ document.querySelector('#presenter-display-apply').disabled=true;presenterDisplayStatus.textContent='Přesouvám okna na potvrzené displeje…';
+ requestPresenterDisplayAction('presenter-displays-apply');
+});
 presenterView.addEventListener('keydown',event=>{
  if(event.repeat || event.target.closest('input,textarea,[contenteditable="true"],[role="tablist"]'))return;
  if(event.key==='ArrowLeft'){event.preventDefault();movePresenter(-1);}
@@ -4602,6 +4659,7 @@ JS += ADMIN_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
+document.querySelector('#presenter-fullscreen').hidden=false;
 """
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = SLIDE_JS + '''

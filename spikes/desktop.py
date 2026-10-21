@@ -37,7 +37,8 @@ from spikes.journal import sync_dir
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
 NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
-                            'export-presentation-pdf'})
+                            'export-presentation-pdf', 'presenter-displays-identify',
+                            'presenter-displays-apply', 'presenter-displays-cancel'})
 
 
 def presentation_pdf_paths(target, nonce):
@@ -133,7 +134,12 @@ def native_action_request(url, origin):
         return None
     try:
         fields = parse_qs(query, strict_parsing=True)
-        expected_fields = {'nonce', 'operation_id'} if action == 'choose-notebooklm-target' else {'nonce'}
+        if action == 'choose-notebooklm-target':
+            expected_fields = {'nonce', 'operation_id'}
+        elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+            expected_fields = {'nonce', 'token', 'speaker', 'audience'}
+        else:
+            expected_fields = {'nonce'}
         if set(fields) != expected_fields or any(len(values) != 1 for values in fields.values()):
             return None
         nonce = fields['nonce'][0]
@@ -145,8 +151,16 @@ def native_action_request(url, origin):
             if str(UUID(operation_id)) != operation_id:
                 return None
             request['operation_id'] = operation_id
+        elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+            token = fields['token'][0]
+            if str(UUID(token)) != token:
+                return None
+            speaker, audience = int(fields['speaker'][0]), int(fields['audience'][0])
+            if not 0 <= speaker <= 63 or not -1 <= audience <= 63:
+                return None
+            request.update(token=token, speaker=speaker, audience=audience)
         return request
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, KeyError):
         return None
 
 
@@ -340,7 +354,13 @@ def main():
         public_window = QMainWindow()
         public_window.setCentralWidget(public_view)
         public_window.setWindowTitle('Veřejné promítání · Projektový workspace')
-        displays = PresenterDisplays(app, window, public_window)
+        displays = PresenterDisplays(
+            app, window, public_window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showPresenterDisplayConfiguration(' + json.dumps(result) + ')'),
+            closed_callback=lambda: page.runJavaScript('closePresenterDisplayConfiguration()'),
+            error_callback=lambda message: page.runJavaScript(
+                'setPresenterDisplayNativeError(' + json.dumps(message) + ')'))
         public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
@@ -540,6 +560,16 @@ def main():
                                 'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
                 page.runJavaScript('JSON.stringify(presentationPdfTargetRequest())', 0,
                                    choose_presentation_pdf)
+            elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+                try:
+                    method = (displays.identify_selection if action == 'presenter-displays-identify'
+                              else displays.apply_selection)
+                    method(request['token'], request['speaker'], request['audience'])
+                except ValueError as exc:
+                    page.runJavaScript('setPresenterDisplayNativeError(' + json.dumps(str(exc)) + ')')
+                    displays.configure()
+            elif action == 'presenter-displays-cancel':
+                displays.cancel_configuration()
             elif action == 'export-presentation-pdf':
                 selected = presentation_pdf_targets.get(request['nonce'])
                 if selected is None:
@@ -751,6 +781,19 @@ def main():
                       if(!profileStatus.textContent.includes('uložen pouze'))return null;
                       window.profileSmokeSaved=true;closeSettings();return null;
                     }
+                    const displayButton=document.querySelector('#presenter-fullscreen');
+                    const displayDialog=document.querySelector('#presenter-display-dialog');
+                    const displayForm=document.querySelector('#presenter-display-form');
+                    if(!window.presenterDisplaySmokeOpened){
+                      if(displayButton.hidden)return null;
+                      window.presenterDisplaySmokeOpened=true;location.hash='presenter-open';return null;
+                    }
+                    if(!window.presenterDisplaySmokeCancelled){
+                      if(!displayDialog.open || displayForm.elements.speaker.options.length<1 ||
+                         displayForm.elements.audience.options.length<2)return null;
+                      window.presenterDisplaySmokeCancelled=true;document.querySelector('#presenter-display-cancel').click();return null;
+                    }
+                    if(displayDialog.open)return null;
                     monitor.click();if(!monitorDialog.open)return null;monitorDialog.close();
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
                        document.querySelector('#sidebar-projects select') ||

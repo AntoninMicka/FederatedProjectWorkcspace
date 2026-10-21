@@ -132,13 +132,8 @@ SHEETS = [
              ("Cílový LXC uzel", "select", ("workspace-m0 — https://…",)),
              ("Důvěryhodná veřejná CA LXC", "text", "")),
             ("Potvrdit a přenést",), notice="Cíl musí být nový projekt; neveřejná historie přenos zastaví.")),
-    sheet(
-        "native-displays", "Nativní dialog — displeje a role prezentace", source="PySide6 desktop", scale=.86,
-        native_html=native_form(
-            "Přiřazení displeje řečníkovi a divákům; ostatní displeje zůstanou nepoužité.",
-            (("Řečník — ovládání a poznámky", "select", ("1 · displej · 1920 × 1080",)),
-             ("Diváci — schválený slide", "select", ("Bez promítání", "2 · displej · 1920 × 1080"))),
-            ("Identifikovat displeje", "Použít role", "Zrušit"))),
+    sheet("presenter-displays", "Presenter — displeje a role",
+          ("#presenter-display-dialog",), ("presenter-display-form",), scale=.86),
 ]
 
 

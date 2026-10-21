@@ -263,6 +263,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("JSON.stringify(presentationPdfExportRequest())", desktop)
         self.assertIn("location.hash=`export-presentation-pdf?nonce=", JS)
         self.assertNotIn("location.hash='presentation-editor'", JS)
+        self.assertIn('id="presenter-display-form"', HTML)
+        self.assertIn("requestPresenterDisplayAction('presenter-displays-identify')", JS)
+        self.assertIn("requestPresenterDisplayAction('presenter-displays-apply')", JS)
+        self.assertIn("requestNativeAction('presenter-displays-cancel')", JS)
+        self.assertIn('showPresenterDisplayConfiguration', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
@@ -309,9 +314,19 @@ class DesktopTests(unittest.TestCase):
                     f'{origin}/#{action}?nonce={nonce}', origin),
                     {'action': action, 'nonce': nonce})
         for action in ('choose-presentation-pdf', 'export-presentation-pdf'):
-            self.assertEqual(native_action_request(
-                f'{origin}/#{action}?nonce={nonce}', origin),
-                {'action': action, 'nonce': nonce})
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?nonce={nonce}', origin),
+                    {'action': action, 'nonce': nonce})
+        token = '7461d65e-cc6c-4daa-8a88-1fe272eddf3d'
+        for action in ('presenter-displays-identify', 'presenter-displays-apply'):
+            url = (f'{origin}/#{action}?token={token}&speaker=0&audience=-1&nonce={nonce}')
+            self.assertEqual(native_action_request(url, origin), {
+                'action': action, 'nonce': nonce, 'token': token, 'speaker': 0, 'audience': -1})
+            self.assertIsNone(native_action_request(url.replace('speaker=0', 'speaker=64'), origin))
+            self.assertIsNone(native_action_request(url.replace(f'token={token}', 'token=bad'), origin))
+        self.assertEqual(native_action_request(
+            f'{origin}/#presenter-displays-cancel?nonce={nonce}', origin),
+            {'action': 'presenter-displays-cancel', 'nonce': nonce})
         for url in (f'{origin}/#choose-notebooklm-target?nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id=invalid&nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id={operation}&nonce=invalid',
@@ -1127,6 +1142,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("'backend-metrics','backend-metrics-indicator','openai-resource-provider'", DESKTOP_BOOTSTRAP)
         self.assertIn("'settings-cms-tab','settings-profile-tab','settings-users-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("'openai-resource-provider','presenter-fullscreen'", DESKTOP_BOOTSTRAP)
         self.assertIn("getElementById('project-location-controls').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn('id="project-create-preview"', HTML)
         self.assertIn("requestNativeAction('choose-project-location')", JS)

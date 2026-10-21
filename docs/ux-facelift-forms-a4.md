@@ -19,9 +19,10 @@ Výstupy `dist/ux-facelift-forms-a4.html` a
 PDF používá A4 na výšku, zmenšenou kopii aktuálního formuláře a tečkovanou
 plochu pro poznámky. Obsahuje společné web/desktop formuláře, průvodce,
 potvrzovací panely, editor prezentace, presenterové ovládání a používané
-nativní dialogy profilu, LXC deploymentu, síťového backendu, Git přenosu a rolí
-displejů. Starý samostatný Qt editor prezentací není součástí balíčku, protože
-produkční desktop používá společný webový editor.
+nativní dialogy LXC deploymentu, síťového backendu a Git přenosu. Profil a role
+displejů už inventura přebírá ze společných webových formulářů. Starý samostatný
+Qt editor prezentací není součástí balíčku, protože produkční desktop používá
+společný webový editor.
 
 Test `tests/test_facelift_forms.py` porovnává inventuru se všemi aktuálními
 HTML `<form id>` a při přidání nezařazeného formuláře selže. Formulářové panely

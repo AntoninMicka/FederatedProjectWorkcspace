@@ -259,7 +259,21 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   desktopový Qt WebEngine ověřil uzamčený vnější panel a oba vnitřní scrolly;
   390px webový Qt WebEngine ověřil limit pěti položek, viditelné overflow a
   jediný scroll celé stránky. Následná celá sada znovu prošla **641 testy**
-  (27 přeskočeno).
+  (27 přeskočeno). Jako druhý nativní dialog byly **Displeje a role prezentace**
+  převedeny do sdíleného webového formuláře presenteru. Formulář je v serverové
+  variantě nedostupný; desktop jej zpřístupní capability bootstrapem a přes
+  přesně allowlistovaný fragmentový most předává pouze index role a jednorázový
+  token konkrétního seznamu obrazovek. Qt dál výhradně zjišťuje fyzické
+  displeje, zobrazuje čtyřsekundové identifikátory a přesouvá okna. Připojení,
+  odpojení nebo změna geometrie token zneplatní, skryje veřejný výstup a obnoví
+  formulář; role zůstávají pouze v paměti presenter relace, takže nevzniká nový
+  persistentní zápis ani recovery hranice. Starý `QDialog` a jeho Qt formulář
+  byly odstraněny, A4 inventura nyní eviduje 19. sdílený formulář. Cílených 10
+  testů mostu, správce displejů a inventury prošlo; skutečný Qt WebEngine otevřel
+  formulář přes nativní presenter akci, ověřil nabídky a zrušil jej přes nový
+  most. Následná celá sada znovu prošla **641 testy** (27 přeskočeno), parser
+  výsledného desktopového JavaScriptu, Python kompilace a `git diff --check`
+  také prošly.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

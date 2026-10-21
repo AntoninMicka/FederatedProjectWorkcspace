@@ -251,6 +251,13 @@ statický seznam jejich skutečných polí, protože jejich vzhled závisí na O
 tématu a displeji. Nový aplikační PDF engine ani runtime závislost byly
 odmítnuty; HTML/PDF v `dist/` jsou ignorované lokální designové build artefakty.
 
+UX-FACELIFT-01-C **reuse sdílené HTML/CSS/JS formuláře a stávající
+`PresenterDisplays`**. Převod rolí displejů adaptuje původní Qt správu
+obrazovek na úzký jednorázově tokenovaný most: web pouze vybírá a validuje
+role, Qt nadále zjišťuje fyzické obrazovky, zobrazuje identifikátory a přesouvá
+okna. Nový HTTP endpoint, persistentní nastavení rolí a další UI framework byly
+odmítnuty, protože přiřazení je záměrně jen stavem aktuální presenter relace.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne
