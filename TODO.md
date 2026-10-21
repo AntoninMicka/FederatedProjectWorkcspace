@@ -51,7 +51,9 @@ souhlasu nad ověřeným kandidátem.
   obou artefaktů a 257 položek manifestu prošel, ale jeho hashe nejsou release
   důkaz: čistý commit `ecacde57` při sběru přesného runtime inventáře odhalil,
   že `python3-segno 1.6.6-2` je architekturně nezávislý balík `all`, nikoli
-  `arm64`. Oprava evidence čeká na navazující commit a nové čisté sestavení.
+  `arm64`. Oprava evidence je commitnutá v `3520a7e`; finální kandidát čeká na
+  nové čisté sestavení, kontrolu a externí záznam hashů tohoto následného
+  commitu.
 - [ ] [planned] **V-11-E — doručení veřejného vydání
   (cílová úroveň: implemented).** Po uživatelském potvrzení kandidáta pushnout
   release větev, otevřít jediný PR `release/0.1.0 -> main`, po jeho merge
