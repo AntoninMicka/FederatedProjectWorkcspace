@@ -24,7 +24,7 @@ reviewed_on = "2026-10-21"
 scope = "Linux source archive and unbundled .deb"
 source_allowlist_files = 257
 reference_platform = "Ubuntu 26.04.1 LTS (resolute) arm64"
-segno_package = "python3-segno 1.6.6-2 arm64"
+segno_package = "python3-segno 1.6.6-2 all"
 status = "prepared_not_released_ce_01_open"
 
 [[components]]
