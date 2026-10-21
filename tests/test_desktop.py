@@ -308,7 +308,8 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(native_action_request(target_url, origin),
                          {'action': 'choose-notebooklm-target', 'nonce': nonce,
                           'operation_id': operation})
-        for action in ('register-project-location', 'choose-notebooklm-archive',
+        for action in ('register-project-location', 'recover-project-operation',
+                       'choose-notebooklm-archive',
                        'choose-project-location',
                        'federation-transfer-open', 'federation-transfer-start',
                        'federation-network-open', 'federation-network-run',
@@ -881,6 +882,15 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('disabled', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
         for tab in ('todo-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab'):
             self.assertIn('disabled', sidebar_tabs.split(f'id="{tab}"', 1)[1].split('</button>', 1)[0])
+        self.assertIn('id="sidebar-layout-toggle" type="button" aria-pressed="false"', HTML)
+        self.assertIn('aria-label="Sbalit hlavní panel"', HTML)
+        self.assertNotIn('Na tomto uzlu', HTML)
+        self.assertNotIn('Zkušební verze', HTML)
+        self.assertNotIn('localStorage', JS)
+        self.assertIn("workspaceSidebar.classList.toggle('sidebar-menu-open',!close)", JS)
+        self.assertIn("event.key!=='Escape'", JS)
+        self.assertIn('aside.sidebar-compact{width:70px', CSS)
+        self.assertIn('aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>', CSS)
         projects = HTML.split('id="sidebar-projects"', 1)[1].split('id="sidebar-chats"', 1)[0]
         self.assertLess(projects.index('id="sidebar-create-project"'),
                         projects.index('id="sidebar-project-list"'))
@@ -1201,7 +1211,14 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("label:'Opravit umístění…'", JS)
         self.assertIn("label:'Odebrat nedostupnou registraci…'", JS)
         self.assertIn('id="project-registration-remove-dialog"', HTML)
-        self.assertNotIn('CreationDialog', Path('spikes/desktop_creation.py').read_text())
+        creation_source = Path('spikes/desktop_creation.py').read_text()
+        self.assertNotIn('CreationDialog', creation_source)
+        self.assertNotIn('addToolBar', creation_source)
+        self.assertNotIn('QLabel', creation_source)
+        self.assertNotIn('QPushButton', creation_source)
+        self.assertIn('status_changed', creation_source)
+        self.assertIn('id="sidebar-project-recover"', HTML)
+        self.assertIn("requestNativeAction('recover-project-operation')", JS)
         self.assertIn('#resource-monitor{flex:none', ASSETS['/app.css'][1])
         self.assertIn('#resource-monitor-dialog{width:min(760px', ASSETS['/app.css'][1])
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)

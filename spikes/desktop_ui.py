@@ -228,7 +228,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button>Přihlásit</button><p id="login-status" role="status"></p></form></section>
 <button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
 <button id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci" hidden></button>
-<aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
+<aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand"><span class="brand-mark">◈</span><span class="brand-name">WORKSPACE</span></div>
 <div id="sidebar-project-tools">
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
 <button id="projects-tab" role="tab" aria-label="Projekty" aria-controls="sidebar-projects" aria-selected="true"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5h7l2 2h9v10H3z"/></svg><span class="sidebar-tab-label" role="tooltip">Projekty</span></button>
@@ -245,7 +245,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="sidebar-import-project" type="button" aria-label="Importovat projekt" aria-expanded="false" aria-controls="sidebar-project-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 3v10M8.5 9.5 12 13l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat projekt</span></button>
 <button id="sidebar-project-trash" type="button" aria-label="Koš projektů"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span class="project-action-label" role="tooltip">Koš projektů</span></button></div>
 <div id="sidebar-project-import-options" hidden><button id="sidebar-register-project" type="button" hidden>Projekt z umístění</button><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
-<p id="sidebar-project-status" role="status">Načítám projekty…</p><ul id="sidebar-project-list"></ul></div>
+<p id="sidebar-project-status" role="status">Načítám projekty…</p><button id="sidebar-project-recover" type="button" hidden>Dokončit přerušenou operaci</button><ul id="sidebar-project-list"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Načítám uložená vlákna…</p>
 <div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button" disabled>Nové vlákno</button></div>
@@ -289,6 +289,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </li></ul></div></div>
 <section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
 <button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
+<svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17V7M9 17v-4M14 17V4M19 17v-7"/></svg>
 <span class="resource-monitor-heading">Zdroje <small>detail</small></span>
 <span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
 <span id="local-provider-indicator">Lokální AI · neověřeno</span>
@@ -299,7 +300,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <span class="resource-mini-row"><span>DISK</span><progress max="100" value="0" aria-label="Disk – placeholder bez telemetrie"></progress><output>—</output></span>
 <span class="resource-mini-row"><span>NET</span><progress max="100" value="0" aria-label="Síť – placeholder bez telemetrie"></progress><output>—</output></span>
 </button></section>
-<button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
+<button id="logout" type="button"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg><span>Odhlásit</span></button>
+<button id="sidebar-layout-toggle" type="button" aria-pressed="false" aria-label="Sbalit hlavní panel"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="sidebar-layout-label">Sbalit panel</span></button></aside>
 <dialog id="resource-monitor-dialog" aria-labelledby="resource-monitor-title">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
@@ -954,8 +956,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 #mobile-sidebar-toggle,#mobile-sidebar-backdrop{display:none}
-aside{width:292px;height:100vh;min-height:0;box-sizing:border-box;flex-shrink:0;background:#142638;color:#c8d4df;padding:22px 14px;display:flex;flex-direction:column;overflow:hidden}
-.brand{flex:none;font-weight:750;letter-spacing:2px;color:white;margin-bottom:18px}.node-note{flex:none;font-size:11px;line-height:1.8;padding-top:12px;color:#9eb5c7}
+aside{position:relative;width:292px;height:100vh;min-height:0;box-sizing:border-box;flex-shrink:0;background:#142638;color:#c8d4df;padding:22px 14px;display:flex;flex-direction:column;overflow:hidden}
+.brand{display:flex;align-items:center;gap:10px;flex:none;font-weight:750;letter-spacing:2px;color:white;margin-bottom:18px}.brand-mark{font-size:17px}.brand-name{white-space:nowrap}
 main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
 .badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
 h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
@@ -975,6 +977,9 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
 #resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
 #resource-monitor-open:hover{background:#1c3549}#resource-monitor-open>*{pointer-events:none}
+.sidebar-utility-icon{display:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#sidebar-layout-toggle,#logout{flex:none;width:100%;margin-top:8px;padding:9px}#sidebar-layout-toggle{display:flex;align-items:center;justify-content:center;gap:8px;background:#20384b}#sidebar-layout-toggle:hover{background:#29485f}#sidebar-layout-toggle .sidebar-utility-icon{display:block;width:18px;height:18px}
+#sidebar-project-recover{margin:0 0 8px;padding:8px;font-size:11px;background:#8a642c}
 .resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
 #backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
 .resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;gap:5px;align-items:center;margin:2px 0;font-size:8px;color:#9eb5c7}.resource-mini-row progress{width:100%;height:5px;accent-color:#79c9ac}.resource-mini-row output{text-align:right;color:#7891a3}
@@ -1064,6 +1069,24 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
 @media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
 @media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
+@media(min-width:641px){
+ aside.sidebar-compact{width:70px;padding:14px 9px;overflow:visible}
+ aside.sidebar-compact .brand{justify-content:center;height:30px;margin-bottom:10px}aside.sidebar-compact .brand-name{display:none}
+ aside.sidebar-compact #sidebar-project-tools{display:block;overflow:visible}aside.sidebar-compact #sidebar-tabs{height:100%;padding:0;border-right:0;overflow-y:auto;overflow-x:visible;scrollbar-width:none}
+ aside.sidebar-compact #sidebar-tabs::-webkit-scrollbar{display:none}
+ aside.sidebar-compact #sidebar-project-tools>[role="tabpanel"]:not([hidden]){position:absolute;z-index:70;left:calc(100% + 8px);top:12px;bottom:12px;width:292px;min-width:0;padding:18px 14px;border:1px solid #496072;border-radius:12px;background:#142638;box-shadow:0 12px 32px #07131f66;overflow:hidden}
+ aside.sidebar-compact:not(.sidebar-menu-open) #sidebar-project-tools>[role="tabpanel"]:not([hidden]){display:none}
+ aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>[role="tabpanel"]:not([hidden]){display:flex}
+ aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid}
+ aside.sidebar-compact #resource-monitor{margin-top:8px;padding-top:8px}aside.sidebar-compact #resource-monitor-open{display:grid;place-items:center;width:42px;height:42px;padding:8px}
+ aside.sidebar-compact #resource-monitor-open>:not(.sidebar-utility-icon){display:none}aside.sidebar-compact #resource-monitor-open>.sidebar-utility-icon{display:block}
+ aside.sidebar-compact #logout,aside.sidebar-compact #sidebar-layout-toggle{position:relative;display:grid;place-items:center;width:42px;height:42px;padding:8px;font-size:0}
+ body[data-runtime="desktop"] aside.sidebar-compact #logout{display:none}
+ aside.sidebar-compact #logout .sidebar-utility-icon{display:block}
+ aside.sidebar-compact #sidebar-layout-toggle .sidebar-utility-icon{transform:rotate(180deg)}
+ aside.sidebar-compact .sidebar-layout-label{position:absolute;z-index:90;left:calc(100% + 9px);top:50%;padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-4px,-50%);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}
+ aside.sidebar-compact #sidebar-layout-toggle:hover .sidebar-layout-label,aside.sidebar-compact #sidebar-layout-toggle:focus-visible .sidebar-layout-label{opacity:1;visibility:visible;transform:translate(0,-50%)}
+}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
  #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
@@ -1088,6 +1111,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  #preview-content pre,#workflow-panel pre,#image-request-json,#image-result-metadata,#external-preview pre,#cms-request-preview{white-space:pre-wrap;overflow-x:auto}
  #pdf-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#pdf-page{margin:0}
  #system-monitor-detail{grid-template-columns:1fr}
+ #sidebar-layout-toggle{display:none}
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
@@ -1721,8 +1745,30 @@ const sidebarArtifactStatus=document.querySelector('#sidebar-artifact-status');
 const workspaceSidebar=document.querySelector('#workspace-sidebar');
 const mobileSidebarToggle=document.querySelector('#mobile-sidebar-toggle');
 const mobileSidebarBackdrop=document.querySelector('#mobile-sidebar-backdrop');
+const sidebarLayoutToggle=document.querySelector('#sidebar-layout-toggle');
 const mobileViewport=window.matchMedia('(max-width:640px)');
 let mobileSidebarReturnFocus=null;
+function compactSidebarActive(){return workspaceSidebar.classList.contains('sidebar-compact')&&!mobileViewport.matches;}
+function closeCompactSidebarMenu(){
+ if(!compactSidebarActive()||!workspaceSidebar.classList.contains('sidebar-menu-open'))return;
+ workspaceSidebar.classList.remove('sidebar-menu-open');syncCompactSidebar();
+}
+function syncCompactSidebar(){
+ const compact=workspaceSidebar.classList.contains('sidebar-compact');
+ const menuOpen=compactSidebarActive()&&workspaceSidebar.classList.contains('sidebar-menu-open');
+ sidebarLayoutToggle.setAttribute('aria-pressed',String(compact));
+ sidebarLayoutToggle.setAttribute('aria-label',compact?'Rozbalit hlavní panel':'Sbalit hlavní panel');
+ sidebarLayoutToggle.querySelector('.sidebar-layout-label').textContent=compact?'Rozbalit panel':'Sbalit panel';
+ for(const tab of document.querySelectorAll('#sidebar-tabs [role="tab"]')){
+  if(compact)tab.setAttribute('aria-expanded',String(menuOpen&&tab.getAttribute('aria-selected')==='true'));
+  else tab.removeAttribute('aria-expanded');
+ }
+}
+function setCompactSidebar(compact){
+ workspaceSidebar.classList.toggle('sidebar-compact',compact);workspaceSidebar.classList.remove('sidebar-menu-open');
+ syncCompactSidebar();
+}
+sidebarLayoutToggle.addEventListener('click',()=>setCompactSidebar(!workspaceSidebar.classList.contains('sidebar-compact')));
 function syncMobileSidebar(){
  const open=document.body.classList.contains('mobile-sidebar-open')&&mobileViewport.matches;
  mobileSidebarToggle.setAttribute('aria-expanded',String(open));mobileSidebarBackdrop.hidden=!open;
@@ -1741,9 +1787,10 @@ function closeMobileSidebar(restoreFocus=true){
 }
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread'))closeMobileSidebar();});
-mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
+document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();return;}if(compactSidebarActive()&&workspaceSidebar.classList.contains('sidebar-menu-open')){event.preventDefault();closeCompactSidebarMenu();}});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}});
+document.addEventListener('click',event=>{if(!workspaceSidebar.contains(event.target))closeCompactSidebarMenu();});
+mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');workspaceSidebar.classList.remove('sidebar-menu-open');syncMobileSidebar();syncCompactSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
 let federationTransferRunning=false;
@@ -1769,7 +1816,11 @@ function selectSidebarTab(selected){
  }
 }
 for(const tab of sidebarTabs){
- tab.addEventListener('click',()=>selectSidebarTab(tab));
+ tab.addEventListener('click',()=>{
+  if(!compactSidebarActive()){selectSidebarTab(tab);return;}
+  const close=tab.getAttribute('aria-selected')==='true'&&workspaceSidebar.classList.contains('sidebar-menu-open');
+  selectSidebarTab(tab);workspaceSidebar.classList.toggle('sidebar-menu-open',!close);syncCompactSidebar();
+ });
  tab.addEventListener('keydown',event=>{
   const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled),index=visible.indexOf(tab);
   const next={ArrowRight:(index+1)%visible.length,
@@ -1786,7 +1837,7 @@ function sidebarItemMenu(label,actions,legacyClass=''){
  const items=document.createElement('div');items.className='sidebar-item-menu-items';items.setAttribute('role','menu');
  for(const action of actions){
   const button=document.createElement('button');button.type='button';button.textContent=action.label;button.disabled=Boolean(action.disabled);button.setAttribute('role','menuitem');
-  button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await action.run(event.currentTarget);});items.append(button);
+  button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;closeCompactSidebarMenu();await action.run(event.currentTarget);});items.append(button);
  }
  menu.append(trigger,items);return menu;
 }
@@ -2218,6 +2269,15 @@ function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
 let recentProjectOrder=[];
+const sidebarProjectRecover=document.querySelector('#sidebar-project-recover');
+function setNativeProjectOperationStatus(message,canRetry=false){
+ document.querySelector('#sidebar-project-status').textContent=message;
+ sidebarProjectRecover.hidden=!canRetry;sidebarProjectRecover.disabled=false;
+}
+sidebarProjectRecover.addEventListener('click',()=>{
+ sidebarProjectRecover.disabled=true;setNativeProjectOperationStatus('Obnovuji přerušenou operaci…',false);
+ requestNativeAction('recover-project-operation');
+});
 let projectRegistrationRemoveTarget=null;
 const projectRegistrationRemoveDialog=document.querySelector('#project-registration-remove-dialog');
 function repairProjectLocation(item){

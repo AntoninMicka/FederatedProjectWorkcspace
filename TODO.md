@@ -350,6 +350,19 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   Cílených 44 testů prošlo (4 přeskočeny), stejně jako Python kompilace,
   JavaScript parser a skutečný Qt WebEngine průchod nad dvěma projektovými
   stavy; následná celá sada prošla **654 testy** (27 přeskočeno).
+  Sdílený hlavní panel má nově plný a redukovaný režim pro desktop i web.
+  Redukovaný režim ponechá jen pás ikon a panel vybrané sekce
+  otevírá jako ukotvené menu se stávajícími položkami a podmenu; na mobilu se
+  nadále používá původní drawer. Monitor zdrojů, odhlášení a přepínač zůstávají
+  dostupné jako spodní ikony. Poslední horní Qt toolbar byla odstraněna, její
+  stav a bezpečné opakování přerušené projektové operace jsou nyní v panelu
+  Projekty při zachování stejného journalu a automatické startup recovery.
+  Dekorativní texty „Na tomto uzlu“ a „Zkušební verze“ byly z panelu odebrány.
+  Cílených 74 regresních testů prošlo (5 přeskočeno), stejně jako Python
+  kompilace a JavaScript parser. Skutečný Qt WebEngine ověřil přepnutí plného
+  panelu na pás ikon, otevření ukotveného menu a návrat do plného režimu;
+  samostatný skutečný průchod ověřil startup recovery bez Qt toolbaru.
+  Následná celá sada prošla **654 testy** (27 přeskočeno).
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

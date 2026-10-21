@@ -292,6 +292,15 @@ má vlastní webové potvrzení. Původní Qt výběr projektu a rozhodovací di
 odmítnuty jako duplicitní. Nový HTTP writer ani druhý registrační workflow
 nevznikají.
 
+Redukovaný hlavní panel **reuse/adaptuje stejný sdílený sidebar, tabpanely a
+položková menu**; nevytváří druhou navigaci ani desktopovou kopii. V úzkém
+desktopovém/webovém režimu se existující panel vybrané sekce pouze zobrazí jako
+ukotvené menu vedle pásu ikon. Volba platí pro aktuální stránku a kvůli
+prezentaci nevzniká nový serverový zápis ani použití webového úložiště. Mobilní
+drawer zůstává samostatným responzivním stavem. Stav a opakování
+`CreationController` byly přesunuté z poslední Qt toolbar do panelu Projekty,
+zatímco journal a automatická startup recovery se nemění.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

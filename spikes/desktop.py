@@ -36,6 +36,7 @@ from spikes.journal import sync_dir
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
 NATIVE_ACTIONS = frozenset({'register-project-location', 'relocate-project-location',
+                            'recover-project-operation',
                             'unregister-missing-project', 'choose-project-location',
                             'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
@@ -421,6 +422,12 @@ def main():
         app.aboutToQuit.connect(network_backend.stop)
         app.aboutToQuit.connect(public_window.close)
         creation_result = {'receipt': None, 'loaded': False}
+        creation_status_state = {'message': '', 'can_retry': False}
+        def creation_status_changed(message, can_retry):
+            creation_status_state.update(message=message, can_retry=bool(can_retry))
+            if creation_result['loaded']:
+                page.runJavaScript('setNativeProjectOperationStatus(' + json.dumps(message) + ',' +
+                                   json.dumps(bool(can_retry)) + ')')
         def created(receipt):
             if receipt:
                 creation_result['receipt'] = receipt
@@ -432,7 +439,8 @@ def main():
                 app.exit(5)
             else:
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
-        controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
+        controller = CreationController(window, ProjectCreation(node_path), created, creation_failed,
+                                        creation_status_changed)
         def register_project():
             if controller.busy:
                 return
@@ -482,6 +490,8 @@ def main():
             page.runJavaScript("history.replaceState(null, '', '/');")
             if action == 'register-project-location':
                 register_project()
+            elif action == 'recover-project-operation':
+                controller.recover()
             elif action == 'relocate-project-location':
                 relocate_project(request['project_id'])
             elif action == 'unregister-missing-project':
@@ -664,6 +674,9 @@ def main():
         page.pdfPrintingFinished.connect(presentation_pdf_finished)
         def project_loaded(ok):
             creation_result['loaded'] = ok
+            if ok:
+                creation_status_changed(creation_status_state['message'],
+                                        creation_status_state['can_retry'])
             if ok and creation_result['receipt']:
                 page.runJavaScript('loadProjects(' + json.dumps(creation_result['receipt']['id']) + ')')
         view.loadStarted.connect(displays.stop)
@@ -805,8 +818,28 @@ def main():
                     const federationNetworkItem=document.querySelector('#open-federation-network');
                     const federationDeploymentItem=document.querySelector('#open-federation-deployment');
                     const projectsTab=document.querySelector('#projects-tab');
+                    const sidebar=document.querySelector('#workspace-sidebar');
+                    const layoutToggle=document.querySelector('#sidebar-layout-toggle');
+                    if(!window.sidebarCompactSmokeStarted){
+                      if(!layoutToggle)return null;
+                      if(sidebar.classList.contains('sidebar-compact')){layoutToggle.click();return null;}
+                      if(sidebar.getBoundingClientRect().width<200)return null;
+                      window.sidebarCompactSmokeStarted=true;layoutToggle.click();return null;
+                    }
+                    if(!window.sidebarCompactMenuOpened){
+                      if(!sidebar.classList.contains('sidebar-compact') || sidebar.getBoundingClientRect().width>=100 ||
+                         sidebar.classList.contains('sidebar-menu-open'))return null;
+                      window.sidebarCompactMenuOpened=true;projectsTab.click();return null;
+                    }
+                    if(!window.sidebarCompactSmokeChecked){
+                      const panel=document.querySelector('#sidebar-projects');
+                      if(!sidebar.classList.contains('sidebar-menu-open') || panel.hidden ||
+                         panel.getClientRects().length===0)return null;
+                      window.sidebarCompactSmokeChecked=true;layoutToggle.click();return null;
+                    }
                     if(!window.projectImportSmokeOpened){
-                      if(!registerProject || registerProject.hidden || !importOptions.hidden ||
+                      if(sidebar.classList.contains('sidebar-compact') || sidebar.getBoundingClientRect().width<200 ||
+                         !registerProject || registerProject.hidden || !importOptions.hidden ||
                          document.querySelectorAll('.sidebar-project-primary-actions .project-action-icon').length!==3)return null;
                       window.projectImportSmokeOpened=true;importProject.click();return null;
                     }
