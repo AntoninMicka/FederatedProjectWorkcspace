@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import signal
 import stat
-import sqlite3
 import sys
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -36,9 +35,16 @@ from spikes.journal import sync_dir
 
 
 PROVIDER_KEY_URLS = frozenset({'https://platform.openai.com/api-keys'})
-NATIVE_ACTIONS = frozenset({'choose-project-location', 'choose-notebooklm-archive',
+NATIVE_ACTIONS = frozenset({'register-project-location', 'relocate-project-location',
+                            'recover-project-operation',
+                            'unregister-missing-project', 'choose-project-location',
+                            'choose-notebooklm-archive',
                             'choose-notebooklm-target', 'choose-presentation-pdf',
-                            'export-presentation-pdf'})
+                            'export-presentation-pdf', 'presenter-displays-identify',
+                            'presenter-displays-apply', 'presenter-displays-cancel',
+                            'federation-transfer-open', 'federation-transfer-start',
+                            'federation-network-open', 'federation-network-run',
+                            'federation-deployment-open', 'federation-deployment-start'})
 
 
 def presentation_pdf_paths(target, nonce):
@@ -134,7 +140,14 @@ def native_action_request(url, origin):
         return None
     try:
         fields = parse_qs(query, strict_parsing=True)
-        expected_fields = {'nonce', 'operation_id'} if action == 'choose-notebooklm-target' else {'nonce'}
+        if action == 'choose-notebooklm-target':
+            expected_fields = {'nonce', 'operation_id'}
+        elif action in {'relocate-project-location', 'unregister-missing-project'}:
+            expected_fields = {'nonce', 'project_id'}
+        elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+            expected_fields = {'nonce', 'token', 'speaker', 'audience'}
+        else:
+            expected_fields = {'nonce'}
         if set(fields) != expected_fields or any(len(values) != 1 for values in fields.values()):
             return None
         nonce = fields['nonce'][0]
@@ -146,8 +159,21 @@ def native_action_request(url, origin):
             if str(UUID(operation_id)) != operation_id:
                 return None
             request['operation_id'] = operation_id
+        elif action in {'relocate-project-location', 'unregister-missing-project'}:
+            project_id = fields['project_id'][0]
+            if str(UUID(project_id)) != project_id:
+                return None
+            request['project_id'] = project_id
+        elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+            token = fields['token'][0]
+            if str(UUID(token)) != token:
+                return None
+            speaker, audience = int(fields['speaker'][0]), int(fields['audience'][0])
+            if not 0 <= speaker <= 63 or not -1 <= audience <= 63:
+                return None
+            request.update(token=token, speaker=speaker, audience=audience)
         return request
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, KeyError):
         return None
 
 
@@ -217,8 +243,8 @@ def main():
     try:
         from PySide6.QtCore import Qt, QTimer, QUrl, QMarginsF, QSizeF
         from PySide6.QtGui import QDesktopServices, QPageLayout, QPageSize
-        from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow, QPushButton,
-                                       QFileDialog, QInputDialog)
+        from PySide6.QtWidgets import (QApplication, QMessageBox, QMainWindow,
+                                       QFileDialog)
         from PySide6.QtWebEngineWidgets import QWebEngineView
         from PySide6.QtWebEngineCore import (QWebEnginePage, QWebEngineProfile,
                                           QWebEngineSettings, QWebEngineUrlRequestInterceptor)
@@ -227,13 +253,12 @@ def main():
         return 1
     try:
         from spikes.desktop_displays import PresenterDisplays
-        from spikes.desktop_user_profile import UserProfileDialog
         from spikes.presentation_documents import PresentationDocuments
         from spikes.presentation_sessions import PresentationSessions
         from spikes.desktop_creation import CreationController
-        from spikes.desktop_deployment import DeploymentDialog
-        from spikes.desktop_network import NetworkDialog
-        from spikes.desktop_transfer import TransferDialog
+        from spikes.desktop_deployment import FederationDeployment
+        from spikes.desktop_network import FederationNetwork
+        from spikes.desktop_transfer import FederationTransfer
         from spikes.network_backend import NetworkBackend
     except ImportError as exc:
         print('Nelze načíst interní modul desktopu: ' + str(exc), file=sys.stderr)
@@ -273,8 +298,12 @@ def main():
             super().closeEvent(event)
 
     class Window(QMainWindow):
+        def __init__(self):
+            super().__init__()
+            self.native_operation_guards = []
+
         def closeEvent(self, event):
-            if controller.busy:
+            if controller.busy or any(guard() for guard in self.native_operation_guards):
                 event.ignore()
                 return
             view.closing = True
@@ -342,7 +371,22 @@ def main():
         public_window = QMainWindow()
         public_window.setCentralWidget(public_view)
         public_window.setWindowTitle('Veřejné promítání · Projektový workspace')
-        displays = PresenterDisplays(app, window, public_window)
+        displays = PresenterDisplays(
+            app, window, public_window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showPresenterDisplayConfiguration(' + json.dumps(result) + ')'),
+            closed_callback=lambda: page.runJavaScript('closePresenterDisplayConfiguration()'),
+            error_callback=lambda message: page.runJavaScript(
+                'setPresenterDisplayNativeError(' + json.dumps(message) + ')'))
+        federation_transfer = FederationTransfer(
+            node_path, parent=window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showFederationTransferConfiguration(' + json.dumps(result) + ')'),
+            progress_callback=lambda message: page.runJavaScript(
+                'setFederationTransferProgress(' + json.dumps(message) + ')'),
+            finished_callback=lambda success, message: page.runJavaScript(
+                'finishFederationTransfer(' + json.dumps(bool(success)) + ',' +
+                json.dumps(message) + ')'))
         public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
@@ -352,9 +396,38 @@ def main():
                     network_backend.start(network_config)
             except Exception as exc:
                 QMessageBox.warning(window, 'Síťový backend se nespustil', str(exc))
+        federation_network = FederationNetwork(
+            network_backend, parent=window,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showFederationNetworkConfiguration(' + json.dumps(result) + ')'),
+            progress_callback=lambda message: page.runJavaScript(
+                'setFederationNetworkProgress(' + json.dumps(message) + ')'),
+            finished_callback=lambda success, message: page.runJavaScript(
+                'finishFederationNetwork(' + json.dumps(bool(success)) + ',' +
+                json.dumps(message) + ')'))
+        federation_deployment = FederationDeployment(
+            node_path, parent=window, endpoint_callback=lambda: network_backend.endpoint,
+            configuration_callback=lambda result: page.runJavaScript(
+                'showFederationDeploymentConfiguration(' + json.dumps(result) + ')'),
+            progress_callback=lambda message: page.runJavaScript(
+                'setFederationDeploymentProgress(' + json.dumps(message) + ')'),
+            finished_callback=lambda success, message: page.runJavaScript(
+                'finishFederationDeployment(' + json.dumps(bool(success)) + ',' +
+                json.dumps(message) + ')'))
+        window.native_operation_guards.extend([
+            lambda: bool(federation_transfer.worker and federation_transfer.worker.isRunning()),
+            lambda: bool(federation_network.worker and federation_network.worker.isRunning()),
+            lambda: bool(federation_deployment.worker and federation_deployment.worker.isRunning()),
+        ])
         app.aboutToQuit.connect(network_backend.stop)
         app.aboutToQuit.connect(public_window.close)
         creation_result = {'receipt': None, 'loaded': False}
+        creation_status_state = {'message': '', 'can_retry': False}
+        def creation_status_changed(message, can_retry):
+            creation_status_state.update(message=message, can_retry=bool(can_retry))
+            if creation_result['loaded']:
+                page.runJavaScript('setNativeProjectOperationStatus(' + json.dumps(message) + ',' +
+                                   json.dumps(bool(can_retry)) + ')')
         def created(receipt):
             if receipt:
                 creation_result['receipt'] = receipt
@@ -366,9 +439,8 @@ def main():
                 app.exit(5)
             else:
                 QMessageBox.warning(window, 'Operace projektu nebyla dokončena', message)
-        controller = CreationController(window, ProjectCreation(node_path), created, creation_failed)
-        project_toolbar = controller.toolbar
-        register_button = QPushButton('Načíst projekt z umístění…')
+        controller = CreationController(window, ProjectCreation(node_path), created, creation_failed,
+                                        creation_status_changed)
         def register_project():
             if controller.busy:
                 return
@@ -376,95 +448,31 @@ def main():
                                                        str(controller.service.default_projects_root()))
             if folder:
                 controller.start(lambda: controller.service.register(folder, str(uuid4())))
-        register_button.clicked.connect(register_project)
-        project_toolbar.addWidget(register_button)
-        relocate_button = QPushButton('Opravit umístění projektu…')
-        def relocate_project():
+            else:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Výběr projektu byl zrušen.'))
+        def relocate_project(project_id):
             if controller.busy:
                 return
-            rows = server.projects.catalog()
-            if not rows:
-                QMessageBox.information(window, 'Umístění projektu', 'Uzel nemá žádný registrovaný projekt.')
+            try:
+                location_missing = controller.service.registration_root_missing(project_id)
+            except ValueError:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Registrace projektu už není dostupná. Obnovte seznam.'))
                 return
-            labels = [row['title'] + ' — ' + row['id'] for row in rows]
-            label, accepted = QInputDialog.getItem(window, 'Umístění projektu',
-                                                   'Registrovaný projekt', labels, 0, False)
-            if not accepted:
+            if not location_missing:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Projekt už nemá chybějící umístění. Obnovte seznam.'))
                 return
-            project_id = rows[labels.index(label)]['id']
-            if controller.service.registration_root_missing(project_id):
-                choice = QMessageBox(window)
-                choice.setWindowTitle('Chybějící projekt')
-                choice.setTextFormat(Qt.TextFormat.PlainText)
-                choice.setText('Původní umístění tohoto projektu na disku neexistuje.\n\n'
-                               'Můžete vybrat nové umístění stejného projektu, nebo odebrat pouze jeho '
-                               'registraci ze seznamu. Lokální stav a případná data jinde se nemažou.')
-                repair = choice.addButton('Vybrat nové umístění', QMessageBox.ButtonRole.AcceptRole)
-                remove = choice.addButton('Odebrat pouze ze seznamu', QMessageBox.ButtonRole.DestructiveRole)
-                choice.addButton(QMessageBox.StandardButton.Cancel)
-                choice.exec()
-                if choice.clickedButton() is remove:
-                    controller.start(lambda: controller.service.unregister_missing(project_id, str(uuid4())))
-                    return
-                if choice.clickedButton() is not repair:
-                    return
             folder = QFileDialog.getExistingDirectory(window, 'Vyberte nové umístění stejného projektu',
                                                        str(controller.service.default_projects_root()))
             if folder:
                 controller.start(lambda: controller.service.relocate(project_id, folder, str(uuid4())))
-        relocate_button.clicked.connect(relocate_project)
-        project_toolbar.addWidget(relocate_button)
-        editor_toolbar = window.addToolBar('Dokumenty')
-        deploy_button = QPushButton('Nasadit LXC uzel…')
-        def deploy_node():
-            if controller.busy:
-                return
-            dialog = DeploymentDialog(node_path, window, local_endpoint=network_backend.endpoint)
-            dialog.exec()
-            if dialog.worker:
-                dialog.worker.wait()
-            dialog.deleteLater()
-        deploy_button.clicked.connect(deploy_node)
-        editor_toolbar.addWidget(deploy_button)
-        network_button = QPushButton('Síť a test spojení…')
-        def network_settings():
-            if controller.busy:
-                return
-            dialog = NetworkDialog(network_backend, window)
-            dialog.exec()
-            if dialog.worker:
-                dialog.worker.wait()
-            dialog.deleteLater()
-        network_button.clicked.connect(network_settings)
-        editor_toolbar.addWidget(network_button)
-        transfer_button = QPushButton('Přenést veřejný projekt…')
-        def transfer_project():
-            if controller.busy:
-                return
-            dialog = TransferDialog(node_path, window)
-            dialog.exec()
-            if dialog.worker:
-                dialog.worker.wait()
-            dialog.deleteLater()
-        transfer_button.clicked.connect(transfer_project)
-        editor_toolbar.addWidget(transfer_button)
-        def edit_presentation():
-            if controller.busy:
-                return
-            page.runJavaScript('openPresentationEditor()')
-        presentation_editor_button = QPushButton('Prezentace…')
-        presentation_editor_button.clicked.connect(edit_presentation)
-        editor_toolbar.addWidget(presentation_editor_button)
-        def edit_user_profile():
-            try:
-                dialog = UserProfileDialog(server.user_profile, window)
-                dialog.exec()
-                dialog.deleteLater()
-            except (ValueError, OSError, sqlite3.Error):
-                QMessageBox.warning(window, 'Uživatelský profil', 'Profil nelze načíst. Ověřte lokální konfiguraci.')
+            else:
+                page.runJavaScript("document.querySelector('#sidebar-project-status').textContent=" +
+                                   json.dumps('Oprava umístění byla zrušena.'))
         def native_action(url):
             actions = {
-                '/#user-profile': edit_user_profile,
                 '/#presenter-open': displays.open,
                 '/#presenter-displays': displays.configure,
                 '/#presenter-close': displays.stop,
@@ -480,7 +488,17 @@ def main():
                 return
             action = request['action']
             page.runJavaScript("history.replaceState(null, '', '/');")
-            if action == 'choose-project-location':
+            if action == 'register-project-location':
+                register_project()
+            elif action == 'recover-project-operation':
+                controller.recover()
+            elif action == 'relocate-project-location':
+                relocate_project(request['project_id'])
+            elif action == 'unregister-missing-project':
+                if not controller.busy:
+                    controller.start(lambda: controller.service.unregister_missing(
+                        request['project_id'], str(uuid4())))
+            elif action == 'choose-project-location':
                 def choose_project_location(request):
                     if not isinstance(request, dict) or set(request) != {'title', 'operation_id'}:
                         return
@@ -550,6 +568,58 @@ def main():
                                 'nonce': request['nonce'], 'success': False, 'error': str(exc)}) + ')')
                 page.runJavaScript('JSON.stringify(presentationPdfTargetRequest())', 0,
                                    choose_presentation_pdf)
+            elif action in {'presenter-displays-identify', 'presenter-displays-apply'}:
+                try:
+                    method = (displays.identify_selection if action == 'presenter-displays-identify'
+                              else displays.apply_selection)
+                    method(request['token'], request['speaker'], request['audience'])
+                except ValueError as exc:
+                    page.runJavaScript('setPresenterDisplayNativeError(' + json.dumps(str(exc)) + ')')
+                    displays.configure()
+            elif action == 'presenter-displays-cancel':
+                displays.cancel_configuration()
+            elif action == 'federation-transfer-open':
+                try:
+                    federation_transfer.open()
+                except (ValueError, OSError) as exc:
+                    page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
+            elif action == 'federation-transfer-start':
+                def start_federation_transfer(raw_request):
+                    try:
+                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
+                        federation_transfer.start(payload)
+                    except (ValueError, OSError, json.JSONDecodeError) as exc:
+                        page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
+                page.runJavaScript('JSON.stringify(federationTransferRequest())', 0,
+                                   start_federation_transfer)
+            elif action == 'federation-network-open':
+                try:
+                    federation_network.open()
+                except (ValueError, OSError) as exc:
+                    page.runJavaScript('setFederationNetworkError(' + json.dumps(str(exc)) + ')')
+            elif action == 'federation-network-run':
+                def run_federation_network(raw_request):
+                    try:
+                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
+                        federation_network.run(payload)
+                    except (ValueError, OSError, json.JSONDecodeError) as exc:
+                        page.runJavaScript('setFederationNetworkError(' + json.dumps(str(exc)) + ')')
+                page.runJavaScript('JSON.stringify(federationNetworkRequest())', 0,
+                                   run_federation_network)
+            elif action == 'federation-deployment-open':
+                try:
+                    federation_deployment.open()
+                except (ValueError, OSError) as exc:
+                    page.runJavaScript('setFederationDeploymentError(' + json.dumps(str(exc)) + ')')
+            elif action == 'federation-deployment-start':
+                def start_federation_deployment(raw_request):
+                    try:
+                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
+                        federation_deployment.start(payload)
+                    except (ValueError, OSError, json.JSONDecodeError) as exc:
+                        page.runJavaScript('setFederationDeploymentError(' + json.dumps(str(exc)) + ')')
+                page.runJavaScript('JSON.stringify(federationDeploymentRequest())', 0,
+                                   start_federation_deployment)
             elif action == 'export-presentation-pdf':
                 selected = presentation_pdf_targets.get(request['nonce'])
                 if selected is None:
@@ -604,6 +674,9 @@ def main():
         page.pdfPrintingFinished.connect(presentation_pdf_finished)
         def project_loaded(ok):
             creation_result['loaded'] = ok
+            if ok:
+                creation_status_changed(creation_status_state['message'],
+                                        creation_status_state['can_retry'])
             if ok and creation_result['receipt']:
                 page.runJavaScript('loadProjects(' + json.dumps(creation_result['receipt']['id']) + ')')
         view.loadStarted.connect(displays.stop)
@@ -617,7 +690,50 @@ def main():
         if args.smoke:
             deadline = QTimer()
             deadline.setSingleShot(True)
-            deadline.timeout.connect(lambda: app.exit(2))
+            def smoke_timeout():
+                print('desktop smoke controller: counter=' + str(server.counter) +
+                      ', busy=' + str(controller.busy) +
+                      ', receipt=' + str(bool(creation_result['receipt'])), flush=True)
+                page.runJavaScript("""JSON.stringify({
+                  projectSmokeStarted:Boolean(window.projectSmokeStarted),
+                  sidebarStage:window.smokeSidebarStage || null,
+                  sidebarReloaded:Boolean(window.sidebarReloaded),
+                  promptSubmitChecked:Boolean(window.promptSubmitChecked),
+                  chatModesChecked:Boolean(window.chatModesChecked),
+                  workflowPanelChecked:Boolean(window.workflowPanelChecked),
+                  imagePanelChecked:Boolean(window.imagePanelChecked),
+                  previewStarted:Boolean(window.previewStarted),
+                  previewClearChecked:Boolean(window.previewClearChecked),
+                  homeReturnChecked:Boolean(window.homeReturnChecked),
+                  selectedSidebar:document.querySelector('#sidebar-tabs [aria-selected="true"]')?.id || null,
+                  artifactsHidden:document.querySelector('#sidebar-artifacts')?.hidden,
+                  todoHidden:document.querySelector('#todo-widget')?.hidden,
+                  artifactCount:document.querySelectorAll('#sidebar-artifact-list li').length,
+                  artifactRows:[...document.querySelectorAll('#sidebar-artifact-list li')].map(row=>({id:row.querySelector('.sidebar-artifact-id')?.textContent,title:row.querySelector('.sidebar-artifact-title')?.textContent})),
+                  expectedArtifacts:window.smokeExpectedArtifacts || null,
+                  chatMode:document.querySelector('#chat-mode')?.value || null,
+                  chatAdapterDisabled:document.querySelector('#chat-run-adapter')?.disabled,
+                  taskArtifactsHidden:document.querySelector('#task-artifacts')?.hidden,
+                  composerBottom:document.querySelector('#chat-composer')?.getBoundingClientRect().bottom,
+                  viewportHeight:window.innerHeight,
+                  previewTitle:document.querySelector('#preview-title')?.textContent || null,
+                  expectedPreviewTitle:window.smokeExpectedArtifacts?.[0]?.title || null,
+                  previewTitleMatches:document.querySelector('#preview-title')?.textContent===window.smokeExpectedArtifacts?.[0]?.title,
+                  previewDetailsHidden:document.querySelector('#preview-details')?.hidden,
+                  projectHidden:document.querySelector('#project-view')?.hidden,
+                  projectCreateHidden:document.querySelector('#project-create-view')?.hidden,
+                  projectTitle:document.querySelector('#project-title')?.textContent || null,
+                  projectCommit:Boolean(document.querySelector('#project-commit')?.textContent),
+                  imageTabHidden:document.querySelector('#image-tab')?.hidden,
+                  imageTabSelected:document.querySelector('#image-tab')?.getAttribute('aria-selected'),
+                  imagePanelHidden:document.querySelector('#image-panel')?.hidden,
+                  imagePrompt:Boolean(document.querySelector('#image-prompt')),
+                  imageRequestHidden:document.querySelector('#image-request-preview')?.hidden,
+                  imageResultHidden:document.querySelector('#image-result')?.hidden,
+                  imageDispatchDisabled:document.querySelector('#image-dispatch')?.disabled,
+                  count:document.querySelector('#count')?.textContent || null
+                })""", lambda value: (print('desktop smoke timeout: ' + str(value), flush=True), app.exit(2)))
+            deadline.timeout.connect(smoke_timeout)
             deadline.start(15000)
             poll = QTimer()
             project_check = None
@@ -628,6 +744,11 @@ def main():
                 project_check = json.dumps(expected)
             def checked(value):
                 if value == '1' and server.counter == 1:
+                    if args.smoke_create and not creation_result['receipt'] and not controller.busy:
+                        created_projects = [item for item in server.projects.list()
+                                            if item['title'] == 'Nový projekt ze společného formuláře']
+                        if len(created_projects) == 1:
+                            creation_result['receipt'] = created_projects[0]
                     if args.smoke_create and (not creation_result['receipt'] or controller.busy):
                         return
                     poll.stop()
@@ -647,6 +768,7 @@ def main():
                         window.close()
                     QTimer.singleShot(800, finish)  # Allow Chromium to present its frame.
             script = """(()=>{
+              if(typeof startChatProgress!=='function')return null;
               document.querySelector('#project-home').hidden=true;
               document.querySelector('#project-view').hidden=false;
               const chatTab=document.querySelector('#chat-tab');chatTab.click();
@@ -683,37 +805,186 @@ def main():
             })()"""
             if project_check:
                 script = """(()=>{
-                  if(!document.querySelector('#project-view'))return null;
+                  if(!document.querySelector('#project-view') || typeof sidebarItemMenu!=='function')return null;
                   const expected=EXPECTED;
+                  window.smokeExpectedArtifacts=expected.artifacts;
                   const card=[...document.querySelectorAll('.project-card')].find(e=>e.dataset.id===expected.id);
                   if(!window.projectSmokeStarted && card){
+                    const registerProject=document.querySelector('#sidebar-register-project');
+                    const importOptions=document.querySelector('#sidebar-project-import-options');
+                    const importProject=document.querySelector('#sidebar-import-project');
+                    const federationTab=document.querySelector('#federation-tab');
+                    const federationItem=document.querySelector('#open-federation-transfer');
+                    const federationNetworkItem=document.querySelector('#open-federation-network');
+                    const federationDeploymentItem=document.querySelector('#open-federation-deployment');
+                    const projectsTab=document.querySelector('#projects-tab');
+                    const sidebar=document.querySelector('#workspace-sidebar');
+                    const layoutToggle=document.querySelector('#sidebar-layout-toggle');
+                    if(!window.sidebarCompactSmokeStarted){
+                      if(!layoutToggle)return null;
+                      if(sidebar.classList.contains('sidebar-compact')){layoutToggle.click();return null;}
+                      if(sidebar.getBoundingClientRect().width<200)return null;
+                      window.sidebarCompactSmokeStarted=true;layoutToggle.click();return null;
+                    }
+                    if(!window.sidebarCompactMenuOpened){
+                      if(!sidebar.classList.contains('sidebar-compact') || sidebar.getBoundingClientRect().width>=100 ||
+                         sidebar.classList.contains('sidebar-menu-open'))return null;
+                      window.sidebarCompactMenuOpened=true;projectsTab.click();return null;
+                    }
+                    if(!window.sidebarCompactSmokeChecked){
+                      const panel=document.querySelector('#sidebar-projects');
+                      if(!sidebar.classList.contains('sidebar-menu-open') || panel.hidden ||
+                         panel.getClientRects().length===0)return null;
+                      window.sidebarCompactSmokeChecked=true;layoutToggle.click();return null;
+                    }
+                    if(!window.projectImportSmokeOpened){
+                      if(sidebar.classList.contains('sidebar-compact') || sidebar.getBoundingClientRect().width<200 ||
+                         !registerProject || registerProject.hidden || !importOptions.hidden ||
+                         document.querySelectorAll('.sidebar-project-primary-actions .project-action-icon').length!==3)return null;
+                      window.projectImportSmokeOpened=true;importProject.click();return null;
+                    }
+                    if(!window.projectImportSmokeChecked){
+                      if(importOptions.hidden || registerProject.getClientRects().length===0)return null;
+                      window.projectImportSmokeChecked=true;importProject.click();return null;
+                    }
+                    if(!window.federationTransferSmokeOpened){
+                      if(!importOptions.hidden || federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
+                      window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
+                    }
+                    if(!window.federationTransferSmokeChecked){
+                      const form=document.querySelector('#federation-transfer-form');
+                      if(document.querySelector('#federation-view').hidden || form.elements.project.options.length<1 ||
+                         !document.querySelector('.federation-transfer-page').textContent.includes('plnohodnotnou správou federace projektů') ||
+                         document.querySelector('#federation-transfer-status').textContent.includes('Načítám'))return null;
+                      window.federationTransferSmokeChecked=true;federationNetworkItem.click();return null;
+                    }
+                    if(!window.federationNetworkSmokeChecked){
+                      const form=document.querySelector('#federation-network-form');
+                      if(document.querySelector('#federation-network-view').hidden ||
+                         form.elements.port.value!=='8443' ||
+                         document.querySelector('#federation-network-status').textContent.includes('Načítám'))return null;
+                      window.federationNetworkSmokeChecked=true;federationDeploymentItem.click();return null;
+                    }
+                    if(!window.federationDeploymentSmokeChecked){
+                      const form=document.querySelector('#federation-deployment-form');
+                      if(document.querySelector('#federation-deployment-view').hidden ||
+                         form.elements.container.value!=='workspace-m0' ||
+                         form.elements.mode.options.length!==5 ||
+                         document.querySelector('#federation-deployment-status').textContent.includes('Načítám'))return null;
+                      window.federationDeploymentSmokeChecked=true;projectsTab.click();return null;
+                    }
+                    const settingsTab=document.querySelector('#settings-sidebar-tab');
+                    const monitor=document.querySelector('#resource-monitor-open');
+                    const monitorDialog=document.querySelector('#resource-monitor-dialog');
+                    if(settingsTab.disabled || !monitor || !monitorDialog)return null;
+                    const profileMenuItem=document.querySelector('[data-settings-item="settings-profile-tab"]');
+                    const profileMenuButton=document.querySelector('[data-settings-tab="settings-profile-tab"]');
+                    if(!window.profileSmokeOpened){
+                      if(profileMenuItem.hidden || !profileMenuButton)return null;
+                      window.profileSmokeOpened=true;profileMenuButton.click();return null;
+                    }
+                    const profileStatus=document.querySelector('#user-profile-status');
+                    const profileForm=document.querySelector('#user-profile-form');
+                    if(!window.profileSmokeSubmitted){
+                      if(document.querySelector('#settings-view').hidden || document.querySelector('#settings-profile-panel').hidden ||
+                         document.querySelector('#settings-profile-tab').hidden || profileMenuItem.hidden ||
+                         !profileStatus.textContent.includes('načtený'))return null;
+                      profileForm.elements.name.value='Desktop Smoke';profileForm.elements.email.value='smoke@example.invalid';
+                      profileForm.elements.phone.value='+420 000 000 000';profileForm.elements.web.value='https://example.invalid';
+                      window.profileSmokeSubmitted=true;profileForm.requestSubmit();return null;
+                    }
+                    if(!window.profileSmokeSaved){
+                      if(!profileStatus.textContent.includes('uložen pouze'))return null;
+                      window.profileSmokeSaved=true;closeSettings();return null;
+                    }
+                    const displayButton=document.querySelector('#presenter-fullscreen');
+                    const displayDialog=document.querySelector('#presenter-display-dialog');
+                    const displayForm=document.querySelector('#presenter-display-form');
+                    if(!window.presenterDisplaySmokeOpened){
+                      if(displayButton.hidden)return null;
+                      window.presenterDisplaySmokeOpened=true;location.hash='presenter-open';return null;
+                    }
+                    if(!window.presenterDisplaySmokeCancelled){
+                      if(!displayDialog.open || displayForm.elements.speaker.options.length<1 ||
+                         displayForm.elements.audience.options.length<2)return null;
+                      window.presenterDisplaySmokeCancelled=true;document.querySelector('#presenter-display-cancel').click();return null;
+                    }
+                    if(displayDialog.open)return null;
+                    monitor.click();if(!monitorDialog.open)return null;monitorDialog.close();
                     if(document.querySelector('#project-home').hidden || document.querySelector('#sidebar-projects').hidden ||
-                       document.querySelector('#project-home select, #sidebar-projects select') ||
+                       document.querySelector('#sidebar-projects select') ||
                        card.querySelector('.project-name').textContent!==expected.title)return null;
                     const compact=[...document.querySelectorAll('#sidebar-project-list button')].find(e=>e.dataset.id===expected.id);
-                    if(!compact || compact.textContent!==expected.title)return null;
+                    const compactMenu=compact?.closest('li')?.querySelector('.sidebar-item-menu-items');
+                    if(!compact || compact.textContent!==expected.title ||
+                       compactMenu?.querySelector('button')?.textContent!=='Otevřít')return null;
                     window.projectSmokeStarted=true;(window.homeReturnChecked?compact:card).click();
                   }
                   if(document.querySelector('#project-view').hidden) return null;
                   if(document.querySelector('#project-title').textContent!==expected.title ||
+                     document.querySelector('#project-description').textContent!==expected.description ||
                      document.querySelector('#project-commit').textContent!==expected.commit_id ||
                      !document.querySelector('#project-home').hidden || !document.querySelector('#sidebar-projects').hidden)return null;
+                  const overviewTab=document.querySelector('#project-overview-tab');
+                  const overviewPanel=document.querySelector('#project-overview-panel');
+                  const promptForm=document.querySelector('#chat-composer');
+                  const openTodo=expected.main_todo?.status==='ready' ? expected.main_todo.items.filter(item=>!item.checked) : [];
+                  const overviewTasks=[...document.querySelectorAll('#project-overview-task-list .dashboard-task-row span')].map(item=>item.textContent);
+                  if(!window.projectOverviewChecked){
+                    const descriptionRect=document.querySelector('.project-overview-description').getBoundingClientRect();
+                    const historyRect=document.querySelector('.project-overview-history').getBoundingClientRect();
+                    const tasksRect=document.querySelector('.project-overview-tasks').getBoundingClientRect();
+                    const mainPanelContent=document.querySelector('#main-panel-content');
+                    const historyList=document.querySelector('#project-overview-history-list');
+                    const taskList=document.querySelector('#project-overview-task-list');
+                    const modeControl=document.querySelector('label[for="chat-mode"]');
+                    const modeControlRect=modeControl.getBoundingClientRect();
+                    const modeLabelRect=modeControl.querySelector('span').getBoundingClientRect();
+                    const historySubjects=[...document.querySelectorAll('#project-overview-history-list .project-history-row strong')].map(item=>item.textContent);
+                    if(overviewPanel.hidden || overviewTab.getAttribute('aria-selected')!=='true' || promptForm.hidden ||
+                       document.querySelector('#prompt-widget-toggle') ||
+                       !mainPanelContent.classList.contains('project-overview-active') ||
+                       getComputedStyle(mainPanelContent).overflowY!=='hidden' ||
+                       getComputedStyle(historyList).overflowY!=='auto' ||
+                       getComputedStyle(taskList).overflowY!=='auto' ||
+                       modeControlRect.height!==44 || modeLabelRect.top<modeControlRect.top ||
+                       modeLabelRect.bottom>modeControlRect.bottom ||
+                       descriptionRect.width<historyRect.width*1.8 ||
+                       descriptionRect.bottom>historyRect.top ||
+                       Math.abs(historyRect.top-tasksRect.top)>2 ||
+                       JSON.stringify(historySubjects)!==JSON.stringify(expected.history.entries.map(item=>item.subject||'Commit bez názvu')) ||
+                       JSON.stringify(overviewTasks)!==JSON.stringify(openTodo.map(item=>item.title)))return null;
+                    window.projectOverviewChecked=true;
+                  }
+                  const projectsTab=document.querySelector('#projects-tab'),chatsTab=document.querySelector('#chats-tab');
                   const artifactTab=document.querySelector('#artifacts-tab'),todoTab=document.querySelector('#todo-tab');
                   const artifactPanel=document.querySelector('#sidebar-artifacts'),todoPanel=document.querySelector('#todo-widget');
                   const sidebarList=document.querySelector('#sidebar-artifact-list');
-                  if(window.sidebarReloaded && artifactTab.getAttribute('aria-selected')!=='true') return null;
+                  window.smokeSidebarStage='opened';
                   artifactTab.click();
                   if(artifactPanel.hidden || !todoPanel.hidden || artifactTab.getAttribute('aria-selected')!=='true') return null;
                   const sideRows=[...sidebarList.querySelectorAll('li')].map(row=>({
                     id:row.querySelector('.sidebar-artifact-id').textContent,
-                    title:row.querySelector('.sidebar-artifact-title').textContent}));
-                  if(JSON.stringify(sideRows)!==JSON.stringify(expected.artifacts) || sidebarList.querySelector('img,script,a')) return null;
+                    title:row.querySelector('.sidebar-item-title').textContent}));
+                  const expectedRows=expected.artifacts.map(({id,title})=>({id,title}));
+                  if(JSON.stringify(sideRows)!==JSON.stringify(expectedRows) || sidebarList.querySelector('img,script,a') ||
+                     [...sidebarList.querySelectorAll(':scope > li')].some(row=>row.querySelector('.sidebar-item-menu-items button')?.textContent!=='Zobrazit')) return null;
+                  window.smokeSidebarStage='rows';
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
-                  if(todoPanel.hidden || !artifactPanel.hidden || document.activeElement!==todoTab) return null;
+                  if(document.querySelector('#sidebar-projects').hidden || !artifactPanel.hidden || document.activeElement!==projectsTab) return null;
+                  window.smokeSidebarStage='home';
+                  projectsTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+                  if(document.querySelector('#sidebar-chats').hidden || document.activeElement!==chatsTab) return null;
+                  window.smokeSidebarStage='chats';
+                  chatsTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+                  if(todoPanel.hidden || document.activeElement!==todoTab) return null;
+                  window.smokeSidebarStage='todo';
                   todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
                   if(artifactPanel.hidden || document.activeElement!==artifactTab || artifactTab.tabIndex!==0 || todoTab.tabIndex!==-1) return null;
+                  window.smokeSidebarStage='artifact-right';
                   artifactTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
                   if(todoPanel.hidden || document.activeElement!==todoTab) return null;
+                  window.smokeSidebarStage='todo-back';
                   const todo=expected.main_todo;
                   const todoAction=document.querySelector('#create-main-todo');
                   if(todoAction.hidden || todoAction.textContent!==(todo?'Upravit seznam úkolů':'Vytvořit seznam úkolů')) return null;
@@ -736,8 +1007,13 @@ def main():
                     if(branch){branch.querySelector('summary').click();if(branch.open) return null;
                       branch.querySelector('summary').click();if(!branch.open) return null;}
                   }else if(todoRows.length) return null;
+                  window.smokeSidebarStage='todo-content';
                   todoTab.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));
-                  if(artifactPanel.hidden || document.activeElement!==artifactTab) return null;
+                  const federationTab=document.querySelector('#federation-tab');
+                  if(document.querySelector('#sidebar-federation').hidden || document.activeElement!==federationTab) return null;
+                  federationTab.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));
+                  if(document.querySelector('#sidebar-settings').hidden || document.activeElement!==document.querySelector('#settings-sidebar-tab')) return null;
+                  window.smokeSidebarStage='end';
                   if(!window.sidebarReloaded){
                     window.sidebarReloaded=true;
                     clearProject();
@@ -761,18 +1037,38 @@ def main():
                   }
                   if(!window.chatModesChecked){
                     const mode=document.querySelector('#chat-mode'),adapter=document.querySelector('#chat-run-adapter');
-                    const artifacts=document.querySelector('#task-artifacts');
-                    if(mode.value!=='orchestration' || !adapter.disabled || artifacts.hidden)return null;
+                    const routing=document.querySelector('#task-routing');
+                    const action=document.querySelector('#task-action'),publicSource=document.querySelector('#task-source-public');
+                    const inputs=document.querySelector('#task-inputs'),output=document.querySelector('#task-output-kind');
+                    const currentPromptSource=document.querySelector('#task-source-current-prompt');
+                    const conversationSource=document.querySelector('#task-source-conversation-label');
+                    if(mode.value!=='orchestration' || adapter.disabled || routing.hidden ||
+                       action.value!=='answer' || publicSource.checked || !currentPromptSource.hidden ||
+                       document.querySelector('#task-input-count').textContent!=='1')return null;
+                    output.value='document';
+                    action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    const routingWarning=document.querySelector('#chat-orchestration-target');
+                    if(!publicSource.checked || currentPromptSource.hidden || !conversationSource.hidden ||
+                       output.value!=='conversation' || !output.disabled ||
+                       (!routingWarning.hidden && !routingWarning.textContent.includes('nastavte SearXNG')))return null;
+                    action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));
+                    if(!currentPromptSource.hidden || conversationSource.hidden || output.disabled || output.value!=='document')return null;
+                    inputs.querySelector('summary').click();inputs.dispatchEvent(new Event('toggle'));
+                    if(!inputs.open || !promptForm.classList.contains('inputs-open'))return null;
+                    inputs.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+                    inputs.dispatchEvent(new Event('toggle'));
+                    if(inputs.open || promptForm.classList.contains('inputs-open'))return null;
                     mode.value='brainstorming';mode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(adapter.disabled || !artifacts.hidden)return null;
+                    if(adapter.disabled || !routing.hidden)return null;
                     mode.value='orchestration';mode.dispatchEvent(new Event('change',{bubbles:true}));
-                    if(!adapter.disabled || artifacts.hidden)return null;
+                    if(adapter.disabled || routing.hidden)return null;
                     window.chatModesChecked=true;
                   }
                   if(!window.workflowPanelChecked){
                     const workflowTab=document.querySelector('#workflow-tab');workflowTab.click();
                     const workflowPanel=document.querySelector('#workflow-panel');
                     if(workflowPanel.hidden || workflowTab.getAttribute('aria-selected')!=='true' ||
+                       !promptForm.hidden ||
                        !document.querySelector('#workflow-purpose') ||
                        !document.querySelector('#workflow-creator-artifacts') ||
                        !document.querySelector('#workflow-opponent-artifacts') ||
@@ -786,6 +1082,7 @@ def main():
                     const imageTab=document.querySelector('#image-tab');imageTab.click();
                     const imagePanel=document.querySelector('#image-panel');
                     if(imagePanel.hidden || imageTab.getAttribute('aria-selected')!=='true' ||
+                       !promptForm.hidden ||
                        !document.querySelector('#image-prompt') ||
                        !document.querySelector('#image-request-preview').hidden ||
                        !document.querySelector('#image-result').hidden ||
@@ -794,15 +1091,23 @@ def main():
                     if(document.querySelector('#chat-panel').hidden)return null;
                   }
                   const composer=document.querySelector('#chat-composer');
-                  if(composer.closest('[role=tabpanel]') || composer.getBoundingClientRect().bottom>window.innerHeight)return null;
+                  window.smokeSidebarStage='composer';
+                  if(composer.closest('[role=tabpanel]') || !composer.offsetParent || composer.getBoundingClientRect().width<=0)return null;
                   chatTab.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));
-                  if(document.querySelector('#preview-panel').hidden || draft.value!=='Local draft' ||
-                     document.activeElement!==previewTab)return null;
+                  if(overviewPanel.hidden || draft.value!=='Local draft' || promptForm.hidden ||
+                     document.activeElement!==overviewTab)return null;
+                  window.smokeSidebarStage='main-home';
                   if(expected.artifacts.length){
                     if(!window.previewStarted){window.previewStarted=true;
                       document.querySelector('#sidebar-artifact-list button').click();return null;}
                     if(document.querySelector('#preview-title').textContent!==expected.artifacts[0].title ||
-                       document.querySelector('#preview-details').hidden)return null;
+                       document.querySelector('#preview-details').hidden ||
+                       document.querySelector('#task-source-current-file').hidden ||
+                       !document.querySelector('#task-source-current-file-title').textContent.includes(expected.artifacts[0].title))return null;
+                    const currentFileInput=document.querySelector('#task-source-current-file-input');
+                    if(!currentFileInput.checked)currentFileInput.click();
+                    if(!currentFileInput.checked || document.querySelector('#task-input-count').textContent!=='2')return null;
+                    window.smokeSidebarStage='preview-basic';
                     if(expected.preview.metadata.import){
                       const details=document.querySelector('#preview-metadata').textContent;
                       for(const value of [expected.preview.metadata.import.imported_at,
@@ -813,6 +1118,7 @@ def main():
                         if(!details.includes(value))return null;
                       }
                     }
+                    window.smokeSidebarStage='preview-metadata';
                     const content=document.querySelector('#preview-content');
                     if(content.querySelector('script,iframe,object,a'))return null;
                     const image=content.querySelector('img');
@@ -821,6 +1127,7 @@ def main():
                     if(expected.preview.format==='markdown' && !content.children.length && expected.preview.text)return null;
                     if(expected.preview.format==='json' &&
                        content.querySelector('pre')?.textContent!==expected.preview.text)return null;
+                    window.smokeSidebarStage='preview-content';
                     if(!window.previewClearChecked){
                       window.previewClearChecked=true;window.previewStarted=false;
                       clearProject();
@@ -830,7 +1137,7 @@ def main():
                   }
                   if(!window.homeReturnChecked){
                     window.homeReturnChecked=true;window.projectSmokeStarted=false;window.previewStarted=false;
-                    document.querySelector('#back-projects').click();
+                    document.querySelector('#projects-tab').click();
                     if(!document.querySelector('#project-view').hidden || document.querySelector('#project-home').hidden ||
                        document.querySelector('#sidebar-projects').hidden || draft.value)return null;
                     return null;
@@ -839,9 +1146,14 @@ def main():
                 })()""".replace('EXPECTED', project_check)
             if args.smoke_create:
                 script = """(()=>{
+                  const required=['project-view','project-title','project-commit','image-tab','image-panel',
+                    'image-prompt','image-request-preview','image-result','image-dispatch'];
+                  const missing=required.filter(id=>!document.getElementById(id));
+                  if(missing.length)return null;
                   if(document.querySelector('#project-view').hidden ||
                      document.querySelector('#project-title').textContent!=='Nový projekt ze společného formuláře' ||
-                     !document.querySelector('#project-commit').textContent) return null;
+                     !document.querySelector('#project-commit').textContent ||
+                     !document.querySelector('#project-create-view').hidden) return null;
                   const imageTab=document.querySelector('#image-tab');imageTab.click();
                   if(document.querySelector('#image-panel').hidden ||
                      imageTab.getAttribute('aria-selected')!=='true' ||
@@ -865,6 +1177,9 @@ def main():
                             args.smoke_create, operation)
                         bootstrap = """(()=>{
                           const title='Nový projekt ze společného formuláře';
+                          document.querySelector('#sidebar-create-project').click();
+                          if(document.querySelector('#project-create-view').hidden ||
+                             !document.querySelector('#project-home').hidden)throw new Error('Samostatná stránka vytvoření se neotevřela.');
                           document.querySelector('#new-project-title').value=title;
                           projectCreationAttempt={title,operation_id:OPERATION};
                           setProjectCreationLocation(LOCATION);
@@ -888,6 +1203,9 @@ def main():
             QTimer.singleShot(0, controller.recover)
         result = app.exec()
         controller.wait()
+        federation_transfer.wait()
+        federation_network.wait()
+        federation_deployment.wait()
         view.closing = True
         window.close()
         # Destroy pages before their off-the-record profile.

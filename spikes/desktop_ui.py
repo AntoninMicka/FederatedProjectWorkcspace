@@ -228,18 +228,29 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button>Přihlásit</button><p id="login-status" role="status"></p></form></section>
 <button id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar" aria-expanded="false">Navigace</button>
 <button id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci" hidden></button>
-<aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand">◈ &nbsp; WORKSPACE</div>
-<div id="sidebar-projects"><h2>Projekty</h2><ul id="sidebar-project-list"></ul>
-<p id="sidebar-project-status" role="status">Načítám projekty…</p></div>
-<button id="open-notebooklm-import" class="global-nav" type="button" hidden>Importovat NotebookLM</button>
-<div id="sidebar-project-tools" hidden>
-<button id="back-projects" class="sidebar-back" type="button">← Seznam projektů</button>
+<aside id="workspace-sidebar" aria-label="Navigace pracovního prostoru"><div class="brand"><span class="brand-mark">◈</span><span class="brand-name">WORKSPACE</span></div>
+<div id="sidebar-project-tools">
 <div id="sidebar-tabs" role="tablist" aria-label="Obsah levého panelu">
-<button id="todo-tab" role="tab" aria-controls="todo-widget" aria-selected="true">Úkoly</button>
-<button id="artifacts-tab" role="tab" aria-controls="sidebar-artifacts" aria-selected="false" tabindex="-1">Podklady</button>
-<button id="chats-tab" role="tab" aria-controls="sidebar-chats" aria-selected="false" tabindex="-1">Chaty</button>
-<button id="presentations-tab" role="tab" aria-controls="sidebar-presentations" aria-selected="false" tabindex="-1">Prezentace</button></div>
-<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0"><h2>Hlavní seznam úkolů</h2>
+<button id="projects-tab" role="tab" aria-label="Projekty" aria-controls="sidebar-projects" aria-selected="true"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5h7l2 2h9v10H3z"/></svg><span class="sidebar-tab-label" role="tooltip">Projekty</span></button>
+<button id="chats-tab" role="tab" aria-label="Chaty" aria-controls="sidebar-chats" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg><span class="sidebar-tab-label" role="tooltip">Chaty</span></button>
+<button id="todo-tab" role="tab" aria-label="Úkoly" aria-controls="todo-widget" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v15H5zM8 9l2 2 4-4M8 15h7"/></svg><span class="sidebar-tab-label" role="tooltip">Úkoly</span></button>
+<button id="artifacts-tab" role="tab" aria-label="Podklady" aria-controls="sidebar-artifacts" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v5h4M9 12h7M9 16h7"/></svg><span class="sidebar-tab-label" role="tooltip">Podklady</span></button>
+<button id="tools-tab" role="tab" aria-label="Nástroje" aria-controls="sidebar-tools" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 3-4-4z"/></svg><span class="sidebar-tab-label" role="tooltip">Nástroje</span></button>
+<button id="presentations-tab" role="tab" aria-label="Výstupy" aria-controls="sidebar-presentations" aria-selected="false" aria-disabled="true" disabled tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9h4v10M10 19V4h4v15M16 19v-7h4v7"/></svg><span class="sidebar-tab-label" role="tooltip">Výstupy</span></button>
+<button id="settings-sidebar-tab" role="tab" aria-label="Nastavení" aria-controls="sidebar-settings" aria-selected="false" tabindex="-1"><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4"/></svg><span class="sidebar-tab-label" role="tooltip">Nastavení</span></button>
+<button id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden><svg class="sidebar-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.7 10.7 6.6-3.4M8.7 13.3l6.6 3.4"/></svg><span class="sidebar-tab-label" role="tooltip">Federace</span></button></div>
+<div id="sidebar-projects" role="tabpanel" aria-labelledby="projects-tab" tabindex="0">
+<h2>Projekty</h2><div class="sidebar-project-primary-actions">
+<button id="sidebar-create-project" type="button" aria-label="Nový projekt"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 12v5M9.5 14.5h5"/></svg><span class="project-action-label" role="tooltip">Nový projekt</span></button>
+<button id="sidebar-import-project" type="button" aria-label="Importovat projekt" aria-expanded="false" aria-controls="sidebar-project-import-options"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h6l2 2h8v10H4zM12 3v10M8.5 9.5 12 13l3.5-3.5"/></svg><span class="project-action-label" role="tooltip">Importovat projekt</span></button>
+<button id="sidebar-project-trash" type="button" aria-label="Koš projektů"><svg class="project-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg><span class="project-action-label" role="tooltip">Koš projektů</span></button></div>
+<div id="sidebar-project-import-options" hidden><button id="sidebar-register-project" type="button" hidden>Projekt z umístění</button><button id="open-notebooklm-import" type="button" hidden>NotebookLM</button></div>
+<p id="sidebar-project-status" role="status">Načítám projekty…</p><button id="sidebar-project-recover" type="button" hidden>Dokončit přerušenou operaci</button><ul id="sidebar-project-list"></ul></div>
+<div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
+<h2>Chaty</h2><p id="sidebar-chat-status" role="status">Načítám uložená vlákna…</p>
+<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button" disabled>Nové vlákno</button></div>
+<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div>
+<div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0" hidden><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
 <button id="create-main-todo" hidden>Vytvořit seznam úkolů</button>
 <ul id="todo-tree" aria-label="Úkoly projektu"></ul><small id="todo-help" hidden>Úkoly upravíte v editoru.</small></div>
@@ -248,22 +259,88 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="open-source-import" type="button">Importovat zdroj</button></div>
 <p id="sidebar-artifact-status" role="status"></p>
 <ul id="sidebar-artifact-list" aria-label="Podklady projektu"></ul></div>
-<div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
-<h2>Chaty</h2><p id="sidebar-chat-status" role="status">Otevřete projekt.</p>
-<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button">Nové vlákno</button>
-<button id="chat-open-settings" type="button">Nastavení backendu</button></div>
-<ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div>
+<div id="sidebar-tools" role="tabpanel" aria-labelledby="tools-tab" tabindex="0" hidden>
+<h2>Nástroje</h2><p>Výpočetní a simulační skripty projektu.</p>
+<p id="sidebar-tools-status" role="status">Katalog nástrojů je zatím prázdný. Spouštění skriptů bude doplněno samostatnou schopností.</p>
+<ul id="sidebar-tool-list" aria-label="Nástroje projektu"></ul></div>
 <div id="sidebar-presentations" role="tabpanel" aria-labelledby="presentations-tab" tabindex="0" hidden>
-<h2>Prezentace</h2><p id="sidebar-presentation-status" role="status">Otevřete projekt.</p>
-<ul id="sidebar-presentation-list" aria-label="Hotové prezentace projektu"></ul></div></div>
-<button id="open-settings" class="global-nav" type="button">Nastavení</button>
-<button id="logout" type="button">Odhlásit</button><div class="node-note">Na tomto uzlu<br>Zkušební verze</div></aside>
+<h2>Výstupy</h2><h3>Prezentace</h3><p id="sidebar-presentation-status" role="status">Otevřete projekt.</p>
+<ul id="sidebar-presentation-list" aria-label="Prezentace ve výstupech projektu"></ul></div>
+<div id="sidebar-settings" role="tabpanel" aria-labelledby="settings-sidebar-tab" tabindex="0" hidden>
+<h2>Nastavení</h2><p>Jednotlivá nastavení tohoto uzlu.</p>
+<ul id="sidebar-settings-list" aria-label="Seznam nastavení">
+<li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-users-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-users-tab">Uživatelé</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Uživatelé">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-users-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-federation-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-federation-tab">Federace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Federace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-federation-tab">Otevřít</button></div></details></li>
+</ul></div>
+<div id="sidebar-federation" role="tabpanel" aria-labelledby="federation-tab" tabindex="0" hidden>
+<h2>Federace</h2><p>V této verzi jsou dostupné jednotlivé přechodové nástroje.</p>
+<ul id="sidebar-federation-list" aria-label="Nástroje federace"><li class="sidebar-list-row">
+<button id="open-federation-transfer" class="sidebar-list-main" type="button">Přenos veřejného projektu do LXC</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce přenosu veřejného projektu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-transfer-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li><li class="sidebar-list-row">
+<button id="open-federation-network" class="sidebar-list-main" type="button">Síťový backend a spojení</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce síťového backendu a spojení">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-network-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li><li class="sidebar-list-row">
+<button id="open-federation-deployment" class="sidebar-list-main" type="button">Nasadit LXC uzel</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce nasazení LXC uzlu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-deployment-menu" type="button" role="menuitem">Otevřít</button></div></details>
+</li></ul></div></div>
+<section id="resource-monitor" aria-label="Přehled zdrojů uzlu">
+<button id="resource-monitor-open" type="button" aria-haspopup="dialog" aria-controls="resource-monitor-dialog">
+<svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17V7M9 17v-4M14 17V4M19 17v-7"/></svg>
+<span class="resource-monitor-heading">Zdroje <small>detail</small></span>
+<span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
+<span id="local-provider-indicator">Lokální AI · neověřeno</span>
+<span class="resource-mini-row"><span>CPU</span><progress max="100" value="0" aria-label="CPU – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>GPU</span><progress max="100" value="0" aria-label="GPU – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>RAM</span><progress max="100" value="0" aria-label="RAM – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>VRAM</span><progress max="100" value="0" aria-label="VRAM – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>DISK</span><progress max="100" value="0" aria-label="Disk – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row"><span>NET</span><progress max="100" value="0" aria-label="Síť – placeholder bez telemetrie"></progress><output>—</output></span>
+</button></section>
+<button id="logout" type="button"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg><span>Odhlásit</span></button>
+<button id="sidebar-layout-toggle" type="button" aria-pressed="false" aria-label="Sbalit hlavní panel"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="sidebar-layout-label">Sbalit panel</span></button></aside>
+<dialog id="resource-monitor-dialog" aria-labelledby="resource-monitor-title">
+<div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
+<section><h3>Poskytovatelé</h3><div id="resource-provider-list">
+<article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p></article>
+<article><strong>Lokální AI</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><small>U lokálních providerů se zde sleduje pouze dostupnost, nikoli tokeny ani náklady.</small></article>
+</div></section>
+<section><h3>Systémové monitory</h3><p class="resource-placeholder-note">CPU, GPU, RAM, VRAM, DISK a NET jsou zatím pouze připravená místa. Aplikace dosud systémovou telemetrii nesbírá.</p>
+<div id="system-monitor-detail"></div></section>
+</dialog>
+<dialog id="project-registration-remove-dialog" aria-labelledby="project-registration-remove-title">
+<form method="dialog"><h2 id="project-registration-remove-title">Odebrat nedostupnou registraci</h2>
+<p>Odebere se pouze registrace z tohoto uzlu. Lokální stav projektu a případná data v jiném umístění zůstanou zachované.</p>
+<p>Projekt: <code id="project-registration-remove-id"></code></p>
+<div class="form-actions"><button value="cancel" class="secondary-button">Zrušit</button><button id="project-registration-remove-confirm" type="button" class="danger">Odebrat registraci</button></div>
+</form></dialog>
 <main><div id="project-home">
-<header><span class="badge">Pracovní prostor</span><span>Vaše projekty, zdroje a rozhodnutí</span></header>
-<div class="home-heading"><div class="eyebrow">VAŠE PRÁCE NA JEDNOM MÍSTĚ</div>
-<h1>Projekty</h1><p>Vyberte projekt a pokračujte tam, kde jste skončili.</p></div>
-<p id="project-status" role="status" aria-live="polite">Načítám projekty…</p>
-<div id="project-cards" aria-label="Seznam projektů"></div>
+<header><span class="badge">Pracovní prostor</span></header>
+<div class="home-heading"><h1>Přehled</h1></div>
+<p id="project-status" class="visually-hidden" role="status" aria-live="polite">Načítám přehled…</p>
+<div id="dashboard-grid" aria-label="Přehled pracovního prostoru">
+<section id="dashboard-calendar" class="dashboard-tile dashboard-placeholder" tabindex="0" aria-label="Kalendář, integrace připravena jako placeholder">
+<span class="dashboard-kicker">Dnes</span><strong id="dashboard-date">—</strong>
+<p>Kalendář zatím není propojený s externí aplikací.</p></section>
+<section id="dashboard-tasks" class="dashboard-tile dashboard-tasks"><span class="dashboard-kicker">Všechny projekty</span>
+<h2>Úkoly</h2><p id="dashboard-task-status" role="status">Načítám úkoly…</p>
+<ul id="dashboard-task-list" aria-label="Nehotové úkoly ze všech projektů"></ul></section>
+<section id="dashboard-mail" class="dashboard-tile dashboard-placeholder" tabindex="0" aria-label="Pošta, integrace připravena jako placeholder">
+<span class="dashboard-kicker">Pošta</span><strong>Přehled zpráv</strong>
+<p>Poštovní klient zatím není propojený.</p></section>
+<button id="dashboard-trash" class="dashboard-tile dashboard-action" type="button"><span class="dashboard-kicker">Projekty</span>
+<strong>Koš projektů</strong><span id="dashboard-trash-summary">Načítám…</span></button>
+<div id="project-cards" class="dashboard-projects" aria-label="Naposledy otevřené projekty"></div>
+</div>
+</div>
+<div id="project-trash-view" hidden>
+<header><span class="badge">Projekty</span></header>
+<button id="project-trash-back" type="button" class="back-button">← Zpět na přehled</button>
+<section class="standalone-form project-trash-page"><h1>Koš projektů</h1>
 <section id="project-delete-panel" class="creation-preview" hidden><h2 id="project-delete-title">Akce projektu</h2>
 <label id="project-delete-mode-row">Režim <select id="project-delete-mode"><option value="clear-derived">Obnovit odvozený index</option><option value="unregister">Pouze odregistrovat</option><option value="trash" selected>Přesunout do obnovitelného koše</option></select></label>
 <pre id="project-delete-details"></pre><p id="project-delete-blockers" role="alert"></p>
@@ -271,23 +348,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="project-delete-confirm" type="button" disabled>Provést potvrzenou akci</button>
 <button id="project-delete-cancel" type="button" class="secondary-button">Zrušit</button></div>
 <p id="project-delete-status" role="status"></p></section>
-<details id="project-trash"><summary>Obnovitelný koš projektů</summary><div id="project-trash-list"></div>
-<p id="project-trash-status" role="status"></p></details>
-<form id="create-project" aria-label="Vytvořit projekt">
-<label for="new-project-title">Název nového projektu</label>
-<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
-<button id="create-project-btn">Připravit vytvoření</button></div>
-<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
-<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
-<p id="project-location-label">Použije se výchozí místní umístění.</p>
-<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
-<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
-<pre id="project-create-details"></pre>
-<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
-<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
-<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
-<p id="create-project-status" role="status"> </p></form>
-<p class="home-help">Dostupné akce určuje tento uzel a vaše oprávnění.</p>
+<div id="project-trash-list"></div><p id="project-trash-status" role="status"></p></section></div>
+<div id="legacy-home-diagnostics" hidden aria-hidden="true">
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
 <details class="diagnostics"><summary>Gamepad demo</summary>
@@ -306,6 +368,102 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="presentation-slide" tabindex="0" aria-live="polite">Zde se zobrazí aktuální slide.</div>
 </details>
 </div>
+<div id="project-create-view" hidden>
+<header><span class="badge">Nový projekt</span><span>Samostatný průvodce vytvořením</span></header>
+<button id="project-create-back" type="button" class="back-button">← Zpět na projekty</button>
+<section class="standalone-form"><div class="eyebrow">NOVÝ PRACOVNÍ PROSTOR</div><h1 id="project-create-heading" tabindex="-1">Vytvořit projekt</h1>
+<p>Nejprve připravíme přesný náhled. Projekt vznikne až po vašem potvrzení názvu a cílového umístění.</p>
+<form id="create-project" aria-label="Vytvořit projekt">
+<label for="new-project-title">Název nového projektu</label>
+<div class="project-create-row"><input id="new-project-title" type="text" required minlength="1" maxlength="200" placeholder="Můj projekt">
+<button id="create-project-btn">Připravit vytvoření</button></div>
+<div id="project-location-controls" hidden><button id="choose-project-location" type="button">Vybrat existující prázdnou složku…</button>
+<button id="clear-project-location" type="button" class="secondary-button" hidden>Použít výchozí umístění</button>
+<p id="project-location-label">Použije se výchozí místní umístění.</p>
+<label id="remember-project-parent-row" hidden><input id="remember-project-parent" type="checkbox"> Používat rodiče vybrané složky jako výchozí umístění</label></div>
+<section id="project-create-preview" class="creation-preview" hidden><h2>Potvrzení vytvoření</h2>
+<pre id="project-create-details"></pre>
+<label class="confirm"><input id="project-create-confirm-check" type="checkbox"> Potvrzuji název a přesné cílové umístění.</label>
+<div class="form-actions"><button id="project-create-confirm" type="button" disabled>Vytvořit a otevřít projekt</button>
+<button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
+<p id="create-project-status" role="status"> </p></form></section></div>
+<div id="federation-view" hidden>
+<header><span class="badge">Federace</span><span>Desktopový nástroj</span></header>
+<section class="standalone-form federation-transfer-page"><div class="eyebrow">PŘECHODOVÁ FUNKCE</div>
+<h1>Přenos veřejného projektu do LXC</h1>
+<p>Tato stránka bude v další verzi nahrazena plnohodnotnou správou federace projektů.</p>
+<p>Přenese se celá veřejná Git historie bez credentials, lokálního indexu a journalu. Cíl musí být nový projekt; neveřejná nebo neklasifikovaná historie přenos zastaví.</p>
+<form id="federation-transfer-form">
+<label>Projekt desktopu <select name="project" required></select></label>
+<label>Cílový LXC uzel <select name="target" required></select></label>
+<label>Důvěryhodná veřejná CA LXC <input name="ca" type="text" maxlength="4096" required autocomplete="off"></label>
+<button id="federation-transfer-preview" type="button" disabled>Připravit potvrzení</button>
+<section id="federation-transfer-confirmation" class="creation-preview" hidden><h2>Potvrdit přenos celé veřejné historie</h2>
+<pre id="federation-transfer-details"></pre>
+<p>Existující projekt se nepřepíše. Metadata autorů, názvy projektu a zprávy commitů jsou součástí historie. Nedokončený přenos stejného projektu a uzlu pokračuje s původním bundle a ID operace.</p>
+<label class="confirm"><input id="federation-transfer-confirm" type="checkbox"> Potvrzuji projekt, cílový uzel, veřejnou CA a přenos celé historie.</label>
+<div class="form-actions"><button id="federation-transfer-start" type="submit" disabled>Potvrdit a přenést</button><button id="federation-transfer-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
+<p id="federation-transfer-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-transfer-log" aria-label="Průběh přenosu"></pre>
+</form></section></div>
+<div id="federation-network-view" hidden>
+<header><span class="badge">Federace</span><span>Lokální nastavení desktopového uzlu</span></header>
+<section class="standalone-form federation-network-page"><div class="eyebrow">SÍŤ A DŮVĚRA</div>
+<h1>Síťový backend a spojení</h1>
+<p>Backend sdílí identitu desktopu a vystavuje pouze podepsaný test spojení, nikoli projekty, účty ani synchronizaci. Firewall se nemění.</p>
+<form id="federation-network-form">
+<fieldset><legend>HTTPS backend desktopu</legend>
+<label class="confirm"><input name="enabled" type="checkbox"> Povolit HTTPS backend při běhu desktopu</label>
+<label>Naslouchací privátní IPv4 <input name="bind" type="text" list="federation-network-addresses" maxlength="45" required autocomplete="off"></label>
+<datalist id="federation-network-addresses"></datalist>
+<label>Port <input name="port" type="number" min="1024" max="65535" required></label>
+<label>Povolená LAN klientů <input name="lan" type="text" maxlength="64" required autocomplete="off"></label>
+<label>TLS certifikát <input name="cert" type="text" maxlength="4096" autocomplete="off"></label>
+<label>TLS soukromý klíč <input name="key" type="text" maxlength="4096" autocomplete="off"></label>
+<label>Veřejná CA desktopu <input name="ca" type="text" maxlength="4096" autocomplete="off"></label>
+<label class="confirm"><input name="generate" type="checkbox"> Vytvořit novou lokální CA a TLS certifikát pro zvolenou IP</label>
+<p class="form-warning">Nové TLS změní důvěryhodnou CA. Pokud následné spuštění nebo uložení selže, nově vytvořená nepoužitá TLS složka může zůstat na disku; předchozí listener se obnoví.</p>
+<button id="federation-network-apply" type="submit">Použít a uložit nastavení</button>
+</fieldset>
+<fieldset><legend>Diagnostika protějšího uzlu</legend>
+<label>Zapamatovaný LXC uzel <select name="target"></select></label>
+<label>Důvěryhodná veřejná CA LXC <input name="peer_ca" type="text" maxlength="4096" autocomplete="off"></label>
+<div class="form-actions"><button id="federation-network-check" type="button">Ověřit HTTPS a identitu</button>
+<button id="federation-network-bilateral-preview" type="button" class="secondary-button">Ověřit oba směry…</button></div>
+<section id="federation-network-confirmation" class="creation-preview" hidden><h2>Potvrdit obousměrný test přes SSH</h2>
+<pre id="federation-network-details"></pre>
+<p>Přenese se pouze veřejná CA desktopu a aktualizuje adresa již schváleného peeru. Identity, práva, soukromé klíče ani firewall se nemění. Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.</p>
+<label class="confirm"><input id="federation-network-confirm" type="checkbox"> Potvrzuji uvedený LXC uzel, veřejné CA a jedno SSH spojení.</label>
+<div class="form-actions"><button id="federation-network-bilateral" type="button" disabled>Potvrdit a ověřit oba směry</button><button id="federation-network-cancel" type="button" class="secondary-button">Zrušit</button></div>
+</section></fieldset>
+<p id="federation-network-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-network-log" aria-label="Výsledek síťové operace"></pre>
+</form></section></div>
+<div id="federation-deployment-view" hidden>
+<header><span class="badge">Federace</span><span>Desktopový nástroj pro vzdálený uzel</span></header>
+<section class="standalone-form federation-deployment-page"><div class="eyebrow">LXC UZEL</div>
+<h1>Nasadit LXC uzel</h1>
+<p>Operace používá jedno SSH spojení. IP kontejneru zjistí automaticky; router musí mít Python 3 a jeho SSH host key musí být předem důvěryhodný v <code>known_hosts</code>. Heslo se neukládá.</p>
+<form id="federation-deployment-form">
+<label>Zapamatovaný uzel <select name="target"><option value="-1">Nový / ručně zadaný uzel</option></select></label>
+<label>SSH router <input name="host" type="text" maxlength="255" required autocomplete="off" placeholder="root@192.168.100.1"></label>
+<label>Kontejner <input name="container" type="text" maxlength="63" required value="workspace-m0" autocomplete="off"></label>
+<label>Privátní LAN <input name="lan" type="text" maxlength="64" required value="192.168.100.0/24" autocomplete="off"></label>
+<label>Adresa desktopového uzlu <input name="endpoint" type="text" list="federation-deployment-endpoints" maxlength="4096" autocomplete="off" placeholder="https://192.168.100.2:8443"></label>
+<datalist id="federation-deployment-endpoints"></datalist>
+<label>Operace <select name="mode" required></select></label>
+<p class="form-warning">První instalace vytvoří lokálního správce a schválí peery na obou uzlech. Existující účty a důvěra se nepřepisují. Projektová synchronizace se nezapíná.</p>
+<p class="form-warning">Reset zahodí recovery snapshot a zastaví službu; není rollback. Po selhání instalace použijte nejprve Obnovit. Aktualizace adresy neinstaluje software, ale vyžaduje zapamatovaný uzel a ověří TLS i identitu.</p>
+<button id="federation-deployment-preview" type="button" disabled>Zobrazit souhrn</button>
+<section id="federation-deployment-confirmation" class="creation-preview" hidden><h2>Potvrdit vzdálené změny</h2>
+<pre id="federation-deployment-details"></pre>
+<p>Instalace nebo aktualizace restartuje pouze webovou službu. První instalace navíc vytvoří správce a oboustrannou důvěru. Změna adresy upraví schválený desktopový peer bez instalace softwaru.</p>
+<label class="confirm"><input id="federation-deployment-confirm" type="checkbox"> Potvrzuji přesný SSH cíl, kontejner, LAN, endpoint a zvolenou operaci.</label>
+<div class="form-actions"><button id="federation-deployment-start" type="submit" disabled>Potvrdit a spustit</button><button id="federation-deployment-cancel" type="button" class="secondary-button">Zrušit</button></div>
+</section>
+<p id="federation-deployment-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
+<pre id="federation-deployment-log" aria-label="Průběh nasazení"></pre>
+</form></section></div>
 <div id="notebooklm-import-view" hidden>
 <header><span class="badge">Import projektu</span><span>Personal NotebookLM / Google Takeout</span></header>
 <button id="notebooklm-import-back" type="button" class="back-button">← Zpět na projekty</button>
@@ -332,6 +490,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
+<button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
@@ -464,9 +623,38 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
 </section>
+<section id="settings-access-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
+<h2>Dostupnost aplikace</h2>
+<p id="application-access-runtime">Určuje, ze kterých adres lze navázat spojení s touto aplikací. Přihlášení a HTTPS zůstávají povinné ve všech režimech.</p>
+<form id="application-access-form">
+<label>Rozsah dostupnosti <select name="mode">
+<option value="localhost">Pouze localhost</option>
+<option value="private-network">Lokální / privátní síť</option>
+<option value="allowlist">Pouze povolené adresy</option>
+<option value="unrestricted">Neomezeně</option>
+</select></label>
+<label id="application-access-allowed-row" hidden>Povolené IP adresy a sítě, jedna na řádek
+<textarea name="allowed" rows="7" placeholder="192.0.2.10&#10;10.20.0.0/16&#10;2001:db8::/48"></textarea></label>
+<p id="application-access-context" class="settings-note"></p>
+<button id="application-access-preview-button" type="submit">Zkontrolovat změnu</button>
+<p id="application-access-status" role="status" aria-live="polite"></p>
+</form>
+<section id="application-access-preview" hidden><h3>Přesný náhled změny</h3>
+<pre id="application-access-plan"></pre>
+<label class="confirm"><input id="application-access-confirm" type="checkbox"> Potvrzuji tento rozsah dostupnosti a beru na vědomí možné odpojení současného klienta.</label>
+<button id="application-access-save" type="button" disabled>Uložit dostupnost</button></section>
+<small>Politika se ukládá pouze na tomto uzlu. Skutečnou dosažitelnost může dále zúžit naslouchací adresa služby, firewall nebo síťová trasa.</small>
+</section>
 <section id="settings-profile-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-profile-tab" hidden>
 <h2>Uživatelský profil</h2><p>Jméno a kontakty pro závěrečný slide prezentace. Platí pro tohoto uživatele desktopu.</p>
-<button id="user-profile-open" type="button">Upravit profil…</button></section>
+<p>Údaje zůstávají v lokálním profilu tohoto uzlu; do projektu se neukládají ani nesynchronizují.</p>
+<form id="user-profile-form">
+<label>Jméno <input name="name" maxlength="100" autocomplete="name"></label>
+<label>E-mail <input name="email" inputmode="email" maxlength="180" autocomplete="email"></label>
+<label>Telefon <input name="phone" type="tel" maxlength="80" autocomplete="tel"></label>
+<label>Web <input name="web" inputmode="url" maxlength="200" autocomplete="url"></label>
+<button type="submit">Uložit profil</button>
+<p id="user-profile-status" role="status" aria-live="polite"></p></form></section>
 '''+ ADMIN_HTML + '''
 <button id="settings-back" class="back-button" type="button">← Zpět</button>
 </div>
@@ -543,20 +731,32 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="form-actions"><button id="artifact-delete-run" type="button" disabled>Odstranit dokument</button><button id="artifact-delete-cancel" class="secondary-button" type="button">Zrušit</button></div></section>
 </div>
 <div id="project-view" hidden>
-<header class="project-header"><div><span class="eyebrow">OTEVŘENÝ PROJEKT</span><h1 id="project-title"></h1></div>
+<header class="project-header"><span class="eyebrow">OTEVŘENÝ PROJEKT</span>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
-<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="true">Náhled</button>
-<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" tabindex="-1">Chat</button>
-<button id="workflow-tab" role="tab" aria-controls="workflow-panel" aria-selected="false" tabindex="-1">Creator → opponent</button>
-<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" tabindex="-1">Souhrn</button>
-<button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" tabindex="-1">Extrakce</button>
-<button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" tabindex="-1">Obrázek</button>
-<button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" tabindex="-1">Prezentace</button>
-<button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" tabindex="-1">Metadata</button></div>
+<button id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible">Projekt</button>
+<button id="preview-tab" role="tab" aria-controls="preview-panel" aria-selected="false" data-prompt-default="visible" tabindex="-1">Náhled</button>
+<button id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible" tabindex="-1">Chat</button>
+<button id="workflow-tab" role="tab" aria-controls="workflow-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Creator → opponent</button>
+<button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Souhrn</button>
+<button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Extrakce</button>
+<button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Obrázek</button>
+<button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Prezentace</button>
+<button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
-<div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab">
+<div id="project-overview-panel" role="tabpanel" aria-labelledby="project-overview-tab">
+<header class="project-overview-heading"><span class="dashboard-kicker">Projekt</span><h1 id="project-title"></h1></header>
+<div class="project-overview-grid">
+<section class="dashboard-tile project-overview-history"><span class="dashboard-kicker">Poslední aktivita</span>
+<h2>Historie změn</h2><p id="project-overview-history-status" role="status">Načítám historii…</p>
+<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol></section>
+<section class="project-overview-description" aria-label="Stručný popis projektu"><p id="project-description"></p></section>
+<section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
+<h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
+<ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
+<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div></div>
+<div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
 <div id="pdf-controls" hidden><label for="pdf-page">Stránka PDF (1–100)</label>
@@ -692,25 +892,35 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label><input id="metadata-apply-description" type="checkbox"><span id="metadata-description-after"></span></label></section>
 <fieldset><legend>Navržené nové štítky</legend><div id="metadata-tag-list"></div></fieldset>
 <button id="metadata-publish" type="button">Použít vybrané změny</button></div></div></div>
-<form id="chat-composer"><label for="chat-draft">Zadání úkolu</label>
-<label for="chat-mode">Režim</label><select id="chat-mode"><option value="orchestration">Zadání úkolu</option><option value="brainstorming">Volná konverzace</option></select>
-<label for="chat-run-adapter">Backend</label><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select>
-<label for="chat-run-model">Model běhu</label><input id="chat-run-model" maxlength="128" list="external-models">
-<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
-<label for="chat-privacy">Soukromí</label><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select>
-<fieldset id="task-routing"><legend>Explicitní routování úkolu</legend>
-<fieldset><legend>Zdroje</legend><label><input id="task-source-conversation" type="checkbox" checked> Konverzace</label>
-<label><input id="task-source-artifacts" type="checkbox"> Interní artefakty</label>
-<label><input id="task-source-public" type="checkbox"> Veřejný internet / načtené veřejné zdroje</label></fieldset>
-<label for="task-output-kind">Výstup</label><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select>
-<label id="task-search-query-label" for="task-search-query" hidden>Dotaz pro hledání na webu</label><input id="task-search-query" maxlength="4096" hidden placeholder="Co se má najít ve veřejných zdrojích?">
+<section id="prompt-widget" aria-label="Prompt"><form id="chat-composer">
+<label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>
+<textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete zpracovat?"></textarea></label>
+<div class="prompt-toolbar">
+<label class="prompt-control" for="chat-mode"><span>Režim</span><select id="chat-mode"><option value="orchestration">Úkol</option><option value="brainstorming">Volná konverzace</option></select></label>
+<div id="task-routing" class="prompt-routing-controls">
+<details id="task-inputs" class="prompt-input-picker"><summary><span>Vstupy</span><output id="task-input-count">1</output></summary>
+<div class="prompt-input-menu"><fieldset><legend>Vybrané zdroje</legend>
+<label id="task-source-current-prompt" hidden><input type="checkbox" checked disabled> Aktuální zadání (povinné pro vyhledávání)</label>
+<label id="task-source-current-file" hidden><input id="task-source-current-file-input" type="checkbox"> <span id="task-source-current-file-title">Aktuální soubor</span></label>
+<label id="task-source-conversation-label"><input id="task-source-conversation" type="checkbox" checked> Aktuální konverzace</label>
+<label id="task-source-artifacts-label"><input id="task-source-artifacts" type="checkbox"> Podklady projektu</label>
+<details id="task-artifacts" hidden><summary>Vybrat konkrétní podklady</summary><fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
+<label id="task-source-public-label"><input id="task-source-public" type="checkbox"> Veřejný web / načtené zdroje</label>
 <fieldset id="task-public-sources" hidden><legend>Již načtené veřejné zdroje</legend><div id="task-public-source-list"></div></fieldset>
-<p id="task-routing-note"></p></fieldset>
-<details id="task-artifacts" hidden><summary>Vybrat interní artefakty</summary>
-<fieldset><legend>Explicitně předat lokálnímu modelu</legend><div id="task-artifact-list"></div></fieldset></details>
-<div class="prompt-row"><textarea id="chat-draft" rows="2" maxlength="16000" placeholder="Co chcete v projektu zpracovat?"></textarea>
-<button id="chat-submit" type="submit" disabled>Zpracovat</button></div>
-<details id="advanced-external"><summary>Pokročilé ruční externí volání</summary>
+</fieldset></div></details>
+<label class="prompt-control" for="task-action"><span>Akce</span><select id="task-action"><option value="answer">Odpovědět</option><option value="search">Vyhledat na webu</option></select></label>
+<span class="prompt-route-arrow" aria-hidden="true">→</span>
+<label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select></label>
+</div>
+<label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
+<div class="prompt-execution-controls" aria-label="Cíl běhu">
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select></label>
+<label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
+</div>
+<button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
+</div>
+<p id="chat-orchestration-target" role="status" aria-live="polite"></p>
+<details id="advanced-external" hidden aria-hidden="true"><summary>Pokročilé ruční externí volání</summary>
 <button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
 <button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button>
 <section id="external-proposal" hidden aria-label="Návrh externího volání">
@@ -727,9 +937,9 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
-<small>Enter odešle, Shift+Enter vloží nový řádek · historie zůstává lokálně na tomto uzlu</small></form>
+</form></section>
 </section>
-</div><output id="backend-metrics-indicator" hidden aria-live="polite">OpenAI přehled: nenačten</output>
+</div>
 <div id="presenter-view" hidden>
 <header class="presenter-header"><div class="presenter-header-main"><span class="badge">Presenter · NÁCVIK</span><h1>Disclosure cockpit</h1><p>Demo workspace · Ukázková schůzka · Interní demo · r1</p></div>
 <div class="presenter-header-state"><strong id="presenter-live-state">NEAKTIVNÍ</strong><span>Schůzka <b id="presenter-meeting-time">00:00</b></span><span>Odbočka <b id="presenter-branch-time">00:00</b></span><span id="presenter-exposure">Expozice 0 · +0</span><button id="presenter-back" class="back-button" type="button">← Zpět do workspace</button></div></header>
@@ -739,7 +949,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <section class="presenter-audience" aria-label="Náhled veřejného výstupu"><div class="presenter-kicker">ZMENŠENÝ NÁHLED VEŘEJNÉHO VÝSTUPU</div>
 <div class="presenter-slide-preview" id="presenter-screen" tabindex="0" aria-live="polite"><p>Spusťte prezentaci.</p></div>
 <section class="presenter-notes"><h2>Poznámky k promítanému obsahu</h2><p id="presenter-notes">Poznámky se zobrazí po spuštění.</p><details><summary>Stručná osnova</summary><p id="presenter-outline">Osnova se zobrazí po spuštění.</p></details><p class="presenter-alert" id="presenter-alert">Interní upozornění: soukromý výběr není promítnutý.</p></section>
-<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" disabled>Celá obrazovka</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
+<div class="presenter-controls"><button id="presenter-prev" type="button" disabled>Předchozí</button><button id="presenter-next" type="button" disabled>Další</button><button id="presenter-fullscreen" type="button" hidden disabled>Displeje a role…</button><button id="presenter-blackout" type="button">Zatemnit</button></div></section>
 <aside class="presenter-speaker" aria-label="Soukromý kokpit"><div class="presenter-panel-head"><h2>Soukromý kokpit</h2><p id="presenter-counter">Slide 0 z 0</p></div><section class="presenter-browser"><div class="presenter-tab-row"><div class="presenter-tabs" role="tablist"><button id="presenter-slide-tab" type="button" role="tab" aria-selected="true">K slidu</button><button id="presenter-backup-tab" type="button" role="tab" aria-selected="false">Backupy</button><button id="presenter-question-tab" type="button" role="tab" aria-selected="false">Otázky</button></div><label class="presenter-search" for="presenter-backup-search"><span>Hledat</span><input id="presenter-backup-search" type="search" placeholder="Hledat…"></label></div><p id="presenter-gamepad-status" class="presenter-gamepad-status">Gamepad: čekám.</p>
 <details id="presenter-gamepad-settings" class="presenter-gamepad-settings"><summary>Nastavení gamepadu</summary>
 <div class="presenter-gamepad-grid"><label class="presenter-gamepad-wide"><input id="presenter-gamepad-enabled" type="checkbox"> Používat gamepad</label>
@@ -757,13 +967,21 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </section><section class="presenter-next-selector"><h3 id="presenter-next-title">Další slide podle plánu</h3><div class="presenter-slide-widget"><div class="presenter-slide-preview" id="presenter-private-preview"></div><section class="presenter-notes"><h2>Poznámky k vybranému slidu</h2><p id="presenter-next-notes"></p></section></div><p id="presenter-private-status">Soukromé procházení nemění expozici.</p><button id="presenter-next-preview" type="button">Zobrazit další slide</button><button id="presenter-show-private" type="button" hidden disabled>Zobrazit publiku</button></section></aside>
 </div>
 <footer class="presenter-footer"><button id="presenter-return" type="button">Návrat na původní slide</button><span>Otázky: <strong id="presenter-question-count">0</strong></span><span>Odložené: <strong>0</strong></span><span id="presenter-blackout-state">Veřejný výstup aktivní</span></footer>
+<dialog id="presenter-display-dialog" aria-labelledby="presenter-display-title"><form id="presenter-display-form" method="dialog">
+<h2 id="presenter-display-title">Displeje a role prezentace</h2>
+<p>Přiřaďte displej řečníkovi a divákům. Ostatní displeje zůstanou nepoužité. Na jednom displeji ponechte veřejný výstup vypnutý.</p>
+<label>Řečník — ovládání a poznámky <select name="speaker" required></select></label>
+<label>Diváci — schválený slide <select name="audience" required></select></label>
+<p id="presenter-display-status" role="status" aria-live="polite"></p>
+<div class="form-actions"><button id="presenter-display-identify" type="button" class="secondary-button">Identifikovat displeje</button><button id="presenter-display-cancel" type="button" class="secondary-button">Zrušit</button><button id="presenter-display-apply" type="submit">Použít role</button></div>
+</form></dialog>
 </div>
 </main><script src="/app.js"></script></body></html>'''
 CSS = '''*{box-sizing:border-box}[hidden]{display:none!important}
 body{margin:0;background:#f4f7fa;color:#162638;font:15px system-ui;display:flex;height:100vh;overflow:hidden}
 #mobile-sidebar-toggle,#mobile-sidebar-backdrop{display:none}
-aside{width:238px;height:100vh;min-height:0;box-sizing:border-box;flex-shrink:0;background:#142638;color:#c8d4df;padding:28px 20px;display:flex;flex-direction:column;overflow:hidden}
-.brand{flex:none;font-weight:750;letter-spacing:2px;color:white;margin-bottom:24px}.global-nav{flex:none;margin-top:auto;background:#176b60;text-align:left}.node-note{flex:none;font-size:11px;line-height:1.8;padding-top:18px;color:#9eb5c7}
+aside{position:relative;width:292px;height:100vh;min-height:0;box-sizing:border-box;flex-shrink:0;background:#142638;color:#c8d4df;padding:22px 14px;display:flex;flex-direction:column;overflow:hidden}
+.brand{display:flex;align-items:center;gap:10px;flex:none;font-weight:750;letter-spacing:2px;color:white;margin-bottom:18px}.brand-mark{font-size:17px}.brand-name{white-space:nowrap}
 main{flex:1;min-width:0;padding:26px 32px;overflow:auto}header{display:flex;justify-content:space-between;gap:16px;align-items:center;color:#627183;font-size:12px}
 .badge{color:#1c6556;background:#e0efe9;border-radius:20px;padding:8px 13px}.eyebrow{font-size:11px;color:#31796e;font-weight:750;letter-spacing:2px}
 h1{font-size:32px;margin:12px 0}h2{font-size:21px}p{line-height:1.6;color:#627183}button,textarea,input{font:inherit}
@@ -772,7 +990,7 @@ button:hover{background:#12564d}button:disabled{opacity:.5;cursor:default}button
 summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font-size:11px;color:#627183}
 #gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
 #gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
-.home-heading,.settings-heading{margin-top:44px}.home-heading h1{font-size:38px}.home-help{font-size:13px;margin-top:24px}
+.home-heading,.settings-heading{margin-top:28px}.home-heading h1{font-size:38px}
 .settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
@@ -780,65 +998,85 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}
-#backend-metrics-indicator{position:fixed;right:14px;bottom:10px;z-index:20;
- background:#142638e8;color:#dce8f1;border:1px solid #496072;border-radius:12px;
- padding:6px 10px;font-size:11px;box-shadow:0 3px 12px #14263830;max-width:60vw;
- white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
+#resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
+#resource-monitor-open:hover{background:#1c3549}#resource-monitor-open>*{pointer-events:none}
+.sidebar-utility-icon{display:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#sidebar-layout-toggle,#logout{flex:none;width:100%;margin-top:8px;padding:9px}#sidebar-layout-toggle{display:flex;align-items:center;justify-content:center;gap:8px;background:#20384b}#sidebar-layout-toggle:hover{background:#29485f}#sidebar-layout-toggle .sidebar-utility-icon{display:block;width:18px;height:18px}
+#sidebar-project-recover{margin:0 0 8px;padding:8px;font-size:11px;background:#8a642c}
+.resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
+#backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
+.resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;gap:5px;align-items:center;margin:2px 0;font-size:8px;color:#9eb5c7}.resource-mini-row progress{width:100%;height:5px;accent-color:#79c9ac}.resource-mini-row output{text-align:right;color:#7891a3}
+#resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
+#project-registration-remove-dialog{width:min(560px,calc(100vw - 32px));padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#project-registration-remove-dialog::backdrop{background:#07131fa8}#project-registration-remove-dialog h2{margin-top:0}#project-registration-remove-dialog code{overflow-wrap:anywhere}
+#project-registration-remove-confirm{background:#8b3030}
+#resource-monitor-dialog::backdrop{background:#07131fa8}.resource-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.resource-dialog-heading h2{margin:5px 0 12px}.resource-dialog-heading button{flex:none}
+#resource-monitor-dialog>section{margin-top:16px;padding:15px;border:1px solid #dce5eb;border-radius:12px;background:white}#resource-monitor-dialog h3{margin:0 0 12px}
+#resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
+.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 92px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-#project-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:24px}.project-card-wrap{display:grid;gap:6px;min-width:0}.project-remove{justify-self:end;background:transparent;color:#8b3030;padding:7px 9px;font-size:12px}.project-remove:hover{background:#fff1f1}.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash{margin:18px 0}#project-trash-list{margin-top:8px}
-.project-card{background:white;color:#162638;border:1px solid #dce5eb;border-radius:16px;padding:24px;text-align:left;min-height:190px;display:flex;flex-direction:column;gap:14px;box-shadow:0 5px 20px #18364808}
-.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
-.project-card .project-name{font-size:21px;line-height:1.4}.project-card .project-description{font-size:13px;color:#627183;font-weight:400;line-height:1.6}
-.project-card .project-id{font-size:11px;color:#82909d;font-weight:400;margin-top:auto}.project-card .project-action{color:#176b60;font-size:13px}
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+#dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
+#project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
+button.dashboard-tile,button.project-card{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+button.dashboard-tile:hover,button.project-card:hover{background:#fafffd;border-color:#4b9e8c;box-shadow:0 8px 24px #18364812}
+.dashboard-kicker{display:block;color:#31796e;font-size:11px;font-weight:750;letter-spacing:.09em;text-transform:uppercase}.dashboard-tile>strong,.project-card .project-name{display:block;font-size:21px;line-height:1.3}.dashboard-tile p{font-size:13px;margin:8px 0}.dashboard-placeholder{background:#f8fafb}.dashboard-placeholder>strong{font-size:24px}.dashboard-action #dashboard-trash-summary{margin-top:auto;color:#627183;font-size:12px;font-weight:500}
+.dashboard-tasks{display:flex;flex-direction:column}.dashboard-tasks h2{margin:6px 0 0}.dashboard-tasks>p{margin:0}.dashboard-tasks ul{list-style:none;padding:0;margin:8px 0 0;overflow:auto;min-height:0}.dashboard-task-row{border-top:1px solid #e2e8ec}.dashboard-task-row button{width:100%;padding:10px 4px;background:transparent;color:#162638;text-align:left}.dashboard-task-row button:hover{background:#edf7f4}.dashboard-task-row span,.dashboard-task-row small{display:block}.dashboard-task-row small{margin-top:3px}.project-card .project-meta{margin-top:auto;color:#627183;font-size:12px;font-weight:500}.project-card-unavailable{opacity:.68}
+.trash-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid #dce5eb}.trash-row code{overflow-wrap:anywhere}.trash-row .danger{background:#8b3030}#project-delete-blockers{color:#8b3030;white-space:pre-wrap}#project-trash-list{margin-top:8px}.project-trash-page{margin-top:18px}
 .diagnostics{margin-top:32px;color:#627183;font-size:12px}.diagnostics button{margin:14px 12px 0 0}.diagnostics output{font-size:20px}
 aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside small{color:#aabecf}
-#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
-#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
-#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover{background:#274154}
-#sidebar-artifact-list button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
-.sidebar-artifact-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-artifact-main{min-width:0}.sidebar-artifact-id{display:block;font-size:10px;color:#8faabc;margin:0 8px 10px;overflow-wrap:anywhere}.sidebar-artifact-title{font-size:13px}
+#sidebar-project-list,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-chat-tree ul,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list,#todo-tree{list-style:none;padding:0;margin:14px 0}
+#sidebar-project-list button,#sidebar-artifact-list button,#sidebar-chats button,#sidebar-federation-list button{display:block;text-align:left;width:100%;background:transparent;color:#dce8f1;padding:10px 8px;font-size:13px}
+#sidebar-project-list button:hover,#sidebar-artifact-list button:hover,#sidebar-chats button:hover,#sidebar-federation-list button:hover{background:#274154}
+.sidebar-list-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}.sidebar-list-main{min-width:0}.sidebar-list-main[aria-current="true"]{background:#274154!important;border-left:3px solid #79c9ac}.sidebar-item-id{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
+.sidebar-artifact-row{position:relative}.sidebar-artifact-title{font-size:13px}
 #sidebar-chats button[aria-current="true"]{background:#274154;border-left:3px solid #79c9ac}
 .sidebar-chat-meta{display:block;font-size:10px;color:#8faabc;margin-top:4px;overflow-wrap:anywhere}
-.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}
+.sidebar-project-primary-actions,.sidebar-chat-primary-actions,.sidebar-artifact-primary-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.sidebar-project-primary-actions button,.sidebar-chat-primary-actions button,.sidebar-artifact-primary-actions button{padding:8px 6px;font-size:11px}.sidebar-project-primary-actions button{position:relative;display:grid;place-items:center;min-height:38px}.project-action-icon{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.project-action-label{position:absolute;z-index:60;left:50%;top:calc(100% + 6px);padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-50%,-4px);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}.sidebar-project-primary-actions button:first-child .project-action-label{left:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:last-child .project-action-label{left:auto;right:0;transform:translateY(-4px)}.sidebar-project-primary-actions button:hover .project-action-label,.sidebar-project-primary-actions button:focus-visible .project-action-label{opacity:1;visibility:visible;transform:translate(-50%,0)}.sidebar-project-primary-actions button:first-child:hover .project-action-label,.sidebar-project-primary-actions button:first-child:focus-visible .project-action-label,.sidebar-project-primary-actions button:last-child:hover .project-action-label,.sidebar-project-primary-actions button:last-child:focus-visible .project-action-label{transform:translateY(0)}
+#sidebar-project-import-options{margin-top:6px}#sidebar-project-import-options button{width:100%;padding:8px 6px;font-size:11px}
 .sidebar-chat-branch{margin-top:12px}.sidebar-chat-branch-toggle{display:flex!important;align-items:center;gap:7px;color:#a9bdca!important;font-size:11px!important;text-transform:uppercase;letter-spacing:.06em}
 .sidebar-chat-branch-toggle::before{content:'▾';font-size:10px}.sidebar-chat-branch[aria-expanded="false"]>.sidebar-chat-branch-toggle::before{content:'▸'}
 .sidebar-chat-branch[aria-expanded="false"]>[role="group"]{display:none}.sidebar-chat-branch>[role="group"]{margin:2px 0 8px}
-.sidebar-chat-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
-.sidebar-chat-row>.sidebar-chat-open{min-width:0}.sidebar-chat-menu{position:relative;margin-top:4px}
-.sidebar-chat-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}
-.sidebar-chat-menu>summary::-webkit-details-marker{display:none}.sidebar-chat-menu>summary:hover,.sidebar-chat-menu[open]>summary{background:#274154}
-.sidebar-chat-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}
-#sidebar-chats .sidebar-chat-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}
-#sidebar-chats .sidebar-chat-menu-items button:hover{background:#dfecea}.sidebar-chat-menu-items button:disabled{display:none}
-.sidebar-presentation-row{padding:10px 8px;border-bottom:1px solid #274154}.sidebar-presentation-row strong,.sidebar-presentation-row small{display:block;overflow-wrap:anywhere}.sidebar-presentation-row small{margin-top:4px;color:#8faabc;font-size:10px}.sidebar-presentation-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}#sidebar-presentations .sidebar-presentation-actions button{padding:7px 5px;font-size:11px;text-align:center;background:#274154}#sidebar-presentations .sidebar-presentation-actions button:hover{background:#36566d}#sidebar-presentations .sidebar-presentation-actions button:disabled{opacity:.55}
-.sidebar-artifact-menu{position:relative;margin-top:4px}.sidebar-artifact-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-artifact-menu>summary::-webkit-details-marker{display:none}.sidebar-artifact-menu>summary:hover,.sidebar-artifact-menu[open]>summary{background:#274154}.sidebar-artifact-menu-items{position:absolute;z-index:30;right:0;top:100%;width:190px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}#sidebar-artifacts .sidebar-artifact-menu-items button{display:block;width:100%;padding:9px 10px;text-align:left;background:transparent;color:#20384b;font-size:12px}#sidebar-artifacts .sidebar-artifact-menu-items button:hover{background:#dfecea}
-#sidebar-tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:18px}#sidebar-tabs button{font-size:12px;padding:8px 6px;border:1px solid #496072;background:transparent;color:#c8d4df}
+.sidebar-chat-row{position:relative}.sidebar-chat-row>.sidebar-chat-open{min-width:0}
+.sidebar-presentation-row{position:relative;border-bottom:1px solid #274154}.sidebar-presentation-row .sidebar-list-main strong,.sidebar-presentation-row .sidebar-list-main small{display:block;overflow-wrap:anywhere}.sidebar-presentation-row .sidebar-list-main small{margin-top:4px;color:#8faabc;font-size:10px}
+.sidebar-item-menu{position:relative;margin-top:4px}.sidebar-item-menu>summary{display:block;list-style:none;cursor:pointer;color:#dce8f1;padding:8px;border-radius:8px;font-weight:700}.sidebar-item-menu>summary::-webkit-details-marker{display:none}.sidebar-item-menu>summary:hover,.sidebar-item-menu[open]>summary{background:#274154}.sidebar-item-menu-items{position:absolute;z-index:30;right:0;top:100%;width:205px;padding:6px;background:#f8fbfd;border:1px solid #8faabc;border-radius:10px;box-shadow:0 8px 22px #07131f55}.sidebar-item-menu-items button{display:block!important;width:100%!important;padding:9px 10px!important;text-align:left!important;background:transparent!important;color:#20384b!important;font-size:12px!important}.sidebar-item-menu-items button:hover{background:#dfecea!important}.sidebar-item-menu-items button:disabled{display:block!important;opacity:.48;cursor:not-allowed}
+#sidebar-tabs{grid-column:1;grid-row:1;display:flex;flex-direction:column;align-items:stretch;gap:6px;margin:0;padding-right:8px;border-right:1px solid #365066;overflow:visible;z-index:10}
+#sidebar-tabs button{position:relative;width:42px;min-height:42px;padding:8px;display:grid;place-items:center;border:1px solid transparent;background:transparent;color:#c8d4df}
+.sidebar-tab-icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sidebar-tab-label{position:absolute;z-index:50;left:calc(100% + 9px);top:50%;padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-4px,-50%);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}
+#sidebar-tabs button:hover .sidebar-tab-label,#sidebar-tabs button:focus-visible .sidebar-tab-label{opacity:1;visibility:visible;transform:translate(0,-50%)}
 #sidebar-tabs button[aria-selected="true"]{background:#274154;color:white;border-color:#79c9ac}
-#sidebar-projects:not([hidden]),#sidebar-project-tools:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-#sidebar-project-tools>[role="tabpanel"]:not([hidden]){flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
-#sidebar-tabs,.sidebar-back{flex:none}.sidebar-back{background:transparent;color:#dce8f1;text-align:left;padding:8px;margin:0 0 14px}.sidebar-back:hover{background:#274154}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
-#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list{flex:1}
+#sidebar-tabs button:disabled{opacity:.42}#sidebar-tabs button:disabled:hover{background:transparent}
+#sidebar-project-tools{flex:1;min-height:0;display:grid;grid-template-columns:51px minmax(0,1fr);column-gap:10px;overflow:hidden}
+#sidebar-project-tools>[role="tabpanel"]:not([hidden]){grid-column:2;grid-row:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list{min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-presentation-list,#sidebar-tool-list,#sidebar-settings-list,#sidebar-federation-list{flex:1}
+#sidebar-settings-list{flex:1}
 #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid;grid-template-rows:auto auto auto minmax(0,1fr)}
+#sidebar-settings-list button{display:block;width:100%;padding:10px 8px;text-align:left;background:transparent;color:#dce8f1;font-size:13px}#sidebar-settings-list button:hover{background:#274154}#sidebar-settings-list li[hidden]{display:none}
+#sidebar-tools h2,#sidebar-presentations h2,#sidebar-settings h2,#sidebar-federation h2{margin-bottom:4px}#sidebar-presentations h3{font-size:13px;color:#dce8f1;margin:8px 0 0}
 #todo-title{font-size:13px;font-weight:600;overflow-wrap:anywhere}#todo-tree ul{padding-left:14px;list-style:none;border-left:1px solid #496072;margin-left:4px}
-#todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
+#todo-tree li{font-size:13px;margin:8px 0}.todo-label{display:inline-flex;gap:7px;align-items:baseline;max-width:100%;padding:7px 5px;border-radius:7px;cursor:pointer}.todo-label:hover,.todo-label:focus-visible{background:#274154;outline:none}.todo-label input{flex-shrink:0;accent-color:#79c9ac}.todo-text{overflow-wrap:anywhere;min-width:0}
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
-#project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0}.project-header h1{font-size:25px;color:#162638;margin:6px 0}
+#project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0;min-height:28px}.project-header .eyebrow{align-self:center}
 .project-header details{max-width:280px}.project-header code{font-size:10px}
 #workspace-panel{min-height:0;flex:1;display:flex;flex-direction:column;background:white;border:1px solid #dce3e9;border-radius:16px;overflow:hidden}
 #main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
 #main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-#main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}
+#main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}#main-panel-content.project-overview-active{overflow:hidden}
+#project-overview-panel{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;flex:none;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;flex:1;min-height:0}.project-overview-history{display:flex;flex-direction:column;grid-column:span 1;min-height:0;overflow:hidden}.project-overview-history ol{flex:1;min-height:0;list-style:none;margin:0;padding:0;overflow:auto;overscroll-behavior:contain}.project-history-row{padding:10px 0;border-top:1px solid #dce3e9}.project-history-row:first-child{border-top:0}.project-history-row strong,.project-history-row small{display:block;overflow-wrap:anywhere}.project-history-row small{margin-top:4px;color:#526675}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
+.project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:0;overflow:hidden}.project-overview-tasks ul{flex:1;min-height:0;max-height:none;overscroll-behavior:contain}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:8px}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
 #pdf-controls{margin:16px 0}#pdf-page{width:75px;margin:0 12px;padding:10px}
-#chat-composer{flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd;padding:14px 20px}#chat-composer label{font-weight:600;font-size:12px}
+#prompt-widget{position:relative;z-index:20;flex-shrink:0;border-top:1px solid #dce3e9;background:#fafffd}#chat-composer{max-height:52vh;overflow:auto;padding:12px 20px 14px}#chat-composer.inputs-open{overflow:visible}#chat-composer label{font-weight:600;font-size:12px}.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.prompt-draft-control{position:relative;display:block;box-sizing:border-box;border:1px solid #bfcdc9;border-radius:10px;background:#fff;color:#526675}.prompt-draft-control>span{position:absolute;z-index:1;top:5px;left:12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;pointer-events:none}.prompt-draft-control:focus-within,.prompt-control:focus-within{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}#chat-draft{display:block;box-sizing:border-box;width:100%;min-height:68px;max-height:180px;resize:vertical;border:0;border-radius:10px;outline:0;padding:23px 12px 8px;background:transparent}
+.prompt-toolbar{display:flex;align-items:end;gap:8px;margin:9px 0 5px;min-width:0}.prompt-control{position:relative;display:block;box-sizing:border-box;height:44px;min-width:0;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#526675}.prompt-control>span{position:absolute;z-index:1;top:4px;left:9px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;pointer-events:none}.prompt-control select,.prompt-control input{box-sizing:border-box;height:42px;min-width:0;max-width:180px;margin:0;padding:17px 28px 3px 9px;border:0;border-radius:8px;outline:0;background:transparent;color:#213746}.prompt-routing-controls,.prompt-execution-controls{display:flex;align-items:end;gap:8px;min-width:0}.prompt-routing-controls{flex:1}.prompt-execution-controls{margin-left:auto}.prompt-route-arrow{align-self:center;color:#688194;font-size:18px}.prompt-input-picker{position:relative;flex:0 0 auto}.prompt-input-picker>summary{display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:44px;min-width:108px;padding:5px 28px 5px 10px;border:1px solid #bfcdc9;border-radius:8px;background:#fff;color:#213746;cursor:pointer;list-style:none}.prompt-input-picker>summary::-webkit-details-marker{display:none}.prompt-input-picker>summary::after{content:'▾';position:absolute;right:10px;bottom:11px;color:#688194}.prompt-input-picker[open]>summary{border-color:#176b60;box-shadow:0 0 0 2px #79c9ac3d}.prompt-input-picker>summary span{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#526675}.prompt-input-picker>summary output{font-size:13px;font-weight:600}.prompt-input-menu{position:absolute;z-index:25;left:0;bottom:50px;width:min(390px,calc(100vw - 48px));max-height:min(360px,45vh);overflow:auto;border:1px solid #bfcdc9;border-radius:10px;padding:10px 12px;background:#fff;box-shadow:0 10px 28px #14263835}.prompt-input-menu fieldset{margin:0;padding:0;border:0}.prompt-input-menu fieldset>legend{font-weight:700;margin-bottom:8px}.prompt-input-menu label{display:block!important;margin:7px 0!important;font-weight:400!important}.prompt-input-menu #task-artifacts{margin:5px 0 9px 22px}.prompt-input-menu #task-artifacts summary{cursor:pointer;font-weight:600}.prompt-input-menu #task-artifacts fieldset,.prompt-input-menu #task-public-sources{max-height:160px;overflow:auto;margin:7px 0;padding:7px 10px;border-left:2px solid #dce3e9}.prompt-privacy-control select{max-width:155px}.prompt-execution-controls .prompt-control:first-child select{max-width:165px}.prompt-execution-controls .prompt-control:last-child input{max-width:150px;padding-right:9px}#chat-submit{flex:0 0 44px;width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;font-size:22px;line-height:1}#chat-submit:disabled{opacity:.48;cursor:not-allowed}#chat-orchestration-target{margin:5px 0 0;color:#9b4f30;font-size:12px}#chat-orchestration-target:empty{display:none}
 #external-preview,#external-proposal,#search-preview,.deletion-preview{margin-top:12px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}#external-preview pre,#search-preview pre,.deletion-preview pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto}#external-proposal-messages label{display:block;margin:7px 0}
-#task-routing,#task-artifacts,#advanced-external{margin:8px 0;color:#456276;font-size:12px}#task-routing fieldset,#task-artifacts fieldset{border:1px solid #dce3e9;margin:8px 0;padding:8px 12px;max-height:160px;overflow:auto}#task-routing label,#task-artifact-list label,#task-public-source-list label{display:block;font-weight:400;margin:5px 0}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
-.prompt-row{display:flex;gap:10px;margin:8px 0}.prompt-row textarea{resize:vertical;min-height:64px;max-height:150px;flex:1;min-width:0;border:1px solid #bfcdc9;border-radius:8px;padding:10px;background:white}
-.prompt-row button{align-self:flex-end}.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:7px;max-width:100%}#chat-operation-status{font-size:12px;min-height:20px;margin:2px 0;color:#315f58}
+#advanced-external{margin:8px 0;color:#456276;font-size:12px}.task-outcome{border:1px solid #dce3e9;border-radius:12px;margin:14px 0;padding:14px 18px;background:#fffaf0}.task-outcome.terminal{background:#f4f7fa}.task-outcome pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:none}.task-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.task-actions button{padding:8px 12px}.artifact-link{color:#176b60;background:transparent;padding:0;text-align:left}.artifact-link:hover{background:transparent;text-decoration:underline}
+.chat-message{padding:14px 18px;background:#edf5f2;border-radius:12px;margin:14px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-message.assistant{background:#eef1fa}.chat-message small{display:block;margin-top:6px}.secondary-button{background:#e8eef2;color:#304657;margin:0 8px 12px 0}.secondary-button:hover{background:#dce6eb}#chat-privacy{padding:17px 28px 3px 9px;max-width:100%}#chat-operation-status{font-size:12px;margin:5px 0 0;color:#315f58}#chat-operation-status:empty{display:none}
 #chat-stream-status.chat-live-progress{display:flex;align-items:center;gap:10px;min-height:52px;color:#304657;font-weight:600}
 .chat-progress-spinner{width:12px;height:12px;flex:0 0 auto;border:3px solid #afc3d8;border-top-color:#526ca4;border-radius:50%;animation:chat-stream-spin .8s linear infinite}
 @keyframes chat-stream-spin{to{transform:rotate(360deg)}}
@@ -850,7 +1088,29 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
-@media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.project-header details{max-width:140px}}
+.federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
+@media(max-width:1100px) and (min-width:641px){#dashboard-grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(210px,auto)}}
+@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.project-overview-description{grid-column:1/-1;grid-row:1}.project-overview-history{grid-column:1;grid-row:2}.project-overview-tasks{grid-column:2;grid-row:2}}
+@media(max-width:1180px) and (min-width:641px){.prompt-toolbar{flex-wrap:wrap}.prompt-routing-controls{order:3;flex-basis:100%}.prompt-execution-controls{margin-left:0}}
+@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}.project-header details{max-width:140px}}
+@media(min-width:641px){
+ aside.sidebar-compact{width:70px;padding:14px 9px;overflow:visible}
+ aside.sidebar-compact .brand{justify-content:center;height:30px;margin-bottom:10px}aside.sidebar-compact .brand-name{display:none}
+ aside.sidebar-compact #sidebar-project-tools{display:block;overflow:visible}aside.sidebar-compact #sidebar-tabs{height:100%;padding:0;border-right:0;overflow-y:auto;overflow-x:visible;scrollbar-width:none}
+ aside.sidebar-compact #sidebar-tabs::-webkit-scrollbar{display:none}
+ aside.sidebar-compact #sidebar-project-tools>[role="tabpanel"]:not([hidden]){position:absolute;z-index:70;left:calc(100% + 8px);top:12px;bottom:12px;width:292px;min-width:0;padding:18px 14px;border:1px solid #496072;border-radius:12px;background:#142638;box-shadow:0 12px 32px #07131f66;overflow:hidden}
+ aside.sidebar-compact:not(.sidebar-menu-open) #sidebar-project-tools>[role="tabpanel"]:not([hidden]){display:none}
+ aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>[role="tabpanel"]:not([hidden]){display:flex}
+ aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>#sidebar-chats:not([hidden]){display:grid}
+ aside.sidebar-compact #resource-monitor{margin-top:8px;padding-top:8px}aside.sidebar-compact #resource-monitor-open{display:grid;place-items:center;width:42px;height:42px;padding:8px}
+ aside.sidebar-compact #resource-monitor-open>:not(.sidebar-utility-icon){display:none}aside.sidebar-compact #resource-monitor-open>.sidebar-utility-icon{display:block}
+ aside.sidebar-compact #logout,aside.sidebar-compact #sidebar-layout-toggle{position:relative;display:grid;place-items:center;width:42px;height:42px;padding:8px;font-size:0}
+ body[data-runtime="desktop"] aside.sidebar-compact #logout{display:none}
+ aside.sidebar-compact #logout .sidebar-utility-icon{display:block}
+ aside.sidebar-compact #sidebar-layout-toggle .sidebar-utility-icon{transform:rotate(180deg)}
+ aside.sidebar-compact .sidebar-layout-label{position:absolute;z-index:90;left:calc(100% + 9px);top:50%;padding:7px 9px;border:1px solid #496072;border-radius:7px;background:#07131f;color:#f4f8fb;font-size:12px;line-height:1;white-space:nowrap;box-shadow:0 5px 16px #07131f66;opacity:0;visibility:hidden;pointer-events:none;transform:translate(-4px,-50%);transition:opacity .12s ease,transform .12s ease,visibility .12s ease}
+ aside.sidebar-compact #sidebar-layout-toggle:hover .sidebar-layout-label,aside.sidebar-compact #sidebar-layout-toggle:focus-visible .sidebar-layout-label{opacity:1;visibility:visible;transform:translate(0,-50%)}
+}
 @media(max-width:640px){
  body{display:block;height:auto;min-height:100vh;min-height:100dvh;overflow:auto}
  #mobile-sidebar-toggle{display:block;position:fixed;z-index:60;top:10px;left:10px;min-height:44px;padding:10px 14px;box-shadow:0 3px 14px #14263835}
@@ -861,19 +1121,21 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
  main{width:100%;min-height:100vh;min-height:100dvh;padding:68px 14px 24px;overflow:visible}
  header,.project-header{align-items:flex-start;flex-direction:column}.project-header details{max-width:100%}
  .home-heading,.settings-heading{margin-top:20px}.home-heading h1,h1{font-size:30px}
- #project-cards{grid-template-columns:minmax(0,1fr);gap:12px}.project-card{min-width:0;min-height:0;padding:18px}
+ #project-home>header,#project-home>.home-heading{display:none}#dashboard-grid{display:block;min-height:0}.dashboard-tile,.project-card{display:none!important}#dashboard-tasks{display:flex!important;height:calc(100vh - 36px);padding:16px}
  #project-view{height:auto;min-height:calc(100vh - 92px);min-height:calc(100dvh - 92px)}
- #workspace-panel{min-width:0;overflow:visible}#main-panel-content{overflow:visible;padding:0 14px 18px}
+ #workspace-panel{min-width:0;overflow:visible}#main-panel-content,#main-panel-content.project-overview-active{overflow:visible;padding:0 14px 18px}
+ #project-overview-panel{display:block;height:auto;padding:16px 0}.project-overview-heading h1{font-size:30px}.project-overview-grid{display:grid;grid-template-columns:1fr}.project-overview-description{grid-column:1;grid-row:1;padding:12px 2px}.project-overview-history{display:flex!important;grid-column:1;grid-row:2;min-height:180px;overflow:visible}.project-overview-history ol{flex:none;overflow:visible;overscroll-behavior:auto}.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px;overflow:visible}.project-overview-tasks ul{flex:none;overflow:visible;overscroll-behavior:auto}#chat-composer{max-height:none;padding:12px 14px 14px}
  #main-tabs,#settings-tabs{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;padding:12px;scrollbar-width:thin}
  #main-tabs button,#settings-tabs button{flex:0 0 auto;min-height:44px;scroll-snap-align:start}
  .settings-card,#workflow-panel section,#image-request-preview,#image-result,#metadata-diff{max-width:100%;padding:16px 14px;border-radius:12px}
  button{min-height:44px}input,select,textarea{font-size:16px;max-width:100%}fieldset{min-width:0}
- .prompt-row,.cms-domain-row{align-items:stretch}.prompt-row button,.cms-domain-row button{width:100%}
+ .prompt-toolbar{display:grid;grid-template-columns:1fr 1fr auto;align-items:end}.prompt-toolbar>.prompt-control:first-child{grid-column:1}.prompt-routing-controls{display:contents}.prompt-input-picker{grid-column:2}.prompt-routing-controls>.prompt-control{grid-column:1}.prompt-route-arrow{display:none}.prompt-routing-controls>.prompt-control:last-child{grid-column:2}.prompt-privacy-control{grid-column:1}.prompt-execution-controls{display:contents}.prompt-execution-controls>.prompt-control:first-child{grid-column:1}.prompt-execution-controls>.prompt-control:last-child{grid-column:2}.prompt-control select,.prompt-control input,.prompt-privacy-control select,.prompt-execution-controls .prompt-control:first-child select,.prompt-execution-controls .prompt-control:last-child input{width:100%;max-width:none}.prompt-input-picker>summary{width:100%}#chat-submit{grid-column:3;grid-row:3/span 2;align-self:end;width:44px;height:44px;min-height:44px}.prompt-input-menu{position:fixed;z-index:70;left:14px;right:14px;bottom:14px;width:auto;max-height:70vh}.cms-domain-row{align-items:stretch}.cms-domain-row button{width:100%}
  .confirm{display:flex!important;align-items:flex-start;gap:10px;overflow-wrap:anywhere}.confirm input{flex:0 0 auto;margin-top:4px}
  pre,code,output,[role="status"],[role="alert"]{max-width:100%;overflow-wrap:anywhere;word-break:break-word}
  #preview-content pre,#workflow-panel pre,#image-request-json,#image-result-metadata,#external-preview pre,#cms-request-preview{white-space:pre-wrap;overflow-x:auto}
  #pdf-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#pdf-page{margin:0}
- #backend-metrics-indicator{right:8px;bottom:8px;max-width:calc(100vw - 16px)}
+ #system-monitor-detail{grid-template-columns:1fr}
+ #sidebar-layout-toggle{display:none}
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
@@ -892,7 +1154,7 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#project-create-view,#project-trash-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view,#federation-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
 #google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -924,6 +1186,7 @@ PRESENTER_CSS = '''
 .presenter-notes{background:#fffaf0;border-top:1px solid #d6b36a;padding:8px 12px}.presenter-notes h2{font-size:13px;margin:0}.presenter-notes p{margin:3px 0;font-size:13px}.presenter-alert{border-left:3px solid #c48226;padding-left:10px}.presenter-tabs{display:flex;gap:3px;flex:0 0 auto}.presenter-tabs button{font-size:11px;padding:7px 9px;background:#e8eef2;color:#304657}.presenter-tabs button[aria-selected="true"]{background:#176b60;color:#fff}.presenter-search{display:flex;align-items:center;gap:4px;min-width:110px;margin:0;font-size:11px;color:#627183}.presenter-search input{width:100px;padding:6px;margin:0;border:1px solid #bfcdc9;border-radius:7px}#presenter-tab-status,#presenter-backup-status{display:none}.presenter-private-preview{background:#f4f7fa;padding:8px;border-radius:8px}.presenter-private-preview h2{font-size:16px;color:#176b60}.presenter-private-preview p{font-size:12px;margin:4px 0}.presenter-private-status{font-size:11px}.presenter-footer{display:flex;gap:16px;align-items:center;flex-wrap:wrap;border-top:1px solid #dce3e9;padding:10px 0;font-size:12px;color:#627183}.presenter-footer button{padding:9px 12px}.presenter-blackout #presenter-screen{background:#05090c}.presenter-blackout #presenter-screen>*{visibility:hidden}
 .presenter-gamepad-status{font-size:11px!important;color:#627183;margin:4px 0!important}.presenter-gamepad-selected{outline:3px solid #59b6aa!important;outline-offset:2px}
 .presenter-gamepad-settings{font-size:11px;color:#456276;border:1px solid #dce3e9;border-radius:8px;padding:6px 8px;margin:4px 0}.presenter-gamepad-settings summary{cursor:pointer;font-weight:700;color:#176b60}.presenter-gamepad-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;margin-top:8px}.presenter-gamepad-grid label{display:flex;align-items:center;justify-content:space-between;gap:6px}.presenter-gamepad-grid input[type="number"]{width:64px;padding:4px}.presenter-gamepad-grid select{min-width:0;max-width:230px;padding:4px}.presenter-gamepad-wide{grid-column:1/-1}.presenter-gamepad-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.presenter-gamepad-actions button{font-size:11px;padding:7px 9px}.presenter-gamepad-settings p{font-size:11px;margin:6px 0!important}.presenter-gamepad-settings output{display:block;overflow-wrap:anywhere;color:#627183}
+#presenter-display-dialog{width:min(620px,calc(100vw - 32px));padding:0;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#presenter-display-dialog::backdrop{background:#07131fa8}#presenter-display-form{padding:22px}#presenter-display-form h2{margin-top:0}#presenter-display-form label{display:block;margin:14px 0;font-weight:650}#presenter-display-form select{display:block;width:100%;margin-top:6px;padding:9px}#presenter-display-status{min-height:24px;color:#8b3030}#presenter-display-form .form-actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 .presenter-next-selector h3{border-top:0!important;padding-top:0!important;margin:0 0 4px!important}.presenter-next-selector #presenter-next-preview{display:block;min-height:48px;line-height:1.25;cursor:pointer}
 .presenter-speaker{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px;overflow:hidden}
 .presenter-panel-head{grid-column:1/-1}
@@ -938,7 +1201,7 @@ PRESENTER_CSS = '''
 .presenter-audience #presenter-screen,.presenter-speaker #presenter-private-preview{width:100%;max-width:420px;aspect-ratio:16/9;align-self:center;display:flex;flex-direction:column;justify-content:center;background:#10222f;color:#f6faf8;padding:5%;border:1px solid #496072;border-radius:0;overflow:auto}.presenter-audience #presenter-screen h2,.presenter-speaker #presenter-private-preview h2{font-size:clamp(14px,1.8vw,30px);color:#79c9ac;margin:0 0 8px}.presenter-audience #presenter-screen p,.presenter-speaker #presenter-private-preview p{font-size:clamp(10px,1.2vw,20px);color:#c8d4df;line-height:1.35;margin:0;white-space:pre-wrap}.presenter-notes p{white-space:pre-wrap}#presenter-tab-content{flex:1;min-height:0;overflow:auto}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 @media(max-width:1100px){.presenter-layout{grid-template-columns:15% 25% minmax(0,1fr)}}
-@media(max-width:780px){aside{width:185px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.prompt-row{flex-direction:column}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
+@media(max-width:780px){aside{width:268px;padding:22px 12px}main{padding:18px}#project-cards{grid-template-columns:1fr}.presenter-layout{grid-template-columns:1fr;min-height:auto}.presenter-deck{max-height:190px}.presenter-audience{min-height:460px}.presenter-speaker{min-height:560px}}
 '''
 CSS += PRESENTER_CSS
 JS = SLIDE_JS + '''const button=document.querySelector('#increment');
@@ -1067,6 +1330,10 @@ const presenterBackupStatus=document.querySelector('#presenter-backup-status');
 const presenterPrevButton=document.querySelector('#presenter-prev');
 const presenterNextButton=document.querySelector('#presenter-next');
 const presenterFullscreenButton=document.querySelector('#presenter-fullscreen');
+const presenterDisplayDialog=document.querySelector('#presenter-display-dialog');
+const presenterDisplayForm=document.querySelector('#presenter-display-form');
+const presenterDisplayStatus=document.querySelector('#presenter-display-status');
+let presenterDisplayConfiguration=null;
 let presenterSlides=[];
 let presenterBackupsData=[];
 let presenterIndex=0;
@@ -1342,22 +1609,67 @@ async function loadPresenter(){
 function openPresenter(){
  location.hash='presenter-open';
  document.body.classList.add('presenter-active');document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;presenterView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
+ document.querySelector('#sidebar-project-tools').hidden=true;loadPresenter();
 }
 async function closePresenter(){
  let saved=false;
  try{const result=await projectRequest('/v1/presentation/status',{action:'end'},120000);saved=result.saved;}
  catch(error){presenterStatus.textContent=`Záznam relace nelze uzavřít: ${error.message}`;return;}
  location.hash='presenter-close';document.body.classList.remove('presenter-active');presenterView.hidden=true;
- if(activeProject){const projectId=activeProject.id;projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(saved){await openRegisteredProject(projectId);await loadPresentationEditor(presentationEditorArtifact,false);sidebarPresentationStatus.textContent='Relace byla uložena do projektu.';}}
- else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+ document.querySelector('#sidebar-project-tools').hidden=false;
+ if(activeProject){const projectId=activeProject.id;projectView.hidden=false;if(saved){await openRegisteredProject(projectId);await loadPresentationEditor(presentationEditorArtifact,false);sidebarPresentationStatus.textContent='Relace byla uložena do projektu.';}}
+ else{document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
 }
 presentationOpenButton.addEventListener('click',openPresenter);
 document.querySelector('#presenter-back').addEventListener('click',closePresenter);
 presenterPrevButton.addEventListener('click',()=>movePresenter(-1));
 presenterNextButton.addEventListener('click',()=>movePresenter(1));
-presenterFullscreenButton.textContent='Displeje a role…';
 presenterFullscreenButton.addEventListener('click',()=>{location.hash='presenter-displays';});
+function presenterDisplaySelection(){return presenterDisplayConfiguration?{
+ token:presenterDisplayConfiguration.token,
+ speaker:Number(presenterDisplayForm.elements.speaker.value),
+ audience:Number(presenterDisplayForm.elements.audience.value)}:null;}
+function validatePresenterDisplaySelection(){
+ const selection=presenterDisplaySelection();
+ const same=selection&&selection.speaker===selection.audience;
+ document.querySelector('#presenter-display-apply').disabled=!selection||same;
+ presenterDisplayStatus.textContent=same?'Řečník a diváci musí mít různé displeje.':'';
+}
+function showPresenterDisplayConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.screens)||!configuration.screens.length)return;
+ presenterDisplayConfiguration=configuration;
+ const speaker=presenterDisplayForm.elements.speaker,audience=presenterDisplayForm.elements.audience;
+ speaker.replaceChildren();audience.replaceChildren();
+ const disabled=document.createElement('option');disabled.value='-1';disabled.textContent='Bez promítání';audience.append(disabled);
+ for(const screen of configuration.screens){
+  const left=document.createElement('option'),right=document.createElement('option');
+  left.value=right.value=String(screen.index);left.textContent=right.textContent=screen.label;speaker.append(left);audience.append(right);
+ }
+ speaker.value=String(configuration.speaker);audience.value=String(configuration.audience);
+ presenterDisplayStatus.textContent='Veřejný výstup zůstává skrytý do potvrzení rolí.';
+ validatePresenterDisplaySelection();if(!presenterDisplayDialog.open)presenterDisplayDialog.showModal();
+}
+function closePresenterDisplayConfiguration(){
+ presenterDisplayConfiguration=null;if(presenterDisplayDialog.open)presenterDisplayDialog.close();
+}
+function setPresenterDisplayNativeError(message){
+ presenterDisplayStatus.textContent=message||'Nastavení displejů se nepodařilo použít.';
+ document.querySelector('#presenter-display-apply').disabled=false;
+}
+function requestPresenterDisplayAction(action){
+ const selection=presenterDisplaySelection();if(!selection)return;
+ requestNativeAction(action,selection);
+}
+presenterDisplayForm.elements.speaker.addEventListener('change',validatePresenterDisplaySelection);
+presenterDisplayForm.elements.audience.addEventListener('change',validatePresenterDisplaySelection);
+document.querySelector('#presenter-display-identify').addEventListener('click',()=>requestPresenterDisplayAction('presenter-displays-identify'));
+document.querySelector('#presenter-display-cancel').addEventListener('click',()=>requestNativeAction('presenter-displays-cancel'));
+presenterDisplayDialog.addEventListener('cancel',event=>{event.preventDefault();requestNativeAction('presenter-displays-cancel');});
+presenterDisplayForm.addEventListener('submit',event=>{event.preventDefault();validatePresenterDisplaySelection();
+ if(document.querySelector('#presenter-display-apply').disabled)return;
+ document.querySelector('#presenter-display-apply').disabled=true;presenterDisplayStatus.textContent='Přesouvám okna na potvrzené displeje…';
+ requestPresenterDisplayAction('presenter-displays-apply');
+});
 presenterView.addEventListener('keydown',event=>{
  if(event.repeat || event.target.closest('input,textarea,[contenteditable="true"],[role="tablist"]'))return;
  if(event.key==='ArrowLeft'){event.preventDefault();movePresenter(-1);}
@@ -1444,6 +1756,8 @@ const sidebarProjects=document.querySelector('#sidebar-project-list');
 const projectStatus=document.querySelector('#project-status');
 const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
+const projectCreateView=document.querySelector('#project-create-view');
+const projectTrashView=document.querySelector('#project-trash-view');
 const sourceImportView=document.querySelector('#source-import-view');
 const notebookImportView=document.querySelector('#notebooklm-import-view');
 const historyView=document.querySelector('#history-view');
@@ -1455,8 +1769,30 @@ const sidebarArtifactStatus=document.querySelector('#sidebar-artifact-status');
 const workspaceSidebar=document.querySelector('#workspace-sidebar');
 const mobileSidebarToggle=document.querySelector('#mobile-sidebar-toggle');
 const mobileSidebarBackdrop=document.querySelector('#mobile-sidebar-backdrop');
+const sidebarLayoutToggle=document.querySelector('#sidebar-layout-toggle');
 const mobileViewport=window.matchMedia('(max-width:640px)');
 let mobileSidebarReturnFocus=null;
+function compactSidebarActive(){return workspaceSidebar.classList.contains('sidebar-compact')&&!mobileViewport.matches;}
+function closeCompactSidebarMenu(){
+ if(!compactSidebarActive()||!workspaceSidebar.classList.contains('sidebar-menu-open'))return;
+ workspaceSidebar.classList.remove('sidebar-menu-open');syncCompactSidebar();
+}
+function syncCompactSidebar(){
+ const compact=workspaceSidebar.classList.contains('sidebar-compact');
+ const menuOpen=compactSidebarActive()&&workspaceSidebar.classList.contains('sidebar-menu-open');
+ sidebarLayoutToggle.setAttribute('aria-pressed',String(compact));
+ sidebarLayoutToggle.setAttribute('aria-label',compact?'Rozbalit hlavní panel':'Sbalit hlavní panel');
+ sidebarLayoutToggle.querySelector('.sidebar-layout-label').textContent=compact?'Rozbalit panel':'Sbalit panel';
+ for(const tab of document.querySelectorAll('#sidebar-tabs [role="tab"]')){
+  if(compact)tab.setAttribute('aria-expanded',String(menuOpen&&tab.getAttribute('aria-selected')==='true'));
+  else tab.removeAttribute('aria-expanded');
+ }
+}
+function setCompactSidebar(compact){
+ workspaceSidebar.classList.toggle('sidebar-compact',compact);workspaceSidebar.classList.remove('sidebar-menu-open');
+ syncCompactSidebar();
+}
+sidebarLayoutToggle.addEventListener('click',()=>setCompactSidebar(!workspaceSidebar.classList.contains('sidebar-compact')));
 function syncMobileSidebar(){
  const open=document.body.classList.contains('mobile-sidebar-open')&&mobileViewport.matches;
  mobileSidebarToggle.setAttribute('aria-expanded',String(open));mobileSidebarBackdrop.hidden=!open;
@@ -1475,12 +1811,28 @@ function closeMobileSidebar(restoreFocus=true){
 }
 mobileSidebarToggle.addEventListener('click',()=>document.body.classList.contains('mobile-sidebar-open')?closeMobileSidebar():openMobileSidebar());
 mobileSidebarBackdrop.addEventListener('click',()=>closeMobileSidebar());
-document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();}});
-workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#back-projects,#open-notebooklm-import,#open-settings,#new-document,#open-source-import,#sidebar-project-list button,.sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar();});
-mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');syncMobileSidebar();});
+document.addEventListener('keydown',event=>{if(event.key!=='Escape')return;if(document.body.classList.contains('mobile-sidebar-open')){event.preventDefault();closeMobileSidebar();return;}if(compactSidebarActive()&&workspaceSidebar.classList.contains('sidebar-menu-open')){event.preventDefault();closeCompactSidebarMenu();}});
+workspaceSidebar.addEventListener('click',event=>{if(event.target.closest('#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open,#sidebar-project-trash,#new-document,#open-source-import,.sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}});
+document.addEventListener('click',event=>{if(!workspaceSidebar.contains(event.target))closeCompactSidebarMenu();});
+mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');workspaceSidebar.classList.remove('sidebar-menu-open');syncMobileSidebar();syncCompactSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
+let federationTransferRunning=false;
+let federationNetworkRunning=false;
+let federationDeploymentRunning=false;
 function selectSidebarTab(selected){
+ if(!selected || selected.disabled)return;
+ if((federationTransferRunning||federationNetworkRunning||federationDeploymentRunning)&&selected.id!=='federation-tab'){
+  if(federationTransferRunning)document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';
+  if(federationNetworkRunning)document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';
+  if(federationDeploymentRunning)document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';
+  return;
+ }
+ const federationPages=[document.querySelector('#federation-view'),document.querySelector('#federation-network-view'),document.querySelector('#federation-deployment-view')];
+ if(selected.id!=='federation-tab'&&federationPages.some(view=>!view.hidden)){
+  for(const view of federationPages)view.hidden=true;
+  if(activeProject)projectView.hidden=false;else document.querySelector('#project-home').hidden=false;
+ }
  for(const tab of sidebarTabs){
   const active=tab===selected;
   tab.setAttribute('aria-selected',String(active));tab.tabIndex=active ? 0 : -1;
@@ -1488,9 +1840,13 @@ function selectSidebarTab(selected){
  }
 }
 for(const tab of sidebarTabs){
- tab.addEventListener('click',()=>selectSidebarTab(tab));
+ tab.addEventListener('click',()=>{
+  if(!compactSidebarActive()){selectSidebarTab(tab);return;}
+  const close=tab.getAttribute('aria-selected')==='true'&&workspaceSidebar.classList.contains('sidebar-menu-open');
+  selectSidebarTab(tab);workspaceSidebar.classList.toggle('sidebar-menu-open',!close);syncCompactSidebar();
+ });
  tab.addEventListener('keydown',event=>{
-  const visible=sidebarTabs.filter(item=>!item.hidden),index=visible.indexOf(tab);
+  const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled),index=visible.indexOf(tab);
   const next={ArrowRight:(index+1)%visible.length,
    ArrowLeft:(index-1+visible.length)%visible.length,
    Home:0,End:visible.length-1}[event.key];
@@ -1499,31 +1855,34 @@ for(const tab of sidebarTabs){
  });
 }
 let currentArtifacts=[];
+function sidebarItemMenu(label,actions,legacyClass=''){
+ const menu=document.createElement('details');menu.className=`sidebar-item-menu ${legacyClass}`.trim();
+ const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce položky ${label}`);trigger.textContent='⋮';
+ const items=document.createElement('div');items.className='sidebar-item-menu-items';items.setAttribute('role','menu');
+ for(const action of actions){
+  const button=document.createElement('button');button.type='button';button.textContent=action.label;button.disabled=Boolean(action.disabled);button.setAttribute('role','menuitem');
+  button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;closeCompactSidebarMenu();await action.run(event.currentTarget);});items.append(button);
+ }
+ menu.append(trigger,items);return menu;
+}
 function renderSidebarArtifacts(items){
  currentArtifacts=items;
  sidebarArtifacts.replaceChildren();
  sidebarArtifactStatus.textContent=items.length ? `Počet položek: ${items.length}` : 'Zatím tu nejsou žádné podklady.';
  for(const item of items){
-  const row=document.createElement('li');row.className='sidebar-artifact-row';
-  const main=document.createElement('div');main.className='sidebar-artifact-main';
-  const title=document.createElement('button');title.className='sidebar-artifact-title';title.textContent=item.title;
+  const row=document.createElement('li');row.className='sidebar-list-row sidebar-artifact-row';
+  const title=document.createElement('button'),name=document.createElement('span');title.className='sidebar-list-main sidebar-artifact-title';name.className='sidebar-item-title';name.textContent=item.title;
   title.dataset.id=item.id;title.setAttribute('aria-current','false');
   title.addEventListener('click',()=>openPreview(item.id));
-  const id=document.createElement('small');id.className='sidebar-artifact-id';id.textContent=item.id;
-  main.append(title,id);row.append(main);
-  if(item.kind==='document'){
-   const menu=document.createElement('details');menu.className='sidebar-artifact-menu';
-   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce dokumentu ${item.title}`);trigger.textContent='⋮';
-   const actions=document.createElement('div');actions.className='sidebar-artifact-menu-items';actions.setAttribute('role','menu');
-   function action(label,callback){const button=document.createElement('button');button.type='button';button.textContent=label;button.setAttribute('role','menuitem');button.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await callback();});actions.append(button);}
-   action('Upravit / přejmenovat',()=>openArtifactEditor(item));
-   const history=document.createElement('button');history.type='button';history.textContent='Zobrazit historii';history.setAttribute('role','menuitem');
-   history.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();});
-   actions.append(history);
-   action('Připravit smazání',()=>openArtifactEditor(item,true));
-   action('Kopírovat ID',async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID dokumentu bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID dokumentu: ${item.id}`;}});
-   menu.append(trigger,actions);row.append(menu);
-  }
+  const id=document.createElement('small');id.className='sidebar-item-id sidebar-artifact-id';id.textContent=item.id;title.append(name,id);
+  const actions=[{label:'Zobrazit',run:()=>openPreview(item.id)}];
+  if(item.kind==='document')actions.push(
+   {label:'Upravit / přejmenovat',run:()=>openArtifactEditor(item)},
+   {label:'Připravit smazání',run:()=>openArtifactEditor(item,true)});
+  actions.push(
+   {label:'Zobrazit historii',run:async()=>{await openPreview(item.id);if(selectedArtifact===item.id)await openHistory();}},
+   {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);sidebarArtifactStatus.textContent='ID položky bylo zkopírováno.';}catch(error){sidebarArtifactStatus.textContent=`ID položky: ${item.id}`;}}});
+  row.append(title,sidebarItemMenu(item.title,actions,'sidebar-artifact-menu'));
   sidebarArtifacts.append(row);
  }
  renderSummarySources();
@@ -1535,6 +1894,57 @@ function renderSidebarArtifacts(items){
 let viewRequest=0;
 const createTodo=document.querySelector('#create-main-todo');
 createTodo.addEventListener('click',()=>openMainTodoEditor());
+document.querySelector('#project-overview-edit-todo').addEventListener('click',()=>openMainTodoEditor());
+const mobileProjectOverview=window.matchMedia('(max-width:640px)');
+const mobileProjectOverviewItemLimit=5;
+let projectOverviewHistory,projectOverviewTodo;
+function visibleProjectOverviewItems(items){return mobileProjectOverview.matches?items.slice(0,mobileProjectOverviewItemLimit):items;}
+function renderProjectHistory(history){
+ projectOverviewHistory=history;
+ const list=document.querySelector('#project-overview-history-list');
+ const status=document.querySelector('#project-overview-history-status');
+ list.replaceChildren();
+ if(!history){status.textContent='Otevřete projekt.';return;}
+ const visible=visibleProjectOverviewItems(history.entries);
+ for(const item of visible){
+  const row=document.createElement('li');row.className='project-history-row';
+  const subject=document.createElement('strong');subject.textContent=item.subject||'Commit bez názvu';
+  const detail=document.createElement('small');
+  const parsed=new Date(item.date);const date=Number.isNaN(parsed.getTime()) ? item.date :
+   new Intl.DateTimeFormat('cs-CZ',{dateStyle:'medium',timeStyle:'short'}).format(parsed);
+  detail.textContent=`${date} · ${item.author} · ${item.commit_id.slice(0,8)}`;
+  row.append(subject,detail);list.append(row);
+ }
+ status.textContent=history.entries.length ? `${history.entries.length} posledních změn` : 'Projekt zatím nemá historii změn.';
+ if(visible.length<history.entries.length)status.textContent+=` · na telefonu zobrazeno ${visible.length}`;
+ if(history.truncated)status.textContent+=' Zobrazeno posledních 20 záznamů.';
+}
+function renderProjectOverview(todo){
+ projectOverviewTodo=todo;
+ const list=document.querySelector('#project-overview-task-list');
+ const status=document.querySelector('#project-overview-task-status');
+ const edit=document.querySelector('#project-overview-edit-todo');
+ list.replaceChildren();edit.textContent=todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů';
+ if(!todo){status.textContent='Projekt zatím nemá hlavní seznam úkolů.';return;}
+ if(todo.status!=='ready'){status.textContent='Hlavní seznam úkolů nelze zobrazit v tomto formátu nebo velikosti.';return;}
+ const open=todo.items.filter(item=>!item.checked);
+ const visible=visibleProjectOverviewItems(open);
+ for(const item of visible){
+  const row=document.createElement('li');row.className='dashboard-task-row';
+  const button=document.createElement('button');button.type='button';
+  const title=document.createElement('span');title.textContent=item.title;
+  const detail=document.createElement('small');detail.textContent=item.depth ? `Vnořená úroveň ${item.depth}` : 'Hlavní úroveň';
+  button.append(title,detail);button.addEventListener('click',()=>openMainTodoEditor());row.append(button);list.append(row);
+ }
+ status.textContent=open.length ? `${open.length} nehotových · ${todo.completed} z ${todo.total} hotovo` :
+  (todo.total ? 'Všechny úkoly jsou hotové.' : 'Zatím bez úkolů.');
+ if(visible.length<open.length)status.textContent+=` · na telefonu zobrazeno ${visible.length}`;
+ if(todo.truncated)status.textContent+=' Zobrazeno prvních 1000 položek.';
+}
+mobileProjectOverview.addEventListener('change',()=>{
+ if(projectOverviewHistory!==undefined)renderProjectHistory(projectOverviewHistory);
+ if(projectOverviewTodo!==undefined)renderProjectOverview(projectOverviewTodo);
+});
 function renderTodo(todo){
  createTodo.hidden=false;createTodo.textContent=todo ? 'Upravit seznam úkolů' : 'Vytvořit seznam úkolů';
  document.querySelector('#todo-help').hidden=!todo;
@@ -1547,12 +1957,14 @@ function renderTodo(todo){
  const lists=[todoTree];
  for(let i=0;i<todo.items.length;i++){
   const item=todo.items[i];lists.length=item.depth+1;
-  const row=document.createElement('li');row.dataset.depth=item.depth;
-  const label=document.createElement('span');label.className='todo-label';
+  const row=document.createElement('li');row.dataset.depth=item.depth;row.className='sidebar-list-row';
+  const label=document.createElement('span');label.className='todo-label sidebar-list-main';label.tabIndex=0;label.setAttribute('role','button');label.setAttribute('aria-label',`Upravit seznam úkolů: ${item.title}`);
   const check=document.createElement('input');check.type='checkbox';check.checked=item.checked;check.disabled=true;
   check.setAttribute('aria-label',item.checked ? 'Hotovo' : 'Nehotovo');
   const title=document.createElement('span');title.className='todo-text';title.textContent=item.title;
   label.append(check,title);
+  label.addEventListener('click',event=>{event.stopPropagation();openMainTodoEditor();});
+  label.addEventListener('keydown',event=>{if(!['Enter',' '].includes(event.key))return;event.preventDefault();event.stopPropagation();openMainTodoEditor();});
   if(item.checked) row.classList.add('todo-done');
   if(todo.items[i+1]?.depth>item.depth){
    const branch=document.createElement('details');branch.open=true;
@@ -1560,8 +1972,16 @@ function renderTodo(todo){
    const children=document.createElement('ul');branch.append(children);row.append(branch);
    lists[item.depth+1]=children;
   }else{row.append(label);}
+  row.append(sidebarItemMenu(item.title,[{label:'Upravit seznam úkolů',run:()=>openMainTodoEditor()}],'sidebar-todo-menu'));
   lists[item.depth].append(row);
  }
+}
+const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab'];
+function syncSidebarProjectAvailability(){
+ const available=Boolean(activeProject);
+ for(const id of projectSidebarTabs){const tab=document.getElementById(id);tab.disabled=!available;tab.setAttribute('aria-disabled',String(!available));}
+ document.querySelector('#chat-new-thread').disabled=!available;
+ if(!available && projectSidebarTabs.includes(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')?.id))selectSidebarTab(document.querySelector('#projects-tab'));
 }
 function clearProject(){
  ++viewRequest;
@@ -1579,18 +1999,22 @@ function clearProject(){
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
  document.querySelector('#chat-operation-status').textContent='';
  document.querySelector('#project-home').hidden=false;
+ projectCreateView.hidden=true;
+ projectTrashView.hidden=true;
  settingsView.hidden=true;
  sourceImportView.hidden=true;
  notebookImportView.hidden=true;
  historyView.hidden=true;
  artifactEditorView.hidden=true;
- document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
+ syncSidebarProjectAvailability();selectSidebarTab(document.querySelector('#projects-tab'));
  selectMainTab(mainTabs[0]);
  sidebarArtifacts.replaceChildren();sidebarArtifactStatus.textContent='Otevřete projekt.';
  todoTree.replaceChildren();document.querySelector('#todo-title').textContent='';
  todoStatus.textContent='Otevřete projekt.';createTodo.hidden=true;document.querySelector('#todo-help').hidden=true;
+ renderProjectOverview(null);renderProjectHistory(null);
  projectView.hidden=true;
  document.querySelector('#project-title').textContent='';
+ document.querySelector('#project-description').textContent='';
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
@@ -1621,8 +2045,8 @@ function bytesBase64(buffer){const bytes=new Uint8Array(buffer);let binary='';fo
 function closeSourceImport(){
  if(googleDrivePoll){clearTimeout(googleDrivePoll);googleDrivePoll=null;}
  sourceImportView.hidden=true;
- if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
- else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+ if(activeProject)projectView.hidden=false;
+ else document.querySelector('#project-home').hidden=false;
 }
 function openSourceImport(){
  if(!activeProject||!canLeaveWorkspaceEditors())return;
@@ -1634,7 +2058,7 @@ function openSourceImport(){
  sourceImportStatus.textContent='Vyberte soubor; do potvrzení se nic neimportuje.';
  resetGoogleDrivePlan();loadGoogleDriveStatus();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=true;sourceImportView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ selectSidebarTab(document.querySelector('#artifacts-tab'));
  document.querySelector('#source-import-heading').focus();
 }
 function resetGoogleDrivePlan(){
@@ -1790,7 +2214,13 @@ function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
  return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
 }
-function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor();}
+function canLeaveFederationTransfer(){
+ if(federationTransferRunning){document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;}
+ if(federationNetworkRunning){document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';return false;}
+ if(federationDeploymentRunning){document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';return false;}
+ return true;
+}
+function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTransfer();}
 function fillArtifactEditor(doc,isNew=false){
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
@@ -1802,7 +2232,7 @@ function fillArtifactEditor(doc,isNew=false){
 async function closeArtifactEditor(){
  if(!canLeaveWorkspaceEditors())return;
  const item=artifactEditorItem;artifactEditorView.hidden=true;hideArtifactDeletion();artifactEditorAttempt=null;artifactEditorDirty=false;artifactEditorItem=null;
- if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;if(item&&!item.new)await openPreview(item.id);}
+ if(activeProject){projectView.hidden=false;if(item&&!item.new)await openPreview(item.id);}
 }
 async function openArtifactEditor(item,deleteMode=false){
  if(!activeProject||item.kind!=='document')return;
@@ -1810,7 +2240,7 @@ async function openArtifactEditor(item,deleteMode=false){
  await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ selectSidebarTab(document.querySelector('#artifacts-tab'));
  artifactEditorStatus.textContent='Načítám uložený dokument…';
  try{const result=await projectRequest('/v1/artifacts/editor/open',{project_id:project.id,artifact_id:item.id,expected_head:project.head});
   if(activeProject!==project||artifactEditorItem!==item)return;
@@ -1824,7 +2254,7 @@ function openNewArtifactEditor({todo=false}={}){
  const id=todo?activeProject.mainTodoId:crypto.randomUUID();
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ selectSidebarTab(document.querySelector(todo?'#todo-tab':'#artifacts-tab'));
  fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'# Hlavní seznam úkolů\\n\\n- [ ] První úkol\\n'}:{title:'',filename:'content.md',body:''},true);
  artifactEditorStatus.textContent='Dokument vznikne až po uložení.';artifactEditorForm.elements.title.focus();
 }
@@ -1862,6 +2292,39 @@ window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactE
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
+let recentProjectOrder=[];
+const sidebarProjectRecover=document.querySelector('#sidebar-project-recover');
+function setNativeProjectOperationStatus(message,canRetry=false){
+ document.querySelector('#sidebar-project-status').textContent=message;
+ sidebarProjectRecover.hidden=!canRetry;sidebarProjectRecover.disabled=false;
+}
+sidebarProjectRecover.addEventListener('click',()=>{
+ sidebarProjectRecover.disabled=true;setNativeProjectOperationStatus('Obnovuji přerušenou operaci…',false);
+ requestNativeAction('recover-project-operation');
+});
+let projectRegistrationRemoveTarget=null;
+const projectRegistrationRemoveDialog=document.querySelector('#project-registration-remove-dialog');
+function repairProjectLocation(item){
+ document.querySelector('#sidebar-project-status').textContent='Otevírám systémový výběr nového umístění…';
+ requestNativeAction('relocate-project-location',{project_id:item.id});
+}
+function confirmMissingProjectUnregister(item){
+ projectRegistrationRemoveTarget=item;
+ document.querySelector('#project-registration-remove-id').textContent=item.id;
+ projectRegistrationRemoveDialog.showModal();
+}
+projectRegistrationRemoveDialog.addEventListener('close',()=>{projectRegistrationRemoveTarget=null;});
+document.querySelector('#project-registration-remove-confirm').addEventListener('click',()=>{
+ if(!projectRegistrationRemoveTarget)return;
+ const projectId=projectRegistrationRemoveTarget.id;
+ projectRegistrationRemoveDialog.close();
+ document.querySelector('#sidebar-project-status').textContent='Odebírám potvrzenou nedostupnou registraci…';
+ requestNativeAction('unregister-missing-project',{project_id:projectId});
+});
+function recentProjectIds(){return recentProjectOrder;}
+function rememberRecentProject(projectId){
+ recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
+}
 async function openRegisteredProject(projectId){
  if(!canLeaveWorkspaceEditors())return;
  ++catalogRequest;
@@ -1870,14 +2333,17 @@ async function openRegisteredProject(projectId){
  try{
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
-  activeProject={id:projectId,head:result.commit_id,mainTodoId:result.main_todo_id};
-  renderTodo(result.main_todo);renderSidebarArtifacts(result.artifacts);
+  rememberRecentProject(projectId);
+  activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id};
+  renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
+  document.querySelector('#project-description').textContent=result.description;
   document.querySelector('#project-commit').textContent=result.commit_id;
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
-  document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+  syncSidebarProjectAvailability();
   await loadChat();
-  selectSidebarTab(document.querySelector('#artifacts-tab'));
+  syncSidebarProjectAvailability();
+  selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
   document.querySelector('#preview-status').textContent=result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
@@ -1885,20 +2351,48 @@ async function openRegisteredProject(projectId){
 function renderProjectCatalog(items){
  projectCards.replaceChildren();sidebarProjects.replaceChildren();
  for(const item of items){
-  const wrap=document.createElement('div');wrap.className='project-card-wrap';
-  const card=document.createElement('button');card.type='button';card.className='project-card';card.dataset.id=item.id;
+  const row=document.createElement('li');row.className='sidebar-list-row';
+  const compact=document.createElement('button');compact.type='button';compact.className='sidebar-list-main';compact.dataset.id=item.id;
+  compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));
+  const actions=[
+   {label:item.available?'Otevřít':'Zkusit otevřít',run:()=>openRegisteredProject(item.id)},
+   {label:'Správa odstranění…',run:()=>openProjectDeletion(item)},
+   {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);document.querySelector('#sidebar-project-status').textContent='ID projektu bylo zkopírováno.';}catch(error){document.querySelector('#sidebar-project-status').textContent=`ID projektu: ${item.id}`;}}}
+  ];
+  if(item.location_missing)actions.splice(1,1,
+   {label:'Opravit umístění…',run:()=>repairProjectLocation(item)},
+   {label:'Odebrat nedostupnou registraci…',run:()=>confirmMissingProjectUnregister(item)});
+  const menu=sidebarItemMenu(item.title,actions,'sidebar-project-menu');
+  row.append(compact,menu);sidebarProjects.append(row);
+ }
+ const byId=new Map(items.map(item=>[item.id,item]));
+ const ordered=[...recentProjectIds().map(id=>byId.get(id)).filter(Boolean),...items.filter(item=>!recentProjectIds().includes(item.id))].slice(0,4);
+ for(const item of ordered){
+  const card=document.createElement('button');card.type='button';card.className=`project-card${item.available?'':' project-card-unavailable'}`;card.dataset.id=item.id;
+  const kicker=document.createElement('span');kicker.className='dashboard-kicker';kicker.textContent='Nedávný projekt';
   const name=document.createElement('span');name.className='project-name';name.textContent=item.title;
-  const description=document.createElement('span');description.className='project-description';
-  description.textContent=item.available ? (item.description.slice(0,240) || 'Prostor pro zdroje, poznámky a rozhodnutí.') : 'Projekt nelze načíst. Ověřte jeho umístění a konfiguraci.';
-  const id=document.createElement('span');id.className='project-id';id.textContent=item.id;
-  const action=document.createElement('span');action.className='project-action';action.textContent=item.available?'Otevřít projekt →':'Zkusit otevřít →';
-  card.append(name,description,id,action);card.addEventListener('click',()=>openRegisteredProject(item.id));
-  const remove=document.createElement('button');remove.type='button';remove.className='project-remove';remove.textContent='Správa odstranění…';
-  remove.addEventListener('click',()=>openProjectDeletion(item));wrap.append(card,remove);projectCards.append(wrap);
-  const row=document.createElement('li');const compact=document.createElement('button');compact.type='button';compact.dataset.id=item.id;
-  compact.textContent=item.title;compact.title=item.id;compact.addEventListener('click',()=>openRegisteredProject(item.id));row.append(compact);sidebarProjects.append(row);
+  const meta=document.createElement('span');meta.className='project-meta';meta.textContent=item.available?'Otevřít':'Projekt není dostupný';
+  card.append(kicker,name,meta);card.addEventListener('click',()=>openRegisteredProject(item.id));projectCards.append(card);
  }
  document.querySelector('#sidebar-project-status').textContent=items.length ? `Počet projektů: ${items.length}` : 'Zatím bez projektů.';
+}
+async function loadDashboardTasks(items,request){
+ const list=document.querySelector('#dashboard-task-list'),status=document.querySelector('#dashboard-task-status');list.replaceChildren();status.textContent='Načítám úkoly…';
+ const available=items.filter(item=>item.available),results=await Promise.allSettled(available.map(item=>projectRequest('/v1/projects/open',{project_id:item.id})));
+ if(request!==catalogRequest)return;
+ let unavailable=0,openCount=0;
+ for(let index=0;index<results.length;index++){
+  const result=results[index],project=available[index];
+  if(result.status!=='fulfilled'){unavailable++;continue;}
+  const todo=result.value.main_todo;
+  if(!todo||todo.status!=='ready'){if(todo)unavailable++;continue;}
+  for(const item of todo.items.filter(item=>!item.checked)){
+   openCount++;const row=document.createElement('li');row.className='dashboard-task-row';const button=document.createElement('button');button.type='button';
+   const title=document.createElement('span');title.textContent=item.title;const source=document.createElement('small');source.textContent=project.title;button.append(title,source);
+   button.addEventListener('click',async()=>{await openRegisteredProject(project.id);if(activeProject?.id===project.id)selectSidebarTab(document.querySelector('#todo-tab'));});row.append(button);list.append(row);
+  }
+ }
+ status.textContent=openCount?`${openCount} nehotových úkolů${unavailable?` · ${unavailable} projektů nelze načíst`:''}`:(unavailable?'Úkoly nejsou dostupné ve všech projektech.':'Žádné nehotové úkoly.');
 }
 const projectDeletePanel=document.querySelector('#project-delete-panel');
 const projectDeleteMode=document.querySelector('#project-delete-mode');
@@ -1932,6 +2426,7 @@ async function refreshProjectDeletion(){
  catch(error){document.querySelector('#project-delete-status').textContent=error.message;}
 }
 function openProjectDeletion(item){
+ if(!openProjectTrashView())return;
  projectDeleteTarget=item;projectDeleteMode.value='trash';document.querySelector('#project-delete-mode-row').hidden=false;
  document.querySelector('#project-delete-title').textContent=`Akce projektu: ${item.title}`;refreshProjectDeletion();
 }
@@ -1958,7 +2453,13 @@ async function loadProjectTrash(){
    const purge=document.createElement('button');purge.type='button';purge.className='danger';purge.textContent='Připravit definitivní výmaz';purge.addEventListener('click',()=>prepareTrashAction(item,'purge'));
    row.append(label,restore,purge);list.append(row);
   }document.querySelector('#project-trash-status').textContent=result.projects.length?`Položek v koši: ${result.projects.length}`:'Koš je prázdný.';
- }catch(error){document.querySelector('#project-trash-status').textContent=error.message;}
+   document.querySelector('#dashboard-trash-summary').textContent=result.projects.length?`${result.projects.length} položek`:'Koš je prázdný';
+ }catch(error){document.querySelector('#project-trash-status').textContent=error.message;document.querySelector('#dashboard-trash-summary').textContent='Koš není dostupný';}
+}
+function openProjectTrashView(){
+ if(!canLeaveWorkspaceEditors())return false;
+ clearProject();document.querySelector('#project-home').hidden=true;projectTrashView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));loadProjectTrash();
+ return true;
 }
 async function loadProjects(selectedId=null){
  if(!canLeaveWorkspaceEditors())return;
@@ -1969,12 +2470,34 @@ async function loadProjects(selectedId=null){
   const result=await projectRequest('/v1/projects',{details:true});
   if(request!==catalogRequest)return;
   renderProjectCatalog(result.projects);
-  await loadProjectTrash();
-  projectStatus.textContent=result.projects.length ? 'Vyberte projekt.' : 'Zatím nemáte žádný projekt.';
+  await Promise.all([loadProjectTrash(),loadDashboardTasks(result.projects,request),loadChat()]);
+  projectStatus.textContent=result.projects.length ? 'Přehled je připravený.' : 'Zatím nemáte žádný projekt.';
   if(selectedId && result.projects.some(p=>p.id===selectedId))await openRegisteredProject(selectedId);
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
-document.querySelector('#back-projects').addEventListener('click',()=>loadProjects());
+document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
+document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
+document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
+ document.querySelector('#sidebar-project-import-options').hidden=true;
+ document.querySelector('#sidebar-import-project').setAttribute('aria-expanded','false');
+ document.querySelector('#sidebar-project-status').textContent='Otevírám systémový výběr projektu…';
+ requestNativeAction('register-project-location');
+});
+document.querySelector('#sidebar-project-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#dashboard-trash').addEventListener('click',openProjectTrashView);
+document.querySelector('#project-trash-back').addEventListener('click',()=>loadProjects());
+document.querySelector('#dashboard-date').textContent=new Intl.DateTimeFormat('cs-CZ',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
+document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
+ if(activeProject)await loadProjects();
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
+ sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;
+ projectCreateView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
+ resetProjectCreationPreview();document.querySelector('#project-create-heading').focus();
+});
+document.querySelector('#project-create-back').addEventListener('click',()=>loadProjects());
+document.querySelector('#sidebar-import-project').addEventListener('click',event=>{
+ const options=document.querySelector('#sidebar-project-import-options'),open=options.hidden;options.hidden=!open;event.currentTarget.setAttribute('aria-expanded',String(open));
+});
 
 const projectCreateForm=document.querySelector('#create-project');
 const createStatus=document.querySelector('#create-project-status');
@@ -2055,15 +2578,302 @@ let notebookArchiveCapability=null,notebookTargetCapability=null;
 function requestNativeAction(action,payload={}){
  const fields=new URLSearchParams({...payload,nonce:crypto.randomUUID()});location.hash=`${action}?${fields}`;
 }
+const federationView=document.querySelector('#federation-view');
+const federationNetworkView=document.querySelector('#federation-network-view');
+const federationDeploymentView=document.querySelector('#federation-deployment-view');
+const federationTransferForm=document.querySelector('#federation-transfer-form');
+const federationTransferStatus=document.querySelector('#federation-transfer-status');
+const federationTransferLog=document.querySelector('#federation-transfer-log');
+const federationTransferConfirmation=document.querySelector('#federation-transfer-confirmation');
+let federationTransferConfiguration=null;
+function resetFederationTransferPreview(message=''){
+ federationTransferConfirmation.hidden=true;document.querySelector('#federation-transfer-confirm').checked=false;
+ document.querySelector('#federation-transfer-start').disabled=true;
+ if(message)federationTransferStatus.textContent=message;
+}
+function federationTransferRequest(){
+ if(!federationTransferConfiguration)return null;
+ return {token:federationTransferConfiguration.token,
+  project:Number(federationTransferForm.elements.project.value),
+  target:Number(federationTransferForm.elements.target.value),
+  ca:federationTransferForm.elements.ca.value.trim(),
+  confirmed:document.querySelector('#federation-transfer-confirm').checked};
+}
+function setFederationTransferLocked(locked){
+ for(const field of federationTransferForm.querySelectorAll('select,input,#federation-transfer-preview,#federation-transfer-cancel'))field.disabled=locked;
+}
+function showFederationTransferConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.projects)||!Array.isArray(configuration.targets)){
+  setFederationTransferError('Nativní vrstva neposkytla platný seznam pro přenos.');return;
+ }
+ federationTransferConfiguration=configuration;federationTransferLog.textContent='';federationTransferRunning=false;setFederationTransferLocked(false);
+ const projects=federationTransferForm.elements.project,targets=federationTransferForm.elements.target;
+ projects.replaceChildren();targets.replaceChildren();
+ for(const item of configuration.projects)projects.append(new Option(item.title,item.index));
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ const available=Boolean(configuration.projects.length&&configuration.targets.length);
+ document.querySelector('#federation-transfer-preview').disabled=!available;
+ if(configuration.targets.length)federationTransferForm.elements.ca.value=configuration.targets[0].ca;
+ else federationTransferForm.elements.ca.value='';
+ resetFederationTransferPreview(available?'Vyberte projekt a cílový uzel.':'Přenos vyžaduje dostupný projekt a zapamatovaný LXC uzel.');
+}
+function setFederationTransferProgress(message){
+ federationTransferRunning=true;setFederationTransferLocked(true);federationTransferStatus.textContent=message;
+}
+function setFederationTransferError(message){
+ federationTransferRunning=false;setFederationTransferLocked(false);
+ federationTransferStatus.textContent=message||'Přenos nelze připravit nebo spustit.';
+ if(federationTransferConfiguration)document.querySelector('#federation-transfer-preview').disabled=false;
+}
+function finishFederationTransfer(success,message){
+ federationTransferRunning=false;federationTransferStatus.textContent=success?'Přenos byl dokončen.':'Přenos nebyl dokončen; lze zopakovat stejnou operaci.';
+ federationTransferLog.textContent=message;document.querySelector('#federation-transfer-start').disabled=false;
+ document.querySelector('#federation-transfer-start').textContent='Zopakovat stejnou operaci';
+}
+function openFederationTransfer(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
+ federationTransferLog.textContent='';resetFederationTransferPreview('Načítám projekty a federační uzly…');
+ requestNativeAction('federation-transfer-open');
+}
+document.querySelector('#open-federation-transfer').addEventListener('click',openFederationTransfer);
+document.querySelector('#open-federation-transfer-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationTransfer();});
+federationTransferForm.elements.target.addEventListener('change',event=>{
+ const target=federationTransferConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ federationTransferForm.elements.ca.value=target?.ca||'';resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.');
+});
+federationTransferForm.elements.project.addEventListener('change',()=>resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.'));
+federationTransferForm.elements.ca.addEventListener('input',()=>resetFederationTransferPreview('Veřejná CA se změnila; připravte nové potvrzení.'));
+document.querySelector('#federation-transfer-preview').addEventListener('click',()=>{
+ const request=federationTransferRequest();if(!request||!request.ca){federationTransferStatus.textContent='Vyberte projekt, LXC a jeho veřejnou CA.';return;}
+ const project=federationTransferConfiguration.projects.find(item=>item.index===request.project);
+ const target=federationTransferConfiguration.targets.find(item=>item.index===request.target);
+ document.querySelector('#federation-transfer-details').textContent=`Projekt: ${project.title}\nID projektu: ${project.id}\nLXC: ${target.container}\nSSH: ${target.host}\nVeřejná CA: ${request.ca}`;
+ federationTransferConfirmation.hidden=false;federationTransferStatus.textContent='Zkontrolujte přesný rozsah a potvrďte přenos.';
+});
+document.querySelector('#federation-transfer-confirm').addEventListener('change',event=>{document.querySelector('#federation-transfer-start').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-transfer-cancel').addEventListener('click',()=>resetFederationTransferPreview('Náhled byl zrušen.'));
+federationTransferForm.addEventListener('submit',event=>{
+ event.preventDefault();const request=federationTransferRequest();if(!request?.confirmed)return;
+ federationTransferRunning=true;setFederationTransferLocked(true);document.querySelector('#federation-transfer-start').disabled=true;
+ federationTransferStatus.textContent='Předávám potvrzenou operaci nativní vrstvě…';requestNativeAction('federation-transfer-start');
+});
+const federationNetworkForm=document.querySelector('#federation-network-form');
+const federationNetworkStatus=document.querySelector('#federation-network-status');
+const federationNetworkLog=document.querySelector('#federation-network-log');
+const federationNetworkConfirmation=document.querySelector('#federation-network-confirmation');
+let federationNetworkConfiguration=null;
+function resetFederationNetworkConfirmation(message=''){
+ federationNetworkConfirmation.hidden=true;document.querySelector('#federation-network-confirm').checked=false;
+ document.querySelector('#federation-network-bilateral').disabled=true;
+ if(message)federationNetworkStatus.textContent=message;
+}
+function federationNetworkConfigureRequest(){
+ if(!federationNetworkConfiguration)return null;
+ return {token:federationNetworkConfiguration.token,action:'configure',config:{
+  enabled:federationNetworkForm.elements.enabled.checked,
+  bind:federationNetworkForm.elements.bind.value.trim(),
+  port:Number(federationNetworkForm.elements.port.value),
+  lan:federationNetworkForm.elements.lan.value.trim(),cert:federationNetworkForm.elements.cert.value.trim(),
+  key:federationNetworkForm.elements.key.value.trim(),ca:federationNetworkForm.elements.ca.value.trim()},
+  generate:federationNetworkForm.elements.generate.checked};
+}
+function federationNetworkDiagnosticRequest(action){
+ if(!federationNetworkConfiguration)return null;
+ const request={token:federationNetworkConfiguration.token,action,
+  target:Number(federationNetworkForm.elements.target.value),ca:federationNetworkForm.elements.peer_ca.value.trim()};
+ if(action==='check-bilateral')request.confirmed=document.querySelector('#federation-network-confirm').checked;
+ return request;
+}
+function federationNetworkRequest(){
+ const action=federationNetworkForm.dataset.action;
+ return action==='configure'?federationNetworkConfigureRequest():federationNetworkDiagnosticRequest(action);
+}
+function setFederationNetworkLocked(locked){
+ for(const field of federationNetworkForm.querySelectorAll('input,select,button'))field.disabled=locked;
+}
+function showFederationNetworkConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!configuration.config||!Array.isArray(configuration.addresses)||!Array.isArray(configuration.targets)){
+  setFederationNetworkError('Nativní vrstva neposkytla platné síťové nastavení.');return;
+ }
+ federationNetworkConfiguration=configuration;federationNetworkRunning=false;setFederationNetworkLocked(false);
+ const config=configuration.config;
+ for(const key of ['bind','port','lan','cert','key','ca'])federationNetworkForm.elements[key].value=config[key]??'';
+ federationNetworkForm.elements.enabled.checked=Boolean(config.enabled);
+ federationNetworkForm.elements.generate.checked=Boolean(configuration.generate);
+ const addresses=document.querySelector('#federation-network-addresses');addresses.replaceChildren();
+ for(const value of configuration.addresses)addresses.append(new Option(value,value));
+ const targets=federationNetworkForm.elements.target;targets.replaceChildren();
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ federationNetworkForm.elements.peer_ca.value=configuration.targets[0]?.ca||'';
+ document.querySelector('#federation-network-check').disabled=!configuration.targets.length;
+ document.querySelector('#federation-network-bilateral-preview').disabled=!configuration.targets.length||!configuration.endpoint;
+ resetFederationNetworkConfirmation(configuration.endpoint?`Aktivní backend: ${configuration.endpoint}`:'Aktivní backend: vypnutý');
+}
+function setFederationNetworkProgress(message){
+ federationNetworkRunning=true;setFederationNetworkLocked(true);federationNetworkStatus.textContent=message;
+}
+function setFederationNetworkError(message){
+ federationNetworkRunning=false;setFederationNetworkLocked(false);federationNetworkStatus.textContent=message||'Síťovou operaci nelze provést.';
+}
+function finishFederationNetwork(success,message){
+ federationNetworkRunning=false;setFederationNetworkLocked(false);
+ federationNetworkStatus.textContent=success?'Síťová operace byla dokončena.':'Síťová operace nebyla dokončena.';
+ federationNetworkLog.textContent=message;
+ if(federationNetworkConfiguration){
+  const available=federationNetworkConfiguration.targets.length>0;
+  document.querySelector('#federation-network-check').disabled=!available;
+  document.querySelector('#federation-network-bilateral-preview').disabled=!available||!federationNetworkConfiguration.endpoint;
+ }
+}
+function runFederationNetwork(request,message){
+ if(!request)return;federationNetworkForm.dataset.action=request.action;
+ federationNetworkRunning=true;setFederationNetworkLocked(true);federationNetworkStatus.textContent=message;
+ requestNativeAction('federation-network-run');
+}
+function openFederationNetwork(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationDeploymentView.hidden=true;federationNetworkView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationNetworkConfiguration=null;
+ federationNetworkLog.textContent='';resetFederationNetworkConfirmation('Načítám lokální síťové nastavení…');
+ requestNativeAction('federation-network-open');
+}
+document.querySelector('#open-federation-network').addEventListener('click',openFederationNetwork);
+document.querySelector('#open-federation-network-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationNetwork();});
+federationNetworkForm.addEventListener('submit',event=>{
+ event.preventDefault();runFederationNetwork(federationNetworkConfigureRequest(),'Předávám nastavení nativní vrstvě…');
+});
+federationNetworkForm.elements.target.addEventListener('change',event=>{
+ const target=federationNetworkConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ federationNetworkForm.elements.peer_ca.value=target?.ca||'';resetFederationNetworkConfirmation('Výběr uzlu se změnil.');
+});
+federationNetworkForm.elements.peer_ca.addEventListener('input',()=>resetFederationNetworkConfirmation('Veřejná CA protějšího uzlu se změnila.'));
+document.querySelector('#federation-network-check').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check');
+ if(!request?.ca){federationNetworkStatus.textContent='Vyberte LXC uzel a jeho důvěryhodnou veřejnou CA.';return;}
+ runFederationNetwork(request,'Předávám diagnostiku nativní vrstvě…');
+});
+document.querySelector('#federation-network-bilateral-preview').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check-bilateral');
+ if(!request?.ca){federationNetworkStatus.textContent='Vyberte LXC uzel a jeho důvěryhodnou veřejnou CA.';return;}
+ const target=federationNetworkConfiguration.targets.find(item=>item.index===request.target);
+ document.querySelector('#federation-network-details').textContent=`Router: ${target.host}\nKontejner: ${target.container}\nDesktop: ${federationNetworkConfiguration.endpoint}\nVeřejná CA LXC: ${request.ca}`;
+ federationNetworkConfirmation.hidden=false;federationNetworkStatus.textContent='Zkontrolujte přesný rozsah a potvrďte obousměrný test.';
+});
+document.querySelector('#federation-network-confirm').addEventListener('change',event=>{document.querySelector('#federation-network-bilateral').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-network-cancel').addEventListener('click',()=>resetFederationNetworkConfirmation('Potvrzení bylo zrušeno.'));
+document.querySelector('#federation-network-bilateral').addEventListener('click',()=>{
+ const request=federationNetworkDiagnosticRequest('check-bilateral');if(!request?.confirmed)return;
+ runFederationNetwork(request,'Předávám potvrzený obousměrný test nativní vrstvě…');
+});
+const federationDeploymentForm=document.querySelector('#federation-deployment-form');
+const federationDeploymentStatus=document.querySelector('#federation-deployment-status');
+const federationDeploymentLog=document.querySelector('#federation-deployment-log');
+const federationDeploymentConfirmation=document.querySelector('#federation-deployment-confirmation');
+let federationDeploymentConfiguration=null;
+function resetFederationDeploymentConfirmation(message=''){
+ federationDeploymentConfirmation.hidden=true;document.querySelector('#federation-deployment-confirm').checked=false;
+ document.querySelector('#federation-deployment-start').disabled=true;
+ if(message)federationDeploymentStatus.textContent=message;
+}
+function federationDeploymentRequest(){
+ if(!federationDeploymentConfiguration)return null;
+ return {token:federationDeploymentConfiguration.token,
+  target:Number(federationDeploymentForm.elements.target.value),
+  host:federationDeploymentForm.elements.host.value.trim(),
+  container:federationDeploymentForm.elements.container.value.trim(),
+  lan:federationDeploymentForm.elements.lan.value.trim(),
+  endpoint:federationDeploymentForm.elements.endpoint.value.trim(),
+  mode:federationDeploymentForm.elements.mode.value,
+  confirmed:document.querySelector('#federation-deployment-confirm').checked};
+}
+function setFederationDeploymentLocked(locked){
+ for(const field of federationDeploymentForm.querySelectorAll('input,select,button'))field.disabled=locked;
+}
+function showFederationDeploymentConfiguration(configuration){
+ if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.targets)||!Array.isArray(configuration.modes)||!Array.isArray(configuration.endpoints)){
+  setFederationDeploymentError('Nativní vrstva neposkytla platné nastavení nasazení.');return;
+ }
+ federationDeploymentConfiguration=configuration;federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ const targets=federationDeploymentForm.elements.target;targets.replaceChildren(new Option('Nový / ručně zadaný uzel',-1));
+ for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
+ const modes=federationDeploymentForm.elements.mode;modes.replaceChildren();
+ for(const item of configuration.modes)modes.append(new Option(item.label,item.value));
+ const endpoints=document.querySelector('#federation-deployment-endpoints');endpoints.replaceChildren();
+ for(const value of configuration.endpoints)endpoints.append(new Option(value,value));
+ if(configuration.endpoint)federationDeploymentForm.elements.endpoint.value=configuration.endpoint;
+ document.querySelector('#federation-deployment-preview').disabled=false;
+ resetFederationDeploymentConfirmation('Vyberte nebo zadejte cílový uzel a připravte souhrn.');
+}
+function setFederationDeploymentProgress(message){
+ federationDeploymentRunning=true;setFederationDeploymentLocked(true);
+ federationDeploymentStatus.textContent='Vzdálená operace probíhá…';
+ federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+message;
+}
+function setFederationDeploymentError(message){
+ federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ resetFederationDeploymentConfirmation(message||'Nasazení nelze připravit nebo spustit.');
+ if(federationDeploymentConfiguration)document.querySelector('#federation-deployment-preview').disabled=false;
+}
+function finishFederationDeployment(success,message){
+ federationDeploymentRunning=false;setFederationDeploymentLocked(false);
+ if(message)federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+message;
+ resetFederationDeploymentConfirmation(success?'Vzdálená operace byla dokončena. Připravte nový souhrn pro případné opakování.':'Vzdálená operace nebyla dokončena. Zkontrolujte průběh a připravte nový souhrn.');
+ if(federationDeploymentConfiguration)document.querySelector('#federation-deployment-preview').disabled=false;
+}
+function openFederationDeployment(){
+ if(!canLeaveWorkspaceEditors())return;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
+ historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=false;
+ selectSidebarTab(document.querySelector('#federation-tab'));federationDeploymentConfiguration=null;
+ federationDeploymentLog.textContent='';resetFederationDeploymentConfirmation('Načítám cílové uzly a lokální endpoint…');
+ requestNativeAction('federation-deployment-open');
+}
+document.querySelector('#open-federation-deployment').addEventListener('click',openFederationDeployment);
+document.querySelector('#open-federation-deployment-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationDeployment();});
+federationDeploymentForm.elements.target.addEventListener('change',event=>{
+ const target=federationDeploymentConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
+ if(target){
+  federationDeploymentForm.elements.host.value=target.host;federationDeploymentForm.elements.container.value=target.container;
+  federationDeploymentForm.elements.lan.value=target.lan;
+  federationDeploymentForm.elements.endpoint.value=federationDeploymentConfiguration.endpoint||target.desktop_endpoint;
+  federationDeploymentForm.elements.mode.value='update';
+  federationDeploymentLog.textContent+=(federationDeploymentLog.textContent?'\\n':'')+`Zapamatovaná adresa kontejneru: ${target.endpoint}`;
+ }
+ resetFederationDeploymentConfirmation('Výběr cílového uzlu se změnil.');
+});
+for(const field of federationDeploymentForm.querySelectorAll('input[name],select[name="mode"]'))field.addEventListener('input',()=>resetFederationDeploymentConfirmation('Nastavení se změnilo; připravte nový souhrn.'));
+document.querySelector('#federation-deployment-preview').addEventListener('click',()=>{
+ const request=federationDeploymentRequest();
+ if(!request||!request.host||!request.container||!request.lan){federationDeploymentStatus.textContent='Vyplňte SSH cíl, kontejner a privátní LAN.';return;}
+ if(request.mode==='install'&&!request.endpoint){federationDeploymentStatus.textContent='První instalace vyžaduje skutečný HTTPS endpoint desktopového backendu.';return;}
+ if(request.mode==='address'&&request.target<0){federationDeploymentStatus.textContent='Aktualizace adresy vyžaduje zapamatovaný cílový uzel.';return;}
+ const mode=federationDeploymentConfiguration.modes.find(item=>item.value===request.mode);
+ document.querySelector('#federation-deployment-details').textContent=`SSH cíl: ${request.host}\\nKontejner: ${request.container}\\nLAN: ${request.lan}\\nDesktopový endpoint: ${request.endpoint||'nepoužije se'}\\nOperace: ${mode?.label||request.mode}`;
+ federationDeploymentConfirmation.hidden=false;federationDeploymentStatus.textContent='Zkontrolujte přesný rozsah vzdálených změn a potvrďte operaci.';
+});
+document.querySelector('#federation-deployment-confirm').addEventListener('change',event=>{document.querySelector('#federation-deployment-start').disabled=!event.currentTarget.checked;});
+document.querySelector('#federation-deployment-cancel').addEventListener('click',()=>resetFederationDeploymentConfirmation('Souhrn byl zrušen.'));
+federationDeploymentForm.addEventListener('submit',event=>{
+ event.preventDefault();const request=federationDeploymentRequest();if(!request?.confirmed)return;
+ federationDeploymentRunning=true;setFederationDeploymentLocked(true);
+ federationDeploymentStatus.textContent='Předávám potvrzené nasazení nativní vrstvě…';requestNativeAction('federation-deployment-start');
+});
 function openNotebookLMImport(){
  if(!canLeaveWorkspaceEditors())return;
  clearProject();
  document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
  sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;notebookImportView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=false;document.querySelector('#sidebar-project-tools').hidden=true;
+ selectSidebarTab(document.querySelector('#projects-tab'));
  notebookStatus.textContent=notebookArchiveCapability?'Pokračujte načtením nebo výběrem projektu.':'Vyberte export Google Takeout.';
 }
-function closeNotebookLMImport(){notebookImportView.hidden=true;document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+function closeNotebookLMImport(){notebookImportView.hidden=true;document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
 document.querySelector('#open-notebooklm-import').addEventListener('click',openNotebookLMImport);
 document.querySelector('#notebooklm-import-back').addEventListener('click',closeNotebookLMImport);
 function notebookArchiveRequest(){
@@ -2160,11 +2970,15 @@ let activeProject=null, selectedArtifact=null, previewRequest=0;
 const previewStatus=document.querySelector('#preview-status');
 const previewContent=document.querySelector('#preview-content');
 const mainTabs=[...document.querySelectorAll('#main-tabs [role="tab"]')];
+const promptForm=document.querySelector('#chat-composer');
+function setPromptVisible(visible){promptForm.hidden=!visible;}
 function selectMainTab(tab){
  for(const item of mainTabs){
   const active=item===tab;item.setAttribute('aria-selected',String(active));item.tabIndex=active?0:-1;
   document.getElementById(item.getAttribute('aria-controls')).hidden=!active;
  }
+ document.querySelector('#main-panel-content').classList.toggle('project-overview-active',tab.id==='project-overview-tab');
+ setPromptVisible(tab.dataset.promptDefault!=='hidden');
 }
 for(const tab of mainTabs){
  tab.addEventListener('click',()=>selectMainTab(tab));
@@ -2289,9 +3103,14 @@ function installPresentationDocument(document){
 function renderSidebarPresentations(){
  sidebarPresentationList.replaceChildren();
  for(const doc of presentationEditorView.documents){
-  const item=document.createElement('li'),title=document.createElement('strong'),identity=document.createElement('small'),actions=document.createElement('div'),edit=document.createElement('button'),start=document.createElement('button');
-  item.className='sidebar-presentation-row';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;actions.className='sidebar-presentation-actions';edit.type='button';edit.textContent='Upravit';start.type='button';start.textContent='Spustit';edit.disabled=Boolean(doc.error);start.disabled=Boolean(doc.error);
-  edit.addEventListener('click',()=>openPresentationEditor(doc.id));start.addEventListener('click',()=>usePresentationDocument(doc));actions.append(edit,start);item.append(title,identity,actions);sidebarPresentationList.append(item);
+  const item=document.createElement('li'),main=document.createElement('button'),title=document.createElement('strong'),identity=document.createElement('small');
+  item.className='sidebar-list-row sidebar-presentation-row';main.type='button';main.className='sidebar-list-main';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;main.disabled=Boolean(doc.error);
+  main.addEventListener('click',()=>openPresentationEditor(doc.id));main.append(title,identity);
+  const menu=sidebarItemMenu(doc.title,[
+   {label:'Upravit',run:()=>openPresentationEditor(doc.id),disabled:Boolean(doc.error)},
+   {label:'Spustit',run:()=>usePresentationDocument(doc),disabled:Boolean(doc.error)}
+  ],'sidebar-presentation-menu');
+  item.append(main,menu);sidebarPresentationList.append(item);
  }
  sidebarPresentationStatus.textContent=presentationEditorView.documents.length?`Počet prezentací: ${presentationEditorView.documents.length}`:'Zatím tu nejsou žádné uložené prezentace.';
 }
@@ -2310,7 +3129,7 @@ async function loadPresentationEditor(preferred=null,openEditor=true){
 async function openPresentationEditor(preferred=null){
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
  if(!artifactEditorView.hidden){if(!canLeaveArtifactEditor())return;artifactEditorView.hidden=true;artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorDirty=false;}
- document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;selectSidebarTab(document.querySelector('#presentations-tab'));
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
 }
 function createPresentationDocument(confirmDiscard=true){
@@ -2353,6 +3172,48 @@ presentationEditorSave.addEventListener('click',async()=>{
 async function usePresentationDocument(document){try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:document.id,expected_head:presentationEditorView.commit_id});sidebarPresentationStatus.textContent=`Prezentace „${document.title}“ je připravena v presenteru.`;presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}}
 presentationEditorUse.addEventListener('click',()=>usePresentationDocument({id:presentationEditorArtifact,title:presentationEditorDeck.title}));
 document.querySelector('#presentation-editor-presenter').addEventListener('click',openPresenter);
+const applicationAccessForm=document.querySelector('#application-access-form');
+const applicationAccessAllowedRow=document.querySelector('#application-access-allowed-row');
+const applicationAccessStatus=document.querySelector('#application-access-status');
+const applicationAccessPreview=document.querySelector('#application-access-preview');
+const applicationAccessConfirm=document.querySelector('#application-access-confirm');
+const applicationAccessSave=document.querySelector('#application-access-save');
+let applicationAccessPlan=null;
+const applicationAccessLabels={localhost:'Pouze localhost','private-network':'Lokální / privátní síť',allowlist:'Pouze povolené adresy',unrestricted:'Neomezeně'};
+function invalidateApplicationAccess(){applicationAccessPlan=null;applicationAccessPreview.hidden=true;applicationAccessConfirm.checked=false;applicationAccessSave.disabled=true;applicationAccessAllowedRow.hidden=applicationAccessForm.elements.mode.value!=='allowlist';}
+function fillApplicationAccess(result){
+ const settings=result.settings;applicationAccessForm.elements.mode.value=settings.mode;applicationAccessForm.elements.allowed.value=settings.allowed.join('\\n');invalidateApplicationAccess();
+ document.querySelector('#application-access-context').textContent=result.runtime==='desktop'
+  ? 'Desktopová aplikace je pevně dostupná pouze na tomto počítači.'
+  : `Privátní síť: ${result.private_network} · tento klient: ${result.client_address}`;
+ applicationAccessStatus.textContent=`Aktuální režim: ${applicationAccessLabels[settings.mode]}.`;
+}
+async function loadApplicationAccess(){
+ if(document.body.dataset.runtime==='desktop'){
+  fillApplicationAccess({runtime:'desktop',settings:{mode:'localhost',allowed:[]}});
+  for(const control of applicationAccessForm.elements)control.disabled=true;
+  document.querySelector('#application-access-runtime').textContent='Desktopová aplikace nepovoluje vzdálený přístup; tato volba je pouze informativní.';return;
+ }
+ applicationAccessStatus.textContent='Načítám aktuální rozsah dostupnosti…';
+ try{fillApplicationAccess(await projectRequest('/v1/application-access',{action:'status'}));}
+ catch(error){applicationAccessStatus.textContent=error.message;}
+}
+applicationAccessForm.elements.mode.addEventListener('change',invalidateApplicationAccess);
+applicationAccessForm.elements.allowed.addEventListener('input',invalidateApplicationAccess);
+applicationAccessForm.addEventListener('submit',async event=>{event.preventDefault();if(document.body.dataset.runtime==='desktop')return;
+ const settings={mode:applicationAccessForm.elements.mode.value,allowed:applicationAccessForm.elements.allowed.value.split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)};
+ applicationAccessStatus.textContent='Kontroluji přesný rozsah…';
+ try{const result=await projectRequest('/v1/application-access',{action:'preview',settings});applicationAccessPlan=result.plan;
+  const disconnect=result.plan.current_client_allowed?'Současný klient zůstane povolen.':'POZOR: současný klient bude po uložení odmítnut.';
+  document.querySelector('#application-access-plan').textContent=[`Režim: ${applicationAccessLabels[result.plan.settings.mode]}`,`Povolené adresy: ${result.plan.settings.allowed.join(', ') || '—'}`,`Klient: ${result.plan.client_address}`,disconnect].join('\\n');
+  applicationAccessPreview.hidden=false;applicationAccessConfirm.checked=false;applicationAccessSave.disabled=true;applicationAccessStatus.textContent='Náhled je připraven. Zkontrolujte jej a potvrďte.';
+ }catch(error){invalidateApplicationAccess();applicationAccessStatus.textContent=error.message;}
+});
+applicationAccessConfirm.addEventListener('change',()=>{applicationAccessSave.disabled=!applicationAccessPlan||!applicationAccessConfirm.checked;});
+applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPlan||!applicationAccessConfirm.checked)return;applicationAccessSave.disabled=true;applicationAccessStatus.textContent='Ukládám potvrzenou politiku na tomto uzlu…';
+ try{const result=await projectRequest('/v1/application-access',{action:'confirm',plan:applicationAccessPlan,confirmed_disconnect:!applicationAccessPlan.current_client_allowed});fillApplicationAccess(result);applicationAccessStatus.textContent=`Uloženo: ${applicationAccessLabels[result.settings.mode]}.`;}
+ catch(error){applicationAccessStatus.textContent=error.message;applicationAccessSave.disabled=false;}
+});
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
 function selectSettingsTab(selected){
@@ -2362,6 +3223,8 @@ function selectSettingsTab(selected){
  }
  const administration=document.getElementById('administration');if(administration)administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id);
  if(selected.id==='settings-cms-tab')loadCmsStatus();
+ if(selected.id==='settings-access-tab')loadApplicationAccess();
+ if(selected.id==='settings-profile-tab')loadUserProfile();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -2371,30 +3234,34 @@ for(const [index,tab] of settingsTabs.entries()){
   if(next===undefined)return;event.preventDefault();visible[next].click();visible[next].focus();
  });
 }
-async function openSettings(){
+function syncSidebarSettingsList(){
+ for(const item of document.querySelectorAll('#sidebar-settings-list [data-settings-item]'))item.hidden=document.getElementById(item.dataset.settingsItem).hidden;
+}
+async function openSettings(settingsTabId='settings-backend-tab'){
  if(!canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
- settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden};
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=true;
- selectSettingsTab(document.querySelector('#settings-backend-tab'));
+ settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden,trash:!projectTrashView.hidden};
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
+ selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
+ const requested=document.getElementById(settingsTabId);selectSettingsTab(requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
  await loadBackendBinding();
 }
 async function closeSettings(){
- const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;
+ const destination=settingsReturn;settingsReturn=null;settingsView.hidden=true;userProfileLoaded=false;
  document.dispatchEvent(new Event('settingsclosed'));
+ if(destination?.trash){openProjectTrashView();return;}
  if(destination?.sourceImport && activeProject){openSourceImport();return;}
  if(destination?.project && activeProject){
-  projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;
+  projectView.hidden=false;
   const tab=document.getElementById(destination.tabId);if(tab)selectMainTab(tab);
   await loadBackendBinding();
  }else{
-  document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;
+  document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
  }
 }
-document.querySelector('#open-settings').addEventListener('click',openSettings);
-document.querySelector('#chat-open-settings').addEventListener('click',openSettings);
+for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-tab]'))button.addEventListener('click',()=>openSettings(button.dataset.settingsTab));
+for(const button of document.querySelectorAll('#sidebar-settings-list [data-settings-menu-tab]'))button.addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openSettings(button.dataset.settingsMenuTab);});
 document.querySelector('#settings-back').addEventListener('click',closeSettings);
 const cmsStatus=document.querySelector('#cms-status');
 const cmsEditor=document.querySelector('#cms-editor');
@@ -2492,9 +3359,29 @@ document.querySelector('#cms-deployment-run').addEventListener('click',async eve
  event.currentTarget.disabled=true;if(!cmsDeploymentAttempt)cmsDeploymentAttempt={operation_id:crypto.randomUUID(),preview_sha256:cmsDeploymentPreview.preview_sha256,approved:true};
  try{cmsDeploymentStatus.textContent='Nahrávám potvrzený release do Cloudflare…';const result=await projectRequest('/v1/publication-cms/deployment/confirm',cmsDeploymentAttempt,120000);cmsDeploymentAttempt=null;cmsDeploymentStatus.textContent=`Deployment ${result.deployment_id} dokončen pro ${result.hostnames.length} domén.`;await loadCmsDeploymentStatus();
  }catch(error){cmsDeploymentStatus.textContent=error.message;}});
-document.querySelector('#user-profile-open').addEventListener('click',()=>{location.hash='user-profile';});
+const userProfileForm=document.querySelector('#user-profile-form');
+const userProfileStatus=document.querySelector('#user-profile-status');
+let userProfileLoaded=false;
+async function loadUserProfile(){
+ if(userProfileLoaded)return;
+ userProfileStatus.textContent='Načítám lokální profil…';
+ try{const result=await projectRequest('/v1/user-profile',{action:'load'});
+  for(const [key,value] of Object.entries(result.profile))userProfileForm.elements[key].value=value;
+  userProfileLoaded=true;userProfileStatus.textContent='Profil je načtený z tohoto počítače.';
+ }catch(error){userProfileStatus.textContent=error.message;}
+}
+userProfileForm.addEventListener('submit',async event=>{
+ event.preventDefault();const submit=userProfileForm.querySelector('button[type="submit"]');submit.disabled=true;
+ const profile=Object.fromEntries(new FormData(userProfileForm));userProfileStatus.textContent='Ukládám lokální profil…';
+ try{const result=await projectRequest('/v1/user-profile',{action:'save',profile});
+  for(const [key,value] of Object.entries(result.profile))userProfileForm.elements[key].value=value;
+  userProfileLoaded=true;userProfileStatus.textContent='Profil byl uložen pouze na tomto počítači.';
+ }catch(error){userProfileStatus.textContent=error.message;
+ }finally{submit.disabled=false;}
+});
 function clearPreview(){
  ++previewRequest;selectedArtifact=null;previewContent.replaceChildren();
+ refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current','false');
  document.querySelector('#preview-title').textContent='';
  document.querySelector('#preview-metadata').replaceChildren();
@@ -2524,10 +3411,10 @@ function renderMarkdown(text){
 async function openPreview(id,page=1){
  if(!activeProject)return;
  const project=activeProject;
- clearPreview();selectedArtifact=id;
+ clearPreview();selectedArtifact=id;refreshCurrentFileSource();
  for(const button of sidebarArtifacts.querySelectorAll('button'))button.setAttribute('aria-current',String(button.dataset.id===id));
  const request=previewRequest;
- selectMainTab(mainTabs[0]);previewStatus.textContent='Načítám náhled…';
+ selectMainTab(document.querySelector('#preview-tab'));previewStatus.textContent='Načítám náhled…';
  try{
   const result=await projectRequest('/v1/artifacts/preview',{
    project_id:project.id,artifact_id:id,expected_head:project.head,page});
@@ -2578,8 +3465,8 @@ function clearHistoryResult(){
 }
 function closeHistory(){
  ++historyRequest;historyView.hidden=true;
- if(activeProject){projectView.hidden=false;document.querySelector('#sidebar-project-tools').hidden=false;}
- else{document.querySelector('#project-home').hidden=false;document.querySelector('#sidebar-projects').hidden=false;}
+ if(activeProject)projectView.hidden=false;
+ else{document.querySelector('#project-home').hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));}
 }
 async function openHistory(){
  if(!activeProject||!selectedArtifact)return;
@@ -2587,7 +3474,7 @@ async function openHistory(){
  historyVersions=[];historyOlder.replaceChildren();historyNewer.replaceChildren();clearHistoryResult();
  document.querySelector('#history-title').textContent=`Historie · ${document.querySelector('#preview-title').textContent||artifactId}`;
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;projectView.hidden=true;historyView.hidden=false;
- document.querySelector('#sidebar-projects').hidden=true;document.querySelector('#sidebar-project-tools').hidden=false;
+ selectSidebarTab(document.querySelector('#artifacts-tab'));
  historyCompare.disabled=true;historyStatus.textContent='Načítám historii…';
  try{
   const result=await projectRequest('/v1/artifacts/history/list',{project_id:project.id,artifact_id:artifactId,expected_head:project.head});
@@ -2643,6 +3530,30 @@ document.querySelector('#google-drive-callback').textContent=googleDriveDesktop 
 const settingsExternalStatus=document.querySelector('#settings-external-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
+const resourceOpenAIDetail=document.querySelector('#resource-openai-detail');
+const localProviderAvailability=document.querySelector('#local-provider-availability');
+const localProviderIndicator=document.querySelector('#local-provider-indicator');
+const resourceMonitorDialog=document.querySelector('#resource-monitor-dialog');
+for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
+ const row=document.createElement('div');row.className='resource-detail-row';
+ const label=document.createElement('strong');label.textContent=name;
+ const progress=document.createElement('progress');progress.max=100;progress.value=0;
+ progress.setAttribute('aria-label',`${name} – placeholder bez telemetrie`);
+ const value=document.createElement('output');value.textContent='bez telemetrie';
+ row.append(label,progress,value);document.querySelector('#system-monitor-detail').append(row);
+}
+document.querySelector('#resource-monitor-open').addEventListener('click',()=>resourceMonitorDialog.showModal());
+document.querySelector('#resource-monitor-close').addEventListener('click',()=>resourceMonitorDialog.close());
+resourceMonitorDialog.addEventListener('click',event=>{
+ const bounds=resourceMonitorDialog.getBoundingClientRect();
+ if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)resourceMonitorDialog.close();
+});
+function renderLocalProviderAvailability(binding){
+ localProviderIndicator.textContent=binding ? `Lokální AI · ${binding.model} · neověřeno` : 'Lokální AI · nenastaveno';
+ localProviderAvailability.textContent=binding ?
+  `Nakonfigurováno: ${binding.model}. Dostupnost zatím nebyla ověřena.` :
+  'Lokální provider není nakonfigurován; dostupnost není ověřena.';
+}
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
@@ -2749,7 +3660,7 @@ function renderChat(thread){
 function renderThreadList(threads){
  knownThreads=threads;
  const tree=document.querySelector('#sidebar-chat-tree');tree.replaceChildren();
- const assigned=threads.filter(thread=>thread.project_id!==null);
+ const assigned=activeProject ? threads.filter(thread=>thread.project_id===activeProject.id) : [];
  const unassigned=threads.filter(thread=>thread.project_id===null);
  function branch(label,branchThreads){
   if(!branchThreads.length)return;
@@ -2760,7 +3671,7 @@ function renderThreadList(threads){
   root.append(toggle,group);tree.append(root);
   for(const thread of branchThreads){
   const row=document.createElement('li'),button=document.createElement('button');button.type='button';row.setAttribute('role','treeitem');
-  row.className='sidebar-chat-row';button.className='sidebar-chat-open';
+  row.className='sidebar-list-row sidebar-chat-row';button.className='sidebar-list-main sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
   button.textContent=`${thread.classification} · ${thread.status}`;
@@ -2768,9 +3679,9 @@ function renderThreadList(threads){
   const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
   meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
   button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
-  const menu=document.createElement('details');menu.className='sidebar-chat-menu';
+  const menu=document.createElement('details');menu.className='sidebar-item-menu sidebar-chat-menu';
   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce chatu ${thread.classification}`);trigger.textContent='⋮';
-  const items=document.createElement('div');items.className='sidebar-chat-menu-items';items.setAttribute('role','menu');
+  const items=document.createElement('div');items.className='sidebar-item-menu-items sidebar-chat-menu-items';items.setAttribute('role','menu');
   function action(label,callback,disabled=false){
    const item=document.createElement('button');item.type='button';item.textContent=label;item.disabled=disabled;item.setAttribute('role','menuitem');
    item.addEventListener('click',async event=>{event.stopPropagation();menu.open=false;
@@ -2778,22 +3689,24 @@ function renderThreadList(threads){
     if(activeThread?.thread_id===thread.thread_id)await callback(event.currentTarget);});
    items.append(item);
   }
+  action('Zobrazit',async()=>{},!activeProject);
   if(thread.project_id===null)action('Zařadit do tohoto projektu',async control=>{
    control.disabled=true;chatOperationStatus.textContent='Zařazuji vlákno do otevřeného projektu…';
    try{await assignActiveThread();chatOperationStatus.textContent='Vlákno bylo zařazeno do otevřeného projektu.';}
    catch(error){control.disabled=false;chatOperationStatus.textContent=error.message;}
-  },thread.status==='archived');
-  action('Archivovat',archiveActiveThread,thread.status==='archived');
-  action('Připravit smazání',prepareActiveThreadDeletion);
-  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!thread.messages.length);
-  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!thread.messages.length);
+  },!activeProject||thread.status==='archived');
+  action('Archivovat',archiveActiveThread,!activeProject||thread.status==='archived');
+  action('Připravit smazání',prepareActiveThreadDeletion,!activeProject);
+  action('Uložit otisk',button=>runChatRecord(button,'snapshot'),!activeProject||!thread.messages.length);
+  action('Uložit poslední odpověď',button=>runChatRecord(button,'output'),!activeProject||!thread.messages.length);
   menu.append(trigger,items);row.append(button,menu);group.append(row);
   }
  }
  branch('Zařazené',assigned);branch('Nezařazené',unassigned);
  const assignedCount=assigned.length,unassignedCount=unassigned.length;
- document.querySelector('#sidebar-chat-status').textContent=threads.length?
-  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:'Zatím tu nejsou žádné uložené chaty.';
+ document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount?
+  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:
+  (activeProject?'Tento projekt nemá žádná přiřazená ani dostupná nezařazená vlákna.':'Zatím tu nejsou žádná nezařazená vlákna.');
 }
 function rememberThread(thread){
  const index=knownThreads.findIndex(item=>item.thread_id===thread.thread_id);
@@ -2817,6 +3730,7 @@ function renderTaskArtifactSources(){
   label.append(check,document.createTextNode(` ${item.title}`));list.append(label);
  }
  if(!currentArtifacts.length)list.textContent='Projekt zatím nemá podklady.';
+ updatePromptInputSummary();
 }
 function availablePublicSources(){
  const values=[];
@@ -2832,6 +3746,33 @@ function renderTaskPublicSources(){
   check.type='checkbox';check.value=source.run_id;check.checked=selected.has(source.run_id);
   label.append(check,document.createTextNode(` ${source.title} · ${source.url}`));list.append(label);}
  if(!sources.length)list.textContent='Zatím není načtený žádný veřejný zdroj. Zadejte dotaz; nejprve vznikne kontrolované webové hledání.';
+ updatePromptInputSummary();
+}
+function refreshCurrentFileSource(){
+ const label=document.querySelector('#task-source-current-file');
+ const input=document.querySelector('#task-source-current-file-input');
+ const title=document.querySelector('#task-source-current-file-title');
+ if(!label||!input||!title)return;
+ const item=currentArtifacts.find(value=>value.id===selectedArtifact);
+ const searching=document.querySelector('#task-action')?.value==='search';
+ const external=document.querySelector('#chat-run-adapter')?.value==='openai-responses';
+ label.hidden=!item||searching;input.disabled=!item||external;
+ if(!item||external)input.checked=false;
+ input.value=item?.id || '';title.textContent=item?`Aktuální soubor: ${item.title}`:'Aktuální soubor';
+ updatePromptInputSummary();
+}
+function updatePromptInputSummary(){
+ const searching=document.querySelector('#task-action')?.value==='search';
+ const conversation=document.querySelector('#task-source-conversation')?.checked;
+ const artifacts=document.querySelector('#task-source-artifacts')?.checked;
+ const publicWeb=document.querySelector('#task-source-public')?.checked;
+ const artifactIds=new Set(artifacts?[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value):[]);
+ if(document.querySelector('#task-source-current-file-input')?.checked&&selectedArtifact)artifactIds.add(selectedArtifact);
+ const artifactCount=artifactIds.size;
+ const publicCount=publicWeb?document.querySelectorAll('#task-public-source-list input:checked').length:0;
+ const count=searching?1:(conversation?1:0)+artifactCount+publicCount;
+ const countOutput=document.querySelector('#task-input-count');
+ if(countOutput)countOutput.textContent=String(count);
 }
 function replaceTaskProjection(projection){
  const index=taskOutcomes.findIndex(item=>item.task_id===projection.task_id);
@@ -2973,7 +3914,7 @@ function renderTaskOutcomes(){
     event.currentTarget.disabled=true;chatOperationStatus.textContent='Ukládám potvrzený artefakt…';
     try{const projectId=activeProject.id;await projectRequest('/v1/tasks/artifact',{
       task_id:projection.task_id,artifact_id:crypto.randomUUID(),operation_id:crypto.randomUUID()});
-     await openRegisteredProject(projectId);selectMainTab(mainTabs[1]);
+     await openRegisteredProject(projectId);selectMainTab(document.querySelector('#chat-tab'));
      chatOperationStatus.textContent='Artefakt byl uložen a návrh nahrazen odkazem.';
     }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
    }),taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
@@ -3160,6 +4101,7 @@ document.querySelector('#public-source-confirm').addEventListener('click',async 
  }catch(error){chatOperationStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#chat-new-thread').addEventListener('click',()=>{
+ if(!activeProject){document.querySelector('#sidebar-chat-status').textContent='Pro nové vlákno nejprve vyberte projekt.';return;}
  hideSearchRecovery();
  ++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID();
  taskOutcomes=[];renderTaskPublicSources();renderChat(null);renderThreadList(knownThreads);draft.value='';
@@ -3170,6 +4112,7 @@ document.querySelector('#chat-new-thread').addEventListener('click',()=>{
  draft.focus();
 });
 async function openStoredThread(threadId){
+ if(!activeProject){document.querySelector('#sidebar-chat-status').textContent='Pro otevření vlákna nejprve vyberte projekt.';return;}
  ++chatSelectionRevision;pendingChatRequest=null;pendingThreadDeletion=null;
  document.querySelector('#chat-delete-preview').hidden=true;
  const thread=knownThreads.find(item=>item.thread_id===threadId);
@@ -3230,6 +4173,7 @@ function chatBindingLabel(binding){
 }
 function fillBinding(binding,draft=null,draftState=null){
  chatBinding=binding;const fields=chatForm.elements,candidate=draft || binding;
+ renderLocalProviderAvailability(binding);
  if(candidate){fields.boundary.value=candidate.boundary;fields.endpoint.value=candidate.endpoint;
   fields.model.value=candidate.model;fields.target_id.value=candidate.target_id;
   fields.tls_cert_sha256.value=candidate.tls_cert_sha256 || '';
@@ -3301,7 +4245,10 @@ function renderBackendMetrics(result){
  if(!result?.report){backendMetricsStatus.textContent=result?.credential?.available ?
   'Administrátorský klíč je uložen; přehled zatím nebyl načten.' :
   'Administrátorský klíč není uložen.';report.hidden=true;
-  backendMetricsIndicator.textContent='OpenAI přehled: nenačten';return;}
+  backendMetricsIndicator.textContent='OpenAI · nenačteno';
+  resourceOpenAIDetail.textContent=result?.credential?.available ?
+   'Administrátorský klíč je uložen; spotřeba zatím nebyla načtena.' :
+   'Účetní přehled není nakonfigurován.';return;}
  const metricStates={unauthorized:'Administrátorský klíč byl odmítnut (HTTP 401).',
   forbidden:'Klíč nemá oprávnění k účetnímu přehledu (HTTP 403).',
   'rate-limited':'OpenAI dočasně omezilo načítání přehledu (HTTP 429).',
@@ -3318,6 +4265,9 @@ function renderBackendMetrics(result){
  const parts=[...costs,tokens ? `${tokens} tokenů` : ''].filter(Boolean);
  backendMetricsIndicator.textContent=`OpenAI · ${result.report.status}`+(parts.length ? ` · ${parts.join(' · ')}` : '');
  backendMetricsIndicator.title=`Poslední načtení: ${result.report.fetched_at}`;
+ resourceOpenAIDetail.textContent=`Stav: ${result.report.status}. `+
+  (parts.length ? parts.join(' · ') : 'Přehled neobsahuje agregovanou spotřebu.')+
+  ` Poslední načtení: ${result.report.fetched_at}.`;
 }
 async function loadBackendMetrics(){
  try{renderBackendMetrics(await projectRequest('/v1/backend-metrics/status',{}));}
@@ -3369,15 +4319,18 @@ function refreshChatModeControls(){
  const adapter=document.querySelector('#chat-run-adapter');
  const model=document.querySelector('#chat-run-model');
  const artifacts=document.querySelector('#task-artifacts');
+ const action=document.querySelector('#task-action');
+ const output=document.querySelector('#task-output-kind');
  const ollamaOption=adapter.querySelector('option[value="ollama"]');
  const target=document.querySelector('#chat-orchestration-target');
  const routing=document.querySelector('#task-routing');
  const artifactSource=document.querySelector('#task-source-artifacts');
  const publicSource=document.querySelector('#task-source-public');
  const publicSources=document.querySelector('#task-public-sources');
- const searchQuery=document.querySelector('#task-search-query');
- const searchLabel=document.querySelector('#task-search-query-label');
- const routingNote=document.querySelector('#task-routing-note');
+ const currentPromptSource=document.querySelector('#task-source-current-prompt');
+ const conversationSource=document.querySelector('#task-source-conversation-label');
+ const artifactSourceLabel=document.querySelector('#task-source-artifacts-label');
+ const publicSourceLabel=document.querySelector('#task-source-public-label');
  const lan=chatBinding?.boundary==='private-network';
  ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
@@ -3387,32 +4340,56 @@ function refreshChatModeControls(){
   model.disabled=!external;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
-  artifacts.hidden=!artifactSource.checked;
-  publicSources.hidden=!publicSource.checked;searchQuery.hidden=!publicSource.checked;
-  searchLabel.hidden=!publicSource.checked;
-  target.hidden=false;target.textContent=external ? (externalBinding ?
-   `Úkol použije OpenAI ${model.value} po přesném náhledu a potvrzení.` :
-   'Externí úkol vyžaduje nejprve nastavit OpenAI backend.') : (chatBinding ?
-   `Úkol použije ${chatBinding.model} · ${lan?'privátní síť':'tento uzel'} · ${chatBinding.endpoint}` :
-   'Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
-  routingNote.textContent=external ?
-   'Externímu modelu lze předat jen konverzaci a načtené veřejné zdroje; interní artefakty jsou zakázané.' :
-   'Zdroj, výstup a backend jsou pevnou součástí plánu; model je sám nemění.';
+  action.value=publicSource.checked?'search':'answer';
+  const searching=action.value==='search';
+  refreshCurrentFileSource();
+  currentPromptSource.hidden=!searching;
+  conversationSource.hidden=searching;artifactSourceLabel.hidden=searching;publicSourceLabel.hidden=searching;
+  artifacts.hidden=searching||!artifactSource.checked;publicSources.hidden=true;publicSource.disabled=searching;
+  if(searching){
+   if(!output.disabled)output.dataset.beforeSearch=output.value;
+   output.value='conversation';output.disabled=true;
+  }else{
+   output.disabled=false;
+   if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
+  }
+  const warnings=[];
+  if(publicSource.checked&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
+  if(external&&!externalBinding)warnings.push('Externí úkol vyžaduje nejprve nastavit OpenAI backend.');
+  if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
+  target.textContent=warnings.join(' ');target.hidden=!warnings.length;
  }else{
   target.hidden=true;target.textContent='';
   adapter.disabled=false;model.disabled=false;routing.hidden=true;artifacts.hidden=true;
+  currentPromptSource.hidden=true;conversationSource.hidden=false;artifactSourceLabel.hidden=false;publicSourceLabel.hidden=false;
+  publicSource.disabled=false;output.disabled=false;
+  if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
   if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
  }
+ updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
  document.querySelector('#chat-run-model').value=event.currentTarget.value==='openai-responses' ?
   (externalBinding?.model || '') : (chatBinding?.model || '');
  refreshChatModeControls();
 });
+document.querySelector('#task-action').addEventListener('change',event=>{
+ document.querySelector('#task-source-public').checked=event.currentTarget.value==='search';
+ renderTaskPublicSources();refreshChatModeControls();
+});
+document.querySelector('#task-source-conversation').addEventListener('change',updatePromptInputSummary);
+document.querySelector('#task-source-current-file-input').addEventListener('change',updatePromptInputSummary);
 document.querySelector('#task-source-artifacts').addEventListener('change',refreshChatModeControls);
 document.querySelector('#task-source-public').addEventListener('change',()=>{
  renderTaskPublicSources();refreshChatModeControls();
+});
+document.querySelector('#task-artifact-list').addEventListener('change',updatePromptInputSummary);
+document.querySelector('#task-public-source-list').addEventListener('change',updatePromptInputSummary);
+const taskInputs=document.querySelector('#task-inputs');
+taskInputs.addEventListener('toggle',()=>promptForm.classList.toggle('inputs-open',taskInputs.open));
+taskInputs.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&taskInputs.open){event.preventDefault();taskInputs.open=false;taskInputs.querySelector('summary').focus();}
 });
 document.querySelector('#chat-mode').addEventListener('change',async event=>{
  pendingChatRequest=null;const mode=event.currentTarget.value;
@@ -3438,8 +4415,7 @@ async function loadChat(){
   if(selectionRevision!==chatSelectionRevision)return;
   activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
   renderThreadList([...result.threads].reverse());
-  chatOperationStatus.textContent=result.threads.length?
-   'Vyberte uložené vlákno k vědomému navázání, nebo založte nové.':'Založte nové vlákno.';
+  chatOperationStatus.textContent='';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 function backendCandidate(){
@@ -3488,10 +4464,14 @@ document.querySelector('#google-drive-config-form').addEventListener('submit',as
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
+  localProviderIndicator.textContent=result.model_available ? 'Lokální AI · dostupná' : 'Lokální AI · dostupná, model chybí';
+  localProviderAvailability.textContent=result.model_available ?
+   `Dostupný · model ${result.model} je připraven.` :
+   `Dostupný · model ${result.model} není nainstalován.`;
   settingsBackendStatus.textContent=result.model_available ?
    `Ollama je dostupná a model ${result.model} je připraven.` :
    `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
- }catch(error){settingsBackendStatus.textContent=error.message;}
+ }catch(error){localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
 ollamaStreamingToggle.addEventListener('change',async event=>{
@@ -3554,7 +4534,7 @@ async function showExternalPreview(request){
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
- if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
@@ -3566,7 +4546,7 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
 document.querySelector('#external-propose-button').addEventListener('click',async event=>{
- if(!activeProject || !draft.value.trim())return;selectMainTab(mainTabs[1]);
+ if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
  const request={proposal_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
@@ -3652,7 +4632,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(!threadWritable()){
   chatOperationStatus.textContent='Archivované vlákno nebo vlákno jiného projektu je pouze pro čtení.';return;
  }
- selectMainTab(mainTabs[1]);
+ selectMainTab(document.querySelector('#chat-tab'));
  const mode=document.querySelector('#chat-mode').value;
  const adapter=document.querySelector('#chat-run-adapter').value;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
@@ -3758,30 +4738,33 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   return;
  }
  if(!pendingChatRequest){
-  const threadId=activeTaskThreadId || activeThread?.thread_id || crypto.randomUUID();
-  const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
-  const useConversation=document.querySelector('#task-source-conversation').checked;
-  const useArtifacts=document.querySelector('#task-source-artifacts').checked;
-  const usePublic=document.querySelector('#task-source-public').checked;
-  const artifactIds=useArtifacts ? [...document.querySelectorAll('#task-artifact-list input:checked')]
-   .map(item=>item.value) : [];
-  const publicRunIds=usePublic ? [...document.querySelectorAll('#task-public-source-list input:checked')]
+ const threadId=activeTaskThreadId || activeThread?.thread_id || crypto.randomUUID();
+ const selectedMessages=activeThread?.thread_id===threadId ? activeThread.messages : [];
+  const searching=document.querySelector('#task-action').value==='search';
+  const useConversation=!searching&&document.querySelector('#task-source-conversation').checked;
+  const useCurrentFile=!searching&&document.querySelector('#task-source-current-file-input').checked&&selectedArtifact;
+  const includeSelectedArtifacts=!searching&&document.querySelector('#task-source-artifacts').checked;
+  const usePublic=searching||document.querySelector('#task-source-public').checked;
+  const selectedArtifactIds=[...document.querySelectorAll('#task-artifact-list input:checked')].map(item=>item.value);
+  const artifactIds=includeSelectedArtifacts ? selectedArtifactIds : [];
+  if(useCurrentFile)artifactIds.push(selectedArtifact);
+  const uniqueArtifactIds=[...new Set(artifactIds)],useArtifacts=uniqueArtifactIds.length>0;
+  const publicRunIds=usePublic&&!searching ? [...document.querySelectorAll('#task-public-source-list input:checked')]
    .map(item=>item.value) : [];
   const sourceKinds=[];if(useConversation)sourceKinds.push('conversation');
   if(useArtifacts)sourceKinds.push('artifacts');if(usePublic)sourceKinds.push('public-web');
   if(!sourceKinds.length){chatOperationStatus.textContent='Vyberte alespoň jeden zdroj úkolu.';return;}
-  if(useArtifacts && !artifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
-  const searchQuery=(usePublic && !publicRunIds.length) ?
-   document.querySelector('#task-search-query').value.trim() : null;
+  if(includeSelectedArtifacts && !selectedArtifactIds.length){chatOperationStatus.textContent='Vyberte alespoň jeden interní artefakt.';return;}
+  const searchQuery=searching?draft.value.trim():null;
   if(usePublic && !publicRunIds.length && !searchQuery){
-   chatOperationStatus.textContent='Zadejte dotaz pro kontrolované hledání na webu nebo vyberte načtený veřejný zdroj.';return;
+   chatOperationStatus.textContent='Zadejte zadání pro kontrolované hledání na webu.';return;
   }
   pendingChatRequest={task_id:crypto.randomUUID(),
   project_id:activeProject.id,expected_head:activeProject.head,
   thread_id:threadId,
   message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),manifest_id:crypto.randomUUID(),
   selected_message_ids:useConversation?selectedMessages.map(item=>item.message_id):[],
-  selected_artifact_ids:artifactIds,
+  selected_artifact_ids:uniqueArtifactIds,
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString(),run_choice:runChoice,
   task_plan:{schema_version:1,source_kinds:sourceKinds,
@@ -3838,7 +4821,7 @@ async function runChatRecord(button,action){
     created_at:new Date().toISOString(),message_ids:[answer.message_id],snapshot_id:null,snapshot_sha256:null});
   }
   chatOperationStatus.textContent=action==='snapshot'?'Otisk byl uložen do projektu.':'Výstup byl uložen jako editovatelný dokument.';
-  await openRegisteredProject(activeProject.id);selectMainTab(mainTabs[1]);
+  await openRegisteredProject(activeProject.id);selectMainTab(document.querySelector('#chat-tab'));
  }catch(error){chatOperationStatus.textContent=error.message;}
  finally{button.disabled=false;}
 }
@@ -4233,10 +5216,17 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
  }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 refreshImageAdapter();
-if(window.workspaceAutoStart!==false)loadProjects();
+if(window.workspaceAutoStart!==false){loadProjects();if(!backendMetricsIndicator.hidden)loadBackendMetrics();}
 """
 JS += ADMIN_JS
-DESKTOP_BOOTSTRAP = "document.body.dataset.runtime='desktop';\n"
+DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
+document.querySelector('#settings-profile-tab').hidden=false;
+document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
+document.querySelector('#settings-access-tab').hidden=false;
+document.querySelector('[data-settings-item="settings-access-tab"]').hidden=false;
+document.querySelector('#presenter-fullscreen').hidden=false;
+document.querySelector('#federation-tab').hidden=false;
+"""
 PUBLIC_CSS = '''html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05090c;color:#f6faf8;font:clamp(18px,2.5vw,42px) system-ui}body{display:flex;align-items:center;justify-content:center}.screen{width:86vw;aspect-ratio:16/9;display:flex;flex-direction:column;justify-content:center}.screen h1{font-size:clamp(30px,6vw,96px);color:#79c9ac;margin:0 0 3vh}.screen p{line-height:1.4;margin:0}.neutral{font-size:clamp(16px,2vw,30px);color:#94a9b5;text-align:center}'''
 PUBLIC_JS = SLIDE_JS + '''
 const screen=document.querySelector('#screen');
@@ -4278,7 +5268,7 @@ class DesktopHandler(Handler):
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
         '/v1/chat/delete/confirm',
         '/v1/gamepad/status', '/v1/presentation/status',
-        '/v1/gamepad/settings',
+        '/v1/gamepad/settings', '/v1/user-profile',
         '/v1/presentations/open', '/v1/presentations/save', '/v1/presentations/use',
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
@@ -4311,6 +5301,18 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/user-profile' and isinstance(request, dict):
+            service = getattr(self.server, 'user_profile', None)
+            if service is None:
+                return self.reply(503, {'error': 'Uživatelský profil je dostupný jen v desktopu.'})
+            try:
+                if request == {'action': 'load'}:
+                    return self.reply(200, {'profile': service.load()})
+                if request.keys() == {'action', 'profile'} and request['action'] == 'save':
+                    return self.reply(200, {'profile': service.save(request['profile'])})
+                return self.send_error(400)
+            except (ValueError, OSError, sqlite3.Error, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/gamepad/status' and (request == {} or isinstance(request, dict)):
             return self.reply(200, scan_gamepads())
         if self.path == '/v1/gamepad/settings' and isinstance(request, dict):

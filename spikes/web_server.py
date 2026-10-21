@@ -33,6 +33,7 @@ from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.backend_contract import BackendResponseError, BackendUnknown
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
+from spikes.application_access import ApplicationAccess
 
 # The shell is shared byte-for-byte. This explicit bootstrap is the only web
 # variant: it provides browser authentication and enables server capabilities.
@@ -63,12 +64,15 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   const sessionResponse=await fetch('/v1/session',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
-  projectCreateForm.hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  projectCreateForm.hidden=!admin;document.querySelector('#sidebar-create-project').hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
+  document.querySelector('#settings-access-tab').hidden=!admin;
+  document.querySelector('[data-settings-item="settings-access-tab"]').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
-  document.body.classList.add('authenticated');await loadProjects();
+  document.querySelector('#openai-resource-provider').hidden=!admin;
+  document.body.classList.add('authenticated');await loadProjects();if(admin)await loadBackendMetrics();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
 window.addEventListener('pagehide',()=>{accessKey='';});
@@ -100,6 +104,7 @@ class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
+                                               '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
                                                '/v1/notebooklm/preview', '/v1/notebooklm/plan',
@@ -169,6 +174,24 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path == '/v1/application-access':
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            try:
+                if request == {'action': 'status'}:
+                    return self.reply(200, self.server.application_access.status(self.client_address[0]))
+                if isinstance(request, dict) and set(request) == {'action', 'settings'} \
+                        and request['action'] == 'preview':
+                    return self.reply(200, {'plan': self.server.application_access.preview(
+                        request['settings'], self.client_address[0])})
+                if isinstance(request, dict) \
+                        and set(request) == {'action', 'plan', 'confirmed_disconnect'} \
+                        and request['action'] == 'confirm':
+                    return self.reply(200, self.server.application_access.confirm(
+                        request['plan'], self.client_address[0], request['confirmed_disconnect']))
+                return self.send_error(400)
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/google-drive/configure':
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -371,8 +394,8 @@ class WebServer(HTTPServer):
         connection, address = super().get_request()
         try:
             peer = ipaddress.ip_address(address[0])
-            if not peer.is_loopback and peer not in self.allowed_network:
-                raise OSError('Client outside configured LAN')
+            if not self.application_access.allows(peer):
+                raise OSError('Client outside configured application access policy')
             connection.settimeout(2)
             return self.tls.wrap_socket(connection, server_side=True), address
         except (OSError, ValueError):
@@ -412,11 +435,12 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
     tls.minimum_version = ssl.TLSVersion.TLSv1_2
     tls.load_cert_chain(cert, key)
     server = WebServer((bind, port), WebHandler)
-    server.tls, server.allowed_network = tls, network
+    server.tls = tls
     server.hostname = hostname
     server.token, server.counter = token, 0
     server.projects = Projects(node, network=True)
     server.node = node
+    server.application_access = ApplicationAccess(node, network)
     server.project_creation_actions = ProjectCreationActions(
         node, projects_root=creator.configured_projects_root() or Path(node).parent / 'projects')
     server.project_deletion_actions = ProjectDeletionActions(node)

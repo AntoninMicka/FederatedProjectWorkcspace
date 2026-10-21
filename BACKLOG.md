@@ -44,11 +44,44 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-02` bylo doručeno PR #67 jako merge commit `6c94047`,
 `F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
-ve WORK_LOG. Aktivní navazující dávka je v TODO.
+ve WORK_LOG. `UX-FACELIFT-01` je uživatelsky akceptované a archivované ve
+WORK_LOG; jeho PR byl vytvořen, po opravě CI portability však dosud nebyl
+sloučen a TODO čeká na doručení. Další nesouvisející dávka proto zatím nebyla
+aktivována.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
+  (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
+  akceptaci UX-FACELIFT-01 výslovně odložil další kolo faceliftu na budoucí
+  dobu. Před aktivací znovu vygenerovat A4 inventuru ze skutečného sdíleného
+  UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit již
+  přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
+  paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
+  právě upravených stránek.
+
+- [ ] [planned] **UX-PROJECT-REPAIR-01 — kontrola a oprava poškozených
+  projektů (cílová úroveň: designed).** Navrhnout obecný nástroj Check &
+  Repair pro registrované projekty nedostupné z jiného důvodu než chybějící
+  umístění. Nejprve bezpečně rozliší a vysvětlí problém repozitáře,
+  metadat, oprávnění, cesty, lokálního stavu nebo indexu; diagnostiku oddělí
+  od oprav a každou persistentní změnu provede až po náhledu a potvrzení s
+  popsanou recovery hranicí.
+
+- [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
+  (cílová úroveň: designed).** Budoucí serverový web dostane kategorii
+  Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle
+  `UX-FEDERATION-02`. Dnešní přechodové desktopové nástroje ani nativní
+  ovladače výstupů se na serverový web nepřenášejí.
+
+- [ ] [planned] **UX-FEDERATION-02 — plnohodnotná správa federace projektů
+  (cílová úroveň: designed).** Nahradit přechodovou stránku jednosměrného
+  veřejného přenosu správou federovaných projektů. Při přípravě dávky
+  konsolidovat otevřené kontrakty M1-AH-14/M1-AH-15 a roadmapu M5; vymezit
+  discovery, vztahy uzlů a projektů, směry operací, oprávnění, konflikty,
+  stav/recovery a audit jako samostatnou reviewovatelnou feature.
 
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
@@ -103,18 +136,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   změnu jazyka pro další běh a restart. Modelové nedodržení se nesmí tiše
   překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
   požadovaný jazyk a případnou odchylku.
-
-- [ ] [planned] **UX-FACELIFT-01 — Vizuální facelift a přeuspořádání prvků
-  pro první release (cílová úroveň: designed → implemented).** Akceptace
-  explicitního routování 2026-10-17 potvrdila, že současné ovládání je funkční
-  a postačí k dokončení rozdělaných dávek, ale je příliš těžkopádné pro první
-  release. Facelift proto začne interaktivní společnou revizí skutečných
-  obrazovek a průchodů; uživatel bude průběžně určovat priority a konkrétní
-  rozsah se předem nezamyká ani nenahrazuje vymyšleným paralelním redesignem.
-  Jakmile revize vymezí ucelený reviewovatelný řez, zaznamenají se jeho hranice
-  a akceptace pro vlastní feature větev/PR. Zachovat jeden sdílený web/desktop
-  frontend, mobilní layout, klávesnicovou přístupnost, bezpečné textové
-  vykreslení a existující RBAC/privacy a recovery hranice.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 

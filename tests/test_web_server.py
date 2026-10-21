@@ -159,12 +159,29 @@ class WebTests(unittest.TestCase):
         self.assertIn('window.workspaceAutoStart=false', WEB_JS)
         self.assertIn('id="settings-users-tab"', WEB_HTML)
         self.assertIn('id="settings-cms-tab"', WEB_HTML)
+        self.assertIn('id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden', WEB_HTML)
+        self.assertIn('data-settings-item="settings-profile-tab" hidden', WEB_HTML)
+        self.assertNotIn("querySelector('#settings-profile-tab').hidden=false", WEB_JS)
+        self.assertIn('id="presenter-fullscreen" type="button" hidden disabled', WEB_HTML)
+        self.assertNotIn("querySelector('#presenter-fullscreen').hidden=false", WEB_JS)
+        self.assertIn('id="federation-tab" role="tab" aria-label="Federace"', WEB_HTML)
+        self.assertIn('id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden', WEB_HTML)
+        self.assertNotIn("querySelector('#federation-tab').hidden=false", WEB_JS)
+        register = WEB_HTML.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
+        self.assertIn('hidden', register)
+        self.assertNotIn("getElementById('sidebar-register-project').hidden=false", WEB_JS)
         self.assertIn('id="administration" class="settings-card" hidden', WEB_HTML)
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#settings-cms-tab').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#settings-access-tab').hidden=!admin", WEB_JS)
+        self.assertIn('id="application-access-form"', WEB_HTML)
+        self.assertIn("projectRequest('/v1/application-access',{action:'status'})", WEB_JS)
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#openai-resource-provider').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#sidebar-create-project').hidden=!admin", WEB_JS)
+        self.assertIn('await loadProjects();if(admin)await loadBackendMetrics()', WEB_JS)
         self.assertIn('id="workflow-tab"', WEB_HTML)
         self.assertIn('Projekt z archivu (NotebookLM notebook)', WEB_HTML)
         self.assertIn('id="notebooklm-selection"', WEB_HTML)
@@ -192,6 +209,34 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
+        self.assertEqual(self.request(path='/v1/user-profile', body='{"action":"load"}')[0], 503)
+
+    def test_application_access_requires_preview_and_persists_node_local_policy(self):
+        code, data, _ = self.request(path='/v1/application-access',
+                                     body=json.dumps({'action': 'status'}))
+        self.assertEqual(200, code, data)
+        status = json.loads(data)
+        self.assertEqual({'mode': 'private-network', 'allowed': []}, status['settings'])
+        self.assertEqual('192.168.100.0/24', status['private_network'])
+        self.assertEqual('127.0.0.1', status['client_address'])
+
+        settings = {'mode': 'allowlist', 'allowed': ['203.0.113.10', '10.20.0.0/16']}
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'preview', 'settings': settings}))
+        self.assertEqual(200, code, data)
+        plan = json.loads(data)['plan']
+        self.assertTrue(plan['current_client_allowed'])  # loopback is never locked out
+        self.assertEqual(settings, plan['settings'])
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'confirm', 'plan': plan, 'confirmed_disconnect': False}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(settings, json.loads(data)['settings'])
+        self.assertEqual(settings, self.server.application_access.load())
+
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'preview', 'settings': {'mode': 'allowlist', 'allowed': ['host.local']}}))
+        self.assertEqual(422, code)
+        self.assertIn('IP', json.loads(data)['error'])
 
     def test_google_drive_https_configuration_picker_callback_and_privacy(self):
         _, data, _ = self.create_project('Drive HTTPS')
@@ -250,22 +295,32 @@ class WebTests(unittest.TestCase):
         self.assertIn('id="mobile-sidebar-toggle" type="button" aria-controls="workspace-sidebar"', WEB_HTML)
         self.assertIn('id="mobile-sidebar-backdrop" type="button" aria-label="Zavřít navigaci"', WEB_HTML)
         self.assertIn('id="workspace-sidebar" aria-label="Navigace pracovního prostoru"', WEB_HTML)
+        self.assertIn('id="sidebar-layout-toggle" type="button" aria-pressed="false"', WEB_HTML)
+        self.assertNotIn('Na tomto uzlu', WEB_HTML)
+        self.assertNotIn('Zkušební verze', WEB_HTML)
         self.assertIn("window.matchMedia('(max-width:640px)')", WEB_JS)
         self.assertIn("workspaceSidebar.inert=mobileViewport.matches&&!open", WEB_JS)
-        self.assertIn("event.key==='Escape'", WEB_JS)
+        self.assertIn("event.key!=='Escape'", WEB_JS)
+        self.assertIn("document.body.classList.contains('mobile-sidebar-open')", WEB_JS)
         self.assertIn("const visible=mainTabs.filter(item=>!item.hidden)", WEB_JS)
-        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden)", WEB_JS)
-        self.assertIn("#back-projects,#open-notebooklm-import,#open-settings", WEB_JS)
-        self.assertIn(".sidebar-artifact-title,.sidebar-artifact-menu-items button,.sidebar-chat-open,.sidebar-chat-menu-items button,.sidebar-presentation-actions button,#chat-new-thread,#chat-open-settings'))closeMobileSidebar()",
+        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", WEB_JS)
+        self.assertIn("#open-notebooklm-import,#sidebar-create-project,#sidebar-register-project,#resource-monitor-open", WEB_JS)
+        self.assertIn(".sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
         self.assertIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
-        self.assertIn("items.className='sidebar-chat-menu-items'", WEB_JS)
+        self.assertIn("items.className='sidebar-item-menu-items sidebar-chat-menu-items'", WEB_JS)
         self.assertIn("item.setAttribute('role','menuitem')", WEB_JS)
-        self.assertIn('id="back-projects" class="sidebar-back"', WEB_HTML)
-        self.assertIn('flex-direction:column;overflow:hidden', WEB_CSS)
+        self.assertNotIn('id="back-projects"', WEB_HTML)
+        self.assertIn('grid-template-columns:51px minmax(0,1fr)', WEB_CSS)
+        self.assertIn('.sidebar-tab-icon{width:22px;height:22px', WEB_CSS)
+        self.assertIn('#sidebar-tabs button:hover .sidebar-tab-label,#sidebar-tabs button:focus-visible .sidebar-tab-label', WEB_CSS)
+        self.assertIn('#resource-monitor-dialog::backdrop', WEB_CSS)
+        self.assertIn('aside.sidebar-compact{width:70px', WEB_CSS)
+        self.assertNotIn('localStorage', WEB_JS)
+        self.assertIn('#sidebar-layout-toggle{display:none}', WEB_CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', WEB_CSS)
         self.assertIn('@media(max-width:640px)', WEB_CSS)
         self.assertIn('max-width:calc(100vw - 48px)', WEB_CSS)
@@ -300,6 +355,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/tasks/search/preview', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/confirm', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/application-access',
+                                      body='{"action":"status"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/media/openai/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/publication-cms/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/request',
@@ -670,11 +727,11 @@ def poll():
  1:"(()=>{if(!document.body.classList.contains('authenticated')||document.querySelectorAll('.project-card').length!==1)return'waiting';if(innerWidth!==390)return'FAIL: wrong viewport '+innerWidth;if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: home overflow';const b=document.querySelector('#mobile-sidebar-toggle');if(getComputedStyle(b).display==='none'||parseFloat(getComputedStyle(b).minHeight)<44)return'FAIL: touch target';return'ready'})()",
  2:"!document.querySelector('#notebooklm-import-view').hidden&&document.querySelector('#notebooklm-selection')&&!document.querySelector('#notebooklm-selection').disabled?'ready':'waiting'",
  3:"(()=>{const row=document.querySelector('#notebooklm-confirm-row'),destination=document.querySelector('#notebooklm-destination');if(row.hidden)return'waiting';if(!destination.textContent.startsWith('/'))return'FAIL: target path missing';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: import overflow';return'ready'})()",
- 4:"!document.querySelector('#project-view').hidden&&document.querySelector('#sidebar-artifact-list button')?'ready':'waiting'",
+ 4:"(()=>{if(document.querySelector('#project-view').hidden||!document.querySelector('#sidebar-artifact-list button'))return'waiting';const form=document.querySelector('#chat-composer'),action=document.querySelector('#task-action'),submit=document.querySelector('#chat-submit'),control=document.querySelector('label[for=chat-mode]'),label=control.querySelector('span'),currentPrompt=document.querySelector('#task-source-current-prompt'),output=document.querySelector('#task-output-kind');if(form.hidden)return'FAIL: prompt hidden';if(document.querySelector('#prompt-widget-toggle')||document.querySelector('#task-search-editor'))return'FAIL: obsolete prompt control';renderProjectHistory({entries:Array.from({length:8},(_,i)=>({subject:'Změna '+i,date:'2026-10-21T00:00:00Z',author:'Test',commit_id:String(i).padStart(8,'0')})),truncated:false});renderProjectOverview({status:'ready',items:Array.from({length:8},(_,i)=>({title:'Úkol '+i,checked:false,depth:0})),completed:0,total:8,truncated:false});const history=document.querySelector('#project-overview-history-list'),tasks=document.querySelector('#project-overview-task-list'),historyCard=document.querySelector('.project-overview-history'),taskCard=document.querySelector('.project-overview-tasks');if(history.children.length!==5||tasks.children.length!==5)return'FAIL: mobile overview limit';if(getComputedStyle(history).overflowY!=='visible'||getComputedStyle(tasks).overflowY!=='visible'||getComputedStyle(historyCard).overflowY!=='visible'||getComputedStyle(taskCard).overflowY!=='visible')return'FAIL: nested mobile overview scroll';action.value='search';action.dispatchEvent(new Event('change',{bubbles:true}));if(currentPrompt.hidden||output.value!=='conversation'||!output.disabled)return'FAIL: search contract';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: prompt overflow';const formRect=form.getBoundingClientRect(),submitRect=submit.getBoundingClientRect(),controlRect=control.getBoundingClientRect(),labelRect=label.getBoundingClientRect();if(controlRect.height<44||labelRect.top<controlRect.top||labelRect.bottom>controlRect.bottom)return'FAIL: embedded label geometry';if(submitRect.left<formRect.left||submitRect.right>formRect.right+1||submitRect.width<44||submitRect.height<44)return'FAIL: prompt submit geometry '+JSON.stringify({form:[formRect.left,formRect.right],submit:[submitRect.left,submitRect.right,submitRect.width,submitRect.height]});action.value='answer';action.dispatchEvent(new Event('change',{bubbles:true}));return'ready'})()",
  5:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='true')return'waiting';if(s.inert)return'FAIL: open drawer inert';return'ready'})()",
  6:"(()=>{const b=document.querySelector('#mobile-sidebar-toggle'),s=document.querySelector('#workspace-sidebar');if(b.getAttribute('aria-expanded')!=='false')return'waiting';if(!s.inert)return'FAIL: closed drawer focusable';if(document.activeElement!==b)return'FAIL: drawer focus not restored';return'ready'})()",
  7:"document.querySelector('#mobile-sidebar-toggle').getAttribute('aria-expanded')==='true'?'ready':'waiting'",
- 8:"(()=>{if(document.querySelector('#preview-title').textContent!=='Mobilní podklad')return'waiting';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: preview overflow';const s=document.querySelector('#workspace-sidebar');if(!s.inert)return'FAIL: selected drawer focusable';return'ready'})()",
+ 8:"(()=>{if(document.querySelector('#preview-title').textContent!=='Mobilní podklad')return'waiting';const currentFile=document.querySelector('#task-source-current-file');if(currentFile.hidden||!currentFile.textContent.includes('Mobilní podklad'))return'FAIL: current file input missing';if(document.documentElement.scrollWidth>document.documentElement.clientWidth)return'FAIL: preview overflow';const s=document.querySelector('#workspace-sidebar');if(!s.inert)return'FAIL: selected drawer focusable';return'ready'})()",
  9:"document.querySelector('#mobile-sidebar-toggle').getAttribute('aria-expanded')==='true'?'ready':'waiting'",
  10:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'"}
  view.page().runJavaScript(checks[phase],result)

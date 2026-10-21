@@ -5,14 +5,90 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-FACELIFT-01 — interaktivní facelift pro první release — 2026-10-21
+
+Dávka vznikla na větvi `feature/ux-facelift-01` z doručeného `develop`
+`8b24452` (PR #71) a dosáhla úrovně **PoC validated**. Uživatel 2026-10-21
+uzavřel interaktivní revizi s tím, že byly odstraněny největší bolístky a
+zbývající stránky se doladí až v budoucím opakování faceliftu. Posledním
+implementačním commitem je `d069693`; před tímto administrativním uzavřením
+obsahovala implementace 31 commitů nad `develop`. Feature akceptace je
+uzavřená a jediný PR do `develop` byl vytvořen, ale dosud nebyl sloučen.
+
+- [x] [completed] **UX-FACELIFT-01-A — A4 inventura všech formulářů
+  (implemented).** Generátor odvozuje tiskový review balíček přímo ze
+  sdíleného HTML/CSS a test selže, pokud nový `<form id>` není zařazený.
+  Původní balíček měl 31 listů a 33 stran A4; po převodu všech používaných
+  Qt formulářů a doplnění dostupnosti aplikace inventura eviduje 23
+  sdílených webových formulářů a žádný používaný nativní Qt formulář.
+- [x] [completed] **UX-FACELIFT-01-B — ruční anotace a společná revize
+  (designed).** Uživatel nad skutečnými obrazovkami průběžně určil
+  informační hierarchii, zjednodušení promptu, podobu dashboardu, přesuny
+  akcí a pořadí převodu dialogů. Projekty zůstávají referenčním vzorem;
+  facelift nevytvořil paralelní frontend ani neuvolnil RBAC, privacy,
+  potvrzovací nebo recovery hranice.
+- [x] [completed] **UX-FACELIFT-01-C — iterativní implementace schváleného
+  řezu (implemented).** Sdílený desktop/web shell dostal pevnou informační
+  architekturu Projekty, Chaty, Úkoly, Podklady, Nástroje, Výstupy a Nastavení;
+  desktop navíc capability Federace. Seznamy používají hlavní akci a
+  skutečně podporované položkové menu. Responzivní dashboard a projektový
+  přehled reuseují existující projekci úkolů a historie. Jednotný prompt
+  odděluje režim, vstupy, akci, výsledek, privacy a backend/model; webové
+  hledání používá aktuální zadání a výsledek vrací do konverzace.
+  Otevřený podklad lze explicitně přidat jako Aktuální soubor.
+
+  Nativní formuláře Profil, Displeje a role prezentace, přenos veřejného
+  projektu, síťový backend/diagnostika a nasazení LXC byly převedeny do
+  sdíleného webového UI s omezenými capability mosty; citlivé Qt/systemové
+  operace, SSH, certifikáty, Git bundle a recovery zůstaly v nativní vrstvě.
+  Registrace projektu se přesunula mezi importní metody a chybějící umístění
+  dostalo přímé akce Opravit/Odregistrovat s potvrzením. Poslední Qt toolbar
+  byl odstraněn; sidebar má plný a redukovaný ikonový režim bez webového
+  persistentního stavu.
+
+  Nastavení Dostupnost aplikace drží desktop pevně na localhostu a serveru
+  nabízí localhost, konfigurovanou privátní síť, validovaný IP/CIDR allowlist
+  nebo neomezený rozsah. Administrátorská změna prochází revizně a klientsky
+  svázaným náhledem; TLS a autentizace zůstávají povinné a bind, firewall či
+  routing mohou dosah dále zúžit.
+- [x] [completed] **UX-FACELIFT-01-D — regresní a fyzická akceptace
+  (PoC validated).** Po poslední implementační změně prošla celá sada
+  `python3 -m unittest discover -s tests -v`: **661 testů**, 27 volitelných
+  testů bylo přeskočeno. Prošly oba výsledné JavaScripty přes `node
+  --check`, Python kompilace, skutečný Qt WebEngine desktopový restart smoke a
+  serverové HTTPS přihlášení/odhlášení. Uživatel následně potvrdil
+  splnění cílů faceliftu a přijal odklad zbývajících stránek. První CI běh PR
+  následně odhalil, že tři nové desktopové testovací moduly importovaly PySide6
+  povinně, přestože obecné CI instaluje jen přenosné závislosti. Testy nyní
+  přesně přeskočí pouze při chybějícím modulu `PySide6`; jiné importní chyby
+  zůstávají viditelné. Simulace prostředí bez site-packages přeskočila všech
+  12 dotčených testů, lokální běh s PySide6 stejných 12 testů provedl a celá
+  sada mimo socketové omezení sandboxu znovu prošla: **661 testů**, 27
+  volitelných testů bylo přeskočeno. CI používá Node.js 24 varianty oficiálních
+  actions a explicitní obraz `ubuntu-24.04`, takže otevřený PR není vystaven
+  ohlášenému automatickému přechodu `ubuntu-latest` na Ubuntu 26.
+
+### Výsledek, recovery a omezení
+
+Projektové zápisy nadále používají Workspace/Journal/Git/index hranici.
+Převody federačních formulářů nemění existující recovery kontrakty:
+web pouze předává přesně potvrzené a omezené hodnoty nativním službám.
+Node-local dostupnost aplikace se zapisuje SQLite transakcí se
+`synchronous=FULL`; chyba před commitem ponechá původní politiku, po commitu ji
+restart znovu načte a neplatný durable stav selže při startu uzavřeně.
+
+Tato akceptace netvrdí dokončení plnohodnotné správy federace, obecného
+Check & Repair nástroje ani doladění všech stránek. Tyto požadavky byly se
+zachovanými ID předány do BACKLOGu spolu s budoucím `UX-FACELIFT-02`.
+
 ## F-M3-EXPLICIT-TASK-ROUTING-01 — explicitní podklady, výstup a vykonání — 2026-10-17
 
 Dávka vznikla na stacked větvi nad reader checkpointem `ea7d101` a dosáhla
 úrovně **PoC validated**. Implementace je v commitu `2c72dfb`. Uživatel
 2026-10-17 následně schválil jednorázovou delivery výjimku: routing a věcně
 provázaný reader doručit z konsolidované větve
-`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Větev zatím
-nebyla pushnuta a PR nebyl vytvořen ani sloučen.
+`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Společný PR #71
+byl doručen jako merge commit `8b24452`.
 
 - [x] [completed] **F-M3-EXPLICIT-TASK-ROUTING-01-A — přesný task-plan
   kontrakt a policy (implemented).** Uzavřený `ExplicitTaskPlan` odděluje
@@ -51,9 +127,8 @@ Dávka vznikla na větvi `feature/f-m3-public-source-reader-01` z doručeného
 `develop` `225ea01` a dosáhla úrovně **PoC validated**. Implementace je v
 commitu `bed828b` a závislost fyzické akceptace v `ea7d101`. Fyzická akceptace
 byla dokončena společně s explicitním routováním; uživatelem schválená delivery
-výjimka proto obě dávky doručí z `feature/f-m3-reader-task-routing-01` jediným
-PR do `develop`. Původní reader větev zůstává do merge recovery bodem; společná
-větev zatím nebyla pushnuta a PR nebyl vytvořen ani sloučen.
+výjimka proto obě dávky doručila z `feature/f-m3-reader-task-routing-01`
+jediným PR #71 do `develop` jako merge commit `8b24452`.
 
 - [x] [completed] **F-M3-PUBLIC-SOURCE-READER-01-A — kontrakt, journal a
   staging (implemented).** `PublicSourceRuns` váže binding, request a preview,

@@ -1,20 +1,27 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
-"""Session-only native display assignment for the two existing presenter views."""
+"""Session-only native display placement behind the shared presenter form."""
+from uuid import uuid4
+
 from PySide6.QtCore import QObject, Qt, QTimer
-from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QLabel
 
 
 class PresenterDisplays(QObject):
-    def __init__(self, app, speaker, audience):
+    def __init__(self, app, speaker, audience, *, configuration_callback=None,
+                 closed_callback=None, error_callback=None):
         super().__init__(speaker)
         self.app, self.speaker, self.audience = app, speaker, audience
+        self.configuration_callback = configuration_callback or (lambda _configuration: None)
+        self.closed_callback = closed_callback or (lambda: None)
+        self.error_callback = error_callback or (lambda _message: None)
         self.active = False
-        self.dialog = None
         self.markers = []
         self.speaker_screen = None
         self.audience_screen = None
         self.saved_geometry = None
+        self.selection_token = None
+        self.configuration_screens = []
         self.refresh = QTimer(self)
         self.refresh.setSingleShot(True)
         self.refresh.timeout.connect(self.configure)
@@ -41,8 +48,9 @@ class PresenterDisplays(QObject):
         # Hide before Qt can relocate the audience window onto the speaker screen.
         self.audience.hide()
         self.clear_markers()
-        if self.dialog:
-            self.dialog.reject()
+        self.selection_token = None
+        self.configuration_screens = []
+        self.closed_callback()
         self.refresh.start(200)
 
     def open(self):
@@ -56,8 +64,9 @@ class PresenterDisplays(QObject):
         self.refresh.stop()
         self.clear_markers()
         self.audience.hide()
-        if self.dialog:
-            self.dialog.reject()
+        self.selection_token = None
+        self.configuration_screens = []
+        self.closed_callback()
         if self.saved_geometry is not None:
             self.speaker.restoreGeometry(self.saved_geometry)
             self.saved_geometry = None
@@ -104,76 +113,60 @@ class PresenterDisplays(QObject):
             return
         self.refresh.stop()
         self.audience.hide()
-        if self.dialog:
-            self.dialog.raise_()
-            return
-        screens = self.app.screens()
+        self.clear_markers()
+        screens = list(self.app.screens())
         if not screens:
+            self.selection_token = None
+            self.configuration_screens = []
+            self.error_callback('Nebyl nalezen žádný dostupný displej.')
             return
-        dialog = QDialog(self.speaker)
-        self.dialog = dialog
-        dialog.setWindowTitle('Displeje a role prezentace')
-        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
-        layout = QVBoxLayout(dialog)
-        info = QLabel('Přiřaďte displej řečníkovi a divákům. Ostatní displeje zůstanou nepoužité.\n'
-                      'Na jednom displeji použijte náhled bez promítání. Zrušení ponechá výstup skrytý.')
-        info.setWordWrap(True)
-        layout.addWidget(info)
-        form = QFormLayout()
-        speaker = QComboBox()
-        audience = QComboBox()
-        audience.addItem('Bez promítání', -1)
+        current = self.speaker_screen if self.speaker_screen in screens else self.speaker.screen()
+        speaker_index = screens.index(current) if current in screens else 0
+        audience_index = screens.index(self.audience_screen) if self.audience_screen in screens else -1
+        if audience_index == speaker_index:
+            audience_index = -1
+        items = []
         for index, screen in enumerate(screens):
             rect = screen.geometry()
-            label = f'{index + 1} · {screen.name()} · {rect.width()} × {rect.height()}'
-            speaker.addItem(label, index)
-            audience.addItem(label, index)
-        current = self.speaker_screen if self.speaker_screen in screens else self.speaker.screen()
-        speaker.setCurrentIndex(screens.index(current) if current in screens else 0)
-        if self.audience_screen in screens and self.audience_screen != current:
-            audience.setCurrentIndex(screens.index(self.audience_screen) + 1)
-        form.addRow('Řečník — ovládání a poznámky', speaker)
-        form.addRow('Diváci — schválený slide', audience)
-        layout.addLayout(form)
-        error = QLabel()
-        layout.addWidget(error)
-        identify = QPushButton('Identifikovat displeje')
-        identify.clicked.connect(lambda: self.identify(screens, speaker.currentData(), audience.currentData()))
-        layout.addWidget(identify)
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText('Použít role')
-        layout.addWidget(buttons)
+            items.append({'index': index, 'label':
+                          f'{index + 1} · {screen.name()} · {rect.width()} × {rect.height()}'})
+        self.selection_token = str(uuid4())
+        self.configuration_screens = screens
+        self.configuration_callback({'token': self.selection_token, 'screens': items,
+                                     'speaker': speaker_index, 'audience': audience_index})
 
-        def validate():
-            same = speaker.currentData() == audience.currentData()
-            buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(not same)
-            error.setText('Řečník a diváci musí mít různé displeje.' if same else '')
-            self.identify(screens, speaker.currentData(), audience.currentData())
+    def _selection(self, token, speaker_index, audience_index):
+        screens = list(self.app.screens())
+        if (token != self.selection_token or screens != self.configuration_screens
+                or not isinstance(speaker_index, int) or isinstance(speaker_index, bool)
+                or not isinstance(audience_index, int) or isinstance(audience_index, bool)
+                or speaker_index < 0 or speaker_index >= len(screens)
+                or audience_index < -1 or audience_index >= len(screens)):
+            raise ValueError('Výběr displejů už neodpovídá aktuálním obrazovkám.')
+        return screens
 
-        def apply():
-            if screens != self.app.screens():
-                self.changed()
-                return
-            if speaker.currentData() == audience.currentData():
-                return
-            self.speaker_screen = screens[speaker.currentData()]
-            audience_index = audience.currentData()
-            self.audience_screen = screens[audience_index] if audience_index >= 0 else None
-            self.place(self.speaker, self.speaker_screen)
-            if self.audience_screen:
-                self.place(self.audience, self.audience_screen, fullscreen=True)
-            dialog.accept()
-            self.speaker.activateWindow()
+    def identify_selection(self, token, speaker_index, audience_index):
+        screens = self._selection(token, speaker_index, audience_index)
+        self.identify(screens, speaker_index, audience_index)
 
-        def finished(_):
-            self.clear_markers()
-            self.dialog = None
-            dialog.deleteLater()
+    def apply_selection(self, token, speaker_index, audience_index):
+        screens = self._selection(token, speaker_index, audience_index)
+        if speaker_index == audience_index:
+            raise ValueError('Řečník a diváci musí mít různé displeje.')
+        self.speaker_screen = screens[speaker_index]
+        self.audience_screen = screens[audience_index] if audience_index >= 0 else None
+        self.place(self.speaker, self.speaker_screen)
+        if self.audience_screen:
+            self.place(self.audience, self.audience_screen, fullscreen=True)
+        self.clear_markers()
+        self.selection_token = None
+        self.configuration_screens = []
+        self.closed_callback()
+        self.speaker.activateWindow()
 
-        speaker.currentIndexChanged.connect(validate)
-        audience.currentIndexChanged.connect(validate)
-        buttons.accepted.connect(apply)
-        buttons.rejected.connect(dialog.reject)
-        dialog.finished.connect(finished)
-        dialog.open()
-        validate()
+    def cancel_configuration(self):
+        self.clear_markers()
+        self.selection_token = None
+        self.configuration_screens = []
+        self.audience.hide()
+        self.closed_callback()

@@ -3,12 +3,16 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na společné doručení readeru a task routingu
+# TODO — čekání na doručení UX-FACELIFT-01
 
-Feature akceptace dávek `F-M3-PUBLIC-SOURCE-READER-01` a
-`F-M3-EXPLICIT-TASK-ROUTING-01` byly 2026-10-17 archivovány ve `WORK_LOG.md`.
-Uživatel následně výslovně schválil jednorázovou delivery výjimku: obě věcně
-provázané a společně ověřené dávky doručit z konsolidované větve
-`feature/f-m3-reader-task-routing-01` jediným PR do `develop`. Původní feature
-ID, samostatné výsledky a implementační commity zůstávají zachované. Větev
-dosud nebyla pushnuta, PR nebyl vytvořen ani sloučen.
+Feature dávka **UX-FACELIFT-01 — interaktivní facelift pro první release**
+byla 2026-10-21 uživatelem akceptována na úrovni **PoC validated**. Dokončené
+úkoly, výsledky ověření, recovery hranice a omezení jsou archivované ve
+[WORK_LOG](WORK_LOG.md). Odložené požadavky a budoucí `UX-FACELIFT-02` byly
+předány do [BACKLOG](BACKLOG.md).
+
+Skutečná větev je `feature/ux-facelift-01`, základ a cíl PR je `develop`.
+Poslední implementační commit je `d069693`. Větev byla pushnuta a jediný PR byl
+vytvořen; po opravě CI portability čeká na nový úspěšný běh a merge. TODO
+zůstává v tomto čekacím stavu do doručení PR. Další nesouvisející feature zde
+není aktivovaná.

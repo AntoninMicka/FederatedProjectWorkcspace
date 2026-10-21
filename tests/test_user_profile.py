@@ -14,7 +14,8 @@ import unittest
 
 from spikes.user_profile import UserProfile, validate_profile, PROFILE_FIELDS
 from spikes.presentation_closing import closing_slide
-from spikes.desktop_ui import presentation_status, presentation_public_payload
+from spikes.desktop_ui import DesktopHandler, presentation_status, presentation_public_payload
+from spikes.local_api import running_api
 from spikes.presentation_documents import project_deck
 from tests.test_presentation_documents import sample
 
@@ -90,22 +91,27 @@ class UserProfileTests(unittest.TestCase):
         self.assertEqual(decoded.text, '\n'.join(PROFILE.values()))
 
 
-class UserProfileDialogTests(unittest.TestCase):
-    def test_native_settings_save_and_reopen(self):
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        try:
-            from PySide6.QtWidgets import QApplication
-            from spikes.desktop_user_profile import UserProfileDialog
-        except ImportError:
-            self.skipTest('Requires Qt widgets')
-        app = QApplication.instance() or QApplication([])
+class UserProfileWebFormTests(unittest.TestCase):
+    def test_desktop_endpoint_saves_reopens_and_rejects_invalid_profile(self):
+        from tests.test_local_api import LocalAPITests
+        driver = LocalAPITests()
         with tempfile.TemporaryDirectory() as directory:
             store = UserProfile(Path(directory) / 'node.json')
-            dialog = UserProfileDialog(store)
-            for key, value in PROFILE.items():
-                dialog.fields[key].setText(value)
-            dialog.save_button.click()
-            self.assertEqual(store.load(), PROFILE)
-            reopened = UserProfileDialog(UserProfile(Path(directory) / 'node.json'))
-            self.assertEqual({key: field.text() for key, field in reopened.fields.items()}, PROFILE)
-            reopened.reject(); dialog.close(); app.processEvents()
+            with running_api('http', handler=DesktopHandler) as server:
+                server.user_profile = store
+                saved = driver.request(server, path='/v1/user-profile', body=json.dumps({
+                    'action': 'save', 'profile': PROFILE}).encode())
+                loaded = driver.request(server, path='/v1/user-profile', body=b'{"action":"load"}')
+                invalid = driver.request(server, path='/v1/user-profile', body=json.dumps({
+                    'action': 'save', 'profile': dict(PROFILE, name='x' * 101)}).encode())
+            self.assertIn(b' 200 ', saved.split(b'\r\n', 1)[0])
+            self.assertEqual(json.loads(loaded.split(b'\r\n\r\n', 1)[1])['profile'], PROFILE)
+            self.assertIn(b' 422 ', invalid.split(b'\r\n', 1)[0])
+            self.assertEqual(UserProfile(Path(directory) / 'node.json').load(), PROFILE)
+
+    def test_endpoint_is_unavailable_without_desktop_profile_service(self):
+        from tests.test_local_api import LocalAPITests
+        with running_api('http', handler=DesktopHandler) as server:
+            response = LocalAPITests().request(
+                server, path='/v1/user-profile', body=b'{"action":"load"}')
+        self.assertIn(b' 503 ', response.split(b'\r\n', 1)[0])

@@ -18,7 +18,7 @@ from spikes.desktop import (google_authorization_url, native_action_name, native
                             presentation_pdf_js_request, presentation_pdf_paths, provider_key_url,
                             publish_presentation_pdf,
                             repairable_target_mode, request_policy)
-from spikes.desktop_ui import CSS, DesktopHandler, HTML, JS
+from spikes.desktop_ui import CSS, DESKTOP_BOOTSTRAP, DesktopHandler, HTML, JS
 from spikes.presentation_visual import SLIDE_JS
 from spikes.local_api import running_api
 from spikes.metadata import ValidationError
@@ -116,6 +116,10 @@ class DesktopTests(unittest.TestCase):
     def test_project_removal_ui_has_separate_preview_restore_and_purge_approvals(self):
         self.assertIn('id="project-delete-panel"', HTML)
         self.assertIn('id="project-trash-list"', HTML)
+        self.assertIn('id="project-trash-view" hidden', HTML)
+        self.assertIn('id="sidebar-project-trash"', HTML)
+        self.assertIn('id="dashboard-trash"', HTML)
+        self.assertIn("if(!openProjectTrashView())return", JS)
         for path in ('/v1/projects/delete/preview', '/v1/projects/delete/confirm',
                      '/v1/projects/delete/restore/preview',
                      '/v1/projects/delete/restore/confirm',
@@ -229,15 +233,15 @@ class DesktopTests(unittest.TestCase):
 
     def test_presentation_editor_is_integrated_in_shared_workspace(self):
         desktop = Path('spikes/desktop.py').read_text()
+        self.assertNotIn("QPushButton('Prezentace…')", desktop)
         self.assertNotIn('PresentationEditorDialog', desktop)
-        self.assertIn("page.runJavaScript('openPresentationEditor()')", desktop)
         self.assertIn('id="presentation-tab"', HTML)
         self.assertIn('id="presentations-tab"', HTML)
         self.assertIn('id="sidebar-presentation-list"', HTML)
-        self.assertIn('aria-label="Hotové prezentace projektu"', HTML)
+        self.assertIn('aria-label="Prezentace ve výstupech projektu"', HTML)
         self.assertIn('renderSidebarPresentations', JS)
-        self.assertIn("edit.textContent='Upravit'", JS)
-        self.assertIn("start.textContent='Spustit'", JS)
+        self.assertIn("{label:'Upravit',run:()=>openPresentationEditor(doc.id)", JS)
+        self.assertIn("{label:'Spustit',run:()=>usePresentationDocument(doc)", JS)
         self.assertIn("loadPresentationEditor(null,false)", JS)
         self.assertIn("renderSidebarPresentations();if(!openEditor)return", JS)
         self.assertIn('id="presentation-editor-workspace"', HTML)
@@ -259,6 +263,11 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("JSON.stringify(presentationPdfExportRequest())", desktop)
         self.assertIn("location.hash=`export-presentation-pdf?nonce=", JS)
         self.assertNotIn("location.hash='presentation-editor'", JS)
+        self.assertIn('id="presenter-display-form"', HTML)
+        self.assertIn("requestPresenterDisplayAction('presenter-displays-identify')", JS)
+        self.assertIn("requestPresenterDisplayAction('presenter-displays-apply')", JS)
+        self.assertIn("requestNativeAction('presenter-displays-cancel')", JS)
+        self.assertIn('showPresenterDisplayConfiguration', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'
@@ -299,15 +308,37 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(native_action_request(target_url, origin),
                          {'action': 'choose-notebooklm-target', 'nonce': nonce,
                           'operation_id': operation})
-        for action in ('choose-notebooklm-archive', 'choose-project-location'):
+        for action in ('register-project-location', 'recover-project-operation',
+                       'choose-notebooklm-archive',
+                       'choose-project-location',
+                       'federation-transfer-open', 'federation-transfer-start',
+                       'federation-network-open', 'federation-network-run',
+                       'federation-deployment-open', 'federation-deployment-start'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
                     {'action': action, 'nonce': nonce})
+        for action in ('relocate-project-location', 'unregister-missing-project'):
+            with self.subTest(action=action):
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?project_id={operation}&nonce={nonce}', origin),
+                    {'action': action, 'nonce': nonce, 'project_id': operation})
+                self.assertIsNone(native_action_request(
+                    f'{origin}/#{action}?project_id=bad&nonce={nonce}', origin))
         for action in ('choose-presentation-pdf', 'export-presentation-pdf'):
-            self.assertEqual(native_action_request(
-                f'{origin}/#{action}?nonce={nonce}', origin),
-                {'action': action, 'nonce': nonce})
+                self.assertEqual(native_action_request(
+                    f'{origin}/#{action}?nonce={nonce}', origin),
+                    {'action': action, 'nonce': nonce})
+        token = '7461d65e-cc6c-4daa-8a88-1fe272eddf3d'
+        for action in ('presenter-displays-identify', 'presenter-displays-apply'):
+            url = (f'{origin}/#{action}?token={token}&speaker=0&audience=-1&nonce={nonce}')
+            self.assertEqual(native_action_request(url, origin), {
+                'action': action, 'nonce': nonce, 'token': token, 'speaker': 0, 'audience': -1})
+            self.assertIsNone(native_action_request(url.replace('speaker=0', 'speaker=64'), origin))
+            self.assertIsNone(native_action_request(url.replace(f'token={token}', 'token=bad'), origin))
+        self.assertEqual(native_action_request(
+            f'{origin}/#presenter-displays-cancel?nonce={nonce}', origin),
+            {'action': 'presenter-displays-cancel', 'nonce': nonce})
         for url in (f'{origin}/#choose-notebooklm-target?nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id=invalid&nonce={nonce}',
                     f'{origin}/#choose-notebooklm-target?operation_id={operation}&nonce=invalid',
@@ -547,7 +578,55 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         input_handler = JS.split("draft.addEventListener('input',()=>{", 1)[1].split('});', 1)[0]
         submit_handler = JS.split("document.querySelector('#chat-composer').addEventListener('submit',async event=>{", 1)[1].split('});', 1)[0]
         self.assertNotIn('selectMainTab', input_handler)
-        self.assertIn('selectMainTab(mainTabs[1])', submit_handler)
+        self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", submit_handler)
+
+    def test_project_overview_and_prompt_widget_define_central_layout(self):
+        overview = HTML.split('<div id="project-overview-panel"', 1)[1].split(
+            '<div id="preview-panel"', 1)[0]
+        self.assertIn('id="project-title"', overview)
+        self.assertIn('id="project-description"', overview)
+        self.assertIn('class="project-overview-grid"', overview)
+        self.assertIn('class="dashboard-tile project-overview-history"', overview)
+        self.assertIn('id="project-overview-history-list"', overview)
+        self.assertIn('class="project-overview-description" aria-label="Stručný popis projektu"', overview)
+        self.assertIn('id="project-overview-task-list"', overview)
+        self.assertIn('id="project-overview-edit-todo"', overview)
+        self.assertIn('class="dashboard-tile dashboard-tasks project-overview-tasks"', overview)
+        self.assertIn('function renderProjectOverview(todo)', JS)
+        self.assertIn('function renderProjectHistory(history)', JS)
+        self.assertIn('subject.textContent=item.subject', JS)
+        self.assertIn('todo.items.filter(item=>!item.checked)', JS)
+        self.assertIn("classList.toggle('project-overview-active',tab.id==='project-overview-tab')", JS)
+        self.assertIn("const mobileProjectOverviewItemLimit=5", JS)
+        self.assertIn("mobileProjectOverview.matches?items.slice(0,mobileProjectOverviewItemLimit):items", JS)
+        self.assertIn("na telefonu zobrazeno ${visible.length}", JS)
+        self.assertIn('renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history)', JS)
+        self.assertIn("document.querySelector('#project-description').textContent=result.description", JS)
+        self.assertIn('id="prompt-widget"', HTML)
+        self.assertNotIn('id="prompt-widget-toggle"', HTML)
+        self.assertIn("setPromptVisible(tab.dataset.promptDefault!=='hidden')", JS)
+        self.assertNotIn('promptToggle', JS)
+        self.assertIn('id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible"', HTML)
+        self.assertIn('id="chat-tab" role="tab" aria-controls="chat-panel" aria-selected="false" data-prompt-default="visible"', HTML)
+        self.assertIn('id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden"', HTML)
+        self.assertIn('#prompt-widget{position:relative;z-index:20;flex-shrink:0', CSS)
+        self.assertIn('#main-panel-content.project-overview-active{overflow:hidden}', CSS)
+        self.assertIn('#project-overview-panel{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%', CSS)
+        self.assertIn('.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
+        self.assertIn('align-items:stretch;flex:1;min-height:0', CSS)
+        self.assertIn('.project-overview-history{display:flex;flex-direction:column', CSS)
+        self.assertIn('.project-overview-history ol{flex:1;min-height:0', CSS)
+        self.assertIn('.project-overview-tasks ul{flex:1;min-height:0;max-height:none', CSS)
+        self.assertIn('.project-overview-description{grid-column:span 2', CSS)
+        self.assertIn('@media(max-width:1250px) and (min-width:641px){.project-overview-grid{grid-template-columns:repeat(2,minmax(0,1fr))}', CSS)
+        self.assertIn('.project-overview-description{grid-column:1/-1;grid-row:1}', CSS)
+        self.assertIn('.project-overview-grid{display:grid;grid-template-columns:1fr}', CSS)
+        self.assertIn('#main-panel-content,#main-panel-content.project-overview-active{overflow:visible', CSS)
+        self.assertIn('#project-overview-panel{display:block;height:auto', CSS)
+        self.assertIn('.project-overview-history{display:flex!important;grid-column:1;grid-row:2;min-height:180px;overflow:visible}', CSS)
+        self.assertIn('.project-overview-history ol{flex:none;overflow:visible', CSS)
+        self.assertIn('.project-overview-tasks{display:flex!important;grid-column:1;grid-row:3;min-height:260px;overflow:visible}', CSS)
+        self.assertIn('.project-overview-tasks ul{flex:none;overflow:visible', CSS)
 
     def test_gamepad_demo_ui_and_backend_are_exposed(self):
         from spikes.desktop_ui import HTML, JS
@@ -555,6 +634,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('/v1/gamepad/status', JS)
         self.assertIn('Gamepad demo', HTML)
         self.assertIn('id="gamepad-list"', HTML)
+        self.assertIn('id="legacy-home-diagnostics" hidden aria-hidden="true"', HTML)
 
     def test_gamepad_settings_endpoint_loads_without_write_and_saves_explicitly(self):
         driver = test_local_api.LocalAPITests()
@@ -769,6 +849,16 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('preview_sha256:preview.preview_sha256', JS)
         self.assertIn("fields.secret.value=''", JS)
         self.assertIn("administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id)", JS)
+        self.assertIn('id="user-profile-form"', HTML)
+        self.assertIn("projectRequest('/v1/user-profile',{action:'load'})", JS)
+        self.assertIn("projectRequest('/v1/user-profile',{action:'save',profile})", JS)
+        self.assertIn("document.querySelector('#settings-profile-tab').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("document.querySelector('#settings-access-tab').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("document.querySelector('[data-settings-item=\"settings-access-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("runtime==='desktop'", JS)
+        self.assertIn("settings:{mode:'localhost',allowed:[]}", JS)
+        self.assertNotIn('user-profile-open', HTML)
         self.assertIn("const reloaded=await loadBackendBinding()", JS)
         self.assertIn("Poslední potvrzené nastavení bylo znovu načteno.", JS)
         self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
@@ -777,18 +867,93 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
         self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
-                         '/v1/chat/delete/confirm', '/v1/sources/import'} <= DesktopHandler.post_paths)
+                         '/v1/chat/delete/confirm', '/v1/sources/import',
+                         '/v1/user-profile'} <= DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
-        self.assertIn('id="back-projects" class="sidebar-back"', HTML)
-        self.assertNotIn('id="back-projects" class="back-button"', HTML)
+        self.assertNotIn('id="back-projects"', HTML)
+        sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
+        labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení', 'Federace']
+        self.assertEqual([label for _, label in sorted(
+            (sidebar_tabs.index(f'aria-label="{label}"'), label) for label in labels)], labels)
+        self.assertEqual(sidebar_tabs.count('class="sidebar-tab-icon"'), len(labels))
+        self.assertEqual(sidebar_tabs.count('class="sidebar-tab-label" role="tooltip"'), len(labels))
+        self.assertIn('id="projects-tab"', sidebar_tabs)
+        self.assertNotIn('disabled', sidebar_tabs.split('id="projects-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertNotIn('disabled', sidebar_tabs.split('id="chats-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertNotIn('disabled', sidebar_tabs.split('id="settings-sidebar-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertIn('hidden', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
+        self.assertNotIn('disabled', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
+        for tab in ('todo-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab'):
+            self.assertIn('disabled', sidebar_tabs.split(f'id="{tab}"', 1)[1].split('</button>', 1)[0])
+        self.assertIn('id="sidebar-layout-toggle" type="button" aria-pressed="false"', HTML)
+        self.assertIn('aria-label="Sbalit hlavní panel"', HTML)
+        self.assertNotIn('Na tomto uzlu', HTML)
+        self.assertNotIn('Zkušební verze', HTML)
+        self.assertNotIn('localStorage', JS)
+        self.assertIn("workspaceSidebar.classList.toggle('sidebar-menu-open',!close)", JS)
+        self.assertIn("event.key!=='Escape'", JS)
+        self.assertIn('aside.sidebar-compact{width:70px', CSS)
+        self.assertIn('aside.sidebar-compact.sidebar-menu-open #sidebar-project-tools>', CSS)
+        projects = HTML.split('id="sidebar-projects"', 1)[1].split('id="sidebar-chats"', 1)[0]
+        self.assertLess(projects.index('id="sidebar-create-project"'),
+                        projects.index('id="sidebar-project-list"'))
+        self.assertLess(projects.index('id="sidebar-import-project"'),
+                        projects.index('id="sidebar-project-trash"'))
+        self.assertLess(projects.index('id="sidebar-project-trash"'),
+                        projects.index('id="sidebar-register-project"'))
+        self.assertLess(projects.index('id="sidebar-register-project"'),
+                        projects.index('id="sidebar-project-list"'))
+        self.assertEqual(projects.count('class="project-action-icon"'), 3)
+        self.assertEqual(projects.count('class="project-action-label" role="tooltip"'), 3)
+        for label in ('Nový projekt', 'Importovat projekt', 'Koš projektů'):
+            self.assertIn(f'aria-label="{label}"', projects)
+            self.assertIn(f'role="tooltip">{label}</span>', projects)
+        register = projects.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
+        self.assertIn('hidden', register)
+        self.assertIn('>Projekt z umístění', register)
+        self.assertIn("requestNativeAction('register-project-location')", JS)
+        self.assertIn('.sidebar-project-primary-actions{grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
+        self.assertNotIn('body[data-runtime="desktop"] .sidebar-project-primary-actions', CSS)
+        self.assertIn('.sidebar-project-primary-actions button:hover .project-action-label', CSS)
+        self.assertIn('.sidebar-project-primary-actions button:focus-visible .project-action-label', CSS)
+        self.assertIn('id="open-notebooklm-import"', projects)
+        self.assertIn('id="sidebar-tools"', HTML)
+        self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
+        self.assertIn('id="sidebar-federation"', HTML)
+        self.assertIn('id="open-federation-transfer"', HTML)
+        self.assertIn('id="open-federation-network"', HTML)
+        self.assertIn('id="open-federation-deployment"', HTML)
+        self.assertEqual(HTML.count('Přenos veřejného projektu do LXC'), 2)
+        self.assertIn('id="federation-transfer-form"', HTML)
+        self.assertIn('plnohodnotnou správou federace projektů', HTML)
+        self.assertIn("requestNativeAction('federation-transfer-open')", JS)
+        self.assertIn("requestNativeAction('federation-transfer-start')", JS)
+        self.assertIn('id="federation-network-form"', HTML)
+        self.assertIn('Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.', HTML)
+        self.assertIn("requestNativeAction('federation-network-open')", JS)
+        self.assertIn("requestNativeAction('federation-network-run')", JS)
+        self.assertIn('id="federation-deployment-form"', HTML)
+        self.assertIn('Reset zahodí recovery snapshot', HTML)
+        self.assertIn("requestNativeAction('federation-deployment-open')", JS)
+        self.assertIn("requestNativeAction('federation-deployment-start')", JS)
+        self.assertIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
+        self.assertIn('JSON.stringify(federationNetworkRequest())', Path('spikes/desktop.py').read_text())
+        self.assertIn('JSON.stringify(federationDeploymentRequest())', Path('spikes/desktop.py').read_text())
+        self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
+        self.assertNotIn('QDialog', Path('spikes/desktop_network.py').read_text())
+        self.assertNotIn('QDialog', Path('spikes/desktop_deployment.py').read_text())
+        self.assertIn('<h2>Výstupy</h2><h3>Prezentace</h3>', HTML)
+        self.assertIn('#sidebar-settings-list{flex:1}', CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', HTML)
         sidebar_chats = HTML.split('id="sidebar-chats"', 1)[1].split('</div></div>', 1)[0]
         self.assertLess(sidebar_chats.index('id="chat-new-thread"'),
                         sidebar_chats.index('id="sidebar-chat-tree"'))
-        self.assertLess(sidebar_chats.index('id="chat-open-settings"'),
-                        sidebar_chats.index('id="sidebar-chat-tree"'))
+        self.assertNotIn('id="chat-open-settings"', sidebar_chats)
         self.assertIn("branch('Zařazené',assigned);branch('Nezařazené',unassigned)", JS)
+        self.assertIn("const assigned=activeProject ? threads.filter(thread=>thread.project_id===activeProject.id) : []", JS)
+        self.assertIn("const unassigned=threads.filter(thread=>thread.project_id===null)", JS)
+        self.assertNotIn("const assigned=threads.filter(thread=>thread.project_id!==null)", JS)
         self.assertIn("if(!branchThreads.length)return", JS)
         self.assertIn("root.setAttribute('role','treeitem')", JS)
         self.assertNotIn('id="chat-archive-thread"', HTML)
@@ -796,23 +961,56 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('id="chat-record-actions"', HTML)
         self.assertNotIn("querySelector('#chat-record-actions')", JS)
         self.assertIn("action('Archivovat',archiveActiveThread", JS)
+        self.assertIn("action('Zobrazit',async()=>{},!activeProject)", JS)
         self.assertIn("action('Zařadit do tohoto projektu'", JS)
         self.assertIn('await assignActiveThread()', JS)
-        self.assertIn("action('Připravit smazání',prepareActiveThreadDeletion)", JS)
+        self.assertIn("action('Připravit smazání',prepareActiveThreadDeletion,!activeProject)", JS)
         self.assertIn("action('Uložit otisk',button=>runChatRecord(button,'snapshot')", JS)
         self.assertIn("action('Uložit poslední odpověď',button=>runChatRecord(button,'output')", JS)
         self.assertIn("trigger.setAttribute('aria-label',`Akce chatu", JS)
-        self.assertIn('.sidebar-chat-menu-items{position:absolute', CSS)
+        self.assertIn('.sidebar-item-menu-items{position:absolute', CSS)
         self.assertIn("openStoredThread(thread.thread_id)", JS)
         self.assertIn("function rememberThread(thread)", JS)
         self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)
-        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden)", JS)
+        self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", JS)
+        self.assertIn("const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab']", JS)
+        self.assertIn("async function openSettings(settingsTabId='settings-backend-tab'){\n if(!canLeaveWorkspaceEditors())return;", JS)
+        self.assertIn("document.querySelector('#chat-new-thread').disabled=!available", JS)
         self.assertIn("End:visible.length-1", JS)
         self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
-        self.assertIn('flex-direction:column;overflow:hidden', CSS)
+        self.assertIn('grid-template-columns:51px minmax(0,1fr)', CSS)
+        self.assertIn('.sidebar-tab-icon{width:22px;height:22px', CSS)
+        self.assertIn('#sidebar-tabs button:hover .sidebar-tab-label,#sidebar-tabs button:focus-visible .sidebar-tab-label', CSS)
         self.assertIn('#sidebar-project-tools>[role="tabpanel"]:not([hidden])', CSS)
         self.assertIn('#sidebar-project-list,#todo-tree,#sidebar-artifact-list,#sidebar-chat-tree', CSS)
         self.assertIn('overflow-y:auto;overscroll-behavior:contain', CSS)
+        project_home = HTML.split('<main><div id="project-home">', 1)[1].split(
+            '<div id="project-trash-view"', 1)[0]
+        self.assertNotIn('id="create-project"', project_home)
+        self.assertIn('id="dashboard-grid"', project_home)
+        self.assertIn('id="dashboard-calendar"', project_home)
+        self.assertIn('id="dashboard-tasks"', project_home)
+        self.assertIn('id="dashboard-mail"', project_home)
+        self.assertIn('id="dashboard-trash"', project_home)
+        self.assertNotIn('Gamepad demo', project_home)
+        self.assertNotIn('Promítání prezentace', project_home)
+        self.assertNotIn('VAŠE PRÁCE NA JEDNOM MÍSTĚ', project_home)
+        self.assertNotIn('Vaše projekty, zdroje a rozhodnutí', project_home)
+        self.assertIn('grid-template-columns:repeat(4,minmax(0,1fr))', CSS)
+        self.assertNotIn('.dashboard-tasks{grid-row:span', CSS)
+        self.assertIn('#dashboard-tasks{display:flex!important', CSS)
+        self.assertIn("projectRequest('/v1/projects/open',{project_id:item.id})", JS)
+        self.assertIn('recentProjectOrder=[projectId,...recentProjectOrder.filter', JS)
+        self.assertIn('<div id="project-create-view" hidden>', HTML)
+        self.assertIn('id="project-create-back"', HTML)
+        self.assertIn("projectCreateView.hidden=false", JS)
+        self.assertIn("projectCreateView.hidden=true", JS)
+        self.assertIn('id="resource-monitor-open" type="button" aria-haspopup="dialog"', HTML)
+        self.assertIn('id="resource-monitor-dialog" aria-labelledby="resource-monitor-title"', HTML)
+        self.assertEqual(HTML.count('class="resource-mini-row"'), 6)
+        self.assertIn("for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET'])", JS)
+        self.assertIn("resourceMonitorDialog.showModal()", JS)
+        self.assertIn('U lokálních providerů se zde sleduje pouze dostupnost', HTML)
         self.assertIn('id="open-source-import"', HTML)
         self.assertIn('id="source-import-view" hidden', HTML)
         self.assertIn('id="source-import-form"', HTML)
@@ -823,19 +1021,24 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="history-close"', HTML)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", JS)
-        self.assertIn("if(item.kind==='document')", JS)
-        self.assertIn("history.textContent='Zobrazit historii'", JS)
+        self.assertIn("if(item.kind==='document')actions.push(", JS)
+        self.assertIn("{label:'Zobrazit',run:()=>openPreview(item.id)}", JS)
         self.assertIn("await openPreview(item.id);if(selectedArtifact===item.id)await openHistory()", JS)
-        self.assertIn('sidebar-artifact-menu-items', CSS)
-        self.assertIn("action('Upravit / přejmenovat'", JS)
-        self.assertIn("action('Připravit smazání'", JS)
-        self.assertIn("action('Kopírovat ID'", JS)
+        self.assertIn('sidebar-item-menu-items', CSS)
+        self.assertIn("{label:'Upravit / přejmenovat'", JS)
+        self.assertIn("{label:'Připravit smazání'", JS)
+        self.assertIn("{label:'Kopírovat ID'", JS)
+        self.assertIn("function sidebarItemMenu(label,actions,legacyClass='')", JS)
+        self.assertIn("{label:item.available?'Otevřít':'Zkusit otevřít'", JS)
+        self.assertIn('data-settings-menu-tab="settings-backend-tab">Otevřít', HTML)
         self.assertIn('id="artifact-editor-view" hidden', HTML)
         self.assertIn('id="new-document"', HTML)
         self.assertIn("projectRequest('/v1/artifacts/editor/open'", JS)
         self.assertIn("projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document}", JS)
         self.assertIn('new:Boolean(artifactEditorItem.new)', JS)
         self.assertIn('function openMainTodoEditor()', JS)
+        self.assertIn("label.setAttribute('role','button')", JS)
+        self.assertIn("{label:'Upravit seznam úkolů',run:()=>openMainTodoEditor()}", JS)
         self.assertNotIn("'/#create-main-todo'", Path('spikes/desktop.py').read_text())
         self.assertIn("projectRequest('/v1/artifacts/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/artifacts/delete/confirm'", JS)
@@ -920,20 +1123,70 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('const enabled=result.preferences?.streaming!==false', status)
         self.assertIn('ollamaStreaming=ollamaStreamingSupported&&enabled', status)
 
-    def test_orchestration_shows_the_configured_ollama_boundary(self):
+    def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
         self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
-        self.assertIn('Úkol použije ${chatBinding.model}', JS)
-        self.assertIn("lan?'privátní síť':'tento uzel'", JS)
-        self.assertIn('${chatBinding.endpoint}', JS)
+        controls = JS.split('function refreshChatModeControls(){', 1)[1].split('\n}', 1)[0]
+        self.assertIn("warnings.push('Pro vyhledávání nejprve nastavte SearXNG.')", controls)
+        self.assertIn("warnings.push('Externí úkol vyžaduje nejprve nastavit OpenAI backend.')", controls)
+        self.assertIn("warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.')", controls)
+        self.assertIn("target.hidden=!warnings.length", controls)
+        self.assertNotIn('chatBinding.endpoint', controls)
         for control in ('task-source-conversation', 'task-source-artifacts',
-                        'task-source-public', 'task-output-kind', 'task-search-query',
+                        'task-source-public', 'task-source-current-prompt',
+                        'task-source-current-file', 'task-source-current-file-input', 'task-output-kind',
                         'task-public-source-list'):
             self.assertIn('id="' + control + '"', HTML)
+        self.assertIn("currentArtifacts.find(value=>value.id===selectedArtifact)", JS)
+        self.assertIn("title.textContent=item?`Aktuální soubor: ${item.title}`", JS)
+        self.assertIn("if(useCurrentFile)artifactIds.push(selectedArtifact)", JS)
+        self.assertIn("selected_artifact_ids:uniqueArtifactIds", JS)
         self.assertIn('task_plan:{schema_version:1,source_kinds:sourceKinds', JS)
         self.assertIn("execution:adapter==='ollama'?'local-ollama':'external-openai'", JS)
         self.assertIn('External task execution cannot include project artifacts',
                       Path('spikes/task_plan.py').read_text())
+
+    def test_prompt_widget_separates_inputs_action_output_privacy_and_target(self):
+        composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
+        for control in ('task-inputs', 'task-input-count', 'task-action',
+                        'task-output-kind', 'chat-privacy', 'chat-run-adapter',
+                        'chat-run-model'):
+            self.assertIn('id="' + control + '"', composer)
+        self.assertIn('<option value="answer">Odpovědět</option>', composer)
+        self.assertIn('<option value="search">Vyhledat na webu</option>', composer)
+        self.assertNotIn('Výpočet', composer)
+        self.assertNotIn('Julia', composer)
+        self.assertIn('aria-label="Zpracovat zadání"', composer)
+        self.assertIn('title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)"', composer)
+        self.assertIn('<label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>', composer)
+        for label in ('Režim', 'Akce', 'Výsledek', 'Soukromí', 'Backend', 'Model'):
+            self.assertIn('<span>' + label + '</span>', composer)
+        self.assertIn('id="task-source-current-prompt" hidden', composer)
+        self.assertIn('Aktuální zadání (povinné pro vyhledávání)', composer)
+        self.assertIn('id="task-source-current-file" hidden', composer)
+        self.assertIn('id="task-source-current-file-input" type="checkbox"', composer)
+        self.assertNotIn('id="task-search-editor"', composer)
+        self.assertNotIn('id="task-search-query"', composer)
+        self.assertIn('id="advanced-external" hidden aria-hidden="true"', composer)
+        self.assertNotIn('id="task-selection-summary"', composer)
+        self.assertNotIn('id="task-routing-note"', composer)
+        self.assertNotIn('historie zůstává lokálně na tomto uzlu', composer)
+        self.assertNotIn('Vyberte uložené vlákno k vědomému navázání', JS)
+        self.assertIn("document.querySelector('#task-source-public').checked=event.currentTarget.value==='search'", JS)
+        self.assertIn("action.value=publicSource.checked?'search':'answer'", JS)
+        self.assertIn("const searchQuery=searching?draft.value.trim():null", JS)
+        self.assertIn("output.value='conversation';output.disabled=true", JS)
+        self.assertIn("currentPromptSource.hidden=!searching", JS)
+        self.assertIn('function updatePromptInputSummary()', JS)
+        self.assertIn("promptForm.classList.toggle('inputs-open',taskInputs.open)", JS)
+        self.assertIn("event.key==='Escape'&&taskInputs.open", JS)
+        self.assertIn('.prompt-toolbar{display:flex', CSS)
+        self.assertIn('.prompt-control>span{position:absolute', CSS)
+        self.assertIn('.prompt-draft-control>span{position:absolute', CSS)
+        self.assertIn('#chat-composer.inputs-open{overflow:visible}', CSS)
+        self.assertNotIn('.prompt-search-editor', CSS)
+        self.assertIn('#chat-operation-status:empty{display:none}', CSS)
+        self.assertIn('@media(max-width:640px)', CSS)
 
     def test_node_settings_are_global_and_backend_form_is_not_duplicated(self):
         from spikes.desktop_ui import HTML
@@ -943,12 +1196,36 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertEqual(desktop_html, HTML)
         self.assertEqual(ASSETS['/app.css'][1], CSS)
         self.assertEqual(ASSETS['/app.js'][1], DESKTOP_BOOTSTRAP + JS)
-        self.assertIn("'backend-metrics','backend-metrics-indicator'", DESKTOP_BOOTSTRAP)
+        self.assertIn("'backend-metrics','backend-metrics-indicator','openai-resource-provider'", DESKTOP_BOOTSTRAP)
+        self.assertIn("'settings-cms-tab','settings-access-tab','settings-profile-tab','settings-users-tab'", DESKTOP_BOOTSTRAP)
+        self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("document.querySelector('[data-settings-item=\"settings-access-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("'openai-resource-provider','presenter-fullscreen'", DESKTOP_BOOTSTRAP)
+        self.assertIn("'federation-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("getElementById('project-location-controls').hidden=false", DESKTOP_BOOTSTRAP)
+        self.assertIn("getElementById('sidebar-register-project').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn('id="project-create-preview"', HTML)
         self.assertIn("requestNativeAction('choose-project-location')", JS)
-        self.assertNotIn('CreationDialog', Path('spikes/desktop_creation.py').read_text())
-        self.assertIn('#backend-metrics-indicator{position:fixed', ASSETS['/app.css'][1])
+        desktop_source = Path('spikes/desktop.py').read_text()
+        self.assertNotIn('QInputDialog', desktop_source)
+        self.assertNotIn("QPushButton('Načíst projekt z umístění…')", desktop_source)
+        self.assertNotIn("QPushButton('Opravit umístění projektu…')", desktop_source)
+        self.assertIn("requestNativeAction('relocate-project-location'", JS)
+        self.assertIn("requestNativeAction('unregister-missing-project'", JS)
+        self.assertIn('if(item.location_missing)actions.splice', JS)
+        self.assertIn("label:'Opravit umístění…'", JS)
+        self.assertIn("label:'Odebrat nedostupnou registraci…'", JS)
+        self.assertIn('id="project-registration-remove-dialog"', HTML)
+        creation_source = Path('spikes/desktop_creation.py').read_text()
+        self.assertNotIn('CreationDialog', creation_source)
+        self.assertNotIn('addToolBar', creation_source)
+        self.assertNotIn('QLabel', creation_source)
+        self.assertNotIn('QPushButton', creation_source)
+        self.assertIn('status_changed', creation_source)
+        self.assertIn('id="sidebar-project-recover"', HTML)
+        self.assertIn("requestNativeAction('recover-project-operation')", JS)
+        self.assertIn('#resource-monitor{flex:none', ASSETS['/app.css'][1])
+        self.assertIn('#resource-monitor-dialog{width:min(760px', ASSETS['/app.css'][1])
         self.assertEqual(HTML.count('id="chat-backend-form"'), 1)
         self.assertIn('id="settings-view"', HTML)
         self.assertIn('id="settings-cms-tab"', HTML)
@@ -979,8 +1256,11 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('approved:true', JS)
         self.assertIn('srcdoc=result.html', JS)
         self.assertNotIn('innerHTML=result.html', JS)
-        self.assertIn('id="open-settings"', HTML)
-        self.assertIn('id="chat-open-settings"', HTML)
+        self.assertNotIn('id="open-settings"', HTML)
+        self.assertNotIn('id="chat-open-settings"', HTML)
+        self.assertIn('id="sidebar-settings-list" aria-label="Seznam nastavení"', HTML)
+        self.assertIn('data-settings-tab="settings-backend-tab"', HTML)
+        self.assertIn("openSettings(button.dataset.settingsTab)", JS)
         self.assertNotIn('id="chat-backend-settings"', HTML)
         self.assertIn("settingsReturn={project:!!activeProject,tabId:", JS)
         self.assertIn("document.querySelector('#project-home').hidden=true", JS)

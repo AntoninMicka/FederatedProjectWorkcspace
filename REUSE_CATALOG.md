@@ -243,6 +243,75 @@ HTML/PDF template engine a nová runtime závislost byly odmítnuty. PDF se
 nejprve dokončí ve stejné cílové složce a až potom se publikuje atomickým
 nahrazením.
 
+UX-FACELIFT-01-A **reuse aktuální `spikes.desktop_ui.HTML` a `CSS`** a
+**adaptuje** lokální Chromium print cestu na A4 inventuru pro ruční anotaci.
+Generátor nekopíruje webové formuláře do paralelní šablony a testuje úplné
+pokrytí všech `<form id>`. Používané nativní PySide6 dialogy převádí pouze na
+statický seznam jejich skutečných polí, protože jejich vzhled závisí na OS
+tématu a displeji. Nový aplikační PDF engine ani runtime závislost byly
+odmítnuty; HTML/PDF v `dist/` jsou ignorované lokální designové build artefakty.
+
+UX-FACELIFT-01-C **reuse sdílené HTML/CSS/JS formuláře a stávající
+`PresenterDisplays`**. Převod rolí displejů adaptuje původní Qt správu
+obrazovek na úzký jednorázově tokenovaný most: web pouze vybírá a validuje
+role, Qt nadále zjišťuje fyzické obrazovky, zobrazuje identifikátory a přesouvá
+okna. Nový HTTP endpoint, persistentní nastavení rolí a další UI framework byly
+odmítnuty, protože přiřazení je záměrně jen stavem aktuální presenter relace.
+
+Stejný řez **reuse/adaptuje `git_transfer.transfer`, `transfer_outbox` a
+`DeploymentTargets`** pro webovou stránku přechodového přenosu v nové desktopové
+záložce Federace. Webová vrstva dostává pouze omezený katalog a potvrzený
+tokenovaný výběr; SSH, Git bundle, SQLite outbox a recovery zůstávají v nativní
+vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy federovaných
+projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
+verze, nikoli rozšíření tohoto jednosměrného přenosu.
+
+Stejná dávka dále **reuse/adaptuje `NetworkBackend`, `DeploymentTargets`,
+`Administration`, `federation_probe.check_peer` a `peer_diagnostics.check_both`**
+pro druhou stránku desktopové záložky Federace. Webový formulář nenahrazuje
+doménovou ani síťovou autoritu: nativní controller znovu validuje přesné schéma,
+jednorázový token, nezměněný seznam cílů a schválený fingerprint. Generování TLS,
+atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stávajících
+službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
+klíči byly odmítnuty.
+
+Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
+`DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
+stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a
+fingerprintů a předá potvrzené hodnoty přes jednorázový fragmentový most;
+SSH session, bundle, vzdálené příkazy, host-key policy, pairing a atomické
+lokální preference zůstávají nativní. Nový HTTP writer, druhý deploy engine a
+přenos SSH credentials do WebEngine byly odmítnuty.
+
+Akce **Projekt z umístění**, **Opravit umístění** a bezpečné odregistrování
+reuse/adaptují existující `ProjectCreation.register`, `relocate`,
+`unregister_missing`, `CreationController` a nativní `QFileDialog`. Sdílené UI
+předává jen validované ID konkrétní registrace přes allowlistovaný fragmentový
+most; pouze doslova chybějící kořen dostane opravné akce a destruktivní varianta
+má vlastní webové potvrzení. Původní Qt výběr projektu a rozhodovací dialog byly
+odmítnuty jako duplicitní. Nový HTTP writer ani druhý registrační workflow
+nevznikají.
+
+Redukovaný hlavní panel **reuse/adaptuje stejný sdílený sidebar, tabpanely a
+položková menu**; nevytváří druhou navigaci ani desktopovou kopii. V úzkém
+desktopovém/webovém režimu se existující panel vybrané sekce pouze zobrazí jako
+ukotvené menu vedle pásu ikon. Volba platí pro aktuální stránku a kvůli
+prezentaci nevzniká nový serverový zápis ani použití webového úložiště. Mobilní
+drawer zůstává samostatným responzivním stavem. Stav a opakování
+`CreationController` byly přesunuté z poslední Qt toolbar do panelu Projekty,
+zatímco journal a automatická startup recovery se nemění.
+
+Nastavení dostupnosti aplikace **reuse/adaptuje existující před-TLS kontrolu
+klienta ve `WebServer.get_request`, privátní síť z `--lan` a node-local SQLite
+vzor nastavení**. Výchozí režim proto zachovává dosavadní localhost + jednu
+konfigurovanou privátní síť. Allowlist přijímá pouze validované číselné IP/CIDR
+hodnoty a změna prochází přesným náhledem svázaným s revizí a adresou
+klienta. TLS a autentizace se žádným režimem nevypínají. Automatická změna
+listeneru, firewallu, routingu a vzdálené zpřístupnění desktopu byly odmítnuty:
+desktop zůstává pevně na localhostu a skutečný dosah serveru může být užší
+než zvolená aplikační politika. Samostatný federation probe si zachovává
+vlastní pevný privátní LAN kontrakt.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

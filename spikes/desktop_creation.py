@@ -4,7 +4,6 @@
 """Native worker/controller for node operations and startup recovery."""
 
 from PySide6.QtCore import QThread, Signal
-from PySide6.QtWidgets import QLabel, QPushButton
 
 from spikes.project_creation import CreationConflict
 
@@ -30,20 +29,12 @@ class CreationWorker(QThread):
 
 
 class CreationController:
-    def __init__(self, window, service, succeeded, failed):
+    def __init__(self, window, service, succeeded, failed, status_changed=None):
         self.window, self.service = window, service
         self.succeeded, self.failed = succeeded, failed
+        self.status_changed = status_changed or (lambda _message, _can_retry: None)
         self.workers = []
         self.busy = False
-        toolbar = window.addToolBar('Projekty')
-        self.toolbar = toolbar
-        toolbar.setMovable(False)
-        self.resume = QPushButton('Dokončit přerušenou operaci projektu')
-        self.resume.setVisible(False)
-        self.status = QLabel('')
-        toolbar.addWidget(self.resume)
-        toolbar.addWidget(self.status)
-        self.resume.clicked.connect(self.recover)
 
     def recover(self):
         if not self.busy:
@@ -51,21 +42,17 @@ class CreationController:
 
     def start(self, action):
         self.busy = True
-        self.resume.setEnabled(False)
-        self.status.setText('  Provádím operaci projektu…')
+        self.status_changed('Provádím operaci projektu…', False)
         worker = CreationWorker(action, self.window)
         self.workers.append(worker)
         def success(receipt):
-            self.status.setText('  Operace projektu dokončena.' if receipt else '')
-            self.resume.setVisible(False)
+            self.status_changed('Operace projektu byla dokončena.' if receipt else '', False)
             self.succeeded(receipt)
         def failure(message):
-            self.status.setText('  Operace projektu nebyla dokončena.')
-            self.resume.setVisible(True)
+            self.status_changed('Operace projektu nebyla dokončena.', True)
             self.failed(message)
         def finished():
             self.busy = False
-            self.resume.setEnabled(True)
         worker.succeeded.connect(success)
         worker.failed.connect(failure)
         worker.finished.connect(finished)

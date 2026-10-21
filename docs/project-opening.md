@@ -45,17 +45,19 @@ správcem nakonfigurovaný `projects_root` (není-li nastaven, pod
 
 ## Bezpečné odstranění projektu
 
-Na kartě projektu zvolte **Správa odstranění…**. Každá volba nejprve zobrazí
-přesný repozitář, projektový stav, HEAD, lokální záznamy a blokátory; bez
-checkboxu se nic nezmění.
+V levém panelu otevřete u projektu menu se třemi tečkami a zvolte **Správa
+odstranění…**. Samostatnou stránku koše lze otevřít také tlačítkem **Koš
+projektů** v panelu Projekty nebo stejnojmennou dlaždicí na úvodním přehledu.
+Každá volba nejprve zobrazí přesný repozitář, projektový stav, HEAD, lokální
+záznamy a blokátory; bez checkboxu se nic nezmění.
 
 - **Obnovit odvozený index** odstraní jen obnovitelný `index.sqlite`; další
   otevření jej sestaví z Gitu. Journal ani projekt nemaže.
 - **Pouze odregistrovat** odebere projekt ze seznamu, ale ponechá repozitář,
   stav i node-local historii na původních cestách.
 - **Přesunout do obnovitelného koše** přesune repozitář a projektový stav
-  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Sekce
-  **Obnovitelný koš projektů** nabídne samostatně potvrzenou obnovu.
+  do přesně zobrazeného soukromého adresáře a projekt odregistruje. Stránka
+  **Koš projektů** nabídne samostatně potvrzenou obnovu.
 
 Definitivní výmaz lze připravit jen nad položkou v koši a vyžaduje nový
 náhled i druhé potvrzení. Pokud k projektu zůstává chatová/AI historie,
@@ -104,7 +106,7 @@ Z nově sestaveného a nainstalovaného balíku:
 federated-workspace-poc --node /absolutni/cesta/node.json
 ```
 
-Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na kartu projektu s názvem a popisem nebo na jeho název ve stručném seznamu vlevo. Zobrazí se název projektu, commit ID a názvy/ID artefaktů z tohoto commitu; prázdný projekt má vlastní hlášení. Markdown dokumenty otevřete nativním editorem; registry zatím nemají vlastní zobrazení. Při chybě se předchozí výsledek vymaže.
+Bez `--node` se používá výchozí uzel popsaný výše; bez registrací je seznam prázdný. Relativní cesta se vyhodnocuje vůči adresáři volajícího. Na úvodní obrazovce klikněte na dlaždici projektu nebo na jeho název v seznamu vlevo. Otevře se projektová stránka **Projekt** s názvem nahoře a pod ním široká mřížka `1–2–1`: dlaždice posledních změn projektu, neorámovaný stručný popis přes dvě pozice a dlaždice nehotových položek hlavního TODO. Ve střední šířce je popis přes celý první řádek a obě dlaždice pod ním; na telefonu jsou všechny tři části pod sebou. Historie ukazuje nejvýše 20 posledních commitů dosažitelných z právě ověřeného HEAD (předmět, datum, autora a zkrácené ID), bez diffů a cest. Uložený commit je dostupný v rozbalovacím detailu nahoře. Historie i úkoly vycházejí ze stejného validovaného Git snapshotu jako levý panel; úkoly vedou do společného editoru hlavního seznamu. Prázdný projekt a chybějící popis mají vlastní pravdivé hlášení. Při chybě se předchozí výsledek vymaže.
 
 ## Markdown editor a checklisty
 
@@ -236,8 +238,12 @@ Po spuštění ověřte otevření, název, commit a „První poznámka“. Zav
 
 V levém panelu přepněte na **Podklady** a klikněte na název položky. Hlavní panel zobrazí uloženou verzi a rozbalovací **Podrobnosti**. U zdroje schema v2 jsou zde samostatně „Importováno do projektu“ a případný „Doložený čas vzniku zdroje“, který může být starší; dále aktér importu, SHA-256 původních bajtů, importér a všechny doložené volitelné údaje. Markdown podporuje základní nadpisy, text a bloky kódu; vložené HTML, odkazy a vzdálené obrázky se nespouštějí ani nenačítají. PNG/JPEG se zobrazí jako obrázek, PDF jako rasterizovaná stránka s volbou čísla stránky. PDF potřebuje systémový balík `poppler-utils`, který deklaruje také instalační .deb. Limit vstupu je 4 MiB, Markdown nejvýše 2000 odřádkování, PDF stránka 1–100, raster do 1200 px; nepodporovaný či poškozený obsah má vlastní hlášení.
 
-Prompt **Zadání úkolu** zůstává pod náhledem i chatem. Psaní zachová právě
-otevřený náhled nebo záložku; teprve Enter nebo **Odeslat** přepne na **Chat**.
+Společný prompt **Zadání** zůstává ve spodní části projektového pracovního
+panelu. Tlačítkem **Skrýt prompt** / **Zobrazit prompt** jej lze ručně sbalit a
+rozbalit. Stránky **Projekt**, **Náhled** a **Chat** jej při vstupu standardně
+zobrazí; specializované stránky workflow, souhrnu, extrakce, obrázku,
+prezentace a metadat jej standardně sbalí. Psaní zachová právě otevřený náhled
+nebo záložku; teprve Enter nebo **Zpracovat** přepne na **Chat**.
 Shift+Enter vytvoří nový řádek. Globální tlačítko **Nastavení** je dostupné i bez
 otevřeného projektu. Stránka má rovnocenné záložky **AI backend**,
 **Uživatelé** a **Federace**; obsah se zobrazuje přímo v hlavní ploše. Web ukáže

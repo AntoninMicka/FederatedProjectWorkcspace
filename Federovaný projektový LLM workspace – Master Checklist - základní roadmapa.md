@@ -835,13 +835,19 @@ nenahrazují.
   desktopu. Jde o responzivní web, nikoli nativní mobilní aplikaci.
   UX-MOBILE-01 dosáhlo 2026-10-09 úrovně PoC validated; evidence je ve
   [WORK_LOG](WORK_LOG.md).
-- [ ] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
+- [x] **UX-FACELIFT-01:** před prvním releasem interaktivně projít skutečné
   obrazovky a prioritní průchody a podle průběžných uživatelských rozhodnutí
   provést vizuální facelift a zjednodušení ovládání. Scope se předem nezamyká;
   po vymezení uceleného reviewovatelného řezu se zaznamenají jeho hranice a
   akceptace pro vlastní feature větev/PR. Nevytvářet konkurenční redesign a
   zachovat jeden sdílený web/desktop frontend, mobilní chování, klávesnicovou
-  přístupnost a stávající bezpečnostní a recovery hranice.
+  přístupnost a stávající bezpečnostní a recovery hranice. Uživatel rozsah
+  akceptoval 2026-10-21; evidence je ve [WORK_LOG](WORK_LOG.md). Doručení PR je
+  samostatný dosud neuzavřený stav.
+- [ ] **UX-FACELIFT-02:** v budoucím samostatném kole uživatelsky vybrat a
+  doladit zbývající stránky nad novou inventurou skutečného UI. Jde o
+  odloženou samostatnou feature v BACKLOGu, nikoli znovuotevření akceptovaného
+  UX-FACELIFT-01.
 - [ ] Hlavní objekty jsou:
   **artefakty – zdroje – tvrzení – rozhodnutí – úkoly – role.**
 
@@ -1158,16 +1164,16 @@ uzavřený.
   Manifest vstup bez automatické projektové publikace. Dávka dosáhla
   2026-10-17 úrovně PoC validated; evidence je ve [WORK_LOG](WORK_LOG.md).
   Uživatel schválil její společné doručení s explicitním task routingem z
-  konsolidované větve jediným PR do `develop`; PR zatím nebyl vytvořen ani
-  sloučen.
+  konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
+  `8b24452`.
 - [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
   aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
   vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.
   Dávka dosáhla 2026-10-17 úrovně PoC validated podle
   [ADR 0034](docs/adr/0034-explicit-task-routing.md) a evidence ve
   [WORK_LOG](WORK_LOG.md). Uživatel schválil její společné doručení s readerem
-  z konsolidované větve jediným PR do `develop`; PR zatím nebyl vytvořen ani
-  sloučen.
+  z konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
+  `8b24452`.
 - [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
   s odloženým odesláním.
