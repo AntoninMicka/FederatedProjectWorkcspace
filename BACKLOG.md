@@ -45,8 +45,9 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
 ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
-Aktivní navazující dávka V-11 / release 0.1.0 je v TODO; Check & Repair zůstává
-první plánovanou produktovou dávkou po vydání.
+Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
+evidence je ve WORK_LOG. Aktivní návrhová dávka `UX-PROJECT-REPAIR-01` je v
+TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -60,14 +61,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **UX-PROJECT-REPAIR-01 — kontrola a oprava poškozených
-  projektů (cílová úroveň: designed).** Navrhnout obecný nástroj Check &
-  Repair pro registrované projekty nedostupné z jiného důvodu než chybějící
-  umístění. Nejprve bezpečně rozliší a vysvětlí problém repozitáře,
-  metadat, oprávnění, cesty, lokálního stavu nebo indexu; diagnostiku oddělí
-  od oprav a každou persistentní změnu provede až po náhledu a potvrzení s
-  popsanou recovery hranicí.
 
 - [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
   (cílová úroveň: designed).** Budoucí serverový web dostane kategorii
