@@ -75,6 +75,8 @@ SHEETS = [
           ("external-backend-form", "openai-image-form", "backend-metrics-form"), scale=.67),
     sheet("cms", "Publikační CMS — obsah webů", ("#settings-cms-panel",),
           ("cms-deployment-form",), scale=.56),
+    sheet("application-access", "Nastavení — dostupnost aplikace",
+          ("#settings-access-panel",), ("application-access-form",), scale=.82),
     sheet("users", "Správa uzlu — lokální účty", ("#admin-users-panel",),
           ("admin-user-create",), scale=.78),
     sheet("federation", "Správa uzlu — federace a mapování účtů", ("#admin-federation",),

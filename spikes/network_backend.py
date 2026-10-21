@@ -18,6 +18,16 @@ from spikes.project_creation import ProjectCreation
 from spikes.web_server import WebHandler, WebServer
 
 
+class _PrivateNetworkAccess:
+    """Keep the federation probe on its separately configured LAN boundary."""
+
+    def __init__(self, network):
+        self.network = network
+
+    def allows(self, peer):
+        return peer.is_loopback or (peer.version == self.network.version and peer in self.network)
+
+
 class ProbeHandler(WebHandler):
     def do_POST(self):
         if self.path != PATH:
@@ -135,7 +145,8 @@ class NetworkBackend:
         tls.minimum_version = ssl.TLSVersion.TLSv1_2
         tls.load_cert_chain(config['cert'], config['key'])
         server = WebServer((config['bind'], config['port']), ProbeHandler)
-        server.tls, server.allowed_network = tls, ipaddress.ip_network(config['lan'])
+        server.tls = tls
+        server.application_access = _PrivateNetworkAccess(ipaddress.ip_network(config['lan']))
         server.administration = service
         thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.1}, daemon=True)
         thread.start()

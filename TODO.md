@@ -363,6 +363,24 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   panelu na pás ikon, otevření ukotveného menu a návrat do plného režimu;
   samostatný skutečný průchod ověřil startup recovery bez Qt toolbaru.
   Následná celá sada prošla **654 testy** (27 přeskočeno).
+  Další schválené rozšíření přidává do Nastavení **Dostupnost
+  aplikace**. Desktop zobrazuje pouze neaktivní a pevně nastavenou volbu
+  localhost. Serverový administrátor může zvolit localhost, dosavadní
+  konfigurovanou lokální/privátní síť, přesný seznam číselných IP adres a
+  CIDR sítí nebo neomezený rozsah; TLS a autentizace zůstávají povinné.
+  Politika je uplatněna před TLS handshake, nikoli jen vizuálně, a její dosah
+  může dále zúžit bind, firewall nebo routing. Běžný člen ji nemůže číst ani
+  měnit. Změna vyžaduje serverem normalizovaný náhled svázaný s aktuální
+  revizí a klientskou adresou a výslovné potvrzení možného odpojení.
+  Persistentní hranice je node-local SQLite mimo projektový Git: chyba před
+  commitem ponechá předchozí politiku, po durable commitu ji restart znovu
+  načte; paměťový stav se přepne až po úspěšném commitu. Neplatný uložený
+  stav způsobí fail-closed chybu startu namísto tichého otevření. A4 inventura
+  nyní eviduje 23 sdílených formulářů. Cílených 76 testů pro node-local
+  politiku, HTTPS/RBAC, desktopovou hranici a inventuru prošlo (6 přeskočeno),
+  stejně jako JavaScript parser a Python kompilace. Následná celá sada prošla
+  **661 testy** (27 přeskočeno). Skutečný Qt WebEngine navíc prošel
+  desktopovým restart smoke i serverovým HTTPS přihlášením a odhlášením.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.

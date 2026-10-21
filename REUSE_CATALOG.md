@@ -301,6 +301,17 @@ drawer zůstává samostatným responzivním stavem. Stav a opakování
 `CreationController` byly přesunuté z poslední Qt toolbar do panelu Projekty,
 zatímco journal a automatická startup recovery se nemění.
 
+Nastavení dostupnosti aplikace **reuse/adaptuje existující před-TLS kontrolu
+klienta ve `WebServer.get_request`, privátní síť z `--lan` a node-local SQLite
+vzor nastavení**. Výchozí režim proto zachovává dosavadní localhost + jednu
+konfigurovanou privátní síť. Allowlist přijímá pouze validované číselné IP/CIDR
+hodnoty a změna prochází přesným náhledem svázaným s revizí a adresou
+klienta. TLS a autentizace se žádným režimem nevypínají. Automatická změna
+listeneru, firewallu, routingu a vzdálené zpřístupnění desktopu byly odmítnuty:
+desktop zůstává pevně na localhostu a skutečný dosah serveru může být užší
+než zvolená aplikační politika. Samostatný federation probe si zachovává
+vlastní pevný privátní LAN kontrakt.
+
 M3-UB-01-A **reuse/adaptuje** durable response evidence v `OpenAIRuns` a
 `OllamaRuns`, existující write-only credential store a bezpečný bounded HTTPS
 transport. Run usage se normalizuje z providerem vrácené odpovědi; nevznikne

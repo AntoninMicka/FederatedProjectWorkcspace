@@ -271,6 +271,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-users-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-users-tab">Uživatelé</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Uživatelé">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-users-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-federation-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-federation-tab">Federace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Federace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-federation-tab">Otevřít</button></div></details></li>
@@ -489,6 +490,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
+<button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
@@ -620,6 +622,28 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <label class="confirm"><input id="cms-deployment-confirm" type="checkbox"> Potvrzuji vytvoření nové verze existujícího Workeru a převedení 100 % provozu. Custom Domains ani DNS se nemění.</label>
 <button id="cms-deployment-run" type="button" disabled>Nasadit potvrzený release</button></section>
 </div>
+</section>
+<section id="settings-access-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-access-tab" hidden>
+<h2>Dostupnost aplikace</h2>
+<p id="application-access-runtime">Určuje, ze kterých adres lze navázat spojení s touto aplikací. Přihlášení a HTTPS zůstávají povinné ve všech režimech.</p>
+<form id="application-access-form">
+<label>Rozsah dostupnosti <select name="mode">
+<option value="localhost">Pouze localhost</option>
+<option value="private-network">Lokální / privátní síť</option>
+<option value="allowlist">Pouze povolené adresy</option>
+<option value="unrestricted">Neomezeně</option>
+</select></label>
+<label id="application-access-allowed-row" hidden>Povolené IP adresy a sítě, jedna na řádek
+<textarea name="allowed" rows="7" placeholder="192.0.2.10&#10;10.20.0.0/16&#10;2001:db8::/48"></textarea></label>
+<p id="application-access-context" class="settings-note"></p>
+<button id="application-access-preview-button" type="submit">Zkontrolovat změnu</button>
+<p id="application-access-status" role="status" aria-live="polite"></p>
+</form>
+<section id="application-access-preview" hidden><h3>Přesný náhled změny</h3>
+<pre id="application-access-plan"></pre>
+<label class="confirm"><input id="application-access-confirm" type="checkbox"> Potvrzuji tento rozsah dostupnosti a beru na vědomí možné odpojení současného klienta.</label>
+<button id="application-access-save" type="button" disabled>Uložit dostupnost</button></section>
+<small>Politika se ukládá pouze na tomto uzlu. Skutečnou dosažitelnost může dále zúžit naslouchací adresa služby, firewall nebo síťová trasa.</small>
 </section>
 <section id="settings-profile-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-profile-tab" hidden>
 <h2>Uživatelský profil</h2><p>Jméno a kontakty pro závěrečný slide prezentace. Platí pro tohoto uživatele desktopu.</p>
@@ -3148,6 +3172,48 @@ presentationEditorSave.addEventListener('click',async()=>{
 async function usePresentationDocument(document){try{presentationEditorUse.disabled=true;await projectRequest('/v1/presentations/use',{project_id:activeProject.id,artifact_id:document.id,expected_head:presentationEditorView.commit_id});sidebarPresentationStatus.textContent=`Prezentace „${document.title}“ je připravena v presenteru.`;presentationEditorStatus.textContent='Uložená prezentace je připravena v presenteru.';openPresenter();}catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;}finally{updatePresentationEditorEnabled();}}
 presentationEditorUse.addEventListener('click',()=>usePresentationDocument({id:presentationEditorArtifact,title:presentationEditorDeck.title}));
 document.querySelector('#presentation-editor-presenter').addEventListener('click',openPresenter);
+const applicationAccessForm=document.querySelector('#application-access-form');
+const applicationAccessAllowedRow=document.querySelector('#application-access-allowed-row');
+const applicationAccessStatus=document.querySelector('#application-access-status');
+const applicationAccessPreview=document.querySelector('#application-access-preview');
+const applicationAccessConfirm=document.querySelector('#application-access-confirm');
+const applicationAccessSave=document.querySelector('#application-access-save');
+let applicationAccessPlan=null;
+const applicationAccessLabels={localhost:'Pouze localhost','private-network':'Lokální / privátní síť',allowlist:'Pouze povolené adresy',unrestricted:'Neomezeně'};
+function invalidateApplicationAccess(){applicationAccessPlan=null;applicationAccessPreview.hidden=true;applicationAccessConfirm.checked=false;applicationAccessSave.disabled=true;applicationAccessAllowedRow.hidden=applicationAccessForm.elements.mode.value!=='allowlist';}
+function fillApplicationAccess(result){
+ const settings=result.settings;applicationAccessForm.elements.mode.value=settings.mode;applicationAccessForm.elements.allowed.value=settings.allowed.join('\\n');invalidateApplicationAccess();
+ document.querySelector('#application-access-context').textContent=result.runtime==='desktop'
+  ? 'Desktopová aplikace je pevně dostupná pouze na tomto počítači.'
+  : `Privátní síť: ${result.private_network} · tento klient: ${result.client_address}`;
+ applicationAccessStatus.textContent=`Aktuální režim: ${applicationAccessLabels[settings.mode]}.`;
+}
+async function loadApplicationAccess(){
+ if(document.body.dataset.runtime==='desktop'){
+  fillApplicationAccess({runtime:'desktop',settings:{mode:'localhost',allowed:[]}});
+  for(const control of applicationAccessForm.elements)control.disabled=true;
+  document.querySelector('#application-access-runtime').textContent='Desktopová aplikace nepovoluje vzdálený přístup; tato volba je pouze informativní.';return;
+ }
+ applicationAccessStatus.textContent='Načítám aktuální rozsah dostupnosti…';
+ try{fillApplicationAccess(await projectRequest('/v1/application-access',{action:'status'}));}
+ catch(error){applicationAccessStatus.textContent=error.message;}
+}
+applicationAccessForm.elements.mode.addEventListener('change',invalidateApplicationAccess);
+applicationAccessForm.elements.allowed.addEventListener('input',invalidateApplicationAccess);
+applicationAccessForm.addEventListener('submit',async event=>{event.preventDefault();if(document.body.dataset.runtime==='desktop')return;
+ const settings={mode:applicationAccessForm.elements.mode.value,allowed:applicationAccessForm.elements.allowed.value.split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)};
+ applicationAccessStatus.textContent='Kontroluji přesný rozsah…';
+ try{const result=await projectRequest('/v1/application-access',{action:'preview',settings});applicationAccessPlan=result.plan;
+  const disconnect=result.plan.current_client_allowed?'Současný klient zůstane povolen.':'POZOR: současný klient bude po uložení odmítnut.';
+  document.querySelector('#application-access-plan').textContent=[`Režim: ${applicationAccessLabels[result.plan.settings.mode]}`,`Povolené adresy: ${result.plan.settings.allowed.join(', ') || '—'}`,`Klient: ${result.plan.client_address}`,disconnect].join('\\n');
+  applicationAccessPreview.hidden=false;applicationAccessConfirm.checked=false;applicationAccessSave.disabled=true;applicationAccessStatus.textContent='Náhled je připraven. Zkontrolujte jej a potvrďte.';
+ }catch(error){invalidateApplicationAccess();applicationAccessStatus.textContent=error.message;}
+});
+applicationAccessConfirm.addEventListener('change',()=>{applicationAccessSave.disabled=!applicationAccessPlan||!applicationAccessConfirm.checked;});
+applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPlan||!applicationAccessConfirm.checked)return;applicationAccessSave.disabled=true;applicationAccessStatus.textContent='Ukládám potvrzenou politiku na tomto uzlu…';
+ try{const result=await projectRequest('/v1/application-access',{action:'confirm',plan:applicationAccessPlan,confirmed_disconnect:!applicationAccessPlan.current_client_allowed});fillApplicationAccess(result);applicationAccessStatus.textContent=`Uloženo: ${applicationAccessLabels[result.settings.mode]}.`;}
+ catch(error){applicationAccessStatus.textContent=error.message;applicationAccessSave.disabled=false;}
+});
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
 function selectSettingsTab(selected){
@@ -3157,6 +3223,7 @@ function selectSettingsTab(selected){
  }
  const administration=document.getElementById('administration');if(administration)administration.hidden=!['settings-users-tab','settings-federation-tab'].includes(selected.id);
  if(selected.id==='settings-cms-tab')loadCmsStatus();
+ if(selected.id==='settings-access-tab')loadApplicationAccess();
  if(selected.id==='settings-profile-tab')loadUserProfile();
 }
 for(const [index,tab] of settingsTabs.entries()){
@@ -5155,6 +5222,8 @@ JS += ADMIN_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
 document.querySelector('#settings-profile-tab').hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
+document.querySelector('#settings-access-tab').hidden=false;
+document.querySelector('[data-settings-item="settings-access-tab"]').hidden=false;
 document.querySelector('#presenter-fullscreen').hidden=false;
 document.querySelector('#federation-tab').hidden=false;
 """

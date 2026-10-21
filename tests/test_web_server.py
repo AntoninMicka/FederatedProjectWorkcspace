@@ -174,6 +174,9 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('<dialog id="administration"', WEB_HTML)
         self.assertIn("querySelector('#settings-users-tab').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#settings-cms-tab').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#settings-access-tab').hidden=!admin", WEB_JS)
+        self.assertIn('id="application-access-form"', WEB_HTML)
+        self.assertIn("projectRequest('/v1/application-access',{action:'status'})", WEB_JS)
         self.assertIn("querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin'", WEB_JS)
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#openai-resource-provider').hidden=!admin", WEB_JS)
@@ -207,6 +210,33 @@ class WebTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
         self.assertEqual(self.request(path='/v1/user-profile', body='{"action":"load"}')[0], 503)
+
+    def test_application_access_requires_preview_and_persists_node_local_policy(self):
+        code, data, _ = self.request(path='/v1/application-access',
+                                     body=json.dumps({'action': 'status'}))
+        self.assertEqual(200, code, data)
+        status = json.loads(data)
+        self.assertEqual({'mode': 'private-network', 'allowed': []}, status['settings'])
+        self.assertEqual('192.168.100.0/24', status['private_network'])
+        self.assertEqual('127.0.0.1', status['client_address'])
+
+        settings = {'mode': 'allowlist', 'allowed': ['203.0.113.10', '10.20.0.0/16']}
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'preview', 'settings': settings}))
+        self.assertEqual(200, code, data)
+        plan = json.loads(data)['plan']
+        self.assertTrue(plan['current_client_allowed'])  # loopback is never locked out
+        self.assertEqual(settings, plan['settings'])
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'confirm', 'plan': plan, 'confirmed_disconnect': False}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(settings, json.loads(data)['settings'])
+        self.assertEqual(settings, self.server.application_access.load())
+
+        code, data, _ = self.request(path='/v1/application-access', body=json.dumps({
+            'action': 'preview', 'settings': {'mode': 'allowlist', 'allowed': ['host.local']}}))
+        self.assertEqual(422, code)
+        self.assertIn('IP', json.loads(data)['error'])
 
     def test_google_drive_https_configuration_picker_callback_and_privacy(self):
         _, data, _ = self.create_project('Drive HTTPS')
@@ -325,6 +355,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/tasks/search/preview', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/confirm', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/application-access',
+                                      body='{"action":"status"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/media/openai/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/publication-cms/status', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/external/request',
