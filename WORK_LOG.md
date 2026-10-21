@@ -10,9 +10,8 @@ SPDX-License-Identifier: MPL-2.0
 Návrhová dávka vznikla na větvi `feature/ux-project-repair-01` z lokálního
 `develop` `d24ad26` po administrativním začlenění release změn a dosáhla úrovně
 **designed**. Uživatel 2026-10-22 přijal ADR 0035 a vymezení prvního
-implementačního řezu. Větev byla pushnuta s návrhovým commitem `4b20a62`, ale
-PR ani merge do `develop` zatím nejsou doložené; stav feature akceptace a
-doručení zůstávají oddělené.
+implementačního řezu. Návrhový commit `4b20a62` a závěrečné předání byly
+doručeny PR #75 do `develop` jako merge commit `618b1f7`.
 
 - [x] [completed] **UX-PROJECT-REPAIR-01-A — inventura a reuse rozhodnutí
   (designed).** Prověřeny `Projects`, validační CLI, konfigurace a metadata,
