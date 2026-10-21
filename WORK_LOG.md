@@ -5,6 +5,98 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-PROJECT-REPAIR-01 — návrh Check & Repair — 2026-10-22
+
+Návrhová dávka vznikla na větvi `feature/ux-project-repair-01` z lokálního
+`develop` `d24ad26` po administrativním začlenění release změn a dosáhla úrovně
+**designed**. Uživatel 2026-10-22 přijal ADR 0035 a vymezení prvního
+implementačního řezu. Větev byla pushnuta s návrhovým commitem `4b20a62`, ale
+PR ani merge do `develop` zatím nejsou doložené; stav feature akceptace a
+doručení zůstávají oddělené.
+
+- [x] [completed] **UX-PROJECT-REPAIR-01-A — inventura a reuse rozhodnutí
+  (designed).** Prověřeny `Projects`, validační CLI, konfigurace a metadata,
+  Git adapter, `Workspace`/`Journal`, `ProjectCreation` a atomický rebuild
+  indexu. Návrh je reuse/adaptuje a nezavádí druhý journal, index, framework
+  ani univerzální filesystemový opravář.
+- [x] [completed] **UX-PROJECT-REPAIR-01-B — read-only diagnostický kontrakt
+  (designed).** ADR 0035 určuje pevné vrstvy sond, stabilní kódy, stavy
+  `healthy`, `repairable`, `manual` a `retry`, bezpečný síťový výstup a
+  `check_token`. Diagnostika nesmí inicializovat `Workspace`, `Journal` ani
+  `Index` a nesmí vytvořit soubor, zámek, SQLite strukturu nebo Git objekt.
+- [x] [completed] **UX-PROJECT-REPAIR-01-C — opravné a recovery hranice
+  (designed).** První implementace smí po novém náhledu, autorizaci, potvrzení
+  a revalidaci tokenu pouze atomicky rebuildovat odvozený index nebo pokračovat
+  v existujícím přesně svázaném journalovém intentu. Oprava chybějící cesty
+  reuseuje dnešní `relocate`; Git obsah, práva, identity a neznámá schémata se
+  automaticky neopravují.
+- [x] [completed] **UX-PROJECT-REPAIR-01-D — review a implementační návaznost
+  (designed).** Uživatel přijal diagnostické kategorie, povolené opravy i vstup
+  **Zkontrolovat projekt…** v menu nedostupného projektu. Implementace byla
+  předána do BACKLOG jako samostatná dávka `UX-PROJECT-REPAIR-02`, aby se nový
+  persistentní zápis nemíchal do návrhového PR.
+
+### Ověření a omezení
+
+Dokumentační konzistence, odkazy a `git diff --check` byly ověřeny. Cílené
+`tests.test_spdx` a `tests.test_license_packaging` prošly: **13 testů**, bez
+chyb a přeskočení. Úplná sada nebyla po čistě dokumentačních změnách znovu
+spuštěna; předchozí release výsledky nejsou vydávány za test tohoto návrhu.
+
+Dávka neimplementuje backend, UI ani opravnou operaci a neprokazuje nulové
+mutace diagnostiky na reálném projektu; to je akceptační podmínka
+`UX-PROJECT-REPAIR-02`. Projektový Git zůstává autoritou dat, journal autoritou
+nedokončeného intentu a index pouze obnovitelnou projekcí validovaného `HEAD`.
+
+## V-11 / release 0.1.0 — veřejné vydání — 2026-10-21
+
+Release dávka vznikla z akceptovaného `develop` na větvi `release/0.1.0` a
+dosáhla úrovně **PoC validated** pro deklarovaný zdrojový archiv a nebundlovaný
+Linux `.deb`. PR #74 byl po úspěšném CI sloučen do `main` jako commit
+`3ebdc40d0a0caf03d31850875fe847c3f0202185`; anotovaný tag `v0.1.0` ukazuje na
+tento commit a GitHub Release je veřejný. Administrativní zápis se doplňuje v
+prvním kroku navazující větve, protože publikace už byla dokončená před
+aktivací další produktové dávky.
+
+- [x] [completed] **V-11-A — jediný kontrakt verze a release balíčků
+  (implemented).** `VERSION` je výchozí autorita `0.1.0`; názvy, kořen source
+  archivu, `.deb` control a vnitřní kopie verze jsou navzájem kontrolované.
+- [x] [completed] **V-11-B — distribuční a compliance review
+  (PoC validated).** Finální allowlist obsahuje 257 verzovaných UTF-8 souborů
+  plus generovaný manifest, bez vendovaného runtime. SPDX, provenance, notices
+  a nebundlované závislosti včetně systémového Segno 1.6.6 byly ověřeny pro
+  deklarovaný profil.
+- [x] [completed] **V-11-C — release notes a uživatelské předání
+  (implemented).** Changelog, instalační/upgrade cesta, podporovaný rozsah,
+  limity a bezpečnostní hranice jsou veřejně zdokumentované bez tvrzení o DOI,
+  archivaci nebo production-ready stavu.
+- [x] [completed] **V-11-D — kandidát a regresní důkazy
+  (PoC validated).** Z čistého commitu `d24ad26` vznikly oba artefakty. Celá
+  sada prošla: **667 testů**, 27 volitelných scénářů přeskočeno. Samostatně
+  prošel skutečný Qt WebEngine smoke, balicí/licenční kontroly a izolovaný
+  `.deb` install/upgrade/start/purge se zachováním dat. Build proběhl na Ubuntu
+  26.04.1 LTS arm64 s Pythonem 3.14.4; strom merge commitu v `main` je shodný s
+  validovaným stromem kandidáta.
+- [x] [completed] **V-11-E — doručení veřejného vydání (implemented).** Uživatel
+  schválil kandidát, PR #74 i publikaci; CI `main` prošlo, tag a release byly
+  vytvořeny a vzdálené artefakty znovu ověřeny proti `SHA256SUMS`.
+
+### Artefakty, recovery a omezení
+
+- source archiv:
+  `8e6c73f85dbc53f77cdbddfe3dd90da7f376ca2cb72cc43b18de1cb391bfb012`;
+- Debian balík:
+  `783a651e1939a1308c18514f3b911726ecaf0cf09e527d5918a2fd6be5cad984`;
+- veřejné vydání:
+  <https://github.com/AntoninMicka/FederatedProjectWorkcspace/releases/tag/v0.1.0>.
+
+Build publikuje cílový soubor až po úspěšném dokončení; neúplné dočasné
+artefakty lze odstranit a sestavení opakovat. Tag ani veřejný release nejsou
+recovery krok. Distribuce nebaluje Python, Qt/Chromium, Segno ani model a
+neprohlašuje podporu všech distribucí, automatické aktualizace, AppImage,
+kontejner nebo production-ready stav. Původní historický záznam V-11 z
+2026-09-10 zůstává níže jako doklad tehdejší návrhové fáze.
+
 ## UX-FACELIFT-01 — interaktivní facelift pro první release — 2026-10-21
 
 Dávka vznikla na větvi `feature/ux-facelift-01` z doručeného `develop`
@@ -13,7 +105,7 @@ uzavřel interaktivní revizi s tím, že byly odstraněny největší bolístky
 zbývající stránky se doladí až v budoucím opakování faceliftu. Posledním
 implementačním commitem je `d069693`; před tímto administrativním uzavřením
 obsahovala implementace 31 commitů nad `develop`. Feature akceptace je
-uzavřená a jediný PR do `develop` byl vytvořen, ale dosud nebyl sloučen.
+uzavřená a jediný PR #72 byl doručen do `develop` jako merge commit `9fb4262`.
 
 - [x] [completed] **UX-FACELIFT-01-A — A4 inventura všech formulářů
   (implemented).** Generátor odvozuje tiskový review balíček přímo ze

@@ -8,12 +8,12 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
   deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--web-hostname DNS_NAME] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
   package-deb [--output SOUBOR] [--version VERZE]  Sestaví instalační .deb.
-  package-desktop [--output SOUBOR]  Sestaví zdrojový balíček desktopového PoC.
+  package-desktop [--output SOUBOR] [--version VERZE]  Sestaví zdrojový balíček desktopového PoC.
   desktop [--node SOUBOR]  Vytvoří nebo otevře projekt v desktopu; konfigurace uzlu je volitelná.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
@@ -63,20 +63,12 @@ if [[ "$command_name" == check || "$command_name" == config || "$command_name" =
     if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
     if [[ "$project_path" != /* ]]; then project_path="$PWD/$project_path"; fi
 fi
-# Resolve package output relative to the caller before cd.
-if [[ "$command_name" == package-desktop && $# == 3 && "$2" == --output && "$3" != /* ]]; then
-    set -- "$1" "$2" "$PWD/$3"
-fi
-if [[ "$command_name" == package-deb ]]; then
+if [[ "$command_name" == package-deb || "$command_name" == package-desktop ]]; then
     shift
-    exec python3 "$(dirname -- "${BASH_SOURCE[0]}")/scripts/package_deb.py" "$@"
+    exec python3 "$(dirname -- "${BASH_SOURCE[0]}")/scripts/package_${command_name#package-}.py" "$@"
 fi
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 cd -- "$repo_dir"
-if [[ "$command_name" == package-desktop ]]; then
-    shift
-    exec python3 scripts/package_desktop.py "$@"
-fi
 if [[ "$command_name" == deploy-omnia ]]; then
     shift
     exec python3 scripts/deploy_omnia.py "$@"

@@ -5,22 +5,23 @@
 import argparse
 import os
 from pathlib import Path
-import re
 import subprocess
 import tempfile
 
 if __package__:
     from .license_files import license_files
+    from .release_version import read_version, validate_version
 else:
     from license_files import license_files
+    from release_version import read_version, validate_version
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'federated-workspace-poc'
 
 
-def build(output, version='0.1.0~m0'):
-    if not re.fullmatch(r'[0-9][A-Za-z0-9.+~]*', version):
-        raise ValueError('Invalid package version')
+def build(output, version=None):
+    version = read_version(ROOT) if version is None else validate_version(version)
+    packaged_version = (version + '\n').encode('ascii')
     legal_sources = license_files(ROOT)
     output = Path(output).absolute()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -45,6 +46,9 @@ def build(output, version='0.1.0~m0'):
             # Desktop deployment builds the same source/legal allowlist as CLI deployment.
             write(f'usr/lib/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
         write(f'usr/lib/{NAME}/requirements.txt', (ROOT / 'requirements.txt').read_bytes())
+        write(f'usr/lib/{NAME}/VERSION', packaged_version)
+        write(f'usr/share/doc/{NAME}/VERSION', packaged_version)
+        write(f'usr/share/doc/{NAME}/CHANGELOG.md', (ROOT / 'CHANGELOG.md').read_bytes())
         for script in ('deploy_omnia.py', 'install_web.py', 'license_files.py'):
             source = ROOT / 'scripts' / script
             if source.is_symlink() or not source.is_file():
@@ -85,10 +89,12 @@ def build(output, version='0.1.0~m0'):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=ROOT / 'dist' / (NAME + '.deb'))
-    parser.add_argument('--version', default='0.1.0~m0')
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--version')
     args = parser.parse_args()
-    print(build(args.output, args.version))
+    version = read_version(ROOT) if args.version is None else validate_version(args.version)
+    output = args.output or ROOT / 'dist' / f'{NAME}_{version}_all.deb'
+    print(build(output, version))
 
 
 if __name__ == '__main__':

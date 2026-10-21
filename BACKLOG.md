@@ -44,14 +44,33 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-02` bylo doručeno PR #67 jako merge commit `6c94047`,
 `F-M4-PRESENTER-01` PR #68 jako merge commit `aa7fa26` a
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
-ve WORK_LOG. `UX-FACELIFT-01` je uživatelsky akceptované a archivované ve
-WORK_LOG; jeho PR byl vytvořen, po opravě CI portability však dosud nebyl
-sloučen a TODO čeká na doručení. Další nesouvisející dávka proto zatím nebyla
-aktivována.
+ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
+Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
+evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl uživatelsky přijat a
+archivován ve WORK_LOG; jeho větev zatím čeká na doručení do `develop` a TODO
+proto neaktivuje další dávku.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **UX-PROJECT-REPAIR-02 — read-only diagnostika a bezpečné
+  opravy projektu (cílová úroveň: implemented → PoC validated).** Implementovat
+  přijatý kontrakt [ADR 0035](docs/adr/0035-project-check-and-repair.md) jako
+  samostatnou feature větev `feature/ux-project-repair-02` až po doručení
+  návrhového PR. První řez přidá skutečně nemutující diagnostický backend,
+  stabilní kódy zjištění a stránku **Zkontrolovat projekt…** v menu
+  nedostupného projektu. Potvrzené akce dovolí pouze atomický rebuild
+  odvozeného indexu a pokračování přesně svázaného journalového intentu;
+  chybějící kořen dál používá existující opravu umístění.
+
+  Akceptace musí prokázat nulovou změnu inode, Git objektů a SQLite bajtů při
+  samotné kontrole, zneplatnění stale `check_token`, oddělené oprávnění a
+  potvrzení oprav, bezpečný receipt/lost-response/retry a restart na všech
+  existujících checkpointech. Pokryje zdravý projekt i chyby registrace, cest,
+  práv, Gitu, `project.json`, snapshotu, journalu a indexu včetně souběžné
+  změny a obsazeného writer locku. Neznámý stav zůstane `manual` nebo `retry`;
+  žádný reset Gitu, změna práv, heuristická oprava obsahu ani mazání dat.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
@@ -61,14 +80,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **UX-PROJECT-REPAIR-01 — kontrola a oprava poškozených
-  projektů (cílová úroveň: designed).** Navrhnout obecný nástroj Check &
-  Repair pro registrované projekty nedostupné z jiného důvodu než chybějící
-  umístění. Nejprve bezpečně rozliší a vysvětlí problém repozitáře,
-  metadat, oprávnění, cesty, lokálního stavu nebo indexu; diagnostiku oddělí
-  od oprav a každou persistentní změnu provede až po náhledu a potvrzení s
-  popsanou recovery hranicí.
 
 - [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
   (cílová úroveň: designed).** Budoucí serverový web dostane kategorii
@@ -138,8 +149,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   požadovaný jazyk a případnou odchylku.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
-
-- [ ] [planned] **V-11 — Příprava veřejné distribuce (cílová úroveň: designed).** Před zveřejněním .deb nahradit maintainer placeholder skutečným kontaktem, určit aktualizační kanál a vyhodnotit licenční povinnosti vůči konkrétním souborům/verzím z distribučního inventáře. Úspěšná interní PoC instalace ani inventář hashů nejsou právním posouzením releasu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

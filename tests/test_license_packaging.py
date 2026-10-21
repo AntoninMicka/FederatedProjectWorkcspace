@@ -24,9 +24,10 @@ SOURCE_ROOT = Path(__file__).resolve().parents[1]
 def fixture(root):
     """Synthetic, trusted build tree with real legal assets, not a release build."""
     for name in (
-        'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
+        'VERSION', 'CHANGELOG.md', 'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
         'docs/ollama-lan.md', 'docs/searxng-search-acceptance.md',
         'docs/public-source-reader-acceptance.md', 'docs/public-sources-research.md',
+        'docs/release-0.1.0.md',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
         'AGENTS.md', 'ARCHITECTURE.md', 'DATA_MODEL.md', 'FEDERATION.md',
@@ -40,7 +41,9 @@ def fixture(root):
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE_ROOT / name, path)
-    for name in ('package_deb.py', 'package_desktop.py', 'license_files.py',
+    (root / 'VERSION').write_text('0.1.0\n', encoding='ascii')
+    (root / 'CHANGELOG.md').write_text('# Changelog\n\n## 0.1.0\n', encoding='utf-8')
+    for name in ('package_deb.py', 'package_desktop.py', 'license_files.py', 'release_version.py',
                  'deploy_omnia.py', 'install_web.py'):
         path = root / 'scripts' / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -91,12 +94,13 @@ class LicensePackagingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = fixture(Path(tmp))
             raw = package_desktop.build(root)
+            prefix = package_desktop.archive_prefix('0.1.0')
             self.assertEqual(raw, package_desktop.build(root))
             with tarfile.open(fileobj=io.BytesIO(raw), mode='r:gz') as archive:
                 manifest = json.load(archive.extractfile(
-                    package_desktop.PREFIX + '/MANIFEST.sha256.json'))
+                    prefix + '/MANIFEST.sha256.json'))
                 for name in LICENSE_FILES:
-                    data = archive.extractfile(package_desktop.PREFIX + '/' + name).read()
+                    data = archive.extractfile(prefix + '/' + name).read()
                     self.assertEqual(data, (root / name).read_bytes())
                     self.assertEqual(manifest[name], hashlib.sha256(data).hexdigest())
                 self.assertNotIn('docs/legal/release.private.md', manifest)
@@ -161,6 +165,7 @@ class LicensePackagingTests(unittest.TestCase):
             self.assertIn('Homepage: https://github.com/AntoninMicka/', control)
             self.assertIn('poppler-utils', control)
             self.assertIn('THIRD_PARTY_NOTICES.md', (doc / 'README').read_text())
+            self.assertIn('0.1.0', (doc / 'CHANGELOG.md').read_text())
             launcher = (unpacked / 'usr/bin' / package_deb.NAME).read_text()
             self.assertTrue(launcher.startswith('#!/bin/sh\n'))
             self.assertIn('SPDX-License-Identifier: MPL-2.0', launcher)

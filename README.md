@@ -337,12 +337,22 @@ Ruční deploy a storage demo na Omnii jsou potvrzené uživatelským výstupem;
 ```sh
 ./run.sh package-desktop
 # nebo vlastní cesta (existující soubor se nikdy nepřepíše):
-./run.sh package-desktop --output /tmp/workspace-poc.tar.gz
+./run.sh package-desktop --output /tmp/workspace-poc-0.1.0.tar.gz
 ```
 
-Výchozí výstup je `dist/federated-workspace-poc.tar.gz` (ignorovaný Gitem). Obsahuje zdrojový kód, testy a veřejnou dokumentaci; nepřenáší `.git`, `.venv`, privátní katalog ani Qt knihovny. SHA256 každého souboru je v `MANIFEST.sha256.json`, hash archivu vypíše příkaz. Stejné bajty zdrojů vytvoří stejný archiv bez závislosti na čase sestavení. Hash dokládá integritu, není to podpis vydavatele.
+Výchozí výstup je `dist/federated-workspace-poc-0.1.0.tar.gz` (ignorovaný
+Gitem); verze se čte z jediného souboru `VERSION`. Stejná verze tvoří kořen
+archivu a výchozí metadata `.deb`. Obsahuje zdrojový kód, testy a veřejnou
+dokumentaci; nepřenáší `.git`, `.venv`, privátní katalog ani Qt knihovny.
+SHA256 každého souboru je v `MANIFEST.sha256.json`, hash archivu vypíše příkaz.
+Stejné bajty zdrojů vytvoří stejný archiv bez závislosti na čase sestavení.
+Hash dokládá integritu, není to podpis vydavatele.
 
-Po rozbalení do nového adresáře spusťte `./run.sh desktop` uvnitř `federated-workspace-poc`. Platí stejné systémové závislosti jako v sekci Desktop; případný `./run.sh setup` připraví pouze Python závislosti. Balíček neobsahuje vlastní Python/Qt runtime, není to AppImage ani instalátor a není určen jako schválené produkční vydání.
+Po rozbalení do nového adresáře spusťte `./run.sh desktop` uvnitř
+`federated-workspace-poc-0.1.0`. Platí stejné systémové závislosti jako v sekci
+Desktop; případný `./run.sh setup` připraví pouze Python závislosti. Balíček
+neobsahuje vlastní Python/Qt runtime, není to AppImage ani instalátor a není
+určen jako schválené produkční vydání.
 
 Sestavení bere aktuální obsah vybraných zdrojů včetně necommitnutých změn. Kompletní archiv se nejprve zapíše do dočasného souboru ve výstupním adresáři a teprve poté zveřejní pod cílovým názvem bez přepsání existujícího souboru. Pád může zanechat `.package-*`; projektová data se nemění.
 
@@ -350,7 +360,7 @@ Sestavení bere aktuální obsah vybraných zdrojů včetně necommitnutých zm�
 
 ```sh
 ./run.sh package-deb
-sudo apt install ./dist/federated-workspace-poc.deb
+sudo apt install ./dist/federated-workspace-poc_0.1.0_all.deb
 federated-workspace-poc
 ```
 
@@ -358,10 +368,12 @@ Příkaz build potřebuje `dpkg-deb`; nic neinstaluje. Instalaci spusťte samost
 
 Aktualizační kanál je v této fázi explicitně **ruční**: nový release se instaluje opět přes nový `.deb` soubor a aktivní verzi pak řeší `apt install`/`dpkg`. `federated-workspace-poc` zatím nemá vlastní update feed ani auto-updater.
 
-Pro další vydání zvolte vyšší verzi a jiný výstup; builder existující soubor nepřepisuje:
+Pro jednorázový kandidát lze verzi explicitně přepsat; builder existující
+soubor nepřepisuje a hodnota musí odpovídat omezenému formátu například
+`0.1.1~rc1`:
 
 ```sh
-./run.sh package-deb --version 0.1.1~m0 --output /tmp/workspace-next.deb
+./run.sh package-deb --version 0.1.1~rc1 --output /tmp/workspace-next.deb
 sudo apt install /tmp/workspace-next.deb
 sudo apt remove federated-workspace-poc
 ```

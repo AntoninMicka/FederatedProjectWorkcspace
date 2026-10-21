@@ -16,6 +16,17 @@ audit_deb_sha256 = "57a66cb5ec4c54635ca9b9f042290329ad5caf0db79f69a2559abcc31363
 lgpl_replacement_status = "pass_shiboken_6_10_2_reference_profile"
 provenance_status = "pass_current_distributed_set"
 
+[release_candidate]
+version = "0.1.0"
+base_commit = "9fb4262"
+release_commit = "pending_clean_commit"
+reviewed_on = "2026-10-21"
+scope = "Linux source archive and unbundled .deb"
+source_allowlist_files = 257
+reference_platform = "Ubuntu 26.04.1 LTS (resolute) arm64"
+segno_package = "python3-segno 1.6.6-2 all"
+status = "prepared_not_released_ce_01_open"
+
 [[components]]
 id = "workspace"
 name = "Workspace application and original documentation"
@@ -180,6 +191,6 @@ version = "1.6.6 pip; system python3-segno >=1.6.6"
 integration = "python_import_os_or_separately_installed_pip"
 license_summary = "BSD-3-Clause"
 license_evidence = "upstream_license_and_1_6_6_wheel_metadata_verified"
-release_status = "new_presenter_dependency_not_in_reference_runtime_audit"
+release_status = "reviewed_release_candidate_reference_profile_unbundled"
 sources = ["https://github.com/heuer/segno/blob/1.6.6/LICENSE", "requirements.txt"]
 bundled_by_current_desktop_builders = false

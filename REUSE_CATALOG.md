@@ -292,6 +292,16 @@ má vlastní webové potvrzení. Původní Qt výběr projektu a rozhodovací di
 odmítnuty jako duplicitní. Nový HTTP writer ani druhý registrační workflow
 nevznikají.
 
+Návrh `UX-PROJECT-REPAIR-01` **reuse/adaptuje `Projects.catalog`, validační
+primitiva konfigurace a metadat, `Git`, `Workspace`/`Journal` recovery,
+`Index.rebuild` a existující uzlové lifecycle operace**. Read-only kontrola je
+nová společná orchestrační vrstva, protože nesmí inicializovat dnešní
+`Workspace`, `Journal` ani `Index`. `check_project` zůstává dílčím CLI
+validátorem artefaktové projekce; rozšířit jej na skrytě mutující univerzální
+opravář bylo odmítnuto. Nový framework ani externí komponenta nejsou potřeba;
+kontrakt, recovery hranice a odmítnuté varianty drží
+[ADR 0035](docs/adr/0035-project-check-and-repair.md).
+
 Redukovaný hlavní panel **reuse/adaptuje stejný sdílený sidebar, tabpanely a
 položková menu**; nevytváří druhou navigaci ani desktopovou kopii. V úzkém
 desktopovém/webovém režimu se existující panel vybrané sekce pouze zobrazí jako
