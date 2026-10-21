@@ -472,13 +472,6 @@ def main():
             dialog.deleteLater()
         deploy_button.clicked.connect(deploy_node)
         editor_toolbar.addWidget(deploy_button)
-        def edit_presentation():
-            if controller.busy:
-                return
-            page.runJavaScript('openPresentationEditor()')
-        presentation_editor_button = QPushButton('Prezentace…')
-        presentation_editor_button.clicked.connect(edit_presentation)
-        editor_toolbar.addWidget(presentation_editor_button)
         def native_action(url):
             actions = {
                 '/#presenter-open': displays.open,

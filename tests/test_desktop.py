@@ -233,8 +233,8 @@ class DesktopTests(unittest.TestCase):
 
     def test_presentation_editor_is_integrated_in_shared_workspace(self):
         desktop = Path('spikes/desktop.py').read_text()
+        self.assertNotIn("QPushButton('Prezentace…')", desktop)
         self.assertNotIn('PresentationEditorDialog', desktop)
-        self.assertIn("page.runJavaScript('openPresentationEditor()')", desktop)
         self.assertIn('id="presentation-tab"', HTML)
         self.assertIn('id="presentations-tab"', HTML)
         self.assertIn('id="sidebar-presentation-list"', HTML)

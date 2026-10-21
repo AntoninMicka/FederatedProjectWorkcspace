@@ -316,6 +316,9 @@ zařazením ověří proti uživatelským anotacím a mobilní/klávesnicové pa
   WebEngine ve dvou projektových stavech kliknutím otevřel obě položky Federace,
   načetl síťový formulář z nativní vrstvy a nezměnil projektové Git repozitáře.
   Následná celá sada prošla **648 testy** (27 přeskočeno).
+  Po fyzické kontrole bylo z horní Qt lišty odstraněno již neúčinné tlačítko
+  **Prezentace…**; webový editor prezentací a záložka Výstupy zůstávají beze
+  změny. Cílené ověření integrovaného editoru a Python kompilace prošly.
 - [ ] [planned] **UX-FACELIFT-01-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit dotčené desktopové i webové průchody,
   úzký viewport, klávesnici, potvrzení a finální fyzický průchod s uživatelem.
