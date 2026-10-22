@@ -42,6 +42,16 @@ class Projects:
             return []
         return parse_node(read_config(self.node_path), location=self.node_path)['projects']
 
+    def replication(self, project_id):
+        if self.node_path is None:
+            return None
+        from spikes.administration import Administration
+        service = Administration(
+            self.node_path, deployment='web' if self.network else 'desktop')
+        if not service.repo.exists():
+            return None
+        return service.project_replication(project_id)
+
     def list(self):
         # Do not expose filesystem locations or credential references to JavaScript.
         if self.network:
@@ -96,13 +106,26 @@ class Projects:
                 'Registration must refer to the repository root')
         # Invalid/uncommitted configuration cannot initialize a journal or index.
         committed_project(git, git.head(), project_id)
-        return Workspace(root, state, blocking=blocking, deadline=deadline)
+        write_guard = None
+        if self.node_path is not None:
+            def write_guard():
+                from spikes.administration import Administration
+                service = Administration(
+                    self.node_path, deployment='web' if self.network else 'desktop')
+                if service.repo.exists():
+                    service.assert_project_writable(project_id)
+        return Workspace(root, state, blocking=blocking, deadline=deadline,
+                         write_guard=write_guard)
 
     def open(self, project_id):
         import time
         workspace = self.workspace(project_id, blocking=not self.network,
                                    deadline=time.monotonic() + 30 if self.network else None)
-        return workspace.read_project(project_id, network=self.network)
+        result = workspace.read_project(project_id, network=self.network)
+        result['replication'] = self.replication(project_id)
+        result['read_only'] = bool(result['replication']
+                                   and result['replication']['role'] == 'read-only-replica')
+        return result
 
     def preview(self, project_id, artifact_id, expected_head, page=1):
         import re

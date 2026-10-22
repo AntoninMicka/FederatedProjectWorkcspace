@@ -38,6 +38,14 @@ MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE
 HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 
 
+class ReplicationRejected(ValueError):
+    pass
+
+
+class ReplicationConflict(ValueError):
+    pass
+
+
 def _journal_path(node):
     path = private_root(node) / 'git-transfer-journal.sqlite'
     fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -297,25 +305,25 @@ class ReplicationReceiver:
                 require(not workspace._active(db)
                         and not db.execute('SELECT 1 FROM pending').fetchone(),
                         'Project has another unfinished operation')
-                require(workspace._branch() == request['ref'],
-                        'Replica branch changed')
-                require(workspace.git.head() == request['expected_base'],
-                        'Replica diverged from expected base')
-                require(not git_run(workspace.git, 'status', '--porcelain',
-                                    '--untracked-files=all').stdout,
-                        'Read-only replica worktree is not clean')
+                if workspace._branch() != request['ref']:
+                    raise ReplicationConflict('Replica branch changed')
+                if workspace.git.head() != request['expected_base']:
+                    raise ReplicationConflict('Replica diverged from expected base')
+                if git_run(workspace.git, 'status', '--porcelain',
+                           '--untracked-files=all').stdout:
+                    raise ReplicationConflict('Read-only replica worktree is not clean')
                 db.execute('INSERT INTO operations(id,record) VALUES (?,?)',
                            (request['operation_id'], json.dumps(marker)))
                 db.commit(); checkpoint('prepared')
 
             head = workspace.git.head()
-            require(head in {request['expected_base'], request['candidate_head']},
-                    'Replica diverged during recovery')
+            if head not in {request['expected_base'], request['candidate_head']}:
+                raise ReplicationConflict('Replica diverged during recovery')
             if head == request['expected_base']:
-                require(workspace._branch() == request['ref']
-                        and not git_run(workspace.git, 'status', '--porcelain',
-                                        '--untracked-files=all').stdout,
-                        'Read-only replica changed during recovery')
+                if (workspace._branch() != request['ref']
+                        or git_run(workspace.git, 'status', '--porcelain',
+                                   '--untracked-files=all').stdout):
+                    raise ReplicationConflict('Read-only replica changed during recovery')
                 with tempfile.NamedTemporaryFile(dir=workspace.journal.state) as bundle:
                     bundle.write(payload); bundle.flush(); os.fsync(bundle.fileno())
                     git_run(workspace.git, '-c', 'protocol.file.allow=always', 'fetch',
@@ -455,13 +463,25 @@ class ReplicationReceiver:
             receipt = validate_receipt(saved_receipt['receipt'])
             require(receipt['request_sha256'] == digest,
                     'Stored receipt belongs to another request')
+            from spikes.transfer_outbox import set_replication_runtime
+            set_replication_runtime(
+                self.node, request['grant_id'], 'idle',
+                operation_id=request['operation_id'], last_head=receipt['head'],
+                detail='Replication completed')
             return saved_receipt
         binding = self._binding(request['project_id'])
-        if request['expected_base'] is None:
-            head = self._initial(request, payload, authority, checkpoint)
-        else:
-            require(binding is not None, 'Existing replica is not registered')
-            head = self._update(request, payload, authority, checkpoint)
+        try:
+            if request['expected_base'] is None:
+                head = self._initial(request, payload, authority, checkpoint)
+            else:
+                require(binding is not None, 'Existing replica is not registered')
+                head = self._update(request, payload, authority, checkpoint)
+        except ReplicationConflict as exc:
+            from spikes.transfer_outbox import set_replication_runtime
+            set_replication_runtime(
+                self.node, request['grant_id'], 'conflict',
+                operation_id=request['operation_id'], detail=str(exc))
+            raise
         receipt = {
             'schema_version': 1,
             'operation_id': request['operation_id'],
@@ -483,6 +503,11 @@ class ReplicationReceiver:
                     (canonical(envelope_receipt).decode('ascii'),
                      request['operation_id'], digest))
                 require(changed.rowcount == 1, 'Replication receipt publication changed')
+        from spikes.transfer_outbox import set_replication_runtime
+        set_replication_runtime(
+            self.node, request['grant_id'], 'idle',
+            operation_id=request['operation_id'], last_head=head,
+            detail='Replication completed')
         return envelope_receipt
 
 
@@ -548,9 +573,13 @@ def send(node, replication_id, operation_id, expected_base, *, ca=None,
         })
         response = connection.getresponse()
         raw = response.read(MAX_ENVELOPE + 1)
-        require(response.status == 200 and len(raw) <= MAX_ENVELOPE,
-                'Replication peer rejected request')
-        receipt_envelope = json.loads(raw)
+        require(len(raw) <= MAX_ENVELOPE, 'Replication response exceeds limit')
+        response_body = json.loads(raw)
+        if response.status == 409:
+            raise ReplicationConflict('Replica reported a conflict')
+        if response.status != 200:
+            raise ReplicationRejected('Replication peer rejected request')
+        receipt_envelope = response_body
     finally:
         connection.close()
     _verify(receipt_envelope, authority['remote']['fingerprint'], 'receipt')
@@ -585,6 +614,7 @@ def reply(handler):
         result = ReplicationReceiver(
             handler.server.node, handler.server.administration).receive(envelope, payload)
         return handler.reply(200, result)
-    except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,
-            RecoveryConflict, PendingOperation):
+    except (ReplicationConflict, RecoveryConflict, PendingOperation):
+        return handler.reply(409, {'error': 'Replication conflicts with replica state'})
+    except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
         return handler.reply(422, {'error': 'Replication request rejected'})

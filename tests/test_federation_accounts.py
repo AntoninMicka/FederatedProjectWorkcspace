@@ -125,12 +125,14 @@ class MappingTests(unittest.TestCase):
         from spikes.projects import Projects
         with running_api('http',handler=DesktopManagementHandler,projects=Projects(self.a.node)) as server:
             server.administration=Administration(self.a.node,deployment='desktop')
-            def request(token,body):
+            def request(token,body,path='/v1/administration'):
                 connection=http.client.HTTPConnection(*server.server_address,timeout=5)
-                connection.request('POST','/v1/administration',body=json.dumps(body),headers={'Content-Type':'application/json','Authorization':'Bearer '+token})
+                connection.request('POST',path,body=json.dumps(body),headers={'Content-Type':'application/json','Authorization':'Bearer '+token})
                 response=connection.getresponse();result=response.status,json.loads(response.read());connection.close();return result
             code,state=request(server.token,{'action':'list'})
             self.assertEqual(code,200);self.assertEqual(len(state['users']),1);self.assertEqual(state['deployment'],'desktop')
+            self.assertEqual(request(server.token,{},'/v1/replications/status'),
+                             (200, {'statuses': {}}))
             self.assertEqual(request(self.states[0]['access_key'],{'action':'list'})[0],401)
             self.assertEqual(request(server.token,{'action':'create-user','expected_commit':state['commit_id'],'name':'No','node_role':'member'})[0],403)
 

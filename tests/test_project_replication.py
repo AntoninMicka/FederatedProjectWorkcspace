@@ -19,9 +19,11 @@ from spikes.project_creation import ProjectCreation
 from spikes.project_repair import ProjectDiagnostics
 from spikes.projects import Projects
 from spikes.project_replication import (
-    CONTENT_TYPE, PATH as REPLICATION_PATH, ReplicationReceiver,
+    CONTENT_TYPE, PATH as REPLICATION_PATH, ReplicationConflict,
+    ReplicationReceiver,
     decode_body, encode_body, prepare, send,
 )
+from spikes.replication_control import ReplicationControl
 from spikes.network_backend import ProbeHandler
 from spikes.source_import import Sources, request_from_file
 from spikes.storage import Git
@@ -128,6 +130,55 @@ class ProjectReplicationTests(unittest.TestCase):
         self.assertEqual(receipt['receipt']['head'], second_head)
         self.assertEqual(Git(destination).head(), second_head)
         self.assertEqual(self.receive(update, update_payload), receipt)
+
+    def test_replica_is_read_only_in_shared_workspace_and_ui_projection(self):
+        self.import_source('first')
+        envelope, payload, _, _ = self.prepared(None)
+        self.receive(envelope, payload)
+        view = Projects(self.nodes[1]).open(self.project_id)
+        self.assertTrue(view['read_only'])
+        self.assertEqual(view['replication']['role'], 'read-only-replica')
+        status = ReplicationControl(
+            self.nodes[1], deployment='web').statuses(
+                self.state(1)['replications'], self.node_ids[1])
+        self.assertEqual(status[self.replication_id]['last_head'], view['commit_id'])
+        workspace = Projects(self.nodes[1]).workspace(self.project_id)
+        before = workspace.git.head()
+        with self.assertRaisesRegex(AccessDenied, 'Read-only replica'):
+            workspace.apply({}, author_name='Local user',
+                            author_email='local@example.invalid', message='Forbidden')
+        self.assertEqual(workspace.git.head(), before)
+        self.assertFalse(Projects(self.nodes[0]).open(self.project_id)['read_only'])
+
+    def test_control_plane_persists_success_conflict_and_offline_states(self):
+        control = ReplicationControl(self.nodes[0], deployment='web')
+        head = Git(self.nodes[0].parent / 'project').head()
+        with patch('spikes.replication_control.send',
+                   return_value={'head': head, 'commit_count': 1}):
+            result = control.synchronize(self.replication_id)
+        self.assertEqual(result['state'], 'idle')
+        self.assertEqual(result['last_head'], head)
+        with patch('spikes.replication_control.send') as repeated:
+            self.assertEqual(control.synchronize(self.replication_id)['state'], 'idle')
+            repeated.assert_not_called()
+
+        self.import_source('changed')
+        with patch('spikes.replication_control.send',
+                   side_effect=ReplicationConflict('diverged')):
+            with self.assertRaises(ReplicationConflict):
+                control.synchronize(self.replication_id)
+        state = control.statuses(self.state(0)['replications'], self.node_ids[0])
+        self.assertEqual(state[self.replication_id]['state'], 'conflict')
+
+        with patch('spikes.replication_control.send',
+                   side_effect=ConnectionError('offline')):
+            with self.assertRaises(ConnectionError):
+                control.synchronize(self.replication_id)
+        state = control.statuses(self.state(0)['replications'], self.node_ids[0])
+        self.assertEqual(state[self.replication_id]['state'], 'offline')
+        with patch.object(control, 'synchronize') as automatic:
+            control.run_enabled()
+        automatic.assert_called_once_with(self.replication_id)
 
     def test_crash_after_cas_rolls_forward_without_second_ref_effect(self):
         base = self.import_source('base')
@@ -280,6 +331,20 @@ class ProjectReplicationTests(unittest.TestCase):
                 'SELECT done,receipt FROM transfers WHERE operation_id=?',
                 (operation,)).fetchone()
         self.assertEqual(done, 1); self.assertIsNotNone(stored)
+
+    def test_offline_retry_keeps_exact_saved_bundle_after_primary_advances(self):
+        first = self.import_source('first')
+        operation = str(uuid4())
+        envelope, payload, _, _ = prepare(
+            self.nodes[0], self.replication_id, operation, None,
+            deployment='web')
+        self.import_source('later')
+        retry, retry_payload, _, _ = prepare(
+            self.nodes[0], self.replication_id, operation, None,
+            deployment='web')
+        self.assertEqual(retry['request']['candidate_head'], first)
+        self.assertEqual(retry['request'], envelope['request'])
+        self.assertEqual(retry_payload, payload)
 
 
 if __name__ == '__main__':

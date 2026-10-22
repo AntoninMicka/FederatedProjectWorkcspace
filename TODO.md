@@ -70,11 +70,24 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   fyzický desktop ↔ server scénář zůstává úkolem E. Úplná sada po finálním
   zpevnění: **706 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine
   scénáře).
-- [ ] [planned] **F-M5-PERSONAL-SYNC-01-D — sdílené webové/desktopové UI
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-D — sdílené webové/desktopové UI
   synchronizace (cílová úroveň: implemented).** Ve správě federace nabídnout
   výběr schváleného peeru a projektu, potvrzení primary/replica směru, zapnutí
   a zastavení. Zobrazit poslední úspěch, čekání/offline, odmítnutí, revokaci a
   konflikt; read-only replika nesmí v editoru předstírat možnost zápisu.
+  Sdílená správa nyní vytváří, oboustranně potvrzuje, importuje/exportuje,
+  zapíná, zastavuje a odvolává grant; primary nabízí i okamžité spuštění.
+  Backendový scheduler po zapnutí každých 60 sekund serializovaně dorovnává
+  primary grant a durable stav rozlišuje `idle`, `pending`, `offline`,
+  `rejected`, `conflict` a `error` včetně posledního úspěšného HEAD. Offline
+  retry zachová přesný operation ID a bundle, i když primary mezitím pokročí.
+  Otevřený projekt nese explicitní replikační roli, UI skrývá editační akce a
+  centrální guard znovu odmítne každý `Workspace.apply`/`transact` pod writer
+  lockem; nejde tedy jen o kosmetické omezení. Správu ostrovní federace vidí i
+  `node-admin`, zatímco udělení vyšší role zůstává oddělené. Cílené replikační
+  a účtové ověření: **25 testů úspěšně**; širší sdílené UI/API ověření:
+  **98 testů úspěšně, 6 přeskočeno**. Úplná sada: **709 testů úspěšně,
+  28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-E — automatické a fyzické ověření
   (cílová úroveň: PoC validated).** Pokrýt první přenos, následný fast-forward,
   restart na persistentních hranicích, offline návrat, idempotentní retry,

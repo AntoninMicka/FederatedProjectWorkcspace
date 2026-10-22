@@ -9,8 +9,8 @@ Datum: 2026-10-22. Stav: přijato jako implementační kontrakt
 `F-M5-PERSONAL-SYNC-01-A`; podepsaný grant a lokální desired state jsou
 implementovány úkolem B, podepsaný bounded HTTPS transport, první publikace
 repliky a CAS fast-forward s roll-forward recovery jsou implementovány úkolem
-C. Scheduler, UI, plošný serverový read-only guard a fyzické ověření ještě
-nejsou dokončeny.
+C. Scheduler, UI a plošný serverový read-only guard jsou implementovány úkolem
+D; fyzické desktop ↔ server ověření ještě není dokončeno.
 
 ## Kontext a rozsah
 
@@ -150,9 +150,11 @@ automatika jej nepřepíše.
 
 ## Omezení a navazující práce
 
-Úkol C materializoval jednorázový bezpečný replikační engine a sdílený endpoint;
-sám však nespouští periodickou synchronizaci. Scheduler, přesná frekvence
-pollingu, uživatelské ovládání a plošný read-only guard patří do dalších úkolů
-stejné dávky. Převzetí primární role, multi-master, automatický merge, retence
-dokončených bundle a plný portable ACL/policy model zůstávají mimo tento řez.
-Tento ADR není důkaz fyzické dostupnosti desktopového HTTPS endpointu.
+Úkol D nad jednorázovým enginem spouští na desktopu i serveru backendový
+scheduler s pevnou periodou 60 sekund, nabízí okamžité spuštění a ukládá
+odvozený runtime stav mimo projektový Git. Scheduler a ruční požadavek sdílejí
+node-local zámek; nezávislé synchronizace stejného uzlu se proto nepřekryjí.
+Převzetí primární role, konfigurovatelná frekvence, multi-master, automatický
+merge, retence dokončených bundle a plný portable ACL/policy model zůstávají
+mimo tento řez. Tento ADR není důkaz fyzické dostupnosti desktopového HTTPS
+endpointu ani úspěšného desktop ↔ server scénáře.

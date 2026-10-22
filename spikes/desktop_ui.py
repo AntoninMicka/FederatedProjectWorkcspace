@@ -763,6 +763,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="project-view" hidden>
 <header class="project-header"><span class="eyebrow">OTEVŘENÝ PROJEKT</span>
 <details><summary>Uložená verze</summary><code id="project-commit"></code></details></header>
+<p id="project-read-only" class="read-only-notice" role="status" hidden>Tento projekt je read-only replika. Obsah lze číst, ale místní editory ani publikační akce jej nemohou měnit.</p>
 <section id="workspace-panel" aria-label="Pracovní prostor">
 <div id="main-tabs" role="tablist" aria-label="Hlavní panel">
 <button id="project-overview-tab" role="tab" aria-controls="project-overview-panel" aria-selected="true" data-prompt-default="visible">Projekt</button>
@@ -1091,6 +1092,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 .todo-done>.todo-label .todo-text,.todo-done>details>summary .todo-text{color:#a9c5b7;text-decoration:line-through}
 #project-view{height:100%;display:flex;flex-direction:column;gap:16px}.project-header{flex-shrink:0;min-height:28px}.project-header .eyebrow{align-self:center}
 .project-header details{max-width:280px}.project-header code{font-size:10px}
+.read-only-notice{margin:0;padding:10px 14px;border:1px solid #c9a951;border-radius:8px;background:#fff7dd;color:#604b11}
 #workspace-panel{min-height:0;flex:1;display:flex;flex-direction:column;background:white;border:1px solid #dce3e9;border-radius:16px;overflow:hidden}
 #main-tabs{display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid #dce3e9;padding:16px;flex-shrink:0}
 #main-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
@@ -1909,7 +1911,7 @@ function renderSidebarArtifacts(items){
   title.addEventListener('click',()=>openPreview(item.id));
   const id=document.createElement('small');id.className='sidebar-item-id sidebar-artifact-id';id.textContent=item.id;title.append(name,id);
   const actions=[{label:'Zobrazit',run:()=>openPreview(item.id)}];
-  if(item.kind==='document')actions.push(
+  if(item.kind==='document'&&!activeProject?.readOnly)actions.push(
    {label:'Upravit / přejmenovat',run:()=>openArtifactEditor(item)},
    {label:'Připravit smazání',run:()=>openArtifactEditor(item,true)});
   actions.push(
@@ -2013,7 +2015,10 @@ const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-
 function syncSidebarProjectAvailability(){
  const available=Boolean(activeProject);
  for(const id of projectSidebarTabs){const tab=document.getElementById(id);tab.disabled=!available;tab.setAttribute('aria-disabled',String(!available));}
- document.querySelector('#chat-new-thread').disabled=!available;
+ const writable=available&&!activeProject.readOnly;
+ document.querySelector('#chat-new-thread').disabled=!writable;
+ for(const id of ['new-document','open-source-import','create-main-todo','project-overview-edit-todo'])document.getElementById(id).disabled=!writable;
+ document.querySelector('#project-read-only').hidden=!available||!activeProject.readOnly;
  if(!available && projectSidebarTabs.includes(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')?.id))selectSidebarTab(document.querySelector('#projects-tab'));
 }
 function clearProject(){
@@ -2270,7 +2275,7 @@ async function closeArtifactEditor(){
  if(activeProject){projectView.hidden=false;if(item&&!item.new)await openPreview(item.id);}
 }
 async function openArtifactEditor(item,deleteMode=false){
- if(!activeProject||item.kind!=='document')return;
+ if(!activeProject||activeProject.readOnly||item.kind!=='document')return;
  if(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors())return;
  await openPreview(item.id);if(selectedArtifact!==item.id)return;
  const project=activeProject;artifactEditorItem=item;artifactEditorAttempt=null;hideArtifactDeletion();
@@ -2285,7 +2290,7 @@ async function openArtifactEditor(item,deleteMode=false){
  }catch(error){artifactEditorStatus.textContent=error.message;}
 }
 function openNewArtifactEditor({todo=false}={}){
- if(!activeProject||(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors()))return;
+ if(!activeProject||activeProject.readOnly||(!artifactEditorView.hidden&&!canLeaveWorkspaceEditors()))return;
  const id=todo?activeProject.mainTodoId:crypto.randomUUID();
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
@@ -2294,7 +2299,7 @@ function openNewArtifactEditor({todo=false}={}){
  artifactEditorStatus.textContent='Dokument vznikne až po uložení.';artifactEditorForm.elements.title.focus();
 }
 function openMainTodoEditor(){
- if(!activeProject)return;const item=currentArtifacts.find(candidate=>candidate.id===activeProject.mainTodoId);
+ if(!activeProject||activeProject.readOnly)return;const item=currentArtifacts.find(candidate=>candidate.id===activeProject.mainTodoId);
  if(item)openArtifactEditor(item);else openNewArtifactEditor({todo:true});
 }
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
@@ -2444,7 +2449,7 @@ async function openRegisteredProject(projectId){
   const result=await projectRequest('/v1/projects/open',{project_id:projectId});
   if(request!==viewRequest)return;
   rememberRecentProject(projectId);
-  activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id};
+  activeProject={id:projectId,title:result.title,description:result.description,head:result.commit_id,mainTodoId:result.main_todo_id,readOnly:Boolean(result.read_only),replication:result.replication||null};
   renderTodo(result.main_todo);renderProjectOverview(result.main_todo);renderProjectHistory(result.history);renderSidebarArtifacts(result.artifacts);
   document.querySelector('#project-title').textContent=result.title;
   document.querySelector('#project-description').textContent=result.description;
@@ -2454,7 +2459,8 @@ async function openRegisteredProject(projectId){
   await loadChat();
   syncSidebarProjectAvailability();
   selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
-  document.querySelector('#preview-status').textContent=result.artifacts.length ?
+  document.querySelector('#preview-status').textContent=result.read_only ?
+   'Read-only replika: podklady lze prohlížet, změny provádějte na primárním uzlu.' : result.artifacts.length ?
    'Vyberte podklad ze seznamu vlevo.' : 'Projekt zatím nemá žádné podklady.';
  }catch(error){if(request===viewRequest)projectStatus.textContent=error.message;}
 }

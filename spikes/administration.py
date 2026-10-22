@@ -290,6 +290,39 @@ class Administration:
                 'peer': peer,
             }))
 
+    def project_replication(self, project_id):
+        """Return this node's durable project role, including inactive grants."""
+        identifier(project_id)
+        with self.locked() as (_, state, commit, _):
+            replication = next((row for row in state['replications']
+                                if row['spec']['project_id'] == project_id
+                                and not row['revocation']), None)
+            if replication is None:
+                return None
+            local = next(node for node in replication['spec']['nodes']
+                         if node['node_id'] == state['node_id'])
+            remote = next(node for node in replication['spec']['nodes']
+                          if node['node_id'] != state['node_id'])
+            peer = next((row for row in state['peers']
+                         if row['id'] == remote['node_id']), None)
+            authorized = self.replication_authorized(state, replication)
+            return json.loads(json.dumps({
+                'registry_commit': commit,
+                'id': replication['spec']['id'],
+                'role': local['role'],
+                'peer': {'id': remote['node_id'],
+                         'name': peer['name'] if peer else remote['node_id']},
+                'remote_role': remote['role'],
+                'enabled': replication['enabled'],
+                'authorized': authorized,
+                'active': replication['enabled'] and authorized,
+            }))
+
+    def assert_project_writable(self, project_id):
+        replication = self.project_replication(project_id)
+        if replication and replication['role'] == 'read-only-replica':
+            raise AccessDenied('Read-only replica cannot be modified locally')
+
     def project_actor_allowed(self, actor, project_id, node):
         if actor.get('memberships', {}).get(project_id) == 'project-admin':
             return True
@@ -650,9 +683,12 @@ class Administration:
                 'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if self.is_admin(actor) else [],
                 'replications': [dict(
                     replication,
+                    local_role=next(node['role'] for node in replication['spec']['nodes']
+                                    if node['node_id'] == state['node_id']),
                     authorized=self.replication_authorized(state, replication),
                     active=(replication['enabled']
                             and self.replication_authorized(state, replication)),
                 ) for replication in state['replications']],
                 'federation_admin': actor['node_role'] == 'federation-admin',
-                'transport': 'not-implemented'}
+                'can_federate': self.is_admin(actor),
+                'transport': 'signed-https-v1'}

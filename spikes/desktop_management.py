@@ -31,10 +31,31 @@ ASSETS = {**BASE_ASSETS,
 class DesktopManagementHandler(DesktopHandler):
     assets = ASSETS
     post_paths = DesktopHandler.post_paths | {'/v1/administration',
+        '/v1/replications/status', '/v1/replications/sync',
         '/v1/backend-metrics/status', '/v1/backend-metrics/configure',
         '/v1/backend-metrics/refresh'}
 
     def dispatch(self, request):
+        if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
+            actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
+            try:
+                from spikes.replication_control import ReplicationControl
+                control = ReplicationControl(
+                    self.server.administration.node, deployment='desktop')
+                state = self.server.administration.request(actor, {'action': 'list'})
+                if self.path == '/v1/replications/sync':
+                    if (not isinstance(request, dict)
+                            or set(request) != {'replication_id'}):
+                        return self.send_error(400)
+                    control.synchronize(request['replication_id'])
+                    state = self.server.administration.request(actor, {'action': 'list'})
+                return self.reply(200, {'statuses': control.statuses(
+                    state['replications'], state['node_id'])})
+            except AccessDenied:
+                return self.send_error(403)
+            except Exception:
+                return self.reply(409, {'error': 'Synchronizaci se nepodařilo dokončit; '
+                                               'aktuální stav je uložen pro bezpečné opakování.'})
         if self.path.startswith('/v1/backend-metrics/'):
             try:
                 if self.path == '/v1/backend-metrics/status' and request == {}:
@@ -57,6 +78,10 @@ class DesktopManagementHandler(DesktopHandler):
             ProjectCreation(administration.node).initialize_node()
             result = self.server.administration.request(actor, request)
             result['projects'] = self.server.projects.catalog()
+            from spikes.replication_control import ReplicationControl
+            result['replication_statuses'] = ReplicationControl(
+                administration.node, deployment='desktop').statuses(
+                    result['replications'], result['node_id'])
             return self.reply(200, result)
         except AccessDenied:
             return self.reply(403, {'error': 'Operace není povolena nebo se změnil registr. Načtěte správu znovu.'})

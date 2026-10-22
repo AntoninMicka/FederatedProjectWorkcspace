@@ -30,6 +30,7 @@ from spikes.media_service import MediaService
 from spikes.role_workflow_service import RoleWorkflowService
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
+from spikes.replication_control import ReplicationScheduler
 from spikes.user_profile import UserProfile
 from spikes.gamepad_settings import GamepadSettings
 from spikes.journal import sync_dir
@@ -1277,7 +1278,11 @@ def main():
         window.show()
         if not args.smoke:
             QTimer.singleShot(0, controller.recover)
+        replication_scheduler = ReplicationScheduler(
+            node_path, deployment='desktop')
+        replication_scheduler.start()
         result = app.exec()
+        replication_scheduler.stop()
         controller.wait()
         federation_transfer.wait()
         federation_network.wait()

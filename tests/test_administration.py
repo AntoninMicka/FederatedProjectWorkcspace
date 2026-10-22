@@ -53,7 +53,8 @@ class AdministrationTests(unittest.TestCase):
         peer = str(uuid4())
         state = self.change(action='add-peer', node_id=peer, name='Desktop', endpoint='https://192.168.100.3:8443', fingerprint='a'*64)
         self.assertEqual(state['peers'][0]['trust'],'pending')
-        self.assertEqual(state['transport'],'not-implemented')
+        self.assertEqual(state['transport'],'signed-https-v1')
+        self.assertTrue(state['can_federate'])
         state = self.change(action='set-trust', node_id=peer, trust='approved')
         self.assertEqual(state['peers'][0]['trust'],'approved')
         node_admin = {'id':None, 'node_role':'node-admin', 'memberships':{}}
