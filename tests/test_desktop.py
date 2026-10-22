@@ -1267,6 +1267,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="sidebar-settings-list" aria-label="Seznam nastavení"', HTML)
         self.assertIn('data-settings-tab="settings-backend-tab"', HTML)
         self.assertIn("openSettings(button.dataset.settingsTab)", JS)
+        self.assertIn("await openAdministration(selected.id==='settings-users-tab'?'users':'federation')", JS)
         self.assertNotIn('id="chat-backend-settings"', HTML)
         self.assertIn("settingsReturn={project:!!activeProject,tabId:", JS)
         self.assertIn("document.querySelector('#project-home').hidden=true", JS)

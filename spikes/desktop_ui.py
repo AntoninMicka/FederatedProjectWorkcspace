@@ -3361,7 +3361,10 @@ async function openSettings(settingsTabId='settings-backend-tab'){
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden,trash:!projectTrashView.hidden};
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
- const requested=document.getElementById(settingsTabId);selectSettingsTab(requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab'));
+ const requested=document.getElementById(settingsTabId),selected=requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab');selectSettingsTab(selected);
+ if(selected.id==='settings-users-tab'||selected.id==='settings-federation-tab'){
+  await openAdministration(selected.id==='settings-users-tab'?'users':'federation');return;
+ }
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
  await loadBackendBinding();
 }

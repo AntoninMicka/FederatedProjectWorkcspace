@@ -124,7 +124,10 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   kontrakt; nový Qt dialog ani fyzické mazání registru nebyly zavedeny.
   Cílené ověření: **10 testů úspěšně**, vygenerovaný JavaScript prošel
   `node --check`; úplná sada: **712 testů úspěšně, 28 přeskočeno** (volitelné
-  fyzické/WebEngine scénáře).
+  fyzické/WebEngine scénáře). Následná oprava navigace zajistila, že otevření
+  Federace nebo Uživatelů přímo z boční nabídky nejen přepne panel, ale také
+  načte administrační stav; jinak zůstávala nová tabulka v počátečním prázdném
+  stavu, přestože backend peer správně vracel.
 
 ## Akceptační podmínky
 
