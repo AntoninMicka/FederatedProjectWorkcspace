@@ -3,6 +3,8 @@
 """Local desktop user's contact profile, outside all project repositories."""
 import json
 import os
+import getpass
+import pwd
 from contextlib import closing
 import sqlite3
 from pathlib import Path
@@ -11,6 +13,21 @@ from spikes.metadata import require
 from spikes.journal import sync_dir
 
 PROFILE_FIELDS = {'name': 100, 'email': 180, 'phone': 80, 'web': 200}
+
+
+def system_profile():
+    """Return only bounded public profile data exposed by the OS account."""
+    try:
+        account = pwd.getpwuid(os.getuid())
+        candidates = [account.pw_gecos.split(',', 1)[0].strip(),
+                      account.pw_name]
+    except (KeyError, OSError):
+        candidates = [getpass.getuser()]
+    name = next((value for value in candidates
+                 if value and len(value) <= PROFILE_FIELDS['name']
+                 and not any(ord(char) < 32 or ord(char) == 127
+                             for char in value)), '')
+    return {'name': name, 'email': '', 'phone': '', 'web': ''}
 
 
 def validate_profile(value):
@@ -29,13 +46,14 @@ class UserProfile:
 
     def load(self):
         if not self.path.exists():
-            return {key: '' for key in PROFILE_FIELDS}
+            return system_profile()
         require(not self.path.is_symlink(), 'Profil nesmí být symbolický odkaz.')
         with closing(sqlite3.connect(f'{self.path.as_uri()}?mode=ro', uri=True)) as db:
             # DDL may have committed before the first profile write was interrupted.
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='profile'").fetchone()
             row = db.execute('SELECT value FROM profile WHERE id=1').fetchone() if exists else None
-        return validate_profile(json.loads(row[0])) if row else {key: '' for key in PROFILE_FIELDS}
+        return (validate_profile(json.loads(row[0])) if row
+                else system_profile())
 
     def save(self, value, *, checkpoint=lambda: None):
         value = validate_profile(value)

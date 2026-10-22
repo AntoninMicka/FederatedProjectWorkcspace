@@ -65,6 +65,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
   projectCreateForm.hidden=!admin;document.querySelector('#sidebar-create-project').hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  document.querySelector('[data-settings-item="settings-users-tab"]').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-access-tab').hidden=!admin;
   document.querySelector('[data-settings-item="settings-access-tab"]').hidden=!admin;

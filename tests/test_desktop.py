@@ -1203,7 +1203,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertEqual(ASSETS['/app.css'][1], CSS)
         self.assertEqual(ASSETS['/app.js'][1], DESKTOP_BOOTSTRAP + JS)
         self.assertIn("'backend-metrics','backend-metrics-indicator','openai-resource-provider'", DESKTOP_BOOTSTRAP)
-        self.assertIn("'settings-cms-tab','settings-access-tab','settings-profile-tab','settings-users-tab'", DESKTOP_BOOTSTRAP)
+        self.assertNotIn("'settings-users-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-access-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn("'openai-resource-provider','presenter-fullscreen'", DESKTOP_BOOTSTRAP)
@@ -1277,7 +1277,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="settings-users-tab"', desktop_html)
         self.assertIn('id="settings-federation-tab"', desktop_html)
         self.assertNotIn('id="settings-cms-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden', desktop_html)
-        self.assertNotIn('id="settings-users-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
+        self.assertIn('data-settings-item="settings-users-tab" hidden', desktop_html)
+        self.assertIn('id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
         settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
         self.assertIn('id="administration" class="settings-card"', settings)
         self.assertIn('<dialog id="admin-peer-editor"', settings)

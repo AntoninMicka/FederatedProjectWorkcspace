@@ -78,7 +78,7 @@ SHEETS = [
     sheet("application-access", "Nastavení — dostupnost aplikace",
           ("#settings-access-panel",), ("application-access-form",), scale=.82),
     sheet("users", "Správa uzlu — lokální účty", ("#admin-users-panel",),
-          ("admin-user-create",), scale=.78),
+          ("admin-user-editor-form", "admin-user-confirm-form"), scale=.78),
     sheet("federation", "Správa uzlu — federované uzly", ("#admin-federation",),
           ("admin-peer-editor-form", "admin-mapping-create", "admin-mapping-import",
            "admin-replication-create", "admin-replication-import"), scale=.46),

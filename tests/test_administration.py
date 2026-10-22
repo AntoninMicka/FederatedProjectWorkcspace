@@ -163,6 +163,22 @@ class AdministrationTests(unittest.TestCase):
         self.assertEqual(self.state()['commit_id'],state['commit_id'])
         self.assertEqual(Administration(self.node).authenticate('Bearer '+key)['id'],user['id'])
 
+    def test_user_editor_updates_name_role_and_project_memberships(self):
+        project = json.loads(self.node.read_text())['projects'][0]['project_id']
+        state = self.change(action='create-user', name='Old name',
+                            node_role='member')
+        user = state['users'][0]
+        state = self.service.request(self.actor, {
+            'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'name': 'New name', 'active': True,
+            'node_role': 'node-admin',
+            'memberships': {project: 'project-admin'}})
+        edited = state['users'][0]
+        self.assertEqual(edited['name'], 'New name')
+        self.assertEqual(edited['node_role'], 'node-admin')
+        self.assertEqual(edited['memberships'], {project: 'project-admin'})
+        self.assertEqual(edited['revision'], 2)
+
     def test_invalid_fields_do_not_publish_and_cannot_escalate(self):
         before=self.state()['commit_id']
         with self.assertRaises(AccessDenied):

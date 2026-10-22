@@ -23,6 +23,10 @@ není globální přihlašovací účet. Každý účet patří jedinému lokál
 Desktop má jediného běžícího OS uživatele se stabilním author UUID; web
 více lokálních účtů. Autentizace je výhradně lokální a není odvozena z mapování.
 Neexportovat hesla, jejich digesty, tokeny, sessions ani soukromé klíče.
+Desktop proto nezobrazuje správu uživatelských účtů. Nový lokální kontaktní
+profil předvyplní pouze omezené zobrazované jméno z OS účtu; kontakty ani
+oprávnění z operačního systému neodvozuje. Server spravuje své lokální účty
+odděleně od federačních mapování a deaktivace zachovává jejich UUID i audit.
 
 Mapování je samostatný registr dvojice (node UUID, user UUID) na druhou takovou
 dvojici a explicitní množinu projektových UUID. Jeho aktivace vyžaduje dvě

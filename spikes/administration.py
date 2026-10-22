@@ -630,7 +630,13 @@ class Administration:
                     raise AccessDenied('Cannot edit federation administrator')
                 if action == 'rotate-key' and set(request) == {'action', 'expected_commit', 'user_id'}:
                     user['credential_ref'], token = self.issue(user['id'])
-                elif action == 'update-user' and set(request) == {'action', 'expected_commit', 'user_id', 'active', 'node_role', 'memberships'}:
+                elif (action == 'update-user'
+                      and set(request) in ({'action', 'expected_commit',
+                                           'user_id', 'active', 'node_role',
+                                           'memberships'},
+                                          {'action', 'expected_commit',
+                                           'user_id', 'name', 'active',
+                                           'node_role', 'memberships'})):
                     role, memberships = request['node_role'], request['memberships']
                     if not isinstance(role, str) or role not in NODE_ROLES or (role == 'federation-admin' and actor['node_role'] != 'federation-admin'):
                         raise AccessDenied('Cannot grant this role')
@@ -638,7 +644,9 @@ class Administration:
                         raise ValueError('Unknown projects')
                     if user['id'] == actor.get('id') and (request['active'] is not True or role != actor['node_role']):
                         raise AccessDenied('Cannot revoke your own administrative access')
-                    user.update(active=request['active'], node_role=role, memberships=memberships)
+                    user.update(name=label(request.get('name', user['name'])),
+                                active=request['active'], node_role=role,
+                                memberships=memberships)
                 else:
                     raise ValueError('Invalid user operation')
                 user['revision'] += 1
@@ -780,6 +788,7 @@ class Administration:
             users = [self.local_account(state, ProjectCreation(self.node).author_id())]
         return {'node_id': state['node_id'], 'commit_id': commit,
                 'users': users, 'deployment': self.deployment,
+                'current_user_id': actor.get('id'),
                 'peers': state['peers'] if self.is_admin(actor) else [],
                 'mapping_identity': MappingSignatures(self.root).identity() if self.is_admin(actor) else None,
                 'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if self.is_admin(actor) else [],

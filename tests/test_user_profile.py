@@ -12,7 +12,8 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 
-from spikes.user_profile import UserProfile, validate_profile, PROFILE_FIELDS
+from spikes.user_profile import (UserProfile, validate_profile, PROFILE_FIELDS,
+                                 system_profile)
 from spikes.presentation_closing import closing_slide
 from spikes.desktop_ui import DesktopHandler, presentation_status, presentation_public_payload
 from spikes.local_api import running_api
@@ -29,7 +30,7 @@ class UserProfileTests(unittest.TestCase):
         self.store = UserProfile(self.node)
 
     def test_save_restart_and_process_crash_keep_whole_profile(self):
-        self.assertEqual(self.store.load(), {key: '' for key in PROFILE_FIELDS})
+        self.assertEqual(self.store.load(), system_profile())
         self.assertFalse(self.store.path.exists())
         self.store.save(PROFILE)
         self.assertEqual(UserProfile(self.node).load(), PROFILE)
@@ -39,12 +40,23 @@ class UserProfileTests(unittest.TestCase):
         result = subprocess.run([sys.executable, '-c', script, str(self.node), json.dumps(changed)])
         self.assertEqual(result.returncode, 73)
         self.assertEqual(UserProfile(self.node).load(), PROFILE)
-        # First-ever save may leave an empty database/table; treat it as an empty profile.
+        # First-ever save may leave an empty database/table; fall back to the OS profile.
         other = Path(self.temp.name) / 'other.json'
         result = subprocess.run([sys.executable, '-c', script, str(other), json.dumps(changed)])
         self.assertEqual(result.returncode, 73)
-        self.assertEqual(UserProfile(other).load(), {key: '' for key in PROFILE_FIELDS})
+        self.assertEqual(UserProfile(other).load(), system_profile())
         self.store.save(changed); self.assertEqual(UserProfile(self.node).load(), changed)
+
+    def test_new_profile_uses_only_bounded_system_account_name(self):
+        from unittest.mock import patch
+        account = SimpleNamespace(pw_gecos='Jana Nováková,Room,Phone',
+                                  pw_name='jnovak')
+        with patch('spikes.user_profile.pwd.getpwuid', return_value=account):
+            self.assertEqual(system_profile(), {
+                'name': 'Jana Nováková', 'email': '', 'phone': '', 'web': ''})
+        account.pw_gecos = 'x' * 101
+        with patch('spikes.user_profile.pwd.getpwuid', return_value=account):
+            self.assertEqual(system_profile()['name'], 'jnovak')
 
     def test_validation_precedes_write_and_never_infers_contacts(self):
         for value in (dict(PROFILE, name='a' * 101), dict(PROFILE, phone='bad\nline'),

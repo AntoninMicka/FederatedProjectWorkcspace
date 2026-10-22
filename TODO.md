@@ -145,9 +145,30 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   `node --check` a změněné Python moduly `py_compile`. Úplná sada po změně:
   **716 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
   Přihlašovací enrollment a jeho fyzická akceptace zůstávají navazující prací.
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-UI3 — serverová správa lokálních
+  účtů (cílová úroveň: implemented).** Na desktopu skrýt správu uživatelů a
+  nový kontaktní profil bezpečně předvyplnit zobrazovaným jménem systémového
+  účtu bez odvozování kontaktů či oprávnění. Na serveru nahradit vložené
+  formuláře výběrovou tabulkou s akcemi Přidat, Upravit,
+  Aktivovat/Deaktivovat a Nový klíč; přidání i editace používají samostatný
+  webový dialog a citlivé stavové operace potvrzení. Fyzické mazání účtů
+  nezavádět, aby zůstaly zachované identity a audit. Federační mapování zůstává
+  oddělenou entitou a jeho matice je navazující řez. Cílené testy správy účtů
+  a profilu: **14 úspěšně, 1 přeskočen** (volitelný QR dekodér); inventura
+  formulářů: **3 úspěšně**; statický desktopový kontrakt: **1 úspěšně**.
+  Vygenerovaný JavaScript prošel `node --check` a změněné Python moduly
+  `py_compile`. Úplná sada po změně: **718 testů, OK (28 přeskočeno)**;
+  přeskočené scénáře vyžadují volitelné závislosti nebo fyzický WebEngine.
 
 ## K předání do backlogu
 
+- [ ] [planned] **F-M5-FED-MAPPING-UI-01 — matice mapování účtů (cílová
+  úroveň: designed → implemented).** Samostatná tabulka s lokálními účty v
+  řádcích a cizími uzly ve sloupcích; buňka určí vzdáleného uživatele, stav a
+  rozsah mapování. U P2P vyžadovat oboustranné potvrzení, u klient–server
+  odvodit mapování z enrollmentu. Doplnit filtr podle uživatele a uzlu a pro
+  mobil použít lineární seznam bez vnořeného vodorovného scrollování. Tato
+  položka není podmínkou dokončení současné dávky.
 - [ ] [planned] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
   úroveň: implemented).** Podle ADR 0039 nahradit dočasnou hlášku skutečným
   přihlášením desktopového klienta serverovým účtem přes ověřené TLS. Připnout
