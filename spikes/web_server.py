@@ -106,6 +106,7 @@ class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
+                                               '/v1/federation/enroll',
                                                '/v1/replications/status', '/v1/replications/sync',
                                                '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
@@ -240,6 +241,15 @@ class WebHandler(DesktopHandler):
                 return self.send_error(400)
             return self.reply(200, {'user_id': self.actor['id'], 'node_role': self.actor['node_role'],
                                     'memberships': self.actor['memberships']})
+        if self.path == '/v1/federation/enroll':
+            try:
+                from spikes.federation_enrollment import accept_on_server
+                return self.reply(200, accept_on_server(
+                    self.server.administration, self.actor, request))
+            except AccessDenied:
+                return self.reply(403, {'error': 'Přihlášení klientského uzlu není povoleno.'})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Identitu klientského uzlu nelze ověřit nebo uložit.'})
         if self.path == '/v1/administration':
             try:
                 result = self.server.administration.request(self.actor, request)

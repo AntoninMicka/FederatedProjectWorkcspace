@@ -31,11 +31,28 @@ ASSETS = {**BASE_ASSETS,
 class DesktopManagementHandler(DesktopHandler):
     assets = ASSETS
     post_paths = DesktopHandler.post_paths | {'/v1/administration',
+        '/v1/federation/enroll',
         '/v1/replications/status', '/v1/replications/sync',
         '/v1/backend-metrics/status', '/v1/backend-metrics/configure',
         '/v1/backend-metrics/refresh'}
 
     def dispatch(self, request):
+        if self.path == '/v1/federation/enroll':
+            if (not isinstance(request, dict)
+                    or set(request) != {'operation_id', 'server_node_id',
+                                        'access_key'}):
+                return self.send_error(400)
+            try:
+                from spikes.federation_enrollment import enroll
+                result = enroll(
+                    self.server.administration.node, request['server_node_id'],
+                    request['access_key'], operation_id=request['operation_id'])
+                result['projects'] = self.server.projects.catalog()
+                return self.reply(200, result)
+            except AccessDenied:
+                return self.reply(403, {'error': 'Server přihlášení klienta odmítl.'})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Přihlášení k serveru se nepodařilo. Ověřte TLS, účet a identitu uzlu.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
             actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             try:

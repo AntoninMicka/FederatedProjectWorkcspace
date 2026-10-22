@@ -84,7 +84,8 @@ class AdministrationTests(unittest.TestCase):
             'id': peer, 'name': 'New name',
             'endpoint': 'https://192.168.100.4:9443',
             'fingerprint': 'a'*64, 'trust': 'approved', 'revision': 2,
-            'relationship_type': 'p2p', 'local_role': 'peer'})
+            'relationship_type': 'p2p', 'local_role': 'peer',
+            'account_binding': None})
         unchanged_commit = state['commit_id']
         state = self.service.request(self.actor, {
             'action': 'update-peer', 'expected_commit': unchanged_commit,
@@ -138,7 +139,8 @@ class AdministrationTests(unittest.TestCase):
         with self.service.locked() as (git, state, commit, _):
             old = dict(state, schema_version=3)
             old['peers'] = [{key: value for key, value in item.items()
-                             if key not in {'relationship_type', 'local_role'}}
+                             if key not in {'relationship_type', 'local_role',
+                                            'account_binding'}}
                             for item in state['peers']]
             self.service.publish(git, old, commit)
         migrated = self.state()
@@ -147,7 +149,8 @@ class AdministrationTests(unittest.TestCase):
             'id': peer, 'name': 'Existing',
             'endpoint': 'https://192.168.100.3:8443',
             'fingerprint': 'a' * 64, 'trust': 'pending', 'revision': 1,
-            'relationship_type': 'legacy', 'local_role': None})
+            'relationship_type': 'legacy', 'local_role': None,
+            'account_binding': None})
 
     def test_rotation_interrupted_before_ref_keeps_previous_key_valid(self):
         from spikes.storage import Git

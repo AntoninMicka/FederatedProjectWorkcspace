@@ -1282,6 +1282,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
         self.assertIn('id="administration" class="settings-card"', settings)
         self.assertIn('<dialog id="admin-peer-editor"', settings)
+        self.assertIn('<dialog id="admin-peer-enroll-dialog"', settings)
         self.assertNotIn('<dialog id="administration"', settings)
         self.assertNotIn('id="administration-open"', settings)
 

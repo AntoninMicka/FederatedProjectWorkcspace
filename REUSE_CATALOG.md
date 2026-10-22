@@ -287,6 +287,14 @@ atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stá
 službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
 klíči byly odmítnuty.
 
+Klient–server enrollment **reuse/adaptuje `Administration`, federační Ed25519
+identitu, existující per-peer CA v `NetworkBackend` a HTTPS `WebHandler`**.
+Serverový access key slouží jen jako jednorázový bootstrap a neukládá se na
+desktopu; odpověď je navíc připnutá a podepsaná node identitou. Account binding
+je verzovaný v Git registru, zatímco node credential a jeho digest zůstávají v
+node-local úložištích. Ruční přepnutí klient–server trustu, druhá databáze
+uživatelů a ukládání serverového access key byly odmítnuty.
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a

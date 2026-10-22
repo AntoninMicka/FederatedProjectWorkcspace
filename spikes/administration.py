@@ -80,34 +80,37 @@ class Administration:
             git.run('init', '--bare', '--template=', '--initial-branch=main')
             head = git.run('rev-parse', '--verify', 'refs/heads/main', check=False)
             if head.returncode:
-                state = {'schema_version': 4, 'node_id': node['id'], 'users': [],
+                state = {'schema_version': 5, 'node_id': node['id'], 'users': [],
                          'peers': [], 'mappings': [], 'replications': []}
                 commit = self.publish(git, state, None)
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
             self.validate(state, node['id'])
-            if state['schema_version'] < 4:
+            if state['schema_version'] < 5:
                 state = dict(state)
                 if state['schema_version'] == 1:
                     state['mappings'] = []
                 if state['schema_version'] < 3:
                     state['replications'] = []
-                state['peers'] = [dict(peer, relationship_type='legacy',
-                                       local_role=None)
+                if state['schema_version'] < 4:
+                    state['peers'] = [dict(peer, relationship_type='legacy',
+                                           local_role=None)
+                                      for peer in state['peers']]
+                state['peers'] = [dict(peer, account_binding=None)
                                   for peer in state['peers']]
-                state['schema_version'] = 4
+                state['schema_version'] = 5
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
     def validate(self, state, node_id):
         version = state.get('schema_version')
         expected = {'schema_version', 'node_id', 'users', 'peers'}
-        if version in {2, 3, 4}:
+        if version in {2, 3, 4, 5}:
             expected.add('mappings')
-        if version in {3, 4}:
+        if version in {3, 4, 5}:
             expected.add('replications')
-        if set(state) != expected or type(version) is not int or version not in {1, 2, 3, 4} or state['node_id'] != node_id:
+        if set(state) != expected or type(version) is not int or version not in {1, 2, 3, 4, 5} or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:
@@ -130,8 +133,10 @@ class Administration:
         for peer in state['peers']:
             expected_peer = {'id', 'name', 'endpoint', 'fingerprint', 'trust',
                              'revision'}
-            if version == 4:
+            if version in {4, 5}:
                 expected_peer |= {'relationship_type', 'local_role'}
+            if version == 5:
+                expected_peer.add('account_binding')
             if set(peer) != expected_peer:
                 raise ValueError('Invalid peer fields')
             identifier(peer['id']); label(peer['name'])
@@ -149,6 +154,16 @@ class Administration:
                     raise ValueError('Dynamic client must not have an endpoint')
             else:
                 self.endpoint(peer['endpoint'])
+            binding = peer.get('account_binding')
+            if binding is not None:
+                if (relationship != 'client-server' or peer['trust'] != 'approved'
+                        or not isinstance(binding, dict)
+                        or set(binding) != {'local_user_id', 'remote_user_id'}):
+                    raise ValueError('Invalid client-server account binding')
+                identifier(binding['local_user_id'])
+                identifier(binding['remote_user_id'])
+            elif relationship == 'client-server' and peer['trust'] == 'approved':
+                raise ValueError('Approved client-server peer requires account binding')
             if peer['id'] == node_id or peer['id'] in seen or peer['trust'] not in {'pending', 'approved', 'revoked'}:
                 raise ValueError('Invalid peer identity/trust')
             seen.add(peer['id'])
@@ -567,6 +582,51 @@ class Administration:
         sync_dir(self.root)
         return reference, token
 
+    def issue_node_credential(self, peer_id, local_user_id, remote_user_id):
+        """Rotate one enrollment-only credential outside the Git registry."""
+        identifier(peer_id); identifier(local_user_id); identifier(remote_user_id)
+        token = secrets.token_urlsafe(32)
+        path = self.root / 'node-credentials.sqlite'
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        info = os.fstat(fd); os.close(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077):
+            raise ValueError('Unsafe node credential store')
+        with closing(sqlite3.connect(path)) as db, db:
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE IF NOT EXISTS node_credentials '
+                       '(peer_id TEXT PRIMARY KEY, local_user_id TEXT NOT NULL, '
+                       'remote_user_id TEXT NOT NULL, digest TEXT NOT NULL, revision INTEGER NOT NULL)')
+            previous = db.execute(
+                'SELECT revision FROM node_credentials WHERE peer_id=?',
+                (peer_id,)).fetchone()
+            revision = previous[0] + 1 if previous else 1
+            db.execute('INSERT OR REPLACE INTO node_credentials VALUES (?, ?, ?, ?, ?)',
+                       (peer_id, local_user_id, remote_user_id,
+                        hashlib.sha256(token.encode()).hexdigest(), revision))
+        sync_dir(self.root)
+        return token, revision
+
+    def revoke_node_credential(self, peer_id):
+        identifier(peer_id)
+        path = self.root / 'node-credentials.sqlite'
+        if path.exists():
+            if path.is_symlink():
+                raise ValueError('Unsafe node credentials')
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute('DELETE FROM node_credentials WHERE peer_id=?', (peer_id,))
+            sync_dir(self.root)
+        network_root = self.node.parent / ('.' + self.node.name + '.network')
+        token = network_root / (peer_id + '-enrollment.token')
+        if os.path.lexists(token):
+            if network_root != network_root.resolve():
+                raise ValueError('Unsafe network credential directory')
+            info = token.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077):
+                raise ValueError('Unsafe client enrollment credential')
+            token.unlink(); sync_dir(network_root)
+
     def authenticate(self, auth):
         if self.deployment == 'desktop':
             return None  # Native process token/OS session only, no foreign account login.
@@ -656,7 +716,8 @@ class Administration:
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
                     'trust': 'pending', 'revision': 1,
-                    'relationship_type': 'legacy', 'local_role': None})
+                    'relationship_type': 'legacy', 'local_role': None,
+                    'account_binding': None})
             elif action == 'add-peer-relationship' and set(request) == {
                     'action', 'expected_commit', 'node_id', 'name', 'endpoint',
                     'fingerprint', 'relationship_type'}:
@@ -673,7 +734,8 @@ class Administration:
                     'endpoint': self.endpoint(request['endpoint']),
                     'fingerprint': request['fingerprint'].lower(),
                     'trust': 'pending', 'revision': 1,
-                    'relationship_type': 'p2p', 'local_role': 'peer'})
+                    'relationship_type': 'p2p', 'local_role': 'peer',
+                    'account_binding': None})
             elif action == 'convert-peer' and set(request) == {
                     'action', 'expected_commit', 'node_id',
                     'relationship_type'}:
@@ -695,7 +757,8 @@ class Administration:
                     local_role=local_role,
                     endpoint=(None if local_role == 'server'
                               else peer['endpoint']),
-                    trust='pending', revision=peer['revision'] + 1)
+                    trust='pending', account_binding=None,
+                    revision=peer['revision'] + 1)
             elif action == 'update-peer' and set(request) == {
                     'action', 'expected_commit', 'node_id', 'name', 'endpoint', 'trust'}:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
@@ -705,7 +768,8 @@ class Administration:
                 if peer['relationship_type'] == 'legacy':
                     raise ValueError('Legacy relationship must be converted or removed')
                 if (peer['relationship_type'] == 'client-server'
-                        and request['trust'] == 'approved'):
+                        and request['trust'] == 'approved'
+                        and peer['trust'] != 'approved'):
                     raise AccessDenied(
                         'Client-server trust is established by login')
                 name = label(request['name'])
@@ -718,7 +782,9 @@ class Administration:
                 peer.update(name=name, endpoint=endpoint, trust=request['trust'],
                             revision=peer['revision'] + 1)
                 if request['trust'] == 'revoked':
+                    peer['account_binding'] = None
                     self.revoke_peer_dependents(state, node, peer['id'])
+                    self.revoke_node_credential(peer['id'])
             elif action == 'update-peer-endpoint' and set(request) == {'action', 'expected_commit', 'node_id', 'endpoint'}:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or peer['trust'] != 'approved':
@@ -734,12 +800,15 @@ class Administration:
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid trust change')
                 if (peer.get('relationship_type') == 'client-server'
-                        and request['trust'] == 'approved'):
+                        and request['trust'] == 'approved'
+                        and peer['trust'] != 'approved'):
                     raise AccessDenied(
                         'Client-server trust is established by login')
                 peer.update(trust=request['trust'], revision=peer['revision'] + 1)
                 if request['trust'] == 'revoked':
+                    peer['account_binding'] = None
                     self.revoke_peer_dependents(state, node, peer['id'])
+                    self.revoke_node_credential(peer['id'])
             elif action in {'propose-mapping', 'confirm-mapping', 'revoke-mapping', 'import-mapping'}:
                 export = self.mapping_request(state, node, request)
                 if action in {'revoke-mapping', 'import-mapping'}:

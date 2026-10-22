@@ -137,8 +137,9 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   odvolá dosavadní mapování i replikační granty a vrátí trust do `pending`;
   P2P lze ručně založit jen mezi servery. Přihlášení desktopového klienta k
   serveru, vydání node credentialu a automatické mapování serverového účtu je
-  výslovně navazující řez a současné UI je nesmí předstírat. Kontrakt, migraci
-  registru v1–v3 na v4 a crash/recovery hranice definuje ADR 0039. Registry
+  výslovně navazující řez a současné UI je nesmí předstírat. Kontrakt, tehdejší
+  migraci registru v1–v3 na v4 a crash/recovery hranice definuje ADR 0039;
+  enrollment registr následně zvyšuje na v5. Registry
   validátor vynucuje přípustnou kombinaci typu, lokální role a endpointu;
   klient–server nelze ručně založit ani schválit. Cílené ověření migrací,
   převodu a revokace: **12 testů úspěšně**; vygenerovaný JavaScript prošel
@@ -159,6 +160,21 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   Vygenerovaný JavaScript prošel `node --check` a změněné Python moduly
   `py_compile`. Úplná sada po změně: **718 testů, OK (28 přeskočeno)**;
   přeskočené scénáře vyžadují volitelné závislosti nebo fyzický WebEngine.
+- [ ] [in progress] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
+  úroveň: implemented).** Desktop dokončí pending klient–server vztah
+  přihlášením existujícím serverovým účtem přes ověřené TLS. Podepsaný
+  požadavek připne node key klienta; server bez druhého ručního schválení uloží
+  oboustrannou účetní vazbu, vydá oddělený node credential a vrátí odpověď
+  podepsanou připnutou identitou serveru. Serverový access key se na desktopu
+  neukládá a enrollment nezakládá projektová práva ani replikační grant.
+  Registry schema v5 odděluje `account_binding` od projektových mapování.
+  Serverový commit, vydání/rotace credentialu, jeho lokální uložení a klientský
+  commit jsou samostatné persistentní hranice; ztracená odpověď a opakování se
+  dorovnají vpřed bez duplicitního peeru. Cílené enrollment, registry a
+  mapovací ověření: **28 testů úspěšně** včetně skutečného loopback TLS,
+  chybného klíče, rotace, revokace, změny účtu a ztracené odpovědi. Úplná sada:
+  **721 testů, OK (28 přeskočeno)**. Zbývá fyzicky potvrdit přihlášení desktopu
+  ke skutečnému serveru; do té doby úkol zůstává `in progress`.
 
 ## K předání do backlogu
 
@@ -169,16 +185,6 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   odvodit mapování z enrollmentu. Doplnit filtr podle uživatele a uzlu a pro
   mobil použít lineární seznam bez vnořeného vodorovného scrollování. Tato
   položka není podmínkou dokončení současné dávky.
-- [ ] [planned] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
-  úroveň: implemented).** Podle ADR 0039 nahradit dočasnou hlášku skutečným
-  přihlášením desktopového klienta serverovým účtem přes ověřené TLS. Připnout
-  node key klienta, vydat omezený obnovitelný node credential a atomicky
-  vytvořit explicitní mapování lokální desktopové identity na přihlášený účet;
-  heslo ani dlouhodobý uživatelský access key neukládat. Pokrýt odvolání,
-  rotaci, ztracenou odpověď, opakování, změnu serverového účtu a fyzický
-  desktop ↔ server scénář. Tato položka není podmínkou dokončení současné
-  dávky.
-
 ## Akceptační podmínky
 
 - synchronizace nezačne pouhou dosažitelností nebo schválením peeru, ale až po

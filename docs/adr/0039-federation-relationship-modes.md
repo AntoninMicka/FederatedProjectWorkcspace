@@ -5,8 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0039 — Typy federačních vztahů P2P a klient–server
 
-Datum: 2026-10-22. Stav: přijato; registr a správa vztahů jsou implementovány,
-enrollment klient–server zatím ne.
+Datum: 2026-10-22. Stav: přijato a implementováno pro odlehčený osobní režim.
 
 ## Kontext
 
@@ -38,17 +37,27 @@ Nový klient–server vztah vznikne až přihlášením klienta existujícím se
 účtem přes důvěryhodné TLS. Enrollment následně připne node key klienta,
 vydá omezený obnovitelný credential a vytvoří explicitní vazbu lokální identity
 desktopu na serverový účet. Původní heslo ani dlouhodobý uživatelský access key
-se na klientovi neukládají. Tento protokol je navazující implementační řez;
-současný editor jej nesmí nahrazovat ručním schválením.
+se na klientovi neukládají. Desktop podepíše jednorázový požadavek svou
+federační identitou a server vrátí podepsanou odpověď vázanou na oba uzly, oba
+účty a operation UUID. Serverový access key je pouze bootstrap autentizace;
+desktop jej po požadavku zahodí. Samostatný node credential zůstává mimo Git,
+je omezený na budoucí obnovu klientského vztahu a opakované přihlášení jej
+rotuje. Enrollment nevytváří projektová oprávnění ani replikační grant.
 
 ## Migrace a bezpečnost převodu
 
-Schéma registračního Git dokumentu se zvyšuje na verzi 4. Načtení verzí 1–3
+Schéma registračního Git dokumentu se zvyšuje na verzi 5. Načtení verzí 1–3
 přidá každému peeru `relationship_type: legacy` a `local_role: null`; účty,
 endpoint, pin, mapování a replikační záznamy zachová. Migrace publikuje jediný
 nový Git commit pod stávajícím flockem a CAS refu. Pád před změnou refu ponechá
 platné staré schéma a další otevření migraci zopakuje; po změně refu je commit
 autoritativní a žádný samostatný index se neopravuje.
+
+Migrace verze 4 na 5 přidá `account_binding: null`. Schválený vztah
+`client-server` musí mít přesnou dvojici `local_user_id` a `remote_user_id`;
+P2P a legacy ji mít nesmí. Na serveru může přihlášení vytvořit nový klientský
+peer nebo dokončit existující odpovídající pending záznam. Již připnutý jiný
+klíč, odvolaný peer nebo vazba na jiný serverový účet se odmítne.
 
 Převod legacy vztahu je jedna atomická revize registru. Nejprve vytvoří
 podepsané revokační tombstones všech navázaných mapování a replikací a vypne
@@ -59,12 +68,27 @@ historii; žádné existující oprávnění se automaticky nepřenese do novéh
 
 ## Důsledky a omezení
 
-Tabulka federace zobrazuje typ a směr vztahu. Nové ruční založení je v tomto
-řezu povoleno jen pro P2P na serveru. Desktop tlačítko Přidat pravdivě odkazuje
-na chybějící přihlašovací krok a klient–server nelze ručně přepnout do
-`approved`. Dokud enrollment nebude implementovaný, převedený klient–server
-vztah zůstane `pending` a nemůže autorizovat mapování ani přenos.
+Tabulka federace zobrazuje typ a směr vztahu. Nové ruční založení je povoleno
+jen pro P2P na serveru. Klient–server nelze ručně přepnout do `approved`;
+pending desktop vztah dokončí akce Přihlásit k serveru. Server vztah založí
+nebo dokončí z ověřeného přihlášení klienta a nečeká na druhé ruční schválení.
 
 Legacy kompatibilita je dočasná, aby upgrade nezastavil existující osobní
 replikaci bez rozhodnutí správce. Její budoucí odstranění vyžaduje samostatnou
 migraci a důkaz, že nezůstaly aktivní staré vztahy.
+
+## Persistentní hranice enrollmentu a recovery
+
+Server nejprve pod svým registry lockem publikuje schválený peer a účetní
+vazbu, potom v lokální SQLite databázi vydá nebo otočí hashovaný node
+credential. Pád mezi těmito kroky může zanechat schválený vztah bez
+credentialu, nikoli credential s širšími právy; stejné přihlášení bezpečně
+vydá nový credential bez druhého peeru.
+
+Klient nejprve ověří TLS, připnutý serverový node key, podpis odpovědi a přesná
+ID požadavku. Potom atomicky uloží node credential mimo Git a teprve následně
+publikuje lokální `approved` a `account_binding`. Pád po serverovém commitu,
+ztracená odpověď nebo pád po uložení credentialu se řeší zopakováním stejného
+enrollmentu; server credential otočí a oba registry se dorovnají vpřed.
+Odvolání peeru smaže lokálně dostupný node credential, zruší účetní vazbu a
+nadále používá existující podepsané tombstones mapování a replikací.
