@@ -31,6 +31,12 @@ tvářit jako specializovaný uzel s capability `identity-authority`, ale tím
 nezískává capability projektového úložiště. Úplná LDAP/SCIM, OIDC a WebAuthn/TOTP
 integrace je odložena do `AUTH-CENTRAL-01`.
 
+Lokálně autoritativní účet smí získat správní pravomoc nejvýše `node-admin`.
+Role `network-group-admin` a `network-admin`, které působí nad hranicí jednoho
+uzlu, jsou platné pouze jako aktuální, ověřitelné tvrzení centrálního registru.
+Lokální kopie takového tvrzení je pouze časově omezená projekce podle offline
+pravidel níže; uzel ji nesmí vydat, povýšit ani po expiraci prodloužit.
+
 Model rozlišuje:
 
 - **network group** — schválenou množinu uzlů se společnou správou;
@@ -55,6 +61,17 @@ Kanonické role budou verzované; pracovní názvy odpovídají uživatelskému 
   nichž lze skupině udělit přístup zvenku;
 - `user` řídí sdílení vlastních projektů; delegovaný `project-admin` může řídit
   projekt pouze v rozsahu výslovného projektu a udělených akcí.
+
+Strop `node-admin` se týká autority lokálního účtu, nikoli pořadí všech rolí na
+jedné ose: `group-admin` a `project-admin` jsou užší delegace omezené konkrétní
+user group nebo projektem. Vyšší federační role `network-group-admin` a
+`network-admin` bez centrálního registru nevznikají.
+
+Federaci ostrovních uzlů bez centrálního registru řídí jejich `node-admin`.
+Každý rozhoduje pouze za vlastní uzel; společný federační stav vzniká z
+ověřených uzlových rozhodnutí, nikoli tím, že by se lokální správce jednoho uzlu
+prohlásil za správce celé sítě. Přesný podpisový a quorum kontrakt zůstává
+součástí návrhu policy a automatické federace.
 
 Správní role samy neudělují `read`, `write` ani `export` k projektovým datům.
 `network-admin`, `network-group-admin` a `node-admin` mohou připravit cestu a
@@ -96,11 +113,12 @@ ochrana dat v klidu tím nejsou zrušeny.
 
 Podepsaná projekce identity, členství a politiky je bez spojení platná osm hodin.
 Předem schválená policy smí limit zvýšit nejvýše na 24 hodin; vypršelá autorita
-si nesmí sama prodloužit platnost během výpadku. Přesné rozdělení pravomoci mezi
-`network-group-admin` a `node-admin` uzavře finální policy kontrakt. Během
-offline okna lze používat poslední dovolená práva, ale nové exporty, zvýšení
-oprávnění a změny federace vyžadují aktuální autoritu. Po expiraci se nové
-účinky zastaví a rozpracovaný stav se zachová pro bezpečné pokračování.
+si nesmí sama prodloužit platnost během výpadku. Centrálně vydané role
+`network-group-admin` a `network-admin` lze během tohoto okna použít pouze v
+posledním dovoleném rozsahu. Bez centrálního registru řídí ostrovní federaci
+`node-admin` jednotlivých uzlů. Nové exporty, zvýšení oprávnění a změny federace
+vyžadují aktuální autoritu. Po expiraci se nové účinky zastaví a rozpracovaný
+stav se zachová pro bezpečné pokračování.
 
 Revokace zastaví budoucí přenosy a přístupy a může vyžádat best-effort odstranění
 spravované repliky s potvrzením. Potvrzení nedokládá smazání nezávislé kopie,

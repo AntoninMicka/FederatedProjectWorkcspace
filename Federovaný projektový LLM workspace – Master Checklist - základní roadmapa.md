@@ -404,12 +404,18 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 ## 5B. Role uživatelů
 
 - [ ] Minimální RBAC:
-  - [ ] federation-admin,
+  - [ ] federation-admin (stávající runtime role; migrovat na cílové role
+    ADR 0037),
   - [ ] node-admin,
   - [ ] project-admin,
   - [ ] editor,
   - [ ] reviewer,
   - [ ] reader.
+- [ ] Cílové federační role rozlišují `network-admin`,
+  `network-group-admin`, `node-admin`, `group-admin`, `project-admin` a `user`.
+  Lokální autorita smí vydat nejvýše `node-admin`; role působící nad
+  hranicí uzlu vyžadují centrální registr. Bez něj spravují ostrovní
+  federaci `node-admin` jednotlivých uzlů bez globální správní role.
 - [ ] Oprávnění řídit minimálně pro:
   - [ ] projekty,
   - [ ] soubory,
@@ -441,7 +447,7 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat capability profil federačního vztahu `same-company-same-team`, `same-company`, `trusted-partner`, `holding-partner` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčený profil zůstává explicitně `unspecified` a je fail-closed.
 - [ ] `same-company-same-team` smí federovat identity uživatelů a jejich projektové role; credentials, session a vzdálené přihlášení zůstávají lokální. `same-company` federuje data, ale vzdálené uživatele pouze eviduje pro provenance a audit, nepřebírá je jako lokální účty ani nesynchronizuje jejich role.
 - [ ] Zachovat způsob nasazení serveru jako auditní/bootstrap provenance, nikoli jako neměnný capability strop. Server instalovaný desktopem lze explicitně převést na obecný víceuživatelský uzel. Jeden fyzický desktop je jeden uzel se systémovou node službou; jednotlivé UI instance jednají pouze za právě přihlášené OS uživatele.
-- [ ] Rozlišit `network-admin`, `network-group-admin`, `node-admin`, `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy neudělují čtení projektů; transport vyžaduje průnik uzlové a projektové policy.
+- [ ] Rozlišit `network-admin`, `network-group-admin`, `node-admin`, `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy neudělují čtení projektů; transport vyžaduje průnik uzlové a projektové policy. Lokální účet smí být nejvýše `node-admin`; `network-group-admin` a `network-admin` vyžadují centrální registr. Bez něj řídí ostrovní federaci `node-admin` jednotlivých uzlů pouze v rozsahu jejich uzlu.
 - [ ] Kvalifikovat identity autoritou, například `U1@A`; lokální projekce na jiném uzlu zachová stejného principalu a nepřenáší credentials, MFA secrets ani session.
 - [ ] `trusted-partner` smí obdržet jen vybraná data konkrétně mapovanými příjemci. `holding-partner` smí obdržet jen vybraná data, ale grant lze udělit také ověřené společnosti jako celku; členství společnosti musí být časově vymezené a verzované. `partner` má jen chat a obsah explicitně odeslaný nebo nasdílený uživatelem, bez background synchronizace a procházení projektu.
 - [ ] Pro `trusted-partner` a `holding-partner` určit na přijímajícím uzlu aktivního místního styčného uživatele. Převzatá data nezpřístupnit ostatním automaticky; styčný uživatel jim přiděluje a odnímá lokální práva jen jako podmnožinu origin ACL, privacy, povolených akcí a exportních omezení. Jeho určení, výměna, deaktivace a změny grantů jsou verzované a auditované; bez aktivního styčného uživatele se nové granty odmítnou.

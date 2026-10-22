@@ -203,10 +203,13 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 
   Zavést role `network-admin`, `network-group-admin`, `node-admin`,
   `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy
-  nezpřístupňují projektová data. Oddělit network groups, user groups,
-  replication sets a project ACL. Automatická replikace začne až vědomým
-  zařazením projektu do replication setu; první režim je jeden primární
-  zapisující uzel a automatické read-only repliky.
+  nezpřístupňují projektová data. Lokální účet může být nejvýše `node-admin`;
+  role `network-group-admin` a `network-admin` musí vydat centrální registr.
+  Ostrovní federaci bez registru řídí `node-admin` jednotlivých uzlů, každý jen
+  za vlastní uzel. Oddělit network groups, user groups, replication sets a
+  project ACL. Automatická replikace začne až vědomým zařazením projektu do
+  replication setu; první režim je jeden primární zapisující uzel a automatické
+  read-only repliky.
 
   Pro `trusted-partner` a `holding-partner` určit aktivního místního styčného
   uživatele přijímajícího uzlu, který auditovatelně přiděluje práva k převzatým

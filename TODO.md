@@ -32,7 +32,10 @@ synchronizaci a nemění běžící uzly.
   jej přepsat na nový účet nebo převzít autoritu nad jeho credentials. Model
   musí zůstat kompatibilní s budoucí centrální autoritou identity, její úplná
   integrace však není podmínkou této dávky. Credentials, MFA secrets a session
-  se nefederují ani nekopírují do projektových uzlů.
+  se nefederují ani nekopírují do projektových uzlů. Lokální účet smí být
+  nejvýše `node-admin`; `network-group-admin` a `network-admin` vyžadují
+  ověřitelné tvrzení centrálního registru. Bez něj řídí ostrovní federaci
+  `node-admin` zúčastněných uzlů, každý pouze v rozsahu svého uzlu.
 - [ ] [planned] **UX-FEDERATION-02-C — jednotný policy model
   (cílová úroveň: designed).** Jedním verzovaným a vysvětlitelným enginem
   vyhodnotit lokální ACL, export, příjem, další delegaci a automatickou
@@ -61,6 +64,8 @@ synchronizaci a nemění běžící uzly.
   přihlášeného OS uživatele a nesdílí uživatelské credentials ani session;
 - každá identita se váže na stabilní dvojici autorita/subjekt; lokální projekce
   na jiném uzlu zachová stejného principalu a neudělá z něj novou autoritu;
+- lokální účet nelze povýšit nad `node-admin`; role s pravomocí nad více uzly
+  vyžadují centrální registr a ostrovní režim je nevytváří ani nenapodobuje;
 - ADR, roadmapa a backlog popisují migraci i pořadí implementace bez tvrzení,
   že návrh už představuje funkční federaci nebo plnohodnotné přihlášení.
 
@@ -77,5 +82,7 @@ nejsou nyní důvodem přidávat další capability omezení ani blokovat dávku
   pouze bounded lokální projekci pro autorizaci, provenance a offline čtení.
   Oddělit adresář/provisioning (např. LDAP/SCIM), autentizační assertions
   (např. OIDC) a lifecycle WebAuthn/TOTP autentizátorů. Definovat TTL, revokaci,
-  návrat centrální služby a nouzový účet uzlu. Hesla, jejich digesty, MFA
-  secrets ani session se na uzly jako záložní kopie nereplikují.
+  návrat centrální služby a nouzový účet uzlu. Registr je nutnou autoritou pro
+  vydání rolí `network-group-admin` a `network-admin`; uzel jejich platné claims
+  pouze projektuje. Hesla, jejich digesty, MFA secrets ani session se na uzly
+  jako záložní kopie nereplikují.
