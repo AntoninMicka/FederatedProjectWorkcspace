@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import copy
+import hashlib
 import http.client
 from http.server import HTTPServer
+import ssl
 import json
 from pathlib import Path
 import subprocess
@@ -20,14 +22,20 @@ from spikes.project_repair import ProjectDiagnostics
 from spikes.projects import Projects
 from spikes.project_replication import (
     CONTENT_TYPE, PATH as REPLICATION_PATH, ReplicationConflict,
-    ReplicationReceiver,
-    decode_body, encode_body, prepare, send,
+    ReplicationReceiver, _signature,
+    decode_body, encode_body, prepare, send, validate_request,
 )
 from spikes.replication_control import ReplicationControl
-from spikes.network_backend import ProbeHandler
+from spikes.network_backend import NetworkBackend, ProbeHandler, trust_ca
 from spikes.source_import import Sources, request_from_file
 from spikes.storage import Git
 from spikes.workspace import PendingOperation
+from spikes.web_server import WebServer
+
+
+class AllowLoopback:
+    def allows(self, peer):
+        return peer.is_loopback
 
 
 class ProjectReplicationTests(unittest.TestCase):
@@ -86,6 +94,46 @@ class ProjectReplicationTests(unittest.TestCase):
         for index in (0, 1):
             self.change(index, action='set-replication-enabled',
                         replication_id=self.replication_id, enabled=True)
+        self.network_servers = []
+        self.addCleanup(self.stop_network_servers)
+
+    def stop_network_servers(self):
+        for server, thread, running in reversed(self.network_servers):
+            if running[0]:
+                server.shutdown()
+                thread.join(timeout=5)
+                running[0] = False
+            server.server_close()
+
+    def https_replica(self, tls_config=None):
+        if tls_config is None:
+            tls_config = NetworkBackend(self.nodes[1]).generate(
+                '127.0.0.1', 8443, '127.0.0.0/8')
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(tls_config['cert'], tls_config['key'])
+        server = WebServer(('127.0.0.1', 0), ProbeHandler)
+        server.tls = context
+        server.hostname = None
+        server.application_access = AllowLoopback()
+        server.node = self.nodes[1]
+        server.administration = self.services[1]
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        running = [True]
+        self.network_servers.append((server, thread, running))
+        endpoint = 'https://127.0.0.1:' + str(server.server_port)
+        self.change(0, action='update-peer-endpoint', node_id=self.node_ids[1],
+                    endpoint=endpoint)
+        trust_ca(self.nodes[0], self.node_ids[1], Path(tls_config['ca']).read_bytes())
+        return server, thread, running, tls_config
+
+    @staticmethod
+    def stop_network_server(server, thread, running):
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+        running[0] = False
 
     def state(self, index):
         return self.services[index].request(self.actors[index], {'action': 'list'})
@@ -274,6 +322,28 @@ class ProjectReplicationTests(unittest.TestCase):
             Git(self.nodes[0].parent / 'project').head(), self.project_id,
             frozenset({'public', 'project'})), 2)
 
+    def test_signed_thin_bundle_without_base_is_rejected_without_ref_change(self):
+        base = self.import_source('thin-base')
+        initial, payload, _, _ = self.prepared(None)
+        self.receive(initial, payload)
+        candidate = self.import_source('thin-candidate')
+        valid, _, _, _ = self.prepared(base)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'thin.bundle'
+            Git(self.nodes[0].parent / 'project').run(
+                'bundle', 'create', str(path), 'refs/heads/main', '^' + base)
+            thin = path.read_bytes()
+        request = validate_request(dict(
+            valid['request'], bundle_size=len(thin),
+            bundle_sha256=hashlib.sha256(thin).hexdigest()))
+        envelope = _signature(
+            self.services[0].root, request, self.node_ids[0], 'request')
+        with self.assertRaises((ValueError, subprocess.SubprocessError)):
+            self.receive(envelope, thin)
+        destination = self.nodes[1].parent / 'projects' / ('project-' + self.project_id)
+        self.assertEqual(Git(destination).head(), base)
+        self.assertNotEqual(Git(destination).head(), candidate)
+
     def test_bounded_binary_endpoint_uses_node_signature_not_browser_token(self):
         base = self.import_source('base')
         initial, payload, _, _ = self.prepared(None)
@@ -345,6 +415,58 @@ class ProjectReplicationTests(unittest.TestCase):
         self.assertEqual(retry['request']['candidate_head'], first)
         self.assertEqual(retry['request'], envelope['request'])
         self.assertEqual(retry_payload, payload)
+
+    def test_tls_control_lifecycle_survives_restart_offline_stop_and_revocation(self):
+        first = self.import_source('first-live')
+        server, thread, running, tls_config = self.https_replica()
+        control = ReplicationControl(self.nodes[0], deployment='web')
+        result = control.synchronize(self.replication_id)
+        self.assertEqual(result['state'], 'idle')
+        self.assertEqual(result['last_head'], first)
+        destination = self.nodes[1].parent / 'projects' / ('project-' + self.project_id)
+        self.assertEqual(Git(destination).head(), first)
+
+        # A new control instance represents a process restart and must use the
+        # durable last successful HEAD for the next fast-forward.
+        second = self.import_source('second-live')
+        restarted = ReplicationControl(self.nodes[0], deployment='web')
+        self.assertEqual(restarted.synchronize(self.replication_id)['last_head'], second)
+        self.assertEqual(Git(destination).head(), second)
+
+        third = self.import_source('offline-live')
+        self.stop_network_server(server, thread, running)
+        with self.assertRaises(OSError):
+            restarted.synchronize(self.replication_id)
+        offline = ReplicationControl(self.nodes[0], deployment='web').statuses(
+            self.state(0)['replications'], self.node_ids[0])[self.replication_id]
+        self.assertEqual(offline['state'], 'offline')
+        pending_operation = offline['operation_id']
+
+        # The endpoint may change while the exact saved operation and bundle
+        # remain authoritative for retry after the peer returns.
+        _, _, _, tls_config = self.https_replica(tls_config)
+        recovered = ReplicationControl(self.nodes[0], deployment='web').synchronize(
+            self.replication_id)
+        self.assertEqual(recovered['operation_id'], pending_operation)
+        self.assertEqual(recovered['last_head'], third)
+        self.assertEqual(Git(destination).head(), third)
+
+        stopped = self.import_source('stopped-live')
+        self.change(0, action='set-replication-enabled',
+                    replication_id=self.replication_id, enabled=False)
+        ReplicationControl(self.nodes[0], deployment='web').run_enabled()
+        self.assertNotEqual(Git(destination).head(), stopped)
+        with self.assertRaises(AccessDenied):
+            restarted.synchronize(self.replication_id)
+
+        self.change(0, action='revoke-replication',
+                    replication_id=self.replication_id)
+        revoked_control = ReplicationControl(self.nodes[0], deployment='web')
+        revoked_control.run_enabled()
+        self.assertNotEqual(Git(destination).head(), stopped)
+        status = revoked_control.statuses(
+            self.state(0)['replications'], self.node_ids[0])[self.replication_id]
+        self.assertEqual(status['state'], 'revoked')
 
 
 if __name__ == '__main__':

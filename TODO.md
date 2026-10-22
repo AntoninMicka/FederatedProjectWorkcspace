@@ -88,12 +88,27 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   a účtové ověření: **25 testů úspěšně**; širší sdílené UI/API ověření:
   **98 testů úspěšně, 6 přeskočeno**. Úplná sada: **709 testů úspěšně,
   28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
-- [ ] [planned] **F-M5-PERSONAL-SYNC-01-E — automatické a fyzické ověření
+- [ ] [blocked] **F-M5-PERSONAL-SYNC-01-E — automatické a fyzické ověření
   (cílová úroveň: PoC validated).** Pokrýt první přenos, následný fast-forward,
   restart na persistentních hranicích, offline návrat, idempotentní retry,
   zastavení/revokaci, změněný HEAD, neúplnou historii, `local-only`, neplatný
   kandidát a divergenci bez přepsání cíle. Nakonec ověřit desktopový a
   LXC/serverový uzel se skutečným projektem a zaznamenat zbývající omezení.
+  Automatický TLS integrační scénář nyní bez mocku transportu ověřuje první
+  repliku, nový control po restartu, následný fast-forward, offline stav,
+  retry stejného durable operation ID po návratu peeru, zastavení a revokaci
+  bez další změny repliky. Samostatný podepsaný thin bundle bez base commitu se
+  odmítne bez změny replica refu; dřívější testy dále pokrývají crash hranice,
+  tampering, změněný HEAD, divergenci a `local-only`. Cílená sada:
+  **13 testů úspěšně**. Úplná sada: **711 testů úspěšně, 28 přeskočeno**.
+  Fyzická příprava 22. 10. 2026 ověřila TLS i podepsanou identitu existujícího
+  LXC peeru a projekt `Pokus` jako čistou přenositelnou historii tří commitů.
+  Vzdálená replikační cesta však vrací HTTP 401 místo protokolového 413, takže
+  LXC dosud nemá tuto verzi endpointu; SSH aktualizace skončila `Permission
+  denied`. Odblokování: nasadit aktuální feature verzi na LXC přes desktopové
+  nasazení nebo s dostupnými SSH credentials, potom vytvořit oboustranné
+  mapování/grant a fyzicky potvrdit první přenos, fast-forward a offline návrat.
+  Při kontrole nebyl vytvořen grant ani změněn desktopový či LXC projekt.
 
 ## Akceptační podmínky
 
