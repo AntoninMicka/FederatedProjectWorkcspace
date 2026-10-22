@@ -9,7 +9,10 @@ import unittest
 from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
-from spikes.federation_accounts import MappingSignatures, validate_rights
+from spikes.federation_accounts import (
+    MappingSignatures, ReplicationSignatures, validate_replication_spec,
+    validate_rights,
+)
 from spikes.project_creation import ProjectCreation
 
 
@@ -107,12 +110,13 @@ class MappingTests(unittest.TestCase):
 
     def test_v1_registry_migration_preserves_local_account_and_credentials(self):
         with self.a.locked() as (git,state,commit,_):
-            old={k:v for k,v in state.items() if k!='mappings'};old['schema_version']=1
+            old={k:v for k,v in state.items() if k not in {'mappings','replications'}};old['schema_version']=1
             self.a.publish(git,old,commit)
         restored=Administration(self.a.node)
         self.assertEqual(restored.authenticate('Bearer '+self.states[0]['access_key'])['id'],self.users[0])
         with restored.locked() as (_,state,_,_):
-            self.assertEqual(state['schema_version'],2);self.assertEqual(state['mappings'],[])
+            self.assertEqual(state['schema_version'],3);self.assertEqual(state['mappings'],[])
+            self.assertEqual(state['replications'],[])
 
     def test_native_api_has_one_user_and_rejects_foreign_credentials(self):
         import http.client
@@ -138,3 +142,127 @@ class MappingTests(unittest.TestCase):
         state=self.change(self.b,action='import-mapping',envelope=revocation)
         self.assertFalse(state['mappings'][0]['active']);self.assertIsNotNone(state['mappings'][0]['revocation'])
         with self.assertRaises(ValueError):self.change(self.b,action='import-mapping',envelope=confirmation)
+
+    def replication(self):
+        mapping, _ = self.bilateral()
+        self.actor['memberships'][self.project] = 'project-admin'
+        state = self.change(
+            self.a, action='propose-replication', mapping_id=mapping,
+            project_id=self.project, primary_node_id=self.states[0]['node_id'],
+            privacy=['confidential', 'project', 'public'])
+        replication = state['replications'][0]['spec']['id']
+        self.assertFalse(state['replications'][0]['authorized'])
+        self.assertFalse(state['replications'][0]['enabled'])
+        with self.assertRaises(AccessDenied):
+            self.change(self.a, action='set-replication-enabled',
+                        replication_id=replication, enabled=True)
+        state = self.change(self.a, action='confirm-replication',
+                            replication_id=replication)
+        primary_confirmation = state['replication_envelope']
+        state = self.change(self.b, action='import-replication',
+                            envelope=primary_confirmation)
+        state = self.change(self.b, action='confirm-replication',
+                            replication_id=replication)
+        replica_confirmation = state['replication_envelope']
+        self.assertTrue(state['replications'][0]['authorized'])
+        state = self.change(self.a, action='import-replication',
+                            envelope=replica_confirmation)
+        self.assertTrue(state['replications'][0]['authorized'])
+        return replication, primary_confirmation
+
+    def test_bilateral_replication_grant_requires_local_enable_on_each_node(self):
+        replication, _ = self.replication()
+        state = self.change(self.a, action='set-replication-enabled',
+                            replication_id=replication, enabled=True)
+        self.assertTrue(state['replications'][0]['active'])
+        first_commit = state['commit_id']
+        state = self.change(self.a, action='set-replication-enabled',
+                            replication_id=replication, enabled=True)
+        self.assertEqual(state['commit_id'], first_commit)
+        self.assertFalse(self.state(self.b)['replications'][0]['active'])
+        state = self.change(self.b, action='set-replication-enabled',
+                            replication_id=replication, enabled=True)
+        self.assertTrue(state['replications'][0]['active'])
+        spec = state['replications'][0]['spec']
+        self.assertEqual(spec['ref'], 'refs/heads/main')
+        self.assertEqual({node['role'] for node in spec['nodes']},
+                         {'primary', 'read-only-replica'})
+        self.assertNotIn('credential', json.dumps(state['replications']))
+        self.assertNotIn('access_key', json.dumps(state['replications']))
+        with self.assertRaises(ValueError):
+            self.change(self.a, action='set-replication-enabled',
+                        replication_id=str(uuid4()), enabled=True)
+
+    def test_replication_scope_is_fail_closed_and_domain_separated(self):
+        mapping, _ = self.bilateral()
+        with self.assertRaises(AccessDenied):
+            self.change(
+                self.a, action='propose-replication', mapping_id=mapping,
+                project_id=self.project, primary_node_id=self.states[0]['node_id'],
+                privacy=['project'])
+        self.actor['memberships'][self.project] = 'project-admin'
+        with self.assertRaises(ValueError):
+            self.change(
+                self.a, action='propose-replication', mapping_id=mapping,
+                project_id=self.project, primary_node_id=self.states[0]['node_id'],
+                privacy=['local-only'])
+        state = self.change(
+            self.a, action='propose-replication', mapping_id=mapping,
+            project_id=self.project, primary_node_id=self.states[0]['node_id'],
+            privacy=['project'])
+        replication = state['replications'][0]['spec']['id']
+        envelope = self.change(
+            self.a, action='confirm-replication',
+            replication_id=replication)['replication_envelope']
+        with self.assertRaises(ValueError):
+            MappingSignatures.verify(
+                envelope, self.states[0]['mapping_identity']['fingerprint'])
+        tampered = copy.deepcopy(envelope)
+        tampered['spec']['privacy'] = ['confidential']
+        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+            ReplicationSignatures.verify(
+                tampered, self.states[0]['mapping_identity']['fingerprint'])
+
+    def test_replication_revocation_is_durable_and_confirmation_cannot_replay(self):
+        replication, original = self.replication()
+        self.change(self.a, action='set-replication-enabled',
+                    replication_id=replication, enabled=True)
+        state = self.change(self.a, action='revoke-replication',
+                            replication_id=replication)
+        self.assertFalse(state['replications'][0]['enabled'])
+        self.assertFalse(state['replications'][0]['authorized'])
+        state = self.change(self.b, action='import-replication',
+                            envelope=state['replication_envelope'])
+        self.assertFalse(state['replications'][0]['active'])
+        with self.assertRaises(ValueError):
+            self.change(self.b, action='import-replication', envelope=original)
+
+    def test_v2_registry_migrates_without_changing_existing_mapping(self):
+        mapping, _ = self.bilateral()
+        with self.a.locked() as (git, state, commit, _):
+            old = {key: value for key, value in state.items()
+                   if key != 'replications'}
+            old['schema_version'] = 2
+            self.a.publish(git, old, commit)
+        with Administration(self.a.node).locked() as (_, state, _, _):
+            self.assertEqual(state['schema_version'], 3)
+            self.assertEqual(state['mappings'][0]['spec']['id'], mapping)
+            self.assertEqual(state['replications'], [])
+
+    def test_replication_spec_rejects_unknown_fields_and_noncanonical_privacy(self):
+        spec = {
+            'schema_version': 1, 'id': str(uuid4()), 'mapping_id': str(uuid4()),
+            'project_id': self.project, 'ref': 'refs/heads/main',
+            'nodes': sorted([
+                {'node_id': self.states[0]['node_id'], 'user_id': self.users[0],
+                 'role': 'primary', 'fingerprint': 'a' * 64,
+                 'identity_revision': 1},
+                {'node_id': self.states[1]['node_id'], 'user_id': self.users[1],
+                 'role': 'read-only-replica', 'fingerprint': 'b' * 64,
+                 'identity_revision': 1}], key=lambda node: node['node_id']),
+            'privacy': ['project', 'public'], 'actions': ['read', 'replicate']}
+        self.assertIs(validate_replication_spec(spec), spec)
+        malformed = copy.deepcopy(spec); malformed['privacy'] = ['public', 'project']
+        with self.assertRaises(ValueError): validate_replication_spec(malformed)
+        malformed = copy.deepcopy(spec); malformed['transport_token'] = 'secret'
+        with self.assertRaises(ValueError): validate_replication_spec(malformed)

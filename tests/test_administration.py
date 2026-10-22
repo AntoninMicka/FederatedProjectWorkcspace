@@ -49,7 +49,7 @@ class AdministrationTests(unittest.TestCase):
         self.assertIsNone(self.service.authenticate('Bearer '+key))
         self.assertEqual(Administration(self.node).request(self.actor, {'action':'list'})['users'], [])
 
-    def test_peer_requires_separate_approval_and_federation_admin(self):
+    def test_peer_requires_separate_approval_and_node_admin_can_manage_island(self):
         peer = str(uuid4())
         state = self.change(action='add-peer', node_id=peer, name='Desktop', endpoint='https://192.168.100.3:8443', fingerprint='a'*64)
         self.assertEqual(state['peers'][0]['trust'],'pending')
@@ -57,10 +57,11 @@ class AdministrationTests(unittest.TestCase):
         state = self.change(action='set-trust', node_id=peer, trust='approved')
         self.assertEqual(state['peers'][0]['trust'],'approved')
         node_admin = {'id':None, 'node_role':'node-admin', 'memberships':{}}
-        with self.assertRaises(AccessDenied):
-            self.service.request(node_admin, {'action':'set-trust','expected_commit':state['commit_id'],'node_id':peer,'trust':'revoked'})
-        state=self.change(action='set-trust',node_id=peer,trust='revoked')
+        state = self.service.request(node_admin, {
+            'action':'set-trust','expected_commit':state['commit_id'],
+            'node_id':peer,'trust':'revoked'})
         self.assertEqual(state['peers'][0]['trust'],'revoked')
+        self.assertIsNotNone(state['mapping_identity'])
         with self.assertRaises(ValueError):
             self.change(action='add-peer',node_id=peer,name='Duplicate',endpoint='https://192.168.100.4',fingerprint='b'*64)
 

@@ -33,12 +33,23 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   Cílená sada trust/mapping/transfer/desktop a compliance testů prošla mimo
   socketově omezený sandbox: **28 testů úspěšně**; první sandboxový běh měl tři
   očekávané `PermissionError` pouze při vytvoření loopback HTTP serveru.
-- [ ] [planned] **F-M5-PERSONAL-SYNC-01-B — úzký replikační grant a durable
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-B — úzký replikační grant a durable
   desired state (cílová úroveň: implemented).** Nad schváleným peerem a
   aktivním oboustranným mapováním vydat podepsaný grant vázaný na oba uzly,
   project UUID, ref, směr a role primary/read-only replica. Zapnutí, zastavení,
   revokace a retry musí být auditovatelné a idempotentní; neznámý nebo stale
-  stav nic nepovolí.
+  stav nic nepovolí. Registry schema v3 drží kanonický grant, podpisy obou uzlů,
+  podepsaný revokační tombstone a lokální `enabled`; migrace v1/v2 zachovává
+  účty a mapování. Podpisová doména replikace je oddělená od mapování účtů,
+  specifikace připíná identity, účty, role, projekt, `refs/heads/main`, privacy
+  bez `local-only` a pouze akce `read`/`replicate`. Aktivace vyžaduje současně
+  schválený peer, aktivní přesné mapování, oba platné podpisy a lokální zapnutí;
+  primary navíc potvrzuje vlastník projektu nebo `project-admin`. Opakování
+  stejného stavu nevytváří další commit, změny mají pojmenovaný Git audit a
+  revokace peeru grant podepsaně ukončí a vypne. Správu ostrovní federace může
+  provádět `node-admin`; credential ani access key se do grantu nedostane.
+  Cílené ověření nové logiky: **11 testů úspěšně**. Úplná sada po změně:
+  **698 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-C — bezpečný přenos a automatický
   fast-forward (cílová úroveň: implemented).** Rozšířit současný `public-only`
   přenos pouze v rozsahu přesného grantu. Odesílající i přijímající uzel ověří

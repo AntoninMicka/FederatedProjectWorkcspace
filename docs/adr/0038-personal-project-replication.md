@@ -6,7 +6,8 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0038 — Osobní replikace projektu mezi dvěma uzly
 
 Datum: 2026-10-22. Stav: přijato jako implementační kontrakt
-`F-M5-PERSONAL-SYNC-01-A`; runtime implementace ještě neexistuje.
+`F-M5-PERSONAL-SYNC-01-A`; podepsaný grant a lokální desired state jsou
+implementovány úkolem B, transport a aplikace repliky ještě neexistují.
 
 ## Kontext a rozsah
 

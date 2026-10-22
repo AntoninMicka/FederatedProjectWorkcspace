@@ -12,14 +12,18 @@ import re
 import secrets
 import sqlite3
 import stat
+import subprocess
 from urllib.parse import urlsplit
 from uuid import uuid4, UUID
 
-from spikes.configuration import parse_node, read_config, overlap
+from spikes.configuration import committed_project, parse_node, read_config, overlap
 from spikes.journal import sync_dir
 from spikes.storage import Git
 from spikes.project_creation import ProjectCreation
-from spikes.federation_accounts import MappingSignatures, validate_spec, effective_actions
+from spikes.federation_accounts import (
+    MappingSignatures, ReplicationSignatures, effective_actions,
+    validate_replication_spec, validate_spec,
+)
 
 NODE_ROLES = {'member', 'node-admin', 'federation-admin'}
 PROJECT_ROLES = {'project-admin', 'editor', 'reviewer', 'reader'}
@@ -74,21 +78,29 @@ class Administration:
             git.run('init', '--bare', '--template=', '--initial-branch=main')
             head = git.run('rev-parse', '--verify', 'refs/heads/main', check=False)
             if head.returncode:
-                state = {'schema_version': 2, 'node_id': node['id'], 'users': [], 'peers': [], 'mappings': []}
+                state = {'schema_version': 3, 'node_id': node['id'], 'users': [],
+                         'peers': [], 'mappings': [], 'replications': []}
                 commit = self.publish(git, state, None)
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
             self.validate(state, node['id'])
-            if state['schema_version'] == 1:
-                state = dict(state, schema_version=2, mappings=[])
+            if state['schema_version'] < 3:
+                state = dict(state)
+                if state['schema_version'] == 1:
+                    state['mappings'] = []
+                state.update(schema_version=3, replications=[])
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
     def validate(self, state, node_id):
         version = state.get('schema_version')
-        expected = {'schema_version', 'node_id', 'users', 'peers'} | ({'mappings'} if version == 2 else set())
-        if set(state) != expected or type(version) is not int or version not in {1, 2} or state['node_id'] != node_id:
+        expected = {'schema_version', 'node_id', 'users', 'peers'}
+        if version in {2, 3}:
+            expected.add('mappings')
+        if version == 3:
+            expected.add('replications')
+        if set(state) != expected or type(version) is not int or version not in {1, 2, 3} or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:
@@ -131,6 +143,36 @@ class Administration:
             for envelope in envelopes:
                 if envelope['spec'] != spec:
                     raise ValueError('Confirmation for another mapping')
+        seen = set()
+        for replication in state.get('replications', []):
+            if set(replication) != {'spec', 'confirmations', 'revocation', 'enabled'}:
+                raise ValueError('Invalid replication record')
+            spec = validate_replication_spec(replication['spec'])
+            participants = {n['node_id'] for n in spec['nodes']}
+            if spec['id'] in seen or node_id not in participants:
+                raise ValueError('Invalid replication identity')
+            seen.add(spec['id'])
+            if (type(replication['enabled']) is not bool
+                    or not isinstance(replication['confirmations'], dict)
+                    or not set(replication['confirmations']) <= participants):
+                raise ValueError('Invalid replication state')
+            for signer, envelope in replication['confirmations'].items():
+                if (not isinstance(envelope, dict)
+                        or set(envelope) != {'spec', 'signer_node_id', 'decision',
+                                             'public_key', 'signature'}
+                        or envelope.get('spec') != spec
+                        or envelope.get('signer_node_id') != signer
+                        or envelope.get('decision') != 'confirm'):
+                    raise ValueError('Confirmation for another replication')
+            if replication['revocation']:
+                envelope = replication['revocation']
+                if (not isinstance(envelope, dict)
+                        or set(envelope) != {'spec', 'signer_node_id', 'decision',
+                                             'public_key', 'signature'}
+                        or envelope.get('spec') != spec
+                        or envelope.get('signer_node_id') not in participants
+                        or envelope.get('decision') != 'revoke'):
+                    raise ValueError('Invalid replication revocation')
 
     def local_account(self, state, user_id):
         if self.deployment == 'desktop':
@@ -181,6 +223,171 @@ class Administration:
                 local_actions = set(local_actions) & roles.get(account['memberships'][manifest['project_id']], set())
             return effective_actions(manifest, entity_id, mapping['spec'], state['node_id'], user_id, local_actions)
 
+    def replication_context(self, state, spec, *, revoking=False):
+        validate_replication_spec(spec)
+        local = next((n for n in spec['nodes'] if n['node_id'] == state['node_id']), None)
+        if not local:
+            raise ValueError('Replication does not include this node')
+        remote = next(n for n in spec['nodes'] if n is not local)
+        peer = next((p for p in state['peers']
+                     if p['id'] == remote['node_id']
+                     and (revoking or p['trust'] == 'approved')), None)
+        if not peer:
+            raise AccessDenied('Peer trust is not approved')
+        mapping = next((m for m in state['mappings']
+                        if m['spec']['id'] == spec['mapping_id']), None)
+        if not mapping:
+            raise ValueError('Unknown account mapping')
+        accounts = sorted(
+            ({'node_id': n['node_id'], 'user_id': n['user_id']} for n in spec['nodes']),
+            key=lambda account: account['node_id'])
+        if (mapping['spec']['accounts'] != accounts
+                or spec['project_id'] not in mapping['spec']['project_ids']
+                or (not revoking and not self.mapping_active(state, mapping))):
+            raise AccessDenied('Replication requires an active exact account mapping')
+        local_fingerprint = MappingSignatures(self.root).identity()['fingerprint']
+        if (local['fingerprint'] != local_fingerprint
+                or remote['fingerprint'] != peer['fingerprint']
+                or local['identity_revision'] != 1
+                or remote['identity_revision'] != 1):
+            raise AccessDenied('Replication identity pin changed')
+        return local, remote, peer, mapping
+
+    def replication_authorized(self, state, replication):
+        if replication['revocation'] or len(replication['confirmations']) != 2:
+            return False
+        try:
+            local, remote, _, _ = self.replication_context(state, replication['spec'])
+            pins = {local['node_id']: local['fingerprint'],
+                    remote['node_id']: remote['fingerprint']}
+            for signer, envelope in replication['confirmations'].items():
+                if envelope.get('signer_node_id') != signer or envelope.get('decision') != 'confirm':
+                    return False
+                ReplicationSignatures.verify(envelope, pins[signer])
+            return True
+        except (ValueError, OSError, subprocess.SubprocessError):
+            return False
+
+    def project_actor_allowed(self, actor, project_id, node):
+        if actor.get('memberships', {}).get(project_id) == 'project-admin':
+            return True
+        binding = next((project for project in node['projects']
+                        if project['project_id'] == project_id), None)
+        if not binding:
+            return False
+        actor_id = actor.get('id')
+        if self.deployment == 'desktop' and actor_id is None:
+            actor_id = ProjectCreation(self.node).author_id()
+        try:
+            git = Git(binding['root'])
+            meta = committed_project(git, git.head(), project_id, check_worktree=False)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            return False
+        return actor_id == meta['author_id']
+
+    def replication_request(self, state, node, actor, request):
+        action = request['action']
+        export = None
+        if action == 'propose-replication' and set(request) == {
+                'action', 'expected_commit', 'mapping_id', 'project_id',
+                'primary_node_id', 'privacy'}:
+            mapping = next((m for m in state['mappings']
+                            if m['spec']['id'] == request['mapping_id']), None)
+            if not mapping or not self.mapping_active(state, mapping):
+                raise AccessDenied('Replication requires an active mapping')
+            project_id = identifier(request['project_id'])
+            if (project_id not in mapping['spec']['project_ids']
+                    or identifier(request['primary_node_id']) != node['id']
+                    or not self.project_actor_allowed(actor, project_id, node)):
+                raise AccessDenied('Only the local project owner may propose replication')
+            if any(not r['revocation'] and r['spec']['project_id'] == project_id
+                   for r in state['replications']):
+                raise ValueError('Project already has an active replication grant')
+            _, _, peer = self.mapping_context(state, mapping['spec'])
+            local_fingerprint = MappingSignatures(self.root).identity()['fingerprint']
+            nodes = []
+            for account in mapping['spec']['accounts']:
+                is_local = account['node_id'] == node['id']
+                nodes.append(dict(
+                    account,
+                    role='primary' if is_local else 'read-only-replica',
+                    fingerprint=local_fingerprint if is_local else peer['fingerprint'],
+                    identity_revision=1,
+                ))
+            spec = {
+                'schema_version': 1,
+                'id': str(uuid4()),
+                'mapping_id': mapping['spec']['id'],
+                'project_id': project_id,
+                'ref': 'refs/heads/main',
+                'nodes': sorted(nodes, key=lambda participant: participant['node_id']),
+                'privacy': request['privacy'],
+                'actions': ['read', 'replicate'],
+            }
+            validate_replication_spec(spec)
+            replication = {'spec': spec, 'confirmations': {},
+                           'revocation': None, 'enabled': False}
+            state['replications'].append(replication)
+        elif action in {'confirm-replication', 'revoke-replication'} and set(request) == {
+                'action', 'expected_commit', 'replication_id'}:
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == request['replication_id']), None)
+            if not replication or replication['revocation']:
+                raise ValueError('Unknown or revoked replication')
+            local, _, _, _ = self.replication_context(
+                state, replication['spec'], revoking=action == 'revoke-replication')
+            if (action == 'confirm-replication' and local['role'] == 'primary'
+                    and not self.project_actor_allowed(actor, replication['spec']['project_id'], node)):
+                raise AccessDenied('Primary confirmation requires the project owner')
+            decision = 'revoke' if action == 'revoke-replication' else 'confirm'
+            export = ReplicationSignatures(self.root).sign(
+                replication['spec'], node['id'], decision)
+            if decision == 'revoke':
+                replication['revocation'] = export
+                replication['enabled'] = False
+            else:
+                replication['confirmations'][node['id']] = export
+        elif action == 'import-replication' and set(request) == {
+                'action', 'expected_commit', 'envelope'}:
+            envelope = request['envelope']
+            if not isinstance(envelope, dict) or 'spec' not in envelope:
+                raise ValueError('Invalid replication confirmation')
+            _, remote, peer, _ = self.replication_context(
+                state, envelope['spec'], revoking=envelope.get('decision') == 'revoke')
+            if envelope.get('signer_node_id') != remote['node_id']:
+                raise ValueError('Replication confirmation must be signed by the peer')
+            ReplicationSignatures.verify(envelope, peer['fingerprint'])
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == envelope['spec']['id']), None)
+            if not replication:
+                replication = {'spec': envelope['spec'], 'confirmations': {},
+                               'revocation': None, 'enabled': False}
+                state['replications'].append(replication)
+            if (replication['spec'] != envelope['spec']
+                    or (replication['revocation'] and envelope['decision'] != 'revoke')):
+                raise ValueError('Changed or already revoked replication')
+            if envelope['decision'] == 'revoke':
+                replication['revocation'] = envelope
+                replication['enabled'] = False
+            else:
+                replication['confirmations'][remote['node_id']] = envelope
+        elif action == 'set-replication-enabled' and set(request) == {
+                'action', 'expected_commit', 'replication_id', 'enabled'}:
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == request['replication_id']), None)
+            if not replication or type(request['enabled']) is not bool:
+                raise ValueError('Invalid replication desired state')
+            local, _, _, _ = self.replication_context(state, replication['spec'])
+            if (request['enabled'] and local['role'] == 'primary'
+                    and not self.project_actor_allowed(actor, replication['spec']['project_id'], node)):
+                raise AccessDenied('Primary activation requires the project owner')
+            if request['enabled'] and not self.replication_authorized(state, replication):
+                raise AccessDenied('Replication is not bilaterally authorized')
+            replication['enabled'] = request['enabled']
+        else:
+            raise ValueError('Invalid replication request')
+        return export
+
     def mapping_request(self, state, node, request):
         action = request['action']
         export = None
@@ -223,7 +430,8 @@ class Administration:
                 mapping['confirmations'][remote['node_id']] = envelope
         else:
             raise ValueError('Invalid mapping request')
-        if not set(mapping['spec']['project_ids']) <= {p['project_id'] for p in node['projects']}:
+        if (action == 'propose-mapping'
+                and not set(mapping['spec']['project_ids']) <= {p['project_id'] for p in node['projects']}):
             raise ValueError('Unknown scoped projects')
         return export
 
@@ -238,14 +446,14 @@ class Administration:
             raise ValueError('Invalid endpoint port')
         return value.rstrip('/')
 
-    def publish(self, git, state, parent):
+    def publish(self, git, state, parent, *, message='Update administration registry\n'):
         self.validate(state, state['node_id'])
         blob = git.run('hash-object', '-w', '--stdin', input=json.dumps(state, ensure_ascii=False, sort_keys=True) + '\n').stdout.strip()
         tree = git.run('mktree', input='100644 blob ' + blob + '\tregistry.json\n').stdout.strip()
         args = ['commit-tree', tree]
         if parent:
             args += ['-p', parent]
-        commit = git.run(*args, input='Update administration registry\n', env_extra={
+        commit = git.run(*args, input=message, env_extra={
             'GIT_AUTHOR_NAME': 'Workspace administration', 'GIT_COMMITTER_NAME': 'Workspace administration',
             'GIT_AUTHOR_EMAIL': state['node_id'] + '@local.invalid',
             'GIT_COMMITTER_EMAIL': state['node_id'] + '@local.invalid'}).stdout.strip()
@@ -320,6 +528,7 @@ class Administration:
                 raise AccessDenied('Registry changed; reload before editing')
             token = None
             export = None
+            previous = json.dumps(state, ensure_ascii=False, sort_keys=True)
             registered = {p['project_id'] for p in node['projects']}
             if action == 'create-user' and set(request) == {'action', 'expected_commit', 'name', 'node_role'}:
                 if self.deployment != 'web':
@@ -354,16 +563,12 @@ class Administration:
                     raise ValueError('Invalid user operation')
                 user['revision'] += 1
             elif action == 'add-peer' and set(request) == {'action', 'expected_commit', 'node_id', 'name', 'endpoint', 'fingerprint'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 if not isinstance(request['fingerprint'], str):
                     raise ValueError('Expected fingerprint text')
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
                     'trust': 'pending', 'revision': 1})
             elif action == 'update-peer-endpoint' and set(request) == {'action', 'expected_commit', 'node_id', 'endpoint'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or peer['trust'] != 'approved':
                     raise ValueError('Unknown or unapproved peer')
@@ -372,8 +577,6 @@ class Administration:
                     return self.public(state, commit, actor)
                 peer.update(endpoint=endpoint, revision=peer['revision'] + 1)
             elif action == 'set-trust' and set(request) == {'action', 'expected_commit', 'node_id', 'trust'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid trust change')
@@ -382,18 +585,36 @@ class Administration:
                     for mapping in state['mappings']:
                         if not mapping['revocation'] and any(a['node_id'] == peer['id'] for a in mapping['spec']['accounts']):
                             mapping['revocation'] = MappingSignatures(self.root).sign(mapping['spec'], node['id'], 'revoke')
+                    for replication in state['replications']:
+                        if (not replication['revocation']
+                                and any(n['node_id'] == peer['id'] for n in replication['spec']['nodes'])):
+                            replication['revocation'] = ReplicationSignatures(self.root).sign(
+                                replication['spec'], node['id'], 'revoke')
+                            replication['enabled'] = False
             elif action in {'propose-mapping', 'confirm-mapping', 'revoke-mapping', 'import-mapping'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 export = self.mapping_request(state, node, request)
+                if action in {'revoke-mapping', 'import-mapping'}:
+                    revoked = {m['spec']['id'] for m in state['mappings'] if m['revocation']}
+                    for replication in state['replications']:
+                        if replication['spec']['mapping_id'] in revoked:
+                            replication['enabled'] = False
+            elif action in {'propose-replication', 'confirm-replication',
+                            'revoke-replication', 'import-replication',
+                            'set-replication-enabled'}:
+                export = self.replication_request(state, node, actor, request)
             else:
                 raise ValueError('Unknown administration operation')
-            commit = self.publish(git, state, commit)
+            if json.dumps(state, ensure_ascii=False, sort_keys=True) != previous:
+                commit = self.publish(git, state, commit,
+                                      message='Administration: ' + action + '\n')
             result = self.public(state, commit, actor)
             if token:
                 result['access_key'] = token
             if export:
-                result['mapping_envelope'] = export
+                key = ('replication_envelope'
+                       if action in {'confirm-replication', 'revoke-replication'}
+                       else 'mapping_envelope')
+                result[key] = export
             return result
 
     def public(self, state, commit, actor):
@@ -402,8 +623,14 @@ class Administration:
             users = [self.local_account(state, ProjectCreation(self.node).author_id())]
         return {'node_id': state['node_id'], 'commit_id': commit,
                 'users': users, 'deployment': self.deployment,
-                'peers': state['peers'] if actor['node_role'] == 'federation-admin' else [],
-                'mapping_identity': MappingSignatures(self.root).identity() if actor['node_role'] == 'federation-admin' else None,
-                'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if actor['node_role'] == 'federation-admin' else [],
+                'peers': state['peers'] if self.is_admin(actor) else [],
+                'mapping_identity': MappingSignatures(self.root).identity() if self.is_admin(actor) else None,
+                'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if self.is_admin(actor) else [],
+                'replications': [dict(
+                    replication,
+                    authorized=self.replication_authorized(state, replication),
+                    active=(replication['enabled']
+                            and self.replication_authorized(state, replication)),
+                ) for replication in state['replications']],
                 'federation_admin': actor['node_role'] == 'federation-admin',
                 'transport': 'not-implemented'}
