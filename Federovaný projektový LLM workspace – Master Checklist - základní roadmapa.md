@@ -404,12 +404,18 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 ## 5B. Role uživatelů
 
 - [ ] Minimální RBAC:
-  - [ ] federation-admin,
+  - [ ] federation-admin (stávající runtime role; migrovat na cílové role
+    ADR 0037),
   - [ ] node-admin,
   - [ ] project-admin,
   - [ ] editor,
   - [ ] reviewer,
   - [ ] reader.
+- [ ] Cílové federační role rozlišují `network-admin`,
+  `network-group-admin`, `node-admin`, `group-admin`, `project-admin` a `user`.
+  Lokální autorita smí vydat nejvýše `node-admin`; role působící nad
+  hranicí uzlu vyžadují centrální registr. Bez něj spravují ostrovní
+  federaci `node-admin` jednotlivých uzlů bez globální správní role.
 - [ ] Oprávnění řídit minimálně pro:
   - [ ] projekty,
   - [ ] soubory,
@@ -440,7 +446,9 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Definovat trust model mezi uzly.
 - [ ] Vedle technického stavu peeru (`pending` / `approved` / `revoked`) evidovat capability profil federačního vztahu `same-company-same-team`, `same-company`, `trusted-partner`, `holding-partner` nebo `partner`; nejde o automatické pořadí důvěry ani oprávnění. Neurčený profil zůstává explicitně `unspecified` a je fail-closed.
 - [ ] `same-company-same-team` smí federovat identity uživatelů a jejich projektové role; credentials, session a vzdálené přihlášení zůstávají lokální. `same-company` federuje data, ale vzdálené uživatele pouze eviduje pro provenance a audit, nepřebírá je jako lokální účty ani nesynchronizuje jejich role.
-- [ ] Rozlišit neměnný původ serveru. Server instalovaný desktopovou aplikací je osobní uzel právě jednoho uživatele a jednoho vlastnického aplikačního účtu; druhý lokální uživatel se odmítne. Desktop smí pro stejného vlastníka založit více serverů v jedné podepsané deployment skupině. Desktop a jeho přímí členové mohou mít `same-company-same-team` vazby navzájem pro primární/záložní provoz, každý server však má vlastní node identity a členství nesmí vydat, delegovat, importovat ani rozšířit. Mimo skupinu se osobní server posuzuje jako desktop, tedy nejvýše `same-company`. Server instalovaný z CLI může hostit více uživatelů a federovat s dalšími servery podle běžně schválených profilů a policies; do osobní skupiny se automaticky nezařazuje a nelze jej do ní dodatečně povýšit pouhou policy. Společný původ sám neuděluje projektová práva ani nespouští replikaci.
+- [ ] Zachovat způsob nasazení serveru jako auditní/bootstrap provenance, nikoli jako neměnný capability strop. Server instalovaný desktopem lze explicitně převést na obecný víceuživatelský uzel. Jeden fyzický desktop je jeden uzel se systémovou node službou; jednotlivé UI instance jednají pouze za právě přihlášené OS uživatele.
+- [ ] Rozlišit `network-admin`, `network-group-admin`, `node-admin`, `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy neudělují čtení projektů; transport vyžaduje průnik uzlové a projektové policy. Lokální účet smí být nejvýše `node-admin`; `network-group-admin` a `network-admin` vyžadují centrální registr. Bez něj řídí ostrovní federaci `node-admin` jednotlivých uzlů pouze v rozsahu jejich uzlu.
+- [ ] Kvalifikovat identity autoritou, například `U1@A`; lokální projekce na jiném uzlu zachová stejného principalu a nepřenáší credentials, MFA secrets ani session.
 - [ ] `trusted-partner` smí obdržet jen vybraná data konkrétně mapovanými příjemci. `holding-partner` smí obdržet jen vybraná data, ale grant lze udělit také ověřené společnosti jako celku; členství společnosti musí být časově vymezené a verzované. `partner` má jen chat a obsah explicitně odeslaný nebo nasdílený uživatelem, bez background synchronizace a procházení projektu.
 - [ ] Pro `trusted-partner` a `holding-partner` určit na přijímajícím uzlu aktivního místního styčného uživatele. Převzatá data nezpřístupnit ostatním automaticky; styčný uživatel jim přiděluje a odnímá lokální práva jen jako podmnožinu origin ACL, privacy, povolených akcí a exportních omezení. Jeho určení, výměna, deaktivace a změny grantů jsou verzované a auditované; bez aktivního styčného uživatele se nové granty odmítnou.
 - [ ] Profil vztahu svázat s verzovanou lokální policy, nikoli s implicitním přístupem. Přenos `project`/`confidential` vyžaduje konkrétní project/branch scope, příslušné mapování uživatele či organizačního příjemce a právo `export`; `local-only` federaci nikdy neopouští.
@@ -469,6 +477,9 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] offline node,
   - [ ] návrat uzlu po delší době.
 - [ ] MVP navrhnout jako **eventual consistency**, nikoli distribuovanou transakční DB.
+- [ ] Automatickou replikaci spustit až explicitním zařazením projektu do replication setu; členství uzlu v network group samo nic nereplikuje.
+- [ ] První implementaci navrhnout jako jeden primární zapisující uzel a automatické read-only repliky. Multi-master a převzetí primární role řešit samostatně; divergence ani sémanticky neplatný kandidát se automaticky neslučují.
+- [ ] Podepsané offline projekce identit, členství a policy mají výchozí platnost 8 hodin, předem schváleně nejvýše 24 hodin. Vypršelá autorita si nesmí limit sama prodloužit během výpadku.
 - [ ] Na desktop synchronizovat pouze vybrané projekty, ke kterým má uživatel oprávnění.
 - [ ] Lokální úpravy a commity umožnit i offline; po připojení znovu ověřit oprávnění a synchronizovat.
 - [ ] Při divergenci zachovat obě historie a nabídnout řešení konfliktu bez tichého přepsání změn.
@@ -1215,6 +1226,12 @@ akceptace a merge do `develop` zůstávají otevřené.
 
 ## Milestone M5 – Federation
 
+ADR 0037 zachovává cílový model plné federace, ale první dodávaný řez je
+`F-M5-PERSONAL-SYNC-01`: dva vlastní uzly, existující lokální `node-admin`,
+ručně schválený peer a projekt, jeden primární zapisující uzel a automatická
+read-only replika. Tento mezikrok nezavádí centrální identity, MFA, sdílené
+uživatele, obecný policy engine ani multi-master a sám Gate M5 neuzavírá.
+
 - [ ] Node identity.
 - [ ] Trust.
 - [ ] Capability profily `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner` oddělené od peer trust state a explicitních oprávnění.
@@ -1234,7 +1251,7 @@ akceptace a merge do `develop` zůstávají otevřené.
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
-**Gate M5:** desktopový a serverový uzel mohou podle explicitního capability profilu a relationship/branch policy sdílet jen povolená data. `same-company-same-team` může uvnitř jedné neměnným desktopovým původem a vlastníkem doložené osobní deployment skupiny propojit desktop i více jeho osobních serverů pro primární/záložní provoz. Každý osobní server má právě jednoho uživatele a vlastní node identity; cross-owner, cross-desktop, tranzitivní, importované nebo dodatečně povýšené členství se odmítne. CLI server může být víceuživatelský a federovat podle běžně schválených profilů a policies, ale do osobní skupiny se automaticky nezařadí. Společný původ ani profil samy neudělují projektová práva a nespouštějí replikaci; ostatní profily zachovají své užší hranice. Uzly mohou používat rozdílné LLM backendy, synchronizovat změny po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení, explicitní sdílení či odvození do projektu je auditovatelné a neobchází privacy ani lidskou akceptaci.
+**Gate M5:** desktopový a serverový uzel mohou podle explicitního capability profilu, kvalifikovaných identit a verzované relationship/project/branch policy sdílet jen povolená data. Network group, user group, replication set a projektové ACL jsou oddělené; členství ani správní role samy neudělují přístup nebo nespouštějí replikaci. Server instalovaný desktopem může po explicitním bootstrapu fungovat jako obecný víceuživatelský uzel. První replikační režim používá jeden primární zapisující uzel a automatické read-only repliky projektů vědomě zařazených do replication setu; divergence se zachová k řešení. Uzly mohou používat rozdílné LLM backendy, obnovit synchronizaci po offline práci bez ztráty historie a vést federovaný chat. Chat funguje bez LLM; jeho uložení, explicitní sdílení či odvození do projektu je auditovatelné a neobchází privacy ani lidskou akceptaci. Revokace zastaví další účinky, ale neslibuje smazání nezávislých kopií již vydaných bajtů.
 
 ## Milestone M6 – Project intelligence
 

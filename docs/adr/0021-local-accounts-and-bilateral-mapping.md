@@ -10,6 +10,12 @@ implemented, portable ACL designed s vykonatelným validátorem; transport M5 ot
 Doplnění 2026-10-11: osobní servery nasazené desktopem mohou tvořit omezenou
 záložní deployment skupinu; server nasazený z CLI zůstává obecný serverový uzel.
 
+Doplnění 2026-10-22: [ADR 0037](0037-federation-identity-policy-and-replication.md)
+nahrazuje osobní omezení serveru podle způsobu nasazení, zavádí kvalifikované
+identity, oddělené network/user groups a replication sets, hierarchické správní
+role a první primary/replica model. Ostatní zde popsané bezpečnostní hranice
+zůstávají v platnosti, dokud je ADR 0037 výslovně nemění.
+
 ## Rozhodnutí
 
 Požadavek uživatele upřesňuje sekce 5A/6C roadmapy: sdílený uživatel federace
@@ -54,36 +60,14 @@ Profily `same-company-same-team`, `same-company`, `trusted-partner`,
   nasdílí; nepovoluje background synchronizaci ani procházení projektu,
 - `unspecified` je fail-closed.
 
-Desktop může mít s libovolným běžným peerem nejvýše `same-company`. Mapování
-kvalifikovaných identit je v této vazbě dovoleno pro provenance a ACL, ale
-neznamená převzetí účtu ani synchronizaci role. Způsob nasazení serveru je
-neměnnou součástí jeho původu:
-
-- server instalovaný desktopovou aplikací je osobní uzel právě jednoho
-  vlastníka a jednoho vlastnického aplikačního účtu; založení nebo převzetí
-  druhého lokálního uživatele se odmítne. Desktop může pro stejného vlastníka
-  přímo založit více serverů. Desktop a tyto servery tvoří jednu podepsanou
-  deployment skupinu a mohou mezi sebou používat `same-company-same-team`, aby
-  mohl jeden osobní server sloužit jako záloha jiného,
-- server instalovaný z CLI není omezen na jednoho uživatele. Je obecným
-  serverovým uzlem, může hostit více lokálních uživatelů a federovat s dalšími
-  servery podle explicitně schválených běžných profilů a policies. Do osobní
-  deployment skupiny se automaticky nezařazuje.
-
-Každý osobní server má vlastní node identity a klíč. Neměnný, kryptograficky
-ověřitelný doklad původu váže stabilní identitu instalujícího desktopu,
-kvalifikovanou identitu vlastníka, deployment group ID a konkrétní node ID a
-veřejný klíč serveru. Osobní server tento doklad nesmí vydat, delegovat,
-importovat, přepsat ani jím přidat další uzel; skupina nevzniká tranzitivně.
-Osobní výjimka pro `same-company-same-team` se povolí jen mezi členy se stejným
-desktopovým původem i vlastníkem. Ve všech ostatních vztazích se osobní server
-posuzuje jako desktop, tedy nejvýše `same-company`. Existující CLI server ani
-cizí osobní server nelze změnou policy, importem či novým schválením do skupiny
-povýšit.
-Revokace může člena odpojit, ale nové schválení nesmí změnit jeho původ,
-vlastníka ani skupinu. Rotace, ztráta a obnova desktopové podepisovací autority
-musí být explicitní a fail-closed; nově vygenerovaný klíč nesmí tiše převzít
-starou skupinu.
+Původní doplnění z 2026-10-11 omezovalo server nasazený desktopem na jediného
+vlastníka a osobní deployment skupinu. ADR 0037 toto omezení ruší: způsob
+nasazení zůstává auditní/bootstrap provenance, ale server lze explicitně
+převést na obecný víceuživatelský uzel. Jeden fyzický desktop je jeden uzel se
+systémovou node službou a oddělenými OS uživateli. Network group, user group a
+replication set nahrazují původní osobní výjimku. Každý uzel dál zachovává
+vlastní node identity a klíč; rotace, ztráta, revokace a obnova jsou explicitní
+a fail-closed.
 
 Společný původ ani `same-company-same-team` samy neudělují projektový přístup a
 nespouštějí replikaci. Primární/záložní role, project/branch scope, privacy,

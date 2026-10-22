@@ -48,10 +48,35 @@ ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
 Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
-doručena PR #76 jako commit `80c083b`. `F-M2-CHAT-LANGUAGE-01` je akceptovaná
-a archivovaná ve WORK_LOG; v TODO čeká na doručení jediného PR.
+doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
+commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl na feature větvi přijat a
+jeho evidence je ve WORK_LOG; PR do `develop` dosud nebyl vytvořen ani sloučen.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
+
+- [ ] [planned] **F-M5-PERSONAL-SYNC-01 — osobní federace dvou vlastních uzlů
+  (cílová úroveň: PoC validated).** Navazující feature větev
+  `feature/f-m5-personal-sync-01` se založí až po doručení `UX-FEDERATION-02`
+  z aktuálního `develop`; cílem PR bude `develop`. Propojit dva uzly spravované
+  jedním člověkem přes existující lokální účty a `node-admin`, ručně schválit
+  peer i konkrétní projekt, určit jeden primární zapisující uzel a automaticky
+  udržovat read-only repliku. UI umožní synchronizaci zapnout a zastavit a
+  ukáže poslední úspěch, čekající stav, odmítnutí a konflikt.
+
+  Rozsah nezahrnuje centrální registr, MFA, sdílené uživatele, role nad uzlem,
+  nový obecný policy engine, multi-master ani automatické řešení divergence.
+  Před implementací prověřit existující peer/transfer/sync komponenty a
+  `REUSE_CATALOG.md`. Současný `public-only` transport rozšířit pouze úzkým
+  podepsaným grantem pro schválenou dvojici uzlů, aktivní oboustranné mapování
+  účtů, přesný project UUID, ref a směr. Odesílající i přijímající uzel ověří
+  celý dosažitelný Git graf proti portable ACL; `local-only` se nepřenáší.
+
+  Akceptace: desktopový a LXC/serverový uzel projdou prvním přenosem, následným
+  automatickým fast-forwardem, offline návratem a restartem. Revokace zastaví
+  další přenos. Změněný HEAD, neúplná historie, neplatný kandidát nebo
+  divergence nesmějí přepsat cílový stav a zobrazí řešitelný konflikt. Před
+  persistentní implementací popsat journal/CAS, crash boundaries a recovery;
+  retry nesmí vytvořit druhou repliku ani opakovat již potvrzený účinek.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -69,13 +94,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle
   `UX-FEDERATION-02`. Dnešní přechodové desktopové nástroje ani nativní
   ovladače výstupů se na serverový web nepřenášejí.
-
-- [ ] [planned] **UX-FEDERATION-02 — plnohodnotná správa federace projektů
-  (cílová úroveň: designed).** Nahradit přechodovou stránku jednosměrného
-  veřejného přenosu správou federovaných projektů. Při přípravě dávky
-  konsolidovat otevřené kontrakty M1-AH-14/M1-AH-15 a roadmapu M5; vymezit
-  discovery, vztahy uzlů a projektů, směry operací, oprávnění, konflikty,
-  stav/recovery a audit jako samostatnou reviewovatelnou feature.
 
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
@@ -192,6 +210,39 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
 
 ## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
 
+- [ ] [planned] **UX-FEDERATION-02-B — úplný lifecycle identity, účtů, skupin
+  a autentizace (cílová úroveň: designed).** Dokončit lifecycle vytvoření,
+  deaktivace, obnovy a zániku identity, plnohodnotný webový login, MFA, vazbu
+  desktopové instance na OS uživatele a správu user groups. Zachovat
+  kvalifikované identity, zákaz federace credentials/session a strop lokálního
+  účtu `node-admin` podle ADR 0037. Nejde o podmínku osobního synchronizačního
+  řezu `F-M5-PERSONAL-SYNC-01`.
+
+- [ ] [planned] **UX-FEDERATION-02-C — úplný jednotný policy model (cílová
+  úroveň: designed).** Definovat verzované strojové schéma, precedence,
+  dědičnost, vysvětlitelnost a oddělené akce pro ACL, export, příjem, delegaci a
+  replikaci. Neznámá nebo konfliktní policy zůstává fail-closed a `local-only`
+  nikdy neopustí uzel.
+
+- [ ] [planned] **UX-FEDERATION-02-D — automatická federace spravovaných
+  skupin (cílová úroveň: designed).** Dokončit podepsané členství, discovery,
+  desired state, replication sets, offline outbox/inbox, revokaci, konflikty,
+  mazání, úplnost historie a audit bez předpokladu globální transakce nebo
+  spolehlivých hodin.
+
+- [ ] [planned] **UX-FEDERATION-02-E — threat model, migrace a implementační
+  rozpad plné federace (cílová úroveň: designed).** Pokrýt bootstrap,
+  rotaci/ztrátu klíčů, obnovu účtu a MFA, kompromitovaný uzel, stale členství,
+  rolling upgrade, metadata leakage, kvóty a nouzové zastavení; poté rozsah
+  rozdělit na samostatné implementační dávky.
+
+- [ ] [planned] **AUTH-CENTRAL-01 — centrální autorita identity a offline
+  projekce (cílová úroveň: designed → PoC validated).** Autorita A vydává
+  stabilní kvalifikované identity a časově omezené podepsané claims. Oddělit
+  adresář/provisioning, autentizační assertions a lifecycle WebAuthn/TOTP.
+  Centrální registr je nutnou autoritou pro `network-group-admin` a
+  `network-admin`; uzly nereplikují hesla, digesty, MFA secrets ani session.
+
 - [ ] [planned] **F-M5-TRUST-01 — Profily federace a branch policy (cílová
   úroveň: designed).** Rozšířit peer registry o capability profil `unspecified` /
   `same-company-same-team` / `same-company` / `trusted-partner` /
@@ -202,20 +253,21 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   `holding-partner` vybraná data také celé ověřené společnosti; `partner` jen
   chat a uživatelem explicitně odeslaný či sdílený obsah.
 
-  Rozlišit dva neměnné původy nasazení serveru. Server instalovaný desktopovou
-  aplikací je osobní uzel právě jednoho uživatele a jednoho vlastnického
-  aplikačního účtu; druhý lokální uživatel se odmítne. Více serverů přímo
-  instalovaných stejným desktopem pro stejného vlastníka tvoří podepsanou
-  deployment skupinu a mohou mít `same-company-same-team` vazby mezi desktopem
-  i navzájem jako primární a záložní uzly. Každý server má vlastní node identity
-  a klíč. Členství ve skupině není tranzitivní ani delegovatelné: osobní server
-  nesmí vydat, importovat nebo přepsat desktopový doklad původu, přidat další
-  uzel ani změnit vlastníka. Server instalovaný z CLI osobní omezení nemá, může
-  hostit více lokálních uživatelů a federovat s dalšími servery podle běžně
-  schválených profilů a policies. Do skupiny se automaticky nezařadí a nemůže
-  být na osobní uzel dodatečně povýšen pouhou policy. Ve všech vztazích mimo
-  platnou deployment skupinu zůstává osobní server omezen jako desktop, tedy
-  nejvýše `same-company`.
+  Způsob nasazení serveru zachovat jako auditní/bootstrap provenance, nikoli
+  jako capability strop. Server instalovaný desktopem lze explicitně převést na
+  obecný víceuživatelský uzel. Jeden fyzický desktop je jeden uzel se systémovou
+  node službou a oddělenými OS uživateli. Identity jsou kvalifikované autoritou,
+  například `U1@A`; vzdálená projekce nepřebírá autoritu nad credentials.
+
+  Zavést role `network-admin`, `network-group-admin`, `node-admin`,
+  `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy
+  nezpřístupňují projektová data. Lokální účet může být nejvýše `node-admin`;
+  role `network-group-admin` a `network-admin` musí vydat centrální registr.
+  Ostrovní federaci bez registru řídí `node-admin` jednotlivých uzlů, každý jen
+  za vlastní uzel. Oddělit network groups, user groups, replication sets a
+  project ACL. Automatická replikace začne až vědomým zařazením projektu do
+  replication setu; první režim je jeden primární zapisující uzel a automatické
+  read-only repliky.
 
   Pro `trusted-partner` a `holding-partner` určit aktivního místního styčného
   uživatele přijímajícího uzlu, který auditovatelně přiděluje práva k převzatým
@@ -224,18 +276,14 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   mapované uživatele nebo organizačního příjemce, styčného uživatele, povolené
   privacy a akce včetně `export`.
 
-  Akceptace: žádný profil, společný původ ani přijetí dat samo neudělí přístup
-  nebo nespustí replikaci; oba uzly schválí přesný scope; vzdálená identita se
-  mimo platnou `same-company-same-team` skupinu nestane lokálním účtem a její
-  role se nesynchronizují. Doklad původu váže stabilní identitu instalujícího
-  desktopu, kvalifikovanou identitu jediného vlastníka, deployment group ID a
-  konkrétní node ID/veřejný klíč osobního serveru. Cross-owner, cross-desktop,
-  tranzitivní, importovaná, klonovaná nebo dodatečně povýšená same-team vazba se
-  odmítne; revokace uzlu ani nové schválení nezmění původ, vlastníka či skupinu.
-  Ztráta/rotace desktopové autority a obnova jejího zálohovaného klíče mají
-  explicitní fail-closed lifecycle. Organizační grant používá ověřené, časově
-  vymezené a verzované členství; změna, downgrade nebo revokace má nové ID/verzi;
-  výměna či deaktivace styčného uživatele zachová audit, zabrání novým grantům a
+  Akceptace: žádný profil, správní role, společný původ ani přijetí dat samo
+  neudělí přístup nebo nespustí replikaci; všechny vrstvy schválí přesný scope.
+  Podepsaná offline projekce má výchozí platnost 8 hodin a předem schválené
+  maximum 24 hodin; vypršelá autorita si ji během výpadku neprodlouží. Ztráta,
+  rotace a obnova identity mají explicitní fail-closed lifecycle. Organizační
+  grant používá ověřené, časově vymezené a verzované členství; změna, downgrade
+  nebo revokace má nové ID/verzi. Výměna či deaktivace styčného uživatele
+  zachová audit, zabrání novým grantům a
   dovolí bezpečné odebrání existujících; pokus styčného uživatele rozšířit origin
   práva se odmítne; neznámá policy fail-closed; credentials, session, vzdálené
   přihlášení a `local-only` jsou vždy odmítnuty.

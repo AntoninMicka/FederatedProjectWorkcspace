@@ -5,6 +5,39 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-FEDERATION-02 — cílový směr federace a etapizace — 2026-10-22
+
+Dávka vznikla na větvi `feature/ux-federation-02` z `develop` na commitu
+`e1366be` (PR #77) a dosáhla úrovně **designed**. Uživatel přijal ADR 0037
+jako dlouhodobý směr, ale pro současnou individuální potřebu záměrně
+odložil detailní návrh a implementaci plné federace. Feature akceptace tohoto
+návrhového řezu je uzavřená; jeho jediný PR do `develop` dosud nebyl vytvořen
+ani sloučen.
+
+- [x] [completed] **UX-FEDERATION-02-A — inventura a revize stávajících
+  kontraktů (designed).** ADR 0021, lokální účty, peer trust, portable ACL a
+  historický přenos byly porovnány s novým směrem. Původ nasazení serveru
+  zůstává provenance, nikoli trvalý capability strop.
+- [x] [completed] **UX-FEDERATION-02-F — přijetí cílového směru a etapizace
+  (designed).** ADR 0037 vymezil kvalifikované identity, oddělené network/user
+  groups, replication sets, role a jejich autority, jeden primary writer s
+  read-only replikami, offline okno 8/24 hodin, revokaci a recovery hranice.
+  Lokální účet smí být nejvýše `node-admin`; vyšší síťové role vyžadují
+  centrální registr. První implementační řez byl zúžen na osobní synchronizaci
+  dvou vlastních uzlů.
+
+### Odložený rozsah, ověření a omezení
+
+Původní `UX-FEDERATION-02-B` až `UX-FEDERATION-02-E` zůstávají otevřené v
+BACKLOG spolu s `AUTH-CENTRAL-01`; nejsou dokončené ani nutnou podmínkou
+odlehčeného `F-M5-PERSONAL-SYNC-01`. Otevřené zůstávají také varianty více
+vlastníků, převzetí primární role, detailní precedence policy, privacy po
+expiraci a rozsah recovery.
+
+Jde pouze o dokumentační návrh; runtime přihlášení, MFA, policy engine ani
+Git synchronizace se nezměnily. Cílená kontrola SPDX a balení před závěrečným
+předáním prošla: **13 testů úspěšně**, `git diff --check` byl bez chyb.
+
 ## F-M2-CHAT-LANGUAGE-01 — explicitní jazyk odpovědi — 2026-10-22
 
 Dávka vznikla na větvi `feature/f-m2-chat-language-01` z `develop` na commitu
