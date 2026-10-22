@@ -160,7 +160,7 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   Vygenerovaný JavaScript prošel `node --check` a změněné Python moduly
   `py_compile`. Úplná sada po změně: **718 testů, OK (28 přeskočeno)**;
   přeskočené scénáře vyžadují volitelné závislosti nebo fyzický WebEngine.
-- [ ] [in progress] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
+- [x] [completed] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
   úroveň: implemented).** Desktop dokončí pending klient–server vztah
   přihlášením existujícím serverovým účtem přes ověřené TLS. Podepsaný
   požadavek připne node key klienta; server bez druhého ručního schválení uloží
@@ -173,8 +173,9 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   dorovnají vpřed bez duplicitního peeru. Cílené enrollment, registry a
   mapovací ověření: **28 testů úspěšně** včetně skutečného loopback TLS,
   chybného klíče, rotace, revokace, změny účtu a ztracené odpovědi. Úplná sada:
-  **721 testů, OK (28 přeskočeno)**. Zbývá fyzicky potvrdit přihlášení desktopu
-  ke skutečnému serveru; do té doby úkol zůstává `in progress`.
+  **721 testů, OK (28 přeskočeno)**. Fyzická akceptace 22. 10. 2026: uživatel
+  potvrdil úspěšné nastavení klient–server federace; oba uzly již nečekají na
+  druhé ruční schválení. Enrollment je tím na úrovni `implemented` dokončen.
 
 ## K předání do backlogu
 
