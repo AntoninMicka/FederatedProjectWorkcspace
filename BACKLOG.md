@@ -48,8 +48,8 @@ ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
 Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
-doručena PR #76 jako commit `80c083b`. `F-M2-CHAT-LANGUAGE-01` je akceptovaná
-a archivovaná ve WORK_LOG; v TODO čeká na doručení jediného PR.
+doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
+commit `e1366be`. `UX-FEDERATION-02` je aktivní návrhová dávka v TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -69,13 +69,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle
   `UX-FEDERATION-02`. Dnešní přechodové desktopové nástroje ani nativní
   ovladače výstupů se na serverový web nepřenášejí.
-
-- [ ] [planned] **UX-FEDERATION-02 — plnohodnotná správa federace projektů
-  (cílová úroveň: designed).** Nahradit přechodovou stránku jednosměrného
-  veřejného přenosu správou federovaných projektů. Při přípravě dávky
-  konsolidovat otevřené kontrakty M1-AH-14/M1-AH-15 a roadmapu M5; vymezit
-  discovery, vztahy uzlů a projektů, směry operací, oprávnění, konflikty,
-  stav/recovery a audit jako samostatnou reviewovatelnou feature.
 
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
