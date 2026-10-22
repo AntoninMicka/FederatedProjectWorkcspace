@@ -49,9 +49,34 @@ Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
 doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
-commit `e1366be`. `UX-FEDERATION-02` je aktivní návrhová dávka v TODO.
+commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl na feature větvi přijat a
+jeho evidence je ve WORK_LOG; PR do `develop` dosud nebyl vytvořen ani sloučen.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
+
+- [ ] [planned] **F-M5-PERSONAL-SYNC-01 — osobní federace dvou vlastních uzlů
+  (cílová úroveň: PoC validated).** Navazující feature větev
+  `feature/f-m5-personal-sync-01` se založí až po doručení `UX-FEDERATION-02`
+  z aktuálního `develop`; cílem PR bude `develop`. Propojit dva uzly spravované
+  jedním člověkem přes existující lokální účty a `node-admin`, ručně schválit
+  peer i konkrétní projekt, určit jeden primární zapisující uzel a automaticky
+  udržovat read-only repliku. UI umožní synchronizaci zapnout a zastavit a
+  ukáže poslední úspěch, čekající stav, odmítnutí a konflikt.
+
+  Rozsah nezahrnuje centrální registr, MFA, sdílené uživatele, role nad uzlem,
+  nový obecný policy engine, multi-master ani automatické řešení divergence.
+  Před implementací prověřit existující peer/transfer/sync komponenty a
+  `REUSE_CATALOG.md`. Současný `public-only` transport rozšířit pouze úzkým
+  podepsaným grantem pro schválenou dvojici uzlů, aktivní oboustranné mapování
+  účtů, přesný project UUID, ref a směr. Odesílající i přijímající uzel ověří
+  celý dosažitelný Git graf proti portable ACL; `local-only` se nepřenáší.
+
+  Akceptace: desktopový a LXC/serverový uzel projdou prvním přenosem, následným
+  automatickým fast-forwardem, offline návratem a restartem. Revokace zastaví
+  další přenos. Změněný HEAD, neúplná historie, neplatný kandidát nebo
+  divergence nesmějí přepsat cílový stav a zobrazí řešitelný konflikt. Před
+  persistentní implementací popsat journal/CAS, crash boundaries a recovery;
+  retry nesmí vytvořit druhou repliku ani opakovat již potvrzený účinek.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -184,6 +209,39 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   Akceptace: nepovolený zdroj ani cizí projekt nevstoupí do kontextu; prompt injection v mailu nevyvolá odeslání; reciprocita sama neodblokuje red slide a nedostupnost lokálního LLM nezpůsobí externí fallback. Základní Presenter a registry fungují i bez modelu.
 
 ## Vzdálenější strategické požadavky (před aktivací rozdělit na feature dávky)
+
+- [ ] [planned] **UX-FEDERATION-02-B — úplný lifecycle identity, účtů, skupin
+  a autentizace (cílová úroveň: designed).** Dokončit lifecycle vytvoření,
+  deaktivace, obnovy a zániku identity, plnohodnotný webový login, MFA, vazbu
+  desktopové instance na OS uživatele a správu user groups. Zachovat
+  kvalifikované identity, zákaz federace credentials/session a strop lokálního
+  účtu `node-admin` podle ADR 0037. Nejde o podmínku osobního synchronizačního
+  řezu `F-M5-PERSONAL-SYNC-01`.
+
+- [ ] [planned] **UX-FEDERATION-02-C — úplný jednotný policy model (cílová
+  úroveň: designed).** Definovat verzované strojové schéma, precedence,
+  dědičnost, vysvětlitelnost a oddělené akce pro ACL, export, příjem, delegaci a
+  replikaci. Neznámá nebo konfliktní policy zůstává fail-closed a `local-only`
+  nikdy neopustí uzel.
+
+- [ ] [planned] **UX-FEDERATION-02-D — automatická federace spravovaných
+  skupin (cílová úroveň: designed).** Dokončit podepsané členství, discovery,
+  desired state, replication sets, offline outbox/inbox, revokaci, konflikty,
+  mazání, úplnost historie a audit bez předpokladu globální transakce nebo
+  spolehlivých hodin.
+
+- [ ] [planned] **UX-FEDERATION-02-E — threat model, migrace a implementační
+  rozpad plné federace (cílová úroveň: designed).** Pokrýt bootstrap,
+  rotaci/ztrátu klíčů, obnovu účtu a MFA, kompromitovaný uzel, stale členství,
+  rolling upgrade, metadata leakage, kvóty a nouzové zastavení; poté rozsah
+  rozdělit na samostatné implementační dávky.
+
+- [ ] [planned] **AUTH-CENTRAL-01 — centrální autorita identity a offline
+  projekce (cílová úroveň: designed → PoC validated).** Autorita A vydává
+  stabilní kvalifikované identity a časově omezené podepsané claims. Oddělit
+  adresář/provisioning, autentizační assertions a lifecycle WebAuthn/TOTP.
+  Centrální registr je nutnou autoritou pro `network-group-admin` a
+  `network-admin`; uzly nereplikují hesla, digesty, MFA secrets ani session.
 
 - [ ] [planned] **F-M5-TRUST-01 — Profily federace a branch policy (cílová
   úroveň: designed).** Rozšířit peer registry o capability profil `unspecified` /

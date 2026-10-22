@@ -1226,6 +1226,12 @@ akceptace a merge do `develop` zůstávají otevřené.
 
 ## Milestone M5 – Federation
 
+ADR 0037 zachovává cílový model plné federace, ale první dodávaný řez je
+`F-M5-PERSONAL-SYNC-01`: dva vlastní uzly, existující lokální `node-admin`,
+ručně schválený peer a projekt, jeden primární zapisující uzel a automatická
+read-only replika. Tento mezikrok nezavádí centrální identity, MFA, sdílené
+uživatele, obecný policy engine ani multi-master a sám Gate M5 neuzavírá.
+
 - [ ] Node identity.
 - [ ] Trust.
 - [ ] Capability profily `same-company-same-team` / `same-company` / `trusted-partner` / `holding-partner` / `partner` oddělené od peer trust state a explicitních oprávnění.

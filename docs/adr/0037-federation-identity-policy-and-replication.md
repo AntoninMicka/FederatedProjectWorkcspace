@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0037 — Identity, policy a automatická replikace federace
 
-Datum: 2026-10-22. Stav: přijato jako průběžný návrhový kontrakt dávky
-`UX-FEDERATION-02`; runtime implementace neexistuje.
+Datum: 2026-10-22. Stav: přijat cílový architektonický směr dávky
+`UX-FEDERATION-02`; detailní návrh a runtime implementace jsou odloženy.
 
 ## Kontext
 
@@ -148,6 +148,22 @@ Toto rozhodnutí ruší trvalé osobní omezení serveru nasazeného desktopem z
 0021. Původ nasazení se zachová jako auditní/bootstrap provenance, ale server lze
 explicitně převést na obecný víceuživatelský uzel. Současné bearer přihlášení,
 registry v2 a public-only přenos se touto dokumentací samy nemění.
+
+## Etapizace implementace
+
+První implementační řez je záměrně menší než cílový model tohoto ADR. Pro
+potřebu jednoho správce propojí dva jeho uzly, použije jejich existující lokální
+účty a roli `node-admin`, vyžádá ruční schválení peeru i konkrétního projektu a
+udržuje jednu read-only repliku z jednoho primárního zapisujícího uzlu.
+
+Tento řez nezavádí centrální registr, MFA, sdílené uživatele, síťové správní
+role, obecný policy engine ani multi-master. Nad existujícím peer trust,
+oboustranným mapováním účtů a portable ACL smí přidat pouze úzký podepsaný grant
+pro přesnou dvojici uzlů, projekt, ref a směr replikace. Autorizace pokrývá celý
+dosažitelný Git graf a `local-only` se vždy odmítne. Tento grant nesmí obejít
+privacy/ACL ani se vydávat za splnění celého Gate M5. Detailní cílový návrh
+zůstává otevřený pod původními ID `UX-FEDERATION-02-B` až
+`UX-FEDERATION-02-E` a `AUTH-CENTRAL-01`.
 
 ## Zbývající rozhodnutí
 
