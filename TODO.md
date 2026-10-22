@@ -36,11 +36,16 @@ heuristická oprava obsahu, přepis identity a mazání dat jsou mimo rozsah.
   Standalone vyčištění intentu a receipt sdílejí jednu SQLite transakci;
   dokončený Workspace intent nebo index bez wrapper receipt lze bezpečně
   rekoncilovat po ztracené odpovědi a vždy následuje nová úplná diagnostika.
-- [ ] [planned] **UX-PROJECT-REPAIR-02-C — desktopové API a sdílené webové UI
+- [x] [completed] **UX-PROJECT-REPAIR-02-C — desktopové API a sdílené webové UI
   (cílová úroveň: implemented).** Přidat položku do menu nedostupného projektu,
   vrstvený report, přesný náhled účinku a samostatné potvrzení. Endpointy
   zůstanou pouze v autentizovaném desktopovém handleru; síťový katalog
-  nezveřejní cesty ani diagnostická data.
+  nezveřejní cesty ani diagnostická data. Sdílená stránka nyní skládá bezpečný
+  report přes DOM `textContent`, nabízí právě jednu backendem povolenou opravu
+  a vyžaduje samostatné potvrzení jejího přesného plánu. Autentizovaný desktop
+  poskytuje oddělené `check`, `preview`, `confirm` a `receipt` routy; síťový
+  handler je explicitně vrací jako 404, službu neinicializuje a katalog zůstává
+  beze změny.
 - [ ] [planned] **UX-PROJECT-REPAIR-02-D — regresní a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit zdravý i poškozený projekt, nulové
   mutace při kontrole, stale token, lock, lost response/retry, recovery
@@ -89,6 +94,15 @@ heuristická oprava obsahu, přepis identity a mazání dat jsou mimo rozsah.
 - `python3 -m unittest discover -s tests` — 680 testů prošlo, 27 bylo
   přeskočeno; výstup obsahoval existující `ResourceWarning` z mockovaných
   SQLite spojení, testovací CLI chyby a recovery logy, návratový kód byl 0.
+- `python3 -m unittest tests.test_web_server tests.test_desktop
+  tests.test_projects tests.test_project_repair tests.test_spdx` — 98 testů
+  prošlo, 8 bylo přeskočeno; ověřena autentizace desktopových rout, oddělený
+  check/preview/confirm/receipt kontrakt, bezpečný payload a síťové 404;
+- po integraci API/UI `python3 -m unittest discover -s tests` — 683 testů
+  prošlo, 27 bylo přeskočeno; stejné existující warningy a testovací logy,
+  návratový kód 0;
+- `python3 -c 'from spikes.desktop_ui import JS; print(JS)' | node --check`,
+  relevantní `py_compile` a `git diff --check` — prošlo.
 
 Úplná sada bude po integraci API/UI zopakována a skutečný Qt WebEngine průchod
 náleží až závěrečné akceptaci úkolu `UX-PROJECT-REPAIR-02-D`.

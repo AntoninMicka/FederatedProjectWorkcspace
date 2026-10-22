@@ -17,8 +17,12 @@ from uuid import uuid4
 from spikes.configuration import parse_node, read_config
 from spikes.project_creation import ProjectCreation
 from spikes.project_repair import ProjectDiagnostics, ProjectRepairActions
+from spikes.desktop_ui import DesktopHandler, HTML, JS
+from spikes.local_api import running_api
+from spikes.projects import Projects
 from spikes.storage import Git
 from spikes.workspace import Workspace
+from tests import test_local_api
 from tests.fixtures import ENTITY, encoded, markdown, metadata
 
 
@@ -203,7 +207,7 @@ class ProjectDiagnosticsTests(unittest.TestCase):
         before = self.node.read_bytes()
         result = self.service.check(self.project_id)
         self.assertEqual(self.codes(result), {'registration-invalid'})
-        self.assertNotIn('bad', json.dumps(result))
+        self.assertNotIn('{bad', json.dumps(result))
         self.assertEqual(self.node.read_bytes(), before)
 
         # A changing observation invalidates every partial finding.
@@ -358,6 +362,48 @@ class ProjectRepairActionsTests(unittest.TestCase):
         self.assertEqual(result['receipt']['intent_operation_id'], intent)
         self.assertEqual(result['report']['status'], 'healthy')
         self.assertEqual(Git(self.root).run('rev-list', '--count', 'HEAD').stdout.strip(), '2')
+
+    def test_authenticated_desktop_api_keeps_check_preview_confirm_and_receipt_separate(self):
+        driver = test_local_api.LocalAPITests()
+        index = self.state / 'index.sqlite'; index.unlink()
+        with running_api('http', handler=DesktopHandler,
+                         projects=Projects(self.node)) as server:
+            server.project_repair_actions = ProjectRepairActions(self.node)
+            check_body = json.dumps({'project_id': self.project_id}).encode()
+            driver.rejected(server, path='/v1/projects/repair/check',
+                            body=check_body, headers={'Authorization': None})
+            response = driver.request(server, path='/v1/projects/repair/check',
+                                      body=check_body)
+            self.assertIn(b' 200 ', response.split(b'\r\n')[0])
+            report = json.loads(response.split(b'\r\n\r\n', 1)[1])
+            operation = str(uuid4())
+            preview = {'project_id': self.project_id, 'action': 'rebuild-index',
+                       'operation_id': operation,
+                       'check_token': report['check_token']}
+            response = driver.request(server, path='/v1/projects/repair/preview',
+                                      body=json.dumps(preview).encode())
+            plan = json.loads(response.split(b'\r\n\r\n', 1)[1])
+            response = driver.request(server, path='/v1/projects/repair/confirm',
+                                      body=json.dumps({'plan': plan}).encode())
+            result = json.loads(response.split(b'\r\n\r\n', 1)[1])
+            self.assertEqual(result['report']['status'], 'healthy')
+            response = driver.request(server, path='/v1/projects/repair/receipt',
+                body=json.dumps({'project_id': self.project_id,
+                                 'operation_id': operation}).encode())
+            durable = json.loads(response.split(b'\r\n\r\n', 1)[1])['receipt']
+            self.assertEqual(durable, result['receipt'])
+            self.assertNotIn(str(self.base), json.dumps(
+                {'report': report, 'plan': plan, 'result': result}))
+
+    def test_shared_ui_has_layered_report_and_unavailable_project_entry(self):
+        self.assertIn('id="project-repair-view" hidden', HTML)
+        self.assertIn('id="project-repair-findings"', HTML)
+        self.assertIn("label:'Zkontrolovat projekt…'", JS)
+        self.assertIn("projectRequest('/v1/projects/repair/check'", JS)
+        self.assertIn("projectRequest('/v1/projects/repair/preview'", JS)
+        self.assertIn("projectRequest('/v1/projects/repair/confirm'", JS)
+        self.assertIn("if(!item.available)actions.splice", JS)
+        self.assertNotIn('innerHTML=', JS)
 
 
 if __name__ == '__main__':

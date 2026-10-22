@@ -112,6 +112,18 @@ class WebTests(unittest.TestCase):
         code, data, _ = self.request(path='/v1/projects', body=json.dumps({'details': True}))
         self.assertEqual(json.loads(data)['projects'][0]['id'], created['id'])
 
+    def test_project_repair_capability_is_not_exposed_by_network_handler(self):
+        project_id = str(uuid4())
+        for suffix, body in (
+                ('check', {'project_id': project_id}),
+                ('preview', {'project_id': project_id}),
+                ('confirm', {'plan': {}}),
+                ('receipt', {'project_id': project_id, 'operation_id': str(uuid4())})):
+            code, data, _ = self.request(path='/v1/projects/repair/' + suffix,
+                                         body=json.dumps(body))
+            self.assertEqual(code, 404, data)
+        self.assertFalse(hasattr(self.server, 'project_repair_actions'))
+
     def notebook_archive(self):
         path = self.root / 'notebooklm.tgz'
         with tarfile.open(path, 'w:gz') as bundle:

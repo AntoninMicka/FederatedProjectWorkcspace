@@ -20,6 +20,7 @@ from spikes.project_creation import CreationConflict, ProjectCreation, default_n
 from spikes.project_creation_actions import ProjectCreationActions
 from spikes.project_deletion import ProjectDeletion
 from spikes.project_deletion_actions import ProjectDeletionActions
+from spikes.project_repair import ProjectRepairActions
 from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.chat_service import ChatService
 from spikes.summary_service import SummaryService
@@ -345,6 +346,7 @@ def main():
         server.project_creation_actions = ProjectCreationActions(
             node_path, desktop_locations=True)
         server.project_deletion_actions = ProjectDeletionActions(node_path)
+        server.project_repair_actions = ProjectRepairActions(node_path)
         server.notebooklm_import_actions = NotebookLMImportActions(
             node_path, desktop_capabilities=True)
         server.google_drive_import = GoogleDriveImport(node_path)
