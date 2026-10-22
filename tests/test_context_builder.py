@@ -9,7 +9,8 @@ from uuid import uuid4
 
 from spikes.artifacts import Artifacts
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder, ConversationSelection,
-                                    ProjectInput, PublicSourceInput, Target, TaskInstruction)
+                                    ProjectInput, PublicSourceInput, ResponseLanguage, Target,
+                                    TaskInstruction)
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.storage import Git
@@ -71,6 +72,16 @@ class ContextBuilderTests(unittest.TestCase):
                 ad_hoc_inputs=(AdHocInput(first, b'one', 'project'),
                                AdHocInput(second, b'two', 'project')),
                 conversation=dataclasses.replace(conversation, message_ids=(second, first)))
+
+    def test_response_language_is_bound_to_payload_and_manifest(self):
+        prepared = self.prepare(response_language=ResponseLanguage('cs-CZ', 'project'))
+        self.assertEqual(json.loads(prepared.payload)['response_language'],
+                         {'tag': 'cs-CZ', 'source': 'project'})
+        self.assertEqual(prepared.manifest['response_language'],
+                         {'tag': 'cs-CZ', 'source': 'project',
+                          'compliance': 'unverified'})
+        with self.assertRaisesRegex(ValidationError, 'normalized'):
+            self.prepare(response_language=ResponseLanguage('cs-cz', 'run'))
 
     def test_task_instruction_and_focus_are_bound_without_changing_chat_contract(self):
         focus = str(uuid4())

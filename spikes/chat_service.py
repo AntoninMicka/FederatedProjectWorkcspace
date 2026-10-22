@@ -22,7 +22,7 @@ from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
                                     PreparedContext, ProjectInput, PublicSourceInput,
-                                    TaskInstruction)
+                                    ResponseLanguage, TaskInstruction)
 from spikes.ai_outcome import AITaskOutcome
 from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
@@ -42,6 +42,7 @@ from spikes.public_source import (MAX_COMPRESSION_RATIO, MAX_DECODED_BYTES,
     MAX_TEXT_CHARS, MAX_WIRE_BYTES,
     PublicSourceBinding, PublicSourceRequest, PublicSourceRuns, StaticHTMLAdapter,
     normalize_url, url_origin)
+from spikes.response_language import ResponseLanguagePolicy, language_tag
 from spikes.task_outcomes import TaskOutcomes
 from spikes.task_plan import ExplicitTaskPlan, task_output_instruction
 from spikes.thread_lifecycle import ThreadLifecycle
@@ -183,6 +184,33 @@ class ChatService:
         bindings.save_preferences({'schema_version': 1, 'streaming': value['streaming']})
         return self.status()
 
+    def configure_response_language(self, value):
+        allowed = {'scope', 'tag', 'project_id', 'thread_id', 'expected_revision'}
+        require(isinstance(value, dict) and set(value) <= allowed
+                and {'scope', 'tag'} <= set(value),
+                'Invalid response language request')
+        scope = value['scope']; tag = language_tag(value['tag'])
+        node_id, user_id = self._identity(); root = self._root()
+        if scope == 'thread':
+            require(set(value) == {'scope', 'tag', 'thread_id', 'expected_revision'},
+                    'Thread language requires thread and revision')
+            thread = ChatThreads(root).set_response_language(
+                thread_id=value['thread_id'], node_id=node_id, user_id=user_id,
+                language=tag, expected_revision=value['expected_revision'])
+            return {'scope': scope, 'tag': tag, 'thread': thread,
+                    'policy': ResponseLanguagePolicy(root).load()}
+        require(set(value) == ({'scope', 'tag'} if scope == 'node' else
+                               {'scope', 'tag', 'project_id'}),
+                'Language preference scope does not match its target')
+        if scope == 'project':
+            node = parse_node(read_config(self.node_path), location=self.node_path)
+            require(any(item['project_id'] == value['project_id']
+                        for item in node['projects']),
+                    'Response language project is not registered')
+        policy = ResponseLanguagePolicy(root).configure(
+            scope=scope, tag=tag, project_id=value.get('project_id'))
+        return {'scope': scope, 'tag': tag, 'policy': policy}
+
     def configure_search(self, value):
         binding = SearXNGBinding.parse(value)
         SearXNGBindings(self._root()).save(binding)
@@ -234,6 +262,7 @@ class ChatService:
                 'binding_draft_state': draft_state, 'threads': rows,
                 'thread_deletions': recoveries,
                 'preferences': bindings.load_preferences(),
+                'response_language_policy': ResponseLanguagePolicy(root).load(),
                 'search_binding': search['binding'],
                 'capabilities': {'streaming': True, 'web_search': True}}
 
@@ -437,7 +466,8 @@ class ChatService:
                     'run_id', 'manifest_id', 'selected_message_ids',
                     'selected_artifact_ids', 'content', 'privacy', 'created_at',
                     'task_plan'}
-        require(isinstance(request, dict) and set(request) in (required, required | {'run_choice'}),
+        optional = {'run_choice', 'response_language'}
+        require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing task route field')
         for key in ('task_id', 'project_id', 'thread_id', 'message_id', 'run_id',
                     'manifest_id'):
@@ -494,6 +524,10 @@ class ChatService:
         if thread is not None and 'run_choice' in request:
             require(thread['classification'] == choice.mode,
                     'Chat mode cannot change inside an existing thread')
+        language = ResponseLanguagePolicy(root).resolve(
+            project_id=request['project_id'],
+            thread_tag=(thread or {}).get('response_language'),
+            run_tag=request.get('response_language'))
         public_inputs = self._task_public_source_inputs(plan, node_id=node_id,
             user_id=user_id, project_id=request['project_id'],
             expected_head=request['expected_head'])
@@ -513,7 +547,8 @@ class ChatService:
                 item['privacy']) for item in prior) + (AdHocInput(request['message_id'],
                 request['content'].encode(), request['privacy']),), conversation=conversation,
             task=TaskInstruction('task-output', role_revision, instruction,
-                                 request['message_id']))
+                                 request['message_id']),
+            response_language=ResponseLanguage(language['tag'], language['source']))
         require(choice.resolve(ollama=(bindings.load() if choice.adapter_id == 'ollama' else None),
                 openai=(OpenAIBindings(root).load()
                 if choice.adapter_id == 'openai-responses' else None)) == binding,
@@ -1146,7 +1181,7 @@ class ChatService:
                     'message_id', 'run_id', 'manifest_id', 'assistant_message_id',
                     'selected_message_ids', 'content', 'privacy', 'created_at'}
         optional = {'selected_artifact_ids', 'record_chat', 'run_choice', 'stream',
-                    'task_plan'}
+                    'task_plan', 'response_language'}
         require(isinstance(request, dict) and required <= set(request) <= required | optional,
                 'Unknown or missing external preview field')
         request = dict(request)
@@ -1215,6 +1250,10 @@ class ChatService:
         selected = [messages[value] for value in request['selected_message_ids']] + [
             {'message_id': request['message_id'], 'content': request['content'],
              'privacy': request['privacy'], 'role': 'user'}]
+        language = ResponseLanguagePolicy(root).resolve(
+            project_id=request['project_id'],
+            thread_tag=(thread or {}).get('response_language'),
+            run_tag=request.get('response_language'))
         require(not any(item['privacy'] == 'local-only' for item in selected),
                 'local-only data cannot be sent to an external provider')
         base_binding = OpenAIBindings(root).load()
@@ -1244,7 +1283,8 @@ class ChatService:
                 if plan is None or len(selected) > 1 else None),
             task=(TaskInstruction('task-output', role_revision,
                                   task_output_instruction(plan), request['message_id'])
-                  if plan is not None else None))
+                  if plan is not None else None),
+            response_language=ResponseLanguage(language['tag'], language['source']))
         handoff = DispatchHandoff(request['run_id'], request['manifest_id'],
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
@@ -1272,6 +1312,7 @@ class ChatService:
                 'target': {'provider': 'OpenAI', 'endpoint': binding.endpoint,
                            'boundary': binding.boundary, 'model': binding.model},
                 'privacy': strongest, 'payload_size': len(prepared.payload),
+                'response_language': prepared.manifest['response_language'],
                 'inputs': [{'input_id': part['input_id'],
                             'source': prepared.manifest['inputs'][index]['source'],
                             'content': base64.b64decode(part['content_b64']).decode('utf-8'),
@@ -1350,6 +1391,7 @@ class ChatService:
         require(current_binding_sha256 == approval['binding_sha256'],
                 'External binding or credential changed after preview')
         manifest = json.loads(approval['manifest'])
+        approved_language = manifest.get('response_language')
         prepared = PreparedContext(MappingProxyType(manifest), approval['manifest'],
                                    approval['payload'])
         plan = (ExplicitTaskPlan.parse(original['task_plan'])
@@ -1408,7 +1450,9 @@ class ChatService:
                     'Chat thread changed after external preview')
             turn = matching_turns[0]
             require(turn['run_id'] in {None, original['run_id']}
-                    and turn['manifest_id'] in {None, original['manifest_id']},
+                    and turn['manifest_id'] in {None, original['manifest_id']}
+                    and turn['response_language'] == (approved_language or {}).get('tag')
+                    and turn['language_source'] == (approved_language or {}).get('source'),
                     'External turn differs from approved request')
             if turn['state'] == 'completed':
                 response = OpenAIRuns(root).get(original['run_id'])['response']
@@ -1442,7 +1486,9 @@ class ChatService:
             threads.prepare_turn(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
                 turn_id=original['turn_id'], message_id=original['message_id'],
                 content=original['content'], privacy=original['privacy'],
-                created_at=original['created_at'])
+                created_at=original['created_at'],
+                response_language=(approved_language or {}).get('tag'),
+                language_source=(approved_language or {}).get('source'))
         threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
@@ -1500,6 +1546,7 @@ class ChatService:
             'content': row['request']['content'], 'privacy': row['privacy'],
             'created_at': row['created_at'], 'record_chat': False,
             'run_choice': row['request']['run_choice'],
+            'response_language': row['request'].get('response_language'),
             'task_plan': row['request']['task_plan']})
         preview['task_id'] = request['task_id']
         preview['purpose'] = row['outcome']['purpose']
@@ -1638,13 +1685,14 @@ class ChatService:
 
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,
-             content, privacy, created_at, run_choice=None):
+             content, privacy, created_at, run_choice=None, response_language=None):
         return self._send(project_id=project_id, expected_head=expected_head,
             thread_id=thread_id, turn_id=turn_id, message_id=message_id,
             run_id=run_id, manifest_id=manifest_id,
             assistant_message_id=assistant_message_id,
             selected_message_ids=selected_message_ids, content=content,
             privacy=privacy, created_at=created_at, run_choice=run_choice,
+            response_language=response_language,
             stream=False, on_delta=lambda _delta: None,
             on_status=lambda _status: None)
 
@@ -1654,12 +1702,14 @@ class ChatService:
         require(on_status is None or callable(on_status),
                 'Ollama stream status callback is invalid')
         request = dict(request); request.setdefault('run_choice', None)
+        request.setdefault('response_language', None)
         return self._send(**request, stream=True, on_delta=on_delta,
                           on_status=on_status or (lambda _status: None))
 
     def _send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
               run_id, manifest_id, assistant_message_id, selected_message_ids,
-              content, privacy, created_at, run_choice, stream, on_delta, on_status):
+              content, privacy, created_at, run_choice, response_language,
+              stream, on_delta, on_status):
         require(type(stream) is bool and callable(on_delta) and callable(on_status),
                 'Invalid Ollama stream callbacks')
         if stream:
@@ -1697,9 +1747,14 @@ class ChatService:
         stored = threads.get(thread_id, node_id, user_id)
         require(stored['classification'] == choice.mode,
                 'Chat mode cannot change inside an existing thread')
+        language = ResponseLanguagePolicy(self._root()).resolve(
+            project_id=project_id, thread_tag=stored['response_language'],
+            run_tag=response_language)
         threads.prepare_turn(thread_id=thread_id, node_id=node_id, user_id=user_id,
                              turn_id=turn_id, message_id=message_id, content=content,
-                             privacy=privacy, created_at=created_at)
+                             privacy=privacy, created_at=created_at,
+                             response_language=language['tag'],
+                             language_source=language['source'])
         thread = threads.get(thread_id, node_id, user_id)
         messages = {item['message_id']: item for item in thread['messages']}
         require(all(value in messages for value in selected_message_ids),
@@ -1720,7 +1775,9 @@ class ChatService:
                                    conversation=ConversationSelection(
                                        thread_id, thread['revision'],
                                        tuple(item['message_id'] for item in selected),
-                                       tuple(item['role'] for item in selected)))
+                                       tuple(item['role'] for item in selected)),
+                                   response_language=ResponseLanguage(
+                                       language['tag'], language['source']))
         current = threads.get(thread_id, node_id, user_id)
         require(current['revision'] == thread['revision']
                 and tuple(item['message_id'] for item in current['messages']) ==

@@ -12,6 +12,7 @@ from spikes.chat_threads import ChatThreads, MAX_MESSAGE, PRIVACY, TERMINAL
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.metadata import MAX_FILE, pairs, require, timestamp, uuid, validate_snapshot
 from spikes.project_creation import ProjectCreation
+from spikes.response_language import LANGUAGE_SOURCES, language_tag
 
 
 PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
@@ -62,7 +63,8 @@ def parse_snapshot(raw):
               'assignment_revision', 'start_sequence', 'end_sequence', 'created_at',
               'privacy', 'base', 'messages', 'turns'}
     require(isinstance(record, dict) and set(record) == fields
-            and record.get('schema') == 'fpw-chat-snapshot-v1',
+            and record.get('schema') in {'fpw-chat-snapshot-v1',
+                                         'fpw-chat-snapshot-v2'},
             'Unknown chat snapshot schema')
     require(record['mode'] in {'full', 'delta'}, 'Invalid chat snapshot mode')
     uuid(record['snapshot_id']); uuid(record['project_id']); uuid(record['thread_id'])
@@ -122,6 +124,8 @@ def parse_snapshot(raw):
             'Chat snapshot privacy is not the strictest message privacy')
     turn_fields = {'turn_id', 'user_message_id', 'run_id', 'assistant_message_id',
                    'state', 'error', 'manifest_id'}
+    if record['schema'] == 'fpw-chat-snapshot-v2':
+        turn_fields |= {'response_language', 'language_source', 'language_compliance'}
     for turn in record['turns']:
         require(isinstance(turn, dict) and set(turn) == turn_fields,
                 'Invalid chat snapshot turn')
@@ -132,6 +136,16 @@ def parse_snapshot(raw):
         require(turn['state'] in {'prepared', 'run-bound', 'completed'} | TERMINAL
                 and (turn['error'] is None or isinstance(turn['error'], str)),
                 'Invalid chat snapshot turn')
+        if record['schema'] == 'fpw-chat-snapshot-v2':
+            if turn['response_language'] is None:
+                require(turn['language_source'] is None
+                        and turn['language_compliance'] is None,
+                        'Invalid legacy chat snapshot language')
+            else:
+                require(language_tag(turn['response_language']) == turn['response_language']
+                        and turn['language_source'] in LANGUAGE_SOURCES
+                        and turn['language_compliance'] == 'unverified',
+                        'Invalid chat snapshot language provenance')
     digest = hashlib.sha256(_canonical(record)).hexdigest()
     require(isinstance(envelope['record_sha256'], str)
             and envelope['record_sha256'] == digest, 'Chat snapshot digest mismatch')
@@ -241,7 +255,7 @@ class ChatRecords:
                      if item['user_message_id'] in message_ids
                      or item['assistant_message_id'] in message_ids]
             privacy = max((item['privacy'] for item in messages), key=PRIVACY_ORDER.__getitem__)
-            record = {'schema': 'fpw-chat-snapshot-v1', 'mode': request['mode'],
+            record = {'schema': 'fpw-chat-snapshot-v2', 'mode': request['mode'],
                       'snapshot_id': request['snapshot_id'],
                       'project_id': request['project_id'], 'thread_id': request['thread_id'],
                       'thread_revision': thread['revision'], 'assignment_revision': thread['assignment_revision'],

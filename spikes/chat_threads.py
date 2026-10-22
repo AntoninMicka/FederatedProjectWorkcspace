@@ -9,6 +9,7 @@ import sqlite3
 import stat
 
 from spikes.metadata import require, timestamp, uuid
+from spikes.response_language import LANGUAGE_SOURCES, language_tag
 
 
 PRIVACY = {'public', 'project', 'confidential', 'local-only'}
@@ -61,9 +62,9 @@ class ChatThreads:
                 require(tables in (legacy_tables, current_tables),
                         'Unknown or incomplete chat schema')
                 row = db.execute('SELECT version FROM schema_info').fetchall()
-                require(row in ([(1,)], [(2,)], [(3,)], [(4,)]),
+                require(row in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)]),
                         'Unsupported chat schema version')
-                require(row != [(4,)] or tables == current_tables,
+                require(row not in ([(4,)], [(5,)]) or tables == current_tables,
                         'Unknown or incomplete chat schema')
                 self._validate_columns(db, version=row[0][0])
                 if row == [(1,)]:
@@ -97,6 +98,13 @@ class ChatThreads:
                             preview_sha256 TEXT NOT NULL)''')
                     db.execute('UPDATE schema_info SET version=4')
                     self._validate_columns(db, version=4)
+                if row in ([(1,)], [(2,)], [(3,)], [(4,)]):
+                    db.execute('ALTER TABLE threads ADD COLUMN response_language TEXT')
+                    db.execute('ALTER TABLE turns ADD COLUMN response_language TEXT')
+                    db.execute('ALTER TABLE turns ADD COLUMN language_source TEXT')
+                    db.execute('ALTER TABLE turns ADD COLUMN language_compliance TEXT')
+                    db.execute('UPDATE schema_info SET version=5')
+                    self._validate_columns(db, version=5)
             db.commit()
             return closing(db)
         except Exception:
@@ -107,14 +115,15 @@ class ChatThreads:
     def _create(db):
         db.executescript('''
             CREATE TABLE schema_info(version INTEGER NOT NULL);
-            INSERT INTO schema_info VALUES(4);
+            INSERT INTO schema_info VALUES(5);
             CREATE TABLE threads(
                 thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 classification TEXT NOT NULL CHECK(classification IN ('brainstorming','orchestration')),
                 status TEXT NOT NULL CHECK(status IN ('active','archived')),
                 created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
                 next_sequence INTEGER NOT NULL CHECK(next_sequence>=0),
-                project_id TEXT, assignment_revision INTEGER NOT NULL CHECK(assignment_revision>=0));
+                project_id TEXT, assignment_revision INTEGER NOT NULL CHECK(assignment_revision>=0),
+                response_language TEXT);
             CREATE TABLE messages(
                 message_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(thread_id),
                 sequence INTEGER NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','assistant')),
@@ -129,7 +138,8 @@ class ChatThreads:
                 run_id TEXT UNIQUE, assistant_message_id TEXT UNIQUE REFERENCES messages(message_id),
                 state TEXT NOT NULL CHECK(state IN
                     ('prepared','run-bound','completed','failed','cancelled','unknown')),
-                error TEXT, manifest_id TEXT);
+                error TEXT, manifest_id TEXT, response_language TEXT,
+                language_source TEXT, language_compliance TEXT);
             CREATE TABLE deletions(
                 thread_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE,
                 node_id TEXT NOT NULL, user_id TEXT NOT NULL,
@@ -142,7 +152,8 @@ class ChatThreads:
             'schema_info': ['version'],
             'threads': ['thread_id', 'node_id', 'user_id', 'classification', 'status',
                         'created_at', 'revision', 'next_sequence'] +
-                       (['project_id', 'assignment_revision'] if version >= 2 else []),
+                       (['project_id', 'assignment_revision'] if version >= 2 else []) +
+                       (['response_language'] if version >= 5 else []),
             'messages': ['message_id', 'thread_id', 'sequence', 'role', 'content',
                          'content_sha256', 'privacy', 'author_id', 'created_at', 'supersedes_id'],
             'turns': ['turn_id', 'thread_id', 'user_message_id', 'run_id',
@@ -152,6 +163,9 @@ class ChatThreads:
         if version >= 4:
             expected['deletions'] = ['thread_id', 'operation_id', 'node_id', 'user_id',
                                      'preview_sha256']
+        if version >= 5:
+            expected['turns'] += ['response_language', 'language_source',
+                                  'language_compliance']
         for table, columns in expected.items():
             actual = [row[1] for row in db.execute(f'PRAGMA table_info({table})')]
             require(actual == columns, 'Unknown or incomplete chat schema')
@@ -161,7 +175,8 @@ class ChatThreads:
         for value in (thread_id, node_id, user_id):
             uuid(value)
         row = db.execute('SELECT node_id,user_id,status,classification,created_at,revision,'
-                         'next_sequence,project_id,assignment_revision FROM threads WHERE thread_id=?',
+                         'next_sequence,project_id,assignment_revision,response_language '
+                         'FROM threads WHERE thread_id=?',
                          (thread_id,)).fetchone()
         require(row is not None and row[0] == node_id and row[1] == user_id,
                 'Chat thread is unavailable to this owner')
@@ -173,6 +188,8 @@ class ChatThreads:
         if row[7] is not None:
             uuid(row[7])
         require(type(row[8]) is int and row[8] >= 0, 'Invalid assignment revision')
+        if row[9] is not None:
+            require(language_tag(row[9]) == row[9], 'Invalid stored thread language')
         deleting = db.execute('SELECT 1 FROM deletions WHERE thread_id=?',
                               (thread_id,)).fetchone()
         require(allow_deleting or deleting is None, 'Chat thread deletion is in progress')
@@ -241,9 +258,9 @@ class ChatThreads:
             if row:
                 require(row == request, 'Thread ID belongs to a different request')
             else:
-                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, classification, 'active',
-                            created_at, 0, 0, project_id, 1 if project_id else 0))
+                            created_at, 0, 0, project_id, 1 if project_id else 0, None))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
@@ -272,26 +289,35 @@ class ChatThreads:
                 require(blocked is None, 'Brainstorming thread has an active or unknown turn')
                 db.execute("UPDATE threads SET status='archived',revision=revision+1 WHERE thread_id=?",
                            (source_thread_id,))
-                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, 'orchestration', 'active',
-                            created_at, 0, 0, source[7], 1 if source[7] else 0))
+                            created_at, 0, 0, source[7], 1 if source[7] else 0, source[9]))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
     def prepare_turn(self, *, thread_id, node_id, user_id, turn_id, message_id,
-                     content, privacy, created_at, checkpoint=lambda stage: None):
+                     content, privacy, created_at, response_language=None,
+                     language_source=None, checkpoint=lambda stage: None):
         uuid(turn_id); uuid(message_id); timestamp(created_at)
         require(privacy in PRIVACY, 'Unknown message privacy')
         raw, digest = _content(content)
+        if response_language is not None:
+            response_language = language_tag(response_language)
+            require(language_source in LANGUAGE_SOURCES,
+                    'Invalid response language source')
+        else:
+            require(language_source is None, 'Language source requires a response language')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             thread = self._owner(db, thread_id, node_id, user_id, active=True)
-            existing = db.execute('SELECT thread_id,user_message_id,state FROM turns '
+            existing = db.execute('SELECT thread_id,user_message_id,state,response_language,'
+                                  'language_source FROM turns '
                                   'WHERE turn_id=?', (turn_id,)).fetchone()
             if existing:
                 message = db.execute('SELECT content,privacy,author_id,created_at FROM messages '
                                      'WHERE message_id=?', (message_id,)).fetchone()
                 require(existing[:2] == (thread_id, message_id)
+                        and existing[3:] == (response_language, language_source)
                         and message == (raw, privacy, user_id, created_at),
                         'Turn ID belongs to a different request')
             else:
@@ -302,8 +328,10 @@ class ChatThreads:
                 db.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,NULL)',
                            (message_id, thread_id, sequence, 'user', raw, digest,
                             privacy, user_id, created_at))
-                db.execute('INSERT INTO turns VALUES(?,?,?,?,?,?,?,?)',
-                           (turn_id, thread_id, message_id, None, None, 'prepared', None, None))
+                db.execute('INSERT INTO turns VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                           (turn_id, thread_id, message_id, None, None, 'prepared', None, None,
+                            response_language, language_source,
+                            'unverified' if response_language is not None else None))
                 db.execute('UPDATE threads SET revision=revision+1,next_sequence=? '
                            'WHERE thread_id=?', (sequence, thread_id))
             checkpoint('prepared')
@@ -418,11 +446,28 @@ class ChatThreads:
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
+    def set_response_language(self, *, thread_id, node_id, user_id, language,
+                              expected_revision):
+        language = language_tag(language)
+        require(type(expected_revision) is int and expected_revision >= 0,
+                'Invalid expected thread revision')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = self._owner(db, thread_id, node_id, user_id, active=True)
+            if row[9] != language:
+                require(row[5] == expected_revision,
+                        'Chat thread changed before language preference update')
+                db.execute('UPDATE threads SET response_language=?,revision=revision+1 '
+                           'WHERE thread_id=?', (language, thread_id))
+            db.commit()
+        return self.get(thread_id, node_id, user_id)
+
     def get_turn(self, turn_id, node_id, user_id):
         uuid(turn_id)
         with self.connect() as db:
             row = db.execute('SELECT turn_id,thread_id,user_message_id,run_id,'
-                             'assistant_message_id,state,error,manifest_id FROM turns WHERE turn_id=?',
+                             'assistant_message_id,state,error,manifest_id,response_language,'
+                             'language_source,language_compliance FROM turns WHERE turn_id=?',
                              (turn_id,)).fetchone()
             require(row is not None, 'Unknown chat turn')
             self._owner(db, row[1], node_id, user_id)
@@ -436,8 +481,14 @@ class ChatThreads:
                     'Invalid stored chat turn')
             if row[7] is not None:
                 uuid(row[7])
+            if row[8] is not None:
+                require(language_tag(row[8]) == row[8]
+                        and row[9] in LANGUAGE_SOURCES and row[10] == 'unverified',
+                        'Invalid stored turn language provenance')
             return dict(zip(('turn_id', 'thread_id', 'user_message_id', 'run_id',
-                             'assistant_message_id', 'state', 'error', 'manifest_id'), row))
+                             'assistant_message_id', 'state', 'error', 'manifest_id',
+                             'response_language', 'language_source',
+                             'language_compliance'), row))
 
     def get(self, thread_id, node_id, user_id):
         with self.connect() as db:
@@ -473,7 +524,8 @@ class ChatThreads:
             require(row[6] == len(messages), 'Invalid stored chat sequence counter')
             turns = []
             for item in db.execute('SELECT turn_id,user_message_id,run_id,assistant_message_id,'
-                                   'state,error,manifest_id FROM turns WHERE thread_id=? ORDER BY rowid',
+                                   'state,error,manifest_id,response_language,language_source,'
+                                   'language_compliance FROM turns WHERE thread_id=? ORDER BY rowid',
                                    (thread_id,)):
                 for value in item[:2]:
                     uuid(value)
@@ -483,13 +535,20 @@ class ChatThreads:
                     uuid(item[3])
                 if item[6] is not None:
                     uuid(item[6])
+                if item[7] is not None:
+                    require(language_tag(item[7]) == item[7]
+                            and item[8] in LANGUAGE_SOURCES and item[9] == 'unverified',
+                            'Invalid stored turn language provenance')
                 require(item[4] in {'prepared', 'run-bound', 'completed'} | TERMINAL,
                         'Invalid stored chat turn')
                 turns.append(dict(zip(('turn_id', 'user_message_id', 'run_id',
-                                       'assistant_message_id', 'state', 'error', 'manifest_id'), item)))
+                                       'assistant_message_id', 'state', 'error', 'manifest_id',
+                                       'response_language', 'language_source',
+                                       'language_compliance'), item)))
             return dict(thread_id=thread_id, node_id=row[0], user_id=row[1], status=row[2],
                         classification=row[3], created_at=row[4], revision=row[5],
                         project_id=row[7], assignment_revision=row[8],
+                        response_language=row[9],
                         messages=messages, turns=turns)
 
     def list(self, node_id, user_id):

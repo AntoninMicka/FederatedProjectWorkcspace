@@ -41,7 +41,8 @@ class ChatRecordTests(unittest.TestCase):
         turn_id, message_id, run_id = (str(uuid4()) for _ in range(3))
         self.threads.prepare_turn(thread_id=self.thread_id, node_id=self.node_id,
             user_id=self.user_id, turn_id=turn_id, message_id=message_id,
-            content=question, privacy='project', created_at=asked)
+            content=question, privacy='project', created_at=asked,
+            response_language='cs-CZ', language_source='node')
         self.threads.bind_run(turn_id=turn_id, node_id=self.node_id, user_id=self.user_id,
                               run_id=run_id, manifest_id=str(uuid4()))
         self.threads.complete(turn_id=turn_id, node_id=self.node_id, user_id=self.user_id,
@@ -67,6 +68,10 @@ class ChatRecordTests(unittest.TestCase):
         self.assertEqual(receipt['commit_id'], self.git.head())
         self.assertEqual([item['content'] for item in record['messages']], ['Question', 'Answer'])
         self.assertTrue(record['turns'][0]['manifest_id'])
+        self.assertEqual((record['schema'], record['turns'][0]['response_language'],
+                          record['turns'][0]['language_source'],
+                          record['turns'][0]['language_compliance']),
+                         ('fpw-chat-snapshot-v2', 'cs-CZ', 'node', 'unverified'))
         meta = validate_snapshot(self.git.snapshot(self.git.head()))[full['snapshot_id']]
         self.assertEqual((meta['kind'], meta['provenance'], meta['privacy']),
                          ('snapshot', 'snapshot', 'confidential'))

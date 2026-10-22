@@ -527,6 +527,13 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
 <label class="settings-toggle"><input id="ollama-streaming-enabled" type="checkbox" disabled> Streamovat odpovědi Ollamy v režimu Brainstorming</label>
 <p id="ollama-streaming-state" role="status" aria-live="polite">Načítám stav streamování…</p>
+<fieldset><legend>Výchozí jazyk odpovědi</legend>
+<p>Preference se dědí v pořadí uzel → projekt → vlákno; konkrétní volba v promptu platí jen pro daný běh.</p>
+<label>Úroveň <select id="response-language-scope"><option value="node">Tento uzel</option><option value="project">Aktuální projekt</option><option value="thread">Aktuální vlákno</option></select></label>
+<label>BCP 47 <input id="response-language-tag" value="cs-CZ" maxlength="63" required></label>
+<button id="response-language-save" type="button">Uložit jazyk</button>
+<p id="response-language-state" role="status" aria-live="polite">Jazyk zatím nebyl načten.</p>
+</fieldset>
 <button id="chat-backend-test" type="button">Ověřit bez uložení</button>
 <button type="submit">Uložit backend</button></form>
 <small>Privátní síť vyžaduje číselnou HTTPS adresu, stabilní ID cíle a připnutý certifikát. Test načte pouze seznam modelů; neposílá projektová data a nastavení neukládá. Tajné klíče se zde nezobrazují.</small>
@@ -936,6 +943,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control" for="task-output-kind"><span>Výsledek</span><select id="task-output-kind"><option value="conversation">Konverzace</option><option value="document">Dokument</option><option value="presentation">Prezentace</option></select></label>
 </div>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
+<label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
 <label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select></label>
 <label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
@@ -3670,6 +3678,7 @@ const chatStreamProgressText=document.querySelector('#chat-stream-progress-text'
 const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
+const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 const presentationApprovalAttempts=new Map();
@@ -3732,12 +3741,15 @@ function fillExternalModels(catalog){
 }
 function renderChat(thread){
  activeThread=thread || null;chatMessages.replaceChildren();
+ if(responseLanguagePolicy)applyResponseLanguageStatus({response_language_policy:responseLanguagePolicy});
  for(const item of thread?.messages || []){
   const message=document.createElement('div');message.className='chat-message '+item.role;
   message.textContent=item.content;
-  const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}`;
-  message.append(detail);chatMessages.append(message);
   const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
+  const languageDetail=turn?.response_language ?
+   ` · požadovaný jazyk ${turn.response_language} · shoda ${turn.language_compliance==='unverified'?'neověřena':turn.language_compliance}`:'';
+  const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}${languageDetail}`;
+  message.append(detail);chatMessages.append(message);
   if(turn?.external_request_available){
    const requestButton=document.createElement('button');requestButton.type='button';
    requestButton.className='secondary-button';requestButton.textContent='Zobrazit odeslaný request';
@@ -4315,11 +4327,25 @@ function applyOllamaStreamingStatus(result){
   'Streamování tento backend nepodporuje.' :
   (ollamaStreaming?'Streamování je zapnuto.':'Streamování je vypnuto; odpověď se zobrazí až celá.');
 }
+let responseLanguagePolicy=null;
+function applyResponseLanguageStatus(result){
+ const policy=result.response_language_policy;
+ if(!policy)return;
+ responseLanguagePolicy=policy;
+ const select=document.querySelector('#chat-response-language');
+ const inherited=activeThread?.response_language || policy.projects?.[activeProject?.id] || policy.node_default;
+ select.options[0].textContent=`Výchozí · ${inherited}`;
+ select.title='Prázdná volba dědí jazyk vlákna, projektu a uzlu. Konkrétní volba platí pro tento běh.';
+ const settingsTag=document.querySelector('#response-language-tag');
+ if(document.activeElement!==settingsTag)settingsTag.value=inherited;
+ responseLanguageState.textContent=`Účinný jazyk: ${inherited}. Shoda výstupu se automaticky negarantuje ani skrytě neopravuje.`;
+}
 async function loadBackendBinding(){
  try{const result=await projectRequest('/v1/chat/status',{});
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
+  applyResponseLanguageStatus(result);
   const external=await projectRequest('/v1/external/status',{});
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
@@ -4587,6 +4613,25 @@ ollamaStreamingToggle.addEventListener('change',async event=>{
   event.currentTarget.disabled=!ollamaStreamingSupported;
   ollamaStreamingState.textContent=error.message;}
 });
+document.querySelector('#response-language-save').addEventListener('click',async event=>{
+ const scope=document.querySelector('#response-language-scope').value;
+ const request={scope,tag:document.querySelector('#response-language-tag').value.trim()};
+ if(scope==='project'){
+  if(!activeProject){responseLanguageState.textContent='Nejprve otevřete projekt.';return;}
+  request.project_id=activeProject.id;
+ }
+ if(scope==='thread'){
+  if(!activeThread){responseLanguageState.textContent='Nejprve otevřete vlákno.';return;}
+  request.thread_id=activeThread.thread_id;request.expected_revision=activeThread.revision;
+ }
+ event.currentTarget.disabled=true;responseLanguageState.textContent='Ukládám jazykovou preferenci…';
+ try{const result=await projectRequest('/v1/chat/response-language',request);
+  if(result.thread){activeThread=result.thread;rememberThread(result.thread);renderChat(result.thread);}
+  applyResponseLanguageStatus({response_language_policy:result.policy});
+  responseLanguageState.textContent=`Uloženo ${result.tag} pro úroveň ${scope}. Model může požadavek nedodržet; výstup se nepřekládá.`;
+ }catch(error){responseLanguageState.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
 chatForm.addEventListener('submit',async event=>{
  event.preventDefault();const binding=backendCandidate();
  settingsBackendStatus.textContent='Ukládám backend…';
@@ -4744,6 +4789,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
+ const responseLanguage=document.querySelector('#chat-response-language').value || null;
  if(mode==='orchestration'){
   if(adapter==='ollama'){
    runChoice.binding_id=chatBinding.binding_id;runChoice.binding_revision=chatBinding.revision;
@@ -4775,7 +4821,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
    selected_artifact_ids:[],content:draft.value.trim(),
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
-   run_choice:runChoice};
+   run_choice:runChoice,response_language:responseLanguage};
  const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám do OpenAI…';
   chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
@@ -4807,7 +4853,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
     selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
     content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
-    created_at:new Date().toISOString(),run_choice:runChoice};
+    created_at:new Date().toISOString(),run_choice:runChoice,
+    response_language:responseLanguage};
   }
   const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám…';chatStream.textContent='';
@@ -4871,6 +4918,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   selected_artifact_ids:uniqueArtifactIds,
   content:draft.value.trim(),privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString(),run_choice:runChoice,
+  response_language:responseLanguage,
   task_plan:{schema_version:1,source_kinds:sourceKinds,
    output_kind:document.querySelector('#task-output-kind').value,
    execution:adapter==='ollama'?'local-ollama':'external-openai',
@@ -5368,7 +5416,7 @@ class DesktopHandler(Handler):
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
         '/v1/chat/status', '/v1/chat/configure',
-        '/v1/chat/preferences', '/v1/chat/test',
+        '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
         '/v1/chat/send', '/v1/chat/send-stream',
         '/v1/chat/orchestration', '/v1/chat/archive', '/v1/chat/delete/preview',
@@ -5671,6 +5719,9 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.configure(request))
             if self.path == '/v1/chat/preferences' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_preferences(request))
+            if self.path == '/v1/chat/response-language' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.configure_response_language(request))
             if self.path == '/v1/chat/test' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.test_binding(request))
             if (self.path == '/v1/chat/orchestration' and isinstance(request, dict)
@@ -5686,15 +5737,14 @@ class DesktopHandler(Handler):
                     and set(request) == {'thread_id', 'operation_id', 'expected_revision',
                                          'preview_sha256'}):
                 return self.reply(200, self.server.chat_service.delete_thread(**request))
-            chat_send_fields = ({
-                    'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
-                    'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
-                    'content', 'privacy', 'created_at'}, {
-                    'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
-                    'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
-                    'content', 'privacy', 'created_at', 'run_choice'})
+            chat_send_required = {
+                'project_id', 'expected_head', 'thread_id', 'turn_id', 'message_id',
+                'run_id', 'manifest_id', 'assistant_message_id', 'selected_message_ids',
+                'content', 'privacy', 'created_at'}
+            chat_send_optional = {'run_choice', 'response_language'}
             if (self.path == '/v1/chat/send-stream' and isinstance(request, dict)
-                    and set(request) in chat_send_fields):
+                    and chat_send_required <= set(request)
+                    and set(request) <= chat_send_required | chat_send_optional):
                 self.close_connection = True
                 self.send_response_only(200)
                 self.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
@@ -5722,7 +5772,8 @@ class DesktopHandler(Handler):
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
                 return
             if self.path == '/v1/chat/send' and isinstance(request, dict) \
-                    and set(request) in chat_send_fields:
+                    and chat_send_required <= set(request) \
+                    and set(request) <= chat_send_required | chat_send_optional:
                 return self.reply(200, self.server.chat_service.send(**request))
             if self.path == '/v1/chat/assign' and isinstance(request, dict) and set(request) == {
                     'project_id', 'thread_id', 'expected_revision'}:

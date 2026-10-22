@@ -10,6 +10,7 @@ from types import MappingProxyType
 
 from spikes.configuration import committed_project
 from spikes.metadata import MAX_FILE, require, uuid, validate_snapshot
+from spikes.response_language import LANGUAGE_SOURCES, language_tag
 from spikes.workspace import PendingOperation
 
 
@@ -137,6 +138,17 @@ class TaskInstruction:
 
 
 @dataclass(frozen=True)
+class ResponseLanguage:
+    tag: str
+    source: str
+
+    def validate(self):
+        require(language_tag(self.tag) == self.tag, 'Response language must be normalized')
+        require(self.source in LANGUAGE_SOURCES, 'Invalid response language source')
+        return self
+
+
+@dataclass(frozen=True)
 class PreparedContext:
     manifest: MappingProxyType
     manifest_bytes: bytes
@@ -160,7 +172,7 @@ class ContextBuilder:
 
     def prepare(self, *, manifest_id, run_id, authority, target, project_inputs=(),
                 ad_hoc_inputs=(), public_source_inputs=(), omitted=(),
-                conversation=None, task=None):
+                conversation=None, task=None, response_language=None):
         uuid(manifest_id); uuid(run_id)
         authority.validate(); target.validate()
         require(isinstance(project_inputs, tuple) and isinstance(ad_hoc_inputs, tuple)
@@ -172,14 +184,18 @@ class ContextBuilder:
         if task is not None:
             require(isinstance(task, TaskInstruction), 'Invalid task instruction')
             task.validate()
+        if response_language is not None:
+            require(isinstance(response_language, ResponseLanguage),
+                    'Invalid response language policy')
+            response_language.validate()
         with self.workspace.journal.lock(), self.workspace.journal.connect() as db:
             return self._prepare_locked(db, manifest_id, run_id, authority, target,
                                         project_inputs, ad_hoc_inputs, public_source_inputs,
-                                        omitted, conversation, task)
+                                        omitted, conversation, task, response_language)
 
     def _prepare_locked(self, db, manifest_id, run_id, authority, target,
                         project_inputs, ad_hoc_inputs, public_source_inputs,
-                        omitted, conversation, task):
+                        omitted, conversation, task, response_language):
         if self.workspace._active(db) or db.execute('SELECT 1 FROM pending').fetchone():
             raise PendingOperation('Project has an unfinished operation')
         self.workspace._branch()
@@ -280,6 +296,9 @@ class ContextBuilder:
             payload_value['task'] = dict(role_id=task.role_id,
                 role_revision=task.role_revision, instruction=task.instruction,
                 focus_input_id=task.focus_input_id)
+        if response_language is not None:
+            payload_value['response_language'] = dict(tag=response_language.tag,
+                                                       source=response_language.source)
         payload = _canonical(payload_value)
         manifest = dict(schema_version=1, manifest_id=manifest_id, run_id=run_id,
                         project_id=self.project_id, project_commit=head,
@@ -301,6 +320,9 @@ class ContextBuilder:
                 role_revision=task.role_revision,
                 instruction_sha256=_digest(task.instruction.encode('utf-8')),
                 focus_input_id=task.focus_input_id)
+        if response_language is not None:
+            manifest['response_language'] = dict(tag=response_language.tag,
+                source=response_language.source, compliance='unverified')
         manifest_bytes = _canonical(manifest)
         require(self.workspace.git.head() == head, 'Project changed during context preparation')
         return PreparedContext(MappingProxyType(manifest), manifest_bytes, payload)
