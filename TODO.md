@@ -26,11 +26,12 @@ synchronizaci a nemění běžící uzly.
   (cílová úroveň: designed).** Definovat lokální autoritu účtů, kvalifikované
   identity, lifecycle uživatele/skupiny/uzlu, plnohodnotné webové přihlášení,
   MFA a model jednoho aktivního uživatele desktopové instance nad více OS
-  uživateli jednoho uzlu. Doplnit volitelnou centrální autoritu identity:
-  oddělit adresář/provisioning uživatelů a skupin (např. LDAP/SCIM), ověření a
-  assertions (např. OIDC) a lifecycle autentizátorů (WebAuthn/TOTP nebo služba
-  IdP). Credentials, MFA secrets a session se nefederují ani nekopírují do
-  projektových uzlů.
+  uživateli jednoho uzlu. Identita je vždy kvalifikovaná autoritou, například
+  `U1@A`; uzly B/C mohou držet lokální projekci stejného principalu, ale nesmějí
+  jej přepsat na nový účet nebo převzít autoritu nad jeho credentials. Model
+  musí zůstat kompatibilní s budoucí centrální autoritou identity, její úplná
+  integrace však není podmínkou této dávky. Credentials, MFA secrets a session
+  se nefederují ani nekopírují do projektových uzlů.
 - [ ] [planned] **UX-FEDERATION-02-C — jednotný policy model
   (cílová úroveň: designed).** Jedním verzovaným a vysvětlitelným enginem
   vyhodnotit lokální ACL, export, příjem, další delegaci a automatickou
@@ -57,8 +58,19 @@ synchronizaci a nemění běžící uzly.
   přijímací policy a lokálních práv; žádná vrstva je nesmí rozšířit;
 - desktopový host je jeden uzel, ale každá instance jedná pouze za právě
   přihlášeného OS uživatele a nesdílí uživatelské credentials ani session;
-- centrální služba identity je volitelná a identita se váže na stabilní
-  dvojici autorita/subjekt; nedostupnost, změna skupiny a revokace mají
-  explicitní offline/TTL a nouzový lokální recovery kontrakt;
+- každá identita se váže na stabilní dvojici autorita/subjekt; lokální projekce
+  na jiném uzlu zachová stejného principalu a neudělá z něj novou autoritu;
 - ADR, roadmapa a backlog popisují migraci i pořadí implementace bez tvrzení,
   že návrh už představuje funkční federaci nebo plnohodnotné přihlášení.
+
+## K předání do backlogu
+
+- [ ] [planned] **AUTH-CENTRAL-01 — centrální autorita identity a offline
+  projekce (cílová úroveň: designed → PoC validated).** Autorita A poskytuje
+  stabilní identity `U1@A`, `U2@A` a podepsané skupinové claims uzlům B/C.
+  Připojený uzel nepoužívá vlastní běžné účty jako konkurenční autoritu; drží
+  pouze bounded lokální projekci pro autorizaci, provenance a offline čtení.
+  Oddělit adresář/provisioning (např. LDAP/SCIM), autentizační assertions
+  (např. OIDC) a lifecycle WebAuthn/TOTP autentizátorů. Definovat TTL, revokaci,
+  návrat centrální služby a nouzový účet uzlu. Hesla, jejich digesty, MFA
+  secrets ani session se na uzly jako záložní kopie nereplikují.
