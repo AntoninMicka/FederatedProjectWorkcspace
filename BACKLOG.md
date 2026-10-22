@@ -195,20 +195,18 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   `holding-partner` vybraná data také celé ověřené společnosti; `partner` jen
   chat a uživatelem explicitně odeslaný či sdílený obsah.
 
-  Rozlišit dva neměnné původy nasazení serveru. Server instalovaný desktopovou
-  aplikací je osobní uzel právě jednoho uživatele a jednoho vlastnického
-  aplikačního účtu; druhý lokální uživatel se odmítne. Více serverů přímo
-  instalovaných stejným desktopem pro stejného vlastníka tvoří podepsanou
-  deployment skupinu a mohou mít `same-company-same-team` vazby mezi desktopem
-  i navzájem jako primární a záložní uzly. Každý server má vlastní node identity
-  a klíč. Členství ve skupině není tranzitivní ani delegovatelné: osobní server
-  nesmí vydat, importovat nebo přepsat desktopový doklad původu, přidat další
-  uzel ani změnit vlastníka. Server instalovaný z CLI osobní omezení nemá, může
-  hostit více lokálních uživatelů a federovat s dalšími servery podle běžně
-  schválených profilů a policies. Do skupiny se automaticky nezařadí a nemůže
-  být na osobní uzel dodatečně povýšen pouhou policy. Ve všech vztazích mimo
-  platnou deployment skupinu zůstává osobní server omezen jako desktop, tedy
-  nejvýše `same-company`.
+  Způsob nasazení serveru zachovat jako auditní/bootstrap provenance, nikoli
+  jako capability strop. Server instalovaný desktopem lze explicitně převést na
+  obecný víceuživatelský uzel. Jeden fyzický desktop je jeden uzel se systémovou
+  node službou a oddělenými OS uživateli. Identity jsou kvalifikované autoritou,
+  například `U1@A`; vzdálená projekce nepřebírá autoritu nad credentials.
+
+  Zavést role `network-admin`, `network-group-admin`, `node-admin`,
+  `group-admin`, `project-admin` a `user` podle ADR 0037. Správní role samy
+  nezpřístupňují projektová data. Oddělit network groups, user groups,
+  replication sets a project ACL. Automatická replikace začne až vědomým
+  zařazením projektu do replication setu; první režim je jeden primární
+  zapisující uzel a automatické read-only repliky.
 
   Pro `trusted-partner` a `holding-partner` určit aktivního místního styčného
   uživatele přijímajícího uzlu, který auditovatelně přiděluje práva k převzatým
@@ -217,18 +215,14 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   mapované uživatele nebo organizačního příjemce, styčného uživatele, povolené
   privacy a akce včetně `export`.
 
-  Akceptace: žádný profil, společný původ ani přijetí dat samo neudělí přístup
-  nebo nespustí replikaci; oba uzly schválí přesný scope; vzdálená identita se
-  mimo platnou `same-company-same-team` skupinu nestane lokálním účtem a její
-  role se nesynchronizují. Doklad původu váže stabilní identitu instalujícího
-  desktopu, kvalifikovanou identitu jediného vlastníka, deployment group ID a
-  konkrétní node ID/veřejný klíč osobního serveru. Cross-owner, cross-desktop,
-  tranzitivní, importovaná, klonovaná nebo dodatečně povýšená same-team vazba se
-  odmítne; revokace uzlu ani nové schválení nezmění původ, vlastníka či skupinu.
-  Ztráta/rotace desktopové autority a obnova jejího zálohovaného klíče mají
-  explicitní fail-closed lifecycle. Organizační grant používá ověřené, časově
-  vymezené a verzované členství; změna, downgrade nebo revokace má nové ID/verzi;
-  výměna či deaktivace styčného uživatele zachová audit, zabrání novým grantům a
+  Akceptace: žádný profil, správní role, společný původ ani přijetí dat samo
+  neudělí přístup nebo nespustí replikaci; všechny vrstvy schválí přesný scope.
+  Podepsaná offline projekce má výchozí platnost 8 hodin a předem schválené
+  maximum 24 hodin; vypršelá autorita si ji během výpadku neprodlouží. Ztráta,
+  rotace a obnova identity mají explicitní fail-closed lifecycle. Organizační
+  grant používá ověřené, časově vymezené a verzované členství; změna, downgrade
+  nebo revokace má nové ID/verzi. Výměna či deaktivace styčného uživatele
+  zachová audit, zabrání novým grantům a
   dovolí bezpečné odebrání existujících; pokus styčného uživatele rozšířit origin
   práva se odmítne; neznámá policy fail-closed; credentials, session, vzdálené
   přihlášení a `local-only` jsou vždy odmítnuty.

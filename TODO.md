@@ -17,12 +17,13 @@ synchronizaci a nemění běžící uzly.
 
 ## Úkoly dávky
 
-- [ ] [in progress] **UX-FEDERATION-02-A — inventura a revize stávajících
+- [x] [completed] **UX-FEDERATION-02-A — inventura a revize stávajících
   kontraktů (cílová úroveň: designed).** Porovnat ADR 0021, lokální účty,
   bearer přihlášení, portable ACL, peer trust, mapování a historický přenos
   M1-AH-14/15 s novým požadavkem. Výslovně nahradit osobní omezení serveru
-  nasazeného desktopem bez ztráty auditovatelného původu uzlu.
-- [ ] [planned] **UX-FEDERATION-02-B — identita, účty, skupiny a autentizace
+  nasazeného desktopem bez ztráty auditovatelného původu uzlu. ADR 0037
+  zachovává původ jako provenance, nikoli capability strop.
+- [ ] [in progress] **UX-FEDERATION-02-B — identita, účty, skupiny a autentizace
   (cílová úroveň: designed).** Definovat lokální autoritu účtů, kvalifikované
   identity, lifecycle uživatele/skupiny/uzlu, plnohodnotné webové přihlášení,
   MFA a model jednoho aktivního uživatele desktopové instance nad více OS
