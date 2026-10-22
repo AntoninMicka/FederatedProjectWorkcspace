@@ -399,6 +399,18 @@ class OllamaAdapterTests(unittest.TestCase):
                          'User:\nahoj\n\nUser:\nco je dnes za den?\n\nAssistant:\n')
         self.assertNotIn('content_b64', captured[0]['prompt'])
 
+    def test_response_language_is_an_explicit_provider_instruction(self):
+        message_id = str(uuid4())
+        payload = json.dumps({'schema_version': 1,
+            'inputs': [{'input_id': message_id,
+                        'content_b64': base64.b64encode(b'Question').decode()}],
+            'conversation': [{'message_id': message_id, 'role': 'user'}],
+            'response_language': {'tag': 'cs-CZ', 'source': 'run'}}).encode()
+        prompt = OllamaAdapter._prompt(payload)
+        self.assertIn('BCP 47', prompt)
+        self.assertIn('cs-CZ', prompt)
+        self.assertIn('Do not translate quoted source content', prompt)
+
     def test_task_pdf_uses_bounded_text_projection_without_changing_source_id(self):
         source, focus = str(uuid4()), str(uuid4())
         payload = json.dumps(dict(schema_version=1, inputs=[

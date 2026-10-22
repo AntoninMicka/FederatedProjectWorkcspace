@@ -1512,7 +1512,9 @@ class ChatServiceTests(unittest.TestCase):
         threads.prepare_turn(thread_id=request['thread_id'], node_id=self.node_id,
             user_id=user_id, turn_id=request['turn_id'], message_id=request['message_id'],
             content=request['content'], privacy=request['privacy'],
-            created_at=request['created_at'])
+            created_at=request['created_at'],
+            response_language=preview['response_language']['tag'],
+            language_source=preview['response_language']['source'])
         result = service.external_confirm({'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
             'privacy': preview['privacy']})
@@ -1541,6 +1543,42 @@ class ChatServiceTests(unittest.TestCase):
         rows = restarted.status()['threads']
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]['messages'][1]['content'], 'Assistant answer')
+
+    def test_response_language_precedence_manifest_and_restart_provenance(self):
+        self.assertEqual(self.service.status()['response_language_policy']['node_default'],
+                         'cs-CZ')
+        self.service.configure_response_language({'scope': 'node', 'tag': 'en-us'})
+        self.service.configure_response_language(
+            {'scope': 'project', 'tag': 'de-de', 'project_id': ENTITY})
+        first_request = self.request()
+        first = self.service.send(**first_request)
+        first_turn = first['turn']
+        self.assertEqual((first_turn['response_language'], first_turn['language_source'],
+                          first_turn['language_compliance']),
+                         ('de-DE', 'project', 'unverified'))
+        payload = json.loads(self.calls[0][1].payload)
+        self.assertEqual(payload['response_language'],
+                         {'tag': 'de-DE', 'source': 'project'})
+
+        configured = self.service.configure_response_language({
+            'scope': 'thread', 'tag': 'cs-cz', 'thread_id': first_request['thread_id'],
+            'expected_revision': first['thread']['revision']})
+        self.assertEqual(configured['thread']['response_language'], 'cs-CZ')
+        selected = [item['message_id'] for item in configured['thread']['messages']]
+        second = self.service.send(**self.request(
+            thread_id=first_request['thread_id'], selected_message_ids=selected,
+            created_at='2026-09-18T14:00:03Z', response_language='sk-sk'))
+        self.assertEqual((second['turn']['response_language'],
+                          second['turn']['language_source']), ('sk-SK', 'run'))
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: FakeAdapter(runs, self.calls))
+        stored = next(row for row in restarted.status()['threads']
+                      if row['thread_id'] == first_request['thread_id'])
+        self.assertEqual(stored['response_language'], 'cs-CZ')
+        self.assertEqual([turn['response_language'] for turn in stored['turns']],
+                         ['de-DE', 'sk-SK'])
 
     def test_explicit_modes_bind_thread_and_per_run_local_model(self):
         brainstorming = self.request(run_choice={

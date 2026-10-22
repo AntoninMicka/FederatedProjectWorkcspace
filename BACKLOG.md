@@ -47,8 +47,9 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
 Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
-merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` je
-akceptovaná a archivovaná ve WORK_LOG, v TODO čeká na doručení jediného PR.
+merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
+doručena PR #76 jako commit `80c083b`. `F-M2-CHAT-LANGUAGE-01` je akceptovaná
+a archivovaná ve WORK_LOG; v TODO čeká na doručení jediného PR.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -118,17 +119,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   skutečném odeslání už dotaz nelze vzít zpět a neurčitý výsledek se bez nového
   rozhodnutí neopakuje. Režim ani odpočet nesmějí obejít RBAC, privacy, binding,
   limity nebo audit přesných odeslaných bajtů.
-
-- [ ] [planned] **F-M2-CHAT-LANGUAGE-01 — Explicitní jazyk odpovědi
-  (cílová úroveň: designed → PoC validated).** Požadavek uživatele po
-  fyzické akceptaci streamu: Gemma občas odpoví slovensky namísto česky.
-  Definovat provider-neutral jazykovou policy, její precedence mezi uzlem,
-  projektem, vláknem a jednotlivým během a explicitní BCP 47 identifikátor v
-  UI, Context Manifestu/provider requestu a run provenance. První akceptace
-  ověří výslovně zvolenou češtinu na reálné Gemmě, navázání vlákna,
-  změnu jazyka pro další běh a restart. Modelové nedodržení se nesmí tiše
-  překládat ani vydávat za deterministicky garantovaný jazyk; UI má ukázat
-  požadovaný jazyk a případnou odchylku.
 
 - [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 

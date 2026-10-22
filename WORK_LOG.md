@@ -5,6 +5,47 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M2-CHAT-LANGUAGE-01 — explicitní jazyk odpovědi — 2026-10-22
+
+Dávka vznikla na větvi `feature/f-m2-chat-language-01` z `develop` na commitu
+`80c083b` (PR #76) a dosáhla úrovně **PoC validated**. Implementace naplňuje
+[ADR 0036](docs/adr/0036-response-language-policy.md); feature akceptace je
+uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M2-CHAT-LANGUAGE-01-A — policy a recovery kontrakt
+  (designed).** Provider-neutral BCP 47 policy má deterministickou precedence
+  uzel → projekt → vlákno → běh. ADR vymezuje persistentní hranice,
+  `unverified` compliance a zákaz skrytého překladu nebo nepravdivé garance.
+- [x] [completed] **F-M2-CHAT-LANGUAGE-01-B — context, provider request a
+  provenance (implemented).** Atomická node/project policy, preference vlákna
+  a jazyk turnu jsou restartově trvalé. Payload, Context Manifest a
+  Ollama/OpenAI provider request vážou konkrétní normalizovaný tag a zdroj;
+  migrace chat schema v5 a retry odmítají neshodnou operaci.
+- [x] [completed] **F-M2-CHAT-LANGUAGE-01-C — sdílené webové UI
+  (implemented).** Prompt nabízí děděnou nebo explicitní volbu pro běh,
+  nastavení umí uložit uzel/projekt/vlákno a odpověď ukazuje požadovaný jazyk
+  i pravdivý stav „shoda neověřena“.
+- [x] [completed] **F-M2-CHAT-LANGUAGE-01-D — automatické ověření a fyzická
+  akceptace (PoC validated).** Cílené testy pokryly policy, migraci, manifest,
+  adaptery, službu, snapshot, restart a lokální API. Uživatel na reálné Gemmě
+  potvrdil, že model odpovídá ve zvoleném jazyce.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu prošla kompletní sada
+`python3 -m unittest discover -s tests -v`: **693 testů úspěšně, 28
+přeskočeno**. Generovaný JavaScript prošel `node --check` a `git diff --check`
+byl bez chyb. Výstup úplné sady obsahoval existující `ResourceWarning` z
+mockovaných SQLite spojení a očekávané testovací recovery logy; návratový kód
+byl 0.
+
+Node/project policy se publikuje atomickým replace, preference vlákna a jazyky
+turnů transakčně v lokální SQLite. Retry je vázaný na přesný jazyk a zdroj;
+starší pending externí preview bez jazykového pole zůstává kompatibilní.
+Jazyk je instrukce providerovi, nikoli deterministicky ověřená vlastnost
+odpovědi. Aplikace odpověď heuristicky nedetekuje, nepřekládá ani neopravuje;
+UI proto zachovává stav `unverified` i po úspěšné fyzické zkoušce.
+
 ## UX-PROJECT-REPAIR-02 — diagnostika a bezpečné opravy projektu — 2026-10-22
 
 Dávka vznikla na větvi `feature/ux-project-repair-02` z `develop` na merge

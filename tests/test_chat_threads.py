@@ -173,7 +173,7 @@ class ChatThreadTests(unittest.TestCase):
             ChatThreads(self.state).connect()
         self.store.path.chmod(0o600)
         with sqlite3.connect(self.store.path) as db:
-            db.execute('UPDATE schema_info SET version=5')
+            db.execute('UPDATE schema_info SET version=6')
         with self.assertRaisesRegex(ValidationError, 'version'):
             ChatThreads(self.state).connect()
 
@@ -223,7 +223,11 @@ class ChatThreadTests(unittest.TestCase):
             db.execute('UPDATE schema_info SET version=1')
             db.execute('ALTER TABLE threads DROP COLUMN assignment_revision')
             db.execute('ALTER TABLE threads DROP COLUMN project_id')
+            db.execute('ALTER TABLE threads DROP COLUMN response_language')
             db.execute('ALTER TABLE turns DROP COLUMN manifest_id')
+            db.execute('ALTER TABLE turns DROP COLUMN response_language')
+            db.execute('ALTER TABLE turns DROP COLUMN language_source')
+            db.execute('ALTER TABLE turns DROP COLUMN language_compliance')
         migrated = ChatThreads(self.state)
         self.assertIsNone(migrated.get(self.thread_id, self.node_id, self.user_id)['project_id'])
         request = self.prepare(); migrated.prepare_turn(**request)
@@ -233,7 +237,25 @@ class ChatThreadTests(unittest.TestCase):
                                  manifest_id=manifest_id)
         self.assertEqual(turn['manifest_id'], manifest_id)
         with sqlite3.connect(self.store.path) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (4,))
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (5,))
+
+    def test_thread_and_turn_language_provenance_survive_restart(self):
+        thread = self.store.set_response_language(
+            thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+            language='cs-cz', expected_revision=0)
+        self.assertEqual((thread['response_language'], thread['revision']), ('cs-CZ', 1))
+        request = self.prepare(response_language='de-DE', language_source='run')
+        turn = self.store.prepare_turn(**request)
+        self.assertEqual((turn['response_language'], turn['language_source'],
+                          turn['language_compliance']), ('de-DE', 'run', 'unverified'))
+        restarted = ChatThreads(self.state)
+        stored = restarted.get(self.thread_id, self.node_id, self.user_id)
+        self.assertEqual(stored['response_language'], 'cs-CZ')
+        self.assertEqual(stored['turns'][0]['response_language'], 'de-DE')
+        with self.assertRaisesRegex(ValidationError, 'changed'):
+            restarted.set_response_language(
+                thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
+                language='en-US', expected_revision=0)
 
 
 if __name__ == '__main__':

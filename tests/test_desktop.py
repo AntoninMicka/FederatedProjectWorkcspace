@@ -1150,7 +1150,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
     def test_prompt_widget_separates_inputs_action_output_privacy_and_target(self):
         composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
         for control in ('task-inputs', 'task-input-count', 'task-action',
-                        'task-output-kind', 'chat-privacy', 'chat-run-adapter',
+                        'task-output-kind', 'chat-privacy', 'chat-response-language',
+                        'chat-run-adapter',
                         'chat-run-model'):
             self.assertIn('id="' + control + '"', composer)
         self.assertIn('<option value="answer">Odpovědět</option>', composer)
@@ -1160,8 +1161,12 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('aria-label="Zpracovat zadání"', composer)
         self.assertIn('title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)"', composer)
         self.assertIn('<label class="prompt-draft-control" for="chat-draft"><span>Zadání</span>', composer)
-        for label in ('Režim', 'Akce', 'Výsledek', 'Soukromí', 'Backend', 'Model'):
+        for label in ('Režim', 'Akce', 'Výsledek', 'Soukromí', 'Jazyk',
+                      'Backend', 'Model'):
             self.assertIn('<span>' + label + '</span>', composer)
+        self.assertIn('<option value="cs-CZ">Čeština · cs-CZ</option>', composer)
+        self.assertIn('response_language:responseLanguage', JS)
+        self.assertIn("turn.language_compliance==='unverified'?'neověřena'", JS)
         self.assertIn('id="task-source-current-prompt" hidden', composer)
         self.assertIn('Aktuální zadání (povinné pro vyhledávání)', composer)
         self.assertIn('id="task-source-current-file" hidden', composer)

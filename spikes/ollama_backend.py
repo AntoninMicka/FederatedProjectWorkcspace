@@ -410,6 +410,22 @@ class OllamaAdapter:
             return payload.decode('utf-8')
         task = value.get('task') if isinstance(value, dict) else None
         conversation = value.get('conversation') if isinstance(value, dict) else None
+        language = value.get('response_language') if isinstance(value, dict) else None
+        language_instruction = ''
+        if language is not None:
+            from spikes.response_language import LANGUAGE_SOURCES, language_tag
+            require(isinstance(language, dict) and set(language) == {'tag', 'source'}
+                    and language.get('source') in LANGUAGE_SOURCES
+                    and language_tag(language.get('tag')) == language.get('tag'),
+                    'Invalid response language payload for Ollama')
+            language_name = {'cs-CZ': 'Czech', 'sk-SK': 'Slovak',
+                             'en-US': 'English', 'de-DE': 'German'}.get(language['tag'])
+            language_label = (f'{language_name} ({language["tag"]})'
+                              if language_name else language['tag'])
+            language_instruction = ('Response language requirement: write the answer in '
+                                    f'{language_label}. Treat this BCP 47 tag as an explicit '
+                                    'output preference. Do not translate quoted source content. '
+                                    'Do not claim that compliance is guaranteed.\n\n')
         if task is not None:
             inputs = value.get('inputs')
             require(isinstance(inputs, list) and bool(inputs) and isinstance(task, dict)
@@ -457,9 +473,9 @@ class OllamaAdapter:
                     label += ' (' + projection + ')'
                 sections.append(label + ':\n' + content)
             sections.append('Summary:\n')
-            return '\n\n'.join(sections)
+            return language_instruction + '\n\n'.join(sections)
         if conversation is None:
-            return payload.decode('utf-8')
+            return language_instruction + payload.decode('utf-8')
         inputs = value.get('inputs')
         require(isinstance(inputs, list) and isinstance(conversation, list)
                 and len(inputs) == len(conversation) and bool(inputs),
@@ -479,7 +495,7 @@ class OllamaAdapter:
             transcript.append(('User' if message['role'] == 'user' else 'Assistant')
                               + ':\n' + content)
         transcript.append('Assistant:\n')
-        return '\n\n'.join(transcript)
+        return language_instruction + '\n\n'.join(transcript)
 
     @staticmethod
     def _execution(binding, role=None, output_format='text'):

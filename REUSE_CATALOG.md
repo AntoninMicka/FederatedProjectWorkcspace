@@ -354,6 +354,14 @@ journal nevzniká; standardní knihovna zajišťuje HTTP/TLS a fragmentaci čten
 aplikace doplňuje vlastní limity, finální validaci a `unknown` hranici podle
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#ollama-ndjson-streaming--f-m3-ollama-stream-01).
 
+F-M2-CHAT-LANGUAGE-01 **reuse/adaptuje** atomický node-local settings vzor,
+`ChatThreads`, `ContextBuilder` a existující Ollama/OpenAI adaptery i run
+journaly. Přidává pouze provider-neutral BCP 47 policy a její explicitní
+materializaci; nepřebírá překladač, heuristickou detekci jazyka ani nový
+provider framework. Soukromá inventura nedokládá komponentu se shodnou
+precedence a provenance smlouvou, proto se z ní nekopíruje kód ani neveřejné
+detaily. Rozhodnutí: [ADR 0036](docs/adr/0036-response-language-policy.md).
+
 F-M3-SEARCH-01 **reuse/adaptuje** uzavřený `AITaskOutcome`, task router,
 `ContextBuilder`, `TaskOutcomes`, jediný `OllamaAdapter`/`OllamaRuns` journal,
 atomický node-local binding vzor a společné desktop/web UI. Skutečný dostupný
