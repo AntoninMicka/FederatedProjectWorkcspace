@@ -64,6 +64,10 @@ synchronizaci a nemění běžící uzly.
 - ADR, roadmapa a backlog popisují migraci i pořadí implementace bez tvrzení,
   že návrh už představuje funkční federaci nebo plnohodnotné přihlášení.
 
+Otevřené varianty více vlastníků, převzetí primární role, detailní precedence
+policy, privacy po expiraci a rozsahu recovery se během návrhu dále prověří;
+nejsou nyní důvodem přidávat další capability omezení ani blokovat dávku.
+
 ## K předání do backlogu
 
 - [ ] [planned] **AUTH-CENTRAL-01 — centrální autorita identity a offline

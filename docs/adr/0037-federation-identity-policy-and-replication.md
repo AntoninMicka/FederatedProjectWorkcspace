@@ -133,6 +133,12 @@ registry v2 a public-only přenos se touto dokumentací samy nemění.
 
 ## Zbývající rozhodnutí
 
+Následující otázky zůstávají záměrně otevřené. Návrh z nich zatím neodvozuje
+další capability stropy, zákazy ani povinnou implementační variantu; rozhodnou
+se až podle konkrétních scénářů a zjištění v dalších částech návrhu. To nemění
+již přijaté fail-closed hranice pro neznámou policy, `local-only`, credentials
+a neautorizovaný přenos.
+
 - přesný lifecycle vlastnictví projektu při více vlastnících nebo deaktivaci;
 - protokol a oprávnění pro bezpečné převzetí primární role;
 - strojové schéma policy, precedence explicitního deny a dědičnost;
