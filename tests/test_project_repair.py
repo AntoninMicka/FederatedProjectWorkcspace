@@ -9,6 +9,8 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -158,6 +160,24 @@ class ProjectDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result['status'], 'manual')
         self.assertEqual(journal.read_bytes(), before)
 
+    def test_journal_recovery_conflict_is_manual_and_preserves_intent(self):
+        journal = self.state / 'journal.sqlite'
+        relative = f'artifacts/{ENTITY}/document.md'
+        after = markdown(metadata('Recovered', ENTITY))
+        with closing(sqlite3.connect(journal)) as db, db:
+            db.execute('INSERT INTO pending VALUES (?,?,?)',
+                       (relative, b'expected previous bytes', after))
+        before = journal.read_bytes()
+
+        result = self.service.check(self.project_id)
+
+        self.assertEqual(self.codes(result), {'journal-recovery-conflict'})
+        self.assertEqual(result['status'], 'manual')
+        self.assertEqual(journal.read_bytes(), before)
+        with closing(sqlite3.connect(journal)) as db:
+            self.assertEqual(db.execute('SELECT path,before,after FROM pending').fetchone(),
+                             (relative, b'expected previous bytes', after))
+
     def test_project_configuration_snapshot_and_git_states_have_stable_codes(self):
         config = self.root / 'project.json'
         current = json.loads(config.read_text())
@@ -231,6 +251,69 @@ class ProjectDiagnosticsTests(unittest.TestCase):
         result = self.service.check(self.project_id)
         self.assertIn('state-unsafe', self.codes(result))
         self.assertEqual(result['status'], 'manual')
+
+    def test_remaining_registration_filesystem_git_project_and_journal_codes(self):
+        self.assertEqual(self.codes(self.service.check(str(uuid4()))),
+                         {'registration-missing'})
+
+        def fixture(name):
+            node = self.base / f'{name}.json'
+            root = self.base / name
+            created = ProjectCreation(node).create(name, root, str(uuid4()))
+            binding = parse_node(read_config(node), location=node)['projects'][0]
+            return (ProjectDiagnostics(node), created['id'], root,
+                    Path(binding['state_dir']))
+
+        service, project_id, root, state = fixture('state-missing')
+        state.rename(self.base / 'removed-state')
+        self.assertEqual(self.codes(service.check(project_id)), {'state-missing'})
+
+        service, project_id, root, state = fixture('filesystem-mismatch')
+        with patch.object(service, '_same_filesystem', return_value=False):
+            self.assertEqual(self.codes(service.check(project_id)),
+                             {'state-filesystem-mismatch'})
+
+        service, project_id, root, state = fixture('journal-missing')
+        (state / 'journal.sqlite').unlink()
+        self.assertEqual(self.codes(service.check(project_id)), {'journal-missing'})
+
+        service, project_id, root, state = fixture('journal-owner')
+        with closing(sqlite3.connect(state / 'journal.sqlite')) as db, db:
+            db.execute('UPDATE owner SET root=?', (str(self.base / 'foreign'),))
+        self.assertEqual(self.codes(service.check(project_id)),
+                         {'journal-owner-mismatch'})
+
+        service, project_id, root, state = fixture('git-invalid')
+        (root / '.git').rename(root / '.git-away')
+        self.assertEqual(self.codes(service.check(project_id)), {'git-invalid-root'})
+
+        service, project_id, root, state = fixture('git-bare')
+        Git(root).run('config', 'core.bare', 'true')
+        self.assertEqual(self.codes(service.check(project_id)), {'git-bare'})
+
+        service, project_id, root, state = fixture('git-head')
+        Git(root).run('update-ref', '-d', 'refs/heads/main')
+        self.assertEqual(self.codes(service.check(project_id)),
+                         {'git-head-missing', 'git-dirty'})
+
+        service, project_id, root, state = fixture('git-detached')
+        Git(root).run('checkout', '--detach')
+        self.assertEqual(self.codes(service.check(project_id)), {'git-detached'})
+
+        service, project_id, root, state = fixture('git-operation')
+        (root / '.git' / 'MERGE_HEAD').write_text(Git(root).head() + '\n')
+        self.assertEqual(self.codes(service.check(project_id)), {'git-operation-active'})
+
+        service, project_id, root, state = fixture('config-missing')
+        (root / 'project.json').unlink(); Git(root).commit('Remove project config')
+        self.assertEqual(self.codes(service.check(project_id)),
+                         {'project-config-missing'})
+
+        service, project_id, root, state = fixture('config-invalid')
+        (root / 'project.json').write_bytes(b'not json')
+        Git(root).commit('Invalidate project config')
+        self.assertEqual(self.codes(service.check(project_id)),
+                         {'project-config-invalid'})
 
 
 class ProjectRepairActionsTests(unittest.TestCase):
@@ -307,6 +390,59 @@ class ProjectRepairActionsTests(unittest.TestCase):
         self.assertTrue(result['receipt']['reconciled'])
         self.assertEqual(result['report']['status'], 'healthy')
         self.assertEqual(index.read_bytes(), first_bytes)
+
+    def test_rebuild_checkpoint_failures_leave_atomic_projection_and_allow_fresh_retry(self):
+        artifact = self.root / 'artifacts' / ENTITY / 'content.md'
+        artifact.parent.mkdir(parents=True)
+        artifact.write_bytes(markdown(metadata('Changed', ENTITY)))
+        Git(self.root).commit('Make index stale')
+        index = self.state / 'index.sqlite'
+        old_bytes = index.read_bytes()
+
+        for stage in ('index-cleared', 'index-entities', 'index-relations', 'index-state'):
+            with self.subTest(stage=stage):
+                plan = self.plan('rebuild-index')
+
+                def interrupted(current):
+                    if current == stage:
+                        raise RuntimeError(stage)
+
+                with self.assertRaisesRegex(RuntimeError, stage):
+                    self.actions.confirm(plan, checkpoint=interrupted)
+                self.assertEqual(index.read_bytes(), old_bytes)
+                self.assertEqual(self.actions.diagnostics.check(self.project_id)['status'],
+                                 'repairable')
+
+        fresh = self.plan('rebuild-index')
+        self.assertEqual(self.actions.confirm(fresh)['report']['status'], 'healthy')
+
+    def test_rebuild_published_checkpoint_reconciles_same_request(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        plan = self.plan('rebuild-index')
+
+        def interrupted(stage):
+            if stage == 'index-published':
+                raise RuntimeError(stage)
+
+        with self.assertRaisesRegex(RuntimeError, 'index-published'):
+            self.actions.confirm(plan, checkpoint=interrupted)
+        published = index.read_bytes()
+        result = self.actions.confirm(plan)
+        self.assertTrue(result['receipt']['reconciled'])
+        self.assertEqual(result['report']['status'], 'healthy')
+        self.assertEqual(index.read_bytes(), published)
+
+    def test_confirm_respects_busy_writer_lock_without_effect(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        plan = self.plan('rebuild-index')
+        fd = os.open(self.state / 'writer.lock', os.O_RDWR | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'r+b') as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(BlockingIOError):
+                self.actions.confirm(plan)
+        self.assertFalse(index.exists())
 
     def test_standalone_journal_recovery_stores_receipt_with_clear(self):
         journal = self.state / 'journal.sqlite'
@@ -404,6 +540,22 @@ class ProjectRepairActionsTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/projects/repair/confirm'", JS)
         self.assertIn("if(!item.available)actions.splice", JS)
         self.assertNotIn('innerHTML=', JS)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1',
+                         'Requires real Qt/WebEngine')
+    def test_real_desktop_repair_menu_preview_confirmation_and_result(self):
+        index = self.state / 'index.sqlite'
+        index.unlink()
+        run = subprocess.run(
+            [sys.executable, '-m', 'spikes.desktop', '--node', str(self.node),
+             '--smoke', '--smoke-repair', self.project_id],
+            capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn('project=' + self.project_id + ', repair UI verified', run.stdout)
+        self.assertIn('desktop smoke: backend stopped', run.stdout)
+        self.assertTrue(index.exists())
+        self.assertEqual(ProjectDiagnostics(self.node).check(self.project_id)['status'],
+                         'healthy')
 
 
 if __name__ == '__main__':

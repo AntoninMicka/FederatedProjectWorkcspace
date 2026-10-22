@@ -5,6 +5,62 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-PROJECT-REPAIR-02 — diagnostika a bezpečné opravy projektu — 2026-10-22
+
+Dávka vznikla na větvi `feature/ux-project-repair-02` z `develop` na merge
+commitu `618b1f7` (PR #75) a dosáhla úrovně **PoC validated**. Implementace
+naplňuje [ADR 0035](docs/adr/0035-project-check-and-repair.md); feature
+akceptace je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani
+sloučen.
+
+- [x] [completed] **UX-PROJECT-REPAIR-02-A — skutečně read-only diagnostický
+  backend (implemented).** `ProjectDiagnostics` bez inicializace `Workspace`,
+  `Journal` nebo `Index` kontroluje registraci, kořen a lokální stav, Git,
+  committed i pracovní konfiguraci, snapshot, journal a index. Report používá
+  stabilní kódy, bezpečný `check_token` a stavy `healthy`, `repairable`,
+  `manual` a `retry`; lokální cesty ani obsah SQLite/Git chyb nevrací.
+- [x] [completed] **UX-PROJECT-REPAIR-02-B — potvrzené opravy a receipt
+  (implemented).** Samostatný preview váže projekt, akci, HEAD, journalový
+  intent, operation ID a token. Confirm vše revaliduje pod existujícím writer
+  lockem a smí pouze atomicky přestavět index nebo pokračovat v přesném
+  Workspace/Journal intentu. Durable receipt, následná úplná kontrola a
+  rekonciliace po ztracené odpovědi brání druhému účinku i záměně operace.
+- [x] [completed] **UX-PROJECT-REPAIR-02-C — desktopové API a sdílené webové UI
+  (implemented).** Menu nedostupného projektu otevírá vrstvený report,
+  konkrétní příčinu, právě jednu povolenou akci, přesný náhled a samostatné
+  potvrzení. Autentizovaný desktop má oddělené `check`, `preview`, `confirm` a
+  `receipt` routy; síťový handler capability neinicializuje a vrací 404. UI
+  skládá nedůvěryhodné hodnoty přes `textContent`.
+- [x] [completed] **UX-PROJECT-REPAIR-02-D — regresní a fyzická akceptace
+  (PoC validated).** Doplněna fail-closed detekce
+  `journal-recovery-conflict`, která zachová cizí změnu i původní intent.
+  Deterministické scénáře pokrývají všechny stabilní kódy ADR, nulové mutace
+  diagnostiky, stale/tampered plán, obsazený writer lock, lost response,
+  rollback na všech transakčních checkpointech rebuildu, rekonciliaci po
+  publikaci a existující Workspace/Journal recovery.
+  Skutečný Qt WebEngine prošel cestu menu **Zkontrolovat projekt…** → report
+  chybějícího indexu → náhled → explicitní potvrzení → receipt → zdravý report.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu prošla kompletní sada
+`python3 -m unittest discover -s tests -v`: **689 testů úspěšně, 28
+přeskočeno**. Samostatná rozšířená sada s `M0_DESKTOP_TEST=1` prošla včetně
+skutečného Qt/WebEngine opravného toku a ostatních relevantních desktopových
+smoke scénářů. `node --check` nad generovaným JavaScriptem, `py_compile` a
+`git diff --check` také prošly. Výstup úplné sady obsahoval existující
+`ResourceWarning` z mockovaných SQLite spojení a očekávané testovací recovery
+logy; návratový kód byl 0.
+
+Diagnostika zůstává desktop-only a nic neopravuje automaticky při načtení.
+Chybějící umístění dál používá samostatný potvrzený relocate/unregister tok.
+Práva, symlinky, Git stav a refs, identity, neplatný obsah, neznámá SQLite
+schémata a konfliktní journal se automaticky nemění. Projektový Git zůstává
+autoritou dat, journal autoritou nedokončeného intentu a index obnovitelnou
+projekcí. První UI řez nabízí kontrolu z menu nedostupného projektu; vstup pro
+dostupný projekt zůstává výslovně pozdějším možným rozšířením ADR, nikoli
+nedokončenou částí této dávky.
+
 ## UX-PROJECT-REPAIR-01 — návrh Check & Repair — 2026-10-22
 
 Návrhová dávka vznikla na větvi `feature/ux-project-repair-01` z lokálního

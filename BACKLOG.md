@@ -47,8 +47,8 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
 Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
-merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` je aktivní
-v TODO.
+merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` je
+akceptovaná a archivovaná ve WORK_LOG, v TODO čeká na doručení jediného PR.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 

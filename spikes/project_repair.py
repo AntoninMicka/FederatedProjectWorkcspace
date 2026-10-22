@@ -14,7 +14,7 @@ import subprocess
 import time
 
 from spikes.configuration import parse_node, parse_project, read_config
-from spikes.journal import Journal
+from spikes.journal import Journal, snapshot
 from spikes.metadata import MAX_METADATA, require, safe_path, uuid, validate_snapshot
 from spikes.storage import Git, Index, projection
 from spikes.workspace import Workspace
@@ -168,6 +168,10 @@ class ProjectDiagnostics:
                 and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600)
 
     @staticmethod
+    def _same_filesystem(root, state):
+        return root.stat().st_dev == state.stat().st_dev
+
+    @staticmethod
     def _writer_busy(path):
         if not os.path.lexists(path):
             return False
@@ -225,6 +229,10 @@ class ProjectDiagnostics:
                         raise ValueError('pending before')
                     if after is not None and not isinstance(after, bytes):
                         raise ValueError('pending after')
+                current = snapshot(root)
+                recovery_conflict = any(
+                    current.get(relative) not in (before, after)
+                    for relative, before, after in pending)
                 active_id = None
                 if active:
                     active_id, raw = active[0]
@@ -232,13 +240,18 @@ class ProjectDiagnostics:
                     record = json.loads(raw)
                     if not isinstance(record, dict) or record.get('operation_id') != active_id:
                         raise ValueError('active record')
-                    add('journal-operation-active', 'journal',
-                        'Projekt má nedokončenou Workspace operaci.',
-                        action='resume-operation')
-                elif pending:
+                    if not recovery_conflict:
+                        add('journal-operation-active', 'journal',
+                            'Projekt má nedokončenou Workspace operaci.',
+                            action='resume-operation')
+                elif pending and not recovery_conflict:
                     add('journal-pending', 'journal',
                         'Projekt má samostatný nedokončený journalový zápis.',
                         action='resume-operation')
+                if recovery_conflict:
+                    add('journal-recovery-conflict', 'journal',
+                        'Journal narazil na cizí změnu; intent zůstal zachovaný '
+                        'pro ruční kontrolu.')
                 intent = {'operation_id': active_id,
                           'pending_sha256': _digest([
                               [name,
@@ -401,7 +414,7 @@ class ProjectDiagnostics:
             except (OSError, ValueError):
                 add('state-unsafe', 'filesystem',
                     'Lokální stav projektu nelze bezpečně ověřit.')
-            if root_ok and state_ok and root.stat().st_dev != state.stat().st_dev:
+            if root_ok and state_ok and not self._same_filesystem(root, state):
                 add('state-filesystem-mismatch', 'filesystem',
                     'Projekt a jeho lokální stav nejsou na stejném filesystemu.')
                 state_ok = False
@@ -442,12 +455,12 @@ class ProjectDiagnostics:
                     if not stat.S_ISDIR(git_path.lstat().st_mode):
                         raise ValueError('git directory')
                     git = self._git(root, deadline)
-                    top = self._run(git, 'rev-parse', '--show-toplevel').stdout.strip()
-                    if Path(top) != root:
-                        raise ValueError('git root')
                     if self._run(git, 'rev-parse', '--is-bare-repository').stdout.strip() != 'false':
                         add('git-bare', 'git', 'Projekt nesmí být bare Git repository.')
                     else:
+                        top = self._run(git, 'rev-parse', '--show-toplevel').stdout.strip()
+                        if Path(top) != root:
+                            raise ValueError('git root')
                         try:
                             head = self._run(git, 'rev-parse', 'HEAD').stdout.strip()
                             if len(head) not in {40, 64}:

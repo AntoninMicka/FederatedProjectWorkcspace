@@ -231,12 +231,19 @@ def main():
     parser.add_argument('--screenshot', help='Save the rendered window during --smoke.')
     parser.add_argument('--smoke-create', metavar='NEW_DIRECTORY', help='During --smoke, create a project through the shared form and native location capability.')
     parser.add_argument('--smoke-project', help='During --smoke, open this registered ID and verify rendered rows.')
+    parser.add_argument('--smoke-repair', help='During --smoke, repair the missing index of this registered project through the shared UI.')
     parser.add_argument('--smoke-crash', action='store_true', help='Kill renderer during --smoke; expect exit 1.')
     args = parser.parse_args()
-    if args.smoke_create and (not (args.smoke and args.node) or args.smoke_project):
-        parser.error('--smoke-create requires --smoke and --node; cannot combine with --smoke-project')
+    smoke_targets = sum(bool(value) for value in
+                        (args.smoke_create, args.smoke_project, args.smoke_repair))
+    if smoke_targets > 1:
+        parser.error('--smoke-create, --smoke-project and --smoke-repair cannot be combined')
+    if args.smoke_create and not (args.smoke and args.node):
+        parser.error('--smoke-create requires --smoke and --node')
     if args.smoke_project and not (args.smoke and args.node):
         parser.error('--smoke-project requires --smoke and --node')
+    if args.smoke_repair and not (args.smoke and args.node):
+        parser.error('--smoke-repair requires --smoke and --node')
     if args.smoke_crash and not args.smoke:
         parser.error('--smoke-crash requires --smoke')
     if args.screenshot and not args.smoke:
@@ -347,6 +354,18 @@ def main():
             node_path, desktop_locations=True)
         server.project_deletion_actions = ProjectDeletionActions(node_path)
         server.project_repair_actions = ProjectRepairActions(node_path)
+        if args.smoke_repair:
+            # Exercise the real unavailable-project menu without letting the
+            # dashboard opener eagerly rebuild this deliberately missing index.
+            catalog = server.projects.catalog
+
+            def repair_smoke_catalog():
+                rows = catalog()
+                return [dict(item, available=False, location_missing=False)
+                        if item['id'] == args.smoke_repair else item
+                        for item in rows]
+
+            server.projects.catalog = repair_smoke_catalog
         server.notebooklm_import_actions = NotebookLMImportActions(
             node_path, desktop_capabilities=True)
         server.google_drive_import = GoogleDriveImport(node_path)
@@ -709,6 +728,14 @@ def main():
                   previewStarted:Boolean(window.previewStarted),
                   previewClearChecked:Boolean(window.previewClearChecked),
                   homeReturnChecked:Boolean(window.homeReturnChecked),
+                  repairSmokeOpened:Boolean(window.repairSmokeOpened),
+                  repairSmokePreviewed:Boolean(window.repairSmokePreviewed),
+                  repairSmokeConfirmed:Boolean(window.repairSmokeConfirmed),
+                  repairViewHidden:document.querySelector('#project-repair-view')?.hidden,
+                  repairState:document.querySelector('#project-repair-state')?.textContent || null,
+                  repairStatus:document.querySelector('#project-repair-status')?.textContent || null,
+                  repairPlanHidden:document.querySelector('#project-repair-plan')?.hidden,
+                  repairFindings:document.querySelector('#project-repair-findings')?.textContent || null,
                   selectedSidebar:document.querySelector('#sidebar-tabs [aria-selected="true"]')?.id || null,
                   artifactsHidden:document.querySelector('#sidebar-artifacts')?.hidden,
                   todoHidden:document.querySelector('#todo-widget')?.hidden,
@@ -746,6 +773,14 @@ def main():
                 if expected['artifacts']:
                     expected['preview'] = server.projects.preview(args.smoke_project, expected['artifacts'][0]['id'], expected['commit_id'])
                 project_check = json.dumps(expected)
+            repair_check = None
+            if args.smoke_repair:
+                item = next((item for item in server.projects.catalog()
+                             if item['id'] == args.smoke_repair), None)
+                if item is None:
+                    parser.error('--smoke-repair requires a registered project')
+                repair_check = json.dumps(dict(item, available=False,
+                                               location_missing=False))
             def checked(value):
                 if value == '1' and server.counter == 1:
                     if args.smoke_create and not creation_result['receipt'] and not controller.busy:
@@ -763,6 +798,8 @@ def main():
                         print('desktop smoke: created=' + creation_result['receipt']['id'], flush=True)
                     if project_check:
                         print('desktop smoke: project=' + args.smoke_project + ', rendered rows verified', flush=True)
+                    if repair_check:
+                        print('desktop smoke: project=' + args.smoke_repair + ', repair UI verified', flush=True)
                     print('desktop smoke: rendered UI, authenticated fetch, value=1', flush=True)
                     def finish():
                         print('desktop measure: idle', flush=True)
@@ -1148,6 +1185,41 @@ def main():
                   }
                   return document.querySelector('#count').textContent;
                 })()""".replace('EXPECTED', project_check)
+            if repair_check:
+                script = """(()=>{
+                  const expected=EXPECTED;
+                  if(typeof renderProjectCatalog!=='function' || typeof openProjectRepair!=='function')return null;
+                  if(!window.repairSmokeOpened){
+                    renderProjectCatalog([expected]);
+                    const row=[...document.querySelectorAll('#sidebar-project-list > li')]
+                      .find(item=>item.querySelector('.sidebar-list-main')?.dataset.id===expected.id);
+                    const repair=[...(row?.querySelectorAll('.sidebar-project-menu button')||[])]
+                      .find(button=>button.textContent==='Zkontrolovat projekt…');
+                    if(!repair)return null;
+                    window.repairSmokeOpened=true;repair.click();return null;
+                  }
+                  const view=document.querySelector('#project-repair-view');
+                  const state=document.querySelector('#project-repair-state');
+                  const status=document.querySelector('#project-repair-status');
+                  const preview=document.querySelector('#project-repair-preview');
+                  if(view.hidden)return null;
+                  if(!window.repairSmokePreviewed){
+                    if(state.textContent!=='Bezpečně opravitelné' || preview.hidden ||
+                       !document.querySelector('#project-repair-findings').textContent.includes('index-missing'))return null;
+                    window.repairSmokePreviewed=true;preview.click();return null;
+                  }
+                  const plan=document.querySelector('#project-repair-plan');
+                  const check=document.querySelector('#project-repair-confirm-check');
+                  const confirm=document.querySelector('#project-repair-confirm');
+                  if(!window.repairSmokeConfirmed){
+                    if(plan.hidden || !document.querySelector('#project-repair-details').textContent.includes('Vrstva: index'))return null;
+                    check.click();if(!check.checked || confirm.disabled)return null;
+                    window.repairSmokeConfirmed=true;confirm.click();return null;
+                  }
+                  if(state.textContent!=='V pořádku' || !status.textContent.startsWith('Oprava dokončena.') ||
+                     !plan.hidden || document.querySelector('#project-repair-findings').textContent.includes('index-missing'))return null;
+                  return document.querySelector('#count').textContent;
+                })()""".replace('EXPECTED', repair_check)
             if args.smoke_create:
                 script = """(()=>{
                   const required=['project-view','project-title','project-commit','image-tab','image-panel',
