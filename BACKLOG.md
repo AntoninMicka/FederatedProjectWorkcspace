@@ -46,31 +46,13 @@ doručeno PR #66 jako merge commit `3466a5f`; evidence je ve WORK_LOG.
 `F-M4-PRESENTER-PDF-01` PR #69 jako merge commit `8338a6c`; jejich evidence je
 ve WORK_LOG. `UX-FACELIFT-01` bylo doručeno PR #72 jako merge commit `9fb4262`.
 Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
-evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl uživatelsky přijat a
-archivován ve WORK_LOG; jeho větev zatím čeká na doručení do `develop` a TODO
-proto neaktivuje další dávku.
+evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
+merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` je
+akceptovaná a archivovaná ve WORK_LOG, v TODO čeká na doručení jediného PR.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **UX-PROJECT-REPAIR-02 — read-only diagnostika a bezpečné
-  opravy projektu (cílová úroveň: implemented → PoC validated).** Implementovat
-  přijatý kontrakt [ADR 0035](docs/adr/0035-project-check-and-repair.md) jako
-  samostatnou feature větev `feature/ux-project-repair-02` až po doručení
-  návrhového PR. První řez přidá skutečně nemutující diagnostický backend,
-  stabilní kódy zjištění a stránku **Zkontrolovat projekt…** v menu
-  nedostupného projektu. Potvrzené akce dovolí pouze atomický rebuild
-  odvozeného indexu a pokračování přesně svázaného journalového intentu;
-  chybějící kořen dál používá existující opravu umístění.
-
-  Akceptace musí prokázat nulovou změnu inode, Git objektů a SQLite bajtů při
-  samotné kontrole, zneplatnění stale `check_token`, oddělené oprávnění a
-  potvrzení oprav, bezpečný receipt/lost-response/retry a restart na všech
-  existujících checkpointech. Pokryje zdravý projekt i chyby registrace, cest,
-  práv, Gitu, `project.json`, snapshotu, journalu a indexu včetně souběžné
-  změny a obsazeného writer locku. Neznámý stav zůstane `manual` nebo `retry`;
-  žádný reset Gitu, změna práv, heuristická oprava obsahu ani mazání dat.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po

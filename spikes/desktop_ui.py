@@ -349,6 +349,29 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <button id="project-delete-cancel" type="button" class="secondary-button">Zrušit</button></div>
 <p id="project-delete-status" role="status"></p></section>
 <div id="project-trash-list"></div><p id="project-trash-status" role="status"></p></section></div>
+<div id="project-repair-view" hidden>
+<header><span class="badge">Projekty</span><span>Desktopová diagnostika</span></header>
+<button id="project-repair-back" type="button" class="back-button">← Zpět na projekty</button>
+<section class="standalone-form project-repair-page"><div class="eyebrow">CHECK &amp; REPAIR</div>
+<h1 id="project-repair-heading" tabindex="-1">Zkontrolovat projekt</h1>
+<p id="project-repair-target"></p>
+<p>Kontrola je pouze pro čtení. Automatická oprava nikdy nemění Git historii,
+práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
+<div class="form-actions"><button id="project-repair-check" type="button">Spustit novou kontrolu</button>
+<button id="project-repair-location" type="button" class="secondary-button" hidden>Opravit umístění…</button></div>
+<p id="project-repair-status" role="status" aria-live="polite"></p>
+<section id="project-repair-report" hidden aria-labelledby="project-repair-report-title">
+<h2 id="project-repair-report-title">Výsledek kontroly</h2>
+<p><strong id="project-repair-state"></strong> <span id="project-repair-summary"></span></p>
+<ol id="project-repair-findings" class="repair-findings"></ol>
+<button id="project-repair-preview" type="button" hidden>Připravit bezpečnou opravu…</button>
+</section>
+<section id="project-repair-plan" class="creation-preview" hidden>
+<h2>Potvrzení opravy</h2><pre id="project-repair-details"></pre>
+<label class="confirm"><input id="project-repair-confirm-check" type="checkbox"> Potvrzuji přesně popsaný účinek na lokální vrstvě.</label>
+<div class="form-actions"><button id="project-repair-confirm" type="button" disabled>Provést potvrzenou opravu</button>
+<button id="project-repair-cancel" type="button" class="secondary-button">Zrušit náhled</button></div>
+</section></section></div>
 <div id="legacy-home-diagnostics" hidden aria-hidden="true">
 <details class="diagnostics"><summary>Ověření spojení</summary>
 <button id="increment">Ověřit spojení</button><output id="count">0</output><p id="status" role="status">Připraveno k ověření.</p></details>
@@ -1154,7 +1177,8 @@ body.authenticated>#login{display:none}#login{margin:10vh auto;padding:24px}
 #login input{padding:12px;margin:12px}.project-create-row{display:flex;gap:12px;align-items:flex-start;max-width:520px}
 #new-project-title{flex:1;min-width:0;padding:12px}#create-project-status{font-size:12px;min-height:14px;color:#47635f}
 #create-project{max-width:760px}#project-location-controls{margin-top:12px}#project-location-label{font-size:12px;color:#47635f;overflow-wrap:anywhere}.creation-preview{margin-top:14px;border:1px solid #d6b36a;background:#fffaf0;border-radius:10px;padding:12px}.creation-preview h2{margin-top:0;font-size:17px}.creation-preview pre{white-space:pre-wrap;overflow-wrap:anywhere}
-#project-create-view,#project-trash-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view,#federation-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+#project-create-view,#project-trash-view,#project-repair-view,#source-import-view,#notebooklm-import-view,#history-view,#artifact-editor-view,#federation-view{height:100%;overflow:auto}.standalone-form{max-width:820px;padding:20px;background:white;border:1px solid #dce3e9;border-radius:12px}
+.repair-findings{display:grid;gap:10px;padding-left:24px}.repair-finding{padding:12px;border:1px solid #dce3e9;border-radius:10px}.repair-finding strong,.repair-finding span,.repair-finding code{display:block}.repair-finding code{margin-top:5px;color:#526878;font-size:12px}
 #google-drive-import{margin-bottom:20px}.import-steps{list-style:none;padding:0;margin:18px 0 22px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.import-steps li{min-width:0;padding:10px;border:1px solid #dce3e9;border-radius:10px;background:#f5f7f9;color:#5b6b7b}.import-steps li>span{display:inline-grid;place-items:center;width:25px;height:25px;margin-right:6px;border-radius:50%;background:#dce3e9;font-weight:750}.import-steps strong,.import-steps small{display:block}.import-steps small{margin:5px 0 0 31px;line-height:1.3}.import-steps li.current{border-color:#16796b;background:#edf8f6;color:#174f48}.import-steps li.current>span,.import-steps li.done>span{background:#16796b;color:white}.import-steps li.done{color:#315f58}.wizard-callout,.wizard-summary{padding:12px 14px;border-left:4px solid #16796b;background:#edf8f6;border-radius:6px}.wizard-callout h3{margin-top:0}.google-login-guide{margin:12px 0;padding:12px 16px;background:#f5f7f9;border-radius:8px}.google-login-guide h4{margin:0}.google-login-guide ol{padding-left:22px}.google-login-guide li{margin:6px 0}.oauth-setup-guide{margin:12px 0;padding:10px 12px;background:#f5f7f9;border-radius:8px}.oauth-setup-guide code{overflow-wrap:anywhere}.wizard-file-list{padding:0;list-style:none}.wizard-file-list li{margin:8px 0;padding:11px 13px;border:1px solid #dce3e9;border-radius:9px;background:#fff}.wizard-file-list strong,.wizard-file-list small{display:block}.wizard-file-list small{margin-top:4px;color:#526a78}#google-drive-plan{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;background:#f5f7f9;padding:12px;border-radius:8px}.import-divider{max-width:820px;margin-top:22px}
 .standalone-form label,#notebooklm-import label{display:block;margin:9px 0}.standalone-form .confirm{display:flex;gap:8px;align-items:flex-start}
 .standalone-form input,.standalone-form textarea,.standalone-form select,#notebooklm-import input,#notebooklm-import select{max-width:100%;padding:8px}
@@ -1758,6 +1782,7 @@ const projectView=document.querySelector('#project-view');
 const settingsView=document.querySelector('#settings-view');
 const projectCreateView=document.querySelector('#project-create-view');
 const projectTrashView=document.querySelector('#project-trash-view');
+const projectRepairView=document.querySelector('#project-repair-view');
 const sourceImportView=document.querySelector('#source-import-view');
 const notebookImportView=document.querySelector('#notebooklm-import-view');
 const historyView=document.querySelector('#history-view');
@@ -2001,6 +2026,8 @@ function clearProject(){
  document.querySelector('#project-home').hidden=false;
  projectCreateView.hidden=true;
  projectTrashView.hidden=true;
+ projectRepairView.hidden=true;
+ projectRepairTarget=null;projectRepairReport=null;resetProjectRepairPlan();
  settingsView.hidden=true;
  sourceImportView.hidden=true;
  notebookImportView.hidden=true;
@@ -2321,6 +2348,81 @@ document.querySelector('#project-registration-remove-confirm').addEventListener(
  document.querySelector('#sidebar-project-status').textContent='Odebírám potvrzenou nedostupnou registraci…';
  requestNativeAction('unregister-missing-project',{project_id:projectId});
 });
+let projectRepairTarget=null,projectRepairReport=null,projectRepairPlan=null,projectRepairOperation=null;
+const projectRepairStatus=document.querySelector('#project-repair-status');
+const projectRepairPreview=document.querySelector('#project-repair-preview');
+const projectRepairConfirmCheck=document.querySelector('#project-repair-confirm-check');
+const projectRepairConfirm=document.querySelector('#project-repair-confirm');
+function resetProjectRepairPlan(){
+ projectRepairPlan=null;projectRepairOperation=null;document.querySelector('#project-repair-plan').hidden=true;
+ projectRepairConfirmCheck.checked=false;projectRepairConfirm.disabled=true;
+}
+function repairAction(report){
+ const findings=Array.isArray(report?.findings)?report.findings:[];
+ const actions=[...new Set(findings.map(item=>item.action).filter(action=>['rebuild-index','resume-operation'].includes(action)))];
+ return report?.status==='repairable'&&actions.length===1&&findings.length===1?actions[0]:null;
+}
+function renderProjectRepairReport(report){
+ projectRepairReport=report;resetProjectRepairPlan();
+ document.querySelector('#project-repair-report').hidden=false;
+ const stateLabels={healthy:'V pořádku',repairable:'Bezpečně opravitelné',manual:'Ruční kontrola',retry:'Zopakovat kontrolu'};
+ document.querySelector('#project-repair-state').textContent=stateLabels[report.status]||report.status;
+ document.querySelector('#project-repair-summary').textContent=report.summary;
+ const findings=document.querySelector('#project-repair-findings');findings.replaceChildren();
+ for(const finding of report.findings){
+  const row=document.createElement('li');row.className='repair-finding';
+  const component=document.createElement('strong');component.textContent=finding.component;
+  const message=document.createElement('span');message.textContent=finding.message;
+  const code=document.createElement('code');code.textContent=finding.code;
+  row.append(component,message,code);findings.append(row);
+ }
+ if(!report.findings.length){const row=document.createElement('li');row.className='repair-finding';row.textContent='V kontrolovaném rozsahu nebyla nalezena chyba.';findings.append(row);}
+ const action=repairAction(report);projectRepairPreview.hidden=!action;projectRepairPreview.dataset.action=action||'';
+ const location=report.findings.some(item=>item.action==='repair-location');
+ document.querySelector('#project-repair-location').hidden=!location;
+ projectRepairStatus.textContent=action?'Kontrola nabízí jednu přesně vymezenou opravu. Nejprve zobrazte její náhled.':report.summary;
+}
+async function runProjectRepairCheck(){
+ if(!projectRepairTarget)return;resetProjectRepairPlan();projectRepairPreview.hidden=true;
+ document.querySelector('#project-repair-location').hidden=true;projectRepairStatus.textContent='Kontroluji registraci, filesystem, Git, projekt, journal a index pouze pro čtení…';
+ try{renderProjectRepairReport(await projectRequest('/v1/projects/repair/check',{project_id:projectRepairTarget.id},120000));}
+ catch(error){document.querySelector('#project-repair-report').hidden=true;projectRepairStatus.textContent=error.message;}
+}
+async function openProjectRepair(item){
+ if(!canLeaveWorkspaceEditors())return;clearProject();projectRepairTarget=item;
+ document.querySelector('#project-home').hidden=true;projectRepairView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
+ document.querySelector('#project-repair-target').textContent=`${item.title} · ${item.id}`;
+ document.querySelector('#project-repair-heading').focus();await runProjectRepairCheck();
+}
+document.querySelector('#project-repair-check').addEventListener('click',runProjectRepairCheck);
+document.querySelector('#project-repair-back').addEventListener('click',()=>loadProjects());
+document.querySelector('#project-repair-location').addEventListener('click',()=>{if(projectRepairTarget)repairProjectLocation(projectRepairTarget);});
+projectRepairPreview.addEventListener('click',async()=>{
+ const action=repairAction(projectRepairReport||{});if(!projectRepairTarget||!action)return;
+ projectRepairOperation=crypto.randomUUID();projectRepairStatus.textContent='Připravuji přesný náhled opravy…';
+ try{projectRepairPlan=await projectRequest('/v1/projects/repair/preview',{
+   project_id:projectRepairTarget.id,action,operation_id:projectRepairOperation,
+   check_token:projectRepairReport.check_token});
+  const intent=projectRepairPlan.intent_operation_id?`Původní operace: ${projectRepairPlan.intent_operation_id}`:'Původní operace: samostatný journalový intent';
+  document.querySelector('#project-repair-details').textContent=[
+   `Vrstva: ${projectRepairPlan.layer}`,projectRepairPlan.effect,
+   `HEAD: ${projectRepairPlan.expected_head||'—'}`,intent,
+   '',...projectRepairPlan.preconditions.map(value=>'Podmínka: '+value),
+   '',`Recovery: ${projectRepairPlan.recovery}`].join('\\n');
+  document.querySelector('#project-repair-plan').hidden=false;projectRepairConfirmCheck.checked=false;projectRepairConfirm.disabled=true;
+  projectRepairStatus.textContent='Náhled je připraven. Projekt se zatím nezměnil.';
+ }catch(error){resetProjectRepairPlan();projectRepairStatus.textContent=error.message;}
+});
+projectRepairConfirmCheck.addEventListener('change',()=>{projectRepairConfirm.disabled=!(projectRepairConfirmCheck.checked&&projectRepairPlan);});
+document.querySelector('#project-repair-cancel').addEventListener('click',()=>{resetProjectRepairPlan();projectRepairStatus.textContent='Náhled byl zrušen; projekt se nezměnil.';});
+projectRepairConfirm.addEventListener('click',async()=>{
+ if(!projectRepairPlan||!projectRepairConfirmCheck.checked)return;projectRepairConfirm.disabled=true;
+ projectRepairStatus.textContent='Provádím potvrzenou opravu a následnou úplnou kontrolu…';
+ try{const result=await projectRequest('/v1/projects/repair/confirm',{plan:projectRepairPlan},120000);
+  const operation=result.receipt.operation_id;renderProjectRepairReport(result.report);
+  projectRepairStatus.textContent=`Oprava dokončena. Receipt operace: ${operation}`;
+ }catch(error){projectRepairStatus.textContent=error.message;projectRepairConfirm.disabled=false;}
+});
 function recentProjectIds(){return recentProjectOrder;}
 function rememberRecentProject(projectId){
  recentProjectOrder=[projectId,...recentProjectOrder.filter(id=>id!==projectId)].slice(0,12);
@@ -2359,6 +2461,8 @@ function renderProjectCatalog(items){
    {label:'Správa odstranění…',run:()=>openProjectDeletion(item)},
    {label:'Kopírovat ID',run:async()=>{try{await navigator.clipboard.writeText(item.id);document.querySelector('#sidebar-project-status').textContent='ID projektu bylo zkopírováno.';}catch(error){document.querySelector('#sidebar-project-status').textContent=`ID projektu: ${item.id}`;}}}
   ];
+  if(!item.available)actions.splice(1,0,
+   {label:'Zkontrolovat projekt…',run:()=>openProjectRepair(item)});
   if(item.location_missing)actions.splice(1,1,
    {label:'Opravit umístění…',run:()=>repairProjectLocation(item)},
    {label:'Odebrat nedostupnou registraci…',run:()=>confirmMissingProjectUnregister(item)});
@@ -2489,7 +2593,7 @@ document.querySelector('#project-trash-back').addEventListener('click',()=>loadP
 document.querySelector('#dashboard-date').textContent=new Intl.DateTimeFormat('cs-CZ',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
 document.querySelector('#sidebar-create-project').addEventListener('click',async()=>{
  if(activeProject)await loadProjects();
- document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;
+ document.querySelector('#project-home').hidden=true;projectView.hidden=true;settingsView.hidden=true;projectRepairView.hidden=true;
  sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;
  projectCreateView.hidden=false;selectSidebarTab(document.querySelector('#projects-tab'));
  resetProjectCreationPreview();document.querySelector('#project-create-heading').focus();
@@ -2632,7 +2736,7 @@ function finishFederationTransfer(success,message){
 }
 function openFederationTransfer(){
  if(!canLeaveWorkspaceEditors())return;
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
@@ -2736,7 +2840,7 @@ function runFederationNetwork(request,message){
 }
 function openFederationNetwork(){
  if(!canLeaveWorkspaceEditors())return;
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationDeploymentView.hidden=true;federationNetworkView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationNetworkConfiguration=null;
@@ -2828,7 +2932,7 @@ function finishFederationDeployment(success,message){
 }
 function openFederationDeployment(){
  if(!canLeaveWorkspaceEditors())return;
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=false;
  selectSidebarTab(document.querySelector('#federation-tab'));federationDeploymentConfiguration=null;
@@ -3241,7 +3345,7 @@ async function openSettings(settingsTabId='settings-backend-tab'){
  if(!canLeaveWorkspaceEditors())return;
  const activeTab=mainTabs.find(tab=>tab.getAttribute('aria-selected')==='true');
  settingsReturn={project:!!activeProject,tabId:activeTab?.id || 'preview-tab',sourceImport:!sourceImportView.hidden,trash:!projectTrashView.hidden};
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
+ document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;projectView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;settingsView.hidden=false;
  selectSidebarTab(document.querySelector('#settings-sidebar-tab'));syncSidebarSettingsList();
  const requested=document.getElementById(settingsTabId);selectSettingsTab(requested&&!requested.hidden?requested:document.querySelector('#settings-backend-tab'));
  document.querySelector('#settings-backend-status').textContent='Načítám stav lokálního backendu…';
@@ -5250,6 +5354,8 @@ class DesktopHandler(Handler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     post_paths = Handler.post_paths | {'/v1/projects', '/v1/projects/open',
         '/v1/projects/create/preview', '/v1/projects/create/confirm',
+        '/v1/projects/repair/check', '/v1/projects/repair/preview',
+        '/v1/projects/repair/confirm', '/v1/projects/repair/receipt',
         '/v1/projects/delete/preview', '/v1/projects/delete/confirm',
         '/v1/projects/delete/trash', '/v1/projects/delete/restore/preview',
         '/v1/projects/delete/restore/confirm', '/v1/projects/delete/purge/preview',
@@ -5630,6 +5736,25 @@ class DesktopHandler(Handler):
                 return self.reply(200, {'projects': projects.list()})
             if self.path == '/v1/projects' and isinstance(request, dict) and set(request) == {'details'} and request['details'] is True:
                 return self.reply(200, {'projects': projects.catalog()})
+            if self.path.startswith('/v1/projects/repair/'):
+                service = getattr(self.server, 'project_repair_actions', None)
+                if service is None:
+                    return self.reply(503, {'error': 'Kontrola projektu je dostupná jen v desktopu.'})
+                if (self.path == '/v1/projects/repair/check' and isinstance(request, dict)
+                        and set(request) == {'project_id'}):
+                    return self.reply(200, service.diagnostics.check(request['project_id']))
+                if (self.path == '/v1/projects/repair/preview' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'action', 'operation_id',
+                                             'check_token'}):
+                    return self.reply(200, service.preview(request))
+                if (self.path == '/v1/projects/repair/confirm' and isinstance(request, dict)
+                        and set(request) == {'plan'}):
+                    return self.reply(200, service.confirm(request['plan']))
+                if (self.path == '/v1/projects/repair/receipt' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'operation_id'}):
+                    return self.reply(200, {'receipt': service.receipt(
+                        request['project_id'], request['operation_id'])})
+                return self.send_error(400)
             if self.path == '/v1/projects/create/preview' and isinstance(request, dict):
                 return self.reply(200, self.server.project_creation_actions.preview(request))
             if (self.path == '/v1/projects/create/confirm' and isinstance(request, dict)
@@ -5820,6 +5945,9 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
             return self.reply(409, {'error': 'Projekt se během čtení změnil. Zkuste jej znovu otevřít.'})
+        except BlockingIOError:
+            return self.reply(409, {'error': 'Projekt právě používá jiná zapisující operace. '
+                                   'Po jejím dokončení spusťte novou kontrolu.'})
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError) as exc:
             if (isinstance(exc, ValidationError)
                     and self.path == '/v1/tasks/search/confirm'
@@ -5871,6 +5999,9 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error': 'Projekt nelze vytvořit. Obnovte náhled a ověřte název, umístění a dostupnost úložiště.'})
             if self.path.startswith('/v1/projects/delete/'):
                 return self.reply(422, {'error': 'Akci projektu nelze provést. Obnovte náhled a ověřte blokující operace, vazby a lokální stav.'})
+            if self.path.startswith('/v1/projects/repair/'):
+                return self.reply(422, {'error': 'Kontrolu nebo opravu nelze dokončit. '
+                                       'Načtěte nový stav a ověřte přesně uvedenou ruční příčinu.'})
             if self.path.startswith('/v1/notebooklm/'):
                 message = {
                     'Directory must not be writable by other users':

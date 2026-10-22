@@ -174,6 +174,8 @@ class WebHandler(DesktopHandler):
             self.reply(422, {'error': 'Zdroj nelze importovat. Ověřte typ, velikost, metadata a aktuální verzi projektu.'})
 
     def dispatch(self, request):
+        if self.path.startswith('/v1/projects/repair/'):
+            return self.send_error(404)
         if self.path == '/v1/application-access':
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
