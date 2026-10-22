@@ -53,6 +53,8 @@ class AdministrationTests(unittest.TestCase):
         peer = str(uuid4())
         state = self.change(action='add-peer', node_id=peer, name='Desktop', endpoint='https://192.168.100.3:8443', fingerprint='a'*64)
         self.assertEqual(state['peers'][0]['trust'],'pending')
+        self.assertEqual(state['peers'][0]['relationship_type'], 'legacy')
+        self.assertIsNone(state['peers'][0]['local_role'])
         self.assertEqual(state['transport'],'signed-https-v1')
         self.assertTrue(state['can_federate'])
         state = self.change(action='set-trust', node_id=peer, trust='approved')
@@ -68,8 +70,11 @@ class AdministrationTests(unittest.TestCase):
 
     def test_peer_editor_updates_mutable_fields_but_keeps_pinned_identity(self):
         peer = str(uuid4())
-        state = self.change(action='add-peer', node_id=peer, name='Old name',
-                            endpoint='https://192.168.100.3:8443', fingerprint='a'*64)
+        state = self.change(action='add-peer-relationship',
+                            relationship_type='p2p', node_id=peer,
+                            name='Old name',
+                            endpoint='https://192.168.100.3:8443',
+                            fingerprint='a'*64)
         state = self.service.request(self.actor, {
             'action': 'update-peer', 'expected_commit': state['commit_id'],
             'node_id': peer, 'name': 'New name',
@@ -78,7 +83,8 @@ class AdministrationTests(unittest.TestCase):
         self.assertEqual(edited, {
             'id': peer, 'name': 'New name',
             'endpoint': 'https://192.168.100.4:9443',
-            'fingerprint': 'a'*64, 'trust': 'approved', 'revision': 2})
+            'fingerprint': 'a'*64, 'trust': 'approved', 'revision': 2,
+            'relationship_type': 'p2p', 'local_role': 'peer'})
         unchanged_commit = state['commit_id']
         state = self.service.request(self.actor, {
             'action': 'update-peer', 'expected_commit': unchanged_commit,
@@ -88,6 +94,60 @@ class AdministrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.change(action='update-peer', node_id=peer, name='Bad',
                         endpoint='http://example.invalid', trust='approved')
+
+    def test_legacy_peer_must_be_converted_and_conversion_is_pending(self):
+        peer = str(uuid4())
+        state = self.change(action='add-peer', node_id=peer, name='Legacy',
+                            endpoint='https://192.168.100.3:8443',
+                            fingerprint='a'*64)
+        with self.assertRaisesRegex(ValueError, 'converted or removed'):
+            self.change(action='update-peer', node_id=peer, name='Changed',
+                        endpoint='https://192.168.100.3:8443', trust='pending')
+        state = self.service.request(self.actor, {
+            'action': 'convert-peer', 'expected_commit': state['commit_id'],
+            'node_id': peer, 'relationship_type': 'client-server'})
+        converted = state['peers'][0]
+        self.assertEqual(converted['relationship_type'], 'client-server')
+        self.assertEqual(converted['local_role'], 'server')
+        self.assertIsNone(converted['endpoint'])
+        self.assertEqual(converted['trust'], 'pending')
+        with self.assertRaisesRegex(AccessDenied, 'established by login'):
+            self.change(action='set-trust', node_id=peer, trust='approved')
+
+    def test_p2p_is_server_only_and_client_server_is_not_manually_added(self):
+        peer = str(uuid4())
+        desktop = Administration(self.node, deployment='desktop')
+        with self.assertRaisesRegex(AccessDenied, 'server-only'):
+            desktop.request(self.actor, {
+                'action': 'add-peer-relationship',
+                'expected_commit': desktop.request(self.actor, {'action': 'list'})['commit_id'],
+                'relationship_type': 'p2p', 'node_id': peer, 'name': 'Peer',
+                'endpoint': 'https://192.168.100.3:8443',
+                'fingerprint': 'a' * 64})
+        with self.assertRaisesRegex(AccessDenied, 'created by login'):
+            self.change(action='add-peer-relationship',
+                        relationship_type='client-server', node_id=peer,
+                        name='Peer', endpoint='https://192.168.100.3:8443',
+                        fingerprint='a' * 64)
+
+    def test_v3_peer_registry_migrates_to_legacy_without_data_loss(self):
+        peer = str(uuid4())
+        current = self.change(action='add-peer', node_id=peer, name='Existing',
+                              endpoint='https://192.168.100.3:8443',
+                              fingerprint='a' * 64)
+        with self.service.locked() as (git, state, commit, _):
+            old = dict(state, schema_version=3)
+            old['peers'] = [{key: value for key, value in item.items()
+                             if key not in {'relationship_type', 'local_role'}}
+                            for item in state['peers']]
+            self.service.publish(git, old, commit)
+        migrated = self.state()
+        self.assertNotEqual(migrated['commit_id'], current['commit_id'])
+        self.assertEqual(migrated['peers'][0], {
+            'id': peer, 'name': 'Existing',
+            'endpoint': 'https://192.168.100.3:8443',
+            'fingerprint': 'a' * 64, 'trust': 'pending', 'revision': 1,
+            'relationship_type': 'legacy', 'local_role': None})
 
     def test_rotation_interrupted_before_ref_keeps_previous_key_valid(self):
         from spikes.storage import Git

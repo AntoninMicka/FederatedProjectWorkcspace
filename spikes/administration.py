@@ -27,6 +27,8 @@ from spikes.federation_accounts import (
 
 NODE_ROLES = {'member', 'node-admin', 'federation-admin'}
 PROJECT_ROLES = {'project-admin', 'editor', 'reviewer', 'reader'}
+PEER_RELATIONSHIPS = {'legacy', 'p2p', 'client-server'}
+PEER_LOCAL_ROLES = {None, 'peer', 'client', 'server'}
 
 
 class AccessDenied(ValueError):
@@ -78,29 +80,34 @@ class Administration:
             git.run('init', '--bare', '--template=', '--initial-branch=main')
             head = git.run('rev-parse', '--verify', 'refs/heads/main', check=False)
             if head.returncode:
-                state = {'schema_version': 3, 'node_id': node['id'], 'users': [],
+                state = {'schema_version': 4, 'node_id': node['id'], 'users': [],
                          'peers': [], 'mappings': [], 'replications': []}
                 commit = self.publish(git, state, None)
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
             self.validate(state, node['id'])
-            if state['schema_version'] < 3:
+            if state['schema_version'] < 4:
                 state = dict(state)
                 if state['schema_version'] == 1:
                     state['mappings'] = []
-                state.update(schema_version=3, replications=[])
+                if state['schema_version'] < 3:
+                    state['replications'] = []
+                state['peers'] = [dict(peer, relationship_type='legacy',
+                                       local_role=None)
+                                  for peer in state['peers']]
+                state['schema_version'] = 4
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
     def validate(self, state, node_id):
         version = state.get('schema_version')
         expected = {'schema_version', 'node_id', 'users', 'peers'}
-        if version in {2, 3}:
+        if version in {2, 3, 4}:
             expected.add('mappings')
-        if version == 3:
+        if version in {3, 4}:
             expected.add('replications')
-        if set(state) != expected or type(version) is not int or version not in {1, 2, 3} or state['node_id'] != node_id:
+        if set(state) != expected or type(version) is not int or version not in {1, 2, 3, 4} or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:
@@ -121,9 +128,27 @@ class Administration:
                     raise ValueError('Invalid project role')
         seen = set()
         for peer in state['peers']:
-            if set(peer) != {'id', 'name', 'endpoint', 'fingerprint', 'trust', 'revision'}:
+            expected_peer = {'id', 'name', 'endpoint', 'fingerprint', 'trust',
+                             'revision'}
+            if version == 4:
+                expected_peer |= {'relationship_type', 'local_role'}
+            if set(peer) != expected_peer:
                 raise ValueError('Invalid peer fields')
-            identifier(peer['id']); label(peer['name']); self.endpoint(peer['endpoint'])
+            identifier(peer['id']); label(peer['name'])
+            relationship = peer.get('relationship_type', 'legacy')
+            local_role = peer.get('local_role')
+            if (relationship not in PEER_RELATIONSHIPS
+                    or local_role not in PEER_LOCAL_ROLES
+                    or (relationship == 'legacy' and local_role is not None)
+                    or (relationship == 'p2p' and local_role != 'peer')
+                    or (relationship == 'client-server'
+                        and local_role not in {'client', 'server'})):
+                raise ValueError('Invalid peer relationship')
+            if relationship == 'client-server' and local_role == 'server':
+                if peer['endpoint'] is not None:
+                    raise ValueError('Dynamic client must not have an endpoint')
+            else:
+                self.endpoint(peer['endpoint'])
             if peer['id'] == node_id or peer['id'] in seen or peer['trust'] not in {'pending', 'approved', 'revoked'}:
                 raise ValueError('Invalid peer identity/trust')
             seen.add(peer['id'])
@@ -622,14 +647,62 @@ class Administration:
                     raise ValueError('Expected fingerprint text')
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
-                    'trust': 'pending', 'revision': 1})
+                    'trust': 'pending', 'revision': 1,
+                    'relationship_type': 'legacy', 'local_role': None})
+            elif action == 'add-peer-relationship' and set(request) == {
+                    'action', 'expected_commit', 'node_id', 'name', 'endpoint',
+                    'fingerprint', 'relationship_type'}:
+                if request['relationship_type'] != 'p2p':
+                    raise AccessDenied(
+                        'Client-server relationship must be created by login')
+                if self.deployment != 'web':
+                    raise AccessDenied('P2P relationship is server-only')
+                if not isinstance(request['fingerprint'], str):
+                    raise ValueError('Expected fingerprint text')
+                state['peers'].append({
+                    'id': identifier(request['node_id']),
+                    'name': label(request['name']),
+                    'endpoint': self.endpoint(request['endpoint']),
+                    'fingerprint': request['fingerprint'].lower(),
+                    'trust': 'pending', 'revision': 1,
+                    'relationship_type': 'p2p', 'local_role': 'peer'})
+            elif action == 'convert-peer' and set(request) == {
+                    'action', 'expected_commit', 'node_id',
+                    'relationship_type'}:
+                peer = next((p for p in state['peers']
+                             if p['id'] == request['node_id']), None)
+                relationship = request['relationship_type']
+                if peer is None or peer['relationship_type'] != 'legacy':
+                    raise ValueError('Only a legacy relationship can be converted')
+                if relationship not in {'p2p', 'client-server'}:
+                    raise ValueError('Invalid peer relationship conversion')
+                if relationship == 'p2p' and self.deployment != 'web':
+                    raise AccessDenied('P2P relationship is server-only')
+                self.revoke_peer_dependents(state, node, peer['id'])
+                local_role = ('peer' if relationship == 'p2p'
+                              else 'client' if self.deployment == 'desktop'
+                              else 'server')
+                peer.update(
+                    relationship_type=relationship,
+                    local_role=local_role,
+                    endpoint=(None if local_role == 'server'
+                              else peer['endpoint']),
+                    trust='pending', revision=peer['revision'] + 1)
             elif action == 'update-peer' and set(request) == {
                     'action', 'expected_commit', 'node_id', 'name', 'endpoint', 'trust'}:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {
                         'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid peer update')
-                name, endpoint = label(request['name']), self.endpoint(request['endpoint'])
+                if peer['relationship_type'] == 'legacy':
+                    raise ValueError('Legacy relationship must be converted or removed')
+                if (peer['relationship_type'] == 'client-server'
+                        and request['trust'] == 'approved'):
+                    raise AccessDenied(
+                        'Client-server trust is established by login')
+                name = label(request['name'])
+                endpoint = (None if peer['local_role'] == 'server'
+                            else self.endpoint(request['endpoint']))
                 changed = (peer['name'] != name or peer['endpoint'] != endpoint
                            or peer['trust'] != request['trust'])
                 if not changed:
@@ -642,6 +715,8 @@ class Administration:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or peer['trust'] != 'approved':
                     raise ValueError('Unknown or unapproved peer')
+                if peer.get('local_role') == 'server':
+                    raise ValueError('Dynamic client has no editable endpoint')
                 endpoint = self.endpoint(request['endpoint'])
                 if peer['endpoint'] == endpoint:
                     return self.public(state, commit, actor)
@@ -650,6 +725,10 @@ class Administration:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid trust change')
+                if (peer.get('relationship_type') == 'client-server'
+                        and request['trust'] == 'approved'):
+                    raise AccessDenied(
+                        'Client-server trust is established by login')
                 peer.update(trust=request['trust'], revision=peer['revision'] + 1)
                 if request['trust'] == 'revoked':
                     self.revoke_peer_dependents(state, node, peer['id'])

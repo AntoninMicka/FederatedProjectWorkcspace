@@ -52,7 +52,7 @@ nesmí jeho samotné zavolání vydávat za autorizaci přenosu.
 
 ## Autority a grant
 
-Federační Git registr `Administration` se verzovaně rozšíří o replikační
+Federační Git registr `Administration` se verzovaně rozšiřuje o replikační
 záznamy. Autoritativní specifikace grantu váže alespoň:
 
 - stabilní grant ID a verzi schématu;
@@ -158,3 +158,9 @@ Převzetí primární role, konfigurovatelná frekvence, multi-master, automatic
 merge, retence dokončených bundle a plný portable ACL/policy model zůstávají
 mimo tento řez. Tento ADR není důkaz fyzické dostupnosti desktopového HTTPS
 endpointu ani úspěšného desktop ↔ server scénáře.
+
+Topologie peer vztahů, bezeztrátové označení dosavadních záznamů jako
+`legacy` a hranici budoucího klient–server enrollmentu nově zpřesňuje
+[ADR 0039](0039-federation-relationship-modes.md). Stávající legacy vztahy
+zůstávají pro tento osobní replikační protokol kompatibilní; jejich převod
+však záměrně odvolá dosavadní mapování a granty a vyžádá nové ověření.

@@ -38,7 +38,8 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   aktivním oboustranným mapováním vydat podepsaný grant vázaný na oba uzly,
   project UUID, ref, směr a role primary/read-only replica. Zapnutí, zastavení,
   revokace a retry musí být auditovatelné a idempotentní; neznámý nebo stale
-  stav nic nepovolí. Registry schema v3 drží kanonický grant, podpisy obou uzlů,
+  stav nic nepovolí. Registry schema v4 (původně v3, následně migrované ADR
+  0039) drží kanonický grant, podpisy obou uzlů,
   podepsaný revokační tombstone a lokální `enabled`; migrace v1/v2 zachovává
   účty a mapování. Podpisová doména replikace je oddělená od mapování účtů,
   specifikace připíná identity, účty, role, projekt, `refs/heads/main`, privacy
@@ -128,6 +129,34 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   Federace nebo Uživatelů přímo z boční nabídky nejen přepne panel, ale také
   načte administrační stav; jinak zůstávala nová tabulka v počátečním prázdném
   stavu, přestože backend peer správně vracel.
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-UI2 — explicitní typy
+  federačních vztahů (cílová úroveň: implemented).** Rozlišit serverové P2P a
+  klient–server spojení, staré záznamy bezeztrátově označit jako `legacy` a v
+  tabulce i editoru zobrazit typ a lokální roli. Legacy vztah ponechat funkční,
+  ale při editaci povolit jen převod nebo bezpečné odebrání. Převod atomicky
+  odvolá dosavadní mapování i replikační granty a vrátí trust do `pending`;
+  P2P lze ručně založit jen mezi servery. Přihlášení desktopového klienta k
+  serveru, vydání node credentialu a automatické mapování serverového účtu je
+  výslovně navazující řez a současné UI je nesmí předstírat. Kontrakt, migraci
+  registru v1–v3 na v4 a crash/recovery hranice definuje ADR 0039. Registry
+  validátor vynucuje přípustnou kombinaci typu, lokální role a endpointu;
+  klient–server nelze ručně založit ani schválit. Cílené ověření migrací,
+  převodu a revokace: **12 testů úspěšně**; vygenerovaný JavaScript prošel
+  `node --check` a změněné Python moduly `py_compile`. Úplná sada po změně:
+  **716 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
+  Přihlašovací enrollment a jeho fyzická akceptace zůstávají navazující prací.
+
+## K předání do backlogu
+
+- [ ] [planned] **F-M5-FED-ENROLL-01 — klient–server enrollment (cílová
+  úroveň: implemented).** Podle ADR 0039 nahradit dočasnou hlášku skutečným
+  přihlášením desktopového klienta serverovým účtem přes ověřené TLS. Připnout
+  node key klienta, vydat omezený obnovitelný node credential a atomicky
+  vytvořit explicitní mapování lokální desktopové identity na přihlášený účet;
+  heslo ani dlouhodobý uživatelský access key neukládat. Pokrýt odvolání,
+  rotaci, ztracenou odpověď, opakování, změnu serverového účtu a fyzický
+  desktop ↔ server scénář. Tato položka není podmínkou dokončení současné
+  dávky.
 
 ## Akceptační podmínky
 
