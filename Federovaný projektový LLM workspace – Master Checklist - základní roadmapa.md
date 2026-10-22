@@ -725,12 +725,13 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   odpovědi s pozastavením při ručním odscrollování. Fyzickou desktopovou
   akceptaci uživatel potvrdil; evidence je ve WORK_LOG, doručení PR do
   `develop` dosud není uzavřené.
-- [ ] **F-M2-CHAT-LANGUAGE-01:** definovat explicitní provider-neutral jazyk
-  odpovědi a precedence uzel/projekt/vlákno/běh. Požadovaný BCP 47 jazyk má
-  být viditelný v UI a dohledatelný v Context Manifestu, provider requestu a
-  run provenance; první cílový scénář je čeština na Gemmě, která dnes
-  občas odpoví slovensky. Nedodržení modelem nesmí vést ke skrytému překladu
-  ani k nepravdivé garanci jazyka.
+- [x] **F-M2-CHAT-LANGUAGE-01 PoC validated:** explicitní provider-neutral
+  BCP 47 jazyk má deterministickou precedence uzel/projekt/vlákno/běh a je
+  viditelný v UI i dohledatelný v Context Manifestu, provider requestu a turn
+  provenance. Uživatel fyzicky potvrdil odpověď Gemmy ve zvoleném jazyce;
+  compliance zůstává pravdivě `unverified` a aplikace odchylku skrytě
+  nepřekládá. Evidence je ve WORK_LOG; doručení PR do `develop` dosud není
+  uzavřené.
 - [x] Doplnit uživatelskou správu lokálních vláken, úplné aplikační smazání a restartovou akceptaci — F-M2-CHAT-03 lokálně PoC validated: nové/navázané vlákno je vědomá volba; samostatná záložka Chaty v pevném levém panelu odděluje zařazená a nezařazená vlákna a zachovává aktivní/archivovaný stav. Scrollují jen vnitřní seznamy a návrat k projektům zůstává nahoře. Potvrzené smazání koordinovaně odstraní podporované node-local zprávy, turns, task outcomes, preview/approval a navázané run záznamy; aktivní nebo `unknown` účinek je fail-closed a operace přes více SQLite stores má durable journal a idempotentní recovery. Publikované Git otisky a artefakty zůstávají neměnnou historií; „úplné“ není příslib forenzního přepsání média. Evidence je ve WORK_LOG; dávka byla doručena PR #51.
 - [x] **F-M3-OLLAMA-ORCH-LAN-01 lokálně PoC validated:** orchestration přijímá explicitně zvolenou TLS připnutou `private-network` Ollamu. Request váže přesné binding ID/revizi a změna před dispatch se odmítne; LAN cíl zůstává odlišný od `same-node`, každý vědomý pokus má nový Context Manifest/run, `local-only` se odmítá a `unknown` se bez fallbacku automaticky neopakuje. Automatické testy jsou uzavřené ve WORK_LOG; živá LAN/TLS/firewall akceptace nebyla provedena.
 
