@@ -623,6 +623,21 @@ class Administration:
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
                     'trust': 'pending', 'revision': 1})
+            elif action == 'update-peer' and set(request) == {
+                    'action', 'expected_commit', 'node_id', 'name', 'endpoint', 'trust'}:
+                peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
+                if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {
+                        'approved', 'revoked', 'pending'}:
+                    raise ValueError('Invalid peer update')
+                name, endpoint = label(request['name']), self.endpoint(request['endpoint'])
+                changed = (peer['name'] != name or peer['endpoint'] != endpoint
+                           or peer['trust'] != request['trust'])
+                if not changed:
+                    return self.public(state, commit, actor)
+                peer.update(name=name, endpoint=endpoint, trust=request['trust'],
+                            revision=peer['revision'] + 1)
+                if request['trust'] == 'revoked':
+                    self.revoke_peer_dependents(state, node, peer['id'])
             elif action == 'update-peer-endpoint' and set(request) == {'action', 'expected_commit', 'node_id', 'endpoint'}:
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or peer['trust'] != 'approved':
@@ -637,15 +652,7 @@ class Administration:
                     raise ValueError('Invalid trust change')
                 peer.update(trust=request['trust'], revision=peer['revision'] + 1)
                 if request['trust'] == 'revoked':
-                    for mapping in state['mappings']:
-                        if not mapping['revocation'] and any(a['node_id'] == peer['id'] for a in mapping['spec']['accounts']):
-                            mapping['revocation'] = MappingSignatures(self.root).sign(mapping['spec'], node['id'], 'revoke')
-                    for replication in state['replications']:
-                        if (not replication['revocation']
-                                and any(n['node_id'] == peer['id'] for n in replication['spec']['nodes'])):
-                            replication['revocation'] = ReplicationSignatures(self.root).sign(
-                                replication['spec'], node['id'], 'revoke')
-                            replication['enabled'] = False
+                    self.revoke_peer_dependents(state, node, peer['id'])
             elif action in {'propose-mapping', 'confirm-mapping', 'revoke-mapping', 'import-mapping'}:
                 export = self.mapping_request(state, node, request)
                 if action in {'revoke-mapping', 'import-mapping'}:
@@ -671,6 +678,22 @@ class Administration:
                        else 'mapping_envelope')
                 result[key] = export
             return result
+
+    def revoke_peer_dependents(self, state, node, peer_id):
+        """Revoke durable grants before a peer disappears from active use."""
+        for mapping in state['mappings']:
+            if (not mapping['revocation']
+                    and any(account['node_id'] == peer_id
+                            for account in mapping['spec']['accounts'])):
+                mapping['revocation'] = MappingSignatures(self.root).sign(
+                    mapping['spec'], node['id'], 'revoke')
+        for replication in state['replications']:
+            if (not replication['revocation']
+                    and any(member['node_id'] == peer_id
+                            for member in replication['spec']['nodes'])):
+                replication['revocation'] = ReplicationSignatures(self.root).sign(
+                    replication['spec'], node['id'], 'revoke')
+                replication['enabled'] = False
 
     def public(self, state, commit, actor):
         users = [{k: v for k, v in u.items() if k != 'credential_ref'} for u in state['users']]

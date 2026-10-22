@@ -88,7 +88,7 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   a účtové ověření: **25 testů úspěšně**; širší sdílené UI/API ověření:
   **98 testů úspěšně, 6 přeskočeno**. Úplná sada: **709 testů úspěšně,
   28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
-- [ ] [blocked] **F-M5-PERSONAL-SYNC-01-E — automatické a fyzické ověření
+- [ ] [in progress] **F-M5-PERSONAL-SYNC-01-E — automatické a fyzické ověření
   (cílová úroveň: PoC validated).** Pokrýt první přenos, následný fast-forward,
   restart na persistentních hranicích, offline návrat, idempotentní retry,
   zastavení/revokaci, změněný HEAD, neúplnou historii, `local-only`, neplatný
@@ -103,12 +103,28 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   **13 testů úspěšně**. Úplná sada: **711 testů úspěšně, 28 přeskočeno**.
   Fyzická příprava 22. 10. 2026 ověřila TLS i podepsanou identitu existujícího
   LXC peeru a projekt `Pokus` jako čistou přenositelnou historii tří commitů.
-  Vzdálená replikační cesta však vrací HTTP 401 místo protokolového 413, takže
-  LXC dosud nemá tuto verzi endpointu; SSH aktualizace skončila `Permission
-  denied`. Odblokování: nasadit aktuální feature verzi na LXC přes desktopové
-  nasazení nebo s dostupnými SSH credentials, potom vytvořit oboustranné
-  mapování/grant a fyzicky potvrdit první přenos, fast-forward a offline návrat.
-  Při kontrole nebyl vytvořen grant ani změněn desktopový či LXC projekt.
+  První capability kontrola během probíhající aktualizace ještě vrátila HTTP
+  401; po jejím dokončení vzdálená replikační cesta vrací očekávané protokolové
+  413 na prázdný request a TLS i podepsaná identita zůstaly platné. Zbývá
+  vytvořit oboustranné mapování/grant a fyzicky potvrdit první přenos,
+  fast-forward a offline návrat. Při dosavadní kontrole nebyl vytvořen grant
+  ani změněn desktopový či LXC projekt.
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-UI1 — facelift správy
+  federovaných uzlů (cílová úroveň: implemented).** Nahradit vložený formulář
+  výběrovou tabulkou s akcemi Přidat, Upravit a Odebrat. Přidání a editace
+  používají samostatný webový dialog; UUID a otisk zůstávají při editaci
+  neměnnou připnutou identitou. Odebrání je bezpečná revokace s auditní stopou,
+  nikoli fyzické smazání registru. Dosavadní mapování a replikační formuláře
+  zůstanou po dobu navazujícího návrhu skrytou přechodovou implementací.
+  Sdílené webové/desktopové UI nyní nabízí výběrovou tabulku, samostatný
+  editor pro přidání i úpravu a webové potvrzení odebrání. Atomická operace
+  `update-peer` mění pouze název, HTTPS endpoint a důvěru; UUID a fingerprint
+  nepřijímá a při revokaci používá stejné durable tombstones jako původní
+  trust flow. Reuse: adaptován existující HTML `<dialog>` vzor a revokační
+  kontrakt; nový Qt dialog ani fyzické mazání registru nebyly zavedeny.
+  Cílené ověření: **10 testů úspěšně**, vygenerovaný JavaScript prošel
+  `node --check`; úplná sada: **712 testů úspěšně, 28 přeskočeno** (volitelné
+  fyzické/WebEngine scénáře).
 
 ## Akceptační podmínky
 

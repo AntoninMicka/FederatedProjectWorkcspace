@@ -1279,7 +1279,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('id="settings-users-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
         settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
         self.assertIn('id="administration" class="settings-card"', settings)
-        self.assertNotIn('<dialog', settings)
+        self.assertIn('<dialog id="admin-peer-editor"', settings)
+        self.assertNotIn('<dialog id="administration"', settings)
         self.assertNotIn('id="administration-open"', settings)
 
     def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):

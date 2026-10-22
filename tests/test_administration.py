@@ -66,6 +66,29 @@ class AdministrationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.change(action='add-peer',node_id=peer,name='Duplicate',endpoint='https://192.168.100.4',fingerprint='b'*64)
 
+    def test_peer_editor_updates_mutable_fields_but_keeps_pinned_identity(self):
+        peer = str(uuid4())
+        state = self.change(action='add-peer', node_id=peer, name='Old name',
+                            endpoint='https://192.168.100.3:8443', fingerprint='a'*64)
+        state = self.service.request(self.actor, {
+            'action': 'update-peer', 'expected_commit': state['commit_id'],
+            'node_id': peer, 'name': 'New name',
+            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved'})
+        edited = state['peers'][0]
+        self.assertEqual(edited, {
+            'id': peer, 'name': 'New name',
+            'endpoint': 'https://192.168.100.4:9443',
+            'fingerprint': 'a'*64, 'trust': 'approved', 'revision': 2})
+        unchanged_commit = state['commit_id']
+        state = self.service.request(self.actor, {
+            'action': 'update-peer', 'expected_commit': unchanged_commit,
+            'node_id': peer, 'name': 'New name',
+            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved'})
+        self.assertEqual(state['commit_id'], unchanged_commit)
+        with self.assertRaises(ValueError):
+            self.change(action='update-peer', node_id=peer, name='Bad',
+                        endpoint='http://example.invalid', trust='approved')
+
     def test_rotation_interrupted_before_ref_keeps_previous_key_valid(self):
         from spikes.storage import Git
         state=self.change(action='create-user',name='Original',node_role='member')
