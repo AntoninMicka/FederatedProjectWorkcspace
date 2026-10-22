@@ -49,34 +49,11 @@ Vydání 0.1.0 bylo doručeno PR #74 do `main`, označeno tagem `v0.1.0` a jeho
 evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
 doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
-commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl na feature větvi přijat a
-jeho evidence je ve WORK_LOG; PR do `develop` dosud nebyl vytvořen ani sloučen.
+commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl doručen PR #78 jako commit
+`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` je aktivní
+dávka v TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
-
-- [ ] [planned] **F-M5-PERSONAL-SYNC-01 — osobní federace dvou vlastních uzlů
-  (cílová úroveň: PoC validated).** Navazující feature větev
-  `feature/f-m5-personal-sync-01` se založí až po doručení `UX-FEDERATION-02`
-  z aktuálního `develop`; cílem PR bude `develop`. Propojit dva uzly spravované
-  jedním člověkem přes existující lokální účty a `node-admin`, ručně schválit
-  peer i konkrétní projekt, určit jeden primární zapisující uzel a automaticky
-  udržovat read-only repliku. UI umožní synchronizaci zapnout a zastavit a
-  ukáže poslední úspěch, čekající stav, odmítnutí a konflikt.
-
-  Rozsah nezahrnuje centrální registr, MFA, sdílené uživatele, role nad uzlem,
-  nový obecný policy engine, multi-master ani automatické řešení divergence.
-  Před implementací prověřit existující peer/transfer/sync komponenty a
-  `REUSE_CATALOG.md`. Současný `public-only` transport rozšířit pouze úzkým
-  podepsaným grantem pro schválenou dvojici uzlů, aktivní oboustranné mapování
-  účtů, přesný project UUID, ref a směr. Odesílající i přijímající uzel ověří
-  celý dosažitelný Git graf proti portable ACL; `local-only` se nepřenáší.
-
-  Akceptace: desktopový a LXC/serverový uzel projdou prvním přenosem, následným
-  automatickým fast-forwardem, offline návratem a restartem. Revokace zastaví
-  další přenos. Změněný HEAD, neúplná historie, neplatný kandidát nebo
-  divergence nesmějí přepsat cílový stav a zobrazí řešitelný konflikt. Před
-  persistentní implementací popsat journal/CAS, crash boundaries a recovery;
-  retry nesmí vytvořit druhou repliku ani opakovat již potvrzený účinek.
 
 ## Zjištěné mezery a navazující ověření
 

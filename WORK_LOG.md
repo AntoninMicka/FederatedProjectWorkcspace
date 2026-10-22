@@ -11,8 +11,7 @@ Dávka vznikla na větvi `feature/ux-federation-02` z `develop` na commitu
 `e1366be` (PR #77) a dosáhla úrovně **designed**. Uživatel přijal ADR 0037
 jako dlouhodobý směr, ale pro současnou individuální potřebu záměrně
 odložil detailní návrh a implementaci plné federace. Feature akceptace tohoto
-návrhového řezu je uzavřená; jeho jediný PR do `develop` dosud nebyl vytvořen
-ani sloučen.
+návrhového řezu byla doručena PR #78 do `develop` jako commit `192e79c`.
 
 - [x] [completed] **UX-FEDERATION-02-A — inventura a revize stávajících
   kontraktů (designed).** ADR 0021, lokální účty, peer trust, portable ACL a
