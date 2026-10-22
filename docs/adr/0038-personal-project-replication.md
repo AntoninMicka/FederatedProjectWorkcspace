@@ -7,7 +7,10 @@ SPDX-License-Identifier: MPL-2.0
 
 Datum: 2026-10-22. Stav: přijato jako implementační kontrakt
 `F-M5-PERSONAL-SYNC-01-A`; podepsaný grant a lokální desired state jsou
-implementovány úkolem B, transport a aplikace repliky ještě neexistují.
+implementovány úkolem B, podepsaný bounded HTTPS transport, první publikace
+repliky a CAS fast-forward s roll-forward recovery jsou implementovány úkolem
+C. Scheduler, UI, plošný serverový read-only guard a fyzické ověření ještě
+nejsou dokončeny.
 
 ## Kontext a rozsah
 
@@ -147,8 +150,9 @@ automatika jej nepřepíše.
 
 ## Omezení a navazující práce
 
-Scheduler, přesná frekvence pollingu a uživatelské ovládání patří do dalších
-úkolů stejné dávky. Převzetí primární role, multi-master, automatický merge,
-retence dokončených bundle a plný portable ACL/policy model zůstávají mimo
-tento řez. Tento ADR není důkaz runtime implementace ani fyzické dostupnosti
-desktopového HTTPS endpointu.
+Úkol C materializoval jednorázový bezpečný replikační engine a sdílený endpoint;
+sám však nespouští periodickou synchronizaci. Scheduler, přesná frekvence
+pollingu, uživatelské ovládání a plošný read-only guard patří do dalších úkolů
+stejné dávky. Převzetí primární role, multi-master, automatický merge, retence
+dokončených bundle a plný portable ACL/policy model zůstávají mimo tento řez.
+Tento ADR není důkaz fyzické dostupnosti desktopového HTTPS endpointu.

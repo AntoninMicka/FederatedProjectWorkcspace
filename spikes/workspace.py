@@ -133,6 +133,8 @@ class Workspace:
                 if db.execute('SELECT 1 FROM pending').fetchone():
                     raise PendingOperation('Standalone Journal recovery required')
                 return None
+            if record.get('kind') == 'external-replication':
+                raise PendingOperation('External replication recovery required')
             return self._recover(db, record, checkpoint)
 
     def read(self):

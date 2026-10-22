@@ -33,7 +33,10 @@ def database(node, *, create=False):
             db.execute('CREATE TABLE IF NOT EXISTS transfers '
                        '(operation_id TEXT PRIMARY KEY, context TEXT NOT NULL, head TEXT NOT NULL, '
                        'commit_count INTEGER NOT NULL, digest TEXT NOT NULL, bundle BLOB NOT NULL, '
-                       'done INTEGER NOT NULL DEFAULT 0)')
+                       'done INTEGER NOT NULL DEFAULT 0, receipt TEXT)')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(transfers)')}
+            if 'receipt' not in columns:
+                db.execute('ALTER TABLE transfers ADD COLUMN receipt TEXT')
             db.commit()
         yield db
 
@@ -70,16 +73,34 @@ def prepare_bundle(node, context, operation_id):
                 require(ws.git.head() == head and not git_run(ws.git, 'status', '--porcelain', '--untracked-files=all').stdout,
                         'Source changed since pending transfer; inspect source and recipient instead of replacing the saved bundle')
         else:
-            payload, head, count = export_bundle(node, context['project_id'])
+            privacy = context.get('privacy', ['public'])
+            require(isinstance(privacy, list), 'Invalid transfer privacy context')
+            payload, head, count = export_bundle(
+                node, context['project_id'], frozenset(privacy))
             db.execute('INSERT INTO transfers(operation_id,context,head,commit_count,digest,bundle) VALUES (?,?,?,?,?,?)',
                        (operation_id, canonical, head, count, hashlib.sha256(payload).hexdigest(), payload))
         db.commit()
         return payload, head, count
 
 
-def complete(node, operation_id, digest):
+def complete(node, operation_id, digest, receipt=None):
+    require(receipt is None or isinstance(receipt, str) and len(receipt) <= 16384,
+            'Invalid transfer receipt')
     with database(node) as db:
         require(db is not None, 'Transfer journal missing after remote success')
         with db:
-            result = db.execute('UPDATE transfers SET done=1 WHERE operation_id=? AND digest=?', (operation_id, digest))
+            if receipt is None:
+                result = db.execute(
+                    'UPDATE transfers SET done=1 WHERE operation_id=? AND digest=?',
+                    (operation_id, digest))
+            else:
+                row = db.execute(
+                    'SELECT receipt FROM transfers WHERE operation_id=? AND digest=?',
+                    (operation_id, digest)).fetchone()
+                require(row is not None and row[0] in {None, receipt},
+                        'Transfer receipt changed')
+                result = db.execute(
+                    'UPDATE transfers SET done=1,receipt=? '
+                    'WHERE operation_id=? AND digest=?',
+                    (receipt, operation_id, digest))
             require(result.rowcount == 1, 'Transfer completion does not match journal')

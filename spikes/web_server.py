@@ -114,6 +114,9 @@ class WebHandler(DesktopHandler):
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)
+        from spikes.project_replication import PATH as REPLICATION_PATH, reply
+        if self.path == REPLICATION_PATH:
+            return reply(self)
         return super().do_POST()
 
     def authorized(self, auth):

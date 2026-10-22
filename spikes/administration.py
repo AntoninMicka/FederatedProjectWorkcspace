@@ -268,6 +268,28 @@ class Administration:
         except (ValueError, OSError, subprocess.SubprocessError):
             return False
 
+    def active_replication(self, replication_id, role):
+        """Return an immutable transport authority snapshot or fail closed."""
+        identifier(replication_id)
+        if role not in {'primary', 'read-only-replica'}:
+            raise ValueError('Invalid replication role')
+        with self.locked() as (_, state, commit, _):
+            replication = next((row for row in state['replications']
+                                if row['spec']['id'] == replication_id), None)
+            if (not replication or not replication['enabled']
+                    or not self.replication_authorized(state, replication)):
+                raise AccessDenied('Replication is not active')
+            local, remote, peer, _ = self.replication_context(state, replication['spec'])
+            if local['role'] != role:
+                raise AccessDenied('Replication direction does not permit this operation')
+            return json.loads(json.dumps({
+                'registry_commit': commit,
+                'spec': replication['spec'],
+                'local': local,
+                'remote': remote,
+                'peer': peer,
+            }))
+
     def project_actor_allowed(self, actor, project_id, node):
         if actor.get('memberships', {}).get(project_id) == 'project-admin':
             return True

@@ -28,7 +28,10 @@ def git_run(git, *args, **kwargs):
     return git.run(*args, env_extra={'GIT_NO_REPLACE_OBJECTS': '1'}, **kwargs)
 
 
-def validate_history(git, head, project_id):
+def validate_history(git, head, project_id, allowed_privacy=frozenset({'public'})):
+    require(isinstance(allowed_privacy, (set, frozenset)) and bool(allowed_privacy)
+            and allowed_privacy <= {'public', 'project', 'confidential'},
+            'Invalid transfer privacy scope')
     commits = git_run(git, 'rev-list', '--max-count=501', head).stdout.splitlines()
     require(0 < len(commits) <= 500, 'History exceeds initial-transfer limit of 500 commits')
     for commit in commits:
@@ -46,13 +49,13 @@ def validate_history(git, head, project_id):
         for parent in parents:
             validate_transition(git.snapshot(parent), candidate)
         for item in entities.values():
-            require(item['privacy'] == 'public',
-                    'Historical rights are not yet implemented: transfer refused for ' + item['privacy'] +
+            require(item['privacy'] in allowed_privacy,
+                    'Transfer grant does not allow ' + item['privacy'] +
                     ' entity ' + item['id'] + ' in commit ' + commit)
     return len(commits)
 
 
-def export_bundle(node, project_id):
+def export_bundle(node, project_id, allowed_privacy=frozenset({'public'})):
     ws = Projects(node).workspace(project_id, blocking=False)
     with ws.journal.lock(), ws.journal.connect() as db:
         ws._branch(); ws._read_locked(db)
@@ -68,7 +71,7 @@ def export_bundle(node, project_id):
             git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags', str(ws.git.root), head)
             git_run(git, 'update-ref', 'refs/heads/main', head, '0' * 40)
             # Verify the exact exported graph, independently of source configuration.
-            count = validate_history(git, head, project_id)
+            count = validate_history(git, head, project_id, allowed_privacy)
             path = root / 'project.bundle'
             git_run(git, 'bundle', 'create', str(path), 'refs/heads/main')
             require(path.stat().st_size <= MAX_BUNDLE, 'Bundle exceeds 64 MiB')

@@ -50,14 +50,26 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   provádět `node-admin`; credential ani access key se do grantu nedostane.
   Cílené ověření nové logiky: **11 testů úspěšně**. Úplná sada po změně:
   **698 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine scénáře).
-- [ ] [planned] **F-M5-PERSONAL-SYNC-01-C — bezpečný přenos a automatický
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-C — bezpečný přenos a automatický
   fast-forward (cílová úroveň: implemented).** Rozšířit současný `public-only`
   přenos pouze v rozsahu přesného grantu. Odesílající i přijímající uzel ověří
   celý dosažitelný Git graf proti aktivnímu project/ref grantu a dovoleným
   privacy třídám; případný portable ACL smí výsledek pouze zúžit. `local-only`,
   nepokrytá historie, změněný HEAD, neplatný kandidát a revokace se odmítnou.
   Po pádu či ztrátě odpovědi recovery bezpečně určí stav bez duplicitního
-  účinku.
+  účinku. Sdílený bounded HTTPS endpoint nyní přijímá přesný podepsaný request
+  a bundle bez browserového bearer tokenu; grant, identity, digest i celý Git
+  graf ověřuje zdroj i příjemce. První přenos publikuje jedinou deterministickou
+  repliku, další přenos používá dočasný ref a CAS fast-forward. Node-local
+  journal uchovává request, bundle a podepsaný receipt, projektový journal
+  odděluje recovery po změně refu; opakování stejné operace vrací tentýž
+  výsledek. Divergence, dirty checkout, změněná větev, tampering, revokace a
+  `local-only` selžou bez přepsání cíle. Cílené replikační ověření: **8 testů
+  úspěšně** mimo socketově omezený sandbox. Spouštění/scheduler, pravdivé stavy
+  v UI a serverové vynucení read-only pro všechny editory zůstávají úkolem D;
+  fyzický desktop ↔ server scénář zůstává úkolem E. Úplná sada po finálním
+  zpevnění: **706 testů úspěšně, 28 přeskočeno** (volitelné fyzické/WebEngine
+  scénáře).
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-D — sdílené webové/desktopové UI
   synchronizace (cílová úroveň: implemented).** Ve správě federace nabídnout
   výběr schváleného peeru a projektu, potvrzení primary/replica směru, zapnutí

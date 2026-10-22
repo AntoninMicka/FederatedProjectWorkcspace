@@ -30,9 +30,12 @@ class _PrivateNetworkAccess:
 
 class ProbeHandler(WebHandler):
     def do_POST(self):
-        if self.path != PATH:
-            return self.send_error(404)
-        return reply_probe(self)
+        if self.path == PATH:
+            return reply_probe(self)
+        from spikes.project_replication import PATH as REPLICATION_PATH, reply
+        if self.path == REPLICATION_PATH:
+            return reply(self)
+        return self.send_error(404)
 
     def do_GET(self):
         return self.send_error(405)
@@ -148,6 +151,7 @@ class NetworkBackend:
         server.tls = tls
         server.application_access = _PrivateNetworkAccess(ipaddress.ip_network(config['lan']))
         server.administration = service
+        server.node = self.node
         thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': 0.1}, daemon=True)
         thread.start()
         self.server, self.thread, self.config = server, thread, config
