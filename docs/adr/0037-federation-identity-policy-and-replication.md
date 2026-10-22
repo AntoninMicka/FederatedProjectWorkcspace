@@ -164,6 +164,8 @@ dosažitelný Git graf a `local-only` se vždy odmítne. Tento grant nesmí obej
 privacy/ACL ani se vydávat za splnění celého Gate M5. Detailní cílový návrh
 zůstává otevřený pod původními ID `UX-FEDERATION-02-B` až
 `UX-FEDERATION-02-E` a `AUTH-CENTRAL-01`.
+Konkrétní autority, transport a crash recovery tohoto omezeného řezu uzavírá
+[ADR 0038](0038-personal-project-replication.md).
 
 ## Zbývající rozhodnutí
 

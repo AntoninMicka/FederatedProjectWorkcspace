@@ -18,7 +18,7 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
 
 ## Úkoly dávky
 
-- [ ] [in progress] **F-M5-PERSONAL-SYNC-01-A — inventura, reuse a kontrakt
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-A — inventura, reuse a kontrakt
   operace (cílová úroveň: designed).** Prověřit skutečnou implementaci peer
   trust, oboustranného mapování účtů, portable ACL, bundle transferu, Git sync,
   UI federace a jejich testů. Porovnat `REUSE_CATALOG.md` a případnou lokální
@@ -26,6 +26,13 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   přenosu soukromých detailů. Před zápisem popsat autoritu desired state,
   grantů a stavů synchronizace, serializaci, journal/CAS, crash boundaries a
   recovery mezi registry, Git objekty/refy a obnovitelným projektovým indexem.
+  ADR 0038 potvrzuje reuse existujícího trust/mapping/bundle/outbox základu,
+  odmítá SSH/askpass pro automatiku i falešné použití neúplného rights manifestu
+  a definuje podepsaný HTTPS protokol, autority, pořadí locků, CAS a roll-forward
+  recovery. Soukromá inventura neposkytla přímo převzatelnou komponentu.
+  Cílená sada trust/mapping/transfer/desktop a compliance testů prošla mimo
+  socketově omezený sandbox: **28 testů úspěšně**; první sandboxový běh měl tři
+  očekávané `PermissionError` pouze při vytvoření loopback HTTP serveru.
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-B — úzký replikační grant a durable
   desired state (cílová úroveň: implemented).** Nad schváleným peerem a
   aktivním oboustranným mapováním vydat podepsaný grant vázaný na oba uzly,
@@ -35,9 +42,11 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-C — bezpečný přenos a automatický
   fast-forward (cílová úroveň: implemented).** Rozšířit současný `public-only`
   přenos pouze v rozsahu přesného grantu. Odesílající i přijímající uzel ověří
-  celý dosažitelný Git graf proti portable ACL; `local-only`, nepokrytá
-  historie, změněný HEAD, neplatný kandidát a revokace se odmítnou. Po pádu či
-  ztrátě odpovědi recovery bezpečně určí stav bez duplicitního účinku.
+  celý dosažitelný Git graf proti aktivnímu project/ref grantu a dovoleným
+  privacy třídám; případný portable ACL smí výsledek pouze zúžit. `local-only`,
+  nepokrytá historie, změněný HEAD, neplatný kandidát a revokace se odmítnou.
+  Po pádu či ztrátě odpovědi recovery bezpečně určí stav bez duplicitního
+  účinku.
 - [ ] [planned] **F-M5-PERSONAL-SYNC-01-D — sdílené webové/desktopové UI
   synchronizace (cílová úroveň: implemented).** Ve správě federace nabídnout
   výběr schváleného peeru a projektu, potvrzení primary/replica směru, zapnutí

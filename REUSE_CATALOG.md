@@ -266,6 +266,18 @@ vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy feder
 projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
 verze, nikoli rozšíření tohoto jednosměrného přenosu.
 
+F-M5-PERSONAL-SYNC-01-A **reuseuje `Administration`, `MappingSignatures`,
+`Projects`, `ProjectCreation`, Workspace/Journal/Index a Git CLI ochrany** a
+**adaptuje `git_transfer`, `transfer_outbox`, uložené peer CA a společnou stránku
+Federace**. Automatický běh nepoužije dnešní SSH/askpass, protože bez aktivního
+agenta není neinteraktivní; úzký podepsaný HTTPS replica endpoint je nový na
+serverovém `WebHandler` i desktopovém `NetworkBackend`. `validate_rights` se
+nepovažuje za důkaz celé historie, protože projekt zatím nevytváří úplný
+byte-bound manifest; osobní řez používá oboustranně podepsaný project/ref grant
+a nezávislou validaci celého Git grafu na obou uzlech. Druhý Git writer, message
+broker, obecný sync framework a přímé převzetí komponent ze soukromé inventury
+byly odmítnuty. Rozhodnutí: [ADR 0038](docs/adr/0038-personal-project-replication.md).
+
 Stejná dávka dále **reuse/adaptuje `NetworkBackend`, `DeploymentTargets`,
 `Administration`, `federation_probe.check_peer` a `peer_diagnostics.check_both`**
 pro druhou stránku desktopové záložky Federace. Webový formulář nenahrazuje
