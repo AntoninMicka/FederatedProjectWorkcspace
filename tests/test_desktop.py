@@ -36,6 +36,10 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="project-conflicts-open"', HTML)
         self.assertIn('id="project-conflicts-raw-panel"', HTML)
         self.assertIn('id="project-conflicts-rendered-panel"', HTML)
+        self.assertIn('id="project-conflicts-files"', HTML)
+        self.assertIn('id="project-conflicts-dialog"', HTML)
+        self.assertNotIn('id="project-conflicts-file"', HTML)
+        self.assertNotIn('id="project-conflicts-load"', HTML)
         raw_panel = HTML.split('id="project-conflicts-raw-panel"', 1)[1].split(
             'id="project-conflicts-rendered-panel"', 1)[0]
         self.assertEqual(3, raw_panel.count('class="conflict-pane'))
@@ -47,6 +51,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/projects/conflicts/list'", JS)
         self.assertIn("projectRequest('/v1/projects/conflicts/preview'", JS)
         self.assertIn("projectRequest('/v1/projects/conflicts/confirm'", JS)
+        self.assertIn('await loadConflictPreview()', JS)
+        self.assertIn('projectConflictDialog.showModal()', JS)
+        self.assertIn("button.addEventListener('click',()=>openConflictDialog(item.path))", JS)
         self.assertIn("changedLineIndexes(item.ours,result)", JS)
         self.assertIn("renderMarkdown(value,target,classes)", JS)
         self.assertIn("project-conflicts-result-highlight", JS)
@@ -54,6 +61,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('Binární nebo nepodporovaný obsah', JS)
         self.assertNotIn('innerHTML', JS)
         self.assertIn('.conflict-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
+        self.assertIn('.conflict-dialog::backdrop', CSS)
         self.assertIn('@media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}', CSS)
         self.assertTrue({'/v1/projects/conflicts/list',
                          '/v1/projects/conflicts/preview',

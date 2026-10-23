@@ -57,8 +57,10 @@ export jsou mimo rozsah.
   bezpečně renderované tři panely `lokální / výsledek / vzdálená`, řádkové
   zvýraznění rozdílů obou stran proti přímo editovanému výsledku, explicitní
   celo-souborové volby, rozlišení chybějícího a binárního obsahu, mobilní
-  jednosloupcový layout a guard rozepsaného návrhu. Merge base zůstává pouze
-  interním podkladem 3-way výpočtu.
+  jednosloupcový layout a guard rozepsaného návrhu. Vstupní akce nejprve
+  zobrazí seznam souborů se stavem řešení; konkrétní třípanelový resolver se
+  otevírá jako modální dialog. Merge base zůstává pouze interním podkladem
+  3-way výpočtu.
 - [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-D — validovaná publikace a
   recovery (cílová úroveň: implemented).** Pod jediným project writer lockem
   znovu ověřit oba heady, base, policy a trust, sémanticky validovat celý
@@ -79,8 +81,8 @@ export jsou mimo rozsah.
   přejmenování–úpravu, sidecar/relationship validaci, stale head/policy/trust,
   zrušení a restart na každé persistentní hranici. Fyzický desktop ↔ LXC
   scénář potvrdí vytvoření a následný sync dvourodičového commitu.
-  Automatické ověření: cílená sada desktop/web/conflict vrstev 80 testů OK,
-  6 skipped;
+  Automatické ověření po poslední UI změně: cílený kontrakt seznamu a
+  modálního třípanelového resolveru 1 test OK;
   úplná sada `python3 -m unittest discover -s tests -v` 750 testů OK,
   28 skipped. Python kompilace, generovaný desktopový i webový JavaScript přes
   `node --check` a `git diff --check` prošly. Pokryto: čistý a konfliktní merge,

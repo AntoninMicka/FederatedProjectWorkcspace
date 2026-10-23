@@ -102,14 +102,16 @@ receipt, zatímco jiný payload pod stejným ID se odmítne.
 ## UI a omezení PoC
 
 Projekt zobrazí červenou akci pouze při dostupné divergenci. Resolver má výběr
-incoming historie a cesty, raw i bezpečně renderovaný třípanelový pohled
-`lokální / výsledek / vzdálená`, počet nevyřešených souborů, přímou editaci
-výsledku a výslovný potvrzovací checkbox. Řádky odlišné od výsledku jsou na
-lokální a vzdálené straně barevně označené; prostřední editor samostatně značí
-rozdíl vůči každé straně i vůči oběma. Na užší obrazovce se panely skládají do
-jednoho sloupce. Zavření resolveru i opuštění stránky s rozepsaným výsledkem
-varuje; rozepsaný návrh není durable a po restartu se znovu sestaví z připnutých
-commitů.
+incoming historie a nejprve zobrazí seznam dotčených souborů se stavem řešení.
+Kliknutí na soubor otevře modální raw nebo bezpečně renderovaný třípanelový
+pohled `lokální / výsledek / vzdálená`; potvrzení celého merge zůstává v
+nadřazeném seznamu. UI ukazuje počet nevyřešených souborů a dovoluje přímou
+editaci výsledku. Řádky odlišné od výsledku jsou na lokální a vzdálené straně
+barevně označené; prostřední editor samostatně značí rozdíl vůči každé straně i
+vůči oběma. Na užší obrazovce se panely skládají do jednoho sloupce. Zavření
+celého resolveru i opuštění stránky s rozepsaným výsledkem varuje; zavření
+dialogu pouze vrátí uživatele do seznamu a rozepsaný návrh v aktuální relaci
+zachová. Návrh není durable a po restartu se znovu sestaví z připnutých commitů.
 
 PoC neposkytuje blokovou 3-way editaci, syntaktické Markdown slučování, obecný
 binární merge, octopus merge, více merge bases, trvalé drafty ani automatickou
