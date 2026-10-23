@@ -3,7 +3,7 @@
 """Fail-closed action registry and durable opt-in orchestration queue."""
 from contextlib import closing
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -18,6 +18,7 @@ from spikes.metadata import parse_json, require, uuid
 MAX_ACTIONS = 64
 MAX_STEPS = 32
 MAX_JSON = 1024 * 1024
+UI_LEASE_SECONDS = 15
 IDENTIFIER = re.compile(r'[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*')
 INPUT_IDENTIFIER = re.compile(r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*')
 VERSION = re.compile(r'[0-9]+\.[0-9]+')
@@ -205,7 +206,7 @@ PRIVACY_ORDER = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
 
 def _validate_local_output(value):
     require(set(value) == {'target', 'content_type', 'content_sha256',
-                           'privacy', 'provenance'},
+                           'privacy', 'provenance', 'request'},
             'Local output approval requires exact output fields')
     require(isinstance(value['target'], str) and value['target'].strip() == value['target']
             and 0 < len(value['target']) <= 512 and '\0' not in value['target'],
@@ -220,6 +221,9 @@ def _validate_local_output(value):
     require(isinstance(value['provenance'], dict) and bool(value['provenance']),
             'Local output provenance is required')
     canonical(value['provenance'])
+    require(isinstance(value['request'], dict) and bool(value['request']),
+            'Local output domain request is required')
+    canonical(value['request'])
 
 
 class UnknownEffect(RuntimeError):
@@ -228,7 +232,7 @@ class UnknownEffect(RuntimeError):
 
 class AutonomyQueue:
     """Node-local authority for queue state; domain adapters keep their journals."""
-    def __init__(self, state_dir, registry, handlers=None):
+    def __init__(self, state_dir, registry, handlers=None, *, countdown_seconds=5):
         self.root = Path(state_dir).absolute()
         info = self.root.stat()
         require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
@@ -237,6 +241,10 @@ class AutonomyQueue:
         self.path = self.root / 'autonomy-queue.sqlite'
         self.registry = registry
         self.handlers = dict(handlers or {})
+        require(type(countdown_seconds) is int
+                and (countdown_seconds == 0 or 3 <= countdown_seconds <= 5),
+                'Autonomy countdown must be zero for tests or 3 to 5 seconds')
+        self.countdown_seconds = countdown_seconds
         self._initialize()
 
     def _connect(self):
@@ -259,7 +267,7 @@ class AutonomyQueue:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(1);
+                    INSERT INTO schema_info VALUES(2);
                     CREATE TABLE settings(global_paused INTEGER NOT NULL);
                     INSERT INTO settings VALUES(0);
                     CREATE TABLE workflows(
@@ -267,13 +275,13 @@ class AutonomyQueue:
                         user_id TEXT NOT NULL, project_id TEXT NOT NULL,
                         plan_digest TEXT NOT NULL, plan_json BLOB NOT NULL,
                         state TEXT NOT NULL, ui_attached INTEGER NOT NULL,
-                        spent_cost INTEGER NOT NULL, created_at TEXT NOT NULL,
+                        ui_seen_at TEXT, spent_cost INTEGER NOT NULL, created_at TEXT NOT NULL,
                         activated_at TEXT, updated_at TEXT NOT NULL, error TEXT);
                     CREATE TABLE steps(
                         workflow_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
                         step_id TEXT NOT NULL UNIQUE, action_id TEXT NOT NULL,
                         action_version TEXT NOT NULL, descriptor_digest TEXT NOT NULL,
-                        state TEXT NOT NULL, approval_digest TEXT,
+                        state TEXT NOT NULL, approval_digest TEXT, not_before TEXT,
                         result_json BLOB, error TEXT,
                         PRIMARY KEY(workflow_id, ordinal),
                         FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id));
@@ -282,28 +290,44 @@ class AutonomyQueue:
                 versions = [tuple(row) for row in
                             db.execute('SELECT version FROM schema_info').fetchall()]
                 require(tables == {'schema_info', 'settings', 'workflows', 'steps'}
-                        and versions == [(1,)],
+                        and versions in ([(1,)], [(2,)]),
                         'Unknown or incomplete autonomy schema')
                 workflow_columns = [row[1] for row in
                     db.execute('PRAGMA table_info(workflows)')]
                 step_columns = [row[1] for row in db.execute('PRAGMA table_info(steps)')]
-                require(workflow_columns == ['workflow_id', 'node_id', 'user_id',
+                if versions == [(1,)]:
+                    require(workflow_columns == ['workflow_id', 'node_id', 'user_id',
+                        'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
+                        'spent_cost', 'created_at', 'activated_at', 'updated_at', 'error']
+                        and step_columns == ['workflow_id', 'ordinal', 'step_id',
+                        'action_id', 'action_version', 'descriptor_digest', 'state',
+                        'approval_digest', 'result_json', 'error'],
+                        'Unknown or incomplete autonomy schema version 1')
+                    db.execute('ALTER TABLE workflows ADD COLUMN ui_seen_at TEXT')
+                    db.execute('ALTER TABLE steps ADD COLUMN not_before TEXT')
+                    db.execute('UPDATE schema_info SET version=2')
+                    workflow_columns.append('ui_seen_at'); step_columns.append('not_before')
+                require(set(workflow_columns) == {'workflow_id', 'node_id', 'user_id',
                     'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
-                    'spent_cost', 'created_at', 'activated_at', 'updated_at', 'error']
-                    and step_columns == ['workflow_id', 'ordinal', 'step_id',
+                    'ui_seen_at', 'spent_cost', 'created_at', 'activated_at',
+                    'updated_at', 'error'} and len(workflow_columns) == 14
+                    and set(step_columns) == {'workflow_id', 'ordinal', 'step_id',
                     'action_id', 'action_version', 'descriptor_digest', 'state',
-                    'approval_digest', 'result_json', 'error'],
+                    'approval_digest', 'not_before', 'result_json', 'error'}
+                    and len(step_columns) == 11,
                     'Unknown or incomplete autonomy schema')
                 db.execute("UPDATE steps SET state='unknown', error=? "
                            "WHERE state='dispatching'",
                            ('Restart occurred during action dispatch',))
-                db.execute("UPDATE workflows SET state='unknown', ui_attached=0, "
+                db.execute("UPDATE steps SET state='queued',not_before=NULL "
+                           "WHERE state='countdown'")
+                db.execute("UPDATE workflows SET state='unknown', ui_attached=0, ui_seen_at=NULL, "
                            "error=?, updated_at=? WHERE workflow_id IN "
                            "(SELECT workflow_id FROM steps WHERE state='unknown')",
                            ('Restart found an uncertain action effect', now()))
-                db.execute("UPDATE workflows SET state='paused', ui_attached=0, "
-                           "updated_at=? WHERE state IN ('queued','running')", (now(),))
-                db.execute("UPDATE workflows SET ui_attached=0 WHERE state NOT IN "
+                db.execute("UPDATE workflows SET state='paused', ui_attached=0, ui_seen_at=NULL, "
+                           "updated_at=? WHERE state IN ('queued','running','countdown')", (now(),))
+                db.execute("UPDATE workflows SET ui_attached=0,ui_seen_at=NULL WHERE state NOT IN "
                            "('completed','failed','unknown','cancelled')")
             db.commit()
 
@@ -327,13 +351,17 @@ class AutonomyQueue:
                         and bytes(row['plan_json']) == raw,
                         'Autonomy workflow ID belongs to a different plan')
             else:
-                db.execute('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,NULL)',
+                db.execute('INSERT INTO workflows(workflow_id,node_id,user_id,project_id,'
+                    'plan_digest,plan_json,state,ui_attached,ui_seen_at,spent_cost,created_at,'
+                    'activated_at,updated_at,error) VALUES(?,?,?,?,?,?,?,?,NULL,?,?,NULL,?,NULL)',
                     (plan['workflow_id'], node_id, user_id, plan['project_id'],
                      plan_digest, raw, 'proposed', 0, 0, created, created))
                 for ordinal, step in enumerate(plan['steps']):
                     descriptor = self.registry.resolve(step['action']['id'],
                                                        step['action']['version'])
-                    db.execute('INSERT INTO steps VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL)',
+                    db.execute('INSERT INTO steps(workflow_id,ordinal,step_id,action_id,'
+                        'action_version,descriptor_digest,state,approval_digest,not_before,'
+                        'result_json,error) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,NULL)',
                         (plan['workflow_id'], ordinal, step['step_id'],
                          descriptor['action_id'], descriptor['version'],
                          digest(descriptor), 'queued'))
@@ -351,10 +379,11 @@ class AutonomyQueue:
             result = {key: row[key] for key in ('workflow_id', 'project_id', 'state',
                       'ui_attached', 'spent_cost', 'created_at', 'activated_at',
                       'updated_at', 'error')}
-            result['ui_attached'] = bool(result['ui_attached'])
+            result['ui_attached'] = self._ui_live(row)
             result['global_paused'] = bool(
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
-            result['mode'] = plan['mode']; result['budget'] = plan['budget']
+            result['mode'] = plan['mode']; result['privacy'] = plan['privacy']
+            result['budget'] = plan['budget']
             result['activation_digest'] = digest({
                 'workflow_id': workflow_id, 'plan_digest': row['plan_digest'],
                 'mode': plan['mode'], 'budget': plan['budget']})
@@ -362,7 +391,14 @@ class AutonomyQueue:
             result['steps'] = []
             for stored, planned in zip(steps, plan['steps']):
                 item = deepcopy(planned)
+                descriptor = self.registry.resolve(
+                    planned['action']['id'], planned['action']['version'])
                 item.update(state=stored['state'], approval_digest=stored['approval_digest'],
+                            not_before=stored['not_before'],
+                            effect=descriptor['effect'],
+                            automatable=descriptor['automatable'],
+                            confirmation=descriptor['confirmation'],
+                            permissions=descriptor['permissions'],
                             result=(json.loads(bytes(stored['result_json']))
                                     if stored['result_json'] is not None else None),
                             error=stored['error'])
@@ -399,11 +435,14 @@ class AutonomyQueue:
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
             state = row['state']
-            if not attached and state in {'queued', 'running'}:
+            if not attached and state in {'queued', 'running', 'countdown'}:
                 state = 'paused'
-            db.execute('UPDATE workflows SET ui_attached=?,state=?,updated_at=? '
+                db.execute("UPDATE steps SET state='queued',not_before=NULL "
+                           "WHERE workflow_id=? AND state='countdown'", (workflow_id,))
+            seen = now() if attached else None
+            db.execute('UPDATE workflows SET ui_attached=?,ui_seen_at=?,state=?,updated_at=? '
                        'WHERE workflow_id=?',
-                       (int(attached), state, now(), workflow_id)); db.commit()
+                       (int(attached), seen, state, now(), workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
 
     def activate(self, workflow_id, node_id, user_id, activation_digest):
@@ -412,7 +451,7 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            require(row['state'] == 'proposed' and row['ui_attached'],
+            require(row['state'] == 'proposed' and self._ui_live(row),
                     'Autonomy proposal requires an attached UI')
             plan = json.loads(bytes(row['plan_json']))
             expected = digest({'workflow_id': workflow_id,
@@ -435,7 +474,7 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            require(row['state'] == 'paused' and row['ui_attached'],
+            require(row['state'] == 'paused' and self._ui_live(row),
                     'Paused autonomy workflow requires an attached UI to resume')
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
@@ -448,8 +487,11 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            require(row['state'] in {'queued', 'running', 'awaiting-approval'},
+            require(row['state'] in {'queued', 'running', 'countdown',
+                                     'awaiting-approval'},
                     'Autonomy workflow cannot be paused')
+            db.execute("UPDATE steps SET state='queued',not_before=NULL "
+                       "WHERE workflow_id=? AND state='countdown'", (workflow_id,))
             db.execute('UPDATE workflows SET state=?,updated_at=? WHERE workflow_id=?',
                        (state, now(), workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
@@ -457,8 +499,10 @@ class AutonomyQueue:
     def pause_all(self):
         with closing(self._connect()) as db:
             db.execute('BEGIN IMMEDIATE'); db.execute('UPDATE settings SET global_paused=1')
+            db.execute("UPDATE steps SET state='queued',not_before=NULL "
+                       "WHERE state='countdown'")
             db.execute("UPDATE workflows SET state='paused',updated_at=? "
-                       "WHERE state IN ('queued','running')", (now(),)); db.commit()
+                       "WHERE state IN ('queued','running','countdown')", (now(),)); db.commit()
 
     def resume_all(self):
         with closing(self._connect()) as db:
@@ -471,7 +515,7 @@ class AutonomyQueue:
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
             require(row['state'] in {'queued', 'awaiting-approval'}
-                    and row['ui_attached'],
+                    and self._ui_live(row),
                     'Autonomy approval requires an active attached workflow')
             plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry)
             planned = next((item for item in plan['steps'] if item['step_id'] == step_id), None)
@@ -516,7 +560,9 @@ class AutonomyQueue:
             for ordinal, step in enumerate(plan['steps']):
                 descriptor = self.registry.resolve(step['action']['id'],
                                                    step['action']['version'])
-                db.execute('INSERT INTO steps VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL)',
+                db.execute('INSERT INTO steps(workflow_id,ordinal,step_id,action_id,'
+                    'action_version,descriptor_digest,state,approval_digest,not_before,'
+                    'result_json,error) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,NULL)',
                     (plan['workflow_id'], ordinal, step['step_id'],
                      descriptor['action_id'], descriptor['version'],
                      digest(descriptor), 'queued'))
@@ -534,7 +580,7 @@ class AutonomyQueue:
                                    "AND state='dispatching'", (workflow_id,)).fetchone(),
                     'A dispatching action cannot be cancelled')
             db.execute("UPDATE steps SET state='cancelled' WHERE workflow_id=? "
-                       "AND state IN ('queued','awaiting-approval')", (workflow_id,))
+                       "AND state IN ('queued','countdown','awaiting-approval')", (workflow_id,))
             db.execute("UPDATE workflows SET state='cancelled',updated_at=? "
                        "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
@@ -546,9 +592,10 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            require(row['state'] in {'queued', 'running'},
+            require(row['state'] in {'queued', 'running', 'countdown'},
                     'Autonomy workflow is not runnable')
-            require(row['ui_attached'], 'Autonomy dispatch requires an attached UI')
+            require(self._ui_live(row),
+                    'Autonomy dispatch requires a live attached UI')
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
             plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry)
@@ -562,8 +609,11 @@ class AutonomyQueue:
             stored_steps = db.execute(
                 'SELECT * FROM steps WHERE workflow_id=? ORDER BY ordinal',
                 (workflow_id,)).fetchall()
+            require(not any(item['state'] == 'dispatching' for item in stored_steps),
+                    'Autonomy workflow already has a dispatching action')
             candidate = next((pair for pair in zip(stored_steps, plan['steps'])
-                              if pair[0]['state'] in {'queued', 'awaiting-approval'}), None)
+                              if pair[0]['state'] in {'queued', 'countdown',
+                                                     'awaiting-approval'}), None)
             if candidate is None:
                 require(all(item['state'] == 'completed' for item in stored_steps),
                         'Autonomy workflow has no runnable step')
@@ -594,15 +644,34 @@ class AutonomyQueue:
                 db.execute("UPDATE workflows SET state='awaiting-approval',updated_at=? "
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
                 return self.get(workflow_id, node_id, user_id)
+            if (plan['mode'] == 'automatic' and not needs_approval
+                    and stored['state'] == 'queued' and self.countdown_seconds):
+                not_before = (datetime.now(timezone.utc)
+                              + timedelta(seconds=self.countdown_seconds)).isoformat().replace(
+                                  '+00:00', 'Z')
+                db.execute("UPDATE steps SET state='countdown',not_before=? WHERE step_id=?",
+                           (not_before, planned['step_id']))
+                db.execute("UPDATE workflows SET state='countdown',updated_at=? "
+                           "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
+                return self.get(workflow_id, node_id, user_id)
+            if stored['state'] == 'countdown':
+                ready = datetime.fromisoformat(stored['not_before'].replace('Z', '+00:00'))
+                require(datetime.now(timezone.utc) >= ready,
+                        'Autonomy countdown is still active')
             handler = self.handlers.get((descriptor['action_id'], descriptor['version']))
             require(handler is not None, 'No reviewed autonomy action handler')
-            db.execute("UPDATE steps SET state='dispatching' WHERE step_id=?",
+            db.execute("UPDATE steps SET state='dispatching',not_before=NULL WHERE step_id=?",
                        (planned['step_id'],))
             db.execute("UPDATE workflows SET state='running',updated_at=? WHERE workflow_id=?",
                        (now(), workflow_id)); db.commit()
         checkpoint('dispatching')
         try:
-            result = handler(deepcopy(planned['input']))
+            execution = {'workflow_id': workflow_id, 'step_id': planned['step_id'],
+                'node_id': node_id, 'user_id': user_id,
+                'project_id': plan['project_id'],
+                'expected_head': plan['expected_head'],
+                'approval_digest': stored['approval_digest']}
+            result = handler(deepcopy(planned['input']), execution)
             raw = canonical(result)
         except UnknownEffect as exc:
             return self._finish_effect(workflow_id, planned['step_id'], node_id, user_id,
@@ -631,3 +700,10 @@ class AutonomyQueue:
                        'WHERE workflow_id=?',
                        (terminal, cost, now(), error, workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
+
+    @staticmethod
+    def _ui_live(row):
+        if not row['ui_attached'] or row['ui_seen_at'] is None:
+            return False
+        seen = datetime.fromisoformat(row['ui_seen_at'].replace('Z', '+00:00'))
+        return (datetime.now(timezone.utc) - seen).total_seconds() <= UI_LEASE_SECONDS

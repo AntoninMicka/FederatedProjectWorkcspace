@@ -156,6 +156,30 @@ class WebTests(unittest.TestCase):
             body=json.dumps({'project_id': created['id']}))
         self.assertEqual(code, 200)
         self.assertEqual(json.loads(data), {'workflows': []})
+        code, data, _ = self.request(path='/v1/autonomy/status',
+            body=json.dumps({'project_id': created['id']}))
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(data)['workflows'], [])
+        local_plan = {'schema_version': 1, 'workflow_id': str(uuid4()),
+            'project_id': created['id'],
+            'expected_head': self.server.projects.workspace(
+                created['id'], blocking=False).git.head(),
+            'mode': 'manual', 'privacy': 'local-only',
+            'budget': {'max_steps': 1, 'max_cost_units': 1,
+                       'max_seconds': 60},
+            'steps': [{'step_id': str(uuid4()),
+                'action': {'id': 'analysis.read-only', 'version': '1.0'},
+                'privacy': 'local-only', 'cost_units': 1, 'depends_on': [],
+                'input': {'selection_sha256': '1' * 64}}]}
+        self.server.autonomy_service.prepare(local_plan)
+        code, data, _ = self.request(path='/v1/autonomy/status',
+            body=json.dumps({'project_id': created['id']}))
+        self.assertEqual(code, 200)
+        self.assertEqual(json.loads(data)['workflows'], [])
+        code, data, _ = self.request(path='/v1/autonomy/prepare',
+                                     body=json.dumps(local_plan))
+        self.assertEqual(code, 422)
+        self.assertIn('local-only', json.loads(data)['error'])
         for path in ('/', '/app.js', '/app.css'):
             code, data, headers = self.request('GET',path)
             self.assertEqual(code,200)
@@ -264,6 +288,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("querySelector('#source-import-local-only').disabled=true", WEB_JS)
         self.assertNotIn('web-source-import', WEB_HTML)
         self.assertIn("projectRequest('/v1/workflows/prepare'", WEB_JS)
+        self.assertIn('id="autonomy-queue"', WEB_HTML)
+        self.assertIn("autonomyRequest('/v1/autonomy/advance'", WEB_JS)
         self.assertEqual(self.request(path='/v1/backend-metrics/status')[0], 200)
         self.assertEqual(self.request(path='/v1/user-profile', body='{"action":"load"}')[0], 503)
 
@@ -451,6 +477,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/media/preview', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/workflows/status', body=json.dumps({
+            'project_id': project}), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/autonomy/status', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
         source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')
         self.assertEqual(self.request(path='/v1/sources/import', body=json.dumps({

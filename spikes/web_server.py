@@ -27,6 +27,7 @@ from spikes.source_import import Sources
 from spikes.media_service import MediaService
 from spikes.notebooklm_import_actions import NotebookLMImportActions
 from spikes.role_workflow_service import RoleWorkflowService
+from spikes.autonomy_service import AutonomyService
 from spikes.summary_service import SummaryService
 from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
@@ -200,6 +201,34 @@ class WebHandler(DesktopHandler):
     def dispatch(self, request):
         if self.path.startswith('/v1/projects/repair/'):
             return self.send_error(404)
+        if self.path.startswith('/v1/autonomy/'):
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            project_id = request.get('project_id') if isinstance(request, dict) else None
+            if project_id is not None and not self._can_write(project_id):
+                return self.send_error(403)
+            service = self.server.autonomy_service
+            try:
+                if self.path == '/v1/autonomy/status' and isinstance(request, dict) \
+                        and set(request) <= {'project_id'}:
+                    return self.reply(200, service.list(
+                        request.get('project_id'), allow_local_only=False))
+                if self.path in {'/v1/autonomy/prepare', '/v1/autonomy/replace'} \
+                        and isinstance(request, dict):
+                    operation = service.prepare if self.path.endswith('/prepare') else service.replace
+                    return self.reply(200, operation(request, allow_local_only=False))
+                if self.path == '/v1/autonomy/pause-all' and request == {}:
+                    service.pause_all()
+                    return self.reply(200, service.list(allow_local_only=False))
+                if self.path == '/v1/autonomy/resume-all' and request == {}:
+                    service.resume_all()
+                    return self.reply(200, service.list(allow_local_only=False))
+                workflow_id = request.get('workflow_id') if isinstance(request, dict) else None
+                if workflow_id is not None:
+                    service.get(workflow_id, allow_local_only=False)
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return self.reply(422, {'error': str(exc)})
+            return super().dispatch(request)
         if self.path == '/v1/application-access':
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -567,6 +596,9 @@ def make_server(bind, port, lan, cert, key, token_file, node, *, hostname=None):
         state_dir=server.chat_service.state_dir)
     server.role_workflow_service = RoleWorkflowService(node, server.projects,
         state_dir=server.chat_service.state_dir)
+    server.autonomy_service = AutonomyService(node, server.projects,
+        state_dir=server.chat_service.state_dir, chat_service=server.chat_service,
+        role_workflow_service=server.role_workflow_service)
     server.summary_service = SummaryService(node, server.projects,
         state_dir=server.chat_service.state_dir,
         chat_state_dir=server.chat_service.state_dir)

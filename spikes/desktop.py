@@ -28,6 +28,7 @@ from spikes.extraction_service import ExtractionService
 from spikes.metadata_suggestion_service import MetadataSuggestionService
 from spikes.media_service import MediaService
 from spikes.role_workflow_service import RoleWorkflowService
+from spikes.autonomy_service import AutonomyService
 from spikes.publication_cms import PublicationCms
 from spikes.google_drive_import import GoogleDriveImport
 from spikes.replication_control import ReplicationScheduler
@@ -339,6 +340,9 @@ def main():
             state_dir=server.chat_service.state_dir)
         server.role_workflow_service = RoleWorkflowService(node_path, server.projects,
             state_dir=server.chat_service.state_dir)
+        server.autonomy_service = AutonomyService(node_path, server.projects,
+            state_dir=server.chat_service.state_dir, chat_service=server.chat_service,
+            role_workflow_service=server.role_workflow_service)
         server.summary_service = SummaryService(node_path, server.projects,
             state_dir=server.chat_service.state_dir,
             chat_state_dir=server.chat_service.state_dir)

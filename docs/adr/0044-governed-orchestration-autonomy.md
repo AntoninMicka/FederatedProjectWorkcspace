@@ -5,8 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0044 — Řízená autonomie orchestračních akcí
 
-Datum: 2026-10-23. Stav: přijato; základ registru a durable fronty je
-implementován v rozpracované dávce `F-M4-AUTONOMY-01`.
+Datum: 2026-10-23. Stav: přijato; registry, durable fronta, integrační service
+a sdílené desktop/web ovládání jsou implementované v rozpracované dávce
+`F-M4-AUTONOMY-01`; fyzická UI akceptace ještě není uzavřená.
 
 ## Kontext a rozhodnutí
 
@@ -29,7 +30,9 @@ Git HEAD, závislosti, cost a časový budget. Automaticky smí projít pouze ak
 jejíž descriptor to výslovně povoluje a nevyžaduje potvrzení. Ruční režim
 vyžaduje potvrzení každého kroku. Globální i workflow pause jsou
 deterministické; ztráta UI pozastaví běžící frontu a resume vyžaduje znovu
-připojené UI.
+připojené UI. Automatizovatelnému kroku předchází durable 3–5sekundový
+countdown; UI obnovuje krátký lease a po jeho vypršení backend další dispatch
+odmítne.
 
 ## Nepřekročitelný lokální checkpoint
 
@@ -51,7 +54,8 @@ requestů, publikace, změn a mazání.
 budgetu a stavů fronty. Má vlastněný adresář 0700, soubor 0600 a SQLite
 `synchronous=FULL`. Není projektovým indexem, nesynchronizuje se a nezapisuje
 projektový Git. Registry je staticky reviewovaná konfigurace; doménové
-journaly zůstávají autoritou vlastních účinků.
+journaly zůstávají autoritou vlastních účinků. Schema verze 2 přidává lease a
+countdown a transakčně migruje dosavadní schema verze 1 bez ztráty fronty.
 
 - Pád ve `proposed`, `awaiting-approval` nebo terminálním stavu nezpůsobí
   dispatch; UI je po restartu vždy odpojené.
@@ -77,8 +81,12 @@ privacy, per-output approval a recovery kontraktem, proto se z ní nekopíruje
 kód ani názvy.
 
 První registry obsahuje typy read-only analýza, externí request, rolový handoff
-a lokální artefakt. Jde o orchestrační obálku a testovací integrační kontrakt,
-nikoli ještě zapojení automatického hledání `F-M3-SEARCH-03`, obecný background
-worker nebo autonomní publikaci. Viditelné desktop/web ovládání a konkrétní
-produkční adaptéry jsou další části téže dávky a její aktuální stav eviduje
-[TODO](../../TODO.md).
+a lokální artefakt. Integrační service je váže na existující externí approval,
+role-workflow a publikační journal. Sdílené UI umí načíst či před účinkem
+nahradit návrh, samostatně potvrdit jeho aktivaci, zobrazit budget a přesné
+mezivýsledky a frontu pozastavit či zrušit. Webová projekce je pouze pro
+administrátory a nikdy nezobrazí ani nepřijme plán s `local-only` obsahem.
+
+Jde stále o orchestrační obálku, nikoli zapojení automatického hledání
+`F-M3-SEARCH-03`, obecný background worker nebo autonomní publikaci. Aktuální
+stav fyzické akceptace eviduje [TODO](../../TODO.md).

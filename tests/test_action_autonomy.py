@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 from copy import deepcopy
+from contextlib import closing
 import json
 from pathlib import Path
 import sqlite3
@@ -23,7 +24,7 @@ class ActionAutonomyTests(unittest.TestCase):
         self.head = 'a' * 40
         self.calls = []
         def handler(name):
-            def invoke(value):
+            def invoke(value, execution):
                 self.calls.append((name, value)); return {'kind': name, 'ok': True}
             return invoke
         self.handlers = {
@@ -50,7 +51,7 @@ class ActionAutonomyTests(unittest.TestCase):
 
     def queue(self, handlers=None):
         return AutonomyQueue(self.state, self.registry,
-                             self.handlers if handlers is None else handlers)
+            self.handlers if handlers is None else handlers, countdown_seconds=0)
 
     def advance(self, queue, workflow_id=None):
         return queue.advance(workflow_id or self.workflow_id,
@@ -84,6 +85,35 @@ class ActionAutonomyTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ActionRegistry([dict(self.registry.list()[0], endpoint='secret')])
 
+    def test_version_one_journal_is_migrated_in_place(self):
+        path = self.state / 'autonomy-queue.sqlite'
+        with closing(sqlite3.connect(path)) as db:
+            db.executescript('''
+                CREATE TABLE schema_info(version INTEGER NOT NULL);
+                INSERT INTO schema_info VALUES(1);
+                CREATE TABLE settings(global_paused INTEGER NOT NULL);
+                INSERT INTO settings VALUES(0);
+                CREATE TABLE workflows(workflow_id TEXT PRIMARY KEY,node_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,project_id TEXT NOT NULL,plan_digest TEXT NOT NULL,
+                    plan_json BLOB NOT NULL,state TEXT NOT NULL,ui_attached INTEGER NOT NULL,
+                    spent_cost INTEGER NOT NULL,created_at TEXT NOT NULL,activated_at TEXT,
+                    updated_at TEXT NOT NULL,error TEXT);
+                CREATE TABLE steps(workflow_id TEXT NOT NULL,ordinal INTEGER NOT NULL,
+                    step_id TEXT NOT NULL UNIQUE,action_id TEXT NOT NULL,
+                    action_version TEXT NOT NULL,descriptor_digest TEXT NOT NULL,
+                    state TEXT NOT NULL,approval_digest TEXT,result_json BLOB,error TEXT,
+                    PRIMARY KEY(workflow_id,ordinal),
+                    FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id));
+            ''')
+        path.chmod(0o600)
+        queue = self.queue()
+        with closing(sqlite3.connect(queue.path)) as db:
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 2)
+            self.assertIn('ui_seen_at', [row[1] for row in
+                                        db.execute('PRAGMA table_info(workflows)')])
+            self.assertIn('not_before', [row[1] for row in
+                                        db.execute('PRAGMA table_info(steps)')])
+
     def test_automatic_mode_is_only_a_proposal_until_exact_opt_in(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); proposed = queue.prepare(self.plan([step]),
@@ -115,12 +145,28 @@ class ActionAutonomyTests(unittest.TestCase):
                          {self.workflow_id, second_id})
         self.assertEqual(queue.list(str(uuid4()), str(uuid4()))['workflows'], [])
 
+    def test_second_dispatch_in_same_workflow_is_rejected(self):
+        queue = self.queue()
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        second = self.step('analysis.read-only', {'selection_sha256': '2' * 64})
+        self.prepare_and_activate(queue, self.plan([first, second]))
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE steps SET state='dispatching' WHERE step_id=?",
+                       (first['step_id'],))
+            db.execute("UPDATE workflows SET state='running' WHERE workflow_id=?",
+                       (self.workflow_id,))
+            db.commit()
+        with self.assertRaisesRegex(ValidationError, 'already has a dispatching'):
+            self.advance(queue)
+        self.assertEqual(self.calls, [])
+
     def test_time_budget_and_cancel_fail_closed_before_effect(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); self.prepare_and_activate(queue, self.plan([step]))
-        with sqlite3.connect(queue.path) as db:
+        with closing(sqlite3.connect(queue.path)) as db:
             db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
                        "WHERE workflow_id=?", (self.workflow_id,))
+            db.commit()
         with self.assertRaisesRegex(ValidationError, 'time budget'):
             self.advance(queue)
         cancelled = queue.cancel(self.workflow_id, self.node_id, self.user_id)
@@ -128,9 +174,34 @@ class ActionAutonomyTests(unittest.TestCase):
                          ('cancelled', 'cancelled'))
         self.assertEqual(self.calls, [])
 
+    def test_automatic_countdown_and_expired_ui_lease_prevent_dispatch(self):
+        queue = AutonomyQueue(self.state, self.registry, self.handlers,
+                              countdown_seconds=3)
+        step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        self.prepare_and_activate(queue, self.plan([step]))
+        countdown = self.advance(queue)
+        self.assertEqual((countdown['state'], countdown['steps'][0]['state']),
+                         ('countdown', 'countdown'))
+        self.assertIsNotNone(countdown['steps'][0]['not_before'])
+        with self.assertRaisesRegex(ValidationError, 'countdown'):
+            self.advance(queue)
+        paused = queue.pause(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((paused['state'], paused['steps'][0]['state']),
+                         ('paused', 'queued'))
+        queue.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        queue.resume(self.workflow_id, self.node_id, self.user_id)
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET ui_seen_at='2000-01-01T00:00:00Z' "
+                       "WHERE workflow_id=?", (self.workflow_id,)); db.commit()
+        self.assertFalse(queue.get(self.workflow_id, self.node_id,
+                                   self.user_id)['ui_attached'])
+        with self.assertRaisesRegex(ValidationError, 'live attached UI'):
+            self.advance(queue)
+
     def test_restart_detaches_proposal_and_approval_without_losing_evidence(self):
         step = self.step('query.external',
-            {'request_sha256': '2' * 64, 'target': 'reviewed-provider'},
+            {'approval_id': str(uuid4()), 'preview_sha256': '2' * 64,
+             'privacy': 'public'},
             privacy='public')
         plan = self.plan([step], privacy='public')
         queue = self.queue(); proposed = queue.prepare(plan, self.node_id, self.user_id)
@@ -155,14 +226,16 @@ class ActionAutonomyTests(unittest.TestCase):
     def test_combined_automatic_workflow_stops_for_external_and_each_local_output(self):
         analysis = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         external = self.step('query.external',
-            {'request_sha256': '2' * 64, 'target': 'reviewed-provider'},
+            {'approval_id': str(uuid4()), 'preview_sha256': '2' * 64,
+             'privacy': 'public'},
             privacy='public', depends=[analysis['step_id']])
         handoff = self.step('workflow.role-handoff',
-            {'handoff_sha256': '3' * 64, 'role': 'opponent'},
+            {'workflow_id': str(uuid4()), 'creator_sha256': '3' * 64},
             depends=[external['step_id']])
         output = self.step('artifact.create-local', {'target': 'artifacts/new/content.md',
             'content_type': 'text/markdown', 'content_sha256': '4' * 64,
-            'privacy': 'project', 'provenance': {'workflow_id': self.workflow_id}},
+            'privacy': 'project', 'provenance': {'workflow_id': self.workflow_id},
+            'request': {'kind': 'test-publication'}},
             depends=[handoff['step_id']])
         queue = self.queue(); self.prepare_and_activate(queue, self.plan(
             [analysis, external, handoff, output], privacy='public'))
@@ -242,7 +315,7 @@ class ActionAutonomyTests(unittest.TestCase):
 
     def test_unknown_effect_is_terminal_and_never_retried(self):
         attempts = []
-        def uncertain(value):
+        def uncertain(value, execution):
             attempts.append(value); raise UnknownEffect('response was lost')
         handlers = dict(self.handlers)
         handlers[('analysis.read-only', '1.0')] = uncertain
@@ -285,7 +358,8 @@ class ActionAutonomyTests(unittest.TestCase):
             parse_plan(self.plan([bad]), self.registry)
         output = self.step('artifact.create-local', {'target': 'x.md',
             'content_type': 'text/markdown', 'content_sha256': 'bad',
-            'privacy': 'project', 'provenance': {'source': 'workflow'}})
+            'privacy': 'project', 'provenance': {'source': 'workflow'},
+            'request': {'kind': 'test-publication'}})
         with self.assertRaisesRegex(ValidationError, 'output hash'):
             parse_plan(self.plan([output]), self.registry)
 

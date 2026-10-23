@@ -44,11 +44,13 @@ zůstávají v platnosti.
   souběžná workflow, owner-filtered bounded výpis a zákaz automatického retry
   neurčitého účinku. Restart odpojí UI, pozastaví bezpečně obnovitelné kroky a
   změní rozpracovaný dispatch na terminální `unknown`.
-- [ ] [in progress] **F-M4-AUTONOMY-01-C — Integrační service a approval boundary
-  (cílová úroveň: implemented).** Deterministicky autorizovat registrované
+- [x] [completed] **F-M4-AUTONOMY-01-C — Integrační service a approval boundary
+  (implemented).** Deterministicky autorizuje registrované
   adaptéry pro read-only analýzu, externí dotaz a rolový handoff; návrh
-  lokálního výstupu vždy zastavit na přesném lidském checkpointu.
-- [ ] [planned] **F-M4-AUTONOMY-01-D — UI, regrese a akceptace (cílová úroveň:
+  lokálního výstupu vždy zastaví na přesném lidském checkpointu. Adaptéry
+  používají existující externí, role-workflow a publikační journal; web navíc
+  fail-closed skrývá a odmítá `local-only` plány.
+- [ ] [in progress] **F-M4-AUTONOMY-01-D — UI, regrese a akceptace (cílová úroveň:
   PoC validated).** Zobrazit frontu, budget, mezivýsledky a globální pauzu;
   ověřit editaci plánu, změny oprávnění/privacy, vyčerpaný budget, neznámou
   akci, odpojení UI, restart v každém stavu, souběh a `unknown` bez auto-retry.
@@ -74,12 +76,18 @@ existující zapisovací operací po konkrétním approval.
 
 ## Průběžné ověření — 2026-10-23
 
-- `tests.test_action_autonomy`: **12 testů OK** — registry, explicitní opt-in,
+- `tests.test_action_autonomy`: **15 testů OK** — registry, explicitní opt-in,
   kombinovaný workflow, manuální režim, přesný lokální checkpoint, změny
   oprávnění/privacy/HEAD, globální pause, odpojení UI, editace, souběh, restart
-  návrhu/approval/`dispatching`, časový budget, cancel a `unknown` bez retry.
-- Související regresní sada `test_action_autonomy`, `test_output_capabilities`,
-  `test_output_execution`, `test_role_workflow_service` mimo socketově omezený
-  sandbox: **37 testů OK, 1 volitelný live test přeskočen**.
-- `py_compile` nového modulu a testu prošel. Úplná sada ani UI/integration
-  akceptace zatím spuštěné nebyly; dávka zůstává otevřená.
+  návrhu/approval/`dispatching`, migraci journalu, backendový countdown a lease,
+  časový budget, cancel a `unknown` bez retry.
+- `tests.test_autonomy_service`: **6 testů OK** — konkrétní doménové adaptéry,
+  stale HEAD, přesný lokální výstup, `local-only` webová hranice, editace plánu
+  a desktop API/UI kontrakt. Dva cílené HTTPS webové testy také prošly.
+- Úplná sada `python3 -m unittest discover -s tests -v`: **772 testů OK,
+  28 volitelných testů přeskočeno**. `py_compile`, kontrola generovaného JS přes
+  `node --check` a `git diff --check` prošly.
+- Sdílené UI nyní zobrazuje/importuje a před účinkem edituje návrh, vyžaduje
+  samostatnou aktivaci, ukazuje budget/stavy/výsledky, drží krátký lease,
+  provádí countdown a nabízí pause/resume/cancel i globální pauzu. Fyzická
+  desktop/web akceptace v reálném prohlížeči ještě zbývá; dávka zůstává otevřená.

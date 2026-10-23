@@ -867,6 +867,14 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <fieldset><legend>Dodatečné podklady opponenta</legend><div id="workflow-opponent-artifacts"></div></fieldset>
 <button id="workflow-prepare" type="button">Připravit creator požadavek</button>
 <p id="workflow-status" role="status" aria-live="polite"></p>
+<details id="autonomy-queue"><summary>Řízená fronta</summary>
+<p>Automatický režim je vždy opt-in. Vytvoření lokálního dokumentu čeká na samostatné potvrzení přesného výstupu.</p>
+<details class="autonomy-plan-editor"><summary>Načíst nebo upravit návrh plánu</summary>
+<p>Vložte celý návrh JSON. Kontrola jej pouze připraví; nic nespustí ani neuloží do projektu.</p>
+<label>Návrh plánu (JSON)<textarea id="autonomy-plan-json" rows="8" spellcheck="false"></textarea></label>
+<div class="form-actions"><button id="autonomy-plan-example" class="secondary-button" type="button">Vložit bezpečný read-only příklad</button><button id="autonomy-plan-check" type="button">Zkontrolovat návrh</button></div></details>
+<div class="form-actions"><button id="autonomy-refresh" class="secondary-button" type="button">Obnovit</button><button id="autonomy-global-pause" class="secondary-button" type="button">Pozastavit vše</button></div>
+<p id="autonomy-status" role="status" aria-live="polite">Otevřením načtete frontu tohoto projektu.</p><div id="autonomy-list"></div></details>
 <section id="workflow-creator-preview" hidden><h3>Creator — přesný požadavek</h3><pre></pre>
 <label class="confirm"><input id="workflow-creator-confirm" type="checkbox"> Potvrzuji creator vstupy, model, privacy a přesný request.</label>
 <button id="workflow-creator-dispatch" type="button" disabled>Spustit creatora</button></section>
@@ -1149,6 +1157,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(prefers-reduced-motion:reduce){.chat-progress-spinner{animation:none;border-top-color:#afc3d8;background:#526ca4}}
 #summary-panel label,#extraction-panel label{display:block;margin:10px 0 5px}#summary-panel textarea,#summary-panel input,#summary-panel select,#extraction-panel textarea,#extraction-panel input,#extraction-panel select{padding:9px;max-width:100%}#summary-focus,#extraction-focus{width:100%;resize:vertical}#summary-artifacts,#extraction-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#summary-artifact-list label,#extraction-artifact-list label{font-weight:400}#summary-status,#extraction-status{font-size:12px;min-height:20px;color:#315f58}#summary-preview,#extraction-preview{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#summary-preview:empty,#extraction-preview:empty{display:none}#summary-preview p{white-space:pre-wrap;margin:6px 0}#extraction-preview{white-space:pre-wrap;overflow:auto}#summary-publish-controls,#extraction-publish-controls{border-top:1px solid #dce3e9;padding-top:12px}
 #workflow-panel label{display:block;margin:10px 0 5px}#workflow-panel textarea,#workflow-panel input,#workflow-panel select{padding:9px;max-width:100%}#workflow-purpose{width:100%;resize:vertical}#workflow-panel fieldset{margin:14px 0;border:1px solid #dce3e9}#workflow-panel fieldset label{font-weight:400}#workflow-status{font-size:12px;min-height:20px;color:#315f58}#workflow-panel section{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#workflow-panel pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto}#workflow-publish{border-top:1px solid #dce3e9}
+#autonomy-queue{margin:16px 0;border:1px solid #bfcdc9;border-radius:12px;padding:12px;background:#f8fbfc}#autonomy-queue>summary{font-weight:700;color:#176b60}.autonomy-plan-editor{margin:10px 0}.autonomy-plan-editor textarea{width:100%;font-family:monospace;font-size:12px}#autonomy-list{display:grid;gap:10px;margin-top:12px}.autonomy-card{border:1px solid #dce3e9;border-left:5px solid #8aa1ad;border-radius:10px;padding:12px;background:#fff}.autonomy-card[data-state="completed"]{border-left-color:#2d8a62}.autonomy-card[data-state="paused"],.autonomy-card[data-state="awaiting-approval"],.autonomy-card[data-state="proposed"]{border-left-color:#c69224}.autonomy-card[data-state="failed"],.autonomy-card[data-state="unknown"]{border-left-color:#b74435}.autonomy-card h3{margin:0 0 5px}.autonomy-card progress{width:100%;accent-color:#176b60}.autonomy-card ol{padding-left:22px}.autonomy-card li{margin:5px 0}.autonomy-card details pre{max-height:220px;font-size:11px}.autonomy-card .form-actions{display:flex;gap:7px;flex-wrap:wrap}.autonomy-card .danger-button{background:#9b3f35}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
@@ -5123,6 +5132,77 @@ draft.addEventListener('keydown',event=>{
 });
 let roleWorkflow=null,pendingWorkflowRequest=null,pendingWorkflowPublish=null;
 const workflowStatus=document.querySelector('#workflow-status');
+const autonomyPanel=document.querySelector('#autonomy-queue');
+const autonomyStatus=document.querySelector('#autonomy-status');
+const autonomyList=document.querySelector('#autonomy-list');
+let autonomyQueue={global_paused:false,workflows:[]},autonomyHeartbeatBusy=false;
+const autonomyTimers=new Map();
+const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
+function autonomyButton(label,action,className='secondary-button'){
+ const button=document.createElement('button');button.type='button';button.className=className;
+ button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;try{await action();}catch(error){autonomyStatus.textContent=error.message;}finally{button.disabled=false;}});return button;
+}
+async function autonomyRequest(path,payload={}){
+ const result=await projectRequest(path,payload,120000);if(activeProject)await loadAutonomyQueue(false);return result;
+}
+function scheduleAutomaticWorkflow(workflow){
+ if(workflow.mode!=='automatic'||autonomyQueue.global_paused||document.visibilityState!=='visible'||!autonomyPanel.open)return;
+ const step=workflow.steps.find(item=>!['completed','failed','unknown','cancelled'].includes(item.state));if(!step)return;
+ let delay=null;
+ if(workflow.state==='queued'&&step.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
+ if(workflow.state==='countdown'&&step.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
+ if(delay===null)return;
+ autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(document.visibilityState!=='visible'||!autonomyPanel.open)return;try{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});}catch(error){autonomyStatus.textContent=error.message;}},delay));
+}
+function renderAutonomyQueue(){
+ for(const timer of autonomyTimers.values())clearTimeout(timer);autonomyTimers.clear();
+ autonomyList.replaceChildren();const rows=autonomyQueue.workflows||[];
+ document.querySelector('#autonomy-global-pause').textContent=autonomyQueue.global_paused?'Zrušit globální pauzu':'Pozastavit vše';
+ if(!rows.length){const empty=document.createElement('p');empty.textContent='Pro tento projekt není připravená žádná řízená fronta.';autonomyList.append(empty);return;}
+ for(const workflow of rows){const card=document.createElement('article');card.className='autonomy-card';card.dataset.state=workflow.state;
+  const heading=document.createElement('h3');heading.textContent=`${workflow.mode==='automatic'?'Automatická':'Ruční'} fronta · ${workflow.state}`;
+  const meta=document.createElement('p');meta.textContent=`${workflow.workflow_id} · náklady ${workflow.spent_cost}/${workflow.budget.max_cost_units} · zbývá ${workflow.remaining_cost}`;
+  const progress=document.createElement('progress');progress.max=Math.max(1,workflow.budget.max_cost_units);progress.value=workflow.spent_cost;progress.setAttribute('aria-label','Využitý budget');
+  const steps=document.createElement('ol');
+  for(const step of workflow.steps){const item=document.createElement('li');item.textContent=`${step.action.id} · ${step.state} · privacy ${step.privacy} · cost ${step.cost_units}`;steps.append(item);}
+  const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Přesný plán a mezivýsledky';const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.steps,null,2);detail.append(summary,pre);
+  const actions=document.createElement('div');actions.className='form-actions';
+  const attach=()=>projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});
+  if(workflow.state==='proposed')actions.append(autonomyButton('Aktivovat plán',async()=>{if(!confirm(`Aktivovat ${workflow.mode==='automatic'?'automatický':'ruční'} režim s budgetem ${JSON.stringify(workflow.budget)}?`))return;await attach();await autonomyRequest('/v1/autonomy/activate',{workflow_id:workflow.workflow_id,activation_digest:workflow.activation_digest});}));
+  if(['queued','running'].includes(workflow.state)){actions.append(autonomyButton('Provést další krok',async()=>{await attach();await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});}));actions.append(autonomyButton('Pozastavit',()=>autonomyRequest('/v1/autonomy/pause',{workflow_id:workflow.workflow_id})));}
+  if(workflow.state==='countdown')actions.append(autonomyButton('Pozastavit odpočet',()=>autonomyRequest('/v1/autonomy/pause',{workflow_id:workflow.workflow_id})));
+  if(workflow.state==='paused')actions.append(autonomyButton('Pokračovat',async()=>{await attach();await autonomyRequest('/v1/autonomy/resume',{workflow_id:workflow.workflow_id});}));
+  for(const step of workflow.steps.filter(item=>item.state==='awaiting-approval'))actions.append(autonomyButton(step.action.id==='artifact.create-local'?'Schválit přesný lokální výstup':'Schválit krok',async()=>{if(!confirm(`Potvrdit pouze tento krok?\n${JSON.stringify(step.input,null,2)}`))return;await attach();await autonomyRequest('/v1/autonomy/approve',{workflow_id:workflow.workflow_id,step_id:step.step_id});}));
+  if(!autonomyTerminal.has(workflow.state))actions.append(autonomyButton('Zrušit frontu',async()=>{if(confirm('Opravdu zrušit dosud neprovedené kroky této fronty?'))await autonomyRequest('/v1/autonomy/cancel',{workflow_id:workflow.workflow_id});},'danger-button'));
+  card.append(heading,meta,progress,steps,detail,actions);autonomyList.append(card);scheduleAutomaticWorkflow(workflow);
+ }
+}
+async function loadAutonomyQueue(showStatus=true){
+ if(!activeProject){autonomyQueue={global_paused:false,workflows:[]};renderAutonomyQueue();return;}
+ if(showStatus)autonomyStatus.textContent='Načítám řízenou frontu…';
+ try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(showStatus)autonomyStatus.textContent=`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;}
+ catch(error){autonomyStatus.textContent=error.message;}
+}
+async function refreshAutonomyLease(){
+ const visible=activeProject&&autonomyPanel.open&&document.visibilityState==='visible'&&document.querySelector('#workflow-tab').getAttribute('aria-selected')==='true';
+ if(autonomyHeartbeatBusy)return;autonomyHeartbeatBusy=true;
+ try{for(const workflow of autonomyQueue.workflows||[])if(!autonomyTerminal.has(workflow.state)){const path=visible?'/v1/autonomy/attach':'/v1/autonomy/detach';await projectRequest(path,{workflow_id:workflow.workflow_id});}if(visible)await loadAutonomyQueue(false);}catch(error){autonomyStatus.textContent=error.message;}finally{autonomyHeartbeatBusy=false;}
+}
+autonomyPanel.addEventListener('toggle',()=>{if(autonomyPanel.open){loadAutonomyQueue().then(refreshAutonomyLease);}else refreshAutonomyLease();});
+document.querySelector('#autonomy-refresh').addEventListener('click',()=>loadAutonomyQueue());
+document.querySelector('#autonomy-plan-example').addEventListener('click',async()=>{
+ if(!activeProject){autonomyStatus.textContent='Nejprve otevřete projekt.';return;}
+ const seed=new TextEncoder().encode(`${activeProject.id}\n${activeProject.head}`);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',seed)),byte=>byte.toString(16).padStart(2,'0')).join('');
+ document.querySelector('#autonomy-plan-json').value=JSON.stringify({schema_version:1,workflow_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,mode:'automatic',privacy:'project',budget:{max_steps:1,max_cost_units:1,max_seconds:300},steps:[{step_id:crypto.randomUUID(),action:{id:'analysis.read-only',version:'1.0'},privacy:'project',cost_units:1,depends_on:[],input:{selection_sha256:hash}}]},null,2);
+ autonomyStatus.textContent='Příklad je pouze vložený v editoru. Tlačítkem Zkontrolovat návrh jej připravíte bez spuštění.';
+});
+document.querySelector('#autonomy-plan-check').addEventListener('click',async()=>{
+ const button=document.querySelector('#autonomy-plan-check');button.disabled=true;
+ try{if(!activeProject)throw new Error('Nejprve otevřete projekt.');const plan=JSON.parse(document.querySelector('#autonomy-plan-json').value);if(plan.project_id!==activeProject.id)throw new Error('Návrh patří do jiného projektu.');const exists=(autonomyQueue.workflows||[]).some(item=>item.workflow_id===plan.workflow_id);await autonomyRequest(exists?'/v1/autonomy/replace':'/v1/autonomy/prepare',plan);autonomyStatus.textContent='Návrh prošel kontrolou. Před spuštěním zkontrolujte přesný plán, režim a budget.';}catch(error){autonomyStatus.textContent=error.message;}finally{button.disabled=false;}
+});
+document.querySelector('#autonomy-global-pause').addEventListener('click',()=>autonomyRequest(autonomyQueue.global_paused?'/v1/autonomy/resume-all':'/v1/autonomy/pause-all'));
+document.querySelector('#workflow-tab').addEventListener('click',()=>{if(autonomyPanel.open)loadAutonomyQueue().then(refreshAutonomyLease);});
+document.addEventListener('visibilitychange',refreshAutonomyLease);setInterval(refreshAutonomyLease,5000);
 function resetWorkflowProjection(message=''){
  roleWorkflow=null;pendingWorkflowRequest=null;pendingWorkflowPublish=null;
  for(const id of ['workflow-creator-preview','workflow-creator-result','workflow-opponent-preview',
@@ -5584,6 +5664,12 @@ class DesktopHandler(Handler):
         '/v1/workflows/status', '/v1/workflows/prepare',
         '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/prepare',
         '/v1/workflows/opponent/dispatch', '/v1/workflows/publish',
+        '/v1/autonomy/status', '/v1/autonomy/prepare', '/v1/autonomy/replace',
+        '/v1/autonomy/attach',
+        '/v1/autonomy/detach', '/v1/autonomy/activate', '/v1/autonomy/approve',
+        '/v1/autonomy/pause', '/v1/autonomy/resume', '/v1/autonomy/cancel',
+        '/v1/autonomy/advance', '/v1/autonomy/pause-all',
+        '/v1/autonomy/resume-all',
         '/v1/summary/status', '/v1/summary/preview', '/v1/summary/publish',
         '/v1/extraction/status', '/v1/extraction/preview', '/v1/extraction/publish',
         '/v1/metadata-suggestions/status', '/v1/metadata-suggestions/preview',
@@ -5728,6 +5814,39 @@ class DesktopHandler(Handler):
                 return self.reply(200, result)
             if self.path == '/v1/workflows/publish' and isinstance(request, dict):
                 return self.reply(200, self.server.role_workflow_service.publish(request))
+            if self.path.startswith('/v1/autonomy/') and isinstance(request, dict):
+                service = getattr(self.server, 'autonomy_service', None)
+                if service is None:
+                    return self.reply(503, {'error': 'Řízená autonomie není dostupná.'})
+                if (self.path == '/v1/autonomy/status'
+                        and set(request) in ({}, {'project_id'})):
+                    return self.reply(200, service.list(request.get('project_id')))
+                if self.path == '/v1/autonomy/prepare':
+                    return self.reply(200, service.prepare(request))
+                if self.path == '/v1/autonomy/replace':
+                    return self.reply(200, service.replace(request))
+                if (self.path == '/v1/autonomy/activate'
+                        and set(request) == {'workflow_id', 'activation_digest'}):
+                    return self.reply(200, service.activate(
+                        request['workflow_id'], request['activation_digest']))
+                if (self.path == '/v1/autonomy/approve'
+                        and set(request) == {'workflow_id', 'step_id'}):
+                    return self.reply(200, service.approve(
+                        request['workflow_id'], request['step_id']))
+                operations = {'/v1/autonomy/attach': 'attach',
+                    '/v1/autonomy/detach': 'detach',
+                    '/v1/autonomy/pause': 'pause',
+                    '/v1/autonomy/resume': 'resume',
+                    '/v1/autonomy/cancel': 'cancel',
+                    '/v1/autonomy/advance': 'advance'}
+                if self.path in operations and set(request) == {'workflow_id'}:
+                    return self.reply(200, getattr(service, operations[self.path])(
+                        request['workflow_id']))
+                if self.path == '/v1/autonomy/pause-all' and request == {}:
+                    return self.reply(200, service.pause_all())
+                if self.path == '/v1/autonomy/resume-all' and request == {}:
+                    return self.reply(200, service.resume_all())
+                return self.send_error(400)
             if self.path == '/v1/media/status' and request == {}:
                 return self.reply(200, self.server.media_service.status())
             if self.path == '/v1/media/comfyui/configure' and isinstance(request, dict):
@@ -6200,7 +6319,7 @@ class DesktopHandler(Handler):
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
                     'stejného tlačítka zachová identitu operace.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
