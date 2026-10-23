@@ -57,8 +57,9 @@ historii ani automatický merge.
   a zachování obou divergentních headů. Webová/desktopová regresní sada:
   **71 testů úspěšně, 6 přeskočeno**. Úplná sada: **737 testů úspěšně, 28
   přeskočeno**. `py_compile`, oba generované JavaScripty přes `node --check` a
-  `git diff --check` prošly. Zbývá fyzicky potvrdit desktop ↔ LXC oba směry,
-  offline návrat a viditelnou divergenci bez automatického merge.
+  `git diff --check` prošly. Uživatel 23. 10. 2026 fyzicky potvrdil přenos
+  projektu desktop → server i server → desktop. Zbývá fyzicky potvrdit offline
+  návrat a viditelnou divergenci bez automatického merge.
 
 ## Akceptační podmínky
 
