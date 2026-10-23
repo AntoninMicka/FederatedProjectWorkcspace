@@ -9,8 +9,8 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/ux-web-nav-01` z `develop` na commitu
 `d15cec3` (PR #83), implementace byla uložena commitem `adf96a5` a dávka
-dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; její jediný
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR #84 byl
+sloučen do `develop` jako `8ed574f`.
 
 - [x] [completed] **UX-WEB-NAV-01-A — webová informační architektura
   (implemented).** Sdílená navigace serverového webu zpřístupňuje Výstupy po

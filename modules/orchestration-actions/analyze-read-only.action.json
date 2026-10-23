@@ -1,0 +1,1 @@
+{"schema_version":1,"action_id":"analysis.read-only","version":"1.0","display_name":"Read-only analysis","effect":"read-only","permissions":["project-read"],"privacy":["public","project","confidential","local-only"],"required_inputs":["selection_sha256"],"max_cost_units":100,"automatable":true,"confirmation":"none"}

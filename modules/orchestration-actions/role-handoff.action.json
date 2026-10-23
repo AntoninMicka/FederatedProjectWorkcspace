@@ -1,0 +1,1 @@
+{"schema_version":1,"action_id":"workflow.role-handoff","version":"1.0","display_name":"Role handoff","effect":"role-handoff","permissions":["project-read","role-dispatch"],"privacy":["public","project","confidential","local-only"],"required_inputs":["handoff_sha256","role"],"max_cost_units":1000,"automatable":true,"confirmation":"none"}

@@ -353,6 +353,17 @@ skrývá nativní síťové a LXC akce. Nový output store, paralelní federačn
 kopie desktopových ovladačů byly odmítnuty; operace používají stávající Git a
 node-local journal/recovery hranice ADR 0038–0043.
 
+`F-M4-AUTONOMY-01` **reuse/adaptuje striktní parser a statický katalog
+`output_capabilities`, vlastněný SQLite journal `RoleWorkflows`, approval
+digesty a `dispatching`/`unknown` recovery existujících executorů**. Přidává
+společný uzavřený action registry a node-local bounded frontu, nikoli nový
+projektový writer. Agent framework, message queue, provider pool a automatické
+uložení modelového výstupu se odmítají: LLM pouze navrhuje a každý lokální
+uživatelský výstup čeká na samostatné potvrzení přesného cíle, typu, hashe,
+privacy a provenance. Soukromá inventura nedokládá shodnou approval/recovery
+hranici, proto se z ní nekopíruje kód ani názvy. Rozhodnutí:
+[ADR 0044](docs/adr/0044-governed-orchestration-autonomy.md).
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a
