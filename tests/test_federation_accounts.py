@@ -110,17 +110,18 @@ class MappingTests(unittest.TestCase):
 
     def test_v1_registry_migration_preserves_local_account_and_credentials(self):
         with self.a.locked() as (git,state,commit,_):
-            old={k:v for k,v in state.items() if k not in {'mappings','replications'}};old['schema_version']=1
+            old={k:v for k,v in state.items() if k not in {'mappings','replications','project_shares'}};old['schema_version']=1
             old['peers'] = [{key: value for key, value in peer.items()
                              if key not in {'relationship_type', 'local_role',
-                                            'account_binding'}}
+                                            'account_binding', 'sharing_level'}}
                             for peer in old['peers']]
             self.a.publish(git,old,commit)
         restored=Administration(self.a.node)
         self.assertEqual(restored.authenticate('Bearer '+self.states[0]['access_key'])['id'],self.users[0])
         with restored.locked() as (_,state,_,_):
-            self.assertEqual(state['schema_version'],5);self.assertEqual(state['mappings'],[])
+            self.assertEqual(state['schema_version'],6);self.assertEqual(state['mappings'],[])
             self.assertEqual(state['replications'],[])
+            self.assertEqual(state['project_shares'],[])
 
     def test_native_api_has_one_user_and_rejects_foreign_credentials(self):
         import http.client
@@ -247,26 +248,28 @@ class MappingTests(unittest.TestCase):
         mapping, _ = self.bilateral()
         with self.a.locked() as (git, state, commit, _):
             old = {key: value for key, value in state.items()
-                   if key != 'replications'}
+                   if key not in {'replications', 'project_shares'}}
             old['schema_version'] = 2
             old['peers'] = [{key: value for key, value in peer.items()
                              if key not in {'relationship_type', 'local_role',
-                                            'account_binding'}}
+                                            'account_binding', 'sharing_level'}}
                             for peer in old['peers']]
             self.a.publish(git, old, commit)
         with Administration(self.a.node).locked() as (_, state, _, _):
-            self.assertEqual(state['schema_version'], 5)
+            self.assertEqual(state['schema_version'], 6)
             self.assertEqual(state['mappings'][0]['spec']['id'], mapping)
             self.assertEqual(state['replications'], [])
             self.assertEqual(state['peers'][0]['relationship_type'], 'legacy')
             self.assertIsNone(state['peers'][0]['local_role'])
             self.assertIsNone(state['peers'][0]['account_binding'])
+            self.assertEqual(state['peers'][0]['sharing_level'], 'unspecified')
 
     def test_legacy_conversion_revokes_existing_mapping_and_replication(self):
         replication, _ = self.replication()
         state = self.change(
             self.a, action='convert-peer',
-            node_id=self.states[1]['node_id'], relationship_type='p2p')
+            node_id=self.states[1]['node_id'], relationship_type='p2p',
+            sharing_level='same-team')
         self.assertEqual(state['peers'][0]['relationship_type'], 'p2p')
         self.assertEqual(state['peers'][0]['trust'], 'pending')
         self.assertIsNotNone(state['mappings'][0]['revocation'])

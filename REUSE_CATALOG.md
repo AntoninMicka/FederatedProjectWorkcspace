@@ -295,6 +295,15 @@ je verzovaný v Git registru, zatímco node credential a jeho digest zůstávaj�
 node-local úložištích. Ruční přepnutí klient–server trustu, druhá databáze
 uživatelů a ukládání serverového access key byly odmítnuty.
 
+F-M5-PERSONAL-SYNC-01-UI4 **reuse/adaptuje Git-backed `Administration` registr,
+CAS publikaci a sdílené webové/desktopové administrační UI** pro oddělení
+topologie peeru od úrovně `same-team` / `same-company` / `external` a pro
+matici projekt × peer. Stávající jednosměrný replikační grant ani SSH export se
+nevydávají za nový obousměrný sync nebo externí datový balíček. Soukromá
+inventura neposkytla komponentu, která by zachovala projektovou Git autoritu,
+branch scope a export bez historie; nový transport proto nebyl v tomto řezu
+zaveden. Rozhodnutí: [ADR 0040](docs/adr/0040-federation-sharing-levels-and-project-matrix.md).
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a

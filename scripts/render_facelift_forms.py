@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from spikes.desktop_ui import CSS, HTML
 
 
-EDITION = "2026-10-17"
+EDITION = "2026-10-23"
 
 
 def sheet(key, title, selectors=(), forms=(), *, scale=.78, source="Sdílené web/desktop UI", native_html="", notes=True):
@@ -81,6 +81,7 @@ SHEETS = [
           ("admin-user-editor-form", "admin-user-confirm-form"), scale=.78),
     sheet("federation", "Správa uzlu — federované uzly", ("#admin-federation",),
           ("admin-peer-editor-form", "admin-peer-enroll-form",
+           "admin-project-share-form",
            "admin-mapping-create", "admin-mapping-import",
            "admin-replication-create", "admin-replication-import"), scale=.46),
     sheet("drive-import", "Import zdroje — Google Drive", ("#google-drive-import",), scale=.6),

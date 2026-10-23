@@ -176,6 +176,23 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   **721 testů, OK (28 přeskočeno)**. Fyzická akceptace 22. 10. 2026: uživatel
   potvrdil úspěšné nastavení klient–server federace; oba uzly již nečekají na
   druhé ruční schválení. Enrollment je tím na úrovni `implemented` dokončen.
+- [ ] [in progress] **F-M5-PERSONAL-SYNC-01-UI4 — úrovně sdílení a matice
+  projekt × peer (cílová úroveň: implemented).** Oddělit topologii
+  `p2p`/`client-server` od policy `same-team`/`same-company`/`external`;
+  klient–server uzamknout na `same-team`. Schema registru v6 ukládá úroveň
+  peeru a explicitní buňky matice pro vybrané projekty: same-company dovoluje
+  všechny větve kromě skrytých nebo jen vybrané větve, external jedinou
+  exportní větev a volitelné patche. Same-team zobrazuje všechny projekty jako
+  odvozené automatické sdílení. Sdílené webové/desktopové UI používá na velké
+  obrazovce matici a na mobilu lineární projektové karty. Změna se publikuje
+  jediným Git commitem pod stávajícím flock/CAS; migrace klient–server zachová
+  jako same-team a staré P2P ponechá fail-closed `unspecified`. Tento řez
+  nespouští nový transport a starý primary/read-only grant nevydává za
+  obousměrnou synchronizaci. Návrh a hranice popisuje ADR 0040. Doménové,
+  migrační a UI kontrakty prošly v úplné sadě: **722 testů úspěšně, 28
+  přeskočeno**; oba výsledné JavaScripty prošly `node --check`, Python moduly
+  `py_compile` a inventura nyní pokrývá všech 28 HTML formulářů. Zbývá fyzická
+  kontrola nastavení na desktopu a LXC/serveru.
 
 ## K předání do backlogu
 
@@ -186,6 +203,14 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   odvodit mapování z enrollmentu. Doplnit filtr podle uživatele a uzlu a pro
   mobil použít lineární seznam bez vnořeného vodorovného scrollování. Tato
   položka není podmínkou dokončení současné dávky.
+- [ ] [planned] **F-M5-SHARING-SYNC-01 — obousměrná synchronizace same-team a
+  same-company.** Nahradit cílově primary/read-only omezení obousměrným
+  recovery-safe Git tokem, autorizovat celý graf povolených větví, zachovat
+  divergenci a konflikt bez tichého merge a fyzicky ověřit offline návrat.
+- [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
+  uživatel.** Z exportní větve na explicitní žádost sestavit data bez vlastní
+  historie, volitelně patche, podepsat přesný manifest a oddělit sestavení od
+  přímého nebo souborového přenosového kanálu a importu do nezávislé historie.
 ## Akceptační podmínky
 
 - synchronizace nezačne pouhou dosažitelností nebo schválením peeru, ale až po

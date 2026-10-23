@@ -167,6 +167,12 @@ zůstává otevřený pod původními ID `UX-FEDERATION-02-B` až
 Konkrétní autority, transport a crash recovery tohoto omezeného řezu uzavírá
 [ADR 0038](0038-personal-project-replication.md).
 
+Doplnění 2026-10-23: cílové členění automatické federace mění
+[ADR 0040](0040-federation-sharing-levels-and-project-matrix.md). Úzký
+primary/read-only řez zůstává implementovaným recovery základem, ale cílem je
+obousměrný `same-team` pro všechny projekty, obousměrný `same-company` pro
+vybrané projekty/větve a ruční export bez historie pro `external`.
+
 ## Zbývající rozhodnutí
 
 Následující otázky zůstávají záměrně otevřené. Návrh z nich zatím neodvozuje

@@ -77,6 +77,10 @@ Legacy kompatibilita je dočasná, aby upgrade nezastavil existující osobní
 replikaci bez rozhodnutí správce. Její budoucí odstranění vyžaduje samostatnou
 migraci a důkaz, že nezůstaly aktivní staré vztahy.
 
+Doplnění 2026-10-23: topologie již neurčuje rozsah sdílení. Samostatné úrovně
+`same-team`, `same-company` a `external`, pravidlo klient–server = `same-team`
+a projektovou matici definuje [ADR 0040](0040-federation-sharing-levels-and-project-matrix.md).
+
 ## Persistentní hranice enrollmentu a recovery
 
 Server nejprve pod svým registry lockem publikuje schválený peer a účetní

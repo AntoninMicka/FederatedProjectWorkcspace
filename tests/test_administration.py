@@ -71,30 +71,34 @@ class AdministrationTests(unittest.TestCase):
     def test_peer_editor_updates_mutable_fields_but_keeps_pinned_identity(self):
         peer = str(uuid4())
         state = self.change(action='add-peer-relationship',
-                            relationship_type='p2p', node_id=peer,
+                            relationship_type='p2p', sharing_level='same-company',
+                            node_id=peer,
                             name='Old name',
                             endpoint='https://192.168.100.3:8443',
                             fingerprint='a'*64)
         state = self.service.request(self.actor, {
             'action': 'update-peer', 'expected_commit': state['commit_id'],
             'node_id': peer, 'name': 'New name',
-            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved'})
+            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved',
+            'sharing_level': 'same-company'})
         edited = state['peers'][0]
         self.assertEqual(edited, {
             'id': peer, 'name': 'New name',
             'endpoint': 'https://192.168.100.4:9443',
             'fingerprint': 'a'*64, 'trust': 'approved', 'revision': 2,
             'relationship_type': 'p2p', 'local_role': 'peer',
-            'account_binding': None})
+            'account_binding': None, 'sharing_level': 'same-company'})
         unchanged_commit = state['commit_id']
         state = self.service.request(self.actor, {
             'action': 'update-peer', 'expected_commit': unchanged_commit,
             'node_id': peer, 'name': 'New name',
-            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved'})
+            'endpoint': 'https://192.168.100.4:9443', 'trust': 'approved',
+            'sharing_level': 'same-company'})
         self.assertEqual(state['commit_id'], unchanged_commit)
         with self.assertRaises(ValueError):
             self.change(action='update-peer', node_id=peer, name='Bad',
-                        endpoint='http://example.invalid', trust='approved')
+                        endpoint='http://example.invalid', trust='approved',
+                        sharing_level='same-company')
 
     def test_legacy_peer_must_be_converted_and_conversion_is_pending(self):
         peer = str(uuid4())
@@ -103,10 +107,12 @@ class AdministrationTests(unittest.TestCase):
                             fingerprint='a'*64)
         with self.assertRaisesRegex(ValueError, 'converted or removed'):
             self.change(action='update-peer', node_id=peer, name='Changed',
-                        endpoint='https://192.168.100.3:8443', trust='pending')
+                        endpoint='https://192.168.100.3:8443', trust='pending',
+                        sharing_level='unspecified')
         state = self.service.request(self.actor, {
             'action': 'convert-peer', 'expected_commit': state['commit_id'],
-            'node_id': peer, 'relationship_type': 'client-server'})
+            'node_id': peer, 'relationship_type': 'client-server',
+            'sharing_level': 'same-team'})
         converted = state['peers'][0]
         self.assertEqual(converted['relationship_type'], 'client-server')
         self.assertEqual(converted['local_role'], 'server')
@@ -123,11 +129,13 @@ class AdministrationTests(unittest.TestCase):
                 'action': 'add-peer-relationship',
                 'expected_commit': desktop.request(self.actor, {'action': 'list'})['commit_id'],
                 'relationship_type': 'p2p', 'node_id': peer, 'name': 'Peer',
+                'sharing_level': 'same-team',
                 'endpoint': 'https://192.168.100.3:8443',
                 'fingerprint': 'a' * 64})
         with self.assertRaisesRegex(AccessDenied, 'created by login'):
             self.change(action='add-peer-relationship',
-                        relationship_type='client-server', node_id=peer,
+                        relationship_type='client-server', sharing_level='same-team',
+                        node_id=peer,
                         name='Peer', endpoint='https://192.168.100.3:8443',
                         fingerprint='a' * 64)
 
@@ -137,10 +145,12 @@ class AdministrationTests(unittest.TestCase):
                               endpoint='https://192.168.100.3:8443',
                               fingerprint='a' * 64)
         with self.service.locked() as (git, state, commit, _):
-            old = dict(state, schema_version=3)
+            old = {key: value for key, value in state.items()
+                   if key != 'project_shares'}
+            old['schema_version'] = 3
             old['peers'] = [{key: value for key, value in item.items()
                              if key not in {'relationship_type', 'local_role',
-                                            'account_binding'}}
+                                            'account_binding', 'sharing_level'}}
                             for item in state['peers']]
             self.service.publish(git, old, commit)
         migrated = self.state()
@@ -150,7 +160,51 @@ class AdministrationTests(unittest.TestCase):
             'endpoint': 'https://192.168.100.3:8443',
             'fingerprint': 'a' * 64, 'trust': 'pending', 'revision': 1,
             'relationship_type': 'legacy', 'local_role': None,
-            'account_binding': None})
+            'account_binding': None, 'sharing_level': 'unspecified'})
+
+    def test_project_peer_matrix_persists_scoped_branch_policies(self):
+        project = json.loads(self.node.read_text())['projects'][0]['project_id']
+        self.actor['memberships'][project] = 'project-admin'
+        company = str(uuid4())
+        state = self.change(
+            action='add-peer-relationship', relationship_type='p2p',
+            sharing_level='same-company', node_id=company, name='Company',
+            endpoint='https://company.example.invalid', fingerprint='b' * 64)
+        state = self.service.request(self.actor, {
+            'action': 'update-peer', 'expected_commit': state['commit_id'],
+            'node_id': company, 'name': 'Company',
+            'endpoint': 'https://company.example.invalid', 'trust': 'approved',
+            'sharing_level': 'same-company'})
+        state = self.service.request(self.actor, {
+            'action': 'set-project-share', 'expected_commit': state['commit_id'],
+            'peer_id': company, 'project_id': project, 'enabled': True,
+            'branch_mode': 'selected-only',
+            'branches': ['refs/heads/release', 'refs/heads/main'],
+            'include_patches': False})
+        self.assertEqual(state['project_shares'], [{
+            'peer_id': company, 'project_id': project,
+            'branch_mode': 'selected-only',
+            'branches': ['refs/heads/main', 'refs/heads/release'],
+            'include_patches': False, 'revision': 1}])
+        state = self.service.request(self.actor, {
+            'action': 'update-peer', 'expected_commit': state['commit_id'],
+            'node_id': company, 'name': 'Company',
+            'endpoint': 'https://company.example.invalid', 'trust': 'approved',
+            'sharing_level': 'external'})
+        self.assertEqual(state['project_shares'], [])
+        state = self.service.request(self.actor, {
+            'action': 'set-project-share', 'expected_commit': state['commit_id'],
+            'peer_id': company, 'project_id': project, 'enabled': True,
+            'branch_mode': 'export-only', 'branches': ['refs/heads/export'],
+            'include_patches': True})
+        self.assertTrue(state['project_shares'][0]['include_patches'])
+        with self.assertRaises(ValueError):
+            self.service.request(self.actor, {
+                'action': 'set-project-share',
+                'expected_commit': state['commit_id'], 'peer_id': company,
+                'project_id': project, 'enabled': True,
+                'branch_mode': 'export-only', 'branches': ['main'],
+                'include_patches': False})
 
     def test_rotation_interrupted_before_ref_keeps_previous_key_valid(self):
         from spikes.storage import Git

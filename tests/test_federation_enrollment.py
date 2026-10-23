@@ -62,7 +62,8 @@ class FederationEnrollmentTests(unittest.TestCase):
             'fingerprint': fingerprint})
         self.client_admin.request(self.system_actor, {
             'action': 'convert-peer', 'expected_commit': client_state['commit_id'],
-            'node_id': self.server_id, 'relationship_type': 'client-server'})
+            'node_id': self.server_id, 'relationship_type': 'client-server',
+            'sharing_level': 'same-team'})
 
     def stop_server(self):
         self.server.shutdown(); self.thread.join(); self.server.server_close()
@@ -78,9 +79,11 @@ class FederationEnrollmentTests(unittest.TestCase):
         server_peer = self.state(self.server_admin)['peers'][0]
         client_user = ProjectCreation(self.client_node).author_id()
         self.assertEqual(client_peer['trust'], 'approved')
+        self.assertEqual(client_peer['sharing_level'], 'same-team')
         self.assertEqual(client_peer['account_binding'], {
             'local_user_id': client_user, 'remote_user_id': self.server_user})
         self.assertEqual(server_peer['trust'], 'approved')
+        self.assertEqual(server_peer['sharing_level'], 'same-team')
         self.assertEqual(server_peer['local_role'], 'server')
         self.assertIsNone(server_peer['endpoint'])
         self.assertEqual(server_peer['account_binding'], {

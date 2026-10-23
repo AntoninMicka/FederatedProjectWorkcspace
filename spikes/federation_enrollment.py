@@ -128,6 +128,7 @@ def accept_on_server(service, actor, envelope):
         if peer:
             if (peer['relationship_type'] != 'client-server'
                     or peer['local_role'] != 'server'
+                    or peer['sharing_level'] != 'same-team'
                     or peer['trust'] == 'revoked'
                     or peer['fingerprint'] != fingerprint):
                 raise AccessDenied('Existing peer does not match this client enrollment')
@@ -146,7 +147,7 @@ def accept_on_server(service, actor, envelope):
                 'endpoint': None, 'fingerprint': fingerprint,
                 'trust': 'approved', 'revision': 1,
                 'relationship_type': 'client-server', 'local_role': 'server',
-                'account_binding': binding,
+                'account_binding': binding, 'sharing_level': 'same-team',
             })
             changed = True
         if changed:
@@ -179,7 +180,9 @@ def accept_on_client(service, server_node_id, operation_id, envelope):
         peer = next((item for item in state['peers']
                      if item['id'] == server_node_id), None)
         if (not peer or peer['relationship_type'] != 'client-server'
-                or peer['local_role'] != 'client' or peer['trust'] == 'revoked'
+                or peer['local_role'] != 'client'
+                or peer['sharing_level'] != 'same-team'
+                or peer['trust'] == 'revoked'
                 or peer['fingerprint'] != fingerprint):
             raise AccessDenied('Server relationship changed during enrollment')
         binding = {'local_user_id': local_user,
