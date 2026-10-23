@@ -153,6 +153,21 @@ zobrazí pruhovaný progress bez předstíraného procenta. Kliknutí nabídne
 potvrzené kooperativní zastavení na nejbližší bezpečné hranici. Již přijatá
 data na peeru se nevracejí zpět; další Sync bezpečně dokončí rekonciliaci.
 
+U otevřeného projektu se při zachované divergenci zobrazí červená akce
+**Vyřešit konflikt**. Nejprve načte pouze náhled připnutého lokálního a
+protějšího commitu. Pro každý změněný soubor lze porovnat základ, naši,
+protější a výslednou verzi jako raw text; Markdown má navíc bezpečně formátovaný
+náhled. Konfliktní soubor vyžaduje explicitní volbu nebo ruční úpravu výsledku.
+Teprve zaškrtnutí potvrzení a akce **Publikovat dvourodičový merge** vytvoří
+Git commit. Zavření rozepsaného resolveru nic nepublikuje.
+
+Změna projektu, incoming headu, důvěry peeru nebo sharing policy náhled
+zneplatní a vyžádá nové načtení. `same-company` dovolí řešit jen projekt a větev
+v aktuálním lokálním scope; `external` resolver interní historie nepoužije.
+Neplatný sidecar, vztah, privacy nebo jiný výsledný snapshot se před commitem
+odmítne. Incoming ref po úspěchu zůstane pro audit, ale už se nezobrazuje jako
+konflikt, protože je předkem výsledného merge commitu.
+
 Každý dosažitelný commit se znovu validuje. Přenos podporuje `public`,
 `project` a `confidential`; jakýkoli `local-only`, neklasifikovaný historický
 soubor, symlink, submodule nebo neplatný metadata transition celý bundle

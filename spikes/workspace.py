@@ -5,6 +5,7 @@
 import hashlib
 import json
 from pathlib import Path
+import re
 import tempfile
 import uuid
 
@@ -72,7 +73,8 @@ class Workspace:
             return self._apply_locked(db, changes, author_name, author_email, message, checkpoint)
 
     def transact(self, operation_id, request, prepare, *, expected_head=None,
-                 allow_privacy_relaxation=False, checkpoint=lambda stage: None):
+                 allow_privacy_relaxation=False, additional_parents=(),
+                 checkpoint=lambda stage: None):
         """Bind a native request to one durable operation, including lost-response retries.
 
         prepare runs under the writer lock, only for a new request, and returns
@@ -80,6 +82,14 @@ class Workspace:
         """
         from spikes.metadata import uuid as validate_uuid
         validate_uuid(operation_id)
+        require(isinstance(additional_parents, (list, tuple))
+                and len(additional_parents) <= 1,
+                'At most one additional parent is supported')
+        additional_parents = list(additional_parents)
+        for parent in additional_parents:
+            require(isinstance(parent, str)
+                    and re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', parent),
+                    'Expected full additional parent commit ID')
         digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         with self.journal.lock(), self.journal.connect() as db:
             self._writable()
@@ -93,11 +103,12 @@ class Workspace:
             changes, name, email, message = prepare(self)
             return self._apply_locked(db, changes, name, email, message, checkpoint,
                                       operation_id=operation_id, request_digest=digest, expected_head=expected_head,
-                                      allow_privacy_relaxation=allow_privacy_relaxation)
+                                      allow_privacy_relaxation=allow_privacy_relaxation,
+                                      additional_parents=additional_parents)
 
     def _apply_locked(self, db, changes, author_name, author_email, message, checkpoint,
                       *, operation_id=None, request_digest=None, expected_head=None,
-                      allow_privacy_relaxation=False):
+                      allow_privacy_relaxation=False, additional_parents=()):
         for value in (author_name, author_email):
             require(isinstance(value, str) and value.strip() == value and bool(value)
                     and not any(c in value for c in '\n\r\0<>'), 'Explicit Git identity required')
@@ -108,6 +119,9 @@ class Workspace:
         branch = self._branch()
         base = self.git.head()
         require(expected_head is None or base == expected_head, 'Project changed before preparation')
+        for parent in additional_parents:
+            resolved = self.git.run('rev-parse', '--verify', parent + '^{commit}').stdout.strip()
+            require(resolved == parent and parent != base, 'Invalid additional parent')
         require(not self.git.run('status', '--porcelain', '--untracked-files=all').stdout,
                 'Clean worktree and staging index required')
         require(snapshot(self.git.root) == self.git.snapshot(base),
@@ -124,11 +138,14 @@ class Workspace:
         validate_transition(base_files, candidate_files,
                             allow_privacy_relaxation=allow_privacy_relaxation)
         paths = self.journal._prepare(db, changes)
-        require(bool(paths), 'Operation has no changes')
+        # A merge that explicitly keeps the complete first-parent tree is still
+        # meaningful: its additional parent records the reconciled history.
+        require(bool(paths) or additional_parents, 'Operation has no changes')
         record = dict(operation_id=operation_id or str(uuid.uuid4()), base_head=base, branch=branch,
                       paths=paths, author_name=author_name, author_email=author_email,
                       message=message, state='prepared', commit_id=None, request_digest=request_digest,
-                      allow_privacy_relaxation=allow_privacy_relaxation)
+                      allow_privacy_relaxation=allow_privacy_relaxation,
+                      additional_parents=list(additional_parents))
         db.execute('INSERT INTO operations(id, record) VALUES (?, ?)',
                    (record['operation_id'], json.dumps(record)))
         db.commit()
@@ -245,6 +262,9 @@ class Workspace:
             raise RecoveryConflict('HEAD changed; operation retained')
         if record['state'] in {'committed', 'indexed'} and head != record['commit_id']:
             raise RecoveryConflict('Published HEAD moved backwards; operation retained')
+        for parent in record.get('additional_parents', []):
+            resolved = self.git.run('rev-parse', '--verify', parent + '^{commit}').stdout.strip()
+            require(resolved == parent, 'Additional parent is unavailable')
         trees = {self.git.run('rev-parse', f"{record['base_head']}^{{tree}}").stdout.strip()}
         if record['commit_id']:
             trees.add(self.git.run('rev-parse', f"{record['commit_id']}^{{tree}}").stdout.strip())
@@ -276,7 +296,10 @@ class Workspace:
                             allow_privacy_relaxation=record.get('allow_privacy_relaxation', False))
         identity = {'GIT_AUTHOR_NAME': record['author_name'], 'GIT_AUTHOR_EMAIL': record['author_email'],
                     'GIT_COMMITTER_NAME': record['author_name'], 'GIT_COMMITTER_EMAIL': record['author_email']}
-        commit = self.git.run('commit-tree', tree, '-p', record['base_head'],
+        parents = []
+        for parent in [record['base_head'], *record.get('additional_parents', [])]:
+            parents.extend(['-p', parent])
+        commit = self.git.run('commit-tree', tree, *parents,
                               input=record['message'] + '\n\nWorkspace-Operation: ' + record['operation_id'] + '\n',
                               env_extra=identity).stdout.strip()
         checkpoint('commit-created')

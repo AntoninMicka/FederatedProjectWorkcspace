@@ -20,7 +20,10 @@ import threading
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from spikes.administration import Administration, AccessDenied, identifier
+from spikes.administration import (
+    Administration, AccessDenied, content_policy, content_policy_allows,
+    identifier,
+)
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.federation_accounts import canonical
 from spikes.git_transfer import MAX_BUNDLE, git_run, validate_history
@@ -142,10 +145,7 @@ def _scope(value, level):
 
 
 def _scope_allows(scope, ref):
-    if scope['mode'] == 'all':
-        return True
-    selected = ref in scope['branches']
-    return selected if scope['mode'] == 'selected-only' else not selected
+    return content_policy_allows(scope, ref)
 
 
 def validate_exchange(value):
@@ -202,15 +202,7 @@ def _authority(service, peer_id):
 
 
 def _policy(peer, shares, project_id):
-    if peer['sharing_level'] == 'same-team':
-        return {'mode': 'all'}
-    share = next((row for row in shares
-                  if row['peer_id'] == peer['id']
-                  and row['project_id'] == project_id), None)
-    if not share:
-        return None
-    return {'mode': share['branch_mode'], 'branches': share['branches'],
-            'revision': share['revision']}
+    return content_policy(peer, shares, project_id)
 
 
 def _binding(node, project_id):

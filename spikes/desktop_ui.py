@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.artifact_history import ArtifactHistory
+from spikes.conflict_resolution import ConflictResolution
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
@@ -769,12 +770,41 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="project-overview-grid">
 <section class="dashboard-tile project-overview-history"><span class="dashboard-kicker">Poslední aktivita</span>
 <h2>Historie změn</h2><p id="project-overview-history-status" role="status">Načítám historii…</p>
-<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol></section>
+<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol>
+<button id="project-conflicts-open" type="button" class="conflict-button" hidden>Vyřešit konflikt</button></section>
 <section class="project-overview-description" aria-label="Stručný popis projektu"><p id="project-description"></p></section>
 <section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
 <h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
 <ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
-<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div></div>
+<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div>
+<section id="project-conflicts" hidden aria-labelledby="project-conflicts-title">
+<button id="project-conflicts-back" type="button" class="back-button">← Zpět na projekt</button>
+<span class="dashboard-kicker">FEDEROVANÁ HISTORIE</span><h2 id="project-conflicts-title">Vyřešit konflikt</h2>
+<p>Výsledek je zatím pouze místní návrh. Projekt se změní až po kontrole a výslovném potvrzení.</p>
+<p id="project-conflicts-status" role="status" aria-live="polite"></p>
+<div class="conflict-toolbar"><label>Protější historie <select id="project-conflicts-select"></select></label>
+<button id="project-conflicts-load" type="button">Načíst 3-way porovnání</button></div>
+<div id="project-conflicts-workspace" hidden>
+<div class="conflict-toolbar"><label>Soubor <select id="project-conflicts-file"></select></label>
+<div role="tablist" aria-label="Zobrazení konfliktu"><button id="project-conflicts-raw" type="button" aria-selected="true">Raw</button><button id="project-conflicts-rendered" type="button" class="secondary-button" aria-selected="false">Náhled</button></div></div>
+<div id="project-conflicts-raw-panel" class="conflict-grid">
+<label>Původní<textarea id="project-conflicts-base" rows="14" readonly></textarea></label>
+<label>Naše<textarea id="project-conflicts-ours" rows="14" readonly></textarea></label>
+<label>Protější<textarea id="project-conflicts-theirs" rows="14" readonly></textarea></label>
+<label>Výsledek<textarea id="project-conflicts-result" rows="14"></textarea></label></div>
+<div id="project-conflicts-rendered-panel" class="conflict-grid conflict-rendered" hidden>
+<section><h3>Původní</h3><div data-conflict-preview="base"></div></section>
+<section><h3>Naše</h3><div data-conflict-preview="ours"></div></section>
+<section><h3>Protější</h3><div data-conflict-preview="theirs"></div></section>
+<section><h3>Výsledek</h3><div data-conflict-preview="result"></div></section></div>
+<div class="form-actions"><button id="project-conflicts-use-ours" type="button">Použít naše</button>
+<button id="project-conflicts-use-theirs" type="button">Použít protější</button>
+<button id="project-conflicts-use-both" type="button">Použít obě</button>
+<button id="project-conflicts-delete" type="button" class="secondary-button">Výsledný soubor smazat</button></div>
+<p id="project-conflicts-unresolved" role="status"></p>
+<label class="confirm"><input id="project-conflicts-confirm" type="checkbox"> Zkontroloval(a) jsem všechny výsledné soubory a potvrzuji vytvoření dvourodičového merge commitu.</label>
+<button id="project-conflicts-publish" type="button" disabled>Vytvořit merge commit</button>
+</div></section></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
@@ -1087,6 +1117,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}#main-panel-content.project-overview-active{overflow:hidden}
 #project-overview-panel{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;flex:none;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;flex:1;min-height:0}.project-overview-history{display:flex;flex-direction:column;grid-column:span 1;min-height:0;overflow:hidden}.project-overview-history ol{flex:1;min-height:0;list-style:none;margin:0;padding:0;overflow:auto;overscroll-behavior:contain}.project-history-row{padding:10px 0;border-top:1px solid #dce3e9}.project-history-row:first-child{border-top:0}.project-history-row strong,.project-history-row small{display:block;overflow-wrap:anywhere}.project-history-row small{margin-top:4px;color:#526675}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
 .project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:0;overflow:hidden}.project-overview-tasks ul{flex:1;min-height:0;max-height:none;overscroll-behavior:contain}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:8px}
+.conflict-button{margin-top:10px;background:#a33b32}.conflict-button:hover{background:#842f28}#project-conflicts{width:100%;max-width:1500px;margin:0 auto;padding:10px 0 30px}.conflict-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.conflict-toolbar label{flex:1;min-width:260px}.conflict-toolbar select{display:block;width:100%;padding:9px}.conflict-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.conflict-grid>label,.conflict-rendered>section{min-width:0;font-weight:700}.conflict-grid textarea{display:block;box-sizing:border-box;width:100%;margin-top:5px;padding:10px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}.conflict-grid textarea[readonly]{background:#f2f5f7}.conflict-rendered>section{border:1px solid #dce3e9;border-radius:10px;padding:12px;background:#fff}.conflict-rendered h3{margin-top:0}.conflict-rendered [data-conflict-preview]{font-weight:400;overflow-wrap:anywhere}.conflict-rendered pre{white-space:pre-wrap}.conflict-rendered p{white-space:pre-wrap}.conflict-missing{color:#6b7780;font-style:italic}#project-conflicts-unresolved{font-weight:700;color:#9b4f30}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
@@ -1161,6 +1192,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
 @media(max-width:700px){.presentation-editor-workspace{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}}
+@media(max-width:760px){.conflict-grid{grid-template-columns:1fr}.conflict-grid textarea{min-height:220px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
@@ -2009,6 +2041,7 @@ function syncSidebarProjectAvailability(){
 }
 function clearProject(){
  ++viewRequest;
+ resetProjectConflicts();
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
@@ -2313,7 +2346,7 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
-window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -2441,6 +2474,7 @@ async function openRegisteredProject(projectId){
   document.querySelector('#project-commit').textContent=result.commit_id;
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
+  loadProjectConflictSummary();
   await loadChat();
   syncSidebarProjectAvailability();
   selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
@@ -3415,25 +3449,119 @@ function clearPreview(){
  document.querySelector('#pdf-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
-function renderMarkdown(text){
+function renderMarkdown(text,target=previewContent){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
  let fence=null,code=null,list=null;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
    list=null;
-   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');previewContent.append(code);}
+   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');target.append(code);}
    continue;
   }
   if(fence){code.textContent+=line+'\\n';continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
   const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
-  if(bullet){if(!list){list=document.createElement('ul');previewContent.append(list);}
+  if(bullet){if(!list){list=document.createElement('ul');target.append(list);}
    const item=document.createElement('li');item.textContent=bullet[1];list.append(item);continue;}
   list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
-  element.textContent=heading?heading[2]:line;previewContent.append(element);
+  element.textContent=heading?heading[2]:line;target.append(element);
  }
 }
+const projectConflicts=document.querySelector('#project-conflicts');
+const projectConflictGrid=document.querySelector('.project-overview-grid');
+const projectConflictHeading=document.querySelector('.project-overview-heading');
+const projectConflictOpen=document.querySelector('#project-conflicts-open');
+const projectConflictStatus=document.querySelector('#project-conflicts-status');
+const projectConflictSelect=document.querySelector('#project-conflicts-select');
+const projectConflictFile=document.querySelector('#project-conflicts-file');
+const projectConflictWorkspace=document.querySelector('#project-conflicts-workspace');
+const projectConflictResult=document.querySelector('#project-conflicts-result');
+const projectConflictConfirm=document.querySelector('#project-conflicts-confirm');
+const projectConflictPublish=document.querySelector('#project-conflicts-publish');
+let projectConflictRows=[],projectConflictPreview=null,projectConflictDrafts=new Map(),projectConflictOperation=null,projectConflictRequest=0;
+function resetProjectConflicts(){
+ ++projectConflictRequest;projectConflictRows=[];projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;
+ projectConflictSelect.replaceChildren();projectConflictFile.replaceChildren();projectConflictWorkspace.hidden=true;projectConflicts.hidden=true;
+ projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictOpen.hidden=true;projectConflictConfirm.checked=false;projectConflictPublish.disabled=true;
+}
+function conflictDraftChanged(){return [...projectConflictDrafts.values()].some(item=>item.choice && item.choice!=='auto');}
+function closeProjectConflicts(){
+ if(conflictDraftChanged()&&!window.confirm('Zahodit rozepsané řešení konfliktu? Projekt zatím nebyl změněn.'))return;
+ projectConflicts.hidden=true;projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;
+}
+async function loadProjectConflictSummary(){
+ if(!activeProject)return;const project=activeProject,request=++projectConflictRequest;projectConflictOpen.hidden=true;
+ try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictRows=result.conflicts||[];projectConflictOpen.hidden=!projectConflictRows.length;
+  projectConflictOpen.textContent=projectConflictRows.length===1?'Vyřešit konflikt':'Vyřešit konflikty ('+projectConflictRows.length+')';
+ }catch(error){if(request===projectConflictRequest)projectConflictOpen.hidden=true;}
+}
+async function openProjectConflicts(){
+ if(!activeProject)return;projectConflictGrid.hidden=true;projectConflictHeading.hidden=true;projectConflicts.hidden=false;projectConflictWorkspace.hidden=true;
+ projectConflictStatus.textContent='Načítám zachované protější historie…';projectConflictSelect.replaceChildren();
+ const project=activeProject,request=++projectConflictRequest;
+ try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictRows=result.conflicts||[];
+  for(const row of projectConflictRows){const option=document.createElement('option');option.value=row.ref;option.textContent=`${row.branch} · ${row.head.slice(0,10)} · ${row.author} · ${row.subject}`;projectConflictSelect.append(option);}
+  document.querySelector('#project-conflicts-load').disabled=!projectConflictRows.length;
+  projectConflictStatus.textContent=projectConflictRows.length?'Vyberte protější historii a načtěte porovnání.':'Projekt nemá nevyřešenou divergenci.';
+ }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
+}
+function conflictText(value,exists){return !exists?'Soubor v této verzi neexistuje.':value===null?'Binární nebo nepodporovaný obsah · pouze volba celého souboru.':value;}
+function selectedConflictFile(){return projectConflictPreview?.files.find(item=>item.path===projectConflictFile.value);}
+function renderConflictPreviews(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);
+ for(const target of document.querySelectorAll('[data-conflict-preview]')){
+  target.replaceChildren();const key=target.dataset.conflictPreview,value=key==='result'?(draft?.deleted?null:draft?.text):item[key];
+  const exists=key==='result'?!draft?.deleted:item[key+'_exists'];
+  if(!exists||value===null){const note=document.createElement('p');note.className='conflict-missing';note.textContent=exists?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'Soubor v této verzi neexistuje.';target.append(note);}
+  else if(item.path.toLowerCase().endsWith('.md'))renderMarkdown(value,target);
+  else{const pre=document.createElement('pre');pre.textContent=value;target.append(pre);}
+ }
+}
+function updateConflictCompletion(){
+ if(!projectConflictPreview)return;let unresolved=0;
+ for(const item of projectConflictPreview.files){const draft=projectConflictDrafts.get(item.path);if(item.conflict&&!draft?.choice)unresolved++;}
+ document.querySelector('#project-conflicts-unresolved').textContent=unresolved?`Zbývá vyřešit ${unresolved} konfliktních souborů.`:'Všechny konfliktní soubory mají explicitní výsledek.';
+ projectConflictConfirm.disabled=Boolean(unresolved)||activeProject?.readOnly;projectConflictPublish.disabled=Boolean(unresolved)||!projectConflictConfirm.checked||activeProject?.readOnly;
+}
+function renderConflictFile(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);
+ document.querySelector('#project-conflicts-base').value=conflictText(item.base,item.base_exists);document.querySelector('#project-conflicts-ours').value=conflictText(item.ours,item.ours_exists);document.querySelector('#project-conflicts-theirs').value=conflictText(item.theirs,item.theirs_exists);
+ projectConflictResult.value=draft?.deleted?'':draft?.text??'';projectConflictResult.readOnly=!item.editable;
+ document.querySelector('#project-conflicts-use-both').disabled=!item.editable||item.ours===null||item.theirs===null;
+ renderConflictPreviews();updateConflictCompletion();
+}
+async function loadConflictPreview(){
+ if(!activeProject||!projectConflictSelect.value)return;const project=activeProject,request=++projectConflictRequest;
+ projectConflictStatus.textContent='Sestavuji izolované 3-way porovnání…';projectConflictWorkspace.hidden=true;
+ try{const result=await projectRequest('/v1/projects/conflicts/preview',{project_id:project.id,expected_head:project.head,incoming_ref:projectConflictSelect.value},120000);
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictPreview=result;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictFile.replaceChildren();
+  for(const item of result.files){const option=document.createElement('option');option.value=item.path;option.textContent=(item.conflict?'Konflikt · ':'Automaticky · ')+item.path;projectConflictFile.append(option);projectConflictDrafts.set(item.path,{choice:item.conflict?null:'auto',text:item.result,deleted:!item.result_exists});}
+  projectConflictConfirm.checked=false;projectConflictWorkspace.hidden=false;renderConflictFile();projectConflictStatus.textContent='Návrh je pouze v prohlížeči; Git ani projekt nebyly změněny.';
+ }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
+}
+function chooseConflict(choice){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);draft.choice=choice;draft.deleted=choice==='delete';
+ if(choice==='ours'){draft.text=item.ours;draft.deleted=!item.ours_exists;}else if(choice==='theirs'){draft.text=item.theirs;draft.deleted=!item.theirs_exists;}else if(choice==='both'){draft.text=(item.ours||'')+((item.ours&&!item.ours.endsWith('\\n'))?'\\n':'')+(item.theirs||'');draft.deleted=false;}else if(choice==='delete')draft.text='';
+ projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictFile();
+}
+projectConflictOpen.addEventListener('click',openProjectConflicts);document.querySelector('#project-conflicts-back').addEventListener('click',closeProjectConflicts);document.querySelector('#project-conflicts-load').addEventListener('click',loadConflictPreview);projectConflictFile.addEventListener('change',renderConflictFile);
+document.querySelector('#project-conflicts-use-ours').addEventListener('click',()=>chooseConflict('ours'));document.querySelector('#project-conflicts-use-theirs').addEventListener('click',()=>chooseConflict('theirs'));document.querySelector('#project-conflicts-use-both').addEventListener('click',()=>chooseConflict('both'));document.querySelector('#project-conflicts-delete').addEventListener('click',()=>chooseConflict('delete'));
+projectConflictResult.addEventListener('input',()=>{const item=selectedConflictFile();if(!item||!item.editable)return;const draft=projectConflictDrafts.get(item.path);draft.choice='manual';draft.text=projectConflictResult.value;draft.deleted=false;projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictPreviews();updateConflictCompletion();});
+for(const [buttonId,panelId,otherId] of [['project-conflicts-raw','project-conflicts-raw-panel','project-conflicts-rendered-panel'],['project-conflicts-rendered','project-conflicts-rendered-panel','project-conflicts-raw-panel']])document.getElementById(buttonId).addEventListener('click',event=>{document.getElementById(panelId).hidden=false;document.getElementById(otherId).hidden=true;for(const button of event.currentTarget.parentElement.querySelectorAll('button')){const active=button===event.currentTarget;button.setAttribute('aria-selected',String(active));button.classList.toggle('secondary-button',!active);}renderConflictPreviews();});
+projectConflictConfirm.addEventListener('change',()=>updateConflictCompletion());
+projectConflictPublish.addEventListener('click',async()=>{
+ if(!activeProject||!projectConflictPreview||!projectConflictConfirm.checked)return;projectConflictPublish.disabled=true;projectConflictStatus.textContent='Validuji celý projekt a vytvářím potvrzený merge commit…';
+ if(!projectConflictOperation)projectConflictOperation=crypto.randomUUID();
+ const resolution={project_id:projectConflictPreview.project_id,expected_head:projectConflictPreview.expected_head,incoming_ref:projectConflictPreview.incoming_ref,incoming_head:projectConflictPreview.incoming_head,base:projectConflictPreview.base,preview_sha256:projectConflictPreview.preview_sha256,resolutions:projectConflictPreview.files.map(item=>{const draft=projectConflictDrafts.get(item.path);const row={path:item.path,choice:draft.choice};if(draft.choice==='manual')row.text=draft.text;return row;})};
+ try{await projectRequest('/v1/projects/conflicts/confirm',{operation_id:projectConflictOperation,resolution},120000);projectConflictOperation=null;await openRegisteredProject(activeProject.id);}
+ catch(error){projectConflictStatus.textContent=error.message;projectConflictPublish.disabled=false;}
+});
 async function openPreview(id,page=1){
  if(!activeProject)return;
  const project=activeProject;
@@ -5324,6 +5452,8 @@ class DesktopHandler(Handler):
         '/v1/projects/delete/purge/confirm',
         '/v1/notebooklm/preview', '/v1/notebooklm/plan', '/v1/notebooklm/confirm',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+        '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
+        '/v1/projects/conflicts/confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
@@ -5775,6 +5905,28 @@ class DesktopHandler(Handler):
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))
+            if self.path.startswith('/v1/projects/conflicts/'):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                conflicts = ConflictResolution(
+                    node, network=getattr(projects, 'network', False))
+                if (self.path == '/v1/projects/conflicts/list'
+                        and isinstance(request, dict)
+                        and set(request) == {'project_id', 'expected_head'}):
+                    return self.reply(200, conflicts.list(**request))
+                if (self.path == '/v1/projects/conflicts/preview'
+                        and isinstance(request, dict)
+                        and set(request) == {
+                            'project_id', 'expected_head', 'incoming_ref'}):
+                    return self.reply(200, conflicts.preview(**request))
+                if (self.path == '/v1/projects/conflicts/confirm'
+                        and isinstance(request, dict)
+                        and set(request) == {'operation_id', 'resolution'}
+                        and isinstance(request['resolution'], dict)):
+                    return self.reply(200, conflicts.confirm(
+                        request['resolution'], request['operation_id']))
+                return self.send_error(400)
             if (self.path == '/v1/artifacts/preview' and isinstance(request, dict)
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))

@@ -492,6 +492,69 @@ class WebTests(unittest.TestCase):
         self.assertEqual({item['id'] for item in Projects(self.root/'node.json').open(project)['artifacts']},
                          {created})
 
+    def test_shared_conflict_routes_preview_and_publish_two_parent_merge(self):
+        _, data, _ = self.create_project('Conflict')
+        project = json.loads(data)['id']; node = self.root / 'node.json'
+        artifacts = Artifacts(node); initial = Projects(node).open(project)['commit_id']
+        artifact = str(uuid4())
+        base = artifacts.save(dict(project_id=project, artifact_id=artifact,
+            base_head=initial, title='Document', body='base\n', new=True),
+            str(uuid4()))['commit_id']
+        local = artifacts.save(dict(project_id=project, artifact_id=artifact,
+            base_head=base, title='Document', body='local\n', new=False),
+            str(uuid4()))['commit_id']
+        workspace = Projects(node).workspace(project); git = workspace.git
+        content = next(path for path in git.snapshot(base)
+                       if path.startswith(f'artifacts/{artifact}/') and path.endswith('.md'))
+        git.run('switch', '-c', 'peer', base)
+        (workspace.git.root / content).write_text('peer\n')
+        peer = git.commit('Peer conflict')
+        git.run('switch', 'main'); git.run('read-tree', '--reset', '-u', local)
+        peer_id = str(uuid4())
+        incoming = (f'refs/federation/incoming/{peer_id}/{uuid4()}/main')
+        git.run('update-ref', incoming, peer, '0' * 40)
+        actor = {'id': None, 'node_role': 'federation-admin',
+                 'memberships': {project: 'project-admin'}}
+        state = self.server.administration.request(actor, {'action': 'list'})
+        state = self.server.administration.request(actor, {
+            'action': 'add-peer-relationship',
+            'expected_commit': state['commit_id'],
+            'relationship_type': 'p2p', 'sharing_level': 'same-team',
+            'node_id': peer_id, 'name': 'Peer',
+            'endpoint': 'https://127.0.0.1:8443', 'fingerprint': 'a' * 64})
+        self.server.administration.request(actor, {
+            'action': 'update-peer', 'expected_commit': state['commit_id'],
+            'node_id': peer_id, 'name': 'Peer',
+            'endpoint': 'https://127.0.0.1:8443', 'trust': 'approved',
+            'sharing_level': 'same-team'})
+
+        request = {'project_id': project, 'expected_head': local}
+        code, data, _ = self.request(path='/v1/projects/conflicts/list',
+                                     body=json.dumps(request))
+        self.assertEqual(code, 200); self.assertEqual(
+            json.loads(data)['conflicts'][0]['ref'], incoming)
+        request['incoming_ref'] = incoming
+        code, data, _ = self.request(path='/v1/projects/conflicts/preview',
+                                     body=json.dumps(request))
+        self.assertEqual(code, 200); preview = json.loads(data)
+        resolutions = []
+        for item in preview['files']:
+            row = {'path': item['path'], 'choice':
+                   'manual' if item['path'] == content else
+                   ('ours' if item['conflict'] else 'auto')}
+            if row['choice'] == 'manual': row['text'] = 'local\npeer\n'
+            resolutions.append(row)
+        resolution = {key: preview[key] for key in (
+            'project_id', 'expected_head', 'incoming_ref', 'incoming_head',
+            'base', 'preview_sha256')} | {'resolutions': resolutions}
+        code, data, _ = self.request(path='/v1/projects/conflicts/confirm',
+            body=json.dumps({'operation_id': str(uuid4()),
+                             'resolution': resolution}))
+        self.assertEqual(code, 200); merged = json.loads(data)['commit_id']
+        self.assertEqual(git.run('show', '-s', '--format=%P', merged).stdout.split(),
+                         [local, peer])
+        self.assertEqual(git.snapshot(merged)[content], b'local\npeer\n')
+
     def test_create_retries_have_one_receipt_and_project(self):
         from uuid import uuid4
         operation=str(uuid4())

@@ -43,19 +43,21 @@ class Git:
         self.run('commit', '-m', message)
         return self.head()
 
-    def snapshot(self, commit):
+    def snapshot(self, commit, *, env_extra=None):
         """Read artifact/registry bytes from a fixed commit or tree under PoC limits."""
-        entries = self.run('ls-tree', '-r', '-z', commit, '--', 'artifacts/', 'registries/').stdout
+        entries = self.run('ls-tree', '-r', '-z', commit, '--', 'artifacts/',
+                           'registries/', env_extra=env_extra).stdout
         files = {}
         total = 0
         for entry in filter(None, entries.split('\0')):
             info, path = entry.split('\t', 1)
             mode, kind, oid = info.split()
             require(mode in {'100644', '100755'} and kind == 'blob', 'Non-regular Git entry')
-            size = int(self.run('cat-file', '-s', oid).stdout)
+            size = int(self.run('cat-file', '-s', oid, env_extra=env_extra).stdout)
             total += size
             require(size <= MAX_FILE and total <= MAX_SNAPSHOT and len(files) < 10000, 'Snapshot exceeds limits')
-            files[path] = self.run('cat-file', 'blob', oid, binary=True).stdout
+            files[path] = self.run('cat-file', 'blob', oid, binary=True,
+                                   env_extra=env_extra).stdout
         return files
 
 

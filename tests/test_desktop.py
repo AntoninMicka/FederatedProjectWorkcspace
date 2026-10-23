@@ -32,6 +32,23 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
+    def test_conflict_resolver_exposes_raw_rendered_preview_and_explicit_publish(self):
+        self.assertIn('id="project-conflicts-open"', HTML)
+        self.assertIn('id="project-conflicts-raw-panel"', HTML)
+        self.assertIn('id="project-conflicts-rendered-panel"', HTML)
+        self.assertIn('id="project-conflicts-confirm"', HTML)
+        self.assertIn("projectRequest('/v1/projects/conflicts/list'", JS)
+        self.assertIn("projectRequest('/v1/projects/conflicts/preview'", JS)
+        self.assertIn("projectRequest('/v1/projects/conflicts/confirm'", JS)
+        self.assertIn("renderMarkdown(value,target)", JS)
+        self.assertIn('conflictDraftChanged()||projectConflictOperation', JS)
+        self.assertIn('Binární nebo nepodporovaný obsah', JS)
+        self.assertNotIn('innerHTML', JS)
+        self.assertIn('@media(max-width:760px){.conflict-grid{grid-template-columns:1fr}', CSS)
+        self.assertTrue({'/v1/projects/conflicts/list',
+                         '/v1/projects/conflicts/preview',
+                         '/v1/projects/conflicts/confirm'} <= DesktopHandler.post_paths)
+
     def test_web_search_ui_requires_exact_preview_and_renders_sources_as_text(self):
         composer = HTML.split('<form id="chat-composer">', 1)[1].split('</form>', 1)[0]
         chat_panel = HTML.split('<div id="chat-panel"', 1)[1].split(
