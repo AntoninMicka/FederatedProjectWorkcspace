@@ -688,7 +688,7 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
   Dávka byla 23. 10. 2026 fyzicky akceptována na úrovni PoC validated;
   evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23),
-  doručení PR do `develop` zatím není dokončené.
+  PR #85 byl doručen do `develop` jako merge commit `7dce1c4`.
 
 ---
 
@@ -1224,7 +1224,7 @@ začlenění feature větve do `develop` zůstává otevřené.
   nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
   PoC akceptace a omezení jsou ve
   [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23);
-  PR do `develop` zatím nebyl doručen.
+  PR #85 byl doručen do `develop` jako merge commit `7dce1c4`.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez

@@ -3,13 +3,64 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na doručení F-M4-AUTONOMY-01
+# TODO — F-M3-SEARCH-03 — Volitelný automatický dispatch hledání
 
-Feature dávka `F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace` byla
-23. 10. 2026 akceptována na úrovni **PoC validated**. Dokončená evidence,
-ověření, recovery a omezení jsou archivované ve
+Původ: roadmapa a [BACKLOG](BACKLOG.md), aktivováno po doručení závislosti
+`F-M4-AUTONOMY-01` dne 23. 10. 2026. Milník M3, cílová úroveň
+**designed → implemented → PoC validated**. Větev
+`feature/f-m3-search-03-auto-dispatch` vznikla z `develop` `7dce1c4`; cílem je
+jediný PR do `develop`.
+
+Předchozí dávka byla doručena PR #85 jako merge commit `7dce1c4`; její
+dokončená evidence zůstává ve
 [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23).
 
-Větev `feature/f-m4-autonomy-01` čeká na doručení jediného PR do `develop`;
-PR zatím nebyl vytvořen ani sloučen. Další feature dávka se aktivuje až po
-merge z aktuálního `develop`.
+## Rozsah a hranice
+
+Nad existujícím iterativním hledáním `F-M3-SEARCH-02` a společnou řízenou
+frontou `F-M4-AUTONOMY-01` přidat pro jedno konkrétní hledání explicitní volbu
+ručního potvrzování nebo bounded automatického odesílání navržených dotazů.
+Každý automatický dotaz musí před sítí ukázat účel, přesný cíl, privacy, číslo
+kola, zbývající budget a uživatelem zvolený countdown 3–5 sekund.
+
+Během countdownu musí jít frontu pozastavit, dotaz zkontrolovat či upravit,
+ihned odeslat nebo zrušit. Ztráta viditelnosti UI, lease, změna oprávnění,
+privacy, bindingu či Git HEAD a restart další dispatch fail-closed pozastaví.
+Po skutečném odeslání nelze síťový účinek odvolat a `unknown` se automaticky
+neopakuje. Dávka nezavádí nový provider, obecný background worker ani
+automatickou publikaci lokálního artefaktu.
+
+## Úkoly
+
+- [ ] [planned] **F-M3-SEARCH-03-A — integrační kontrakt a reuse
+  (cílová úroveň: designed).** Prověřit současné `ChatService`, `SearchRuns`,
+  search approval/recovery a action registry; navrhnout jediný přesný
+  registrovaný search dispatch bez druhého journalu či paralelního síťového
+  writeru. Popsat crash boundaries a způsob vazby user-selected countdownu na
+  aktivovaný plán.
+- [ ] [planned] **F-M3-SEARCH-03-B — automatický search adapter
+  (cílová úroveň: implemented).** Připojit navržený dotaz iterativního hledání
+  k obecné frontě, zachovat stávající autorizaci, privacy, binding, round/time
+  budget a audit přesných odeslaných bajtů a zajistit `unknown` bez auto-retry.
+- [ ] [planned] **F-M3-SEARCH-03-C — ovládání ruční/automatické fronty
+  (cílová úroveň: implemented).** V existujícím search UI zpřístupnit volbu
+  režimu a countdownu 3–5 sekund, viditelný dotaz/účel/cíl/privacy/kolo/budget
+  a akce pause, review/edit, send-now a cancel bez oslabení obecného UI lease.
+- [ ] [planned] **F-M3-SEARCH-03-D — regrese a fyzická akceptace
+  (cílová úroveň: PoC validated).** Ověřit ruční i automatický vícekolový tok,
+  editaci během countdownu, pause celé fronty, vyčerpaný budget, změny policy,
+  skrytí/odpojení UI, restart ve všech stavech a `unknown` bez opakování;
+  dokončit úplnou sadu, statické kontroly, dokumentaci a reálný desktopový
+  průchod nad dostupným search backendem.
+
+## Akceptace
+
+- Uživatel může pro konkrétní iterativní hledání vědomě zvolit ruční nebo
+  bounded automatický režim a později automatiku pozastavit či zrušit.
+- Žádný dotaz neopustí uzel bez viditelného 3–5sekundového countdownu nebo
+  explicitní akce send-now; skryté/odpojené UI a restart další dispatch
+  pozastaví.
+- Existující search journal zůstane autoritou síťového účinku, obecná fronta
+  autoritou orchestrace a projektový Git pouze potvrzených projektových zápisů.
+- Cílené testy, úplná sada `python3 -m unittest discover -s tests -v`, statické
+  kontroly a fyzická desktopová akceptace projdou; omezení budou zdokumentována.

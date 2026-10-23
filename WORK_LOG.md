@@ -8,9 +8,9 @@ SPDX-License-Identifier: MPL-2.0
 ## F-M4-AUTONOMY-01 — obecná řízená autonomie orchestrace — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m4-autonomy-01` z `develop` `8ed574f` a
-dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; implementace
-aplikačního řezu končí commitem `1dfcf64`, ale závěrečný evidenční diff ještě
-není commitnutý a PR do `develop` zatím nebyl vytvořen ani sloučen.
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; aplikační
+řez skončil commitem `1dfcf64`, závěrečná evidence commitem `cec744a` a PR #85
+byl sloučen do `develop` jako merge commit `7dce1c4`.
 
 - [x] [completed] **F-M4-AUTONOMY-01-A — Action registry a policy kontrakt
   (implemented).** Uzavřený verzovaný registry deklaruje účinek, permissions,
