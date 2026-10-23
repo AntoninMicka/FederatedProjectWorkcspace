@@ -144,6 +144,13 @@ Jeden požadavek může nést bundle desktop → server
 a odpověď bundle server → desktop, takže dynamická serverová strana nepotřebuje
 adresu klienta. Nezměněný obsah si vymění jen podepsané inventury headů.
 
+Žluté tlačítko označuje potřebný Push, Pull nebo Sync, zelené dvouřádkové
+**Obsah aktuální / ruční kontrola** poslední úspěšné srovnání a červené
+**Sync konflikt** zachovanou divergenci. Během ručního přenosu se v tlačítku
+zobrazí pruhovaný progress bez předstíraného procenta. Kliknutí nabídne
+potvrzené kooperativní zastavení na nejbližší bezpečné hranici. Již přijatá
+data na peeru se nevracejí zpět; další Sync bezpečně dokončí rekonciliaci.
+
 Každý dosažitelný commit se znovu validuje. Přenos podporuje `public`,
 `project` a `confidential`; jakýkoli `local-only`, neklasifikovaný historický
 soubor, symlink, submodule nebo neplatný metadata transition celý bundle

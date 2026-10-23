@@ -50,6 +50,10 @@ class SyncRejected(ValueError):
     pass
 
 
+class SyncCancelled(Exception):
+    pass
+
+
 def _journal_path(node):
     path = private_root(node) / 'federation-content-sync.sqlite'
     fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
@@ -599,7 +603,11 @@ class SyncReceiver:
         return response, response_payload
 
 
-def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None):
+def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
+                cancelled=None):
+    cancelled = cancelled or (lambda: False)
+    if cancelled():
+        raise SyncCancelled('Content sync cancelled before preparation')
     service = Administration(node, deployment=deployment)
     with _database(node) as db:
         runtime = db.execute('SELECT last_sent,last_remote FROM runtime '
@@ -628,7 +636,7 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None):
                 db.execute('DELETE FROM outbound WHERE peer_id=? AND project_id=?',
                            (peer_id, project_id))
             return synchronize(node, peer_id, project_id,
-                               deployment=deployment, ca=ca)
+                               deployment=deployment, ca=ca, cancelled=cancelled)
     else:
         operation_id = str(uuid4())
         envelope, payload, peer, local_refs = _prepare(
@@ -645,6 +653,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None):
                        (peer_id, project_id, operation_id,
                         canonical(envelope).decode('ascii'), payload,
                         canonical(local_refs).decode('ascii')))
+    if cancelled():
+        raise SyncCancelled('Content sync cancelled before transport')
     if not peer.get('endpoint'):
         raise AccessDenied('Peer can synchronize content only when it connects')
     parsed = urlsplit(peer['endpoint'])
@@ -673,6 +683,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None):
         response_envelope, response_payload = decode_body(body)
     finally:
         connection.close()
+    if cancelled():
+        raise SyncCancelled('Content sync cancelled before local publication')
     require(set(response_envelope) == {'exchange', 'signer_node_id', 'public_key',
                                        'signature', 'accepted_source_refs', 'conflict'},
             'Invalid content sync response')
@@ -719,10 +731,25 @@ class ContentSyncControl:
     def statuses(self):
         with _database(self.node) as db:
             rows = db.execute('SELECT peer_id,project_id,state,detail FROM runtime').fetchall()
+        stale = [(peer, project) for peer, project, state, _ in rows
+                 if state in {'running', 'cancelling'}
+                 and not _MANUAL_SYNCS.active(self.node, peer, project)]
+        if stale:
+            with _database(self.node) as db:
+                for peer, project in stale:
+                    db.execute(
+                        "UPDATE runtime SET state='cancelled',detail=? "
+                        'WHERE peer_id=? AND project_id=? '
+                        "AND state IN ('running','cancelling')",
+                        ('Synchronization was interrupted before completion',
+                         peer, project))
+            with _database(self.node) as db:
+                rows = db.execute(
+                    'SELECT peer_id,project_id,state,detail FROM runtime').fetchall()
         return {peer + ':' + project: {'state': state, 'detail': detail}
                 for peer, project, state, detail in rows}
 
-    def synchronize(self, peer_id, project_id):
+    def synchronize(self, peer_id, project_id, *, cancelled=None):
         try:
             root = private_root(self.node)
             fd = os.open(root / 'federation-content-sync.lock',
@@ -730,7 +757,10 @@ class ContentSyncControl:
             with os.fdopen(fd, 'a+b') as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 return synchronize(self.node, peer_id, project_id,
-                                   deployment=self.deployment)
+                                   deployment=self.deployment,
+                                   cancelled=cancelled)
+        except SyncCancelled as exc:
+            state = 'cancelled'; detail = str(exc); error = exc
         except SyncConflict as exc:
             state = 'conflict'; detail = str(exc); error = exc
         except (AccessDenied, SyncRejected) as exc:
@@ -740,9 +770,20 @@ class ContentSyncControl:
         except (ValueError, sqlite3.Error, subprocess.SubprocessError) as exc:
             state = 'error'; detail = str(exc); error = exc
         with _database(self.node) as db:
+            previous = db.execute(
+                'SELECT last_sent,last_remote FROM runtime '
+                'WHERE peer_id=? AND project_id=?',
+                (peer_id, project_id)).fetchone() or ('[]', '[]')
             db.execute('INSERT OR REPLACE INTO runtime VALUES (?,?,?,?,?,?)',
-                       (peer_id, project_id, state, detail, '[]', '[]'))
+                       (peer_id, project_id, state, detail, *previous))
         raise error
+
+    def start(self, peer_id, project_id):
+        return _MANUAL_SYNCS.start(self.node, self.deployment,
+                                   peer_id, project_id)
+
+    def cancel(self, peer_id, project_id):
+        return _MANUAL_SYNCS.cancel(self.node, peer_id, project_id)
 
     def run_automatic(self):
         actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
@@ -769,6 +810,89 @@ class ContentSyncControl:
                     self.synchronize(peer['id'], project_id)
                 except Exception:
                     pass
+
+
+class ManualSyncTasks:
+    """Volatile workers over the durable content-sync journal.
+
+    Cancellation is cooperative and stops before the next local publication.
+    A remote peer may already have accepted the request, so cancellation never
+    attempts a destructive rollback; a later retry reconciles both histories.
+    """
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.tasks = {}
+
+    @staticmethod
+    def _key(node, peer_id, project_id):
+        return str(Path(node).absolute()), peer_id, project_id
+
+    def active(self, node, peer_id, project_id):
+        key = self._key(node, peer_id, project_id)
+        with self.lock:
+            task = self.tasks.get(key)
+            return bool(task and task['thread'].is_alive())
+
+    def start(self, node, deployment, peer_id, project_id):
+        identifier(peer_id); identifier(project_id)
+        key = self._key(node, peer_id, project_id)
+        with self.lock:
+            current = self.tasks.get(key)
+            if current and current['thread'].is_alive():
+                return False
+            stopping = threading.Event()
+            thread = threading.Thread(
+                target=self._run,
+                args=(Path(node).absolute(), deployment, peer_id,
+                      project_id, stopping, key),
+                name='manual-federation-content-sync', daemon=True)
+            self.tasks[key] = {'thread': thread, 'stopping': stopping}
+            self._status(node, peer_id, project_id, 'running',
+                         'Content synchronization is running')
+            thread.start()
+        return True
+
+    def cancel(self, node, peer_id, project_id):
+        identifier(peer_id); identifier(project_id)
+        key = self._key(node, peer_id, project_id)
+        with self.lock:
+            task = self.tasks.get(key)
+            if not task or not task['thread'].is_alive():
+                return False
+            task['stopping'].set()
+            self._status(node, peer_id, project_id, 'cancelling',
+                         'Cancellation requested; waiting for a safe boundary')
+        return True
+
+    @staticmethod
+    def _status(node, peer_id, project_id, state, detail):
+        with _database(node) as db:
+            previous = db.execute(
+                'SELECT last_sent,last_remote FROM runtime '
+                'WHERE peer_id=? AND project_id=?',
+                (peer_id, project_id)).fetchone() or ('[]', '[]')
+            db.execute('INSERT OR REPLACE INTO runtime VALUES (?,?,?,?,?,?)',
+                       (peer_id, project_id, state, detail, *previous))
+
+    def _run(self, node, deployment, peer_id, project_id, stopping, key):
+        completed = False
+        try:
+            ContentSyncControl(node, deployment=deployment).synchronize(
+                peer_id, project_id, cancelled=stopping.is_set)
+            completed = True
+        except Exception:
+            pass
+        finally:
+            if completed and stopping.is_set():
+                self._status(node, peer_id, project_id, 'idle',
+                             'Content sync completed before cancellation')
+            with self.lock:
+                current = self.tasks.get(key)
+                if current and current['stopping'] is stopping:
+                    self.tasks.pop(key, None)
+
+
+_MANUAL_SYNCS = ManualSyncTasks()
 
 
 class ContentSyncScheduler:

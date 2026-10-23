@@ -86,6 +86,14 @@ větve se recovery vždy roll-forward dokončí checkoutem a rebuildem indexu.
 Přesná odpověď se uloží před odesláním; ztracená odpověď proto vrátí při retry
 stejné potvrzení a bundle. Odlišný payload pod stejným operation ID se odmítne.
 
+Ruční spuštění běží ve volatilním workeru, ale používá tentýž durable journal.
+Požadavek na zrušení je kooperativní: před přípravou, před síťovým přenosem a
+před lokální publikací zastaví další krok a ponechá outbound záznam pro bezpečný
+retry. Vzdálený uzel už mohl přijatý request publikovat, proto zrušení nikdy
+neprovádí destruktivní rollback; následující synchronizace rozdíl znovu
+zrekonsoliduje. Pád procesu ukončí volatilní worker a existující journal se
+obnovuje stejnými pravidly jako dosud.
+
 ## Omezení
 
 Limit zůstává 500 dosažitelných commitů na validovaný head a 64 MiB na jeden

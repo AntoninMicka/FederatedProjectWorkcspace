@@ -43,15 +43,19 @@ historii ani automatický merge.
   po 60 sekundách, desktop může sync vyžádat ručně a dynamická serverová strana
   odpovídá při jeho spojení. Jedna matice spojuje místní a vzdálený katalog a
   nabízí Push pro projekt jen místní, Pull pro projekt jen na peeru a Sync pro
-  projekt na obou stranách. Sdílené UI ukazuje idle/offline/rejected/conflict/
-  error a divergenci výslovně nevydává za merge.
+  projekt na obou stranách. Stavové tlačítko je zelené po úspěchu, žluté při
+  potřebě přenosu a červené při konfliktu; ruční worker ukazuje neurčitý
+  progress a potvrzené kooperativní zrušení na bezpečné hranici. Sdílené UI
+  ukazuje idle/offline/rejected/conflict/error a divergenci výslovně nevydává
+  za merge.
 - [ ] [in progress] **F-M5-SHARING-SYNC-01-E — automatické a fyzické ověření
-  (cílová úroveň: PoC validated).** Cílených **8 testů úspěšně** ověřilo první
+  (cílová úroveň: PoC validated).** Cílených **9 testů úspěšně** ověřilo první
   import, fast-forward oběma směry, vedlejší větev, `same-company` filtr,
   pinned TLS včetně Pull projektu existujícího jen na serveru, retry po pádu za
-  CAS, `local-only` odmítnutí, external fail-closed
+  CAS, kooperativní zrušení ručního workeru, `local-only` odmítnutí,
+  external fail-closed
   a zachování obou divergentních headů. Webová/desktopová regresní sada:
-  **71 testů úspěšně, 6 přeskočeno**. Úplná sada: **736 testů úspěšně, 28
+  **71 testů úspěšně, 6 přeskočeno**. Úplná sada: **737 testů úspěšně, 28
   přeskočeno**. `py_compile`, oba generované JavaScripty přes `node --check` a
   `git diff --check` prošly. Zbývá fyzicky potvrdit desktop ↔ LXC oba směry,
   offline návrat a viditelnou divergenci bez automatického merge.

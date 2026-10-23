@@ -4,13 +4,16 @@ from pathlib import Path
 import ssl
 import tempfile
 import threading
+import time
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
 from spikes.federation_accounts import MappingSignatures
 from spikes.federation_sync import (
-    SyncReceiver, _apply, _build_bundle, _prepare, synchronize,
+    ContentSyncControl, SyncCancelled, SyncReceiver, _apply, _build_bundle,
+    _prepare, synchronize,
 )
 from spikes.git_transfer import git_run
 from spikes.project_creation import ProjectCreation
@@ -158,13 +161,47 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn('syncProjectContent', ADMIN_JS)
         self.assertIn("localExists&&remoteExists?'Sync':localExists?'Push':'Pull'",
                       ADMIN_JS)
-        self.assertIn("administrationState=await adminRequest({action:'list'})",
-                      ADMIN_JS)
+        self.assertIn('Obsah aktuální', ADMIN_JS)
+        self.assertIn('admin-sync-action', ADMIN_JS)
+        self.assertIn("document.createElement('progress')", ADMIN_JS)
+        self.assertIn('cancelProjectContent', ADMIN_JS)
         self.assertNotIn('admin-remote-projects', ADMIN_SHARING_HTML)
         self.assertIn('nativní Git historii', ADMIN_SHARING_HTML)
         self.assertIn('/v1/federation/content/reconcile',
                       DesktopManagementHandler.post_paths)
         self.assertIn('/v1/federation/content/reconcile', WebHandler.post_paths)
+        self.assertIn('/v1/federation/content/cancel',
+                      DesktopManagementHandler.post_paths)
+        self.assertIn('/v1/federation/content/cancel', WebHandler.post_paths)
+
+    def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
+        started = threading.Event(); finished = threading.Event()
+        force_stop = threading.Event(); self.addCleanup(force_stop.set)
+
+        def waiting_sync(*args, cancelled=None, **kwargs):
+            started.set()
+            try:
+                while not cancelled() and not force_stop.wait(.01):
+                    pass
+                raise SyncCancelled('cancelled by test')
+            finally:
+                finished.set()
+
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        with patch('spikes.federation_sync.synchronize', side_effect=waiting_sync):
+            self.assertTrue(control.start(self.node_ids[1], self.project_id))
+            self.assertTrue(started.wait(2))
+            self.assertEqual(control.statuses()[
+                self.node_ids[1] + ':' + self.project_id]['state'], 'running')
+            self.assertFalse(control.start(self.node_ids[1], self.project_id))
+            self.assertTrue(control.cancel(self.node_ids[1], self.project_id))
+            self.assertTrue(finished.wait(2))
+            deadline = time.monotonic() + 2
+            while (control.statuses()[self.node_ids[1] + ':' + self.project_id]
+                   ['state'] != 'cancelled' and time.monotonic() < deadline):
+                time.sleep(.01)
+            self.assertEqual(control.statuses()[
+                self.node_ids[1] + ':' + self.project_id]['state'], 'cancelled')
 
     def test_retry_is_idempotent_and_crash_after_ref_update_rolls_forward(self):
         self.exchange(0, 1)

@@ -34,6 +34,7 @@ class DesktopManagementHandler(DesktopHandler):
         '/v1/federation/enroll',
         '/v1/federation/catalog/reconcile',
         '/v1/federation/content/reconcile',
+        '/v1/federation/content/cancel',
         '/v1/replications/status', '/v1/replications/sync',
         '/v1/backend-metrics/status', '/v1/backend-metrics/configure',
         '/v1/backend-metrics/refresh'}
@@ -68,7 +69,8 @@ class DesktopManagementHandler(DesktopHandler):
                 return self.send_error(403)
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
-        if self.path == '/v1/federation/content/reconcile':
+        if self.path in {'/v1/federation/content/reconcile',
+                          '/v1/federation/content/cancel'}:
             if (not isinstance(request, dict)
                     or set(request) != {'peer_id', 'project_id'}):
                 return self.send_error(400)
@@ -76,8 +78,10 @@ class DesktopManagementHandler(DesktopHandler):
                 from spikes.federation_sync import ContentSyncControl
                 control = ContentSyncControl(
                     self.server.administration.node, deployment='desktop')
-                result = control.synchronize(request['peer_id'], request['project_id'])
-                return self.reply(200, {'result': result,
+                changed = (control.cancel(request['peer_id'], request['project_id'])
+                           if self.path.endswith('/cancel') else
+                           control.start(request['peer_id'], request['project_id']))
+                return self.reply(200, {'changed': changed,
                                         'content_sync_statuses': control.statuses()})
             except AccessDenied:
                 return self.send_error(403)
