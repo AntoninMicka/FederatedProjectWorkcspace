@@ -11,7 +11,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 ## Nejbližší feature dávky
 
-Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
+Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; splněný Gate M1 neznamená automatické uzavření ostatních požadavků.
 
 F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
@@ -58,8 +58,8 @@ evidence je ve WORK_LOG.
 `F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
 evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` bylo doručeno PR #82
 jako merge commit `637bf90`; evidence je ve WORK_LOG. `M1-07-C` bylo
-23. 10. 2026 přesunuto do TODO jako aktuální dávka a do fyzické akceptace
-zůstává podmínkou Gate M1.
+23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1; evidence je ve WORK_LOG a
+feature čeká v TODO na doručení jediného PR do `develop`.
 
 ## Zjištěné mezery a navazující ověření
 

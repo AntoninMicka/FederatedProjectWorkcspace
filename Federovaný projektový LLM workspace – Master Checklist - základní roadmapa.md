@@ -6,7 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální implementační práce: **M1-07-C — cílová restartová akceptace LXC autostartu**; Gate M1 zůstává otevřený do skutečného restartu a fyzického ověření. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
+Aktuální feature `M1-07-C` dosáhla **PoC validated na Turris Omnia** a čeká na doručení PR; Gate M1 je splněný. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
 
 Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
@@ -1027,23 +1027,23 @@ Zahájeno 2026-09-09. Důkazy: [ADR 0001](docs/adr/0001-m0-baseline.md), [ADR 00
 
 ## Milestone M1 – Single-node project workspace
 
-M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Zbývající lifecycle registrace a Gate M1 zůstávají otevřené.
+M1-01 propojuje otevření registrovaného projektu a seznam artefaktů s desktopem; M1-02 přidává nativní vytvoření/registraci nového projektu a obnovu při přerušení (PoC validated, důkazy ve WORK_LOG). M1-03 přidává nativní Markdown editor, checklisty a jeden hlavní TODO dokument projektu; jde o PoC validated, kontrakt a důkazy drží [WORK_LOG](WORK_LOG.md) a [ADR 0016](docs/adr/0016-markdown-editor.md). M1-04 (PoC validated) přidává readonly historii dokumentu, prohlížení verzí a diff obsahu/metadat dle [ADR 0017](docs/adr/0017-artifact-history.md); důkazy drží WORK_LOG. F-M1-IMPORT-01 přidává nativní import Markdown/PNG/JPEG/PDF se zachováním původních bajtů a obnovou koordinovaného zápisu — lokální PoC validated, důkazy ve [WORK_LOG](WORK_LOG.md#f-m1-import-01--nativní-import-zdrojových-dokumentů--2026-09-14). F-M1-INDEX-01/V-03 rozšiřuje obnovitelný index o metadata, cesty, štítky a směrované vztahy s atomickou migrací a recovery — lokální PoC validated dle [ADR 0022](docs/adr/0022-relational-index.md), důkazy a uzavřené předání ve [WORK_LOG](WORK_LOG.md#f-m1-index-01--relační-projekce-projektového-indexu--2026-09-15). F-M1-DELETE-01/M1-08 je po PR #17 lokální PoC validated; důkazy drží [WORK_LOG](WORK_LOG.md#f-m1-delete-01--ověření-bezpečného-odstranění-dokumentu--2026-09-15). F-M1-META-01/V-04 a navazující F-M1-META-02 upřesňují a implementují importní provenance v2 dle [ADR 0023](docs/adr/0023-metadata-and-import-provenance.md). F-M1-SOURCE-01/V-05 a F-M1-SOURCE-02 navrhují a vynucují neměnné bajty pod jedním UUID a novou verzi jako nový source artefakt dle [ADR 0024](docs/adr/0024-source-immutability-and-versioning.md). Gate M1 byl 23. 10. 2026 fyzicky uzavřen dávkou M1-07-C; produkční hardening a vzdálenější lifecycle položky zůstávají samostatně v BACKLOG.
 
-Aktualizace 2026-10-23: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokálně PoC validated. M1-07 autostart je po PR #24 implementovaný a lokálně ověřený, ale druhý skutečný restart po application-only aktualizaci naběhl bez kontejnerů. `M1-07-C` je proto znovu aktivní v TODO: doplňuje viditelný návod k explicitnímu nastavení a čeká na předrestartovou kontrolu a skutečný restart. M1-LXC-DNS-TLS-01 lokálně PoC validated doplňuje generování certifikátu s IP i explicitním DNS SAN a přesnou DNS Host/Origin autoritu; skutečné vydání certifikátu a přístup oběma URL zůstávají součástí stejné cílové akceptace. Gate M1 proto zůstává otevřený. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce, návrhy metadat, centralizovaná nastavení a externí provider jsou po PR #26–#36 začleněné. F-M1-PROJECT-LOCATION-01 doplnila umístění/registraci projektů a webový source import bez tvrzení o splnění Gate M1.
+Aktualizace 2026-10-23: M1-07-C po přesné UCI instalaci a skutečném restartu doložil automaticky běžící LXC i aplikaci, aktuální dlaždici, přihlášení, katalog a náhled projektu. Veřejná CA a certifikát s IP/DNS SAN prošly v klientovi; opakovaný application-only deploy se stejným hostname doplnil přesnou Host/Origin autoritu a uživatel potvrdil IP i DNS URL. Spolu s dříve dokončenými M1 funkcemi je Gate M1 na úrovni PoC validated splněný. Context Builder, Ollama adapter, UI oprava, lokálně perzistentní konverzace, projektové otisky, souhrny, extrakce, návrhy metadat, centralizovaná nastavení a externí provider jsou po PR #26–#36 začleněné. F-M1-PROJECT-LOCATION-01 doplnila umístění/registraci projektů a webový source import.
 
-- [ ] LXC deployment.
-- [ ] Jeden uživatel.
-- [ ] Jeden projekt.
-- [ ] Git repository.
-- [ ] Markdown/JSON/PDF/assets.
-- [ ] Metadata.
-- [ ] Git history.
-- [ ] Web UI.
-- [ ] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
+- [x] LXC deployment.
+- [x] Jeden uživatel.
+- [x] Jeden projekt.
+- [x] Git repository.
+- [x] Markdown/JSON/PDF/assets.
+- [x] Metadata.
+- [x] Git history.
+- [x] Web UI.
+- [x] Desktopové balení se spuštěním lokálního uzlu a jednotným sdíleným UI
   podle sekce 12A; Qt/PySide ponechat pouze pro desktop-only integrační funkce.
-- [ ] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
+- [x] Ověření lokální práce bez sítě a zachování dat po restartu desktopové aplikace.
 - [x] Ověření obnovy projektového indexu z Gitu a konzistence metadat po přejmenování či smazání artefaktu — lokální PoC; důkazy přejmenování, indexu a odstranění drží WORK_LOG.
-- [ ] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
+- [x] Ověření obnovy po přerušení zápisu artefaktu/sidecaru a po commitu před aktualizací indexu; import neměnného zdroje musí zachovat jeho původní bajty.
 - [x] Bezpečné odstranění celého projektu — F-M1-PROJECT-DELETE-01: rozlišit
   odregistrování, odstranění obnovitelného lokálního stavu, přesun repozitáře do
   koše a definitivní výmaz. Preview musí zahrnout projektová i chatová data,
@@ -1053,7 +1053,7 @@ Aktualizace 2026-10-23: F-M1-META-02 a F-M1-SOURCE-02 jsou po PR #22/#23 lokáln
   sdílených nebo vzdálených revizí. Lokální PoC byl fyzicky akceptován
   2026-10-14; důkazy a omezení drží WORK_LOG a ADR 0031.
 
-**Gate M1:** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS.
+**Gate M1 — splněn 2026-10-23 (PoC validated):** systém je použitelný jako projektový Git-backed knowledge workspace bez LLM v LXC i v desktopové aplikaci na prvním podporovaném OS. Důkazy závěrečné fyzické akceptace drží [WORK_LOG](WORK_LOG.md#m1-07-c--cílová-restartová-akceptace-lxc-autostartu--2026-10-23).
 
 ## Milestone M2 – Local AI
 
