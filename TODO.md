@@ -28,7 +28,7 @@ export jsou mimo rozsah.
   Udělat bounded UI spike nad MIT `@codemirror/merge`; potvrdit aktuální
   upstream, verzi, tranzitivní licence, bundling, klávesnici a mobilní
   použitelnost. Git CLI zůstane autoritou merge base, stromu a rodičů. Pokud
-  dvoustranný CodeMirror nevyhoví čtyřpohledové orchestraci, adaptovat
+  dvoustranný CodeMirror nevyhoví třípanelové orchestraci s výsledkem uprostřed, adaptovat
   stávající editor bez nové UI knihovny. ADR popíše přesné autority, limity a
   crash boundaries před implementací zápisu.
   Výsledek (designed): ADR 0043 připíná Git, administrativní policy,
@@ -54,9 +54,11 @@ export jsou mimo rozsah.
   Zobrazuje počet nevyřešených konfliktů, nedovolí zaměnit preview za uložený
   stav a před zrušením či opuštěním rozepsaného výsledku varuje.
   Výsledek (implemented): sdílený desktop/web projektový pohled nabízí raw a
-  bezpečně renderované čtyři verze, explicitní celo-souborové volby, přímou
-  editaci UTF-8 výsledku, rozlišení chybějícího a binárního obsahu, mobilní
-  jednosloupcový layout a guard rozepsaného návrhu.
+  bezpečně renderované tři panely `lokální / výsledek / vzdálená`, řádkové
+  zvýraznění rozdílů obou stran proti přímo editovanému výsledku, explicitní
+  celo-souborové volby, rozlišení chybějícího a binárního obsahu, mobilní
+  jednosloupcový layout a guard rozepsaného návrhu. Merge base zůstává pouze
+  interním podkladem 3-way výpočtu.
 - [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-D — validovaná publikace a
   recovery (cílová úroveň: implemented).** Pod jediným project writer lockem
   znovu ověřit oba heady, base, policy a trust, sémanticky validovat celý
@@ -77,7 +79,8 @@ export jsou mimo rozsah.
   přejmenování–úpravu, sidecar/relationship validaci, stale head/policy/trust,
   zrušení a restart na každé persistentní hranici. Fyzický desktop ↔ LXC
   scénář potvrdí vytvoření a následný sync dvourodičového commitu.
-  Automatické ověření: cílená sada sdílených vrstev 123 testů OK, 6 skipped;
+  Automatické ověření: cílená sada desktop/web/conflict vrstev 80 testů OK,
+  6 skipped;
   úplná sada `python3 -m unittest discover -s tests -v` 750 testů OK,
   28 skipped. Python kompilace, generovaný desktopový i webový JavaScript přes
   `node --check` a `git diff --check` prošly. Pokryto: čistý a konfliktní merge,
@@ -90,8 +93,9 @@ export jsou mimo rozsah.
 ## Akceptační podmínky
 
 - prohlížení ani rozepsaný návrh nemění Git, index, worktree nebo incoming refs;
-- uživatel vždy rozliší base, lokální, protější a výslednou podobu a může u
-  Markdownu přepnout raw i bezpečně renderovaný pohled;
+- uživatel vždy rozliší lokální, vzdálenou a výslednou podobu, vidí rozdíly
+  obou stran vůči výsledku a může u Markdownu přepnout raw i bezpečně
+  renderovaný pohled; merge base zůstává interním podkladem;
 - publikace vyžaduje explicitní potvrzení přesného výsledku a nezměněné heady,
   policy, trust a oprávnění;
 - celý výsledný snapshot projde projektovou a vztahovou validací před CAS;

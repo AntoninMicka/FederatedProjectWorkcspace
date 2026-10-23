@@ -155,9 +155,11 @@ data na peeru se nevracejí zpět; další Sync bezpečně dokončí rekonciliac
 
 U otevřeného projektu se při zachované divergenci zobrazí červená akce
 **Vyřešit konflikt**. Nejprve načte pouze náhled připnutého lokálního a
-protějšího commitu. Pro každý změněný soubor lze porovnat základ, naši,
-protější a výslednou verzi jako raw text; Markdown má navíc bezpečně formátovaný
-náhled. Konfliktní soubor vyžaduje explicitní volbu nebo ruční úpravu výsledku.
+protějšího commitu. Pro každý změněný soubor zobrazí tři panely: lokální verzi,
+uprostřed přímo editovatelný výsledek a vzdálenou verzi. Barevné řádky ukazují
+rozdíly každé strany proti výsledku; merge base zůstává interním podkladem
+3-way výpočtu. Markdown má navíc bezpečně formátovaný třípanelový náhled.
+Konfliktní soubor vyžaduje explicitní volbu nebo ruční úpravu výsledku.
 Teprve zaškrtnutí potvrzení a akce **Publikovat dvourodičový merge** vytvoří
 Git commit. Zavření rozepsaného resolveru nic nepublikuje.
 

@@ -32,19 +32,29 @@ from tests import test_local_api
 
 
 class DesktopTests(unittest.TestCase):
-    def test_conflict_resolver_exposes_raw_rendered_preview_and_explicit_publish(self):
+    def test_conflict_resolver_exposes_three_panel_diff_and_explicit_publish(self):
         self.assertIn('id="project-conflicts-open"', HTML)
         self.assertIn('id="project-conflicts-raw-panel"', HTML)
         self.assertIn('id="project-conflicts-rendered-panel"', HTML)
+        raw_panel = HTML.split('id="project-conflicts-raw-panel"', 1)[1].split(
+            'id="project-conflicts-rendered-panel"', 1)[0]
+        self.assertEqual(3, raw_panel.count('class="conflict-pane'))
+        self.assertNotIn('project-conflicts-base', raw_panel)
+        self.assertIn('Lokální verze', raw_panel)
+        self.assertIn('Výsledek', raw_panel)
+        self.assertIn('Vzdálená verze', raw_panel)
         self.assertIn('id="project-conflicts-confirm"', HTML)
         self.assertIn("projectRequest('/v1/projects/conflicts/list'", JS)
         self.assertIn("projectRequest('/v1/projects/conflicts/preview'", JS)
         self.assertIn("projectRequest('/v1/projects/conflicts/confirm'", JS)
-        self.assertIn("renderMarkdown(value,target)", JS)
+        self.assertIn("changedLineIndexes(item.ours,result)", JS)
+        self.assertIn("renderMarkdown(value,target,classes)", JS)
+        self.assertIn("project-conflicts-result-highlight", JS)
         self.assertIn('conflictDraftChanged()||projectConflictOperation', JS)
         self.assertIn('Binární nebo nepodporovaný obsah', JS)
         self.assertNotIn('innerHTML', JS)
-        self.assertIn('@media(max-width:760px){.conflict-grid{grid-template-columns:1fr}', CSS)
+        self.assertIn('.conflict-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))', CSS)
+        self.assertIn('@media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}', CSS)
         self.assertTrue({'/v1/projects/conflicts/list',
                          '/v1/projects/conflicts/preview',
                          '/v1/projects/conflicts/confirm'} <= DesktopHandler.post_paths)

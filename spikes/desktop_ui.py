@@ -788,17 +788,16 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="conflict-toolbar"><label>Soubor <select id="project-conflicts-file"></select></label>
 <div role="tablist" aria-label="Zobrazení konfliktu"><button id="project-conflicts-raw" type="button" aria-selected="true">Raw</button><button id="project-conflicts-rendered" type="button" class="secondary-button" aria-selected="false">Náhled</button></div></div>
 <div id="project-conflicts-raw-panel" class="conflict-grid">
-<label>Původní<textarea id="project-conflicts-base" rows="14" readonly></textarea></label>
-<label>Naše<textarea id="project-conflicts-ours" rows="14" readonly></textarea></label>
-<label>Protější<textarea id="project-conflicts-theirs" rows="14" readonly></textarea></label>
-<label>Výsledek<textarea id="project-conflicts-result" rows="14"></textarea></label></div>
+<section class="conflict-pane conflict-local"><header><h3>Lokální verze</h3><span id="project-conflicts-local-summary" class="conflict-summary"></span></header><div class="conflict-code" data-conflict-diff="ours"></div></section>
+<section class="conflict-pane conflict-result"><header><h3>Výsledek</h3><span id="project-conflicts-result-summary" class="conflict-summary"></span></header><label class="visually-hidden" for="project-conflicts-result">Výsledný obsah souboru</label><div class="conflict-editor-stack"><pre id="project-conflicts-result-highlight" aria-hidden="true"></pre><textarea id="project-conflicts-result" rows="20" wrap="off" spellcheck="false"></textarea></div></section>
+<section class="conflict-pane conflict-remote"><header><h3>Vzdálená verze</h3><span id="project-conflicts-remote-summary" class="conflict-summary"></span></header><div class="conflict-code" data-conflict-diff="theirs"></div></section></div>
 <div id="project-conflicts-rendered-panel" class="conflict-grid conflict-rendered" hidden>
-<section><h3>Původní</h3><div data-conflict-preview="base"></div></section>
-<section><h3>Naše</h3><div data-conflict-preview="ours"></div></section>
-<section><h3>Protější</h3><div data-conflict-preview="theirs"></div></section>
-<section><h3>Výsledek</h3><div data-conflict-preview="result"></div></section></div>
-<div class="form-actions"><button id="project-conflicts-use-ours" type="button">Použít naše</button>
-<button id="project-conflicts-use-theirs" type="button">Použít protější</button>
+<section class="conflict-pane conflict-local"><header><h3>Lokální verze</h3></header><div data-conflict-preview="ours"></div></section>
+<section class="conflict-pane conflict-result"><header><h3>Výsledek</h3></header><div data-conflict-preview="result"></div></section>
+<section class="conflict-pane conflict-remote"><header><h3>Vzdálená verze</h3></header><div data-conflict-preview="theirs"></div></section></div>
+<div class="conflict-legend" aria-label="Legenda rozdílů"><span class="diff-local">Rozdíl vůči lokální verzi</span><span class="diff-remote">Rozdíl vůči vzdálené verzi</span><span class="diff-both">Rozdíl vůči oběma verzím</span></div>
+<div class="form-actions"><button id="project-conflicts-use-ours" type="button">Použít lokální</button>
+<button id="project-conflicts-use-theirs" type="button">Použít vzdálenou</button>
 <button id="project-conflicts-use-both" type="button">Použít obě</button>
 <button id="project-conflicts-delete" type="button" class="secondary-button">Výsledný soubor smazat</button></div>
 <p id="project-conflicts-unresolved" role="status"></p>
@@ -1117,7 +1116,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}#main-panel-content.project-overview-active{overflow:hidden}
 #project-overview-panel{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;flex:none;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;flex:1;min-height:0}.project-overview-history{display:flex;flex-direction:column;grid-column:span 1;min-height:0;overflow:hidden}.project-overview-history ol{flex:1;min-height:0;list-style:none;margin:0;padding:0;overflow:auto;overscroll-behavior:contain}.project-history-row{padding:10px 0;border-top:1px solid #dce3e9}.project-history-row:first-child{border-top:0}.project-history-row strong,.project-history-row small{display:block;overflow-wrap:anywhere}.project-history-row small{margin-top:4px;color:#526675}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
 .project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:0;overflow:hidden}.project-overview-tasks ul{flex:1;min-height:0;max-height:none;overscroll-behavior:contain}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:8px}
-.conflict-button{margin-top:10px;background:#a33b32}.conflict-button:hover{background:#842f28}#project-conflicts{width:100%;max-width:1500px;margin:0 auto;padding:10px 0 30px}.conflict-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.conflict-toolbar label{flex:1;min-width:260px}.conflict-toolbar select{display:block;width:100%;padding:9px}.conflict-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.conflict-grid>label,.conflict-rendered>section{min-width:0;font-weight:700}.conflict-grid textarea{display:block;box-sizing:border-box;width:100%;margin-top:5px;padding:10px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;overflow:auto}.conflict-grid textarea[readonly]{background:#f2f5f7}.conflict-rendered>section{border:1px solid #dce3e9;border-radius:10px;padding:12px;background:#fff}.conflict-rendered h3{margin-top:0}.conflict-rendered [data-conflict-preview]{font-weight:400;overflow-wrap:anywhere}.conflict-rendered pre{white-space:pre-wrap}.conflict-rendered p{white-space:pre-wrap}.conflict-missing{color:#6b7780;font-style:italic}#project-conflicts-unresolved{font-weight:700;color:#9b4f30}
+.conflict-button{margin-top:10px;background:#a33b32}.conflict-button:hover{background:#842f28}#project-conflicts{width:100%;max-width:1800px;margin:0 auto;padding:10px 0 30px}.conflict-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.conflict-toolbar label{flex:1;min-width:260px}.conflict-toolbar select{display:block;width:100%;padding:9px}.conflict-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}.conflict-pane{min-width:0;border:1px solid #dce3e9;border-radius:10px;background:#fff;overflow:hidden}.conflict-pane>header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:30px;padding:10px 12px;border-bottom:1px solid #dce3e9;background:#f5f8fa}.conflict-pane h3{margin:0;font-size:15px}.conflict-result{border-color:#77a99e;box-shadow:0 0 0 1px #77a99e}.conflict-result>header{background:#e8f4f0}.conflict-summary{font-size:11px;font-weight:600;color:#526675;text-align:right}.conflict-code,.conflict-editor-stack{height:440px;min-height:260px;overflow:auto;background:#fff}.conflict-code pre,.conflict-editor-stack pre,.conflict-editor-stack textarea{box-sizing:border-box;margin:0;padding:12px;width:100%;min-width:100%;min-height:100%;border:0;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4;white-space:pre}.conflict-code pre{overflow:visible}.conflict-editor-stack{display:grid;position:relative}.conflict-editor-stack pre,.conflict-editor-stack textarea{grid-area:1/1;overflow:auto}.conflict-editor-stack pre{pointer-events:none;color:transparent;background:#fff}.conflict-editor-stack textarea{position:relative;resize:none;outline:0;background:transparent;color:#213746}.conflict-editor-stack textarea:focus{box-shadow:inset 0 0 0 2px #176b60}.conflict-line{display:block;min-height:1.55em;padding:0 3px}.diff-local{background:#dceeff;border-left:4px solid #2674a8}.diff-remote{background:#fff0cf;border-left:4px solid #c17b16}.diff-both{background:linear-gradient(90deg,#dceeff 0 50%,#fff0cf 50%);border-left:4px solid #7c5ba7}.conflict-legend{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;font-size:12px}.conflict-legend span{display:inline-block;padding:5px 8px;border-radius:5px}.conflict-rendered [data-conflict-preview]{padding:12px;font-weight:400;overflow-wrap:anywhere;max-height:440px;overflow:auto}.conflict-rendered pre{white-space:pre-wrap}.conflict-rendered p{white-space:pre-wrap}.conflict-rendered .diff-local,.conflict-rendered .diff-remote,.conflict-rendered .diff-both{padding-left:8px}.conflict-missing{color:#6b7780;font-style:italic}#project-conflicts-unresolved{font-weight:700;color:#9b4f30}
+.conflict-code{overflow:auto}.conflict-editor-stack{overflow:hidden}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
@@ -1192,7 +1192,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
 @media(max-width:700px){.presentation-editor-workspace{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}}
-@media(max-width:760px){.conflict-grid{grid-template-columns:1fr}.conflict-grid textarea{min-height:220px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
+@media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
@@ -3449,23 +3449,25 @@ function clearPreview(){
  document.querySelector('#pdf-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
-function renderMarkdown(text,target=previewContent){
+function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
+function renderMarkdown(text,target=previewContent,lineClasses=null){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
- let fence=null,code=null,list=null;
+ let fence=null,code=null,list=null,lineIndex=0;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
    list=null;
-   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');target.append(code);}
+   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');addConflictLineClasses(code,lineClasses,lineIndex);target.append(code);}
+   lineIndex++;
    continue;
   }
-  if(fence){code.textContent+=line+'\\n';continue;}
+  if(fence){code.textContent+=line+'\\n';addConflictLineClasses(code,lineClasses,lineIndex);lineIndex++;continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
   const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
   if(bullet){if(!list){list=document.createElement('ul');target.append(list);}
-   const item=document.createElement('li');item.textContent=bullet[1];list.append(item);continue;}
+   const item=document.createElement('li');item.textContent=bullet[1];addConflictLineClasses(item,lineClasses,lineIndex);list.append(item);lineIndex++;continue;}
   list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
-  element.textContent=heading?heading[2]:line;target.append(element);
+  element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
 const projectConflicts=document.querySelector('#project-conflicts');
@@ -3510,16 +3512,52 @@ async function openProjectConflicts(){
   projectConflictStatus.textContent=projectConflictRows.length?'Vyberte protější historii a načtěte porovnání.':'Projekt nemá nevyřešenou divergenci.';
  }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
 }
-function conflictText(value,exists){return !exists?'Soubor v této verzi neexistuje.':value===null?'Binární nebo nepodporovaný obsah · pouze volba celého souboru.':value;}
 function selectedConflictFile(){return projectConflictPreview?.files.find(item=>item.path===projectConflictFile.value);}
+function changedLineIndexes(left,right){
+ const a=left.split('\\n'),b=right.split('\\n'),leftChanged=new Set(),rightChanged=new Set();
+ if(left===right)return {left:leftChanged,right:rightChanged};
+ const markMiddle=()=>{let start=0,endA=a.length-1,endB=b.length-1;while(start<=endA&&start<=endB&&a[start]===b[start])start++;while(endA>=start&&endB>=start&&a[endA]===b[endB]){endA--;endB--;}for(let i=start;i<=endA;i++)leftChanged.add(i);for(let i=start;i<=endB;i++)rightChanged.add(i);};
+ if((a.length+1)*(b.length+1)>250000){markMiddle();return {left:leftChanged,right:rightChanged};}
+ const table=Array.from({length:a.length+1},()=>new Uint32Array(b.length+1));
+ for(let i=a.length-1;i>=0;i--)for(let j=b.length-1;j>=0;j--)table[i][j]=a[i]===b[j]?table[i+1][j+1]+1:Math.max(table[i+1][j],table[i][j+1]);
+ let i=0,j=0;while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;}else if(table[i+1][j]>=table[i][j+1])leftChanged.add(i++);else rightChanged.add(j++);}while(i<a.length)leftChanged.add(i++);while(j<b.length)rightChanged.add(j++);
+ return {left:leftChanged,right:rightChanged};
+}
+function conflictDiffState(item,draft){
+ const resultExists=!draft?.deleted,result=resultExists&&draft?.text!==null?draft?.text:null;
+ const local=item.ours_exists&&item.ours!==null&&result!==null?changedLineIndexes(item.ours,result):null;
+ const remote=item.theirs_exists&&item.theirs!==null&&result!==null?changedLineIndexes(item.theirs,result):null;
+ return {resultExists,result,local,remote};
+}
+function resultLineClasses(state){
+ const classes=new Map(),count=state.result===null?0:state.result.split('\\n').length;
+ for(let index=0;index<count;index++){const local=state.local?.right.has(index),remote=state.remote?.right.has(index);if(local||remote)classes.set(index,[local&&remote?'diff-both':local?'diff-local':'diff-remote']);}
+ return classes;
+}
+function sideLineClasses(diff,name){const classes=new Map();if(diff)for(const index of diff.left)classes.set(index,[name]);return classes;}
+function renderConflictLines(target,value,exists,lineClasses){
+ target.replaceChildren();if(!exists||value===null){const note=document.createElement('p');note.className='conflict-missing';note.textContent=exists?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'Soubor v této verzi neexistuje.';target.append(note);return;}
+ const pre=document.createElement('pre');for(const [index,line] of value.split('\\n').entries()){const row=document.createElement('span');row.className='conflict-line';addConflictLineClasses(row,lineClasses,index);row.textContent=line||' ';pre.append(row);}target.append(pre);
+}
+function conflictDifferenceSummary(diff,unavailable){return unavailable?'Porovnání není dostupné':`${diff?.left.size||0} odlišných řádků`;}
+function renderConflictDiffs(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path),state=conflictDiffState(item,draft);
+ const localTarget=document.querySelector('[data-conflict-diff="ours"]'),remoteTarget=document.querySelector('[data-conflict-diff="theirs"]');
+ renderConflictLines(localTarget,item.ours,item.ours_exists,sideLineClasses(state.local,'diff-local'));renderConflictLines(remoteTarget,item.theirs,item.theirs_exists,sideLineClasses(state.remote,'diff-remote'));
+ document.querySelector('#project-conflicts-local-summary').textContent=conflictDifferenceSummary(state.local,!item.ours_exists||item.ours===null||state.result===null);
+ document.querySelector('#project-conflicts-remote-summary').textContent=conflictDifferenceSummary(state.remote,!item.theirs_exists||item.theirs===null||state.result===null);
+ const resultClasses=resultLineClasses(state),highlight=document.querySelector('#project-conflicts-result-highlight');highlight.replaceChildren();
+ if(state.result!==null)for(const [index,line] of state.result.split('\\n').entries()){const row=document.createElement('span');row.className='conflict-line';addConflictLineClasses(row,resultClasses,index);row.textContent=line||' ';highlight.append(row);}
+ const localCount=state.local?.right.size||0,remoteCount=state.remote?.right.size||0;document.querySelector('#project-conflicts-result-summary').textContent=!state.resultExists?'Výsledný soubor bude odstraněn':state.result===null?'Binární obsah · volba celého souboru':`${localCount} vůči lokální · ${remoteCount} vůči vzdálené`;
+ highlight.scrollTop=projectConflictResult.scrollTop;highlight.scrollLeft=projectConflictResult.scrollLeft;
+}
 function renderConflictPreviews(){
- const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path),state=conflictDiffState(item,draft),resultClasses=resultLineClasses(state);
  for(const target of document.querySelectorAll('[data-conflict-preview]')){
   target.replaceChildren();const key=target.dataset.conflictPreview,value=key==='result'?(draft?.deleted?null:draft?.text):item[key];
   const exists=key==='result'?!draft?.deleted:item[key+'_exists'];
   if(!exists||value===null){const note=document.createElement('p');note.className='conflict-missing';note.textContent=exists?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'Soubor v této verzi neexistuje.';target.append(note);}
-  else if(item.path.toLowerCase().endsWith('.md'))renderMarkdown(value,target);
-  else{const pre=document.createElement('pre');pre.textContent=value;target.append(pre);}
+  else{const classes=key==='ours'?sideLineClasses(state.local,'diff-local'):key==='theirs'?sideLineClasses(state.remote,'diff-remote'):resultClasses;if(item.path.toLowerCase().endsWith('.md'))renderMarkdown(value,target,classes);else renderConflictLines(target,value,exists,classes);}
  }
 }
 function updateConflictCompletion(){
@@ -3530,10 +3568,9 @@ function updateConflictCompletion(){
 }
 function renderConflictFile(){
  const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);
- document.querySelector('#project-conflicts-base').value=conflictText(item.base,item.base_exists);document.querySelector('#project-conflicts-ours').value=conflictText(item.ours,item.ours_exists);document.querySelector('#project-conflicts-theirs').value=conflictText(item.theirs,item.theirs_exists);
- projectConflictResult.value=draft?.deleted?'':draft?.text??'';projectConflictResult.readOnly=!item.editable;
+ projectConflictResult.value=draft?.deleted?'':draft?.text??'';projectConflictResult.readOnly=!item.editable;projectConflictResult.placeholder=draft?.deleted?'Výsledný soubor bude odstraněn.':!item.editable?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'';
  document.querySelector('#project-conflicts-use-both').disabled=!item.editable||item.ours===null||item.theirs===null;
- renderConflictPreviews();updateConflictCompletion();
+ renderConflictDiffs();renderConflictPreviews();updateConflictCompletion();
 }
 async function loadConflictPreview(){
  if(!activeProject||!projectConflictSelect.value)return;const project=activeProject,request=++projectConflictRequest;
@@ -3552,7 +3589,8 @@ function chooseConflict(choice){
 }
 projectConflictOpen.addEventListener('click',openProjectConflicts);document.querySelector('#project-conflicts-back').addEventListener('click',closeProjectConflicts);document.querySelector('#project-conflicts-load').addEventListener('click',loadConflictPreview);projectConflictFile.addEventListener('change',renderConflictFile);
 document.querySelector('#project-conflicts-use-ours').addEventListener('click',()=>chooseConflict('ours'));document.querySelector('#project-conflicts-use-theirs').addEventListener('click',()=>chooseConflict('theirs'));document.querySelector('#project-conflicts-use-both').addEventListener('click',()=>chooseConflict('both'));document.querySelector('#project-conflicts-delete').addEventListener('click',()=>chooseConflict('delete'));
-projectConflictResult.addEventListener('input',()=>{const item=selectedConflictFile();if(!item||!item.editable)return;const draft=projectConflictDrafts.get(item.path);draft.choice='manual';draft.text=projectConflictResult.value;draft.deleted=false;projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictPreviews();updateConflictCompletion();});
+projectConflictResult.addEventListener('input',()=>{const item=selectedConflictFile();if(!item||!item.editable)return;const draft=projectConflictDrafts.get(item.path);draft.choice='manual';draft.text=projectConflictResult.value;draft.deleted=false;projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictDiffs();renderConflictPreviews();updateConflictCompletion();});
+projectConflictResult.addEventListener('scroll',()=>{const highlight=document.querySelector('#project-conflicts-result-highlight');highlight.scrollTop=projectConflictResult.scrollTop;highlight.scrollLeft=projectConflictResult.scrollLeft;});
 for(const [buttonId,panelId,otherId] of [['project-conflicts-raw','project-conflicts-raw-panel','project-conflicts-rendered-panel'],['project-conflicts-rendered','project-conflicts-rendered-panel','project-conflicts-raw-panel']])document.getElementById(buttonId).addEventListener('click',event=>{document.getElementById(panelId).hidden=false;document.getElementById(otherId).hidden=true;for(const button of event.currentTarget.parentElement.querySelectorAll('button')){const active=button===event.currentTarget;button.setAttribute('aria-selected',String(active));button.classList.toggle('secondary-button',!active);}renderConflictPreviews();});
 projectConflictConfirm.addEventListener('change',()=>updateConflictCompletion());
 projectConflictPublish.addEventListener('click',async()=>{

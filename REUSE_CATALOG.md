@@ -332,12 +332,14 @@ Workspace/Journal/Index a nativní 3-way schopnosti Git CLI. Git určí merge ba
 strom a rodiče; UI není druhou autoritou historie. Spike ověřil MIT
 [`@codemirror/merge`](https://codemirror.net/docs/ref/#merge) 6.12.2: umí
 dvoustranný/unified diff, changed chunks a accept/reject, nikoli hotový 3-way
-resolver `base / ours / theirs / result`. Balíček se nyní **deferuje**: jeho
+resolver `lokální / výsledek / vzdálená` se skrytým merge base. Balíček se nyní **deferuje**: jeho
 zdrojový mirror je archivovaný, workspace nemá npm lock/bundler/notice pipeline
 a úplný tranzitivní licenční, klávesnicový a mobilní audit není doložený.
 Implementace proto adaptuje stávající editor a bezpečný renderer bez nové
 runtime závislosti; API dovolí pozdější výměnu editoru. Monaco, archivovaný
 `diff-match-patch`, vlastní merge algoritmus a kopie cizího UI byly odmítnuty.
+Bounded řádkové porovnání ve stávajícím UI je pouze prezentační zvýraznění a
+nenahrazuje Git jako autoritu výsledného stromu.
 Soukromá inventura neposkytla ověřenou komponentu se stejným Git, validačním a
 recovery kontraktem. Rozhodnutí: [ADR 0043](docs/adr/0043-explicit-federated-conflict-resolution.md).
 

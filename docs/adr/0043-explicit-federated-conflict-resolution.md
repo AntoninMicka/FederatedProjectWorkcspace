@@ -16,8 +16,9 @@ Navazuje na [ADR 0017](0017-artifact-history.md),
 Obousměrný interní sync při divergenci úmyslně nemění lokální větev. Protější
 head zachová v `refs/federation/incoming/<peer>/<operation>/<branch>`. Tento řez
 přidává vědomé lokální řešení: Git určí jediný merge base a sestaví kandidátní
-strom, aplikace zobrazí `base / naše / protější / výsledek` a až explicitní
-potvrzení publikuje jeden commit se dvěma rodiči. Automatický merge během
+strom. Merge base zůstává skrytým výpočetním podkladem; aplikace zobrazí tři
+pracovní panely `lokální / výsledek / vzdálená` a až explicitní potvrzení
+publikuje jeden commit se dvěma rodiči. Automatický merge během
 synchronizace, rebase, force update a obecný Git endpoint zůstávají zakázané.
 
 První verze řeší pouze změny pod `artifacts/` a `registries/`. Jakákoli změna
@@ -36,15 +37,18 @@ první verzi rozloží na vlastněné cesty, ale UI je označí jako `rename/upd
   automatického výsledného stromu.
 - **Defer:** `@codemirror/merge` 6.12.2 je MIT balíček s pěti deklarovanými
   runtime závislostmi. Nabízí side-by-side i unified diff, changed chunks,
-  accept/reject a navigaci. Není však hotovým čtyřpohledovým 3-way resolverem.
+  accept/reject a navigaci. Není však hotovým výsledkově orientovaným
+  třípanelovým 3-way resolverem.
   Zdrojový GitHub mirror byl v dubnu 2026 archivován a repozitář workspace nemá
   npm lock, auditovaný bundler, notice generování ani distribuci JS závislostí.
   Úplný tranzitivní licenční audit, klávesnicová a fyzická mobilní akceptace
   proto nejsou doložené. Balíček se nyní nevendoruje ani nepřidává jako runtime
   závislost; existující textarea kontrakt je později nahraditelný bez změny API.
 - **Reject pro tento řez:** Monaco, archivovaný `diff-match-patch`, vlastní
-  diff/merge algoritmus a kopie cizího UI. Nepřidávají potřebnou autoritu,
-  snapshot validaci ani crash recovery a zvětšily by distribuční plochu.
+  merge algoritmus a kopie cizího UI. Nepřidávají potřebnou autoritu, snapshot
+  validaci ani crash recovery a zvětšily by distribuční plochu. Malý bounded
+  řádkový porovnávač slouží pouze k barevné prezentaci rozdílů; merge strom,
+  rodiče ani publikovaný obsah neurčuje.
 
 ## Read-only model a bezpečnost
 
@@ -98,11 +102,14 @@ receipt, zatímco jiný payload pod stejným ID se odmítne.
 ## UI a omezení PoC
 
 Projekt zobrazí červenou akci pouze při dostupné divergenci. Resolver má výběr
-incoming historie a cesty, raw i bezpečně renderovaný čtyřpohled, počet
-nevyřešených souborů, přímou editaci výsledku a výslovný potvrzovací checkbox.
-Na telefonu se pohledy skládají do jednoho sloupce. Zavření resolveru i opuštění
-stránky s rozepsaným výsledkem varuje; rozepsaný návrh není durable a po restartu
-se znovu sestaví z připnutých commitů.
+incoming historie a cesty, raw i bezpečně renderovaný třípanelový pohled
+`lokální / výsledek / vzdálená`, počet nevyřešených souborů, přímou editaci
+výsledku a výslovný potvrzovací checkbox. Řádky odlišné od výsledku jsou na
+lokální a vzdálené straně barevně označené; prostřední editor samostatně značí
+rozdíl vůči každé straně i vůči oběma. Na užší obrazovce se panely skládají do
+jednoho sloupce. Zavření resolveru i opuštění stránky s rozepsaným výsledkem
+varuje; rozepsaný návrh není durable a po restartu se znovu sestaví z připnutých
+commitů.
 
 PoC neposkytuje blokovou 3-way editaci, syntaktické Markdown slučování, obecný
 binární merge, octopus merge, více merge bases, trvalé drafty ani automatickou
