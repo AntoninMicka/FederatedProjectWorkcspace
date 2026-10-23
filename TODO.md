@@ -32,12 +32,18 @@ automatickou publikaci lokálního artefaktu.
 
 ## Úkoly
 
-- [ ] [planned] **F-M3-SEARCH-03-A — integrační kontrakt a reuse
+- [x] [completed] **F-M3-SEARCH-03-A — integrační kontrakt a reuse
   (cílová úroveň: designed).** Prověřit současné `ChatService`, `SearchRuns`,
   search approval/recovery a action registry; navrhnout jediný přesný
   registrovaný search dispatch bez druhého journalu či paralelního síťového
   writeru. Popsat crash boundaries a způsob vazby user-selected countdownu na
-  aktivovaný plán.
+  aktivovaný plán. [ADR 0045](docs/adr/0045-governed-automatic-search-dispatch.md)
+  ponechává `SearchRuns` jedinou autoritou síťového účinku a obecnou frontu
+  autoritou orchestrace. Zavádí jednu přesnou reviewovanou search akci,
+  activation digest s per-workflow countdownem, bounded dynamické kroky,
+  editaci před vznikem search runu a explicitní fail-closed reconciliation.
+  Reuse/odmítnuté varianty jsou zaznamenané v `REUSE_CATALOG.md`; runtime se
+  v tomto kroku neměnil.
 - [ ] [planned] **F-M3-SEARCH-03-B — automatický search adapter
   (cílová úroveň: implemented).** Připojit navržený dotaz iterativního hledání
   k obecné frontě, zachovat stávající autorizaci, privacy, binding, round/time
