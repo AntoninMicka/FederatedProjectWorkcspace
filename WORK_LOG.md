@@ -5,11 +5,60 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-SHARING-SYNC-01 — obousměrná synchronizace interních projektů — 2026-10-23
+
+Dávka vznikla na větvi `feature/f-m5-sharing-sync-01` z `develop` na merge
+commitu `ae1b25e` (PR #80) a dosáhla úrovně **PoC validated**. Feature
+akceptace je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani
+sloučen.
+
+- [x] [completed] **F-M5-SHARING-SYNC-01-A — kontrakt, reuse a recovery
+  (designed).** ADR 0042 vymezilo podepsané inventury, branch scope, native Git
+  bundle, fast-forward/divergence pravidla a recovery bez druhého Git writeru
+  nebo skrytého merge.
+- [x] [completed] **F-M5-SHARING-SYNC-01-B — podepsaná obousměrná výměna
+  (implemented).** Jeden iniciátor vymění obsah v obou směrech; `same-team`
+  zahrnuje všechny projekty a větve, `same-company` jen scope místní matice a
+  `external` tento protokol nikdy nespustí.
+- [x] [completed] **F-M5-SHARING-SYNC-01-C — CAS aplikace, divergence a
+  recovery (implemented).** Chybějící projekt či větev se bezpečně založí,
+  existující ref se mění pouze fast-forwardem a divergentní protější head se
+  zachová pod `refs/federation/incoming/…`. Durable journal, staging, writer
+  lock a roll-forward obnova drží idempotentní retry a aktuální index.
+- [x] [completed] **F-M5-SHARING-SYNC-01-D — scheduler a sdílené UI
+  (implemented).** Společná matice nabízí Push, Pull nebo Sync podle místního a
+  vzdáleného katalogu, barevně odlišuje aktuální stav, potřebu přenosu a
+  konflikt a u ručního workeru dovolí potvrzené kooperativní zrušení. Scheduler
+  po přechodné startovní chybě nezanikne a bezpečně opakuje průchod.
+- [x] [completed] **F-M5-SHARING-SYNC-01-E — automatické a fyzické ověření
+  (PoC validated).** Uživatel na skutečném desktop ↔ LXC nasazení potvrdil
+  založení a přenos projektů v obou směrech, automatický přenos následné změny
+  po restartu a viditelný konflikt bez automatického merge. Tím je naplněna i
+  dříve odložená cílová fyzická akceptace `F-M5-PERSONAL-SYNC-01-E-ACCEPT`;
+  starší primary/read-only protokol se za nový obousměrný model nevydává.
+
+### Ověření, recovery a omezení
+
+Cílených **10 testů úspěšně** pokrylo první import, fast-forward oběma směry,
+vedlejší větev, `same-company` filtr, pinned TLS Pull, CAS retry, zrušení
+workeru, přežití startovní chyby scheduleru, přenos po novém controlleru,
+`local-only`/`external` odmítnutí a zachování divergentních headů. Sdílená
+webová/desktopová sada skončila **71 testy úspěšně, 6 přeskočeno** a úplná sada
+**738 testy úspěšně, 28 přeskočeno**. Změněné moduly prošly `py_compile`, oba
+generované JavaScripty `node --check` a finální kódový diff `git diff --check`.
+
+Pád před durable inbound záznamem nemá účinek; přesný request/response lze
+opakovat a částečná publikace se roll-forward dokončí pod project writer
+lockem. Synchronizace nikdy neprovádí non-fast-forward ani automatický merge.
+Uživatelské prohlížení historie a ruční vytvoření validovaného merge commitu
+jsou samostatná dávka `F-M5-CONFLICT-RESOLUTION-01`; externí export bez historie
+zůstává `F-M5-EXTERNAL-EXPORT-01`.
+
 ## F-M5-PROJECT-CATALOG-01 — federovaný katalog existence projektů — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m5-project-catalog-01` z `develop` na merge
-commitu `61df652` (PR #79) a dosáhla úrovně **implemented**. Feature akceptace
-je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
+commitu `61df652` (PR #79), dosáhla úrovně **implemented** a byla doručena PR
+#80 jako merge commit `ae1b25e`.
 
 - [x] [completed] **F-M5-PROJECT-CATALOG-01-A — předání předchozí dávky a
   kontrakt katalogu (designed).** Předchozí sloučená dávka byla administrativně
@@ -51,9 +100,9 @@ moduly prošly `py_compile`, oba generované JavaScripty `node --check`.
 
 Pád před SQLite commitem stav nezmění; po commitu lze požadavek bezpečně
 opakovat a opožděná revize projekci nevrátí. Katalog neuděluje právo získat
-obsah ani nevytváří lokální repozitář. Synchronizace větví a historie i externí
-exportní balíčky zůstávají v BACKLOG jako samostatné feature
-`F-M5-SHARING-SYNC-01` a `F-M5-EXTERNAL-EXPORT-01`.
+obsah ani nevytváří lokální repozitář. Synchronizace větví a historie byla
+následně dokončena v `F-M5-SHARING-SYNC-01`; externí exportní balíčky zůstávají
+v BACKLOG jako samostatná feature `F-M5-EXTERNAL-EXPORT-01`.
 
 ## F-M5-PERSONAL-SYNC-01 — osobní federace a nastavení sdílení — 2026-10-23
 
@@ -86,10 +135,10 @@ Generované JavaScripty prošly `node --check`, změněné Python moduly
 credentials a přenosové journály jsou node-local; projektový Git a obnovitelný
 index zachovávají oddělené autority popsané ADR 0038–0040.
 
-Fyzické desktop ↔ LXC ověření prvního bundle přenosu, fast-forwardu, offline
-návratu a poslední podoby matice nebylo před merge dokončeno. Je zachováno v
-BACKLOG jako `F-M5-PERSONAL-SYNC-01-E-ACCEPT`; merge ani automatické testy se
-za tuto fyzickou akceptaci nevydávají.
+Fyzické desktop ↔ LXC ověření nebylo před merge dokončeno. Cílové obousměrné
+chování, návrat po restartu a bezpečné zachování divergence byly následně
+fyzicky přijaty v `F-M5-SHARING-SYNC-01`; starší primary/read-only protokol se
+za nový model nevydává.
 
 ## UX-FEDERATION-02 — cílový směr federace a etapizace — 2026-10-22
 

@@ -478,8 +478,8 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] offline node,
   - [ ] návrat uzlu po delší době.
 - [ ] MVP navrhnout jako **eventual consistency**, nikoli distribuovanou transakční DB.
-- [ ] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje.
-- [ ] Úzký implementovaný mezikrok s jedním primárním zapisujícím uzlem a read-only replikou zachovat jako recovery základ, nikoli jako cílový model. `same-team` a `same-company` vyžadují bezpečnou obousměrnou synchronizaci; divergence ani sémanticky neplatný kandidát se automaticky neslučují.
+- [ ] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje. Native Git implementační řez popisuje ADR 0042 a čeká na fyzickou desktop ↔ LXC akceptaci.
+- [ ] Úzký implementovaný mezikrok s jedním primárním zapisujícím uzlem a read-only replikou zachovat jako recovery základ, nikoli jako cílový model. `same-team` a `same-company` používají podle ADR 0042 bezpečnou obousměrnou výměnu; fast-forward se aplikuje, divergence se zachová v operation-scoped incoming refu a sémanticky neplatný kandidát se odmítne. Automatické řešení konfliktu zůstává otevřené.
 - [ ] Podepsané offline projekce identit, členství a policy mají výchozí platnost 8 hodin, předem schváleně nejvýše 24 hodin. Vypršelá autorita si nesmí limit sama prodloužit během výpadku.
 - [ ] Na desktop synchronizovat pouze vybrané projekty, ke kterým má uživatel oprávnění.
 - [ ] Lokální úpravy a commity umožnit i offline; po připojení znovu ověřit oprávnění a synchronizovat.
@@ -1231,12 +1231,17 @@ ADR 0037 zachovává cílový model plné federace, ale první dodávaný řez j
 `F-M5-PERSONAL-SYNC-01`: implementovaný mezikrok dvou vlastních uzlů s jedním
 primárním zapisujícím uzlem a automatickou read-only replikou poskytuje
 podepsaný transport a recovery základ. ADR 0040 jej rozšiřuje cílovými
-úrovněmi sdílení a maticí projekt × peer; samotný mezikrok Gate M5 neuzavírá.
+úrovněmi sdílení a maticí projekt × peer. `F-M5-PROJECT-CATALOG-01` a fyzicky
+akceptovaný `F-M5-SHARING-SYNC-01` už poskytují obousměrný katalog i Git sync
+pro `same-team` a `same-company`, bezpečně obnovují přenos po restartu a
+zachovávají divergenci. Ruční řešení konfliktu navazuje jako
+`F-M5-CONFLICT-RESOLUTION-01`; external export, kvalifikované identity a chat
+zůstávají otevřené, takže Gate M5 není uzavřený.
 
 - [ ] Node identity.
 - [ ] Trust.
 - [ ] Úrovně `same-team` / `same-company` / `external` oddělené od topologie, peer trust state a explicitních project/branch oprávnění.
-- [ ] Git sync.
+- [x] Git sync — interní obousměrný přenos PoC validated v `F-M5-SHARING-SYNC-01`.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
 - [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné
@@ -1244,10 +1249,10 @@ podepsaný transport a recovery základ. ADR 0040 jej rozšiřuje cílovými
   netvoří pořadový žebříček a tato transportní policy sama neuděluje přístup.
 - [ ] Explicitní publikace chatu, shrnutí, zadání nebo jiného podporovaného artefaktu do projektu.
 - [ ] Node-local backend registry.
-- [ ] Federation status.
-- [ ] Offline/reconnect.
+- [x] Federation status — matice rozlišuje aktuální stav, přenos a divergenci.
+- [x] Offline/reconnect — fyzicky ověřen návrat automatického sync po restartu.
 
-- [ ] Ověřit synchronizaci desktopového a Turris/LXC nebo Linux serverového uzlu.
+- [x] Ověřit synchronizaci desktopového a Turris/LXC nebo Linux serverového uzlu.
 - [ ] Ověřit souběžné úpravy stejného souboru a stejné entity registru během offline provozu desktopu a následné řešení konfliktu.
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.

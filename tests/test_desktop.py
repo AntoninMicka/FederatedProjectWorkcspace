@@ -932,7 +932,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         federation_page = HTML.split('id="federation-view"', 1)[1].split('id="federation-network-view"', 1)[0]
         self.assertIn('id="admin-project-sharing"', federation_page)
         self.assertIn('id="admin-project-share-form"', federation_page)
-        self.assertIn('id="admin-remote-projects"', federation_page)
+        self.assertNotIn('id="admin-remote-projects"', federation_page)
+        self.assertIn("localExists&&remoteExists?'Sync':localExists?'Push':'Pull'", JS)
         self.assertIn('openFederationSharing', JS)
         self.assertIn('syncProjectCatalog', JS)
         self.assertIn('#administration{color:#213632;max-width:none}', CSS)

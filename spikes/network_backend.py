@@ -35,6 +35,9 @@ class ProbeHandler(WebHandler):
         from spikes.project_replication import PATH as REPLICATION_PATH, reply
         if self.path == REPLICATION_PATH:
             return reply(self)
+        from spikes.federation_sync import PATH as SYNC_PATH, reply as reply_sync
+        if self.path == SYNC_PATH:
+            return reply_sync(self)
         return self.send_error(404)
 
     def do_GET(self):

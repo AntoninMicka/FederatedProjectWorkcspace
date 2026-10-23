@@ -108,6 +108,8 @@ class WebHandler(DesktopHandler):
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/federation/enroll',
                                                '/v1/federation/catalog/reconcile',
+                                               '/v1/federation/content/reconcile',
+                                               '/v1/federation/content/cancel',
                                                '/v1/replications/status', '/v1/replications/sync',
                                                '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
@@ -125,6 +127,9 @@ class WebHandler(DesktopHandler):
         from spikes.project_replication import PATH as REPLICATION_PATH, reply
         if self.path == REPLICATION_PATH:
             return reply(self)
+        from spikes.federation_sync import PATH as SYNC_PATH, reply as reply_sync
+        if self.path == SYNC_PATH:
+            return reply_sync(self)
         return super().do_POST()
 
     def authorized(self, auth):
@@ -265,6 +270,9 @@ class WebHandler(DesktopHandler):
                 from spikes.federation_catalog import CatalogControl
                 result.update(CatalogControl(
                     self.server.node, deployment='web').view())
+                from spikes.federation_sync import ContentSyncControl
+                result['content_sync_statuses'] = ContentSyncControl(
+                    self.server.node, deployment='web').statuses()
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
@@ -284,6 +292,25 @@ class WebHandler(DesktopHandler):
                 return self.send_error(403)
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
+        if self.path in {'/v1/federation/content/reconcile',
+                         '/v1/federation/content/cancel'}:
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            if (not isinstance(request, dict)
+                    or set(request) != {'peer_id', 'project_id'}):
+                return self.send_error(400)
+            try:
+                from spikes.federation_sync import ContentSyncControl
+                control = ContentSyncControl(self.server.node, deployment='web')
+                changed = (control.cancel(request['peer_id'], request['project_id'])
+                           if self.path.endswith('/cancel') else
+                           control.start(request['peer_id'], request['project_id']))
+                return self.reply(200, {'changed': changed,
+                                        'content_sync_statuses': control.statuses()})
+            except AccessDenied:
+                return self.send_error(403)
+            except Exception:
+                return self.reply(409, {'error': 'Obsah projektu se nepodařilo synchronizovat; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -545,15 +572,19 @@ def main():
                      args.token_file, args.node, hostname=args.hostname) as server:
         from spikes.replication_control import ReplicationScheduler
         from spikes.federation_catalog import CatalogScheduler
+        from spikes.federation_sync import ContentSyncScheduler
         scheduler = ReplicationScheduler(args.node, deployment='web')
         catalog_scheduler = CatalogScheduler(args.node, deployment='web')
+        content_scheduler = ContentSyncScheduler(args.node, deployment='web')
         scheduler.start()
         catalog_scheduler.start()
+        content_scheduler.start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
         finally:
+            content_scheduler.stop()
             catalog_scheduler.stop()
             scheduler.stop()
 

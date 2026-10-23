@@ -3,13 +3,11 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na doručení F-M5-PROJECT-CATALOG-01
+# TODO — čeká se na doručení F-M5-SHARING-SYNC-01
 
-Dávka **F-M5-PROJECT-CATALOG-01 — federovaný katalog existence projektů** byla
-23. 10. 2026 implementována, automaticky ověřena a fyzicky přijata. Její
-evidence včetně testů, recovery a omezení byla archivována ve
-[WORK_LOG](WORK_LOG.md); navazující samostatné feature byly předány do
-[BACKLOG](BACKLOG.md).
-
-Větev `feature/f-m5-project-catalog-01` cílí jedním PR do `develop`. PR dosud
-nebyl vytvořen ani sloučen a žádná další feature dávka zde není aktivní.
+Dávka `F-M5-SHARING-SYNC-01` byla 23. 10. 2026 akceptována na úrovni **PoC
+validated** a její evidence byla přesunuta do [WORK_LOG](WORK_LOG.md). Větev
+`feature/f-m5-sharing-sync-01` čeká na jediný PR do `develop`; PR dosud nebyl
+vytvořen ani sloučen. Navazující `F-M5-CONFLICT-RESOLUTION-01` zůstává do
+doručení této dávky v [BACKLOG](BACKLOG.md) a nesmí se implementovat ve stejné
+větvi.

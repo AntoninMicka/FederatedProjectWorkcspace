@@ -5,8 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0040 — Úrovně sdílení a matice projektů federace
 
-Datum: 2026-10-23. Stav: přijato; implementováno je verzované nastavení,
-transport a skládání exportních balíčků zůstávají navazující prací.
+Datum: 2026-10-23. Stav: přijato; verzované nastavení je implementováno a
+interní transport implementuje ADR 0042. Skládání externích exportních balíčků
+zůstává navazující prací.
 
 ## Kontext
 
@@ -59,14 +60,14 @@ obousměrný režim.
 
 ## Hranice současné implementace
 
-Implementováno je pouze durable nastavení a jeho UI. Dosavadní podepsaný HTTPS
-transport nadále vykonává jen explicitní `primary` → `read-only-replica` grant
-z ADR 0038. Neinterpretuje `same-team`, `same-company` ani `external` jako
-novou transportní autoritu.
+Durable nastavení a jeho UI doplňuje
+[ADR 0042](0042-bidirectional-native-git-sharing-sync.md), které interpretuje
+`same-team` a `same-company` jako branch-scoped obousměrnou výměnu nativních
+Git bundle. Dosavadní explicitní `primary` → `read-only-replica` grant z ADR
+0038 zůstává odděleným recovery základem. `external` není transportní
+autoritou interní synchronizace.
 
-Navazující řezy musí samostatně navrhnout a ověřit obousměrnou synchronizaci,
-divergenci a merge bez ztráty historie, autorizaci všech dosažitelných objektů
-větví, sestavení obsahově omezeného exportního balíčku, patch provenance,
+Navazující řezy musí samostatně navrhnout řešení zachované divergence a merge,
+sestavení obsahově omezeného exportního balíčku, patch provenance,
 styčného uživatele, přímý i souborový přenos, import do nezávislé historie a
 revokaci dalších účinků. `local-only` nesmí opustit svůj uzel v žádném režimu.
-
