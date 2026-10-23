@@ -3,105 +3,13 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M5-CONFLICT-RESOLUTION-01: historie a ruční řešení divergence
+# TODO — F-M5-CONFLICT-RESOLUTION-01 čeká na doručení PR
 
-Původ: uživatelský požadavek 23. 10. 2026 po fyzickém potvrzení bezpečně
-zachované divergence uzavřít synchronizační dávku a řešení konfliktů dodat
-samostatně v uživatelsky přívětivém prohlížeči historie. Navazuje na ADR 0017,
-ADR 0042 a `F-M5-SHARING-SYNC-01`, doručené PR #81 jako merge commit `c884cd2`.
-Cílová úroveň: **designed → implemented → PoC validated**. Větev:
-`feature/f-m5-conflict-resolution-01`, základ `develop` na `c884cd2`, cíl PR:
-`develop`.
+Dávka `F-M5-CONFLICT-RESOLUTION-01` dosáhla 23. 10. 2026 úrovně **PoC
+validated** a její akceptovaná evidence byla archivována ve
+[WORK_LOG](WORK_LOG.md). Větev `feature/f-m5-conflict-resolution-01` je určena
+pro jediný PR do `develop`; PR zatím nebyl vytvořen ani sloučen.
 
-Dávka zobrazí lokální a `refs/federation/incoming/…` historii, nabídne
-explicitní 3-way řešení `base / naše / protější / výsledek` a až po lidském
-potvrzení publikuje sémanticky validní dvourodičový merge commit. Markdown lze
-porovnávat jako raw text i jako bezpečně formátovaný náhled stejného návrhu.
-Automatický merge při synchronizaci, obecný editor binárních souborů a externí
-export jsou mimo rozsah.
-
-## Úkoly dávky
-
-- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-A — kontrakt, reuse spike a
-  recovery návrh (cílová úroveň: designed).** Ověřit stávající
-  `ArtifactHistory`, Markdown preview, Git wrapper a Workspace/Journal/Index.
-  Udělat bounded UI spike nad MIT `@codemirror/merge`; potvrdit aktuální
-  upstream, verzi, tranzitivní licence, bundling, klávesnici a mobilní
-  použitelnost. Git CLI zůstane autoritou merge base, stromu a rodičů. Pokud
-  dvoustranný CodeMirror nevyhoví třípanelové orchestraci s výsledkem uprostřed, adaptovat
-  stávající editor bez nové UI knihovny. ADR popíše přesné autority, limity a
-  crash boundaries před implementací zápisu.
-  Výsledek (designed): ADR 0043 připíná Git, administrativní policy,
-  Workspace/Journal/Index a celý snapshot jako autority. CodeMirror Merge
-  6.12.2 byl posouzen a odložen: zdrojový mirror je archivovaný a chybí
-  auditovaný JS build/licenční pipeline; používá se nahraditelný stávající
-  editor bez nové runtime závislosti.
-- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-B — historie a read-only 3-way
-  model (cílová úroveň: implemented).** Nad autorizovaným projektem a přesně
-  připnutými heady načíst bounded graf, společného předka, změněné cesty a
-  `base/ours/theirs` bajty bez změny worktree, indexu či refs. Odlišit textový,
-  add/add, změna–smazání, přejmenování–úprava a nepodporovaný/binární konflikt;
-  stale head, změněná policy/trust a nevalidní historie selžou closed.
-  Výsledek (implemented): `ConflictResolution` čte přesně připnuté divergentní
-  incoming refy, vytváří kandidáta přes `merge-tree` v dočasném object store a
-  vrací bounded model cest bez změny projektových objektů, refs, worktree,
-  indexu či journalu. Změny mimo `artifacts/` a `registries/` odmítá; policy a
-  trust ověřuje pro `same-team` i scoped `same-company`.
-- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-C — raw/rendered resolver UI
-  (cílová úroveň: implemented).** Projektový prohlížeč historie nabídne seznam
-  konfliktních cest, navigaci po blocích, volbu naší/protější/obou změn, přímou
-  editaci výsledku a přepnutí raw Markdown ↔ bezpečně renderovaný náhled.
-  Zobrazuje počet nevyřešených konfliktů, nedovolí zaměnit preview za uložený
-  stav a před zrušením či opuštěním rozepsaného výsledku varuje.
-  Výsledek (implemented): sdílený desktop/web projektový pohled nabízí raw a
-  bezpečně renderované tři panely `lokální / výsledek / vzdálená`, řádkové
-  zvýraznění rozdílů obou stran proti přímo editovanému výsledku, explicitní
-  celo-souborové volby, rozlišení chybějícího a binárního obsahu, mobilní
-  jednosloupcový layout a guard rozepsaného návrhu. Vstupní akce nejprve
-  zobrazí seznam souborů se stavem řešení; konkrétní třípanelový resolver se
-  otevírá jako modální dialog. Merge base zůstává pouze interním podkladem
-  3-way výpočtu.
-- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-D — validovaná publikace a
-  recovery (cílová úroveň: implemented).** Pod jediným project writer lockem
-  znovu ověřit oba heady, base, policy a trust, sémanticky validovat celý
-  kandidátní snapshot a po explicitním potvrzení vytvořit merge commit s oběma
-  rodiči přes journal/CAS. Po commitu obnovit worktree a index z potvrzeného
-  HEAD; incoming ref uklidit jen podle doloženého výsledku. Restart před
-  potvrzením nesmí nic publikovat, pád po durable přípravě se idempotentně
-  dokončí nebo pravdivě nabídne obnovu.
-  Výsledek (implemented): `Workspace.transact` podporuje právě jednoho dalšího
-  rodiče a smysluplný merge se stromem shodným s prvním rodičem. Confirm znovu
-  sestaví a ověří náhled pod writer lockem, validuje celý snapshot a přes
-  journal/CAS publikuje jediný dvourodičový commit; retry po pádu za ref update
-  dokončí index bez druhého commitu. Incoming ref zůstává auditovatelný a po
-  začlenění se už nenabízí jako konflikt.
-- [ ] [in progress] **F-M5-CONFLICT-RESOLUTION-01-E — automatické a fyzické
-  ověření (cílová úroveň: PoC validated).** Ověřit čistý merge, stejný Markdown
-  blok, raw/rendered shodu, ruční editaci, změnu–smazání,
-  přejmenování–úpravu, sidecar/relationship validaci, stale head/policy/trust,
-  zrušení a restart na každé persistentní hranici. Fyzický desktop ↔ LXC
-  scénář potvrdí vytvoření a následný sync dvourodičového commitu.
-  Automatické ověření po poslední UI změně: cílený kontrakt seznamu a
-  modálního třípanelového resolveru 1 test OK;
-  úplná sada `python3 -m unittest discover -s tests -v` 750 testů OK,
-  28 skipped. Python kompilace, generovaný desktopový i webový JavaScript přes
-  `node --check` a `git diff --check` prošly. Pokryto: čistý a konfliktní merge,
-  ruční výsledek, změna–smazání, rename/update, sidecar/snapshot validace,
-  stale policy/trust, local-only, změna mimo podporované cesty, idempotence a
-  pád po CAS. Zbývá fyzický desktop ↔ LXC průchod včetně následného syncu
-  dvourodičového commitu; dávka proto zatím není PoC validated ani připravena k
-  předání PR.
-
-## Akceptační podmínky
-
-- prohlížení ani rozepsaný návrh nemění Git, index, worktree nebo incoming refs;
-- uživatel vždy rozliší lokální, vzdálenou a výslednou podobu, vidí rozdíly
-  obou stran vůči výsledku a může u Markdownu přepnout raw i bezpečně
-  renderovaný pohled; merge base zůstává interním podkladem;
-- publikace vyžaduje explicitní potvrzení přesného výsledku a nezměněné heady,
-  policy, trust a oprávnění;
-- celý výsledný snapshot projde projektovou a vztahovou validací před CAS;
-- úspěch vytvoří jediný dvourodičový merge commit, obnoví index z jeho HEAD a
-  následný federovaný sync jej přenese bez ztráty historie;
-- cílené i úplné testy projdou a fyzický konflikt bude vyřešen mezi desktopem
-  a LXC bez ručního zásahu do `.git`.
+Další nesouvisející feature se v této větvi neaktivuje. Po doručení PR se z
+aktuálního `develop` založí samostatná větev pro další uživatelem schválenou
+dávku z [BACKLOG](BACKLOG.md).

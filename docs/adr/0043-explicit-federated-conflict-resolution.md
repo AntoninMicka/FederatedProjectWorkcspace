@@ -5,8 +5,8 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0043 — Explicitní řešení federované Git divergence
 
-Datum: 2026-10-23. Stav: přijato a implementováno jako PoC v
-`F-M5-CONFLICT-RESOLUTION-01`; fyzická desktop ↔ LXC akceptace ještě neproběhla.
+Datum: 2026-10-23. Stav: přijato, implementováno a fyzicky akceptováno jako
+PoC v `F-M5-CONFLICT-RESOLUTION-01`.
 Navazuje na [ADR 0017](0017-artifact-history.md),
 [ADR 0040](0040-federation-sharing-levels-and-project-matrix.md) a
 [ADR 0042](0042-bidirectional-native-git-sharing-sync.md).
@@ -115,6 +115,8 @@ zachová. Návrh není durable a po restartu se znovu sestaví z připnutých co
 
 PoC neposkytuje blokovou 3-way editaci, syntaktické Markdown slučování, obecný
 binární merge, octopus merge, více merge bases, trvalé drafty ani automatickou
-retenci incoming refs. Fyzická klávesnicová, mobilní a desktop ↔ LXC akceptace
-zůstává podmínkou uzavření dávky; implementované chování a automatické důkazy
-eviduje [TODO](../../TODO.md).
+retenci incoming refs. Uživatel fyzicky potvrdil opravu konfliktu mezi desktopem
+a LXC i následný sync výsledku. Samostatná fyzická mobilní a úplná
+klávesnicová akceptace nebyla doložena a zůstává omezením mimo přijatý desktopový
+scénář. Implementované chování a důkazy eviduje
+[WORK_LOG](../../WORK_LOG.md#f-m5-conflict-resolution-01--historie-a-ruční-řešení-divergence--2026-10-23).

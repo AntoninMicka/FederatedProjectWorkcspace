@@ -56,8 +56,9 @@ a cílová fyzická akceptace byla následně naplněna novým obousměrným ře
 `F-M5-PROJECT-CATALOG-01` bylo doručeno PR #80 jako merge commit `ae1b25e`;
 evidence je ve WORK_LOG.
 `F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
-evidence je ve WORK_LOG. Aktivní `F-M5-CONFLICT-RESOLUTION-01` bylo se stejným
-ID přesunuto do TODO na vlastní feature větev.
+evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` dosáhlo na vlastní
+feature větvi úrovně PoC validated a jeho evidence byla archivována ve
+WORK_LOG; PR do `develop` zatím nebyl vytvořen ani sloučen.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
@@ -379,7 +380,7 @@ Aktualizace M1-07 podle hlášení uživatele (2026-09-13): deploy již proběhl
 
 Aktualizace M1-07 podle hlášení uživatele (2026-09-17): restart routeru zachoval instalaci a data, ale kontejner `workspace-m0` se po bootu nespustil automaticky. Jde o částečný real-device důkaz persistence, nikoli splnění restartové akceptace. Doplnit bezpečný LXC autostart a zopakovat reboot bez ručního startu včetně služby uvnitř kontejneru, dlaždice, přihlášení a náhledu.
 
-**M1-07 je aktivní výhradně v [TODO](TODO.md).** Následující odstavce zachovávají historické důkazy před aktivací, nikoli druhý aktuální stav feature. Navazuje na otevřené LXC nasazení v souhrnném M1 a požadavek uživatele z 2026-09-10 na dlaždici aplikace. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013.
+**Historická poznámka:** M1-07 již není aktivní v [TODO](TODO.md). Následující odstavce zachovávají starší důkazy, nikoli druhý aktuální stav feature; otevřené návaznosti M1 zůstávají v tomto backlogu a roadmapě. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013.
 
 Ověření cílového prostředí (2026-09-13): SSH přístup k cílovému routeru zatím blokuje `Permission denied (publickey,password,keyboard-interactive)`, změna cílové cesty už byla dočasně potvrzena v `docs/lxc-web.md` a v `scripts` kódu. Do odblokování SSH a prvního nasazení zůstává celá položka otevřená.
 
