@@ -58,8 +58,11 @@ evidence je ve WORK_LOG.
 `F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
 evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` bylo doručeno PR #82
 jako merge commit `637bf90`; evidence je ve WORK_LOG. `M1-07-C` bylo
-23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1; evidence je ve WORK_LOG a
-feature čeká v TODO na doručení jediného PR do `develop`.
+23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1 a bylo doručeno PR #83 jako
+commit `d15cec3`; evidence je ve WORK_LOG.
+`F-M4-AUTONOMY-01` byla 23. 10. 2026 akceptována na úrovni PoC validated;
+evidence je ve WORK_LOG a feature větev čeká na vytvoření a doručení PR do
+`develop`.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -80,33 +83,6 @@ feature čeká v TODO na doručení jediného PR do `develop`.
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
-  (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
-  opt-in kontrakt pro všechny orchestrační akce, nikoli zvláštní automatiku
-  každého modulu. Registry akcí musí fail-closed deklarovat typ účinku,
-  potřebná oprávnění, privacy, vstupy, budget, zda je akce automatizovatelná a
-  jaké potvrzení vyžaduje; neznámá akce se nikdy automaticky nespustí. Uživatel
-  může pro konkrétní workflow zvolit ruční režim nebo bounded automatiku s
-  viditelnou frontou, mezivýsledky, globální pauzou a časem na zásah. LLM pouze
-  navrhuje plán a další akci; oprávnění a dispatch řídí deterministický
-  orchestrátor.
-
-  **Nepřekročitelná výjimka:** vytvoření každého uživatelsky adresovatelného
-  lokálního souboru, dokumentu nebo artefaktu vyžaduje explicitní schválení
-  uživatele nad přesným cílem, typem, obsahem/hash, privacy a provenance.
-  Countdown, předchozí souhlas s automatikou ani modelové označení `final`
-  toto potvrzení nenahrazují a schválení jednoho výstupu se nesmí zobecnit na
-  další. Interní journal/fronta nejsou obsahovým výstupem, ale zůstávají
-  node-local, bounded a recovery-safe. Existující přísnější pravidla pro
-  změnu, publikaci, odeslání nebo smazání se touto schopností neuvolňují.
-
-  Akceptace zahrne kombinovaný workflow s read-only analýzou, externím
-  dotazem, rolovým handoffem a návrhem artefaktu; povolené kroky mohou projít
-  automaticky, ale před vytvořením každého lokálního výstupu se fronta vždy
-  zastaví. Ověřit pause/resume, editaci plánu, změnu oprávnění či privacy,
-  vyčerpaný budget, neznámý typ akce, odpojení UI, restart v každém stavu,
-  souběžná workflow a `unknown` účinek bez automatického retry.
 
 - [ ] [planned] **F-M3-SEARCH-03 — Volitelný automatický dispatch s časem na
   zásah (cílová úroveň: designed → PoC validated).** Nad iterativním workflow

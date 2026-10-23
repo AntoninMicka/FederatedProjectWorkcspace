@@ -5,6 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-AUTONOMY-01 — obecná řízená autonomie orchestrace — 2026-10-23
+
+Dávka vznikla na větvi `feature/f-m4-autonomy-01` z `develop` `8ed574f` a
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; implementace
+aplikačního řezu končí commitem `1dfcf64`, ale závěrečný evidenční diff ještě
+není commitnutý a PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M4-AUTONOMY-01-A — Action registry a policy kontrakt
+  (implemented).** Uzavřený verzovaný registry deklaruje účinek, permissions,
+  privacy, přesné vstupy, cost, automatizovatelnost a confirmation. Neznámá
+  akce, změněný descriptor nebo plannerem navržený režim bez samostatného
+  potvrzení přesného plánu, režimu a budgetu selže fail-closed. Rozhodnutí a
+  hranice popisuje [ADR 0044](docs/adr/0044-governed-orchestration-autonomy.md).
+- [x] [completed] **F-M4-AUTONOMY-01-B — Durable bounded fronta a recovery
+  (implemented).** Vlastněný node-local SQLite journal drží pořadí, budget,
+  approval digests, mezivýsledky a stavy manual/automatic workflow. Podporuje
+  pause/resume/cancel, globální pauzu, souběžná workflow, krátký UI lease a
+  durable 3–5sekundový countdown. Schema v1 se transakčně migruje na v2.
+- [x] [completed] **F-M4-AUTONOMY-01-C — Integrační service a approval boundary
+  (implemented).** Reviewované adaptéry propojují read-only referenci,
+  existující externí approval journal, creator→opponent handoff a potvrzenou
+  publikaci artefaktu. Každý lokální výstup znovu ověřuje přesný cíl, typ,
+  hash, privacy, provenance, request a Git HEAD. Web je omezený na správce a
+  nezobrazí ani nepřijme `local-only` plán.
+- [x] [completed] **F-M4-AUTONOMY-01-D — UI, regrese a akceptace (PoC
+  validated).** Sdílené UI umí načíst či před účinkem upravit návrh, zobrazit
+  přesný plán, budget, stav a mezivýsledky, samostatně aktivovat režim a plán
+  pozastavit, obnovit či zrušit. Uživatel fyzicky potvrdil, že bezpečný
+  read-only příklad prošel návrhem, aktivací, countdownem a doběhl ve frontě.
+
+### Ověření, recovery a omezení
+
+`tests.test_action_autonomy` skončil 15 testy OK a
+`tests.test_autonomy_service` 6 testy OK; cílené HTTPS testy webové autorizace
+a privacy hranice také prošly. Úplná sada
+`python3 -m unittest discover -s tests -v` skončila **772 testy úspěšně,
+28 podmíněně přeskočeno**. Python moduly prošly `py_compile`, generovaný
+JavaScript `node --check` a finální diff `git diff --check`.
+
+Před dispatch se znovu ověřuje descriptor, oprávnění, privacy, expected HEAD,
+závislosti a budget. Pád před účinkem nebo ztráta UI bezpečně pozastaví další
+práci; restart v `dispatching` končí terminálním `unknown` bez automatického
+retry. Projektový Git zůstává autoritou pouze potvrzených projektových zápisů
+a konkrétní doménové journaly zůstávají autoritou vlastních účinků.
+
+Fyzicky byl ověřen základní read-only automatický průchod v desktopovém UI;
+konkrétní externí/handoff/publikační kombinace a chybové/restartové hranice
+jsou doložené automatickými integračními testy. První vertikální použití pro
+iterativní webové hledání zůstává samostatná dávka `F-M3-SEARCH-03`; obecný
+background worker, message queue, provider pool a autonomní publikace nejsou
+součástí této feature.
+
 ## UX-WEB-NAV-01 — webové kategorie Výstupy a Federace — 2026-10-23
 
 Dávka vznikla na větvi `feature/ux-web-nav-01` z `develop` na commitu

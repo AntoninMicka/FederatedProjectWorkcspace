@@ -670,22 +670,25 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
 - [ ] Každý krok musí mít explicitní vstupní artefakty.
 - [ ] Nepřenášet implicitně kompletní historii předchozí role.
 - [ ] Umožnit checkpoint člověka mezi jednotlivými rolemi.
-- [ ] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace:** všechny
+- [x] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace:** všechny
   orchestrační akce mohou používat společnou opt-in frontu a bounded
   automatický režim pouze tehdy, když jejich uzavřený action registry záznam
   výslovně dovoluje automatický dispatch. Každá položka fronty zobrazuje akci,
   vstupy, účinek, cíl, privacy, oprávnění, budget a mezivýsledek; LLM pouze
   navrhuje, deterministický orchestrátor autorizuje a vykonává.
-- [ ] Automatika musí mít viditelný stav, pause/resume/cancel, limity kroků,
+- [x] Automatika musí mít viditelný stav, pause/resume/cancel, limity kroků,
   času a nákladů a fail-closed recovery při změně oprávnění, privacy, vstupů,
   ztrátě UI nebo restartu. Neznámá akce ani `unknown` účinek se automaticky
   nespustí či neopakuje.
-- [ ] **Povinný lidský checkpoint pro lokální obsah:** vytvoření každého
+- [x] **Povinný lidský checkpoint pro lokální obsah:** vytvoření každého
   uživatelsky adresovatelného lokálního souboru, dokumentu nebo artefaktu musí
   uživatel samostatně schválit nad přesným cílem, typem, obsahem/hash, privacy
   a provenance. Countdown ani obecný souhlas s automatikou toto potvrzení
   nenahrazují. Interní bounded recovery journal není obsahovým výstupem;
   stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
+  Dávka byla 23. 10. 2026 fyzicky akceptována na úrovni PoC validated;
+  evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23),
+  doručení PR do `develop` zatím není dokončené.
 
 ---
 
@@ -1215,10 +1218,13 @@ začlenění feature větve do `develop` zůstává otevřené.
 - [ ] Editor.
 - [x] Workflow handoff — lokálně PoC validated v `F-M4-WORKFLOW-01`.
 - [x] Human approval — oddělený creator dispatch, opponent handoff/dispatch a publikace.
-- [ ] Obecná řízená autonomie — F-M4-AUTONOMY-01: opt-in bounded fronta pro
+- [x] Obecná řízená autonomie — F-M4-AUTONOMY-01: opt-in bounded fronta pro
   všechny registrované orchestrační akce s fail-closed action policy;
   vytvoření každého uživatelsky adresovatelného lokálního souboru, dokumentu
   nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
+  PoC akceptace a omezení jsou ve
+  [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23);
+  PR do `develop` zatím nebyl doručen.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
