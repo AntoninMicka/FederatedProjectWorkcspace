@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Webový náhled v LXC a dlaždice na routeru
 
-Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO, náhledy Markdown/obrázků/PDF a read-only historii podporovaných Markdown dokumentů; nativní editor zůstává v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../BACKLOG.md).
+Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO, náhledy Markdown/obrázků/PDF a read-only historii podporovaných Markdown dokumentů; nativní editor zůstává v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../TODO.md).
 
 ## Příprava
 
@@ -211,6 +211,11 @@ lokální recovery. Při pádu nebo timeoutu vypíše stav služby a posledních
 neopakuje; nový pokus musí správce spustit vědomě až po diagnóze.
 Chybějící systémové závislosti řešte běžným deployem bez `--update-only`;
 ten nyní přeskočí apt, pokud jsou všechny požadované balíky již nainstalované.
+Po úspěchu příkaz výslovně připomene, že application-only aktualizace nemění
+routerový autostart. Vypíše přesný read-only UCI check a při chybějící vlastní
+sekci také oddělený staging, `plan` a `install` postup pro `router_tile.py`.
+Instalace se nespouští skrytě: správce nejprve zkontroluje plán a teprve potom
+vědomě změní routerovou integraci.
 
 Při přerušeném nasazení preferujte skutečnou obnovu:
 

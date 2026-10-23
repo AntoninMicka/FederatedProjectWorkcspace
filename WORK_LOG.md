@@ -9,7 +9,8 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/f-m5-conflict-resolution-01` z `develop` na
 merge commitu `c884cd2` (PR #81) a dosáhla úrovně **PoC validated**. Feature
-akceptace je dokončená; její PR do `develop` zatím nebyl vytvořen ani sloučen.
+akceptace je dokončená a dávka byla doručena PR #82 jako merge commit
+`637bf90` do `develop`.
 
 - [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-A — kontrakt, reuse spike a
   recovery návrh (designed).** ADR 0043 připnulo Git, administrativní policy,

@@ -77,6 +77,23 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(run_ssh.call_args_list[1][0][1], 'cat > /etc/federated-workspace-ca.pem && chmod 0644 /etc/federated-workspace-ca.pem')
             self.assertEqual(run_ssh.call_args_list[1][0][2], b'-----BEGIN CERTIFICATE-----\n')
 
+    def test_successful_update_only_prints_explicit_router_autostart_steps(self):
+        payload = SimpleNamespace(returncode=0, stdout=b'-----BEGIN CERTIFICATE-----\n', stderr=b'')
+        write_ok = SimpleNamespace(returncode=0, stderr=b'', stdout=b'')
+        output = io.StringIO()
+        with patch('sys.argv', ['deploy', 'root@router.example', '--container', 'workspace-m0',
+                                '--web-lan', '192.168.100.0/24', '--update-only']), \
+                patch('scripts.deploy_omnia.run_ssh', side_effect=[payload, write_ok]), \
+                patch('scripts.deploy_omnia.run_ssh_output', return_value=payload), \
+                patch('sys.stdout', output):
+            self.assertEqual(deploy_omnia.main(), 0)
+        rendered = output.getvalue()
+        self.assertIn('router LXC autostart was not changed', rendered)
+        self.assertIn('uci show lxc-auto.federated_workspace', rendered)
+        self.assertIn('scripts/router_tile.py scripts/router_entry.py', rendered)
+        self.assertIn('router_tile.py plan --container workspace-m0 --lan 192.168.100.0/24', rendered)
+        self.assertIn('router_tile.py install --container workspace-m0 --lan 192.168.100.0/24', rendered)
+
     def test_regen_tls_requires_web_lan(self):
         with patch('sys.argv', ['deploy', 'root@example.invalid', '--regen-tls']):
             with self.assertRaises(SystemExit):
