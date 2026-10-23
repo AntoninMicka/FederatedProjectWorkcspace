@@ -44,8 +44,10 @@ document.querySelector('#source-import-local-only').disabled=true;
 document.querySelector('#google-drive-local-only').disabled=true;
 document.querySelector('#notebooklm-local-only').disabled=true;
 document.querySelector('#presentation-tab').hidden=true;
-document.querySelector('#presentations-tab').hidden=true;
+document.querySelector('#outputs-overview-tab').hidden=false;
 document.querySelector('#presentation-editor').hidden=true;
+document.querySelector('#open-federation-network').closest('li').hidden=true;
+document.querySelector('#open-federation-deployment').closest('li').hidden=true;
 let accessKey='';
 const notebookImportButton=document.querySelector('#open-notebooklm-import');
 const originalFetch=window.fetch.bind(window);
@@ -71,6 +73,7 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.querySelector('[data-settings-item="settings-access-tab"]').hidden=!admin;
   document.querySelector('#settings-federation-tab').hidden=!admin;
   document.querySelector('[data-settings-item="settings-federation-tab"]').hidden=!admin;
+  document.querySelector('#federation-tab').hidden=!admin;
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
   document.querySelector('#openai-resource-provider').hidden=!admin;
@@ -111,6 +114,7 @@ class WebHandler(DesktopHandler):
                                                '/v1/federation/content/reconcile',
                                                '/v1/federation/content/cancel',
                                                '/v1/replications/status', '/v1/replications/sync',
+                                               '/v1/outputs/definitions',
                                                '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
@@ -335,6 +339,20 @@ class WebHandler(DesktopHandler):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
             return super().dispatch(request)
+        if self.path == '/v1/outputs/definitions':
+            if (not isinstance(request, dict)
+                    or set(request) != {'project_id', 'expected_head'}
+                    or not self.server.administration.allowed(
+                        self.actor, request.get('project_id'))):
+                return self.send_error(403)
+            try:
+                from spikes.presentation_documents import PresentationDocuments
+                result = PresentationDocuments(self.server.node).open(request['project_id'])
+                if result['commit_id'] != request['expected_head']:
+                    raise ValueError('Project changed before output projection')
+                return self.reply(200, result)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(409, {'error': 'Definice výstupů nelze načíst z potvrzené verze projektu.'})
         if self.path.startswith('/v1/backend-metrics/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)

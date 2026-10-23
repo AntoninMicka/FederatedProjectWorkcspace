@@ -762,6 +762,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Souhrn</button>
 <button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Extrakce</button>
 <button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Obrázek</button>
+<button id="outputs-overview-tab" role="tab" aria-controls="outputs-overview-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Výstupy</button>
 <button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Prezentace</button>
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button></div>
 <div id="main-panel-content">
@@ -913,6 +914,14 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <pre id="image-result-metadata"></pre><label for="image-title">Název artefaktu</label>
 <input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
+<div id="outputs-overview-panel" role="tabpanel" aria-labelledby="outputs-overview-tab" hidden>
+<header class="outputs-overview-heading"><span class="dashboard-kicker">VERZOVANÉ DEFINICE</span><h2>Výstupy projektu</h2>
+<p>Web zobrazuje přesně uložené definice výstupů aktuálního commitu. Úpravy, spuštění presenteru a lokální export zůstávají v desktopové aplikaci.</p></header>
+<p id="outputs-overview-status" role="status" aria-live="polite">Otevřete kategorii Výstupy.</p>
+<div class="outputs-overview-grid"><ul id="outputs-overview-list" aria-label="Definice výstupů projektu"></ul>
+<section id="outputs-overview-detail" class="outputs-overview-detail" aria-labelledby="outputs-overview-detail-title" hidden>
+<span class="dashboard-kicker">DEFINICE</span><h3 id="outputs-overview-detail-title"></h3><dl id="outputs-overview-properties"></dl>
+</section></div></div>
 <div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
 <div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
 <div class="form-actions"><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
@@ -1143,6 +1152,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+.outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
 .federation-transfer-page,.federation-network-page,.federation-deployment-page{max-width:860px}.federation-transfer-page form>label,.federation-network-page fieldset>label,.federation-deployment-page form>label{display:block;margin:14px 0;font-weight:650}.federation-transfer-page select,.federation-transfer-page input,.federation-network-page select,.federation-network-page input:not([type="checkbox"]),.federation-deployment-page select,.federation-deployment-page input:not([type="checkbox"]){display:block;width:100%;margin-top:6px;padding:9px}.federation-transfer-page pre,.federation-network-page pre,.federation-deployment-page pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f6f8;border-radius:8px;padding:12px}.federation-network-page fieldset{margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:14px}.federation-network-page legend{font-weight:700}.federation-network-page .form-warning,.federation-deployment-page .form-warning{color:#7a4b28}#federation-transfer-log:empty,#federation-network-log:empty,#federation-deployment-log:empty{display:none}
@@ -1196,7 +1206,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
-@media(max-width:700px){.presentation-editor-workspace{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}}
+@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}}
 @media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
@@ -3053,6 +3063,9 @@ for(const tab of mainTabs){
  });
 }
 const presentationTab=document.querySelector('#presentation-tab');
+const outputsOverviewTab=document.querySelector('#outputs-overview-tab');
+const outputsOverviewList=document.querySelector('#outputs-overview-list');
+const outputsOverviewStatus=document.querySelector('#outputs-overview-status');
 const presentationEditorDocuments=document.querySelector('#presentation-editor-documents');
 const sidebarPresentationList=document.querySelector('#sidebar-presentation-list');
 const sidebarPresentationStatus=document.querySelector('#sidebar-presentation-status');
@@ -3162,16 +3175,44 @@ document.querySelector('#presentation-print-run').addEventListener('click',()=>{
 function installPresentationDocument(document){
  presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
 }
+function renderOutputsOverview(preferred=null){
+ outputsOverviewList.replaceChildren();
+ const documents=presentationEditorView?.documents||[];
+ const selected=documents.find(item=>item.id===preferred)||documents[0];
+ for(const doc of documents){
+  const item=document.createElement('li'),button=document.createElement('button'),title=document.createElement('strong'),detail=document.createElement('small');
+  button.type='button';button.dataset.id=doc.id;button.setAttribute('aria-current',String(doc===selected));
+  title.textContent=doc.title+(doc.error?' — neplatná':'');detail.textContent=`Prezentace · ${doc.id}`;
+  button.append(title,detail);button.addEventListener('click',()=>renderOutputsOverview(doc.id));item.append(button);outputsOverviewList.append(item);
+ }
+ const panel=document.querySelector('#outputs-overview-detail'),properties=document.querySelector('#outputs-overview-properties');properties.replaceChildren();
+ if(!selected){panel.hidden=true;outputsOverviewStatus.textContent='Projekt zatím nemá žádnou uloženou definici výstupu.';return;}
+ outputsOverviewStatus.textContent=`Počet definic výstupů: ${documents.length} · commit ${presentationEditorView.commit_id.slice(0,12)}`;
+ panel.hidden=false;document.querySelector('#outputs-overview-detail-title').textContent=selected.title;
+ const values=[['Typ','Prezentace'],['Artefakt',selected.id],['Stav',selected.error?'Neplatná definice':'Validní definice'],['Hlavní slidy',String(selected.deck?.slides?.filter(slide=>slide.kind==='main').length||0)],['Záložní slidy',String(selected.deck?.slides?.filter(slide=>slide.kind==='backup').length||0)],['Revize projektu',presentationEditorView.commit_id]];
+ for(const [name,value] of values){const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;properties.append(term,description);}
+}
+async function openOutputsOverview(preferred=null){
+ if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého výstupy patří.';return;}
+ document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;historyView.hidden=true;projectView.hidden=false;
+ selectSidebarTab(document.querySelector('#presentations-tab'));selectMainTab(outputsOverviewTab);outputsOverviewTab.focus();
+ if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head){
+  outputsOverviewStatus.textContent='Načítám definice výstupů…';
+  try{presentationEditorView=await projectRequest('/v1/outputs/definitions',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(null,false);renderOutputsOverview(preferred);}
+  catch(error){outputsOverviewList.replaceChildren();document.querySelector('#outputs-overview-detail').hidden=true;outputsOverviewStatus.textContent=error.message;}
+ }else renderOutputsOverview(preferred);
+}
 function renderSidebarPresentations(){
  sidebarPresentationList.replaceChildren();
  for(const doc of presentationEditorView.documents){
   const item=document.createElement('li'),main=document.createElement('button'),title=document.createElement('strong'),identity=document.createElement('small');
   item.className='sidebar-list-row sidebar-presentation-row';main.type='button';main.className='sidebar-list-main';title.textContent=doc.title+(doc.error?' — neplatná':'');identity.textContent=doc.id;main.disabled=Boolean(doc.error);
-  main.addEventListener('click',()=>openPresentationEditor(doc.id));main.append(title,identity);
-  const menu=sidebarItemMenu(doc.title,[
+  const web=document.body.dataset.runtime==='server';
+  main.addEventListener('click',()=>web?openOutputsOverview(doc.id):openPresentationEditor(doc.id));main.append(title,identity);
+  const actions=web?[{label:'Zobrazit',run:()=>openOutputsOverview(doc.id)}]:[
    {label:'Upravit',run:()=>openPresentationEditor(doc.id),disabled:Boolean(doc.error)},
-   {label:'Spustit',run:()=>usePresentationDocument(doc),disabled:Boolean(doc.error)}
-  ],'sidebar-presentation-menu');
+   {label:'Spustit',run:()=>usePresentationDocument(doc),disabled:Boolean(doc.error)}];
+  const menu=sidebarItemMenu(doc.title,actions,'sidebar-presentation-menu');
   item.append(main,menu);sidebarPresentationList.append(item);
  }
  sidebarPresentationStatus.textContent=presentationEditorView.documents.length?`Počet prezentací: ${presentationEditorView.documents.length}`:'Zatím tu nejsou žádné uložené prezentace.';
@@ -3198,7 +3239,7 @@ function createPresentationDocument(confirmDiscard=true){
  if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorDocuments.value='';renderPresentationEditor();presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();else if(!presentationEditorDeck)renderPresentationDocuments();});
-document.querySelector('#presentations-tab').addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
+document.querySelector('#presentations-tab').addEventListener('click',()=>{if(document.body.dataset.runtime==='server'){openOutputsOverview();return;}if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
 presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
 document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});

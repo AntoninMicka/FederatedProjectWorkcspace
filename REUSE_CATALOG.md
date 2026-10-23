@@ -343,6 +343,16 @@ nenahrazuje Git jako autoritu výsledného stromu.
 Soukromá inventura neposkytla ověřenou komponentu se stejným Git, validačním a
 recovery kontraktem. Rozhodnutí: [ADR 0043](docs/adr/0043-explicit-federated-conflict-resolution.md).
 
+`UX-WEB-NAV-01` **reuse/adaptuje sdílený shell `desktop_ui`, validovanou
+projekci `PresentationDocuments` a stávající `Administration`/federační
+matici**. Webový přehled Výstupů dostává pouze úzký RBAC-ověřený read-only
+endpoint připnutý k očekávanému Git commitu; neinicializuje desktopový editor,
+presenter, lokální PDF export ani druhého zapisovače. Kategorie Federace
+zpřístupňuje existující správu sdílení pouze správci uzlu/federace a na serveru
+skrývá nativní síťové a LXC akce. Nový output store, paralelní federační model a
+kopie desktopových ovladačů byly odmítnuty; operace používají stávající Git a
+node-local journal/recovery hranice ADR 0038–0043.
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a
