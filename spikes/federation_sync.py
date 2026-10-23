@@ -908,7 +908,15 @@ class ContentSyncScheduler:
 
     def _run(self):
         while not self.stopping.is_set():
-            self.control.run_automatic(); self.stopping.wait(self.interval)
+            try:
+                self.control.run_automatic()
+                delay = self.interval
+            except Exception:
+                # Registry/catalog startup can race another scheduler. A
+                # transient read failure must not permanently kill content
+                # synchronization for the rest of the process lifetime.
+                delay = min(self.interval, 5)
+            self.stopping.wait(delay)
 
     def stop(self):
         self.stopping.set()

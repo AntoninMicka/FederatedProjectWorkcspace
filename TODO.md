@@ -47,15 +47,18 @@ historii ani automatický merge.
   potřebě přenosu a červené při konfliktu; ruční worker ukazuje neurčitý
   progress a potvrzené kooperativní zrušení na bezpečné hranici. Sdílené UI
   ukazuje idle/offline/rejected/conflict/error a divergenci výslovně nevydává
-  za merge.
+  za merge. Oprava restartové regrese zachytí přechodnou chybu celého prvního
+  schedulerového průchodu, do pěti sekund jej zopakuje a nenechá automatickou
+  synchronizaci po startu trvale skončit.
 - [ ] [in progress] **F-M5-SHARING-SYNC-01-E — automatické a fyzické ověření
-  (cílová úroveň: PoC validated).** Cílených **9 testů úspěšně** ověřilo první
+  (cílová úroveň: PoC validated).** Cílených **10 testů úspěšně** ověřilo první
   import, fast-forward oběma směry, vedlejší větev, `same-company` filtr,
   pinned TLS včetně Pull projektu existujícího jen na serveru, retry po pádu za
-  CAS, kooperativní zrušení ručního workeru, `local-only` odmítnutí,
-  external fail-closed
+  CAS, kooperativní zrušení ručního workeru, přežití přechodné chyby scheduleru
+  a přenos nového HEAD po novém controlleru, `local-only` odmítnutí, external
+  fail-closed
   a zachování obou divergentních headů. Webová/desktopová regresní sada:
-  **71 testů úspěšně, 6 přeskočeno**. Úplná sada: **737 testů úspěšně, 28
+  **71 testů úspěšně, 6 přeskočeno**. Úplná sada: **738 testů úspěšně, 28
   přeskočeno**. `py_compile`, oba generované JavaScripty přes `node --check` a
   `git diff --check` prošly. Uživatel 23. 10. 2026 fyzicky potvrdil přenos
   projektu desktop → server i server → desktop. Zbývá fyzicky potvrdit offline

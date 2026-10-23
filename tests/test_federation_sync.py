@@ -12,8 +12,8 @@ from uuid import uuid4
 from spikes.administration import Administration, AccessDenied
 from spikes.federation_accounts import MappingSignatures
 from spikes.federation_sync import (
-    ContentSyncControl, SyncCancelled, SyncReceiver, _apply, _build_bundle,
-    _prepare, synchronize,
+    ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver,
+    _apply, _build_bundle, _prepare, synchronize,
 )
 from spikes.git_transfer import git_run
 from spikes.project_creation import ProjectCreation
@@ -203,6 +203,24 @@ class FederationSyncTests(unittest.TestCase):
             self.assertEqual(control.statuses()[
                 self.node_ids[1] + ':' + self.project_id]['state'], 'cancelled')
 
+    def test_scheduler_survives_transient_startup_failure(self):
+        scheduler = ContentSyncScheduler(self.nodes[0], deployment='web',
+                                         interval=.01)
+        recovered = threading.Event(); attempts = 0
+
+        def run():
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise OSError('simulated startup race')
+            recovered.set(); scheduler.stopping.set()
+
+        with patch.object(scheduler.control, 'run_automatic', side_effect=run):
+            scheduler.start()
+            self.assertTrue(recovered.wait(2))
+            scheduler.stop()
+        self.assertGreaterEqual(attempts, 2)
+
     def test_retry_is_idempotent_and_crash_after_ref_update_rolls_forward(self):
         self.exchange(0, 1)
         candidate = self.commit_marker(0, 'candidate')
@@ -267,6 +285,10 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(Projects(self.nodes[0]).workspace(
             server_only['id']).git.head(), Projects(self.nodes[1]).workspace(
                 server_only['id']).git.head())
+        changed_after_restart = self.commit_marker(0, 'after restart')
+        ContentSyncControl(self.nodes[0], deployment='web').run_automatic()
+        self.assertEqual(Projects(self.nodes[1]).workspace(
+            self.project_id).git.head(), changed_after_restart)
 
 
 if __name__ == '__main__':

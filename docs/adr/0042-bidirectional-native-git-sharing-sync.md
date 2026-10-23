@@ -94,6 +94,11 @@ neprovádí destruktivní rollback; následující synchronizace rozdíl znovu
 zrekonsoliduje. Pád procesu ukončí volatilní worker a existující journal se
 obnovuje stejnými pravidly jako dosud.
 
+Automatický scheduler nesmí po přechodné chybě prvního průchodu skončit. Chybu
+registru nebo katalogu po startu zachytí na hranici celého průchodu, nejvýše za
+pět sekund pokus zopakuje a po úspěchu se vrátí k běžnému intervalu. Jednotlivé
+projektové chyby nadále izoluje uvnitř průchodu.
+
 ## Omezení
 
 Limit zůstává 500 dosažitelných commitů na validovaný head a 64 MiB na jeden

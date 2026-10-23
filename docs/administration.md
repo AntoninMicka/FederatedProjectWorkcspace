@@ -143,6 +143,8 @@ projektu na obou stranách a stejný reconcile běží po 60 sekundách automati
 Jeden požadavek může nést bundle desktop → server
 a odpověď bundle server → desktop, takže dynamická serverová strana nepotřebuje
 adresu klienta. Nezměněný obsah si vymění jen podepsané inventury headů.
+Přechodná chyba při prvním průchodu po restartu scheduler neukončí; nejvýše za
+pět sekund pokus zopakuje a následně pokračuje běžným intervalem.
 
 Žluté tlačítko označuje potřebný Push, Pull nebo Sync, zelené dvouřádkové
 **Obsah aktuální / ruční kontrola** poslední úspěšné srovnání a červené
