@@ -43,15 +43,17 @@ od routerové integrace a nesmí zahodit projekty, identitu ani credentials.
   (implemented).** Úspěšná application-only aktualizace nyní výslovně uvádí,
   že autostart nezměnila, a vypíše přesný UCI check i oddělený staging,
   `plan` a `install` postup. Hostitel se bez vědomé akce správce nemění.
-- [ ] [in progress] **M1-07-C-C — Předrestartová kontrola a instalace
-  (cílová úroveň: PoC validated).** Na skutečné Omnii ověřit či přes
+- [x] [completed] **M1-07-C-C — Předrestartová kontrola a instalace
+  (PoC validated, 2026-10-23).** Na skutečné Omnii ověřit či přes
   zkontrolovaný plán idempotentně doplnit jen
   `lxc-auto.federated_workspace`, čistý rollback journal, routerovou službu,
   LXC službu a vydaný certifikát pro aktuální IP a DNS autoritu. Read-only
   kontrola potvrdila čistý journal, běžící `workspace-m0` na
   `192.168.100.247`, routerový helper, enabled/active LXC službu a SAN pro IP
-  i `workspace.cacke.internal`; UCI sekce chybí a čeká na explicitní instalaci.
-- [ ] [planned] **M1-07-C-D — Skutečný restart a uživatelská akceptace
+  i `workspace.cacke.internal`. Následný explicitní `router_tile.py install`
+  vytvořil přesně vlastněnou UCI sekci typu `container`, se jménem
+  `workspace-m0` a timeoutem `60`.
+- [ ] [in progress] **M1-07-C-D — Skutečný restart a uživatelská akceptace
   (cílová úroveň: PoC validated).** Po výslovně potvrzeném termínu restartovat
   router a doložit automatický běh `workspace-m0` a
   `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled
@@ -74,7 +76,9 @@ od routerové integrace a nesmí zahodit projekty, identitu ani credentials.
   (`Permission denied`); stav routeru se nezměnil. Předrestartová kontrola
   byla následně provedena uživatelem v jeho terminálu: journal je čistý,
   kontejner i služby běží a certifikát má požadované IP/DNS SAN. Jediná
-  zjištěná mezera je `uci: Entry not found` pro vlastní autostart sekci.
+  zjištěná mezera byla `uci: Entry not found` pro vlastní autostart sekci;
+  uživatel následně doložil její správnou explicitní instalaci se jménem
+  `workspace-m0` a timeoutem `60`.
 
 ## Akceptační podmínky
 
