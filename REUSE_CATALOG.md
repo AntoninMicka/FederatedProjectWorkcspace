@@ -326,6 +326,23 @@ writer a externí sync framework byly odmítnuty. Soukromá inventura nenabídla
 komponentu se shodnou branch policy, Git autoritou a crash hranicemi.
 Rozhodnutí: [ADR 0042](docs/adr/0042-bidirectional-native-git-sharing-sync.md).
 
+Plánovaná `F-M5-CONFLICT-RESOLUTION-01` má **reuse/adaptovat** stávající
+`ArtifactHistory`, bezpečný Markdown preview, Git wrapper, snapshot validaci,
+Workspace/Journal/Index a nativní 3-way schopnosti Git CLI. Git určí merge base,
+strom a rodiče; UI nebude druhou autoritou historie. Jako bounded UI spike je
+vhodný MIT [`@codemirror/merge`](https://codemirror.net/docs/ref/#merge): umí
+dvoustranný/unified diff, changed chunks a accept/reject ovládání, nikoli však
+hotový aplikační 3-way resolver `base / ours / theirs / result`. Vlastní zůstane
+orchestrace čtyř pohledů, raw/rendered Markdown, explicitní potvrzení a
+crash-safe publikace validovaného dvourodičového commitu. Monaco bylo pro první
+spike odmítnuto kvůli dvoustrannému veřejnému diff API, vyšší integrační ploše a
+deklarované absenci mobilní podpory; archivovaný `diff-match-patch` kvůli
+ukončené údržbě a absenci 3-way workflow. Soukromá inventura neposkytla
+ověřenou komponentu s tímto Git, validačním a recovery kontraktem. Přesnou
+verzi, transitive licence, bundling a přístupnost CodeMirroru je nutné před
+zařazením do distribuované aplikace znovu ověřit; nevyhoví-li spike, adaptuje se
+stávající editor bez nové knihovny.
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a

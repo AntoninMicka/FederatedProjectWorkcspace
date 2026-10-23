@@ -7,7 +7,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Datum: 2026-10-23. Stav: přijato a implementováno v
 `F-M5-SHARING-SYNC-01`; automatické ověření prošlo, fyzická desktop ↔ LXC
-akceptace probíhá.
+akceptace obou směrů, návratu po restartu a zachování divergence prošla.
 
 ## Kontext a rozsah
 
