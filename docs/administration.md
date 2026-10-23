@@ -27,9 +27,11 @@ lokální recovery credential spravovanou deployem.
 Peer vyžaduje UUID uzlu, HTTPS adresu a SHA-256 otisk veřejného klíče ověřený
 nezávislou cestou. Nový peer čeká na explicitní schválení. Schválení pouze
 eviduje lokální rozhodnutí: neprovádí handshake ani neověřuje dostupnost,
-nepřenáší projekty/uživatele a neuděluje jeho uživatelům lokální přístup.
-Síťová synchronizace dat, automatické doručování revokací a řešení divergence
-zůstávají otevřenou částí M5. Přihlášení vzdáleným účtem se nezavádí.
+nepřenáší uživatele a neuděluje jeho uživatelům lokální přístup. Samostatný
+katalogový přenos popsaný níže začne až nad schváleným peerem a policy
+projektů. Síťová synchronizace projektového obsahu, automatické doručování
+revokací a řešení divergence zůstávají otevřenou částí M5. Přihlášení
+vzdáleným účtem se nezavádí.
 
 Identita uživatele má vlastní stabilní UUID a home_node_id, oddělené od
 lokální role, členství a credential. Uživatelské UUID se nesmí při budoucí
@@ -96,6 +98,27 @@ konflikt a poslední úspěšný HEAD. Zastavení nepřenáší další změny, 
 grant trvale ukončí. Read-only replika skrývá editační akce a server každý
 zápis přes Workspace znovu odmítá; zápisy se provádějí na primary.
 
+## Katalog existence projektů
+
+Stránka **Federace → Sdílení projektů** přenáší v první fázi jen UUID a název
+projektu. `same-team` automaticky oznamuje všechny dostupné místní projekty,
+`same-company` jen projekty zapnuté v matici. U `external` se stejný minimální
+katalog odešle pouze tlačítkem **Odeslat existenci**. Nastavení větví se tím
+nemění a použije se až při budoucím přenosu obsahu.
+
+Jeden podepsaný HTTPS požadavek vymění katalog oběma směry. Desktop periodicky
+kontaktuje svůj server; serverový záznam dynamického klienta proto nemusí mít
+vlastní adresu. P2P uzel se známou HTTPS adresou může synchronizaci zahájit
+sám. Stav a tabulka **Projekty oznámené peery** jsou node-local informace.
+Takový řádek nelze otevřít jako místní projekt a nevzniká mu Git repozitář,
+členství ani oprávnění.
+
+Katalog má limit 256 projektů na peer. Nedostupná místní registrace bez
+ověřitelného committed názvu se neoznámí. Pending, revoked a migrační
+`unspecified` peer nic nepřenese. Podpis připnuté node identity, oba Node UUID,
+TLS CA a aktuální policy se ověřují při každé výměně; browserový přístupový
+klíč se na node endpoint neposílá.
+
 ## Práva spolu s daty
 
 [ADR 0021](adr/0021-local-accounts-and-bilateral-mapping.md) definuje povinný
@@ -122,6 +145,12 @@ opaque credential reference; neposílá se peerům. Ani celý registr nelze
 automaticky exportovat: obsahuje lokální role a credential reference.
 Záloha musí zachovat node.json, registr, credentials a původní bootstrap klíč;
 přeinstalace kódu tyto soubory nemění.
+
+Vedle něj může vzniknout `.node.json.network/federation-catalog.sqlite`.
+Obsahuje odchozí revize, poslední přijatou projekci a provozní stav peerů.
+Nejde o projektový index ani další autoritu projektů. Novější snapshot
+atomicky nahradí starší, opožděná revize se ignoruje a stejná revize s jiným
+obsahem se odmítne. Ztrátu odpovědi lze bezpečně napravit opakováním výměny.
 
 Registr v2 přidal samostatnou tabulku mapování a v3 podepsané replikační granty
 s lokálním desired state. V1 i v2 se pod stejným flock/CAS migrují do v3 bez

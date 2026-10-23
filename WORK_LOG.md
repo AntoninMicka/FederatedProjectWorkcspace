@@ -5,6 +5,42 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-PERSONAL-SYNC-01 — osobní federace a nastavení sdílení — 2026-10-23
+
+Dávka vznikla na větvi `feature/f-m5-personal-sync-01` z `develop` na commitu
+`192e79c` a byla doručena PR #79 jako merge commit `61df652`. Dosáhla úrovně
+**implemented**; automatická sada byla ověřena, fyzická akceptace replikace a
+posledního UI řezu zůstala při merge výslovně otevřená. Protože uživatel PR
+sloučil před administrativním uzavřením dávky, evidence byla přesunuta z TODO
+jako první krok navazující větve `feature/f-m5-project-catalog-01`.
+
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-A až D — grant, přenos,
+  recovery, scheduler a read-only UI (implemented).** Podepsaný oboustranný
+  grant autorizuje jeden project/ref a privacy scope. Bounded HTTPS bundle,
+  validace celého grafu, node-local journal, CAS fast-forward a recovery
+  odmítají local-only, změněný HEAD, neúplnou historii a divergenci.
+- [x] [completed] **F-M5-PERSONAL-SYNC-01-UI1 až UI4 — správa federace,
+  enrollment, úrovně sdílení a matice projekt × peer (implemented).** Sdílené
+  webové/desktopové UI používá tabulky a dialogy, odděluje topologii od
+  `same-team` / `same-company` / `external`, klient–server enrollment nepřenáší
+  uživatelský credential a schema v6 drží projektové a branch policy.
+- [x] [completed] **F-M5-FED-ENROLL-01 — klient–server enrollment
+  (implemented).** Podepsané přihlášení bylo automaticky i fyzicky přijato;
+  account binding a node credential zůstávají oddělené od projektových práv.
+
+### Ověření, recovery a otevřená akceptace
+
+Poslední úplná sada na sloučené větvi: **723 testů úspěšně, 28 přeskočeno**.
+Generované JavaScripty prošly `node --check`, změněné Python moduly
+`py_compile` a inventura pokryla 27 HTML formulářů. Registry je Git-backed CAS,
+credentials a přenosové journály jsou node-local; projektový Git a obnovitelný
+index zachovávají oddělené autority popsané ADR 0038–0040.
+
+Fyzické desktop ↔ LXC ověření prvního bundle přenosu, fast-forwardu, offline
+návratu a poslední podoby matice nebylo před merge dokončeno. Je zachováno v
+BACKLOG jako `F-M5-PERSONAL-SYNC-01-E-ACCEPT`; merge ani automatické testy se
+za tuto fyzickou akceptaci nevydávají.
+
 ## UX-FEDERATION-02 — cílový směr federace a etapizace — 2026-10-22
 
 Dávka vznikla na větvi `feature/ux-federation-02` z `develop` na commitu

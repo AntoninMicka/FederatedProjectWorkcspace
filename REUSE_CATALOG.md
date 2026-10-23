@@ -304,6 +304,16 @@ inventura neposkytla komponentu, která by zachovala projektovou Git autoritu,
 branch scope a export bez historie; nový transport proto nebyl v tomto řezu
 zaveden. Rozhodnutí: [ADR 0040](docs/adr/0040-federation-sharing-levels-and-project-matrix.md).
 
+F-M5-PROJECT-CATALOG-01 **reuse/adaptuje `Administration`, `Projects.catalog`,
+`MappingSignatures`, uložené peer CA, bounded HTTPS endpoint a sdílené
+administrační UI** pro minimální obousměrnou výměnu `{project UUID, title}`.
+Přijatá data zůstávají node-local monotónní SQLite projekcí a nevytvářejí
+projektový Git, registraci, index ani oprávnění. Git bundle, SSH, Workspace
+journal, message broker a nový externí sync framework byly odmítnuty jako širší
+autorita a přenos, než první katalogová fáze potřebuje. Soukromá inventura
+nenabídla komponentu se stejnou maticí a připnutou bilaterální identitou.
+Rozhodnutí: [ADR 0041](docs/adr/0041-federated-project-existence-catalog.md).
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a

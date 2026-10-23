@@ -50,12 +50,23 @@ evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
 doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
 commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl doručen PR #78 jako commit
-`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` je aktivní
-dávka v TODO.
+`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` bylo doručeno
+PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
+a otevřená fyzická akceptace níže. Aktivní dávka je
+`F-M5-PROJECT-CATALOG-01` v TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M5-PERSONAL-SYNC-01-E-ACCEPT — fyzická akceptace osobní
+  replikace a matice (cílová úroveň: PoC validated).** Na již implementovaném
+  řezu fyzicky potvrdit desktop ↔ LXC první bundle, následný fast-forward,
+  offline návrat a UI po restartu. Ověřit, že divergence nic nepřepíše a že
+  stránka Sdílení projektů na desktopu i serveru odpovídá schema v6. Jde o
+  nedokončenou akceptaci sloučeného PR #79, nikoli o opakování implementace;
+  koordinovat s katalogovým přenosem, aby se starý primary/read-only grant
+  nevydával za cílový same-team/same-company model.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po

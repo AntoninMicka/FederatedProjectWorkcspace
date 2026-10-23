@@ -1253,8 +1253,13 @@ def main():
             QTimer.singleShot(0, controller.recover)
         replication_scheduler = ReplicationScheduler(
             node_path, deployment='desktop')
+        from spikes.federation_catalog import CatalogScheduler
+        catalog_scheduler = CatalogScheduler(
+            node_path, deployment='desktop')
         replication_scheduler.start()
+        catalog_scheduler.start()
         result = app.exec()
+        catalog_scheduler.stop()
         replication_scheduler.stop()
         controller.wait()
         federation_network.wait()
