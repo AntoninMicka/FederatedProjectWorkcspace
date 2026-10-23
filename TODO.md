@@ -57,10 +57,22 @@ automatickou publikaci lokálního artefaktu.
   a `unknown` je terminální bez retry. Cílených 83 testů prošlo; úplná sada
   23. 10. 2026 skončila 775 testy OK, 28 podmíněně přeskočeno. UI příprava,
   editace a `send-now` zůstávají v úkolu C.
-- [ ] [planned] **F-M3-SEARCH-03-C — ovládání ruční/automatické fronty
+- [x] [completed] **F-M3-SEARCH-03-C — ovládání ruční/automatické fronty
   (cílová úroveň: implemented).** V existujícím search UI zpřístupnit volbu
   režimu a countdownu 3–5 sekund, viditelný dotaz/účel/cíl/privacy/kolo/budget
   a akce pause, review/edit, send-now a cancel bez oslabení obecného UI lease.
+  Search karta nyní ponechává dosavadní ruční preview/confirm tok a nabízí
+  explicitně aktivovaný automatický režim s odpočtem 3–5 sekund. Zobrazuje
+  přesný dotaz, účel, endpoint a target ID, privacy, kolo, budget i živý
+  odpočet; podporuje pause/resume, editaci navazujícího dotazu, potvrzené
+  send-now a zrušení samotné fronty. Skrytí karty nebo ztráta UI lease frontu
+  fail-closed pozastaví. Editace před dispatchí nevytváří `SearchRuns`: původní
+  přesný krok ukládá journal schématu 4 jako zrušenou revizi a nový krok znovu
+  validuje přes čistý search candidate. Send-now přijme pouze digest právě
+  zobrazeného countdown kroku a potom používá stejný `advance` a doménový
+  journal jako běžné vypršení odpočtu. Cílených 25 testů prošlo; úplná sada
+  23. 10. 2026 skončila 776 testy OK, 28 podmíněně přeskočeno. Reálný
+  vícekolový průchod, restartové stavy a fyzická UI akceptace zůstávají v D.
 - [ ] [planned] **F-M3-SEARCH-03-D — regrese a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit ruční i automatický vícekolový tok,
   editaci během countdownu, pause celé fronty, vyčerpaný budget, změny policy,

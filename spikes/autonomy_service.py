@@ -123,6 +123,87 @@ class AutonomyService:
         node_id, user_id = self._identity()
         return self.queue.cancel(workflow_id, node_id, user_id)
 
+    def prepare_search(self, value):
+        required = {'workflow_id', 'task_id', 'mode', 'countdown_seconds'}
+        follow_up = required | {'parent_search_id', 'query'}
+        require(isinstance(value, dict) and set(value) in (required, follow_up)
+                and value['mode'] in {'manual', 'automatic'}
+                and type(value['countdown_seconds']) is int
+                and 3 <= value['countdown_seconds'] <= 5,
+                'Invalid governed search preparation')
+        uuid(value['workflow_id']); uuid(value['task_id'])
+        if set(value) == follow_up:
+            uuid(value['parent_search_id'])
+            require(isinstance(value['query'], str), 'Invalid governed search query')
+        namespace = UUID(value['workflow_id'])
+        request = {'task_id': value['task_id'],
+            'search_id': str(uuid5(namespace, 'initial:search')),
+            'synthesis_run_id': str(uuid5(namespace, 'initial:synthesis-run')),
+            'synthesis_manifest_id': str(uuid5(namespace, 'initial:synthesis-manifest'))}
+        if 'query' in value:
+            request.update(parent_search_id=value['parent_search_id'], query=value['query'])
+        context = self.chat_service.task_search_autonomy_candidate(request)
+        preview = dict(context['preview']); preview_sha256 = preview.pop('preview_sha256')
+        preview.pop('state', None)
+        remaining = preview['budget']['max_rounds'] - preview['round_index'] + 1
+        plan = {'schema_version': 2, 'workflow_id': value['workflow_id'],
+            'project_id': context['project_id'], 'expected_head': context['expected_head'],
+            'mode': value['mode'], 'privacy': preview['privacy'],
+            'countdown_seconds': value['countdown_seconds'],
+            'continuation': {'kind': 'iterative-search-v1',
+                'task_id': value['task_id'],
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'follow_up_policy': 'first-proposed-v1'},
+            'budget': {'max_steps': remaining, 'max_cost_units': remaining,
+                       'max_seconds': preview['budget']['max_seconds']},
+            'steps': [{'step_id': str(uuid5(namespace, 'initial:step')),
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': preview['privacy'], 'cost_units': 1, 'depends_on': [],
+                'input': {'request': request, 'preview': preview,
+                          'preview_sha256': preview_sha256}}]}
+        return self.prepare(plan)
+
+    def edit_search(self, workflow_id, query):
+        require(isinstance(query, str), 'Invalid governed search query')
+        node_id, user_id = self._identity()
+        workflow = self.queue.get(workflow_id, node_id, user_id)
+        require(workflow['steps'], 'Governed search has no pending step')
+        previous = workflow['steps'][-1]
+        require(previous['action'] == {'id': 'search.iterative-query', 'version': '1.0'}
+                and previous['state'] in {'queued', 'countdown', 'awaiting-approval'},
+                'Governed search cannot be edited now')
+        old_request = previous['input']['request']; round_index = previous['input'][
+            'preview']['round_index']
+        revision = 2 + len([item for item in workflow.get('revisions', [])
+                            if item['ordinal'] == len(workflow['steps']) - 1])
+        request = {'task_id': old_request['task_id'],
+            'search_id': self._derived_id(workflow_id, round_index, revision, 'search'),
+            'synthesis_run_id': self._derived_id(
+                workflow_id, round_index, revision, 'synthesis-run'),
+            'synthesis_manifest_id': self._derived_id(
+                workflow_id, round_index, revision, 'synthesis-manifest')}
+        parent = old_request.get('parent_search_id')
+        if parent is not None:
+            request.update(parent_search_id=parent, query=query)
+        else:
+            require(query.strip() == previous['input']['preview']['query'],
+                    'The initial routed search query cannot be changed')
+        context = self.chat_service.task_search_autonomy_candidate(request)
+        preview = dict(context['preview']); preview_sha256 = preview.pop('preview_sha256')
+        preview.pop('state', None)
+        step = {'step_id': self._derived_id(workflow_id, round_index, revision, 'step'),
+            'action': previous['action'], 'privacy': previous['privacy'],
+            'cost_units': previous['cost_units'],
+            'depends_on': previous['depends_on'],
+            'input': {'request': request, 'preview': preview,
+                      'preview_sha256': preview_sha256}}
+        return self.queue.revise_pending_step(workflow_id, step, node_id, user_id)
+
+    def send_now(self, workflow_id, step_id, dispatch_digest):
+        node_id, user_id = self._identity()
+        self.queue.send_now(workflow_id, step_id, node_id, user_id, dispatch_digest)
+        return self.advance(workflow_id)
+
     def pause_all(self):
         self.queue.pause_all()
         return self.list()

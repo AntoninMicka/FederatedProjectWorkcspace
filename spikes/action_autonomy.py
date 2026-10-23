@@ -349,7 +349,7 @@ class AutonomyQueue:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(3);
+                    INSERT INTO schema_info VALUES(4);
                     CREATE TABLE settings(global_paused INTEGER NOT NULL);
                     INSERT INTO settings VALUES(0);
                     CREATE TABLE workflows(
@@ -368,16 +368,25 @@ class AutonomyQueue:
                         result_json BLOB, error TEXT,
                         PRIMARY KEY(workflow_id, ordinal),
                         FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id));
+                    CREATE TABLE step_revisions(
+                        workflow_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+                        revision INTEGER NOT NULL, step_json BLOB NOT NULL,
+                        cancelled_at TEXT NOT NULL,
+                        PRIMARY KEY(workflow_id,ordinal,revision));
                 ''')
             else:
                 versions = [tuple(row) for row in
                             db.execute('SELECT version FROM schema_info').fetchall()]
-                require(tables == {'schema_info', 'settings', 'workflows', 'steps'}
-                        and versions in ([(1,)], [(2,)], [(3,)]),
+                legacy_tables = {'schema_info', 'settings', 'workflows', 'steps'}
+                require(tables in (legacy_tables, legacy_tables | {'step_revisions'})
+                        and versions in ([(1,)], [(2,)], [(3,)], [(4,)]),
                         'Unknown or incomplete autonomy schema')
                 workflow_columns = [row[1] for row in
                     db.execute('PRAGMA table_info(workflows)')]
                 step_columns = [row[1] for row in db.execute('PRAGMA table_info(steps)')]
+                revision_columns = ([row[1] for row in
+                    db.execute('PRAGMA table_info(step_revisions)')]
+                    if 'step_revisions' in tables else [])
                 if versions == [(1,)]:
                     require(workflow_columns == ['workflow_id', 'node_id', 'user_id',
                         'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
@@ -407,6 +416,21 @@ class AutonomyQueue:
                                    'WHERE workflow_id=?', (activation, workflow_id))
                     db.execute('UPDATE schema_info SET version=3')
                     workflow_columns.append('activation_digest')
+                    versions = [(3,)]
+                if versions == [(3,)]:
+                    require('step_revisions' not in tables,
+                            'Unexpected autonomy step revision table')
+                    db.execute('''CREATE TABLE step_revisions(
+                        workflow_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
+                        revision INTEGER NOT NULL, step_json BLOB NOT NULL,
+                        cancelled_at TEXT NOT NULL,
+                        PRIMARY KEY(workflow_id,ordinal,revision))''')
+                    db.execute('UPDATE schema_info SET version=4')
+                    tables.add('step_revisions')
+                    revision_columns = ['workflow_id', 'ordinal', 'revision',
+                                        'step_json', 'cancelled_at']
+                require(tables == legacy_tables | {'step_revisions'},
+                        'Unknown or incomplete autonomy schema')
                 require(set(workflow_columns) == {'workflow_id', 'node_id', 'user_id',
                     'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
                     'ui_seen_at', 'spent_cost', 'created_at', 'activated_at',
@@ -415,7 +439,9 @@ class AutonomyQueue:
                     and set(step_columns) == {'workflow_id', 'ordinal', 'step_id',
                     'action_id', 'action_version', 'descriptor_digest', 'state',
                     'approval_digest', 'not_before', 'result_json', 'error'}
-                    and len(step_columns) == 11,
+                    and len(step_columns) == 11
+                    and revision_columns == ['workflow_id', 'ordinal', 'revision',
+                                              'step_json', 'cancelled_at'],
                     'Unknown or incomplete autonomy schema')
                 db.execute("UPDATE steps SET state='unknown', error=? "
                            "WHERE state='dispatching'",
@@ -508,7 +534,17 @@ class AutonomyQueue:
                             result=(json.loads(bytes(stored['result_json']))
                                     if stored['result_json'] is not None else None),
                             error=stored['error'])
+                item['dispatch_digest'] = digest({'workflow_id': workflow_id,
+                    'step_id': planned['step_id'], 'descriptor': digest(descriptor),
+                    'input': planned['input'], 'privacy': planned['privacy'],
+                    'not_before': stored['not_before']})
                 result['steps'].append(item)
+            revisions = db.execute('SELECT ordinal,revision,step_json,cancelled_at '
+                'FROM step_revisions WHERE workflow_id=? ORDER BY ordinal,revision',
+                (workflow_id,)).fetchall()
+            result['revisions'] = [{'ordinal': item[0], 'revision': item[1],
+                'step': json.loads(bytes(item[2])), 'state': 'cancelled',
+                'cancelled_at': item[3]} for item in revisions]
             return result
 
     def list(self, node_id, user_id, project_id=None):
@@ -718,6 +754,87 @@ class AutonomyQueue:
             db.execute('UPDATE workflows SET plan_digest=?,plan_json=?,updated_at=? '
                        'WHERE workflow_id=?', (plan_digest, raw, now(), workflow_id))
             db.commit()
+        return self.get(workflow_id, node_id, user_id)
+
+    def revise_pending_step(self, workflow_id, step, node_id, user_id):
+        """Replace only the pending search proposal while retaining its audit record."""
+        with closing(self._connect()) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
+                             (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
+            require(row['state'] in {'queued', 'paused', 'countdown',
+                                     'awaiting-approval'},
+                    'Autonomy search step cannot be edited now')
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
+            require(plan['schema_version'] == 2, 'Static autonomy step cannot be revised')
+            ordinal = len(plan['steps']) - 1; previous = plan['steps'][ordinal]
+            stored = db.execute('SELECT * FROM steps WHERE workflow_id=? AND ordinal=?',
+                                (workflow_id, ordinal)).fetchone()
+            require(stored is not None
+                    and stored['state'] in {'queued', 'countdown', 'awaiting-approval'}
+                    and previous['action'] == {
+                        'id': 'search.iterative-query', 'version': '1.0'},
+                    'Only an undispatched search step can be revised')
+            require(step.get('action') == previous['action']
+                    and step.get('privacy') == previous['privacy']
+                    and step.get('cost_units') == previous['cost_units']
+                    and step.get('depends_on') == previous['depends_on']
+                    and step.get('input', {}).get('request', {}).get('task_id')
+                    == previous['input']['request']['task_id']
+                    and step.get('input', {}).get('preview', {}).get('round_index')
+                    == previous['input']['preview']['round_index']
+                    and step.get('input', {}).get('request', {}).get('parent_search_id')
+                    == previous['input']['request'].get('parent_search_id'),
+                    'Edited search step changed the activated policy')
+            updated = deepcopy(plan); updated['steps'][ordinal] = deepcopy(step)
+            updated = parse_plan(updated, self.registry, allow_materialized=True)
+            revision = db.execute('SELECT COALESCE(MAX(revision),0)+1 '
+                'FROM step_revisions WHERE workflow_id=? AND ordinal=?',
+                (workflow_id, ordinal)).fetchone()[0]
+            cancelled = now()
+            db.execute('INSERT INTO step_revisions VALUES(?,?,?,?,?)',
+                (workflow_id, ordinal, revision, canonical(previous), cancelled))
+            descriptor = self.registry.resolve(step['action']['id'],
+                                               step['action']['version'])
+            db.execute('UPDATE steps SET step_id=?,action_id=?,action_version=?,'
+                'descriptor_digest=?,state=?,approval_digest=NULL,not_before=NULL,'
+                'result_json=NULL,error=NULL WHERE workflow_id=? AND ordinal=?',
+                (step['step_id'], descriptor['action_id'], descriptor['version'],
+                 digest(descriptor), 'queued', workflow_id, ordinal))
+            raw = canonical(updated)
+            following = 'paused' if row['state'] == 'paused' else 'queued'
+            db.execute('UPDATE workflows SET plan_digest=?,plan_json=?,state=?,updated_at=? '
+                       'WHERE workflow_id=?',
+                       (digest(raw), raw, following, cancelled, workflow_id))
+            db.commit()
+        return self.get(workflow_id, node_id, user_id)
+
+    def send_now(self, workflow_id, step_id, node_id, user_id, dispatch_digest):
+        """Explicitly release one exact countdown step without weakening other checks."""
+        with closing(self._connect()) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
+                             (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
+            require(row['state'] == 'countdown' and self._ui_live(row),
+                    'Send now requires a live countdown')
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
+            planned = next((item for item in plan['steps']
+                            if item['step_id'] == step_id), None)
+            stored = db.execute('SELECT * FROM steps WHERE step_id=?', (step_id,)).fetchone()
+            require(planned is not None and stored is not None
+                    and stored['state'] == 'countdown',
+                    'Search step is not in countdown')
+            descriptor = self.registry.resolve(planned['action']['id'],
+                                               planned['action']['version'])
+            expected = digest({'workflow_id': workflow_id, 'step_id': step_id,
+                'descriptor': digest(descriptor), 'input': planned['input'],
+                'privacy': planned['privacy'], 'not_before': stored['not_before']})
+            require(dispatch_digest == expected,
+                    'Send-now confirmation differs from displayed search step')
+            db.execute("UPDATE steps SET not_before='1970-01-01T00:00:00Z' "
+                       'WHERE step_id=?', (step_id,)); db.commit()
         return self.get(workflow_id, node_id, user_id)
 
     def cancel(self, workflow_id, node_id, user_id):

@@ -735,6 +735,17 @@ class ChatService:
         return dict(candidate['preview'],
                     preview_sha256=candidate['preview_sha256'], state='candidate')
 
+    def task_search_autonomy_candidate(self, request):
+        """Return an exact unpersisted proposal plus its validated project binding."""
+        candidate = self._task_search_candidate(request)
+        require(candidate['existing'] is None,
+                'Search run is already prepared and cannot enter automatic countdown')
+        preview = dict(candidate['preview'],
+                       preview_sha256=candidate['preview_sha256'], state='candidate')
+        return {'request': candidate['request'], 'preview': preview,
+                'project_id': candidate['row']['project_id'],
+                'expected_head': candidate['row']['project_commit']}
+
     def task_search_preview(self, request):
         candidate = self._task_search_candidate(request)
         request = candidate['request']

@@ -1067,7 +1067,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .provider-link{color:#176b60;font-weight:600}
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
-.search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}
+.search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}.search-autonomy-controls{border:1px solid #bfcdc9;border-radius:9px;padding:10px}.search-autonomy-controls label{margin-right:10px}.search-autonomy{width:100%;border:1px solid #bfcdc9;border-left:5px solid #c69224;border-radius:10px;background:#f8fbfc;padding:12px}.search-autonomy[data-state="countdown"]{border-left-color:#2d8a62}.search-autonomy h4{margin:0 0 8px}.search-autonomy-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:8px 0}.search-autonomy-facts dt{font-weight:700}.search-autonomy-facts dd{margin:0;overflow-wrap:anywhere}.search-autonomy progress{width:100%;accent-color:#176b60}.search-autonomy .task-actions input{min-width:min(28rem,100%);flex:1}.search-next-query{width:100%;display:grid;gap:7px}
 #resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
 #resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
 #resource-monitor-open:hover{background:#1c3549}#resource-monitor-open>*{pointer-events:none}
@@ -4054,6 +4054,107 @@ function taskButton(label,handler,secondary=false){
  const button=document.createElement('button');button.type='button';button.textContent=label;
  if(secondary)button.className='secondary-button';button.addEventListener('click',handler);return button;
 }
+function searchAutonomyWorkflow(taskId){
+ return (autonomyQueue?.workflows || []).find(workflow=>
+  !autonomyTerminal.has(workflow.state) && workflow.steps?.some(step=>
+   step.action?.id==='search.iterative-query' &&
+   step.input?.request?.task_id===taskId));
+}
+function currentSearchAutonomyStep(workflow){
+ return workflow?.steps?.find(step=>!['completed','failed','unknown','cancelled'].includes(step.state)) ||
+  workflow?.steps?.at(-1) || null;
+}
+async function refreshActiveTaskOutcomes(){
+ if(!activeProject || !activeTaskThreadId)return;
+ const tasks=await projectRequest('/v1/tasks/list',{
+  project_id:activeProject.id,thread_id:activeTaskThreadId});
+ taskOutcomes=tasks.outcomes;renderTaskPublicSources();renderChat(activeThread);
+}
+async function prepareAutomaticSearch(projection,query,parentSearchId,countdownSeconds){
+ const request={workflow_id:crypto.randomUUID(),task_id:projection.task_id,
+  mode:'automatic',countdown_seconds:countdownSeconds};
+ if(query!==null)Object.assign(request,{query,parent_search_id:parentSearchId});
+ chatOperationStatus.textContent='Připravuji přesný automatický plán bez odeslání…';
+ try{await projectRequest('/v1/autonomy/search/prepare',request);await loadAutonomyQueue(false);
+  renderChat(activeThread);chatOperationStatus.textContent=
+   'Automatický plán je připravený. Zkontrolujte dotaz, cíl, privacy a budget a výslovně jej aktivujte.';
+ }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);}
+}
+function renderSearchAutonomy(container,projection,query,parentSearchId){
+ const workflow=searchAutonomyWorkflow(projection.task_id);
+ if(!workflow){
+  const controls=document.createElement('fieldset');controls.className='search-autonomy-controls';
+  const legend=document.createElement('legend');legend.textContent='Režim dalšího dotazu';
+  const modeLabel=document.createElement('label');modeLabel.textContent='Režim ';
+  const mode=document.createElement('select');
+  mode.append(new Option('Ruční kontrola','manual'),new Option('Automaticky s odpočtem','automatic'));
+  modeLabel.append(mode);
+  const countdownLabel=document.createElement('label');countdownLabel.textContent=' Odpočet ';
+  const countdown=document.createElement('select');
+  for(const seconds of [3,4,5])countdown.append(new Option(`${seconds} s`,String(seconds)));
+  countdown.value='5';countdown.disabled=true;countdownLabel.append(countdown);
+  const run=taskButton('Připravit ruční kontrolu',()=>mode.value==='manual' ?
+   prepareTaskSearch(projection,query,parentSearchId) :
+   prepareAutomaticSearch(projection,query,parentSearchId,Number(countdown.value)));
+  mode.addEventListener('change',()=>{const automatic=mode.value==='automatic';
+   countdown.disabled=!automatic;run.textContent=automatic?'Připravit automatiku':'Připravit ruční kontrolu';});
+  controls.append(legend,modeLabel,countdownLabel,run);container.append(controls);return;
+ }
+ const step=currentSearchAutonomyStep(workflow),preview=step?.input?.preview || {};
+ const panel=document.createElement('section');panel.className='search-autonomy';panel.dataset.state=workflow.state;
+ const title=document.createElement('h4');title.textContent=
+  `${workflow.mode==='automatic'?'Automatický':'Ruční'} přenos dotazu · ${workflow.state}`;
+ const facts=document.createElement('dl');facts.className='search-autonomy-facts';
+ const fact=(name,value)=>{const term=document.createElement('dt');term.textContent=name;
+  const detail=document.createElement('dd');detail.textContent=String(value ?? '—');facts.append(term,detail);};
+ fact('Dotaz',preview.query);fact('Účel',preview.purpose);
+ fact('Cíl',preview.binding ? `${preview.binding.endpoint || preview.binding.adapter || 'SearXNG'} · ${preview.binding.target_id || '—'}` : '—');
+ fact('Privacy',step?.privacy);fact('Kolo',preview.round_index);
+ fact('Budget',`${workflow.spent_cost}/${workflow.budget.max_cost_units} cost · nejvýše ${workflow.budget.max_steps} kol · ${workflow.budget.max_seconds} s`);
+ if(workflow.state==='countdown'&&step?.not_before){const term=document.createElement('dt');term.textContent='Odeslání za';
+  const detail=document.createElement('dd'),count=document.createElement('strong');count.className='search-autonomy-countdown';
+  count.dataset.notBefore=step.not_before;detail.append(count);facts.append(term,detail);}
+ const progress=document.createElement('progress');progress.max=Math.max(1,workflow.budget.max_cost_units);
+ progress.value=workflow.spent_cost;progress.setAttribute('aria-label','Využitý rozpočet automatického hledání');
+ const actions=document.createElement('div');actions.className='task-actions';
+ const attach=()=>projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});
+ if(workflow.state==='proposed')actions.append(taskButton('Aktivovat automatiku',async()=>{
+  if(!confirm(`Aktivovat automatické hledání?\n\nDotaz: ${preview.query}\nCíl: ${preview.binding?.endpoint || preview.binding?.adapter}\nPrivacy: ${step.privacy}\nKolo: ${preview.round_index}\nBudget: ${workflow.budget.max_steps} kroků / ${workflow.budget.max_cost_units} cost\nOdpočet: ${workflow.countdown_seconds} s`))return;
+  await attach();await autonomyRequest('/v1/autonomy/activate',{
+   workflow_id:workflow.workflow_id,activation_digest:workflow.activation_digest});renderChat(activeThread);
+ }));
+ if(workflow.state==='countdown')actions.append(taskButton('Odeslat nyní',async()=>{
+  if(!confirm(`Odeslat nyní přesně zobrazený dotaz?\n\n${preview.query}`))return;
+  await autonomyRequest('/v1/autonomy/send-now',{workflow_id:workflow.workflow_id,
+   step_id:step.step_id,dispatch_digest:step.dispatch_digest});
+  await refreshActiveTaskOutcomes();renderChat(activeThread);
+ }));
+ if(['queued','countdown'].includes(workflow.state))actions.append(taskButton('Pozastavit',async()=>{
+  await autonomyRequest('/v1/autonomy/pause',{workflow_id:workflow.workflow_id});renderChat(activeThread);
+ },true));
+ if(workflow.state==='paused')actions.append(taskButton('Pokračovat',async()=>{
+  await attach();await autonomyRequest('/v1/autonomy/resume',{workflow_id:workflow.workflow_id});renderChat(activeThread);
+ }));
+ const editable=step && ['queued','countdown','awaiting-approval'].includes(step.state) &&
+  step.input?.request?.parent_search_id;
+ if(editable){const edit=document.createElement('input');edit.value=preview.query || '';
+  edit.maxLength=4096;edit.setAttribute('aria-label','Upravený webový dotaz');
+  actions.append(edit,taskButton('Uložit úpravu',async()=>{
+   await autonomyRequest('/v1/autonomy/search/edit',{
+    workflow_id:workflow.workflow_id,query:edit.value});renderChat(activeThread);
+  },true));}
+ if(!autonomyTerminal.has(workflow.state))actions.append(taskButton('Zrušit',async()=>{
+  if(!confirm('Zrušit automatické hledání a dosud neodeslané dotazy?'))return;
+  await autonomyRequest('/v1/autonomy/cancel',{workflow_id:workflow.workflow_id});
+  await refreshActiveTaskOutcomes();renderChat(activeThread);
+ },true));
+ panel.append(title,facts,progress,actions);
+ if(workflow.revisions?.length){const history=document.createElement('details');
+  const summary=document.createElement('summary');summary.textContent=`Zrušené verze dotazu (${workflow.revisions.length})`;
+  const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.revisions,null,2);
+  history.append(summary,pre);panel.append(history);}
+ container.append(panel);updateAutonomyCountdownLabels();
+}
 function taskPlanSummary(plan){
  if(!plan)return '';
  const sources={conversation:'konverzace',artifacts:'interní artefakty','public-web':'veřejné zdroje'};
@@ -4197,11 +4298,16 @@ function renderTaskOutcomes(){
    const actions=document.createElement('div');actions.className='task-actions';
    const workflow=projection.search_workflow,latest=workflow?.rounds?.at(-1);
    if(!workflow || !latest?.evaluation){
-    actions.append(taskButton('Zkontrolovat webový dotaz',()=>prepareTaskSearch(projection)));
+    renderSearchAutonomy(actions,projection,null,null);
    }else{
-   for(const nextQuery of workflow.next_queries || []){
-     actions.append(taskButton(`Zkontrolovat další dotaz: ${nextQuery}`,
-      ()=>prepareTaskSearch(projection,nextQuery,latest.search_id)));
+   const activeAutomatic=searchAutonomyWorkflow(projection.task_id);
+   if(activeAutomatic){renderSearchAutonomy(actions,projection,
+    activeAutomatic.steps.at(-1)?.input?.preview?.query || null,latest.search_id);}
+   else for(const nextQuery of workflow.next_queries || []){
+     const option=document.createElement('div');option.className='search-next-query';
+     const label=document.createElement('strong');label.textContent=`Navržený další dotaz: ${nextQuery}`;
+     option.append(label);renderSearchAutonomy(option,projection,nextQuery,latest.search_id);
+     actions.append(option);
     }
     if(!(workflow.next_queries || []).length){const hint=document.createElement('small');
      hint.textContent='Výsledek není konečný. Zpřesnění dalšího kola napište do pole dole.';
@@ -4388,7 +4494,8 @@ async function openStoredThread(threadId){
  selectMainTab(document.querySelector('#chat-tab'));renderThreadList(knownThreads);
  try{const tasks=thread.project_id ? await projectRequest('/v1/tasks/list',{
    project_id:thread.project_id,thread_id:thread.thread_id}) : {outcomes:[]};
-  taskOutcomes=tasks.outcomes;renderTaskPublicSources();renderChat(thread);
+  taskOutcomes=tasks.outcomes;await loadAutonomyQueue(false);
+  renderTaskPublicSources();renderChat(thread);
   chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
@@ -5138,6 +5245,25 @@ const autonomyList=document.querySelector('#autonomy-list');
 let autonomyQueue={global_paused:false,workflows:[]},autonomyHeartbeatBusy=false;
 const autonomyTimers=new Map();
 const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
+function isSearchAutonomy(workflow){
+ return workflow.steps?.some(step=>step.action?.id==='search.iterative-query');
+}
+function autonomyWorkflowVisible(workflow){
+ if(!activeProject || document.visibilityState!=='visible')return false;
+ if(isSearchAutonomy(workflow)){
+  const taskId=workflow.steps?.[0]?.input?.request?.task_id;
+  return document.querySelector('#chat-tab').getAttribute('aria-selected')==='true' &&
+   taskOutcomes.some(item=>item.task_id===taskId);
+ }
+ return autonomyPanel.open &&
+  document.querySelector('#workflow-tab').getAttribute('aria-selected')==='true';
+}
+function updateAutonomyCountdownLabels(){
+ for(const label of document.querySelectorAll('.search-autonomy-countdown[data-not-before]')){
+  const remaining=Math.max(0,new Date(label.dataset.notBefore).getTime()-Date.now());
+  label.textContent=`${Math.ceil(remaining/1000)} s`;
+ }
+}
 function autonomyButton(label,action,className='secondary-button'){
  const button=document.createElement('button');button.type='button';button.className=className;
  button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;try{await action();}catch(error){autonomyStatus.textContent=error.message;}finally{button.disabled=false;}});return button;
@@ -5146,13 +5272,14 @@ async function autonomyRequest(path,payload={}){
  const result=await projectRequest(path,payload,120000);if(activeProject)await loadAutonomyQueue(false);return result;
 }
 function scheduleAutomaticWorkflow(workflow){
- if(workflow.mode!=='automatic'||autonomyQueue.global_paused||document.visibilityState!=='visible'||!autonomyPanel.open)return;
- const step=workflow.steps.find(item=>!['completed','failed','unknown','cancelled'].includes(item.state));if(!step)return;
+ if(workflow.mode!=='automatic'||autonomyQueue.global_paused||!autonomyWorkflowVisible(workflow))return;
+ const step=workflow.steps.find(item=>!['completed','failed','unknown','cancelled'].includes(item.state));
  let delay=null;
- if(workflow.state==='queued'&&step.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
- if(workflow.state==='countdown'&&step.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
+ if(workflow.state==='queued'&&!step&&workflow.steps.every(item=>item.state==='completed'))delay=350;
+ if(workflow.state==='queued'&&step?.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
+ if(workflow.state==='countdown'&&step?.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
  if(delay===null)return;
- autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(document.visibilityState!=='visible'||!autonomyPanel.open)return;try{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});}catch(error){autonomyStatus.textContent=error.message;}},delay));
+ autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;try{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
 }
 function renderAutonomyQueue(){
  for(const timer of autonomyTimers.values())clearTimeout(timer);autonomyTimers.clear();
@@ -5180,13 +5307,12 @@ function renderAutonomyQueue(){
 async function loadAutonomyQueue(showStatus=true){
  if(!activeProject){autonomyQueue={global_paused:false,workflows:[]};renderAutonomyQueue();return;}
  if(showStatus)autonomyStatus.textContent='Načítám řízenou frontu…';
- try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(showStatus)autonomyStatus.textContent=`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;}
+ try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')renderChat(activeThread);if(showStatus)autonomyStatus.textContent=`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;}
  catch(error){autonomyStatus.textContent=error.message;}
 }
 async function refreshAutonomyLease(){
- const visible=activeProject&&autonomyPanel.open&&document.visibilityState==='visible'&&document.querySelector('#workflow-tab').getAttribute('aria-selected')==='true';
  if(autonomyHeartbeatBusy)return;autonomyHeartbeatBusy=true;
- try{for(const workflow of autonomyQueue.workflows||[])if(!autonomyTerminal.has(workflow.state)){const path=visible?'/v1/autonomy/attach':'/v1/autonomy/detach';await projectRequest(path,{workflow_id:workflow.workflow_id});}if(visible)await loadAutonomyQueue(false);}catch(error){autonomyStatus.textContent=error.message;}finally{autonomyHeartbeatBusy=false;}
+ try{let anyVisible=false;for(const workflow of autonomyQueue.workflows||[])if(!autonomyTerminal.has(workflow.state)){const visible=autonomyWorkflowVisible(workflow);anyVisible ||= visible;const path=visible?'/v1/autonomy/attach':'/v1/autonomy/detach';await projectRequest(path,{workflow_id:workflow.workflow_id});}if(anyVisible)await loadAutonomyQueue(false);}catch(error){autonomyStatus.textContent=error.message;}finally{autonomyHeartbeatBusy=false;}
 }
 autonomyPanel.addEventListener('toggle',()=>{if(autonomyPanel.open){loadAutonomyQueue().then(refreshAutonomyLease);}else refreshAutonomyLease();});
 document.querySelector('#autonomy-refresh').addEventListener('click',()=>loadAutonomyQueue());
@@ -5202,7 +5328,8 @@ document.querySelector('#autonomy-plan-check').addEventListener('click',async()=
 });
 document.querySelector('#autonomy-global-pause').addEventListener('click',()=>autonomyRequest(autonomyQueue.global_paused?'/v1/autonomy/resume-all':'/v1/autonomy/pause-all'));
 document.querySelector('#workflow-tab').addEventListener('click',()=>{if(autonomyPanel.open)loadAutonomyQueue().then(refreshAutonomyLease);});
-document.addEventListener('visibilitychange',refreshAutonomyLease);setInterval(refreshAutonomyLease,5000);
+document.querySelector('#chat-tab').addEventListener('click',()=>loadAutonomyQueue(false).then(refreshAutonomyLease));
+document.addEventListener('visibilitychange',refreshAutonomyLease);setInterval(refreshAutonomyLease,5000);setInterval(updateAutonomyCountdownLabels,250);
 function resetWorkflowProjection(message=''){
  roleWorkflow=null;pendingWorkflowRequest=null;pendingWorkflowPublish=null;
  for(const id of ['workflow-creator-preview','workflow-creator-result','workflow-opponent-preview',
@@ -5665,6 +5792,8 @@ class DesktopHandler(Handler):
         '/v1/workflows/creator/dispatch', '/v1/workflows/opponent/prepare',
         '/v1/workflows/opponent/dispatch', '/v1/workflows/publish',
         '/v1/autonomy/status', '/v1/autonomy/prepare', '/v1/autonomy/replace',
+        '/v1/autonomy/search/prepare', '/v1/autonomy/search/edit',
+        '/v1/autonomy/send-now',
         '/v1/autonomy/attach',
         '/v1/autonomy/detach', '/v1/autonomy/activate', '/v1/autonomy/approve',
         '/v1/autonomy/pause', '/v1/autonomy/resume', '/v1/autonomy/cancel',
@@ -5825,6 +5954,18 @@ class DesktopHandler(Handler):
                     return self.reply(200, service.prepare(request))
                 if self.path == '/v1/autonomy/replace':
                     return self.reply(200, service.replace(request))
+                if self.path == '/v1/autonomy/search/prepare':
+                    return self.reply(200, service.prepare_search(request))
+                if (self.path == '/v1/autonomy/search/edit'
+                        and set(request) == {'workflow_id', 'query'}):
+                    return self.reply(200, service.edit_search(
+                        request['workflow_id'], request['query']))
+                if (self.path == '/v1/autonomy/send-now'
+                        and set(request) == {
+                            'workflow_id', 'step_id', 'dispatch_digest'}):
+                    return self.reply(200, service.send_now(
+                        request['workflow_id'], request['step_id'],
+                        request['dispatch_digest']))
                 if (self.path == '/v1/autonomy/activate'
                         and set(request) == {'workflow_id', 'activation_digest'}):
                     return self.reply(200, service.activate(

@@ -108,13 +108,16 @@ class ActionAutonomyTests(unittest.TestCase):
         path.chmod(0o600)
         queue = self.queue()
         with closing(sqlite3.connect(queue.path)) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 3)
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 4)
             self.assertIn('ui_seen_at', [row[1] for row in
                                         db.execute('PRAGMA table_info(workflows)')])
             self.assertIn('not_before', [row[1] for row in
                                         db.execute('PRAGMA table_info(steps)')])
             self.assertIn('activation_digest', [row[1] for row in
                 db.execute('PRAGMA table_info(workflows)')])
+            self.assertEqual([row[1] for row in
+                db.execute('PRAGMA table_info(step_revisions)')],
+                ['workflow_id', 'ordinal', 'revision', 'step_json', 'cancelled_at'])
 
     def test_automatic_mode_is_only_a_proposal_until_exact_opt_in(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
@@ -303,13 +306,30 @@ class ActionAutonomyTests(unittest.TestCase):
                               countdown_seconds=0)
         activated = self.prepare_and_activate(queue, plan)
         self.assertEqual(activated['countdown_seconds'], 4)
+        edited = search_step('edited first', 1)
+        edited['input']['request']['task_id'] = task_id
+        edited['input']['preview']['task_id'] = task_id
+        revised = queue.revise_pending_step(
+            self.workflow_id, edited, self.node_id, self.user_id)
+        self.assertEqual(revised['steps'][0]['input']['preview']['query'], 'edited first')
+        self.assertEqual(revised['revisions'][0]['step']['step_id'], first['step_id'])
+        self.assertEqual(revised['revisions'][0]['state'], 'cancelled')
+        countdown = self.advance(queue)
+        self.assertEqual(countdown['state'], 'countdown')
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            queue.send_now(self.workflow_id, edited['step_id'], self.node_id,
+                           self.user_id, '0' * 64)
+        released = queue.send_now(self.workflow_id, edited['step_id'], self.node_id,
+                                  self.user_id,
+                                  countdown['steps'][0]['dispatch_digest'])
+        self.assertEqual(released['steps'][0]['not_before'], '1970-01-01T00:00:00Z')
         with closing(sqlite3.connect(queue.path)) as db:
             db.execute("UPDATE steps SET state='completed',result_json=? "
-                       "WHERE step_id=?", (b'{}', first['step_id']))
+                       "WHERE step_id=?", (b'{}', edited['step_id']))
             db.execute("UPDATE workflows SET state='queued' WHERE workflow_id=?",
                        (self.workflow_id,)); db.commit()
-        second = search_step('second', 2, first['input']['request']['search_id'],
-                             [first['step_id']])
+        second = search_step('second', 2, edited['input']['request']['search_id'],
+                             [edited['step_id']])
         appended = queue.append_step(self.workflow_id, second,
             self.node_id, self.user_id)
         self.assertEqual(len(appended['steps']), 2)
