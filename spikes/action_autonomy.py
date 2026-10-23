@@ -284,6 +284,16 @@ class AutonomyQueue:
                 require(tables == {'schema_info', 'settings', 'workflows', 'steps'}
                         and versions == [(1,)],
                         'Unknown or incomplete autonomy schema')
+                workflow_columns = [row[1] for row in
+                    db.execute('PRAGMA table_info(workflows)')]
+                step_columns = [row[1] for row in db.execute('PRAGMA table_info(steps)')]
+                require(workflow_columns == ['workflow_id', 'node_id', 'user_id',
+                    'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
+                    'spent_cost', 'created_at', 'activated_at', 'updated_at', 'error']
+                    and step_columns == ['workflow_id', 'ordinal', 'step_id',
+                    'action_id', 'action_version', 'descriptor_digest', 'state',
+                    'approval_digest', 'result_json', 'error'],
+                    'Unknown or incomplete autonomy schema')
                 db.execute("UPDATE steps SET state='unknown', error=? "
                            "WHERE state='dispatching'",
                            ('Restart occurred during action dispatch',))
@@ -358,6 +368,24 @@ class AutonomyQueue:
                             error=stored['error'])
                 result['steps'].append(item)
             return result
+
+    def list(self, node_id, user_id, project_id=None):
+        """Return a bounded owner-filtered projection suitable for queue UI."""
+        uuid(node_id); uuid(user_id)
+        if project_id is not None:
+            uuid(project_id)
+        with closing(self._connect()) as db:
+            parameters = [node_id, user_id]
+            where = 'node_id=? AND user_id=?'
+            if project_id is not None:
+                where += ' AND project_id=?'; parameters.append(project_id)
+            rows = db.execute('SELECT workflow_id FROM workflows WHERE ' + where
+                + ' ORDER BY updated_at DESC,workflow_id LIMIT 128', parameters).fetchall()
+            global_paused = bool(
+                db.execute('SELECT global_paused FROM settings').fetchone()[0])
+        return {'schema_version': 1, 'global_paused': global_paused,
+                'workflows': [self.get(row['workflow_id'], node_id, user_id)
+                              for row in rows]}
 
     def attach_ui(self, workflow_id, node_id, user_id):
         return self._set_attached(workflow_id, node_id, user_id, True)

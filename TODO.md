@@ -37,14 +37,14 @@ zůstávají v platnosti.
   Přesný plán, režim a budget navíc vyžadují samostatný opt-in digest; samotné
   plannerem navržené `automatic` nic neaktivuje. Kontrakt a recovery popisuje
   [ADR 0044](docs/adr/0044-governed-orchestration-autonomy.md).
-- [ ] [in progress] **F-M4-AUTONOMY-01-B — Durable bounded fronta a recovery
-  (cílová úroveň: implemented).** Implementovaný node-local journal už pokrývá
+- [x] [completed] **F-M4-AUTONOMY-01-B — Durable bounded fronta a recovery
+  (implemented).** Node-local journal pokrývá
   ruční/automatický režim,
   viditelný stav a mezivýsledky, pause/resume/cancel, limity kroků/času/nákladů,
-  souběžná workflow a zákaz automatického retry neurčitého účinku. Zbývá
-  doplnit test vyčerpaného časového budgetu, cancel/restart všech stavů a
-  bezpečný výpis více workflow pro UI.
-- [ ] [planned] **F-M4-AUTONOMY-01-C — Integrační service a approval boundary
+  souběžná workflow, owner-filtered bounded výpis a zákaz automatického retry
+  neurčitého účinku. Restart odpojí UI, pozastaví bezpečně obnovitelné kroky a
+  změní rozpracovaný dispatch na terminální `unknown`.
+- [ ] [in progress] **F-M4-AUTONOMY-01-C — Integrační service a approval boundary
   (cílová úroveň: implemented).** Deterministicky autorizovat registrované
   adaptéry pro read-only analýzu, externí dotaz a rolový handoff; návrh
   lokálního výstupu vždy zastavit na přesném lidském checkpointu.
@@ -74,12 +74,12 @@ existující zapisovací operací po konkrétním approval.
 
 ## Průběžné ověření — 2026-10-23
 
-- `tests.test_action_autonomy`: **10 testů OK** — registry, explicitní opt-in,
+- `tests.test_action_autonomy`: **12 testů OK** — registry, explicitní opt-in,
   kombinovaný workflow, manuální režim, přesný lokální checkpoint, změny
   oprávnění/privacy/HEAD, globální pause, odpojení UI, editace, souběh, restart
-  v `dispatching` a `unknown` bez retry.
+  návrhu/approval/`dispatching`, časový budget, cancel a `unknown` bez retry.
 - Související regresní sada `test_action_autonomy`, `test_output_capabilities`,
   `test_output_execution`, `test_role_workflow_service` mimo socketově omezený
-  sandbox: **35 testů OK, 1 volitelný live test přeskočen**.
+  sandbox: **37 testů OK, 1 volitelný live test přeskočen**.
 - `py_compile` nového modulu a testu prošel. Úplná sada ani UI/integration
   akceptace zatím spuštěné nebyly; dávka zůstává otevřená.

@@ -110,6 +110,47 @@ class ActionAutonomyTests(unittest.TestCase):
         self.assertEqual((one['spent_cost'], two['spent_cost']), (2, 3))
         self.assertNotEqual(one['steps'][0]['result'], None)
         self.assertNotEqual(two['steps'][0]['result'], None)
+        listed = queue.list(self.node_id, self.user_id, self.project_id)
+        self.assertEqual({item['workflow_id'] for item in listed['workflows']},
+                         {self.workflow_id, second_id})
+        self.assertEqual(queue.list(str(uuid4()), str(uuid4()))['workflows'], [])
+
+    def test_time_budget_and_cancel_fail_closed_before_effect(self):
+        step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue(); self.prepare_and_activate(queue, self.plan([step]))
+        with sqlite3.connect(queue.path) as db:
+            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
+                       "WHERE workflow_id=?", (self.workflow_id,))
+        with self.assertRaisesRegex(ValidationError, 'time budget'):
+            self.advance(queue)
+        cancelled = queue.cancel(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((cancelled['state'], cancelled['steps'][0]['state']),
+                         ('cancelled', 'cancelled'))
+        self.assertEqual(self.calls, [])
+
+    def test_restart_detaches_proposal_and_approval_without_losing_evidence(self):
+        step = self.step('query.external',
+            {'request_sha256': '2' * 64, 'target': 'reviewed-provider'},
+            privacy='public')
+        plan = self.plan([step], privacy='public')
+        queue = self.queue(); proposed = queue.prepare(plan, self.node_id, self.user_id)
+        queue.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        restarted = self.queue()
+        result = restarted.get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((result['state'], result['ui_attached']), ('proposed', False))
+        restarted.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        restarted.activate(self.workflow_id, self.node_id, self.user_id,
+                           proposed['activation_digest'])
+        result = self.advance(restarted)
+        self.assertEqual(result['steps'][0]['state'], 'awaiting-approval')
+        restarted = self.queue()
+        result = restarted.get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((result['state'], result['ui_attached'],
+                          result['steps'][0]['state']),
+                         ('awaiting-approval', False, 'awaiting-approval'))
+        with self.assertRaisesRegex(ValidationError, 'attached workflow'):
+            restarted.approve(self.workflow_id, step['step_id'],
+                              self.node_id, self.user_id)
 
     def test_combined_automatic_workflow_stops_for_external_and_each_local_output(self):
         analysis = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
