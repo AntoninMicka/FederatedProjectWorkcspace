@@ -73,6 +73,16 @@ automatickou publikaci lokálního artefaktu.
   journal jako běžné vypršení odpočtu. Cílených 25 testů prošlo; úplná sada
   23. 10. 2026 skončila 776 testy OK, 28 podmíněně přeskočeno. Reálný
   vícekolový průchod, restartové stavy a fyzická UI akceptace zůstávají v D.
+- [x] [completed] **F-M3-SEARCH-03-C1 — jednotná časová osa chatu a úloh
+  (ad-hoc, cílová úroveň: implemented).** Hlášení uživatele odhalilo, že UI
+  nejprve vykreslovalo všechny uložené zprávy a teprve pod nimi samostatný blok
+  task projekcí včetně opakovaných vstupů. Renderer nyní skládá jedinou stabilní
+  časovou osu podle `created_at`; task svázaný přes `prompt.message_id` vloží
+  výstup bezprostředně za existující vstup a prompt podruhé nevykreslí. Task bez
+  uložené chatové zprávy vloží jako sousední dvojici vstup–výstup na jeho
+  časovou pozici. Změna je pouze projekční, nemění persistentní data ani jejich
+  recovery. Desktopových 46 testů prošlo, 3 podmíněně přeskočeny; úplná sada
+  23. 10. 2026 skončila 776 testy OK, 28 podmíněně přeskočeno.
 - [ ] [planned] **F-M3-SEARCH-03-D — regrese a fyzická akceptace
   (cílová úroveň: PoC validated).** Ověřit ruční i automatický vícekolový tok,
   editaci během countdownu, pause celé fronty, vyčerpaný budget, změny policy,

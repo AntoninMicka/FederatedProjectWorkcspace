@@ -3889,17 +3889,36 @@ function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
 }
-function renderChat(thread){
- activeThread=thread || null;chatMessages.replaceChildren();
- if(responseLanguagePolicy)applyResponseLanguageStatus({response_language_policy:responseLanguagePolicy});
- for(const item of thread?.messages || []){
+function buildChatTimeline(thread,projections){
+ const messages=thread?.messages || [],messageIds=new Set(messages.map(item=>item.message_id));
+ const tasksByPrompt=new Map(),entries=[];
+ for(const projection of projections){
+  const messageId=projection.prompt?.message_id;
+  if(messageIds.has(messageId)){
+   if(!tasksByPrompt.has(messageId))tasksByPrompt.set(messageId,[]);
+   tasksByPrompt.get(messageId).push(projection);
+  }else entries.push({kind:'task',created_at:projection.created_at,
+   stable_id:projection.task_id,value:projection});
+ }
+ for(const [index,item] of messages.entries())entries.push({kind:'message',
+  created_at:item.created_at,stable_id:String(index).padStart(12,'0'),value:item,
+  tasks:tasksByPrompt.get(item.message_id) || []});
+ entries.sort((left,right)=>{
+  const byTime=Date.parse(left.created_at)-Date.parse(right.created_at);
+  if(byTime)return byTime;
+  if(left.kind!==right.kind)return left.kind==='message'?-1:1;
+  return left.stable_id.localeCompare(right.stable_id);
+ });
+ return entries;
+}
+function renderThreadMessage(item,thread){
   const message=document.createElement('div');message.className='chat-message '+item.role;
   message.textContent=item.content;
   const turn=(thread?.turns || []).find(value=>value.assistant_message_id===item.message_id);
   const languageDetail=turn?.response_language ?
    ` · požadovaný jazyk ${turn.response_language} · shoda ${turn.language_compliance==='unverified'?'neověřena':turn.language_compliance}`:'';
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}${languageDetail}`;
-  message.append(detail);chatMessages.append(message);
+  message.append(detail);
   if(turn?.external_request_available){
    const requestButton=document.createElement('button');requestButton.type='button';
    requestButton.className='secondary-button';requestButton.textContent='Zobrazit odeslaný request';
@@ -3914,8 +3933,16 @@ function renderChat(thread){
    });
    message.append(requestButton);
   }
+ return message;
+}
+function renderChat(thread){
+ activeThread=thread || null;chatMessages.replaceChildren();
+ if(responseLanguagePolicy)applyResponseLanguageStatus({response_language_policy:responseLanguagePolicy});
+ for(const entry of buildChatTimeline(thread,taskOutcomes)){
+  if(entry.kind==='task'){renderTaskOutcome(entry.value,true);continue;}
+  chatMessages.append(renderThreadMessage(entry.value,thread));
+  for(const projection of entry.tasks)renderTaskOutcome(projection,false);
  }
- renderTaskOutcomes();
  draft.placeholder=activeSearchContinuation()?
   'Zpřesněte další kolo hledání…':'Co chcete v projektu zpracovat?';
  const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
@@ -4202,19 +4229,18 @@ function renderSearchWorkflow(container,workflow,projection=null){
  }
  container.append(rounds);
 }
-function renderTaskOutcomes(){
- for(const projection of taskOutcomes){
-  const prompt=document.createElement('div');prompt.className='chat-message user';
-  prompt.textContent=projection.prompt.content;
-  const promptDetail=document.createElement('small');promptDetail.textContent=`Vy · ${projection.prompt.privacy}`;
-  prompt.append(promptDetail);chatMessages.append(prompt);
-  if(projection.state==='cancelled')continue;
-  const outcome=projection.outcome;if(!outcome)continue;
+function renderTaskOutcome(projection,showPrompt=true){
+  if(showPrompt){const prompt=document.createElement('div');prompt.className='chat-message user';
+   prompt.textContent=projection.prompt.content;
+   const promptDetail=document.createElement('small');promptDetail.textContent=`Vy · ${projection.prompt.privacy}`;
+   prompt.append(promptDetail);chatMessages.append(prompt);}
+  if(projection.state==='cancelled')return;
+  const outcome=projection.outcome;if(!outcome)return;
   if(outcome.kind==='direct-answer'){
    const answer=document.createElement('div');answer.className='chat-message assistant';answer.textContent=outcome.content;
    const detail=document.createElement('small');detail.textContent=`Asistent · ${projection.privacy}`;
    answer.append(detail);if(projection.task_plan){const plan=document.createElement('small');
-    plan.textContent=taskPlanSummary(projection.task_plan);answer.append(plan);}chatMessages.append(answer);continue;
+    plan.textContent=taskPlanSummary(projection.task_plan);answer.append(plan);}chatMessages.append(answer);return;
   }
   const card=document.createElement('section');card.className='task-outcome'+(projection.temporary?'':' terminal');
   const heading=document.createElement('h3');
@@ -4338,7 +4364,6 @@ function renderTaskOutcomes(){
    const detail=document.createElement('small');detail.textContent=`Externí asistent · ${projection.privacy}`;
    answer.append(detail);chatMessages.append(answer);
   }
- }
 }
 async function cancelTaskProjection(taskId){
  try{replaceTaskProjection(await projectRequest('/v1/tasks/cancel',{task_id:taskId}));
