@@ -3,13 +3,13 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — UX-WEB-NAV-01 čeká na doručení PR
+# TODO — čeká se na doručení F-M4-AUTONOMY-01
 
-Dávka `UX-WEB-NAV-01` dosáhla 23. 10. 2026 úrovně **PoC validated** a její
-akceptovaná evidence byla archivována ve [WORK_LOG](WORK_LOG.md). Větev
-`feature/ux-web-nav-01` je určena pro jediný PR do `develop`; PR zatím nebyl
-vytvořen ani sloučen.
+Feature dávka `F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace` byla
+23. 10. 2026 akceptována na úrovni **PoC validated**. Dokončená evidence,
+ověření, recovery a omezení jsou archivované ve
+[WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23).
 
-Další nesouvisející feature se v této větvi neaktivuje. Po doručení PR se z
-aktuálního `develop` založí samostatná větev pro další uživatelem schválenou
-dávku z [BACKLOG](BACKLOG.md).
+Větev `feature/f-m4-autonomy-01` čeká na doručení jediného PR do `develop`;
+PR zatím nebyl vytvořen ani sloučen. Další feature dávka se aktivuje až po
+merge z aktuálního `develop`.
