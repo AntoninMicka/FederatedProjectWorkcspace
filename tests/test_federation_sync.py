@@ -156,7 +156,11 @@ class FederationSyncTests(unittest.TestCase):
             _prepare(self.services[0], self.node_ids[1], self.project_id,
                      str(uuid4()), [], force_bundle=True)
         self.assertIn('syncProjectContent', ADMIN_JS)
-        self.assertIn('Synchronizovat obsah', ADMIN_JS)
+        self.assertIn("localExists&&remoteExists?'Sync':localExists?'Push':'Pull'",
+                      ADMIN_JS)
+        self.assertIn("administrationState=await adminRequest({action:'list'})",
+                      ADMIN_JS)
+        self.assertNotIn('admin-remote-projects', ADMIN_SHARING_HTML)
         self.assertIn('nativní Git historii', ADMIN_SHARING_HTML)
         self.assertIn('/v1/federation/content/reconcile',
                       DesktopManagementHandler.post_paths)
@@ -196,6 +200,8 @@ class FederationSyncTests(unittest.TestCase):
             _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
 
     def test_pinned_https_endpoint_exchanges_native_bundle(self):
+        server_only = ProjectCreation(self.nodes[1]).create(
+            'Server only', self.nodes[1].parent / 'server-only', str(uuid4()))
         tls = NetworkBackend(self.nodes[1]).generate(
             '127.0.0.1', 8443, '127.0.0.0/8')
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -218,6 +224,12 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), Projects(self.nodes[0]).workspace(
                 self.project_id).git.head())
+        pulled = synchronize(self.nodes[0], self.node_ids[1], server_only['id'],
+                             deployment='web')
+        self.assertEqual(pulled['state'], 'idle')
+        self.assertEqual(Projects(self.nodes[0]).workspace(
+            server_only['id']).git.head(), Projects(self.nodes[1]).workspace(
+                server_only['id']).git.head())
 
 
 if __name__ == '__main__':

@@ -109,9 +109,11 @@ nastavení větví ani nepovoluje čtení obsahu.
 Jeden podepsaný HTTPS požadavek vymění katalog oběma směry. Desktop periodicky
 kontaktuje svůj server; serverový záznam dynamického klienta proto nemusí mít
 vlastní adresu. P2P uzel se známou HTTPS adresou může synchronizaci zahájit
-sám. Stav a tabulka **Projekty oznámené peery** jsou node-local informace.
-Takový řádek nelze otevřít jako místní projekt a nevzniká mu Git repozitář,
-členství ani oprávnění.
+sám. Matice spojuje místní projekty s node-local katalogy peerů do jedné
+tabulky. **Push** znamená projekt přítomný jen místně, **Pull** jen na peeru a
+**Sync** na obou stranách. Samotný vzdálený řádek nelze otevřít jako místní
+projekt a nevzniká mu Git repozitář, členství ani oprávnění; teprve úspěšný
+interní Pull jej založí z validovaného Git bundle.
 
 Katalog má limit 256 projektů na peer. Nedostupná místní registrace bez
 ověřitelného committed názvu se neoznámí. Pending, revoked a migrační
@@ -136,8 +138,9 @@ základu, aktuální větev zůstane beze změny a protější head se uloží p
 zachována** proto není merge ani chyba vedoucí k přepsání; konflikt se musí
 vyřešit vědomým lokálním Git/uživatelským workflow.
 
-Desktop může použít tlačítko **Synchronizovat obsah** a stejný reconcile běží
-po 60 sekundách automaticky. Jeden požadavek může nést bundle desktop → server
+Desktop může použít akci **Push**, **Pull** nebo **Sync** podle přítomnosti
+projektu na obou stranách a stejný reconcile běží po 60 sekundách automaticky.
+Jeden požadavek může nést bundle desktop → server
 a odpověď bundle server → desktop, takže dynamická serverová strana nepotřebuje
 adresu klienta. Nezměněný obsah si vymění jen podepsané inventury headů.
 
