@@ -8,9 +8,8 @@ SPDX-License-Identifier: MPL-2.0
 ## F-M5-SHARING-SYNC-01 — obousměrná synchronizace interních projektů — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m5-sharing-sync-01` z `develop` na merge
-commitu `ae1b25e` (PR #80) a dosáhla úrovně **PoC validated**. Feature
-akceptace je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani
-sloučen.
+commitu `ae1b25e` (PR #80), dosáhla úrovně **PoC validated** a byla doručena
+PR #81 jako merge commit `c884cd2`.
 
 - [x] [completed] **F-M5-SHARING-SYNC-01-A — kontrakt, reuse a recovery
   (designed).** ADR 0042 vymezilo podepsané inventury, branch scope, native Git

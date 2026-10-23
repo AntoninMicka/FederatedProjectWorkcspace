@@ -55,47 +55,13 @@ PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
 a cílová fyzická akceptace byla následně naplněna novým obousměrným řezem.
 `F-M5-PROJECT-CATALOG-01` bylo doručeno PR #80 jako merge commit `ae1b25e`;
 evidence je ve WORK_LOG.
-`F-M5-SHARING-SYNC-01` je fyzicky akceptována a archivována ve WORK_LOG, ale
-její feature větev dosud čeká na jediný PR do `develop`. Navazující dávka se
-neaktivuje před jejím doručením.
+`F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
+evidence je ve WORK_LOG. Aktivní `F-M5-CONFLICT-RESOLUTION-01` bylo se stejným
+ID přesunuto do TODO na vlastní feature větev.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M5-CONFLICT-RESOLUTION-01 — historie a ruční řešení
-  divergence (cílová úroveň: designed → implemented → PoC validated).** Nad
-  zachovanými lokálními a `refs/federation/incoming/…` heady vytvořit
-  projektový prohlížeč historie a explicitní 3-way resolver. Pro Markdown má
-  nabídnout přepínatelný raw pohled `base / naše / protější / výsledek`, volbu
-  změn po konfliktních blocích, přímou editaci výsledku a bezpečně renderovaný
-  formátovaný náhled stejného návrhu. Výchozí kandidát se sestaví nativním
-  [`git merge-file`](https://git-scm.com/docs/git-merge-file.html) nebo
-  ekvivalentním Git plumbingem; Git zůstává autoritou společného předka,
-  stromu a rodičů merge commitu.
-
-  Pro UI nejprve udělat bounded spike nad MIT
-  [`@codemirror/merge`](https://codemirror.net/docs/ref/#merge), který poskytuje
-  rozdílové bloky, navigaci a accept/reject ovládání, ale pouze dvoustranný
-  merge view. Aplikační 3-way orchestrace a samostatný výsledek proto zůstanou
-  vlastní. Monaco nyní nepřebírat: jeho veřejné API nabízí především
-  [dvoustranný diff editor](https://microsoft.github.io/monaco-editor/typedoc/functions/editor_editor_api.editor.createDiffEditor.html)
-  a oficiálně nepodporuje mobilní prohlížeče. Archivovaný `diff-match-patch`
-  není vhodný základ nové editace. Před přidáním závislosti ověřit aktuální
-  upstream, přesnou verzi, transitive licence, bundling a klávesnicovou i
-  mobilní použitelnost; při nevyhovujícím spike adaptovat stávající editor a
-  historii bez nové UI knihovny.
-
-  Preview nesmí měnit Git, index ani incoming refs. Publikace pod jediným
-  project writer lockem znovu ověří oba heady, base, policy a trust, sémanticky
-  validuje celý kandidátní snapshot a až po explicitním potvrzení vytvoří
-  merge commit s oběma rodiči přes journal/CAS; po commitu obnoví worktree a
-  index z potvrzeného HEAD. Restart před potvrzením pouze zahodí návrh, pád po
-  durable přípravě se idempotentně dokončí nebo pravdivě nabídne obnovu.
-  Akceptace pokryje čistý merge, stejný Markdown blok, raw/rendered shodu,
-  ruční editaci, změnu–smazání, přejmenování–úpravu, sidecar/relationship
-  validaci, stale head/policy/trust, zrušení, restart na každé persistentní
-  hranici a následný sync vytvořeného dvourodičového commitu.
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
   uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční
