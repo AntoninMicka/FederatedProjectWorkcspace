@@ -33,6 +33,7 @@ class DesktopManagementHandler(DesktopHandler):
     post_paths = DesktopHandler.post_paths | {'/v1/administration',
         '/v1/federation/enroll',
         '/v1/federation/catalog/reconcile',
+        '/v1/federation/content/reconcile',
         '/v1/replications/status', '/v1/replications/sync',
         '/v1/backend-metrics/status', '/v1/backend-metrics/configure',
         '/v1/backend-metrics/refresh'}
@@ -67,6 +68,21 @@ class DesktopManagementHandler(DesktopHandler):
                 return self.send_error(403)
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
+        if self.path == '/v1/federation/content/reconcile':
+            if (not isinstance(request, dict)
+                    or set(request) != {'peer_id', 'project_id'}):
+                return self.send_error(400)
+            try:
+                from spikes.federation_sync import ContentSyncControl
+                control = ContentSyncControl(
+                    self.server.administration.node, deployment='desktop')
+                result = control.synchronize(request['peer_id'], request['project_id'])
+                return self.reply(200, {'result': result,
+                                        'content_sync_statuses': control.statuses()})
+            except AccessDenied:
+                return self.send_error(403)
+            except Exception:
+                return self.reply(409, {'error': 'Obsah projektu se nepodařilo synchronizovat; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
             actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             try:
@@ -116,6 +132,9 @@ class DesktopManagementHandler(DesktopHandler):
             from spikes.federation_catalog import CatalogControl
             result.update(CatalogControl(
                 administration.node, deployment='desktop').view())
+            from spikes.federation_sync import ContentSyncControl
+            result['content_sync_statuses'] = ContentSyncControl(
+                administration.node, deployment='desktop').statuses()
             return self.reply(200, result)
         except AccessDenied:
             return self.reply(403, {'error': 'Operace není povolena nebo se změnil registr. Načtěte správu znovu.'})

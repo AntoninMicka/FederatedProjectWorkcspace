@@ -314,6 +314,18 @@ autorita a přenos, než první katalogová fáze potřebuje. Soukromá inventur
 nenabídla komponentu se stejnou maticí a připnutou bilaterální identitou.
 Rozhodnutí: [ADR 0041](docs/adr/0041-federated-project-existence-catalog.md).
 
+F-M5-SHARING-SYNC-01 **reuse/adaptuje Git CLI, `git_transfer.validate_history`,
+`project_replication` podpis/TLS/bounded-body vzor, `Administration` schema v6,
+federační katalog, Workspace writer lock, Journal/Index a `ProjectCreation`**.
+Datovou jednotkou zůstává nativní `git bundle` s přesně podepsanou inventurou
+`refs/heads/*`; nový kód neserializuje commity ani neskládá vlastní historii.
+Node-local SQLite rozšiřuje lost-response recovery o přesný symetrický request a
+response, ale není Git autoritou ani projektovým indexem. Smart HTTP server,
+SSH credential, kopie `.git`, automatický merge/rebase, force update, nový Git
+writer a externí sync framework byly odmítnuty. Soukromá inventura nenabídla
+komponentu se shodnou branch policy, Git autoritou a crash hranicemi.
+Rozhodnutí: [ADR 0042](docs/adr/0042-bidirectional-native-git-sharing-sync.md).
+
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí
 stránku desktopové záložky Federace. Web získá jen omezený katalog bez ID a

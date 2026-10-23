@@ -478,8 +478,8 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] offline node,
   - [ ] návrat uzlu po delší době.
 - [ ] MVP navrhnout jako **eventual consistency**, nikoli distribuovanou transakční DB.
-- [ ] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje.
-- [ ] Úzký implementovaný mezikrok s jedním primárním zapisujícím uzlem a read-only replikou zachovat jako recovery základ, nikoli jako cílový model. `same-team` a `same-company` vyžadují bezpečnou obousměrnou synchronizaci; divergence ani sémanticky neplatný kandidát se automaticky neslučují.
+- [ ] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje. Native Git implementační řez popisuje ADR 0042 a čeká na fyzickou desktop ↔ LXC akceptaci.
+- [ ] Úzký implementovaný mezikrok s jedním primárním zapisujícím uzlem a read-only replikou zachovat jako recovery základ, nikoli jako cílový model. `same-team` a `same-company` používají podle ADR 0042 bezpečnou obousměrnou výměnu; fast-forward se aplikuje, divergence se zachová v operation-scoped incoming refu a sémanticky neplatný kandidát se odmítne. Automatické řešení konfliktu zůstává otevřené.
 - [ ] Podepsané offline projekce identit, členství a policy mají výchozí platnost 8 hodin, předem schváleně nejvýše 24 hodin. Vypršelá autorita si nesmí limit sama prodloužit během výpadku.
 - [ ] Na desktop synchronizovat pouze vybrané projekty, ke kterým má uživatel oprávnění.
 - [ ] Lokální úpravy a commity umožnit i offline; po připojení znovu ověřit oprávnění a synchronizovat.

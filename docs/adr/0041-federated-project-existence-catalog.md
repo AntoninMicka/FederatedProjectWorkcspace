@@ -72,5 +72,6 @@ než tato úzká fáze vyžaduje.
 Uživatel uvidí, že projekt na peeru existuje, ale nemůže jej zatím otevřít.
 Nedostupná lokální registrace bez validního committed názvu se v katalogu
 neobjeví; nejde o tvrzení, že vzdálený obsah je synchronizovaný. Přenos větví a
-historie pro interní vztahy řeší F-M5-SHARING-SYNC-01. External data bundle,
+historie pro interní vztahy řeší
+[ADR 0042](0042-bidirectional-native-git-sharing-sync.md). External data bundle,
 patche, styčný uživatel a souborový kanál řeší F-M5-EXTERNAL-EXPORT-01.

@@ -52,21 +52,13 @@ doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
 commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl doručen PR #78 jako commit
 `192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` bylo doručeno
 PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
-a otevřená fyzická akceptace níže. `F-M5-PROJECT-CATALOG-01` je po automatické
-i fyzické akceptaci uzavřené ve WORK_LOG a v TODO čeká pouze na doručení svého
-PR do `develop`; další feature zatím nebyla aktivována.
+a otevřená fyzická akceptace níže. `F-M5-PROJECT-CATALOG-01` bylo doručeno PR
+#80 jako merge commit `ae1b25e`; evidence je ve WORK_LOG. Aktivní dávka
+`F-M5-SHARING-SYNC-01` byla se stejným ID přesunuta do TODO.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M5-SHARING-SYNC-01 — obousměrná synchronizace obsahu pro
-  same-team a same-company (cílová úroveň: designed → implemented → PoC
-  validated).** Nad ověřeným katalogem přidat přenos povolených větví a
-  historie, divergence-safe příjem a offline recovery. `same-team` přenáší
-  celou historii oběma směry, `same-company` dovolí některé větve skrýt nebo
-  exportovat jen vybrané. Existence v katalogu sama nikdy neuděluje právo
-  obsah stáhnout nebo otevřít.
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
   uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční

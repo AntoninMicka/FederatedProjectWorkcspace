@@ -1254,11 +1254,16 @@ def main():
         replication_scheduler = ReplicationScheduler(
             node_path, deployment='desktop')
         from spikes.federation_catalog import CatalogScheduler
+        from spikes.federation_sync import ContentSyncScheduler
         catalog_scheduler = CatalogScheduler(
+            node_path, deployment='desktop')
+        content_scheduler = ContentSyncScheduler(
             node_path, deployment='desktop')
         replication_scheduler.start()
         catalog_scheduler.start()
+        content_scheduler.start()
         result = app.exec()
+        content_scheduler.stop()
         catalog_scheduler.stop()
         replication_scheduler.stop()
         controller.wait()

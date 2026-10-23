@@ -100,11 +100,11 @@ zápis přes Workspace znovu odmítá; zápisy se provádějí na primary.
 
 ## Katalog existence projektů
 
-Stránka **Federace → Sdílení projektů** přenáší v první fázi jen UUID a název
+Stránka **Federace → Sdílení projektů** nejprve vymění jen UUID a název
 projektu. `same-team` automaticky oznamuje všechny dostupné místní projekty,
 `same-company` jen projekty zapnuté v matici. U `external` se stejný minimální
-katalog odešle pouze tlačítkem **Odeslat existenci**. Nastavení větví se tím
-nemění a použije se až při budoucím přenosu obsahu.
+katalog odešle pouze tlačítkem **Odeslat existenci**. Katalog sám nemění
+nastavení větví ani nepovoluje čtení obsahu.
 
 Jeden podepsaný HTTPS požadavek vymění katalog oběma směry. Desktop periodicky
 kontaktuje svůj server; serverový záznam dynamického klienta proto nemusí mít
@@ -118,6 +118,34 @@ ověřitelného committed názvu se neoznámí. Pending, revoked a migrační
 `unspecified` peer nic nepřenese. Podpis připnuté node identity, oba Node UUID,
 TLS CA a aktuální policy se ověřují při každé výměně; browserový přístupový
 klíč se na node endpoint neposílá.
+
+## Obousměrná synchronizace interního obsahu
+
+`same-team` po katalogu automaticky synchronizuje všechny lokální projekty a
+jejich `refs/heads/*`. `same-company` používá pouze projekty zapnuté v matici a
+na každé straně aplikuje její lokální `selected-only` nebo
+`all-except-hidden`. Výběr je exportní policy daného uzlu; protější uzel si
+nemůže vzdálenou větev sám zpřístupnit. `external` tento protokol nikdy
+nespouští.
+
+Přenos používá nativní `git bundle`, zachovává původní commit ID a předává jen
+validované větve. První přenos může zaregistrovat chybějící projekt. Existující
+větev se pouze založí nebo fast-forwarduje. Když se obě strany změnily z téhož
+základu, aktuální větev zůstane beze změny a protější head se uloží pod
+`refs/federation/incoming/<peer>/<operation>/<branch>`. Stav **Divergence
+zachována** proto není merge ani chyba vedoucí k přepsání; konflikt se musí
+vyřešit vědomým lokálním Git/uživatelským workflow.
+
+Desktop může použít tlačítko **Synchronizovat obsah** a stejný reconcile běží
+po 60 sekundách automaticky. Jeden požadavek může nést bundle desktop → server
+a odpověď bundle server → desktop, takže dynamická serverová strana nepotřebuje
+adresu klienta. Nezměněný obsah si vymění jen podepsané inventury headů.
+
+Každý dosažitelný commit se znovu validuje. Přenos podporuje `public`,
+`project` a `confidential`; jakýkoli `local-only`, neklasifikovaný historický
+soubor, symlink, submodule nebo neplatný metadata transition celý bundle
+odmítne. Synchronizace projektu nevytváří lokální členství ani nepřenáší
+credentials/session. Lokální zápis nadále vyžaduje místní RBAC.
 
 ## Práva spolu s daty
 
@@ -151,6 +179,14 @@ Obsahuje odchozí revize, poslední přijatou projekci a provozní stav peerů.
 Nejde o projektový index ani další autoritu projektů. Novější snapshot
 atomicky nahradí starší, opožděná revize se ignoruje a stejná revize s jiným
 obsahem se odmítne. Ztrátu odpovědi lze bezpečně napravit opakováním výměny.
+
+Obousměrný obsah používá ve stejné privátní síťové složce
+`federation-content-sync.sqlite`. Outbound řádek drží přesné podepsané bajty do
+potvrzené odpovědi; inbound řádek váže operation ID na jediný request a stejnou
+durable odpověď. Projektový Git zůstává autoritou dat. Změna aktuální větve je
+navíc krytá projektovým journalem a po CAS se recovery dokončí roll-forward
+checkoutem a obnovou indexu. Tento SQLite není projektový index ani policy
+autorita a nemá se kopírovat mezi uzly.
 
 Registr v2 přidal samostatnou tabulku mapování a v3 podepsané replikační granty
 s lokálním desired state. V1 i v2 se pod stejným flock/CAS migrují do v3 bez
