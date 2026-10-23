@@ -167,10 +167,10 @@ openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkhost DNS_NAME
 5) Na routeru proveďte deployment kontrol a reálné scénáře:
 
 ```sh
-ssh root@ROUTER "uci show lxc-auto.federated_workspace; lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/omc-federated-workspace-web status; cat /var/lib/federated-workspace/access-key"
+ssh root@ROUTER "uci show lxc-auto.federated_workspace; lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/federated-workspace-entry status; cat /var/lib/federated-workspace/access-key"
 python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
 ```
-Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/omc-federated-workspace-web status`.
+Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/federated-workspace-entry status`.
 
 6) Ověření scénářů uživatelem:
 Ověření 1: otevření dlaždice bezchybně načte přihlašovací stránku přes HTTPS 8443.

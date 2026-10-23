@@ -47,7 +47,10 @@ od routerové integrace a nesmí zahodit projekty, identitu ani credentials.
   (cílová úroveň: PoC validated).** Na skutečné Omnii ověřit či přes
   zkontrolovaný plán idempotentně doplnit jen
   `lxc-auto.federated_workspace`, čistý rollback journal, routerovou službu,
-  LXC službu a vydaný certifikát pro aktuální IP a DNS autoritu.
+  LXC službu a vydaný certifikát pro aktuální IP a DNS autoritu. Read-only
+  kontrola potvrdila čistý journal, běžící `workspace-m0` na
+  `192.168.100.247`, routerový helper, enabled/active LXC službu a SAN pro IP
+  i `workspace.cacke.internal`; UCI sekce chybí a čeká na explicitní instalaci.
 - [ ] [planned] **M1-07-C-D — Skutečný restart a uživatelská akceptace
   (cílová úroveň: PoC validated).** Po výslovně potvrzeném termínu restartovat
   router a doložit automatický běh `workspace-m0` a
@@ -69,7 +72,9 @@ od routerové integrace a nesmí zahodit projekty, identitu ani credentials.
 - Read-only SSH pokus na uložený cíl `root@192.168.100.1` skončil před
   spuštěním vzdálených příkazů na chybějící neinteraktivní autentizaci
   (`Permission denied`); stav routeru se nezměnil. Předrestartová kontrola
-  proto čeká na uživatelsky zadané SSH heslo v jeho terminálu.
+  byla následně provedena uživatelem v jeho terminálu: journal je čistý,
+  kontejner i služby běží a certifikát má požadované IP/DNS SAN. Jediná
+  zjištěná mezera je `uci: Entry not found` pro vlastní autostart sekci.
 
 ## Akceptační podmínky
 
