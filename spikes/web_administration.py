@@ -61,11 +61,6 @@ ADMIN_JS = '''
 let administrationState=null;
 const adminPanel=document.querySelector('#administration');
 const adminStatus=document.querySelector('#admin-status');
-if(document.body.dataset.runtime==='server'){
- const federationPanel=document.querySelector('#admin-federation');
- federationPanel.insertBefore(document.querySelector('#admin-project-sharing'),document.querySelector('#admin-federation-transition'));
- federationPanel.insertBefore(document.querySelector('#admin-project-share-dialog'),document.querySelector('#admin-federation-transition'));
-}
 function showAdminStatus(message,error=false){
  adminStatus.textContent=message;adminStatus.setAttribute('role',error?'alert':'status');
  const sharingStatus=document.querySelector('#federation-sharing-status');
@@ -81,7 +76,7 @@ async function openAdministration(tab){
  catch(error){selectSettingsTab(document.querySelector('#settings-'+tab+'-tab'));showAdminStatus(error.message || 'Správu se nepodařilo načíst.',true);}
 }
 async function openFederationSharing(){
- if(document.body.dataset.runtime!=='desktop'||!canLeaveWorkspaceEditors())return;
+ if(!['desktop','server'].includes(document.body.dataset.runtime)||!canLeaveWorkspaceEditors())return;
  document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
  projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
  historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;

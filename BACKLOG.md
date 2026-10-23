@@ -81,12 +81,6 @@ feature čeká v TODO na doručení jediného PR do `develop`.
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
 
-- [ ] [planned] **UX-WEB-NAV-01 — webové kategorie Výstupy a Federace
-  (cílová úroveň: designed).** Budoucí serverový web dostane kategorii
-  Výstupy a kategorii Federace až s nově navrženou plnohodnotnou správou podle
-  `UX-FEDERATION-02`. Dnešní přechodové desktopové nástroje ani nativní
-  ovladače výstupů se na serverový web nepřenášejí.
-
 - [ ] [planned] **F-M4-AUTONOMY-01 — Obecná řízená autonomie orchestrace
   (cílová úroveň: designed → implemented → PoC validated).** Zavést společný
   opt-in kontrakt pro všechny orchestrační akce, nikoli zvláštní automatiku

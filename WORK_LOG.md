@@ -5,12 +5,47 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-WEB-NAV-01 — webové kategorie Výstupy a Federace — 2026-10-23
+
+Dávka vznikla na větvi `feature/ux-web-nav-01` z `develop` na commitu
+`d15cec3` (PR #83), implementace byla uložena commitem `adf96a5` a dávka
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; její jediný
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **UX-WEB-NAV-01-A — webová informační architektura
+  (implemented).** Sdílená navigace serverového webu zpřístupňuje Výstupy po
+  otevření projektu a Federaci správcům i bez otevřeného projektu. Zachovává
+  pořadí, klávesnicový tablist, mobilní drawer a deklarativně skrytý prompt.
+- [x] [completed] **UX-WEB-NAV-01-B — bezpečné webové projekce (PoC
+  validated).** Výstupy používají nový úzký read-only endpoint s kontrolou
+  projektového členství a přesného Git HEAD a zobrazují uložené definice
+  prezentací bez aktivace editoru, presenteru nebo lokálního exportu. Federace
+  používá stávající administrační model a projektovou matici; server skrývá
+  nativní síťové a LXC akce.
+- [x] [completed] **UX-WEB-NAV-01-C — ověření a předání (PoC validated).**
+  Uživatel po nasazení fyzicky potvrdil přítomnost obou kategorií. Automatické
+  kontrakty pokryly serverový runtime, mobilní CSS, RBAC, zakázaný cizí projekt
+  a odmítnutí stale HEAD.
+
+### Ověření, recovery a omezení
+
+Úplná sada skončila **751 testy úspěšně, 28 podmíněně přeskočeno**. Změněné
+Python moduly prošly `py_compile`, generovaný webový JavaScript `node --check`
+a finální diff `git diff --check`. Read-only projekce nevytváří nový
+persistentní stav: čte validovanou definici z potvrzeného Git commitu a při
+změně HEAD selže bez zastaralého výsledku. Federační zápisy nadále používají
+existující Git/node-local journal a recovery hranice ADR 0038–0043.
+
+Výstupy jsou nyní pouze přehledem existujících definic prezentací; obecný
+editor definic a historie běhů nebyly součástí dávky. Plná cílová federace,
+externí exportní balíčky a desktopové síťové/LXC operace zůstávají oddělené.
+
 ## M1-07-C — cílová restartová akceptace LXC autostartu — 2026-10-23
 
 Dávka vznikla na větvi `feature/m1-07-c-restart-acceptance` z `develop`
 `637bf90` po začlenění PR #82 a dosáhla úrovně **PoC validated na Turris
-Omnia**. Feature akceptace je dokončená; její PR do `develop` zatím nebyl
-vytvořen ani sloučen.
+Omnia**. Feature akceptace byla doručena PR #83 jako commit `d15cec3` do
+`develop`.
 
 - [x] [completed] **M1-07-C-A — aktivace a administrativní předání
   (implemented).** Předchozí PR #82 byl doložen jako doručený, samostatná větev

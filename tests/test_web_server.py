@@ -178,7 +178,10 @@ class WebTests(unittest.TestCase):
         self.assertNotIn("querySelector('#presenter-fullscreen').hidden=false", WEB_JS)
         self.assertIn('id="federation-tab" role="tab" aria-label="Federace"', WEB_HTML)
         self.assertIn('id="federation-tab" role="tab" aria-label="Federace" aria-controls="sidebar-federation" aria-selected="false" tabindex="-1" hidden', WEB_HTML)
-        self.assertNotIn("querySelector('#federation-tab').hidden=false", WEB_JS)
+        self.assertIn("querySelector('#federation-tab').hidden=!admin", WEB_JS)
+        self.assertIn("!['desktop','server'].includes(document.body.dataset.runtime)", WEB_JS)
+        self.assertIn("querySelector('#open-federation-network').closest('li').hidden=true", WEB_JS)
+        self.assertIn("querySelector('#open-federation-deployment').closest('li').hidden=true", WEB_JS)
         register = WEB_HTML.split('id="sidebar-register-project"', 1)[1].split('</button>', 1)[0]
         self.assertIn('hidden', register)
         self.assertNotIn("getElementById('sidebar-register-project').hidden=false", WEB_JS)
@@ -199,8 +202,7 @@ class WebTests(unittest.TestCase):
         self.assertNotIn('id="admin-remote-projects"', WEB_HTML)
         self.assertIn("localExists&&remoteExists?'Sync':localExists?'Push':'Pull'", WEB_JS)
         self.assertIn('id="admin-project-share-dialog"', WEB_HTML)
-        self.assertIn("if(document.body.dataset.runtime==='server')", WEB_JS)
-        self.assertIn("insertBefore(document.querySelector('#admin-project-sharing')", WEB_JS)
+        self.assertNotIn("insertBefore(document.querySelector('#admin-project-sharing')", WEB_JS)
         self.assertIn("action:'set-project-share'", WEB_JS)
         self.assertIn("'/v1/federation/catalog/reconcile'", WEB_JS)
         self.assertIn("peer.sharing_level==='external'", WEB_JS)
@@ -240,6 +242,13 @@ class WebTests(unittest.TestCase):
         self.assertIn('<div id="source-import-view" hidden>', WEB_HTML)
         self.assertIn('id="open-source-import"', WEB_HTML)
         self.assertIn('id="history-view" hidden', WEB_HTML)
+        self.assertIn('id="outputs-overview-tab" role="tab"', WEB_HTML)
+        self.assertIn('id="outputs-overview-panel" role="tabpanel"', WEB_HTML)
+        self.assertIn('id="outputs-overview-list"', WEB_HTML)
+        self.assertIn("querySelector('#outputs-overview-tab').hidden=false", WEB_JS)
+        self.assertIn("document.body.dataset.runtime==='server'){openOutputsOverview()", WEB_JS)
+        self.assertIn("projectRequest('/v1/outputs/definitions'", WEB_JS)
+        self.assertNotIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", WEB_JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", WEB_JS)
         self.assertIn('id="artifact-editor-view" hidden', WEB_HTML)
@@ -355,7 +364,9 @@ class WebTests(unittest.TestCase):
         self.assertIn(".sidebar-list-main,.sidebar-item-menu-items button,#chat-new-thread')){closeMobileSidebar();closeCompactSidebarMenu();}",
                       WEB_JS)
         self.assertIn('id="chats-tab"', WEB_HTML)
-        self.assertIn("querySelector('#presentations-tab').hidden=true", WEB_JS)
+        self.assertIn("querySelector('#outputs-overview-tab').hidden=false", WEB_JS)
+        self.assertIn('.outputs-overview-grid{display:grid', WEB_CSS)
+        self.assertIn('.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}', WEB_CSS)
         self.assertIn('id="sidebar-chat-tree" role="tree"', WEB_HTML)
         self.assertIn('class="sidebar-chat-primary-actions"', WEB_HTML)
         self.assertIn("items.className='sidebar-item-menu-items sidebar-chat-menu-items'", WEB_JS)
@@ -394,6 +405,8 @@ class WebTests(unittest.TestCase):
         history_request = {'project_id':project, 'artifact_id':str(uuid4()), 'expected_head':'0'*40}
         self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/artifacts/editor/open', body=json.dumps(history_request), headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/outputs/definitions', body=json.dumps({
+            'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
@@ -426,6 +439,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}), headers=headers)[0], 200)
         self.assertEqual(self.request(path='/v1/artifacts/history/list', body=json.dumps(history_request), headers=headers)[0], 409)
         self.assertEqual(self.request(path='/v1/artifacts/editor/open', body=json.dumps(history_request), headers=headers)[0], 409)
+        view = Projects(self.root/'node.json').open(project)
+        self.assertEqual(self.request(path='/v1/outputs/definitions', body=json.dumps({
+            'project_id':project, 'expected_head':view['commit_id']}), headers=headers)[0], 200)
+        self.assertEqual(self.request(path='/v1/outputs/definitions', body=json.dumps({
+            'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 409)
         self.assertEqual(self.request(path='/v1/artifacts/editor/save', body=json.dumps({
             'operation_id':str(uuid4()), 'document':{'project_id':project}}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/artifacts/delete/confirm', body=json.dumps({
@@ -434,7 +452,6 @@ class WebTests(unittest.TestCase):
             'project_id': project}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/workflows/status', body=json.dumps({
             'project_id': project}), headers=headers)[0], 403)
-        view = Projects(self.root/'node.json').open(project)
         source = request_from_bytes(project, view['commit_id'], 'reader.md', b'denied', 'Denied', '', [], 'project')
         self.assertEqual(self.request(path='/v1/sources/import', body=json.dumps({
             'operation_id': str(uuid4()), 'source': source}), headers=headers)[0], 403)
