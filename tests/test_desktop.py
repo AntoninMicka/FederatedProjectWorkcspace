@@ -312,13 +312,15 @@ class DesktopTests(unittest.TestCase):
         for action in ('register-project-location', 'recover-project-operation',
                        'choose-notebooklm-archive',
                        'choose-project-location',
-                       'federation-transfer-open', 'federation-transfer-start',
                        'federation-network-open', 'federation-network-run',
                        'federation-deployment-open', 'federation-deployment-start'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
                     {'action': action, 'nonce': nonce})
+        for retired in ('federation-transfer-open', 'federation-transfer-start'):
+            self.assertIsNone(native_action_request(
+                f'{origin}/#{retired}?nonce={nonce}', origin))
         for action in ('relocate-project-location', 'unregister-missing-project'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
@@ -922,14 +924,19 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
         self.assertIn('id="sidebar-federation"', HTML)
-        self.assertIn('id="open-federation-transfer"', HTML)
+        self.assertIn('id="open-federation-sharing"', HTML)
         self.assertIn('id="open-federation-network"', HTML)
         self.assertIn('id="open-federation-deployment"', HTML)
-        self.assertEqual(HTML.count('Přenos veřejného projektu do LXC'), 2)
-        self.assertIn('id="federation-transfer-form"', HTML)
-        self.assertIn('plnohodnotnou správou federace projektů', HTML)
-        self.assertIn("requestNativeAction('federation-transfer-open')", JS)
-        self.assertIn("requestNativeAction('federation-transfer-start')", JS)
+        self.assertNotIn('Přenos veřejného projektu do LXC', HTML)
+        self.assertNotIn('id="federation-transfer-form"', HTML)
+        federation_page = HTML.split('id="federation-view"', 1)[1].split('id="federation-network-view"', 1)[0]
+        self.assertIn('id="admin-project-sharing"', federation_page)
+        self.assertIn('id="admin-project-share-form"', federation_page)
+        self.assertIn('openFederationSharing', JS)
+        self.assertIn('#administration{color:#213632;max-width:none}', CSS)
+        self.assertIn('.federation-sharing-page{max-width:none}', CSS)
+        self.assertNotIn("requestNativeAction('federation-transfer-open')", JS)
+        self.assertNotIn("requestNativeAction('federation-transfer-start')", JS)
         self.assertIn('id="federation-network-form"', HTML)
         self.assertIn('Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.', HTML)
         self.assertIn("requestNativeAction('federation-network-open')", JS)
@@ -938,7 +945,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Reset zahodí recovery snapshot', HTML)
         self.assertIn("requestNativeAction('federation-deployment-open')", JS)
         self.assertIn("requestNativeAction('federation-deployment-start')", JS)
-        self.assertIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
+        self.assertNotIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
         self.assertIn('JSON.stringify(federationNetworkRequest())', Path('spikes/desktop.py').read_text())
         self.assertIn('JSON.stringify(federationDeploymentRequest())', Path('spikes/desktop.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())

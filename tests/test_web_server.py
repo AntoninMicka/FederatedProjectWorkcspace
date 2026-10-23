@@ -197,6 +197,8 @@ class WebTests(unittest.TestCase):
         self.assertIn('name="sharing_level"', WEB_HTML)
         self.assertIn('id="admin-project-shares"', WEB_HTML)
         self.assertIn('id="admin-project-share-dialog"', WEB_HTML)
+        self.assertIn("if(document.body.dataset.runtime==='server')", WEB_JS)
+        self.assertIn("insertBefore(document.querySelector('#admin-project-sharing')", WEB_JS)
         self.assertIn("action:'set-project-share'", WEB_JS)
         self.assertIn("peer.sharing_level==='external'", WEB_JS)
         self.assertIn('.admin-share-matrix thead{display:none}', WEB_CSS)

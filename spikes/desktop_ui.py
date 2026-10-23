@@ -31,7 +31,8 @@ from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS
 from spikes.storage import StaleIndex
 from spikes.workspace import PendingOperation
 from spikes.web_search import SearchResponseError, SearchUnknown
-from spikes.web_administration import ADMIN_HTML, ADMIN_CSS, ADMIN_JS
+from spikes.web_administration import (ADMIN_HTML, ADMIN_SHARING_HTML,
+                                       ADMIN_CSS, ADMIN_JS)
 
 
 CHAT_VALIDATION_ERRORS = {
@@ -277,10 +278,10 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <li class="sidebar-list-row" data-settings-item="settings-federation-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-federation-tab">Federace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Federace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-federation-tab">Otevřít</button></div></details></li>
 </ul></div>
 <div id="sidebar-federation" role="tabpanel" aria-labelledby="federation-tab" tabindex="0" hidden>
-<h2>Federace</h2><p>V této verzi jsou dostupné jednotlivé přechodové nástroje.</p>
+<h2>Federace</h2><p>Sdílení projektů a nástroje federačního uzlu.</p>
 <ul id="sidebar-federation-list" aria-label="Nástroje federace"><li class="sidebar-list-row">
-<button id="open-federation-transfer" class="sidebar-list-main" type="button">Přenos veřejného projektu do LXC</button>
-<details class="sidebar-item-menu"><summary aria-label="Akce přenosu veřejného projektu">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-transfer-menu" type="button" role="menuitem">Otevřít</button></div></details>
+<button id="open-federation-sharing" class="sidebar-list-main" type="button">Sdílení projektů</button>
+<details class="sidebar-item-menu"><summary aria-label="Akce sdílení projektů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-sharing-menu" type="button" role="menuitem">Otevřít</button></div></details>
 </li><li class="sidebar-list-row">
 <button id="open-federation-network" class="sidebar-list-main" type="button">Síťový backend a spojení</button>
 <details class="sidebar-item-menu"><summary aria-label="Akce síťového backendu a spojení">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button id="open-federation-network-menu" type="button" role="menuitem">Otevřít</button></div></details>
@@ -411,24 +412,11 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="project-create-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
 <p id="create-project-status" role="status"> </p></form></section></div>
 <div id="federation-view" hidden>
-<header><span class="badge">Federace</span><span>Desktopový nástroj</span></header>
-<section class="standalone-form federation-transfer-page"><div class="eyebrow">PŘECHODOVÁ FUNKCE</div>
-<h1>Přenos veřejného projektu do LXC</h1>
-<p>Tato stránka bude v další verzi nahrazena plnohodnotnou správou federace projektů.</p>
-<p>Přenese se celá veřejná Git historie bez credentials, lokálního indexu a journalu. Cíl musí být nový projekt; neveřejná nebo neklasifikovaná historie přenos zastaví.</p>
-<form id="federation-transfer-form">
-<label>Projekt desktopu <select name="project" required></select></label>
-<label>Cílový LXC uzel <select name="target" required></select></label>
-<label>Důvěryhodná veřejná CA LXC <input name="ca" type="text" maxlength="4096" required autocomplete="off"></label>
-<button id="federation-transfer-preview" type="button" disabled>Připravit potvrzení</button>
-<section id="federation-transfer-confirmation" class="creation-preview" hidden><h2>Potvrdit přenos celé veřejné historie</h2>
-<pre id="federation-transfer-details"></pre>
-<p>Existující projekt se nepřepíše. Metadata autorů, názvy projektu a zprávy commitů jsou součástí historie. Nedokončený přenos stejného projektu a uzlu pokračuje s původním bundle a ID operace.</p>
-<label class="confirm"><input id="federation-transfer-confirm" type="checkbox"> Potvrzuji projekt, cílový uzel, veřejnou CA a přenos celé historie.</label>
-<div class="form-actions"><button id="federation-transfer-start" type="submit" disabled>Potvrdit a přenést</button><button id="federation-transfer-cancel" type="button" class="secondary-button">Zrušit náhled</button></div></section>
-<p id="federation-transfer-status" role="status" aria-live="polite">Otevřete nástroj ze záložky Federace.</p>
-<pre id="federation-transfer-log" aria-label="Průběh přenosu"></pre>
-</form></section></div>
+<header><span class="badge">Federace</span><span>Policy sdílení projektů</span></header>
+<section class="standalone-form federation-sharing-page"><div class="eyebrow">PROJEKTY × PEERY</div>
+<p id="federation-sharing-status" role="status" aria-live="polite">Načítám nastavení sdílení…</p>
+'''+ ADMIN_SHARING_HTML + '''
+</section></div>
 <div id="federation-network-view" hidden>
 <header><span class="badge">Federace</span><span>Lokální nastavení desktopového uzlu</span></header>
 <section class="standalone-form federation-network-page"><div class="eyebrow">SÍŤ A DŮVĚRA</div>
@@ -1852,13 +1840,11 @@ document.addEventListener('click',event=>{if(!workspaceSidebar.contains(event.ta
 mobileViewport.addEventListener('change',()=>{document.body.classList.remove('mobile-sidebar-open');workspaceSidebar.classList.remove('sidebar-menu-open');syncMobileSidebar();syncCompactSidebar();});
 syncMobileSidebar();
 const sidebarTabs=[...document.querySelectorAll('#sidebar-tabs [role="tab"]')];
-let federationTransferRunning=false;
 let federationNetworkRunning=false;
 let federationDeploymentRunning=false;
 function selectSidebarTab(selected){
  if(!selected || selected.disabled)return;
- if((federationTransferRunning||federationNetworkRunning||federationDeploymentRunning)&&selected.id!=='federation-tab'){
-  if(federationTransferRunning)document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';
+ if((federationNetworkRunning||federationDeploymentRunning)&&selected.id!=='federation-tab'){
   if(federationNetworkRunning)document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';
   if(federationDeploymentRunning)document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';
   return;
@@ -2254,13 +2240,12 @@ function canLeaveArtifactEditor(){
  if(artifactEditorView.hidden||(!artifactEditorDirty&&!artifactEditorAttempt))return true;
  return window.confirm('Zahodit rozepsané změny dokumentu? Neuložený text zůstává pouze v tomto editoru.');
 }
-function canLeaveFederationTransfer(){
- if(federationTransferRunning){document.querySelector('#federation-transfer-status').textContent='Přenos právě probíhá; stránku nelze opustit.';return false;}
+function canLeaveFederationTools(){
  if(federationNetworkRunning){document.querySelector('#federation-network-status').textContent='Síťová operace právě probíhá; stránku nelze opustit.';return false;}
  if(federationDeploymentRunning){document.querySelector('#federation-deployment-status').textContent='Nasazení právě probíhá; stránku nelze opustit.';return false;}
  return true;
 }
-function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTransfer();}
+function canLeaveWorkspaceEditors(){return canLeaveArtifactEditor()&&canLeavePresentationEditor()&&canLeaveFederationTools();}
 function fillArtifactEditor(doc,isNew=false){
  const meta=doc.metadata||{};document.querySelector('#artifact-editor-heading').textContent=doc.title||'Nový dokument';
  document.querySelector('#artifact-editor-mode').textContent=isNew?'Nový neuložený Markdown':'Uložený Markdown';
@@ -2699,86 +2684,6 @@ function requestNativeAction(action,payload={}){
 const federationView=document.querySelector('#federation-view');
 const federationNetworkView=document.querySelector('#federation-network-view');
 const federationDeploymentView=document.querySelector('#federation-deployment-view');
-const federationTransferForm=document.querySelector('#federation-transfer-form');
-const federationTransferStatus=document.querySelector('#federation-transfer-status');
-const federationTransferLog=document.querySelector('#federation-transfer-log');
-const federationTransferConfirmation=document.querySelector('#federation-transfer-confirmation');
-let federationTransferConfiguration=null;
-function resetFederationTransferPreview(message=''){
- federationTransferConfirmation.hidden=true;document.querySelector('#federation-transfer-confirm').checked=false;
- document.querySelector('#federation-transfer-start').disabled=true;
- if(message)federationTransferStatus.textContent=message;
-}
-function federationTransferRequest(){
- if(!federationTransferConfiguration)return null;
- return {token:federationTransferConfiguration.token,
-  project:Number(federationTransferForm.elements.project.value),
-  target:Number(federationTransferForm.elements.target.value),
-  ca:federationTransferForm.elements.ca.value.trim(),
-  confirmed:document.querySelector('#federation-transfer-confirm').checked};
-}
-function setFederationTransferLocked(locked){
- for(const field of federationTransferForm.querySelectorAll('select,input,#federation-transfer-preview,#federation-transfer-cancel'))field.disabled=locked;
-}
-function showFederationTransferConfiguration(configuration){
- if(!configuration||typeof configuration.token!=='string'||!Array.isArray(configuration.projects)||!Array.isArray(configuration.targets)){
-  setFederationTransferError('Nativní vrstva neposkytla platný seznam pro přenos.');return;
- }
- federationTransferConfiguration=configuration;federationTransferLog.textContent='';federationTransferRunning=false;setFederationTransferLocked(false);
- const projects=federationTransferForm.elements.project,targets=federationTransferForm.elements.target;
- projects.replaceChildren();targets.replaceChildren();
- for(const item of configuration.projects)projects.append(new Option(item.title,item.index));
- for(const item of configuration.targets)targets.append(new Option(item.label,item.index));
- const available=Boolean(configuration.projects.length&&configuration.targets.length);
- document.querySelector('#federation-transfer-preview').disabled=!available;
- if(configuration.targets.length)federationTransferForm.elements.ca.value=configuration.targets[0].ca;
- else federationTransferForm.elements.ca.value='';
- resetFederationTransferPreview(available?'Vyberte projekt a cílový uzel.':'Přenos vyžaduje dostupný projekt a zapamatovaný LXC uzel.');
-}
-function setFederationTransferProgress(message){
- federationTransferRunning=true;setFederationTransferLocked(true);federationTransferStatus.textContent=message;
-}
-function setFederationTransferError(message){
- federationTransferRunning=false;setFederationTransferLocked(false);
- federationTransferStatus.textContent=message||'Přenos nelze připravit nebo spustit.';
- if(federationTransferConfiguration)document.querySelector('#federation-transfer-preview').disabled=false;
-}
-function finishFederationTransfer(success,message){
- federationTransferRunning=false;federationTransferStatus.textContent=success?'Přenos byl dokončen.':'Přenos nebyl dokončen; lze zopakovat stejnou operaci.';
- federationTransferLog.textContent=message;document.querySelector('#federation-transfer-start').disabled=false;
- document.querySelector('#federation-transfer-start').textContent='Zopakovat stejnou operaci';
-}
-function openFederationTransfer(){
- if(!canLeaveWorkspaceEditors())return;
- document.querySelector('#project-home').hidden=true;projectCreateView.hidden=true;projectTrashView.hidden=true;projectRepairView.hidden=true;
- projectView.hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;notebookImportView.hidden=true;
- historyView.hidden=true;artifactEditorView.hidden=true;federationNetworkView.hidden=true;federationDeploymentView.hidden=true;federationView.hidden=false;
- selectSidebarTab(document.querySelector('#federation-tab'));federationTransferConfiguration=null;
- federationTransferLog.textContent='';resetFederationTransferPreview('Načítám projekty a federační uzly…');
- requestNativeAction('federation-transfer-open');
-}
-document.querySelector('#open-federation-transfer').addEventListener('click',openFederationTransfer);
-document.querySelector('#open-federation-transfer-menu').addEventListener('click',event=>{event.currentTarget.closest('details').open=false;openFederationTransfer();});
-federationTransferForm.elements.target.addEventListener('change',event=>{
- const target=federationTransferConfiguration?.targets.find(item=>item.index===Number(event.currentTarget.value));
- federationTransferForm.elements.ca.value=target?.ca||'';resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.');
-});
-federationTransferForm.elements.project.addEventListener('change',()=>resetFederationTransferPreview('Výběr se změnil; připravte nové potvrzení.'));
-federationTransferForm.elements.ca.addEventListener('input',()=>resetFederationTransferPreview('Veřejná CA se změnila; připravte nové potvrzení.'));
-document.querySelector('#federation-transfer-preview').addEventListener('click',()=>{
- const request=federationTransferRequest();if(!request||!request.ca){federationTransferStatus.textContent='Vyberte projekt, LXC a jeho veřejnou CA.';return;}
- const project=federationTransferConfiguration.projects.find(item=>item.index===request.project);
- const target=federationTransferConfiguration.targets.find(item=>item.index===request.target);
- document.querySelector('#federation-transfer-details').textContent=`Projekt: ${project.title}\nID projektu: ${project.id}\nLXC: ${target.container}\nSSH: ${target.host}\nVeřejná CA: ${request.ca}`;
- federationTransferConfirmation.hidden=false;federationTransferStatus.textContent='Zkontrolujte přesný rozsah a potvrďte přenos.';
-});
-document.querySelector('#federation-transfer-confirm').addEventListener('change',event=>{document.querySelector('#federation-transfer-start').disabled=!event.currentTarget.checked;});
-document.querySelector('#federation-transfer-cancel').addEventListener('click',()=>resetFederationTransferPreview('Náhled byl zrušen.'));
-federationTransferForm.addEventListener('submit',event=>{
- event.preventDefault();const request=federationTransferRequest();if(!request?.confirmed)return;
- federationTransferRunning=true;setFederationTransferLocked(true);document.querySelector('#federation-transfer-start').disabled=true;
- federationTransferStatus.textContent='Předávám potvrzenou operaci nativní vrstvě…';requestNativeAction('federation-transfer-start');
-});
 const federationNetworkForm=document.querySelector('#federation-network-form');
 const federationNetworkStatus=document.querySelector('#federation-network-status');
 const federationNetworkLog=document.querySelector('#federation-network-log');

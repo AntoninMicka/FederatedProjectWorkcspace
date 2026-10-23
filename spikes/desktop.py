@@ -44,7 +44,6 @@ NATIVE_ACTIONS = frozenset({'register-project-location', 'relocate-project-locat
                             'choose-notebooklm-target', 'choose-presentation-pdf',
                             'export-presentation-pdf', 'presenter-displays-identify',
                             'presenter-displays-apply', 'presenter-displays-cancel',
-                            'federation-transfer-open', 'federation-transfer-start',
                             'federation-network-open', 'federation-network-run',
                             'federation-deployment-open', 'federation-deployment-start'})
 
@@ -267,7 +266,6 @@ def main():
         from spikes.desktop_creation import CreationController
         from spikes.desktop_deployment import FederationDeployment
         from spikes.desktop_network import FederationNetwork
-        from spikes.desktop_transfer import FederationTransfer
         from spikes.network_backend import NetworkBackend
     except ImportError as exc:
         print('Nelze načíst interní modul desktopu: ' + str(exc), file=sys.stderr)
@@ -402,15 +400,6 @@ def main():
                 'closePresenterDisplayConfiguration()'),
             error_callback=lambda message: page.runJavaScript(
                 'setPresenterDisplayNativeError(' + json.dumps(message) + ')'))
-        federation_transfer = FederationTransfer(
-            node_path, parent=window,
-            configuration_callback=lambda result: page.runJavaScript(
-                'showFederationTransferConfiguration(' + json.dumps(result) + ')'),
-            progress_callback=lambda message: page.runJavaScript(
-                'setFederationTransferProgress(' + json.dumps(message) + ')'),
-            finished_callback=lambda success, message: page.runJavaScript(
-                'finishFederationTransfer(' + json.dumps(bool(success)) + ',' +
-                json.dumps(message) + ')'))
         public_view.setUrl(QUrl(server.origin + '/presentation-screen'))
         network_backend = NetworkBackend(node_path)
         if not args.smoke:
@@ -439,7 +428,6 @@ def main():
                 'finishFederationDeployment(' + json.dumps(bool(success)) + ',' +
                 json.dumps(message) + ')'))
         window.native_operation_guards.extend([
-            lambda: bool(federation_transfer.worker and federation_transfer.worker.isRunning()),
             lambda: bool(federation_network.worker and federation_network.worker.isRunning()),
             lambda: bool(federation_deployment.worker and federation_deployment.worker.isRunning()),
         ])
@@ -602,20 +590,6 @@ def main():
                     displays.configure()
             elif action == 'presenter-displays-cancel':
                 displays.cancel_configuration()
-            elif action == 'federation-transfer-open':
-                try:
-                    federation_transfer.open()
-                except (ValueError, OSError) as exc:
-                    page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
-            elif action == 'federation-transfer-start':
-                def start_federation_transfer(raw_request):
-                    try:
-                        payload = json.loads(raw_request) if isinstance(raw_request, str) else None
-                        federation_transfer.start(payload)
-                    except (ValueError, OSError, json.JSONDecodeError) as exc:
-                        page.runJavaScript('setFederationTransferError(' + json.dumps(str(exc)) + ')')
-                page.runJavaScript('JSON.stringify(federationTransferRequest())', 0,
-                                   start_federation_transfer)
             elif action == 'federation-network-open':
                 try:
                     federation_network.open()
@@ -856,7 +830,7 @@ def main():
                     const importOptions=document.querySelector('#sidebar-project-import-options');
                     const importProject=document.querySelector('#sidebar-import-project');
                     const federationTab=document.querySelector('#federation-tab');
-                    const federationItem=document.querySelector('#open-federation-transfer');
+                    const federationItem=document.querySelector('#open-federation-sharing');
                     const federationNetworkItem=document.querySelector('#open-federation-network');
                     const federationDeploymentItem=document.querySelector('#open-federation-deployment');
                     const projectsTab=document.querySelector('#projects-tab');
@@ -889,16 +863,15 @@ def main():
                       if(importOptions.hidden || registerProject.getClientRects().length===0)return null;
                       window.projectImportSmokeChecked=true;importProject.click();return null;
                     }
-                    if(!window.federationTransferSmokeOpened){
+                    if(!window.federationSharingSmokeOpened){
                       if(!importOptions.hidden || federationTab.hidden || !federationItem || !federationNetworkItem || !federationDeploymentItem || [...document.querySelectorAll('#sidebar-tabs [role="tab"]')].at(-1)!==federationTab)return null;
-                      window.federationTransferSmokeOpened=true;federationTab.click();federationItem.click();return null;
+                      window.federationSharingSmokeOpened=true;federationTab.click();federationItem.click();return null;
                     }
-                    if(!window.federationTransferSmokeChecked){
-                      const form=document.querySelector('#federation-transfer-form');
-                      if(document.querySelector('#federation-view').hidden || form.elements.project.options.length<1 ||
-                         !document.querySelector('.federation-transfer-page').textContent.includes('plnohodnotnou správou federace projektů') ||
-                         document.querySelector('#federation-transfer-status').textContent.includes('Načítám'))return null;
-                      window.federationTransferSmokeChecked=true;federationNetworkItem.click();return null;
+                    if(!window.federationSharingSmokeChecked){
+                      const matrix=document.querySelector('#admin-project-shares');
+                      if(document.querySelector('#federation-view').hidden || !matrix || matrix.rows.length<1 ||
+                         document.querySelector('#federation-sharing-status').textContent.includes('Načítám'))return null;
+                      window.federationSharingSmokeChecked=true;federationNetworkItem.click();return null;
                     }
                     if(!window.federationNetworkSmokeChecked){
                       const form=document.querySelector('#federation-network-form');
@@ -1284,7 +1257,6 @@ def main():
         result = app.exec()
         replication_scheduler.stop()
         controller.wait()
-        federation_transfer.wait()
         federation_network.wait()
         federation_deployment.wait()
         view.closing = True
