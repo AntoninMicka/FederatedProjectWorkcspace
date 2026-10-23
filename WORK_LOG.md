@@ -5,6 +5,56 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-PROJECT-CATALOG-01 — federovaný katalog existence projektů — 2026-10-23
+
+Dávka vznikla na větvi `feature/f-m5-project-catalog-01` z `develop` na merge
+commitu `61df652` (PR #79) a dosáhla úrovně **implemented**. Feature akceptace
+je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M5-PROJECT-CATALOG-01-A — předání předchozí dávky a
+  kontrakt katalogu (designed).** Předchozí sloučená dávka byla administrativně
+  uzavřena a ADR 0041 vymezilo minimální payload, autoritu matice, podepsanou
+  výměnu, persistentní hranice a zákaz vytvořit lokální projekt. Řešení
+  adaptuje stávající správu federace, připnutou Ed25519 identitu, peer CA a
+  HTTPS vzor; Git bundle a projektový journal pro pouhý katalog nepoužívá.
+- [x] [completed] **F-M5-PROJECT-CATALOG-01-B — podepsaná obousměrná výměna
+  katalogu (implemented).** Jeden bounded HTTPS požadavek posílá katalog
+  volajícího a vrací podepsaný katalog protistrany. Obě strany ověřují
+  schválený peer, připnutý fingerprint, source/recipient UUID a aktuální
+  sharing policy. Nejvýše 256 položek obsahuje pouze UUID a název projektu;
+  browser credential, Origin a nepřesný Host endpoint odmítá.
+- [x] [completed] **F-M5-PROJECT-CATALOG-01-C — durable projekce a recovery
+  (implemented).** Node-local `federation-catalog.sqlite` drží monotónní revize
+  a poslední katalog každého peeru atomicky. Kolizní revize selže, opožděná se
+  ignoruje a retry po ztracené odpovědi je bezpečný. Projektový Git,
+  `node.json` ani obnovitelný projektový index se nemění.
+- [x] [completed] **F-M5-PROJECT-CATALOG-01-D — automatika a sdílené UI
+  (implemented).** Desktop a server plánují interní synchronizaci po 60
+  sekundách; `same-team` oznamuje všechny dostupné projekty a `same-company`
+  pouze výběr matice. `external` zůstává ruční. Serverový dynamický záznam
+  klienta nemá odchozí endpoint, proto sync sám nespouští a katalog vrací při
+  spojení desktopu. UI zobrazuje vzdálené katalogy odděleně od lokálních
+  projektů a tuto roli serveru pravdivě označuje.
+- [x] [completed] **F-M5-PROJECT-CATALOG-01-E — automatické a fyzické
+  ověření (implemented).** Uživatel na skutečném desktop ↔ LXC nasazení
+  potvrdil obousměrný přenos katalogů; nemožnost zahájit přenos z dynamické
+  serverové strany odpovídá kontraktu a přenos iniciovaný desktopem vymění oba
+  směry.
+
+### Ověření, recovery a omezení
+
+Cílených 5 testů pokrylo obousměrnou výměnu, filtry, revokaci, ruční external
+tok, monotónní projekci, absenci lokální registrace a bounded endpoint. Širší
+administrační/webová/desktopová sada skončila **88 testy úspěšně, 6
+přeskočeno** a úplná sada **728 testy úspěšně, 28 přeskočeno**. Změněné Python
+moduly prošly `py_compile`, oba generované JavaScripty `node --check`.
+
+Pád před SQLite commitem stav nezmění; po commitu lze požadavek bezpečně
+opakovat a opožděná revize projekci nevrátí. Katalog neuděluje právo získat
+obsah ani nevytváří lokální repozitář. Synchronizace větví a historie i externí
+exportní balíčky zůstávají v BACKLOG jako samostatné feature
+`F-M5-SHARING-SYNC-01` a `F-M5-EXTERNAL-EXPORT-01`.
+
 ## F-M5-PERSONAL-SYNC-01 — osobní federace a nastavení sdílení — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m5-personal-sync-01` z `develop` na commitu
