@@ -107,6 +107,7 @@ class WebHandler(DesktopHandler):
     google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
                                                '/v1/federation/enroll',
+                                               '/v1/federation/catalog/reconcile',
                                                '/v1/replications/status', '/v1/replications/sync',
                                                '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
@@ -118,6 +119,9 @@ class WebHandler(DesktopHandler):
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)
+        from spikes.federation_catalog import PATH as CATALOG_PATH, reply as reply_catalog
+        if self.path == CATALOG_PATH:
+            return reply_catalog(self)
         from spikes.project_replication import PATH as REPLICATION_PATH, reply
         if self.path == REPLICATION_PATH:
             return reply(self)
@@ -258,11 +262,28 @@ class WebHandler(DesktopHandler):
                 result['replication_statuses'] = ReplicationControl(
                     self.server.node, deployment='web').statuses(
                         result['replications'], result['node_id'])
+                from spikes.federation_catalog import CatalogControl
+                result.update(CatalogControl(
+                    self.server.node, deployment='web').view())
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Změnu nelze uložit. Ověřte údaje a dostupnost úložiště uzlu.'})
+        if self.path == '/v1/federation/catalog/reconcile':
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            if not isinstance(request, dict) or set(request) != {'peer_id'}:
+                return self.send_error(400)
+            try:
+                from spikes.federation_catalog import CatalogControl
+                control = CatalogControl(self.server.node, deployment='web')
+                control.synchronize(request['peer_id'])
+                return self.reply(200, control.view())
+            except AccessDenied:
+                return self.send_error(403)
+            except Exception:
+                return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -523,13 +544,17 @@ def main():
     with make_server(args.bind, args.port, args.lan, args.cert, args.key,
                      args.token_file, args.node, hostname=args.hostname) as server:
         from spikes.replication_control import ReplicationScheduler
+        from spikes.federation_catalog import CatalogScheduler
         scheduler = ReplicationScheduler(args.node, deployment='web')
+        catalog_scheduler = CatalogScheduler(args.node, deployment='web')
         scheduler.start()
+        catalog_scheduler.start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
         finally:
+            catalog_scheduler.stop()
             scheduler.stop()
 
 

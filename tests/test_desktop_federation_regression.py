@@ -33,6 +33,8 @@ class DesktopFederationTests(unittest.TestCase):
             self.assertFalse(self.node.exists())
             code,state=self.request(server,{'action':'list'})
             self.assertEqual(code,200);self.assertEqual(len(state['users']),1);self.assertEqual(state['projects'],[])
+            self.assertEqual(state['remote_projects'],[])
+            self.assertEqual(state['catalog_statuses'],{})
             node_id=state['node_id'];author_id=state['users'][0]['id']
             code,state=self.request(server,{'action':'add-peer','expected_commit':state['commit_id'],
                 'node_id':str(uuid4()),'name':'Peer','endpoint':'https://192.168.100.2:8443','fingerprint':'a'*64})

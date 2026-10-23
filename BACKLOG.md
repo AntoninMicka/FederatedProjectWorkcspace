@@ -50,12 +50,40 @@ evidence je ve WORK_LOG. Návrh `UX-PROJECT-REPAIR-01` byl doručen PR #75 jako
 merge commit `618b1f7`; implementační dávka `UX-PROJECT-REPAIR-02` byla
 doručena PR #76 jako commit `80c083b` a `F-M2-CHAT-LANGUAGE-01` PR #77 jako
 commit `e1366be`. Cílový směr `UX-FEDERATION-02` byl doručen PR #78 jako commit
-`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` je aktivní
-dávka v TODO.
+`192e79c`; jeho evidence je ve WORK_LOG. `F-M5-PERSONAL-SYNC-01` bylo doručeno
+PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
+a otevřená fyzická akceptace níže. `F-M5-PROJECT-CATALOG-01` je po automatické
+i fyzické akceptaci uzavřené ve WORK_LOG a v TODO čeká pouze na doručení svého
+PR do `develop`; další feature zatím nebyla aktivována.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M5-SHARING-SYNC-01 — obousměrná synchronizace obsahu pro
+  same-team a same-company (cílová úroveň: designed → implemented → PoC
+  validated).** Nad ověřeným katalogem přidat přenos povolených větví a
+  historie, divergence-safe příjem a offline recovery. `same-team` přenáší
+  celou historii oběma směry, `same-company` dovolí některé větve skrýt nebo
+  exportovat jen vybrané. Existence v katalogu sama nikdy neuděluje právo
+  obsah stáhnout nebo otevřít.
+
+- [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
+  uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční
+  oznámení existence projektu není datový export. Navrhnout sestavený balíček
+  bez vlastní historie, nejvýše s patchi z exportní větve, který styčný
+  uživatel výslovně vytvoří a odešle. Protistrana si historii sestaví
+  nezávisle; přímý a souborový přenos zůstávají rovnocenné kanály do pozdějšího
+  rozhodnutí o spojení.
+
+- [ ] [planned] **F-M5-PERSONAL-SYNC-01-E-ACCEPT — fyzická akceptace osobní
+  replikace a matice (cílová úroveň: PoC validated).** Na již implementovaném
+  řezu fyzicky potvrdit desktop ↔ LXC první bundle, následný fast-forward,
+  offline návrat a UI po restartu. Ověřit, že divergence nic nepřepíše a že
+  stránka Sdílení projektů na desktopu i serveru odpovídá schema v6. Jde o
+  nedokončenou akceptaci sloučeného PR #79, nikoli o opakování implementace;
+  koordinovat s katalogovým přenosem, aby se starý primary/read-only grant
+  nevydával za cílový same-team/same-company model.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
