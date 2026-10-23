@@ -89,6 +89,8 @@ class Administration:
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
+            # Validate the source with its own schema before deriving a new
+            # commit.  Older schemas do not carry the v6 sharing policy yet.
             self.validate(state, node['id'])
             if state['schema_version'] < 6:
                 state = dict(state)
@@ -111,6 +113,7 @@ class Administration:
                     for peer in state['peers']]
                 state['project_shares'] = []
                 state['schema_version'] = 6
+                self.validate(state, node['id'])
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
@@ -165,11 +168,11 @@ class Administration:
                     or (relationship == 'client-server'
                         and local_role not in {'client', 'server'})):
                 raise ValueError('Invalid peer relationship')
-            if (sharing_level not in SHARING_LEVELS
+            if (version == 6 and (sharing_level not in SHARING_LEVELS
                     or (relationship == 'client-server'
                         and sharing_level != 'same-team')
                     or (relationship == 'legacy'
-                        and sharing_level != 'unspecified')):
+                        and sharing_level != 'unspecified'))):
                 raise ValueError('Invalid peer sharing level')
             if relationship == 'client-server' and local_role == 'server':
                 if peer['endpoint'] is not None:

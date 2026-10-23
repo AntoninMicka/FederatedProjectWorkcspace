@@ -189,10 +189,17 @@ multi-master ani automatické řešení divergence a sama neuzavírá Gate M5.
   jako same-team a staré P2P ponechá fail-closed `unspecified`. Tento řez
   nespouští nový transport a starý primary/read-only grant nevydává za
   obousměrnou synchronizaci. Návrh a hranice popisuje ADR 0040. Doménové,
-  migrační a UI kontrakty prošly v úplné sadě: **722 testů úspěšně, 28
-  přeskočeno**; oba výsledné JavaScripty prošly `node --check`, Python moduly
-  `py_compile` a inventura nyní pokrývá všech 28 HTML formulářů. Zbývá fyzická
-  kontrola nastavení na desktopu a LXC/serveru.
+  První fyzická kontrola desktopu 23. 10. 2026 odhalila, že existující registr
+  v5 s klient–server peerem byl validován podle pravidel v6 ještě před migrací;
+  UI proto bezpečně skončilo hláškou o nedostupné správě bez změny registru.
+  Oprava validuje zdroj podle jeho verze, sestaví a znovu validuje v6 ještě
+  před atomickým publikováním. Regresní test i kopie skutečného registru v5
+  potvrzují migraci klient–server peeru na `same-team`; minimální šířka tabulek
+  byla snížena tak, aby při ověřované šířce nevznikal zbytečný posuvník.
+  Úplná sada po opravě: **723 testů úspěšně, 28 přeskočeno**. Oba výsledné
+  JavaScripty prošly `node --check`, Python moduly `py_compile` a inventura
+  pokrývá všech 28 HTML formulářů. Zbývá zopakovat fyzickou kontrolu nastavení
+  po restartu desktopu a ověřit LXC/server.
 
 ## K předání do backlogu
 

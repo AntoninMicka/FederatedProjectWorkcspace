@@ -162,6 +162,31 @@ class AdministrationTests(unittest.TestCase):
             'relationship_type': 'legacy', 'local_role': None,
             'account_binding': None, 'sharing_level': 'unspecified'})
 
+    def test_v5_client_server_registry_migrates_before_v6_policy_validation(self):
+        peer = str(uuid4())
+        current = self.change(action='add-peer', node_id=peer, name='Existing',
+                              endpoint='https://192.168.100.3:8443',
+                              fingerprint='a' * 64)
+        current = self.service.request(self.actor, {
+            'action': 'convert-peer', 'expected_commit': current['commit_id'],
+            'node_id': peer, 'relationship_type': 'client-server',
+            'sharing_level': 'same-team'})
+        with self.service.locked() as (git, state, commit, _):
+            old = {key: value for key, value in state.items()
+                   if key != 'project_shares'}
+            old['schema_version'] = 5
+            old['peers'] = [{key: value for key, value in item.items()
+                             if key != 'sharing_level'}
+                            for item in state['peers']]
+            self.service.publish(git, old, commit)
+
+        migrated = self.state()
+        self.assertNotEqual(migrated['commit_id'], current['commit_id'])
+        self.assertEqual(migrated['peers'][0]['sharing_level'], 'same-team')
+        self.assertEqual(migrated['project_shares'], [])
+        with self.service.locked() as (_, stored, _, _):
+            self.assertEqual(stored['schema_version'], 6)
+
     def test_project_peer_matrix_persists_scoped_branch_policies(self):
         project = json.loads(self.node.read_text())['projects'][0]['project_id']
         self.actor['memberships'][project] = 'project-admin'
