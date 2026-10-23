@@ -146,11 +146,16 @@ def load_action_registry(directory=REVIEWED_ACTIONS):
     return ActionRegistry(descriptors)
 
 
-def parse_plan(value, registry):
-    _fields(value, {'schema_version', 'workflow_id', 'project_id', 'expected_head',
-                    'mode', 'privacy', 'budget', 'steps'}, 'plan')
-    require(value['schema_version'] == 1 and type(value['schema_version']) is int,
+def parse_plan(value, registry, *, allow_materialized=False):
+    require(isinstance(value, dict) and type(value.get('schema_version')) is int,
             'Unsupported autonomy plan schema')
+    version = value['schema_version']
+    fields = {'schema_version', 'workflow_id', 'project_id', 'expected_head',
+              'mode', 'privacy', 'budget', 'steps'}
+    if version == 2:
+        fields |= {'countdown_seconds', 'continuation'}
+    _fields(value, fields, 'plan')
+    require(version in {1, 2}, 'Unsupported autonomy plan schema')
     uuid(value['workflow_id']); uuid(value['project_id'])
     require(isinstance(value['expected_head'], str)
             and bool(GIT_HEAD.fullmatch(value['expected_head'])),
@@ -195,8 +200,34 @@ def parse_plan(value, registry):
         canonical(step['input'])
         if descriptor['effect'] == 'local-content-create':
             _validate_local_output(step['input'])
+        if descriptor['action_id'] == 'search.iterative-query':
+            _validate_search_input(step['input'])
         seen.add(step['step_id'])
     require(cost <= budget['max_cost_units'], 'Autonomy plan exceeds cost budget')
+    if version == 2:
+        require(type(value['countdown_seconds']) is int
+                and 3 <= value['countdown_seconds'] <= 5,
+                'Search autonomy countdown must be 3 to 5 seconds')
+        continuation = value['continuation']
+        _fields(continuation, {'kind', 'task_id', 'action', 'follow_up_policy'},
+                'continuation')
+        require(continuation['kind'] == 'iterative-search-v1'
+                and continuation['follow_up_policy'] == 'first-proposed-v1',
+                'Unsupported autonomy continuation policy')
+        uuid(continuation['task_id'])
+        _fields(continuation['action'], {'id', 'version'}, 'continuation action')
+        require(continuation['action'] == {
+            'id': 'search.iterative-query', 'version': '1.0'},
+            'Unsupported autonomy continuation action')
+        require(value['privacy'] != 'local-only'
+                and budget['max_steps'] <= 3
+                and (allow_materialized or len(value['steps']) == 1),
+                'Invalid iterative search autonomy envelope')
+        for step in value['steps']:
+            require(step['action'] == continuation['action']
+                    and step['input'].get('request', {}).get('task_id')
+                    == continuation['task_id'],
+                    'Search step differs from activated continuation')
     canonical(value)
     return deepcopy(value)
 
@@ -224,6 +255,57 @@ def _validate_local_output(value):
     require(isinstance(value['request'], dict) and bool(value['request']),
             'Local output domain request is required')
     canonical(value['request'])
+
+
+def _validate_search_input(value):
+    require(set(value) == {'request', 'preview', 'preview_sha256'},
+            'Iterative search action requires exact input fields')
+    request = value['request']; preview = value['preview']
+    root = {'task_id', 'search_id', 'synthesis_run_id', 'synthesis_manifest_id'}
+    follow_up = root | {'parent_search_id', 'query'}
+    require(isinstance(request, dict) and set(request) in (root, follow_up),
+            'Invalid iterative search action request')
+    for key in root: uuid(request[key])
+    if set(request) == follow_up:
+        uuid(request['parent_search_id'])
+        require(isinstance(request['query'], str)
+                and request['query'].strip() == request['query']
+                and 0 < len(request['query'].encode()) <= 4096
+                and '\0' not in request['query'],
+                'Invalid iterative search action query')
+    preview_fields = root | {'schema_version', 'query', 'purpose', 'privacy',
+        'round_index', 'parent_search_id', 'result_limit', 'budget', 'language',
+        'binding', 'message_ids', 'artifact_ids', 'warning'}
+    require(isinstance(preview, dict) and set(preview) == preview_fields
+            and preview['schema_version'] == 2
+            and all(preview[key] == request[key] for key in root)
+            and preview['privacy'] in {'public', 'project', 'confidential'}
+            and type(preview['round_index']) is int
+            and 1 <= preview['round_index'] <= 3
+            and type(preview['result_limit']) is int
+            and 1 <= preview['result_limit'] <= 10
+            and isinstance(preview['query'], str) and bool(preview['query'])
+            and isinstance(preview['purpose'], str) and bool(preview['purpose'])
+            and isinstance(preview['language'], str) and bool(preview['language'])
+            and isinstance(preview['binding'], dict) and bool(preview['binding'])
+            and isinstance(preview['message_ids'], list)
+            and isinstance(preview['artifact_ids'], list)
+            and isinstance(preview['warning'], str) and bool(preview['warning']),
+            'Invalid iterative search action preview')
+    require(preview['parent_search_id'] == request.get('parent_search_id')
+            and preview['query'] == request.get('query', preview['query']),
+            'Iterative search action request differs from preview')
+    for item in preview['message_ids'] + preview['artifact_ids']: uuid(item)
+    require(isinstance(preview['budget'], dict)
+            and set(preview['budget']) == {
+                'max_rounds', 'max_queries', 'max_results', 'max_seconds'}
+            and all(type(item) is int and item > 0
+                    for item in preview['budget'].values()),
+            'Invalid iterative search action budget')
+    require(isinstance(value['preview_sha256'], str)
+            and bool(HASH.fullmatch(value['preview_sha256']))
+            and digest(preview) == value['preview_sha256'],
+            'Iterative search action preview digest changed')
 
 
 class UnknownEffect(RuntimeError):
@@ -267,7 +349,7 @@ class AutonomyQueue:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(2);
+                    INSERT INTO schema_info VALUES(3);
                     CREATE TABLE settings(global_paused INTEGER NOT NULL);
                     INSERT INTO settings VALUES(0);
                     CREATE TABLE workflows(
@@ -276,7 +358,8 @@ class AutonomyQueue:
                         plan_digest TEXT NOT NULL, plan_json BLOB NOT NULL,
                         state TEXT NOT NULL, ui_attached INTEGER NOT NULL,
                         ui_seen_at TEXT, spent_cost INTEGER NOT NULL, created_at TEXT NOT NULL,
-                        activated_at TEXT, updated_at TEXT NOT NULL, error TEXT);
+                        activated_at TEXT, activation_digest TEXT,
+                        updated_at TEXT NOT NULL, error TEXT);
                     CREATE TABLE steps(
                         workflow_id TEXT NOT NULL, ordinal INTEGER NOT NULL,
                         step_id TEXT NOT NULL UNIQUE, action_id TEXT NOT NULL,
@@ -290,7 +373,7 @@ class AutonomyQueue:
                 versions = [tuple(row) for row in
                             db.execute('SELECT version FROM schema_info').fetchall()]
                 require(tables == {'schema_info', 'settings', 'workflows', 'steps'}
-                        and versions in ([(1,)], [(2,)]),
+                        and versions in ([(1,)], [(2,)], [(3,)]),
                         'Unknown or incomplete autonomy schema')
                 workflow_columns = [row[1] for row in
                     db.execute('PRAGMA table_info(workflows)')]
@@ -307,10 +390,28 @@ class AutonomyQueue:
                     db.execute('ALTER TABLE steps ADD COLUMN not_before TEXT')
                     db.execute('UPDATE schema_info SET version=2')
                     workflow_columns.append('ui_seen_at'); step_columns.append('not_before')
+                    versions = [(2,)]
+                if versions == [(2,)]:
+                    require('activation_digest' not in workflow_columns,
+                            'Unexpected autonomy activation digest column')
+                    db.execute('ALTER TABLE workflows ADD COLUMN activation_digest TEXT')
+                    rows = db.execute('SELECT workflow_id,plan_digest,plan_json,activated_at '
+                                      'FROM workflows').fetchall()
+                    for workflow_id, plan_digest, raw_plan, activated_at in rows:
+                        if activated_at is None: continue
+                        plan = json.loads(bytes(raw_plan))
+                        activation = digest({'workflow_id': workflow_id,
+                            'plan_digest': plan_digest, 'mode': plan['mode'],
+                            'budget': plan['budget']})
+                        db.execute('UPDATE workflows SET activation_digest=? '
+                                   'WHERE workflow_id=?', (activation, workflow_id))
+                    db.execute('UPDATE schema_info SET version=3')
+                    workflow_columns.append('activation_digest')
                 require(set(workflow_columns) == {'workflow_id', 'node_id', 'user_id',
                     'project_id', 'plan_digest', 'plan_json', 'state', 'ui_attached',
                     'ui_seen_at', 'spent_cost', 'created_at', 'activated_at',
-                    'updated_at', 'error'} and len(workflow_columns) == 14
+                    'activation_digest', 'updated_at', 'error'}
+                    and len(workflow_columns) == 15
                     and set(step_columns) == {'workflow_id', 'ordinal', 'step_id',
                     'action_id', 'action_version', 'descriptor_digest', 'state',
                     'approval_digest', 'not_before', 'result_json', 'error'}
@@ -353,7 +454,8 @@ class AutonomyQueue:
             else:
                 db.execute('INSERT INTO workflows(workflow_id,node_id,user_id,project_id,'
                     'plan_digest,plan_json,state,ui_attached,ui_seen_at,spent_cost,created_at,'
-                    'activated_at,updated_at,error) VALUES(?,?,?,?,?,?,?,?,NULL,?,?,NULL,?,NULL)',
+                    'activated_at,activation_digest,updated_at,error) '
+                    'VALUES(?,?,?,?,?,?,?,?,NULL,?,?,NULL,NULL,?,NULL)',
                     (plan['workflow_id'], node_id, user_id, plan['project_id'],
                      plan_digest, raw, 'proposed', 0, 0, created, created))
                 for ordinal, step in enumerate(plan['steps']):
@@ -375,7 +477,8 @@ class AutonomyQueue:
             self._owned(row, node_id, user_id)
             steps = db.execute('SELECT * FROM steps WHERE workflow_id=? ORDER BY ordinal',
                                (workflow_id,)).fetchall()
-            plan = json.loads(bytes(row['plan_json']))
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
             result = {key: row[key] for key in ('workflow_id', 'project_id', 'state',
                       'ui_attached', 'spent_cost', 'created_at', 'activated_at',
                       'updated_at', 'error')}
@@ -384,9 +487,12 @@ class AutonomyQueue:
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
             result['mode'] = plan['mode']; result['privacy'] = plan['privacy']
             result['budget'] = plan['budget']
-            result['activation_digest'] = digest({
+            result['countdown_seconds'] = (plan['countdown_seconds']
+                if plan['schema_version'] == 2 else self.countdown_seconds)
+            proposed_activation = digest({
                 'workflow_id': workflow_id, 'plan_digest': row['plan_digest'],
                 'mode': plan['mode'], 'budget': plan['budget']})
+            result['activation_digest'] = row['activation_digest'] or proposed_activation
             result['remaining_cost'] = plan['budget']['max_cost_units'] - row['spent_cost']
             result['steps'] = []
             for stored, planned in zip(steps, plan['steps']):
@@ -462,8 +568,9 @@ class AutonomyQueue:
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
             activated = now()
-            db.execute("UPDATE workflows SET state='queued',activated_at=?,updated_at=? "
-                       "WHERE workflow_id=?", (activated, activated, workflow_id)); db.commit()
+            db.execute("UPDATE workflows SET state='queued',activated_at=?,"
+                       "activation_digest=?,updated_at=? WHERE workflow_id=?",
+                       (activated, expected, activated, workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
 
     def pause(self, workflow_id, node_id, user_id):
@@ -517,7 +624,8 @@ class AutonomyQueue:
             require(row['state'] in {'queued', 'awaiting-approval'}
                     and self._ui_live(row),
                     'Autonomy approval requires an active attached workflow')
-            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry)
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
             planned = next((item for item in plan['steps'] if item['step_id'] == step_id), None)
             require(planned is not None, 'Unknown autonomy step')
             stored = db.execute('SELECT * FROM steps WHERE step_id=?', (step_id,)).fetchone()
@@ -553,7 +661,8 @@ class AutonomyQueue:
                     'Autonomy plan already produced an effect')
             db.execute('DELETE FROM steps WHERE workflow_id=?', (plan['workflow_id'],))
             db.execute('UPDATE workflows SET project_id=?,plan_digest=?,plan_json=?,state=?, '
-                       'spent_cost=0,activated_at=NULL,updated_at=?,error=NULL '
+                       'spent_cost=0,activated_at=NULL,activation_digest=NULL,'
+                       'updated_at=?,error=NULL '
                        'WHERE workflow_id=?',
                        (plan['project_id'], plan_digest, raw, 'proposed', now(),
                         plan['workflow_id']))
@@ -568,6 +677,48 @@ class AutonomyQueue:
                      digest(descriptor), 'queued'))
             db.commit()
         return self.get(plan['workflow_id'], node_id, user_id)
+
+    def append_step(self, workflow_id, step, node_id, user_id):
+        """Materialize one bounded step under an already activated v2 policy."""
+        with closing(self._connect()) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
+                             (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
+            require(row['state'] in {'queued', 'paused'}
+                    and row['activated_at'] is not None
+                    and row['activation_digest'] is not None,
+                    'Autonomy continuation is not active')
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
+            require(plan['schema_version'] == 2,
+                    'Static autonomy plan cannot append steps')
+            stored = db.execute('SELECT state FROM steps WHERE workflow_id=?',
+                                (workflow_id,)).fetchall()
+            require(stored and all(item[0] in {'completed', 'cancelled'} for item in stored)
+                    and stored[-1][0] == 'completed',
+                    'Autonomy continuation already has a pending step')
+            previous = plan['steps'][-1]
+            require(step.get('depends_on') == [previous['step_id']]
+                    and step.get('input', {}).get('preview', {}).get('round_index')
+                    == previous['input']['preview']['round_index'] + 1
+                    and step.get('input', {}).get('request', {}).get('parent_search_id')
+                    == previous['input']['request']['search_id'],
+                    'Autonomy continuation does not extend the completed search step')
+            updated = deepcopy(plan); updated['steps'].append(deepcopy(step))
+            updated = parse_plan(updated, self.registry, allow_materialized=True)
+            raw = canonical(updated); plan_digest = digest(raw)
+            ordinal = len(plan['steps']); planned = updated['steps'][-1]
+            descriptor = self.registry.resolve(planned['action']['id'],
+                                               planned['action']['version'])
+            db.execute('INSERT INTO steps(workflow_id,ordinal,step_id,action_id,'
+                'action_version,descriptor_digest,state,approval_digest,not_before,'
+                'result_json,error) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL,NULL)',
+                (workflow_id, ordinal, planned['step_id'], descriptor['action_id'],
+                 descriptor['version'], digest(descriptor), 'queued'))
+            db.execute('UPDATE workflows SET plan_digest=?,plan_json=?,updated_at=? '
+                       'WHERE workflow_id=?', (plan_digest, raw, now(), workflow_id))
+            db.commit()
+        return self.get(workflow_id, node_id, user_id)
 
     def cancel(self, workflow_id, node_id, user_id):
         with closing(self._connect()) as db:
@@ -598,7 +749,8 @@ class AutonomyQueue:
                     'Autonomy dispatch requires a live attached UI')
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
-            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry)
+            plan = parse_plan(json.loads(bytes(row['plan_json'])), self.registry,
+                              allow_materialized=True)
             require(plan['expected_head'] == expected_head,
                     'Project changed after autonomy plan preparation')
             require(row['activated_at'] is not None, 'Autonomy workflow was not activated')
@@ -644,10 +796,12 @@ class AutonomyQueue:
                 db.execute("UPDATE workflows SET state='awaiting-approval',updated_at=? "
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
                 return self.get(workflow_id, node_id, user_id)
+            countdown_seconds = (plan['countdown_seconds']
+                if plan['schema_version'] == 2 else self.countdown_seconds)
             if (plan['mode'] == 'automatic' and not needs_approval
-                    and stored['state'] == 'queued' and self.countdown_seconds):
+                    and stored['state'] == 'queued' and countdown_seconds):
                 not_before = (datetime.now(timezone.utc)
-                              + timedelta(seconds=self.countdown_seconds)).isoformat().replace(
+                              + timedelta(seconds=countdown_seconds)).isoformat().replace(
                                   '+00:00', 'Z')
                 db.execute("UPDATE steps SET state='countdown',not_before=? WHERE step_id=?",
                            (not_before, planned['step_id']))

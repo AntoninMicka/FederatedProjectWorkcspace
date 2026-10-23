@@ -44,10 +44,19 @@ automatickou publikaci lokálního artefaktu.
   editaci před vznikem search runu a explicitní fail-closed reconciliation.
   Reuse/odmítnuté varianty jsou zaznamenané v `REUSE_CATALOG.md`; runtime se
   v tomto kroku neměnil.
-- [ ] [planned] **F-M3-SEARCH-03-B — automatický search adapter
+- [x] [completed] **F-M3-SEARCH-03-B — automatický search adapter
   (cílová úroveň: implemented).** Připojit navržený dotaz iterativního hledání
   k obecné frontě, zachovat stávající autorizaci, privacy, binding, round/time
   budget a audit přesných odeslaných bajtů a zajistit `unknown` bez auto-retry.
+  Registry nyní obsahuje přesnou akci `search.iterative-query`; autonomy plán
+  v2 váže search task, policy `first-proposed-v1` a per-workflow countdown.
+  Fronta materializuje nejvýše jeden navazující krok s deterministickými ID a
+  neměnným activation digestem, zatímco skutečný dispatch i audit zůstávají v
+  `SearchRuns`/`OllamaRuns`. Čistý kandidát před countdownem nevytváří search
+  journal; změna preview, HEAD, bindingu, privacy nebo budgetu selže před sítí
+  a `unknown` je terminální bez retry. Cílených 83 testů prošlo; úplná sada
+  23. 10. 2026 skončila 775 testy OK, 28 podmíněně přeskočeno. UI příprava,
+  editace a `send-now` zůstávají v úkolu C.
 - [ ] [planned] **F-M3-SEARCH-03-C — ovládání ruční/automatické fronty
   (cílová úroveň: implemented).** V existujícím search UI zpřístupnit volbu
   režimu a countdownu 3–5 sekund, viditelný dotaz/účel/cíl/privacy/kolo/budget

@@ -4,6 +4,7 @@
 import os
 from pathlib import Path
 import stat
+from uuid import UUID, uuid5
 
 from spikes.action_autonomy import (AutonomyQueue, UnknownEffect, digest,
                                      load_action_registry)
@@ -11,6 +12,7 @@ from spikes.backend_contract import BackendUnknown
 from spikes.configuration import parse_node, read_config
 from spikes.metadata import require, uuid
 from spikes.project_creation import ProjectCreation
+from spikes.web_search import SearchUnknown
 
 
 class AutonomyService:
@@ -32,6 +34,7 @@ class AutonomyService:
         self.queue = AutonomyQueue(root, self.registry, handlers={
             ('analysis.read-only', '1.0'): self._read_only,
             ('query.external', '1.0'): self._external,
+            ('search.iterative-query', '1.0'): self._search,
             ('workflow.role-handoff', '1.0'): self._role_handoff,
             ('artifact.create-local', '1.0'): self._publish_artifact,
         }, countdown_seconds=countdown_seconds)
@@ -132,11 +135,12 @@ class AutonomyService:
         current = self._owned(workflow_id)
         workspace = self.projects.workspace(current['project_id'], blocking=False)
         node_id, user_id = self._identity()
-        return self.queue.advance(workflow_id, node_id, user_id,
+        result = self.queue.advance(workflow_id, node_id, user_id,
             permissions={'project-read', 'external-dispatch', 'role-dispatch',
                          'project-write'},
             allowed_privacy={'public', 'project', 'confidential', 'local-only'},
             expected_head=workspace.git.head())
+        return self._append_search_continuation(result, node_id, user_id)
 
     @staticmethod
     def _read_only(value, execution):
@@ -157,6 +161,80 @@ class AutonomyService:
             raise UnknownEffect(str(exc)) from exc
         return {'schema_version': 1, 'kind': 'external-result-reference',
                 'approval_id': value['approval_id'], 'state': 'recorded'}
+
+    def _search(self, value, execution):
+        require(set(value) == {'request', 'preview', 'preview_sha256'}
+                and isinstance(value['request'], dict)
+                and isinstance(value['preview'], dict)
+                and isinstance(value['preview_sha256'], str),
+                'Invalid iterative search autonomy input')
+        candidate = self.chat_service.task_search_candidate(value['request'])
+        candidate_preview = dict(candidate)
+        candidate_sha = candidate_preview.pop('preview_sha256', None)
+        candidate_preview.pop('state', None)
+        require(candidate_preview == value['preview']
+                and candidate_sha == value['preview_sha256'],
+                'Iterative search preview changed before dispatch')
+        prepared = self.chat_service.task_search_preview(value['request'])
+        require(prepared['preview_sha256'] == value['preview_sha256'],
+                'Iterative search preview changed while preparing dispatch')
+        try:
+            projection = self.chat_service.task_search_confirm({
+                'task_id': value['request']['task_id'],
+                'search_id': value['request']['search_id'],
+                'preview_sha256': value['preview_sha256'], 'approved': True})
+        except (BackendUnknown, SearchUnknown) as exc:
+            raise UnknownEffect(str(exc)) from exc
+        workflow = projection.get('search_workflow') or {}
+        next_queries = workflow.get('next_queries') or []
+        rounds = workflow.get('rounds') or []
+        return {'schema_version': 1, 'kind': 'iterative-search-reference',
+                'task_id': value['request']['task_id'],
+                'search_id': value['request']['search_id'],
+                'preview_sha256': value['preview_sha256'],
+                'state': projection['state'],
+                'round_index': (rounds[-1]['round_index'] if rounds else
+                                value['preview']['round_index']),
+                'next_query': next_queries[0] if next_queries else None}
+
+    @staticmethod
+    def _derived_id(workflow_id, round_index, revision, label):
+        return str(uuid5(UUID(workflow_id),
+                         f'iterative-search:{round_index}:{revision}:{label}'))
+
+    def _append_search_continuation(self, workflow, node_id, user_id):
+        if workflow.get('state') not in {'queued', 'paused'}:
+            return workflow
+        steps = workflow.get('steps') or []
+        if not steps or steps[-1]['action'] != {
+                'id': 'search.iterative-query', 'version': '1.0'}:
+            return workflow
+        result = steps[-1].get('result')
+        if steps[-1].get('state') != 'completed' or not isinstance(result, dict):
+            return workflow
+        query = result.get('next_query')
+        if query is None:
+            return workflow
+        round_index = result['round_index'] + 1; revision = 1
+        request = {'task_id': result['task_id'],
+            'search_id': self._derived_id(workflow['workflow_id'], round_index,
+                                          revision, 'search'),
+            'synthesis_run_id': self._derived_id(workflow['workflow_id'], round_index,
+                                                 revision, 'synthesis-run'),
+            'synthesis_manifest_id': self._derived_id(
+                workflow['workflow_id'], round_index, revision, 'synthesis-manifest'),
+            'parent_search_id': result['search_id'], 'query': query}
+        candidate = self.chat_service.task_search_candidate(request)
+        preview = dict(candidate); preview_sha256 = preview.pop('preview_sha256')
+        preview.pop('state', None)
+        step = {'step_id': self._derived_id(workflow['workflow_id'], round_index,
+                                            revision, 'step'),
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': preview['privacy'], 'cost_units': 1,
+                'depends_on': [steps[-1]['step_id']],
+                'input': {'request': request, 'preview': preview,
+                          'preview_sha256': preview_sha256}}
+        return self.queue.append_step(workflow['workflow_id'], step, node_id, user_id)
 
     def _role_handoff(self, value, execution):
         uuid(value['workflow_id'])

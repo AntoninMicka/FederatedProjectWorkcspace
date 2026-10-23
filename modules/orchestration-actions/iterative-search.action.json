@@ -1,0 +1,1 @@
+{"schema_version":1,"action_id":"search.iterative-query","version":"1.0","display_name":"Iterative web search query","effect":"external-request","permissions":["external-dispatch"],"privacy":["public","project","confidential"],"required_inputs":["request","preview","preview_sha256"],"max_cost_units":1,"automatable":true,"confirmation":"none"}

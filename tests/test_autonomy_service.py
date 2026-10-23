@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
+from contextlib import closing
 from pathlib import Path
 import json
+import sqlite3
 import tempfile
 import unittest
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.action_autonomy import digest
 from spikes.autonomy_service import AutonomyService
 from spikes.backend_contract import BackendUnknown
 from spikes.metadata import ValidationError
@@ -15,6 +18,7 @@ from spikes.projects import Projects
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import running_api
+from spikes.web_search import SearchUnknown
 from tests import test_local_api
 
 
@@ -177,6 +181,58 @@ class AutonomyServiceTests(unittest.TestCase):
             body='Changed after activation.\n', new=True), str(uuid4()))
         with self.assertRaisesRegex(ValidationError, 'Project changed'):
             self.service.advance(self.workflow_id)
+
+    def test_unknown_search_effect_is_not_retried_by_autonomy_adapter(self):
+        task_id, search_id = str(uuid4()), str(uuid4())
+        request = {'task_id': task_id, 'search_id': search_id,
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+        preview = {'schema_version': 2, **request, 'query': 'uncertain',
+            'purpose': 'Test', 'privacy': 'project', 'round_index': 1,
+            'parent_search_id': None, 'result_limit': 3,
+            'budget': {'max_rounds': 3, 'max_queries': 3,
+                       'max_results': 30, 'max_seconds': 300},
+            'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+            'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+        preview_sha256 = digest(preview)
+        class SearchChat(ChatStub):
+            def task_search_candidate(inner, value):
+                inner.calls.append(('candidate', value))
+                return dict(preview, preview_sha256=preview_sha256, state='candidate')
+            def task_search_preview(inner, value):
+                inner.calls.append(('preview', value))
+                return dict(preview, preview_sha256=preview_sha256, state='prepared')
+            def task_search_confirm(inner, value):
+                inner.calls.append(('confirm', value))
+                raise SearchUnknown('search outcome unknown')
+        chat = SearchChat()
+        service = AutonomyService(self.node, Projects(self.node), state_dir=self.state,
+            chat_service=chat, role_workflow_service=self.roles, countdown_seconds=0)
+        step_id = str(uuid4())
+        plan = {'schema_version': 2, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'automatic', 'privacy': 'project', 'countdown_seconds': 3,
+            'continuation': {'kind': 'iterative-search-v1', 'task_id': task_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'follow_up_policy': 'first-proposed-v1'},
+            'budget': {'max_steps': 3, 'max_cost_units': 3, 'max_seconds': 300},
+            'steps': [{'step_id': step_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': 'project', 'cost_units': 1, 'depends_on': [],
+                'input': {'request': request, 'preview': preview,
+                          'preview_sha256': preview_sha256}}]}
+        proposed = service.prepare(plan); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id)
+        with closing(sqlite3.connect(service.queue.path)) as db:
+            db.execute("UPDATE steps SET not_before='2000-01-01T00:00:00Z' "
+                       "WHERE step_id=?", (step_id,)); db.commit()
+        service.attach(self.workflow_id)
+        unknown = service.advance(self.workflow_id)
+        self.assertEqual((unknown['state'], unknown['steps'][0]['state']),
+                         ('unknown', 'unknown'))
+        with self.assertRaisesRegex(ValidationError, 'not runnable'):
+            service.advance(self.workflow_id)
+        self.assertEqual([item[0] for item in chat.calls].count('confirm'), 1)
 
     def test_exact_local_output_fields_are_rechecked_by_domain_adapter(self):
         role_workflow_id = str(uuid4())
