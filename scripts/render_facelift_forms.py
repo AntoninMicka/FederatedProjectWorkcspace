@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from spikes.desktop_ui import CSS, HTML
 
 
-EDITION = "2026-10-17"
+EDITION = "2026-10-23"
 
 
 def sheet(key, title, selectors=(), forms=(), *, scale=.78, source="Sdílené web/desktop UI", native_html="", notes=True):
@@ -78,9 +78,11 @@ SHEETS = [
     sheet("application-access", "Nastavení — dostupnost aplikace",
           ("#settings-access-panel",), ("application-access-form",), scale=.82),
     sheet("users", "Správa uzlu — lokální účty", ("#admin-users-panel",),
-          ("admin-user-create",), scale=.78),
-    sheet("federation", "Správa uzlu — federace a mapování účtů", ("#admin-federation",),
-          ("admin-peer-create", "admin-mapping-create", "admin-mapping-import"), scale=.56),
+          ("admin-user-editor-form", "admin-user-confirm-form"), scale=.78),
+    sheet("federation", "Správa uzlu — federované uzly", ("#admin-federation",),
+          ("admin-peer-editor-form", "admin-peer-enroll-form",
+           "admin-mapping-create", "admin-mapping-import",
+           "admin-replication-create", "admin-replication-import"), scale=.46),
     sheet("drive-import", "Import zdroje — Google Drive", ("#google-drive-import",), scale=.6),
     sheet("source-import", "Import zdroje — místní soubor", ("#source-import-form",),
           ("source-import-form",), scale=.86),
@@ -103,8 +105,8 @@ SHEETS = [
     sheet("gamepad", "Presenter — nastavení gamepadu", (".presenter-gamepad-settings",), scale=.78),
     sheet("profile", "Nastavení — uživatelský profil", ("#settings-profile-panel",),
           ("user-profile-form",), scale=.82),
-    sheet("federation-transfer", "Federace — přenos veřejného projektu do LXC",
-          ("#federation-view",), ("federation-transfer-form",), scale=.78),
+    sheet("federation-sharing", "Federace — sdílení projektů",
+          ("#federation-view",), ("admin-project-share-form",), scale=.66),
     sheet("federation-network", "Federace — síťový backend a spojení",
           ("#federation-network-view",), ("federation-network-form",), scale=.65),
     sheet("federation-deployment", "Federace — nasazení LXC uzlu",

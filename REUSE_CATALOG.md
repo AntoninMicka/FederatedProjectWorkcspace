@@ -266,6 +266,18 @@ vrstvě. Nový HTTP writer, druhý journal a předstírání plné správy feder
 projektů byly odmítnuty. Plnohodnotná správa je samostatný požadavek další
 verze, nikoli rozšíření tohoto jednosměrného přenosu.
 
+F-M5-PERSONAL-SYNC-01-A **reuseuje `Administration`, `MappingSignatures`,
+`Projects`, `ProjectCreation`, Workspace/Journal/Index a Git CLI ochrany** a
+**adaptuje `git_transfer`, `transfer_outbox`, uložené peer CA a společnou stránku
+Federace**. Automatický běh nepoužije dnešní SSH/askpass, protože bez aktivního
+agenta není neinteraktivní; úzký podepsaný HTTPS replica endpoint je nový na
+serverovém `WebHandler` i desktopovém `NetworkBackend`. `validate_rights` se
+nepovažuje za důkaz celé historie, protože projekt zatím nevytváří úplný
+byte-bound manifest; osobní řez používá oboustranně podepsaný project/ref grant
+a nezávislou validaci celého Git grafu na obou uzlech. Druhý Git writer, message
+broker, obecný sync framework a přímé převzetí komponent ze soukromé inventury
+byly odmítnuty. Rozhodnutí: [ADR 0038](docs/adr/0038-personal-project-replication.md).
+
 Stejná dávka dále **reuse/adaptuje `NetworkBackend`, `DeploymentTargets`,
 `Administration`, `federation_probe.check_peer` a `peer_diagnostics.check_both`**
 pro druhou stránku desktopové záložky Federace. Webový formulář nenahrazuje
@@ -274,6 +286,23 @@ jednorázový token, nezměněný seznam cílů a schválený fingerprint. Gener
 atomický publish lokálního nastavení, HTTPS probe a SSH zůstávají ve stávajících
 službách. Nový HTTP writer, druhá konfigurace a webové nakládání se soukromými
 klíči byly odmítnuty.
+
+Klient–server enrollment **reuse/adaptuje `Administration`, federační Ed25519
+identitu, existující per-peer CA v `NetworkBackend` a HTTPS `WebHandler`**.
+Serverový access key slouží jen jako jednorázový bootstrap a neukládá se na
+desktopu; odpověď je navíc připnutá a podepsaná node identitou. Account binding
+je verzovaný v Git registru, zatímco node credential a jeho digest zůstávají v
+node-local úložištích. Ruční přepnutí klient–server trustu, druhá databáze
+uživatelů a ukládání serverového access key byly odmítnuty.
+
+F-M5-PERSONAL-SYNC-01-UI4 **reuse/adaptuje Git-backed `Administration` registr,
+CAS publikaci a sdílené webové/desktopové administrační UI** pro oddělení
+topologie peeru od úrovně `same-team` / `same-company` / `external` a pro
+matici projekt × peer. Stávající jednosměrný replikační grant ani SSH export se
+nevydávají za nový obousměrný sync nebo externí datový balíček. Soukromá
+inventura neposkytla komponentu, která by zachovala projektovou Git autoritu,
+branch scope a export bez historie; nový transport proto nebyl v tomto řezu
+zaveden. Rozhodnutí: [ADR 0040](docs/adr/0040-federation-sharing-levels-and-project-matrix.md).
 
 Poslední převod UX-FACELIFT-01-C **reuse/adaptuje `lxc_deployment.deploy`,
 `DeploymentTargets` a existující deploy/recover/reset skripty** pro třetí

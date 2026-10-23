@@ -312,13 +312,15 @@ class DesktopTests(unittest.TestCase):
         for action in ('register-project-location', 'recover-project-operation',
                        'choose-notebooklm-archive',
                        'choose-project-location',
-                       'federation-transfer-open', 'federation-transfer-start',
                        'federation-network-open', 'federation-network-run',
                        'federation-deployment-open', 'federation-deployment-start'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
                     f'{origin}/#{action}?nonce={nonce}', origin),
                     {'action': action, 'nonce': nonce})
+        for retired in ('federation-transfer-open', 'federation-transfer-start'):
+            self.assertIsNone(native_action_request(
+                f'{origin}/#{retired}?nonce={nonce}', origin))
         for action in ('relocate-project-location', 'unregister-missing-project'):
             with self.subTest(action=action):
                 self.assertEqual(native_action_request(
@@ -922,14 +924,19 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="sidebar-tools"', HTML)
         self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
         self.assertIn('id="sidebar-federation"', HTML)
-        self.assertIn('id="open-federation-transfer"', HTML)
+        self.assertIn('id="open-federation-sharing"', HTML)
         self.assertIn('id="open-federation-network"', HTML)
         self.assertIn('id="open-federation-deployment"', HTML)
-        self.assertEqual(HTML.count('Přenos veřejného projektu do LXC'), 2)
-        self.assertIn('id="federation-transfer-form"', HTML)
-        self.assertIn('plnohodnotnou správou federace projektů', HTML)
-        self.assertIn("requestNativeAction('federation-transfer-open')", JS)
-        self.assertIn("requestNativeAction('federation-transfer-start')", JS)
+        self.assertNotIn('Přenos veřejného projektu do LXC', HTML)
+        self.assertNotIn('id="federation-transfer-form"', HTML)
+        federation_page = HTML.split('id="federation-view"', 1)[1].split('id="federation-network-view"', 1)[0]
+        self.assertIn('id="admin-project-sharing"', federation_page)
+        self.assertIn('id="admin-project-share-form"', federation_page)
+        self.assertIn('openFederationSharing', JS)
+        self.assertIn('#administration{color:#213632;max-width:none}', CSS)
+        self.assertIn('.federation-sharing-page{max-width:none}', CSS)
+        self.assertNotIn("requestNativeAction('federation-transfer-open')", JS)
+        self.assertNotIn("requestNativeAction('federation-transfer-start')", JS)
         self.assertIn('id="federation-network-form"', HTML)
         self.assertIn('Při pozdější chybě testu mohou CA a adresa na LXC zůstat aktualizované.', HTML)
         self.assertIn("requestNativeAction('federation-network-open')", JS)
@@ -938,7 +945,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Reset zahodí recovery snapshot', HTML)
         self.assertIn("requestNativeAction('federation-deployment-open')", JS)
         self.assertIn("requestNativeAction('federation-deployment-start')", JS)
-        self.assertIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
+        self.assertNotIn('JSON.stringify(federationTransferRequest())', Path('spikes/desktop.py').read_text())
         self.assertIn('JSON.stringify(federationNetworkRequest())', Path('spikes/desktop.py').read_text())
         self.assertIn('JSON.stringify(federationDeploymentRequest())', Path('spikes/desktop.py').read_text())
         self.assertNotIn('QDialog', Path('spikes/desktop_transfer.py').read_text())
@@ -976,7 +983,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", JS)
         self.assertIn("const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab']", JS)
         self.assertIn("async function openSettings(settingsTabId='settings-backend-tab'){\n if(!canLeaveWorkspaceEditors())return;", JS)
-        self.assertIn("document.querySelector('#chat-new-thread').disabled=!available", JS)
+        self.assertIn("document.querySelector('#chat-new-thread').disabled=!writable", JS)
         self.assertIn("End:visible.length-1", JS)
         self.assertIn("selectMainTab(document.querySelector('#chat-tab'))", JS)
         self.assertIn('grid-template-columns:51px minmax(0,1fr)', CSS)
@@ -1022,7 +1029,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="history-close"', HTML)
         self.assertIn("projectRequest('/v1/artifacts/history/list'", JS)
         self.assertIn("projectRequest('/v1/artifacts/history/compare'", JS)
-        self.assertIn("if(item.kind==='document')actions.push(", JS)
+        self.assertIn("if(item.kind==='document'&&!activeProject?.readOnly)actions.push(", JS)
         self.assertIn("{label:'Zobrazit',run:()=>openPreview(item.id)}", JS)
         self.assertIn("await openPreview(item.id);if(selectedArtifact===item.id)await openHistory()", JS)
         self.assertIn('sidebar-item-menu-items', CSS)
@@ -1203,7 +1210,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertEqual(ASSETS['/app.css'][1], CSS)
         self.assertEqual(ASSETS['/app.js'][1], DESKTOP_BOOTSTRAP + JS)
         self.assertIn("'backend-metrics','backend-metrics-indicator','openai-resource-provider'", DESKTOP_BOOTSTRAP)
-        self.assertIn("'settings-cms-tab','settings-access-tab','settings-profile-tab','settings-users-tab'", DESKTOP_BOOTSTRAP)
+        self.assertNotIn("'settings-users-tab'", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-profile-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn("document.querySelector('[data-settings-item=\"settings-access-tab\"]').hidden=false", DESKTOP_BOOTSTRAP)
         self.assertIn("'openai-resource-provider','presenter-fullscreen'", DESKTOP_BOOTSTRAP)
@@ -1267,6 +1274,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="sidebar-settings-list" aria-label="Seznam nastavení"', HTML)
         self.assertIn('data-settings-tab="settings-backend-tab"', HTML)
         self.assertIn("openSettings(button.dataset.settingsTab)", JS)
+        self.assertIn("await openAdministration(selected.id==='settings-users-tab'?'users':'federation')", JS)
         self.assertNotIn('id="chat-backend-settings"', HTML)
         self.assertIn("settingsReturn={project:!!activeProject,tabId:", JS)
         self.assertIn("document.querySelector('#project-home').hidden=true", JS)
@@ -1276,10 +1284,13 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="settings-users-tab"', desktop_html)
         self.assertIn('id="settings-federation-tab"', desktop_html)
         self.assertNotIn('id="settings-cms-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden', desktop_html)
-        self.assertNotIn('id="settings-users-tab" type="button" data-desktop="true" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
+        self.assertIn('data-settings-item="settings-users-tab" hidden', desktop_html)
+        self.assertIn('id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden', desktop_html)
         settings = desktop_html.split('id="settings-view"', 1)[1].split('id="project-view"', 1)[0]
         self.assertIn('id="administration" class="settings-card"', settings)
-        self.assertNotIn('<dialog', settings)
+        self.assertIn('<dialog id="admin-peer-editor"', settings)
+        self.assertIn('<dialog id="admin-peer-enroll-dialog"', settings)
+        self.assertNotIn('<dialog id="administration"', settings)
         self.assertNotIn('id="administration-open"', settings)
 
     def test_summary_ui_uses_explicit_selection_preview_and_confirmation(self):

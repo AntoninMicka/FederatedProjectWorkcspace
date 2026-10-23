@@ -12,17 +12,25 @@ import re
 import secrets
 import sqlite3
 import stat
+import subprocess
 from urllib.parse import urlsplit
 from uuid import uuid4, UUID
 
-from spikes.configuration import parse_node, read_config, overlap
+from spikes.configuration import committed_project, parse_node, read_config, overlap
 from spikes.journal import sync_dir
 from spikes.storage import Git
 from spikes.project_creation import ProjectCreation
-from spikes.federation_accounts import MappingSignatures, validate_spec, effective_actions
+from spikes.federation_accounts import (
+    MappingSignatures, ReplicationSignatures, effective_actions,
+    validate_replication_spec, validate_spec,
+)
 
 NODE_ROLES = {'member', 'node-admin', 'federation-admin'}
 PROJECT_ROLES = {'project-admin', 'editor', 'reviewer', 'reader'}
+PEER_RELATIONSHIPS = {'legacy', 'p2p', 'client-server'}
+PEER_LOCAL_ROLES = {None, 'peer', 'client', 'server'}
+SHARING_LEVELS = {'unspecified', 'same-team', 'same-company', 'external'}
+BRANCH_MODES = {'all-except-hidden', 'selected-only', 'export-only'}
 
 
 class AccessDenied(ValueError):
@@ -74,21 +82,51 @@ class Administration:
             git.run('init', '--bare', '--template=', '--initial-branch=main')
             head = git.run('rev-parse', '--verify', 'refs/heads/main', check=False)
             if head.returncode:
-                state = {'schema_version': 2, 'node_id': node['id'], 'users': [], 'peers': [], 'mappings': []}
+                state = {'schema_version': 6, 'node_id': node['id'], 'users': [],
+                         'peers': [], 'mappings': [], 'replications': [],
+                         'project_shares': []}
                 commit = self.publish(git, state, None)
             else:
                 commit = head.stdout.strip()
                 state = json.loads(git.run('show', commit + ':registry.json').stdout)
+            # Validate the source with its own schema before deriving a new
+            # commit.  Older schemas do not carry the v6 sharing policy yet.
             self.validate(state, node['id'])
-            if state['schema_version'] == 1:
-                state = dict(state, schema_version=2, mappings=[])
+            if state['schema_version'] < 6:
+                state = dict(state)
+                if state['schema_version'] == 1:
+                    state['mappings'] = []
+                if state['schema_version'] < 3:
+                    state['replications'] = []
+                if state['schema_version'] < 4:
+                    state['peers'] = [dict(peer, relationship_type='legacy',
+                                           local_role=None)
+                                      for peer in state['peers']]
+                if state['schema_version'] < 5:
+                    state['peers'] = [dict(peer, account_binding=None)
+                                      for peer in state['peers']]
+                state['peers'] = [dict(
+                    peer,
+                    sharing_level=('same-team'
+                                   if peer['relationship_type'] == 'client-server'
+                                   else 'unspecified'))
+                    for peer in state['peers']]
+                state['project_shares'] = []
+                state['schema_version'] = 6
+                self.validate(state, node['id'])
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
     def validate(self, state, node_id):
         version = state.get('schema_version')
-        expected = {'schema_version', 'node_id', 'users', 'peers'} | ({'mappings'} if version == 2 else set())
-        if set(state) != expected or type(version) is not int or version not in {1, 2} or state['node_id'] != node_id:
+        expected = {'schema_version', 'node_id', 'users', 'peers'}
+        if version in {2, 3, 4, 5, 6}:
+            expected.add('mappings')
+        if version in {3, 4, 5, 6}:
+            expected.add('replications')
+        if version == 6:
+            expected.add('project_shares')
+        if set(state) != expected or type(version) is not int or version not in {1, 2, 3, 4, 5, 6} or state['node_id'] != node_id:
             raise ValueError('Invalid registry identity/version')
         seen = set()
         for user in state['users']:
@@ -109,9 +147,48 @@ class Administration:
                     raise ValueError('Invalid project role')
         seen = set()
         for peer in state['peers']:
-            if set(peer) != {'id', 'name', 'endpoint', 'fingerprint', 'trust', 'revision'}:
+            expected_peer = {'id', 'name', 'endpoint', 'fingerprint', 'trust',
+                             'revision'}
+            if version in {4, 5, 6}:
+                expected_peer |= {'relationship_type', 'local_role'}
+            if version in {5, 6}:
+                expected_peer.add('account_binding')
+            if version == 6:
+                expected_peer.add('sharing_level')
+            if set(peer) != expected_peer:
                 raise ValueError('Invalid peer fields')
-            identifier(peer['id']); label(peer['name']); self.endpoint(peer['endpoint'])
+            identifier(peer['id']); label(peer['name'])
+            relationship = peer.get('relationship_type', 'legacy')
+            local_role = peer.get('local_role')
+            sharing_level = peer.get('sharing_level', 'unspecified')
+            if (relationship not in PEER_RELATIONSHIPS
+                    or local_role not in PEER_LOCAL_ROLES
+                    or (relationship == 'legacy' and local_role is not None)
+                    or (relationship == 'p2p' and local_role != 'peer')
+                    or (relationship == 'client-server'
+                        and local_role not in {'client', 'server'})):
+                raise ValueError('Invalid peer relationship')
+            if (version == 6 and (sharing_level not in SHARING_LEVELS
+                    or (relationship == 'client-server'
+                        and sharing_level != 'same-team')
+                    or (relationship == 'legacy'
+                        and sharing_level != 'unspecified'))):
+                raise ValueError('Invalid peer sharing level')
+            if relationship == 'client-server' and local_role == 'server':
+                if peer['endpoint'] is not None:
+                    raise ValueError('Dynamic client must not have an endpoint')
+            else:
+                self.endpoint(peer['endpoint'])
+            binding = peer.get('account_binding')
+            if binding is not None:
+                if (relationship != 'client-server' or peer['trust'] != 'approved'
+                        or not isinstance(binding, dict)
+                        or set(binding) != {'local_user_id', 'remote_user_id'}):
+                    raise ValueError('Invalid client-server account binding')
+                identifier(binding['local_user_id'])
+                identifier(binding['remote_user_id'])
+            elif relationship == 'client-server' and peer['trust'] == 'approved':
+                raise ValueError('Approved client-server peer requires account binding')
             if peer['id'] == node_id or peer['id'] in seen or peer['trust'] not in {'pending', 'approved', 'revoked'}:
                 raise ValueError('Invalid peer identity/trust')
             seen.add(peer['id'])
@@ -131,6 +208,67 @@ class Administration:
             for envelope in envelopes:
                 if envelope['spec'] != spec:
                     raise ValueError('Confirmation for another mapping')
+        seen = set()
+        for replication in state.get('replications', []):
+            if set(replication) != {'spec', 'confirmations', 'revocation', 'enabled'}:
+                raise ValueError('Invalid replication record')
+            spec = validate_replication_spec(replication['spec'])
+            participants = {n['node_id'] for n in spec['nodes']}
+            if spec['id'] in seen or node_id not in participants:
+                raise ValueError('Invalid replication identity')
+            seen.add(spec['id'])
+            if (type(replication['enabled']) is not bool
+                    or not isinstance(replication['confirmations'], dict)
+                    or not set(replication['confirmations']) <= participants):
+                raise ValueError('Invalid replication state')
+            for signer, envelope in replication['confirmations'].items():
+                if (not isinstance(envelope, dict)
+                        or set(envelope) != {'spec', 'signer_node_id', 'decision',
+                                             'public_key', 'signature'}
+                        or envelope.get('spec') != spec
+                        or envelope.get('signer_node_id') != signer
+                        or envelope.get('decision') != 'confirm'):
+                    raise ValueError('Confirmation for another replication')
+            if replication['revocation']:
+                envelope = replication['revocation']
+                if (not isinstance(envelope, dict)
+                        or set(envelope) != {'spec', 'signer_node_id', 'decision',
+                                             'public_key', 'signature'}
+                        or envelope.get('spec') != spec
+                        or envelope.get('signer_node_id') not in participants
+                        or envelope.get('decision') != 'revoke'):
+                    raise ValueError('Invalid replication revocation')
+        seen = set()
+        peers = {peer['id']: peer for peer in state['peers']}
+        for share in state.get('project_shares', []):
+            if set(share) != {'peer_id', 'project_id', 'branch_mode',
+                              'branches', 'include_patches', 'revision'}:
+                raise ValueError('Invalid project sharing fields')
+            identifier(share['peer_id']); identifier(share['project_id'])
+            peer = peers.get(share['peer_id'])
+            key = (share['project_id'], share['peer_id'])
+            if (not peer or key in seen or peer['sharing_level'] not in {
+                    'same-company', 'external'}):
+                raise ValueError('Invalid project sharing peer')
+            seen.add(key)
+            if (share['branch_mode'] not in BRANCH_MODES
+                    or not isinstance(share['branches'], list)
+                    or share['branches'] != sorted(set(share['branches']))
+                    or type(share['include_patches']) is not bool
+                    or type(share['revision']) is not int
+                    or share['revision'] < 1):
+                raise ValueError('Invalid project sharing policy')
+            for branch in share['branches']:
+                self.branch_ref(branch)
+            if peer['sharing_level'] == 'same-company':
+                if (share['branch_mode'] not in {'all-except-hidden', 'selected-only'}
+                        or share['include_patches']
+                        or (share['branch_mode'] == 'selected-only'
+                            and not share['branches'])):
+                    raise ValueError('Invalid same-company project policy')
+            elif (share['branch_mode'] != 'export-only'
+                  or len(share['branches']) != 1):
+                raise ValueError('Invalid external project policy')
 
     def local_account(self, state, user_id):
         if self.deployment == 'desktop':
@@ -181,6 +319,226 @@ class Administration:
                 local_actions = set(local_actions) & roles.get(account['memberships'][manifest['project_id']], set())
             return effective_actions(manifest, entity_id, mapping['spec'], state['node_id'], user_id, local_actions)
 
+    def replication_context(self, state, spec, *, revoking=False):
+        validate_replication_spec(spec)
+        local = next((n for n in spec['nodes'] if n['node_id'] == state['node_id']), None)
+        if not local:
+            raise ValueError('Replication does not include this node')
+        remote = next(n for n in spec['nodes'] if n is not local)
+        peer = next((p for p in state['peers']
+                     if p['id'] == remote['node_id']
+                     and (revoking or p['trust'] == 'approved')), None)
+        if not peer:
+            raise AccessDenied('Peer trust is not approved')
+        mapping = next((m for m in state['mappings']
+                        if m['spec']['id'] == spec['mapping_id']), None)
+        if not mapping:
+            raise ValueError('Unknown account mapping')
+        accounts = sorted(
+            ({'node_id': n['node_id'], 'user_id': n['user_id']} for n in spec['nodes']),
+            key=lambda account: account['node_id'])
+        if (mapping['spec']['accounts'] != accounts
+                or spec['project_id'] not in mapping['spec']['project_ids']
+                or (not revoking and not self.mapping_active(state, mapping))):
+            raise AccessDenied('Replication requires an active exact account mapping')
+        local_fingerprint = MappingSignatures(self.root).identity()['fingerprint']
+        if (local['fingerprint'] != local_fingerprint
+                or remote['fingerprint'] != peer['fingerprint']
+                or local['identity_revision'] != 1
+                or remote['identity_revision'] != 1):
+            raise AccessDenied('Replication identity pin changed')
+        return local, remote, peer, mapping
+
+    def replication_authorized(self, state, replication):
+        if replication['revocation'] or len(replication['confirmations']) != 2:
+            return False
+        try:
+            local, remote, _, _ = self.replication_context(state, replication['spec'])
+            pins = {local['node_id']: local['fingerprint'],
+                    remote['node_id']: remote['fingerprint']}
+            for signer, envelope in replication['confirmations'].items():
+                if envelope.get('signer_node_id') != signer or envelope.get('decision') != 'confirm':
+                    return False
+                ReplicationSignatures.verify(envelope, pins[signer])
+            return True
+        except (ValueError, OSError, subprocess.SubprocessError):
+            return False
+
+    def active_replication(self, replication_id, role):
+        """Return an immutable transport authority snapshot or fail closed."""
+        identifier(replication_id)
+        if role not in {'primary', 'read-only-replica'}:
+            raise ValueError('Invalid replication role')
+        with self.locked() as (_, state, commit, _):
+            replication = next((row for row in state['replications']
+                                if row['spec']['id'] == replication_id), None)
+            if (not replication or not replication['enabled']
+                    or not self.replication_authorized(state, replication)):
+                raise AccessDenied('Replication is not active')
+            local, remote, peer, _ = self.replication_context(state, replication['spec'])
+            if local['role'] != role:
+                raise AccessDenied('Replication direction does not permit this operation')
+            return json.loads(json.dumps({
+                'registry_commit': commit,
+                'spec': replication['spec'],
+                'local': local,
+                'remote': remote,
+                'peer': peer,
+            }))
+
+    def project_replication(self, project_id):
+        """Return this node's durable project role, including inactive grants."""
+        identifier(project_id)
+        with self.locked() as (_, state, commit, _):
+            replication = next((row for row in state['replications']
+                                if row['spec']['project_id'] == project_id
+                                and not row['revocation']), None)
+            if replication is None:
+                return None
+            local = next(node for node in replication['spec']['nodes']
+                         if node['node_id'] == state['node_id'])
+            remote = next(node for node in replication['spec']['nodes']
+                          if node['node_id'] != state['node_id'])
+            peer = next((row for row in state['peers']
+                         if row['id'] == remote['node_id']), None)
+            authorized = self.replication_authorized(state, replication)
+            return json.loads(json.dumps({
+                'registry_commit': commit,
+                'id': replication['spec']['id'],
+                'role': local['role'],
+                'peer': {'id': remote['node_id'],
+                         'name': peer['name'] if peer else remote['node_id']},
+                'remote_role': remote['role'],
+                'enabled': replication['enabled'],
+                'authorized': authorized,
+                'active': replication['enabled'] and authorized,
+            }))
+
+    def assert_project_writable(self, project_id):
+        replication = self.project_replication(project_id)
+        if replication and replication['role'] == 'read-only-replica':
+            raise AccessDenied('Read-only replica cannot be modified locally')
+
+    def project_actor_allowed(self, actor, project_id, node):
+        if actor.get('memberships', {}).get(project_id) == 'project-admin':
+            return True
+        binding = next((project for project in node['projects']
+                        if project['project_id'] == project_id), None)
+        if not binding:
+            return False
+        actor_id = actor.get('id')
+        if self.deployment == 'desktop' and actor_id is None:
+            actor_id = ProjectCreation(self.node).author_id()
+        try:
+            git = Git(binding['root'])
+            meta = committed_project(git, git.head(), project_id, check_worktree=False)
+        except (ValueError, OSError, subprocess.SubprocessError):
+            return False
+        return actor_id == meta['author_id']
+
+    def replication_request(self, state, node, actor, request):
+        action = request['action']
+        export = None
+        if action == 'propose-replication' and set(request) == {
+                'action', 'expected_commit', 'mapping_id', 'project_id',
+                'primary_node_id', 'privacy'}:
+            mapping = next((m for m in state['mappings']
+                            if m['spec']['id'] == request['mapping_id']), None)
+            if not mapping or not self.mapping_active(state, mapping):
+                raise AccessDenied('Replication requires an active mapping')
+            project_id = identifier(request['project_id'])
+            if (project_id not in mapping['spec']['project_ids']
+                    or identifier(request['primary_node_id']) != node['id']
+                    or not self.project_actor_allowed(actor, project_id, node)):
+                raise AccessDenied('Only the local project owner may propose replication')
+            if any(not r['revocation'] and r['spec']['project_id'] == project_id
+                   for r in state['replications']):
+                raise ValueError('Project already has an active replication grant')
+            _, _, peer = self.mapping_context(state, mapping['spec'])
+            local_fingerprint = MappingSignatures(self.root).identity()['fingerprint']
+            nodes = []
+            for account in mapping['spec']['accounts']:
+                is_local = account['node_id'] == node['id']
+                nodes.append(dict(
+                    account,
+                    role='primary' if is_local else 'read-only-replica',
+                    fingerprint=local_fingerprint if is_local else peer['fingerprint'],
+                    identity_revision=1,
+                ))
+            spec = {
+                'schema_version': 1,
+                'id': str(uuid4()),
+                'mapping_id': mapping['spec']['id'],
+                'project_id': project_id,
+                'ref': 'refs/heads/main',
+                'nodes': sorted(nodes, key=lambda participant: participant['node_id']),
+                'privacy': request['privacy'],
+                'actions': ['read', 'replicate'],
+            }
+            validate_replication_spec(spec)
+            replication = {'spec': spec, 'confirmations': {},
+                           'revocation': None, 'enabled': False}
+            state['replications'].append(replication)
+        elif action in {'confirm-replication', 'revoke-replication'} and set(request) == {
+                'action', 'expected_commit', 'replication_id'}:
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == request['replication_id']), None)
+            if not replication or replication['revocation']:
+                raise ValueError('Unknown or revoked replication')
+            local, _, _, _ = self.replication_context(
+                state, replication['spec'], revoking=action == 'revoke-replication')
+            if (action == 'confirm-replication' and local['role'] == 'primary'
+                    and not self.project_actor_allowed(actor, replication['spec']['project_id'], node)):
+                raise AccessDenied('Primary confirmation requires the project owner')
+            decision = 'revoke' if action == 'revoke-replication' else 'confirm'
+            export = ReplicationSignatures(self.root).sign(
+                replication['spec'], node['id'], decision)
+            if decision == 'revoke':
+                replication['revocation'] = export
+                replication['enabled'] = False
+            else:
+                replication['confirmations'][node['id']] = export
+        elif action == 'import-replication' and set(request) == {
+                'action', 'expected_commit', 'envelope'}:
+            envelope = request['envelope']
+            if not isinstance(envelope, dict) or 'spec' not in envelope:
+                raise ValueError('Invalid replication confirmation')
+            _, remote, peer, _ = self.replication_context(
+                state, envelope['spec'], revoking=envelope.get('decision') == 'revoke')
+            if envelope.get('signer_node_id') != remote['node_id']:
+                raise ValueError('Replication confirmation must be signed by the peer')
+            ReplicationSignatures.verify(envelope, peer['fingerprint'])
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == envelope['spec']['id']), None)
+            if not replication:
+                replication = {'spec': envelope['spec'], 'confirmations': {},
+                               'revocation': None, 'enabled': False}
+                state['replications'].append(replication)
+            if (replication['spec'] != envelope['spec']
+                    or (replication['revocation'] and envelope['decision'] != 'revoke')):
+                raise ValueError('Changed or already revoked replication')
+            if envelope['decision'] == 'revoke':
+                replication['revocation'] = envelope
+                replication['enabled'] = False
+            else:
+                replication['confirmations'][remote['node_id']] = envelope
+        elif action == 'set-replication-enabled' and set(request) == {
+                'action', 'expected_commit', 'replication_id', 'enabled'}:
+            replication = next((r for r in state['replications']
+                                if r['spec']['id'] == request['replication_id']), None)
+            if not replication or type(request['enabled']) is not bool:
+                raise ValueError('Invalid replication desired state')
+            local, _, _, _ = self.replication_context(state, replication['spec'])
+            if (request['enabled'] and local['role'] == 'primary'
+                    and not self.project_actor_allowed(actor, replication['spec']['project_id'], node)):
+                raise AccessDenied('Primary activation requires the project owner')
+            if request['enabled'] and not self.replication_authorized(state, replication):
+                raise AccessDenied('Replication is not bilaterally authorized')
+            replication['enabled'] = request['enabled']
+        else:
+            raise ValueError('Invalid replication request')
+        return export
+
     def mapping_request(self, state, node, request):
         action = request['action']
         export = None
@@ -223,7 +581,8 @@ class Administration:
                 mapping['confirmations'][remote['node_id']] = envelope
         else:
             raise ValueError('Invalid mapping request')
-        if not set(mapping['spec']['project_ids']) <= {p['project_id'] for p in node['projects']}:
+        if (action == 'propose-mapping'
+                and not set(mapping['spec']['project_ids']) <= {p['project_id'] for p in node['projects']}):
             raise ValueError('Unknown scoped projects')
         return export
 
@@ -238,14 +597,14 @@ class Administration:
             raise ValueError('Invalid endpoint port')
         return value.rstrip('/')
 
-    def publish(self, git, state, parent):
+    def publish(self, git, state, parent, *, message='Update administration registry\n'):
         self.validate(state, state['node_id'])
         blob = git.run('hash-object', '-w', '--stdin', input=json.dumps(state, ensure_ascii=False, sort_keys=True) + '\n').stdout.strip()
         tree = git.run('mktree', input='100644 blob ' + blob + '\tregistry.json\n').stdout.strip()
         args = ['commit-tree', tree]
         if parent:
             args += ['-p', parent]
-        commit = git.run(*args, input='Update administration registry\n', env_extra={
+        commit = git.run(*args, input=message, env_extra={
             'GIT_AUTHOR_NAME': 'Workspace administration', 'GIT_COMMITTER_NAME': 'Workspace administration',
             'GIT_AUTHOR_EMAIL': state['node_id'] + '@local.invalid',
             'GIT_COMMITTER_EMAIL': state['node_id'] + '@local.invalid'}).stdout.strip()
@@ -278,6 +637,51 @@ class Administration:
             db.execute('INSERT INTO credentials VALUES (?, ?, ?)', (reference, user_id, hashlib.sha256(token.encode()).hexdigest()))
         sync_dir(self.root)
         return reference, token
+
+    def issue_node_credential(self, peer_id, local_user_id, remote_user_id):
+        """Rotate one enrollment-only credential outside the Git registry."""
+        identifier(peer_id); identifier(local_user_id); identifier(remote_user_id)
+        token = secrets.token_urlsafe(32)
+        path = self.root / 'node-credentials.sqlite'
+        fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        info = os.fstat(fd); os.close(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o077):
+            raise ValueError('Unsafe node credential store')
+        with closing(sqlite3.connect(path)) as db, db:
+            db.execute('PRAGMA synchronous=FULL')
+            db.execute('CREATE TABLE IF NOT EXISTS node_credentials '
+                       '(peer_id TEXT PRIMARY KEY, local_user_id TEXT NOT NULL, '
+                       'remote_user_id TEXT NOT NULL, digest TEXT NOT NULL, revision INTEGER NOT NULL)')
+            previous = db.execute(
+                'SELECT revision FROM node_credentials WHERE peer_id=?',
+                (peer_id,)).fetchone()
+            revision = previous[0] + 1 if previous else 1
+            db.execute('INSERT OR REPLACE INTO node_credentials VALUES (?, ?, ?, ?, ?)',
+                       (peer_id, local_user_id, remote_user_id,
+                        hashlib.sha256(token.encode()).hexdigest(), revision))
+        sync_dir(self.root)
+        return token, revision
+
+    def revoke_node_credential(self, peer_id):
+        identifier(peer_id)
+        path = self.root / 'node-credentials.sqlite'
+        if path.exists():
+            if path.is_symlink():
+                raise ValueError('Unsafe node credentials')
+            with closing(sqlite3.connect(path)) as db, db:
+                db.execute('DELETE FROM node_credentials WHERE peer_id=?', (peer_id,))
+            sync_dir(self.root)
+        network_root = self.node.parent / ('.' + self.node.name + '.network')
+        token = network_root / (peer_id + '-enrollment.token')
+        if os.path.lexists(token):
+            if network_root != network_root.resolve():
+                raise ValueError('Unsafe network credential directory')
+            info = token.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077):
+                raise ValueError('Unsafe client enrollment credential')
+            token.unlink(); sync_dir(network_root)
 
     def authenticate(self, auth):
         if self.deployment == 'desktop':
@@ -320,6 +724,7 @@ class Administration:
                 raise AccessDenied('Registry changed; reload before editing')
             token = None
             export = None
+            previous = json.dumps(state, ensure_ascii=False, sort_keys=True)
             registered = {p['project_id'] for p in node['projects']}
             if action == 'create-user' and set(request) == {'action', 'expected_commit', 'name', 'node_role'}:
                 if self.deployment != 'web':
@@ -341,7 +746,13 @@ class Administration:
                     raise AccessDenied('Cannot edit federation administrator')
                 if action == 'rotate-key' and set(request) == {'action', 'expected_commit', 'user_id'}:
                     user['credential_ref'], token = self.issue(user['id'])
-                elif action == 'update-user' and set(request) == {'action', 'expected_commit', 'user_id', 'active', 'node_role', 'memberships'}:
+                elif (action == 'update-user'
+                      and set(request) in ({'action', 'expected_commit',
+                                           'user_id', 'active', 'node_role',
+                                           'memberships'},
+                                          {'action', 'expected_commit',
+                                           'user_id', 'name', 'active',
+                                           'node_role', 'memberships'})):
                     role, memberships = request['node_role'], request['memberships']
                     if not isinstance(role, str) or role not in NODE_ROLES or (role == 'federation-admin' and actor['node_role'] != 'federation-admin'):
                         raise AccessDenied('Cannot grant this role')
@@ -349,52 +760,182 @@ class Administration:
                         raise ValueError('Unknown projects')
                     if user['id'] == actor.get('id') and (request['active'] is not True or role != actor['node_role']):
                         raise AccessDenied('Cannot revoke your own administrative access')
-                    user.update(active=request['active'], node_role=role, memberships=memberships)
+                    user.update(name=label(request.get('name', user['name'])),
+                                active=request['active'], node_role=role,
+                                memberships=memberships)
                 else:
                     raise ValueError('Invalid user operation')
                 user['revision'] += 1
             elif action == 'add-peer' and set(request) == {'action', 'expected_commit', 'node_id', 'name', 'endpoint', 'fingerprint'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 if not isinstance(request['fingerprint'], str):
                     raise ValueError('Expected fingerprint text')
                 state['peers'].append({'id': identifier(request['node_id']), 'name': label(request['name']),
                     'endpoint': self.endpoint(request['endpoint']), 'fingerprint': request['fingerprint'].lower(),
-                    'trust': 'pending', 'revision': 1})
+                    'trust': 'pending', 'revision': 1,
+                    'relationship_type': 'legacy', 'local_role': None,
+                    'account_binding': None, 'sharing_level': 'unspecified'})
+            elif action == 'add-peer-relationship' and set(request) == {
+                    'action', 'expected_commit', 'node_id', 'name', 'endpoint',
+                    'fingerprint', 'relationship_type', 'sharing_level'}:
+                if request['relationship_type'] != 'p2p':
+                    raise AccessDenied(
+                        'Client-server relationship must be created by login')
+                if self.deployment != 'web':
+                    raise AccessDenied('P2P relationship is server-only')
+                if not isinstance(request['fingerprint'], str):
+                    raise ValueError('Expected fingerprint text')
+                if request['sharing_level'] not in {
+                        'same-team', 'same-company', 'external'}:
+                    raise ValueError('Invalid peer sharing level')
+                state['peers'].append({
+                    'id': identifier(request['node_id']),
+                    'name': label(request['name']),
+                    'endpoint': self.endpoint(request['endpoint']),
+                    'fingerprint': request['fingerprint'].lower(),
+                    'trust': 'pending', 'revision': 1,
+                    'relationship_type': 'p2p', 'local_role': 'peer',
+                    'account_binding': None,
+                    'sharing_level': request['sharing_level']})
+            elif action == 'convert-peer' and set(request) == {
+                    'action', 'expected_commit', 'node_id',
+                    'relationship_type', 'sharing_level'}:
+                peer = next((p for p in state['peers']
+                             if p['id'] == request['node_id']), None)
+                relationship = request['relationship_type']
+                if peer is None or peer['relationship_type'] != 'legacy':
+                    raise ValueError('Only a legacy relationship can be converted')
+                if relationship not in {'p2p', 'client-server'}:
+                    raise ValueError('Invalid peer relationship conversion')
+                sharing_level = request['sharing_level']
+                if (sharing_level not in SHARING_LEVELS
+                        or (relationship == 'client-server'
+                            and sharing_level != 'same-team')
+                        or (relationship == 'p2p'
+                            and sharing_level not in {
+                                'same-team', 'same-company', 'external'})):
+                    raise ValueError('Invalid peer sharing level')
+                if relationship == 'p2p' and self.deployment != 'web':
+                    raise AccessDenied('P2P relationship is server-only')
+                self.revoke_peer_dependents(state, node, peer['id'])
+                local_role = ('peer' if relationship == 'p2p'
+                              else 'client' if self.deployment == 'desktop'
+                              else 'server')
+                peer.update(
+                    relationship_type=relationship,
+                    local_role=local_role,
+                    endpoint=(None if local_role == 'server'
+                              else peer['endpoint']),
+                    trust='pending', account_binding=None,
+                    sharing_level=sharing_level,
+                    revision=peer['revision'] + 1)
+            elif action == 'update-peer' and set(request) == {
+                    'action', 'expected_commit', 'node_id', 'name', 'endpoint',
+                    'trust', 'sharing_level'}:
+                peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
+                if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {
+                        'approved', 'revoked', 'pending'}:
+                    raise ValueError('Invalid peer update')
+                if peer['relationship_type'] == 'legacy':
+                    raise ValueError('Legacy relationship must be converted or removed')
+                if (peer['relationship_type'] == 'client-server'
+                        and request['trust'] == 'approved'
+                        and peer['trust'] != 'approved'):
+                    raise AccessDenied(
+                        'Client-server trust is established by login')
+                sharing_level = request['sharing_level']
+                if (sharing_level not in SHARING_LEVELS
+                        or (peer['relationship_type'] == 'client-server'
+                            and sharing_level != 'same-team')
+                        or (peer['relationship_type'] == 'p2p'
+                            and sharing_level not in {
+                                'same-team', 'same-company', 'external'})):
+                    raise ValueError('Invalid peer sharing level')
+                name = label(request['name'])
+                endpoint = (None if peer['local_role'] == 'server'
+                            else self.endpoint(request['endpoint']))
+                changed = (peer['name'] != name or peer['endpoint'] != endpoint
+                           or peer['trust'] != request['trust']
+                           or peer['sharing_level'] != sharing_level)
+                if not changed:
+                    return self.public(state, commit, actor)
+                if peer['sharing_level'] != sharing_level:
+                    state['project_shares'] = [
+                        share for share in state['project_shares']
+                        if share['peer_id'] != peer['id']]
+                peer.update(name=name, endpoint=endpoint, trust=request['trust'],
+                            sharing_level=sharing_level,
+                            revision=peer['revision'] + 1)
+                if request['trust'] == 'revoked':
+                    peer['account_binding'] = None
+                    self.revoke_peer_dependents(state, node, peer['id'])
+                    self.revoke_node_credential(peer['id'])
             elif action == 'update-peer-endpoint' and set(request) == {'action', 'expected_commit', 'node_id', 'endpoint'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or peer['trust'] != 'approved':
                     raise ValueError('Unknown or unapproved peer')
+                if peer.get('local_role') == 'server':
+                    raise ValueError('Dynamic client has no editable endpoint')
                 endpoint = self.endpoint(request['endpoint'])
                 if peer['endpoint'] == endpoint:
                     return self.public(state, commit, actor)
                 peer.update(endpoint=endpoint, revision=peer['revision'] + 1)
             elif action == 'set-trust' and set(request) == {'action', 'expected_commit', 'node_id', 'trust'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 peer = next((p for p in state['peers'] if p['id'] == request['node_id']), None)
                 if peer is None or not isinstance(request['trust'], str) or request['trust'] not in {'approved', 'revoked', 'pending'}:
                     raise ValueError('Invalid trust change')
+                if (peer.get('relationship_type') == 'client-server'
+                        and request['trust'] == 'approved'
+                        and peer['trust'] != 'approved'):
+                    raise AccessDenied(
+                        'Client-server trust is established by login')
                 peer.update(trust=request['trust'], revision=peer['revision'] + 1)
                 if request['trust'] == 'revoked':
-                    for mapping in state['mappings']:
-                        if not mapping['revocation'] and any(a['node_id'] == peer['id'] for a in mapping['spec']['accounts']):
-                            mapping['revocation'] = MappingSignatures(self.root).sign(mapping['spec'], node['id'], 'revoke')
+                    peer['account_binding'] = None
+                    self.revoke_peer_dependents(state, node, peer['id'])
+                    self.revoke_node_credential(peer['id'])
             elif action in {'propose-mapping', 'confirm-mapping', 'revoke-mapping', 'import-mapping'}:
-                if actor['node_role'] != 'federation-admin':
-                    raise AccessDenied('Federation administrator required')
                 export = self.mapping_request(state, node, request)
+                if action in {'revoke-mapping', 'import-mapping'}:
+                    revoked = {m['spec']['id'] for m in state['mappings'] if m['revocation']}
+                    for replication in state['replications']:
+                        if replication['spec']['mapping_id'] in revoked:
+                            replication['enabled'] = False
+            elif action in {'propose-replication', 'confirm-replication',
+                            'revoke-replication', 'import-replication',
+                            'set-replication-enabled'}:
+                export = self.replication_request(state, node, actor, request)
+            elif action == 'set-project-share':
+                self.project_share_request(state, node, actor, request)
             else:
                 raise ValueError('Unknown administration operation')
-            commit = self.publish(git, state, commit)
+            if json.dumps(state, ensure_ascii=False, sort_keys=True) != previous:
+                commit = self.publish(git, state, commit,
+                                      message='Administration: ' + action + '\n')
             result = self.public(state, commit, actor)
             if token:
                 result['access_key'] = token
             if export:
-                result['mapping_envelope'] = export
+                key = ('replication_envelope'
+                       if action in {'confirm-replication', 'revoke-replication'}
+                       else 'mapping_envelope')
+                result[key] = export
             return result
+
+    def revoke_peer_dependents(self, state, node, peer_id):
+        """Revoke durable grants before a peer disappears from active use."""
+        for mapping in state['mappings']:
+            if (not mapping['revocation']
+                    and any(account['node_id'] == peer_id
+                            for account in mapping['spec']['accounts'])):
+                mapping['revocation'] = MappingSignatures(self.root).sign(
+                    mapping['spec'], node['id'], 'revoke')
+        for replication in state['replications']:
+            if (not replication['revocation']
+                    and any(member['node_id'] == peer_id
+                            for member in replication['spec']['nodes'])):
+                replication['revocation'] = ReplicationSignatures(self.root).sign(
+                    replication['spec'], node['id'], 'revoke')
+                replication['enabled'] = False
 
     def public(self, state, commit, actor):
         users = [{k: v for k, v in u.items() if k != 'credential_ref'} for u in state['users']]
@@ -402,8 +943,84 @@ class Administration:
             users = [self.local_account(state, ProjectCreation(self.node).author_id())]
         return {'node_id': state['node_id'], 'commit_id': commit,
                 'users': users, 'deployment': self.deployment,
-                'peers': state['peers'] if actor['node_role'] == 'federation-admin' else [],
-                'mapping_identity': MappingSignatures(self.root).identity() if actor['node_role'] == 'federation-admin' else None,
-                'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if actor['node_role'] == 'federation-admin' else [],
+                'current_user_id': actor.get('id'),
+                'peers': state['peers'] if self.is_admin(actor) else [],
+                'project_shares': state.get('project_shares', [])
+                if self.is_admin(actor) else [],
+                'mapping_identity': MappingSignatures(self.root).identity() if self.is_admin(actor) else None,
+                'mappings': [dict(m, active=self.mapping_active(state, m)) for m in state['mappings']] if self.is_admin(actor) else [],
+                'replications': [dict(
+                    replication,
+                    local_role=next(node['role'] for node in replication['spec']['nodes']
+                                    if node['node_id'] == state['node_id']),
+                    authorized=self.replication_authorized(state, replication),
+                    active=(replication['enabled']
+                            and self.replication_authorized(state, replication)),
+                ) for replication in state['replications']],
                 'federation_admin': actor['node_role'] == 'federation-admin',
-                'transport': 'not-implemented'}
+                'can_federate': self.is_admin(actor),
+                'transport': 'signed-https-v1'}
+
+    def project_share_request(self, state, node, actor, request):
+        if set(request) != {'action', 'expected_commit', 'peer_id',
+                            'project_id', 'enabled', 'branch_mode',
+                            'branches', 'include_patches'}:
+            raise ValueError('Invalid project sharing request')
+        peer = next((item for item in state['peers']
+                     if item['id'] == request['peer_id']), None)
+        project_id = identifier(request['project_id'])
+        if (not peer or peer['trust'] == 'revoked'
+                or peer['sharing_level'] not in {'same-company', 'external'}):
+            raise AccessDenied('Peer sharing level does not allow project selection')
+        if (project_id not in {item['project_id'] for item in node['projects']}
+                or not self.project_actor_allowed(actor, project_id, node)):
+            raise AccessDenied('Project sharing requires the project owner')
+        if type(request['enabled']) is not bool:
+            raise ValueError('Invalid project sharing state')
+        existing = next((item for item in state['project_shares']
+                         if item['peer_id'] == peer['id']
+                         and item['project_id'] == project_id), None)
+        if not request['enabled']:
+            if existing:
+                state['project_shares'].remove(existing)
+            return
+        branches = request['branches']
+        if (not isinstance(branches, list)
+                or any(not isinstance(branch, str) for branch in branches)):
+            raise ValueError('Invalid project branches')
+        branches = sorted(set(self.branch_ref(branch) for branch in branches))
+        policy = {
+            'peer_id': peer['id'], 'project_id': project_id,
+            'branch_mode': request['branch_mode'], 'branches': branches,
+            'include_patches': request['include_patches'],
+            'revision': existing['revision'] + 1 if existing else 1,
+        }
+        # Validate the new record in the same strict shape as a loaded registry.
+        if peer['sharing_level'] == 'same-company':
+            if (policy['branch_mode'] not in {'all-except-hidden', 'selected-only'}
+                    or type(policy['include_patches']) is not bool
+                    or policy['include_patches']
+                    or (policy['branch_mode'] == 'selected-only'
+                        and not policy['branches'])):
+                raise ValueError('Invalid same-company project policy')
+        elif (policy['branch_mode'] != 'export-only'
+              or len(policy['branches']) != 1
+              or type(policy['include_patches']) is not bool):
+            raise ValueError('Invalid external project policy')
+        if existing:
+            if {key: value for key, value in existing.items()
+                    if key != 'revision'} == {key: value for key, value in policy.items()
+                                       if key != 'revision'}:
+                return
+            existing.update(policy)
+        else:
+            state['project_shares'].append(policy)
+
+    @staticmethod
+    def branch_ref(value):
+        if (not isinstance(value, str) or not value.startswith('refs/heads/')
+                or len(value) > 255 or value.endswith(('/', '.'))
+                or '..' in value or '@{' in value or '\\' in value
+                or any(ord(char) < 33 or char in '~^:?*[' for char in value)):
+            raise ValueError('Invalid branch ref')
+        return value

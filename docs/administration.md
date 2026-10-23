@@ -82,6 +82,20 @@ mapování, opětovné schválení peeru stará mapování neoživí. Bez automa
 transportu změna druhý uzel neinformuje sama; doručení je nyní ruční/offline.
 Uložený podepsaný soubor lze znovu zobrazit po ztrátě odpovědi/restartu.
 
+Osobní replikace používá pouze aktivní oboustranné mapování účtů. Správce
+vybere schválený peer a projekt, nastaví privacy třídy bez `local-only`
+a výslovně potvrdí, že tento uzel je primary a protější uzel read-only
+replica pro `refs/heads/main`. Podepsaný grant se stejně jako mapování ručně
+přenese a potvrdí na obou uzlech; pouhá dosažitelnost nebo důvěra peeru
+synchronizaci nepovolí.
+
+Po obou potvrzeních lze grant zapnout. Backend pak každých 60 sekund zkouší
+omezený podepsaný HTTPS přenos; tlačítko Synchronizovat nyní provede stejný
+pokus okamžitě. Stav rozlišuje čekání, offline uzel, odmítnutí, revokaci,
+konflikt a poslední úspěšný HEAD. Zastavení nepřenáší další změny, revokace
+grant trvale ukončí. Read-only replika skrývá editační akce a server každý
+zápis přes Workspace znovu odmítá; zápisy se provádějí na primary.
+
 ## Práva spolu s daty
 
 [ADR 0021](adr/0021-local-accounts-and-bilateral-mapping.md) definuje povinný
@@ -94,10 +108,10 @@ rozsahu ověřeného mapování, místního členství/role a místní politiky;
 nemůže získat write tím, že protější účet je editor. Členství a privacy se
 kontrolují na obou stranách před přenosem i před zpřístupněním.
 
-Implementován je validátor manifestu a vyhodnocení `Administration.mapped_actions`.
-Samotný datový transport a napojení manifestu na Git přenos/uložení artefaktů
-je stále otevřené M5; toto není důkaz jeho implementace. Podepsaná potvrzení
-účtů jsou funkční offline protokol, nikoli datová synchronizace nebo SSO.
+Obecný portable rights manifest a policy engine zůstávají otevřenou částí M5.
+Implementovaná osobní replikace je užší: grant autorizuje celý validovaný Git
+graf jednoho projektu a povolené privacy třídy mezi dvěma určenými uzly.
+Není důkazem obecné federace jednotlivých artefaktů, sdílené identity ani SSO.
 
 ## Persistence a recovery
 
@@ -109,9 +123,10 @@ automaticky exportovat: obsahuje lokální role a credential reference.
 Záloha musí zachovat node.json, registr, credentials a původní bootstrap klíč;
 přeinstalace kódu tyto soubory nemění.
 
-Registr v2 přidává samostatnou tabulku mapování. V1 se pod stejným flock/CAS
-migruje do v2 bez změny uživatelských UUID či credentials. Pád ponechá buď
-v1 nebo kompletní v2, další start migraci dokončí. `federation-key.pem` a
+Registr v2 přidal samostatnou tabulku mapování a v3 podepsané replikační granty
+s lokálním desired state. V1 i v2 se pod stejným flock/CAS migrují do v3 bez
+změny uživatelských UUID či credentials. Pád ponechá buď původní verzi, nebo
+kompletní v3; další start migraci dokončí. `federation-key.pem` a
 `federation-key.identity` zůstávají mimo Git v privátním adresáři správy.
 Při prvním vytvoření se publikuje klíč a potom jeho public identity marker;
 opakováním lze doplnit marker ke stejnému klíči. Ztráta klíče při existujícím

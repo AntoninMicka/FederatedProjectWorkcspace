@@ -23,10 +23,12 @@ MAX_PROJECT_HISTORY = 20
 
 
 class Workspace:
-    def __init__(self, root, state, *, blocking=True, deadline=None):
+    def __init__(self, root, state, *, blocking=True, deadline=None,
+                 write_guard=None):
         self.journal = Journal(root, state, blocking=blocking)
         self.git = Git(self.journal.root, deadline=deadline)
         self.index = Index(self.journal.state / 'index.sqlite')
+        self.write_guard = write_guard
 
     @classmethod
     def attach(cls, root, state, *, blocking=True, deadline=None, index=False):
@@ -36,7 +38,12 @@ class Workspace:
         workspace.git = Git(workspace.journal.root, deadline=deadline)
         workspace.index = (Index(workspace.journal.state / 'index.sqlite')
                            if index else None)
+        workspace.write_guard = None
         return workspace
+
+    def _writable(self):
+        if self.write_guard is not None:
+            self.write_guard()
 
     def _active(self, db):
         row = db.execute('SELECT record FROM operations WHERE done=0').fetchone()
@@ -61,6 +68,7 @@ class Workspace:
     def apply(self, changes, *, author_name, author_email, message, checkpoint=lambda stage: None):
         """Refuse dirty inputs; return a durable receipt after commit and index publication."""
         with self.journal.lock(), self.journal.connect() as db:
+            self._writable()
             return self._apply_locked(db, changes, author_name, author_email, message, checkpoint)
 
     def transact(self, operation_id, request, prepare, *, expected_head=None,
@@ -74,6 +82,7 @@ class Workspace:
         validate_uuid(operation_id)
         digest = hashlib.sha256(json.dumps(request, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         with self.journal.lock(), self.journal.connect() as db:
+            self._writable()
             row = db.execute('SELECT record, done FROM operations WHERE id=?', (operation_id,)).fetchone()
             if row:
                 record = json.loads(row[0])
@@ -133,6 +142,8 @@ class Workspace:
                 if db.execute('SELECT 1 FROM pending').fetchone():
                     raise PendingOperation('Standalone Journal recovery required')
                 return None
+            if record.get('kind') == 'external-replication':
+                raise PendingOperation('External replication recovery required')
             return self._recover(db, record, checkpoint)
 
     def read(self):

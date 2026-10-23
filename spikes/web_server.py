@@ -65,10 +65,12 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   if(!sessionResponse.ok)throw new Error();
   const session=await sessionResponse.json();const admin=['node-admin','federation-admin'].includes(session.node_role);
   projectCreateForm.hidden=!admin;document.querySelector('#sidebar-create-project').hidden=!admin;notebookImportButton.hidden=!admin;document.querySelector('#settings-users-tab').hidden=!admin;
+  document.querySelector('[data-settings-item="settings-users-tab"]').hidden=!admin;
   document.querySelector('#settings-cms-tab').hidden=!admin;
   document.querySelector('#settings-access-tab').hidden=!admin;
   document.querySelector('[data-settings-item="settings-access-tab"]').hidden=!admin;
-  document.querySelector('#settings-federation-tab').hidden=session.node_role!=='federation-admin';
+  document.querySelector('#settings-federation-tab').hidden=!admin;
+  document.querySelector('[data-settings-item="settings-federation-tab"]').hidden=!admin;
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
   document.querySelector('#openai-resource-provider').hidden=!admin;
@@ -104,6 +106,8 @@ class WebHandler(DesktopHandler):
     max_body = 4 * ((MAX_FILE + 2) // 3) + 128 * 1024
     google_drive_callback_path = '/oauth/google-drive/callback'
     post_paths = DesktopHandler.post_paths | {'/v1/administration', '/v1/session',
+                                               '/v1/federation/enroll',
+                                               '/v1/replications/status', '/v1/replications/sync',
                                                '/v1/application-access',
                                                '/v1/sources/import', '/v1/backend-metrics/status',
                                                '/v1/backend-metrics/configure', '/v1/backend-metrics/refresh',
@@ -114,6 +118,9 @@ class WebHandler(DesktopHandler):
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)
+        from spikes.project_replication import PATH as REPLICATION_PATH, reply
+        if self.path == REPLICATION_PATH:
+            return reply(self)
         return super().do_POST()
 
     def authorized(self, auth):
@@ -153,6 +160,10 @@ class WebHandler(DesktopHandler):
         return 'https://' + authority
 
     def _can_write(self, project_id):
+        try:
+            self.server.administration.assert_project_writable(project_id)
+        except (AccessDenied, ValueError, OSError, subprocess.SubprocessError):
+            return False
         if self.server.administration.is_admin(self.actor):
             return True
         return bool(self.actor and self.actor.get('memberships', {}).get(project_id) in {'editor', 'project-admin'})
@@ -230,15 +241,48 @@ class WebHandler(DesktopHandler):
                 return self.send_error(400)
             return self.reply(200, {'user_id': self.actor['id'], 'node_role': self.actor['node_role'],
                                     'memberships': self.actor['memberships']})
+        if self.path == '/v1/federation/enroll':
+            try:
+                from spikes.federation_enrollment import accept_on_server
+                return self.reply(200, accept_on_server(
+                    self.server.administration, self.actor, request))
+            except AccessDenied:
+                return self.reply(403, {'error': 'Přihlášení klientského uzlu není povoleno.'})
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
+                return self.reply(422, {'error': 'Identitu klientského uzlu nelze ověřit nebo uložit.'})
         if self.path == '/v1/administration':
             try:
                 result = self.server.administration.request(self.actor, request)
                 result['projects'] = self.server.projects.catalog()
+                from spikes.replication_control import ReplicationControl
+                result['replication_statuses'] = ReplicationControl(
+                    self.server.node, deployment='web').statuses(
+                        result['replications'], result['node_id'])
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
             except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
                 return self.reply(422, {'error': 'Změnu nelze uložit. Ověřte údaje a dostupnost úložiště uzlu.'})
+        if self.path in {'/v1/replications/status', '/v1/replications/sync'}:
+            if not self.server.administration.is_admin(self.actor):
+                return self.send_error(403)
+            try:
+                from spikes.replication_control import ReplicationControl
+                control = ReplicationControl(self.server.node, deployment='web')
+                state = self.server.administration.request(self.actor, {'action': 'list'})
+                if self.path == '/v1/replications/sync':
+                    if (not isinstance(request, dict)
+                            or set(request) != {'replication_id'}):
+                        return self.send_error(400)
+                    control.synchronize(request['replication_id'])
+                    state = self.server.administration.request(self.actor, {'action': 'list'})
+                return self.reply(200, {'statuses': control.statuses(
+                    state['replications'], state['node_id'])})
+            except AccessDenied:
+                return self.send_error(403)
+            except Exception:
+                return self.reply(409, {'error': 'Synchronizaci se nepodařilo dokončit; '
+                                               'aktuální stav je uložen pro bezpečné opakování.'})
         if self.path.startswith('/v1/notebooklm/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -478,10 +522,15 @@ def main():
     args = parser.parse_args()
     with make_server(args.bind, args.port, args.lan, args.cert, args.key,
                      args.token_file, args.node, hostname=args.hostname) as server:
+        from spikes.replication_control import ReplicationScheduler
+        scheduler = ReplicationScheduler(args.node, deployment='web')
+        scheduler.start()
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             pass
+        finally:
+            scheduler.stop()
 
 
 if __name__ == '__main__':

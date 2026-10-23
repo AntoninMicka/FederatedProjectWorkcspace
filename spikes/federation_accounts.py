@@ -48,6 +48,47 @@ def validate_spec(spec):
     return spec
 
 
+def validate_replication_spec(spec):
+    expected = {'schema_version', 'id', 'mapping_id', 'project_id', 'ref',
+                'nodes', 'privacy', 'actions'}
+    if (not isinstance(spec, dict) or set(spec) != expected
+            or type(spec['schema_version']) is not int
+            or spec['schema_version'] != 1):
+        raise ValueError('Invalid replication specification')
+    uid(spec['id']); uid(spec['mapping_id']); uid(spec['project_id'])
+    if spec['ref'] != 'refs/heads/main':
+        raise ValueError('Only the main project ref may be replicated')
+    nodes = spec['nodes']
+    if not isinstance(nodes, list) or len(nodes) != 2:
+        raise ValueError('Replication requires two nodes')
+    roles = set()
+    for node in nodes:
+        if (not isinstance(node, dict)
+                or set(node) != {'node_id', 'user_id', 'role', 'fingerprint',
+                                  'identity_revision'}):
+            raise ValueError('Invalid replication node')
+        uid(node['node_id']); uid(node['user_id'])
+        if node['role'] not in {'primary', 'read-only-replica'}:
+            raise ValueError('Invalid replication role')
+        roles.add(node['role'])
+        if (not isinstance(node['fingerprint'], str)
+                or not re.fullmatch(r'[a-f0-9]{64}', node['fingerprint'])
+                or type(node['identity_revision']) is not int
+                or node['identity_revision'] < 1):
+            raise ValueError('Invalid replication identity')
+    if (nodes[0]['node_id'] >= nodes[1]['node_id']
+            or roles != {'primary', 'read-only-replica'}):
+        raise ValueError('Replication nodes must be distinct and canonical')
+    privacy = spec['privacy']
+    if (not isinstance(privacy, list) or not privacy
+            or privacy != sorted(set(privacy))
+            or not set(privacy) <= {'public', 'project', 'confidential'}):
+        raise ValueError('Invalid replication privacy scope')
+    if spec['actions'] != ['read', 'replicate']:
+        raise ValueError('Invalid replication actions')
+    return spec
+
+
 def openssl(*args):
     return subprocess.run(['openssl', *args], check=True, capture_output=True, timeout=10).stdout
 
@@ -98,8 +139,12 @@ class MappingSignatures:
         return {'public_key': base64.b64encode(public).decode(), 'fingerprint': hashlib.sha256(public).hexdigest()}
 
     def sign(self, spec, node_id, decision='confirm'):
-        validate_spec(spec)
-        if node_id not in [a['node_id'] for a in spec['accounts']] or decision not in {'confirm', 'revoke'}:
+        return self._sign(spec, node_id, decision, validate_spec,
+                          lambda value: [a['node_id'] for a in value['accounts']])
+
+    def _sign(self, spec, node_id, decision, validator, participant_ids):
+        validator(spec)
+        if node_id not in participant_ids(spec) or decision not in {'confirm', 'revoke'}:
             raise ValueError('Invalid signer or decision')
         public = self.public_key()
         payload = {'spec': spec, 'signer_node_id': node_id, 'decision': decision}
@@ -111,10 +156,16 @@ class MappingSignatures:
 
     @staticmethod
     def verify(envelope, fingerprint):
+        return MappingSignatures._verify(
+            envelope, fingerprint, validate_spec,
+            lambda value: [a['node_id'] for a in value['accounts']])
+
+    @staticmethod
+    def _verify(envelope, fingerprint, validator, participant_ids):
         if not isinstance(envelope, dict) or set(envelope) != {'spec', 'signer_node_id', 'decision', 'public_key', 'signature'}:
             raise ValueError('Invalid consent envelope')
-        validate_spec(envelope['spec'])
-        if envelope['signer_node_id'] not in [a['node_id'] for a in envelope['spec']['accounts']] or not isinstance(envelope['decision'], str) or envelope['decision'] not in {'confirm', 'revoke'}:
+        validator(envelope['spec'])
+        if envelope['signer_node_id'] not in participant_ids(envelope['spec']) or not isinstance(envelope['decision'], str) or envelope['decision'] not in {'confirm', 'revoke'}:
             raise ValueError('Invalid consent signer/decision')
         if not isinstance(envelope['public_key'], str) or not isinstance(envelope['signature'], str) or len(envelope['public_key']) > 128 or len(envelope['signature']) > 128:
             raise ValueError('Invalid signature encoding')
@@ -131,6 +182,21 @@ class MappingSignatures:
             openssl('pkeyutl', '-verify', '-pubin', '-keyform', 'DER', '-inkey', str(root / 'public'),
                     '-rawin', '-in', str(root / 'message'), '-sigfile', str(root / 'signature'))
         return envelope
+
+
+class ReplicationSignatures(MappingSignatures):
+    """Domain-separated validation for bilateral project replication grants."""
+
+    def sign(self, spec, node_id, decision='confirm'):
+        return self._sign(
+            spec, node_id, decision, validate_replication_spec,
+            lambda value: [node['node_id'] for node in value['nodes']])
+
+    @staticmethod
+    def verify(envelope, fingerprint):
+        return MappingSignatures._verify(
+            envelope, fingerprint, validate_replication_spec,
+            lambda value: [node['node_id'] for node in value['nodes']])
 
 
 ACTIONS = {'read', 'write', 'review', 'manage', 'export'}

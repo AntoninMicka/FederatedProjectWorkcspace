@@ -240,7 +240,12 @@ class ProjectDiagnostics:
                     record = json.loads(raw)
                     if not isinstance(record, dict) or record.get('operation_id') != active_id:
                         raise ValueError('active record')
-                    if not recovery_conflict:
+                    if record.get('kind') == 'external-replication':
+                        add('journal-external-replication', 'journal',
+                            'Projekt čeká na dokončení externí replikace; '
+                            'opakujte stejnou synchronizační operaci.')
+                        active_id = None
+                    elif not recovery_conflict:
                         add('journal-operation-active', 'journal',
                             'Projekt má nedokončenou Workspace operaci.',
                             action='resume-operation')
