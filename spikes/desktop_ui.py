@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 from pathlib import Path
 
 from spikes.artifact_history import ArtifactHistory
+from spikes.conflict_resolution import ConflictResolution
 from spikes.artifact_actions import ArtifactActions
 from spikes.local_api import Handler
 from spikes.backend_contract import BackendResponseError, BackendUnknown
@@ -769,12 +770,44 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div class="project-overview-grid">
 <section class="dashboard-tile project-overview-history"><span class="dashboard-kicker">Poslední aktivita</span>
 <h2>Historie změn</h2><p id="project-overview-history-status" role="status">Načítám historii…</p>
-<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol></section>
+<ol id="project-overview-history-list" aria-label="Poslední změny projektu"></ol>
+<button id="project-conflicts-open" type="button" class="conflict-button" hidden>Vyřešit konflikt</button></section>
 <section class="project-overview-description" aria-label="Stručný popis projektu"><p id="project-description"></p></section>
 <section class="dashboard-tile dashboard-tasks project-overview-tasks"><span class="dashboard-kicker">Hlavní seznam</span>
 <h2>Úkoly</h2><p id="project-overview-task-status" role="status">Načítám úkoly…</p>
 <ul id="project-overview-task-list" aria-label="Nehotové úkoly projektu"></ul>
-<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div></div>
+<button id="project-overview-edit-todo" type="button" class="secondary-button">Upravit seznam úkolů</button></section></div>
+<section id="project-conflicts" hidden aria-labelledby="project-conflicts-title">
+<button id="project-conflicts-back" type="button" class="back-button">← Zpět na projekt</button>
+<span class="dashboard-kicker">FEDEROVANÁ HISTORIE</span><h2 id="project-conflicts-title">Vyřešit konflikt</h2>
+<p>Výsledek je zatím pouze místní návrh. Projekt se změní až po kontrole a výslovném potvrzení.</p>
+<p id="project-conflicts-status" role="status" aria-live="polite"></p>
+<div class="conflict-toolbar"><label>Protější historie <select id="project-conflicts-select"></select></label></div>
+<div id="project-conflicts-workspace" hidden>
+<h3>Konfliktní soubory</h3><p id="project-conflicts-files-summary"></p>
+<ul id="project-conflicts-files" class="conflict-file-list" aria-label="Soubory v konfliktu"></ul>
+<p id="project-conflicts-unresolved" role="status"></p>
+<label class="confirm"><input id="project-conflicts-confirm" type="checkbox"> Zkontroloval(a) jsem všechny výsledné soubory a potvrzuji vytvoření dvourodičového merge commitu.</label>
+<button id="project-conflicts-publish" type="button" disabled>Vytvořit merge commit</button>
+</div>
+<dialog id="project-conflicts-dialog" class="conflict-dialog" aria-labelledby="project-conflicts-dialog-title">
+<div class="conflict-dialog-shell"><header class="conflict-dialog-header"><div><span class="dashboard-kicker">ŘEŠENÍ SOUBORU</span><h2 id="project-conflicts-dialog-title"></h2></div><button id="project-conflicts-dialog-close" type="button" class="secondary-button" aria-label="Zavřít řešitel konfliktu">Zavřít</button></header>
+<div class="conflict-toolbar">
+<div role="tablist" aria-label="Zobrazení konfliktu"><button id="project-conflicts-raw" type="button" aria-selected="true">Raw</button><button id="project-conflicts-rendered" type="button" class="secondary-button" aria-selected="false">Náhled</button></div></div>
+<div id="project-conflicts-raw-panel" class="conflict-grid">
+<section class="conflict-pane conflict-local"><header><h3>Lokální verze</h3><span id="project-conflicts-local-summary" class="conflict-summary"></span></header><div class="conflict-code" data-conflict-diff="ours"></div></section>
+<section class="conflict-pane conflict-result"><header><h3>Výsledek</h3><span id="project-conflicts-result-summary" class="conflict-summary"></span></header><label class="visually-hidden" for="project-conflicts-result">Výsledný obsah souboru</label><div class="conflict-editor-stack"><pre id="project-conflicts-result-highlight" aria-hidden="true"></pre><textarea id="project-conflicts-result" rows="20" wrap="off" spellcheck="false"></textarea></div></section>
+<section class="conflict-pane conflict-remote"><header><h3>Vzdálená verze</h3><span id="project-conflicts-remote-summary" class="conflict-summary"></span></header><div class="conflict-code" data-conflict-diff="theirs"></div></section></div>
+<div id="project-conflicts-rendered-panel" class="conflict-grid conflict-rendered" hidden>
+<section class="conflict-pane conflict-local"><header><h3>Lokální verze</h3></header><div data-conflict-preview="ours"></div></section>
+<section class="conflict-pane conflict-result"><header><h3>Výsledek</h3></header><div data-conflict-preview="result"></div></section>
+<section class="conflict-pane conflict-remote"><header><h3>Vzdálená verze</h3></header><div data-conflict-preview="theirs"></div></section></div>
+<div class="conflict-legend" aria-label="Legenda rozdílů"><span class="diff-local">Rozdíl vůči lokální verzi</span><span class="diff-remote">Rozdíl vůči vzdálené verzi</span><span class="diff-both">Rozdíl vůči oběma verzím</span></div>
+<div class="form-actions"><button id="project-conflicts-use-ours" type="button">Použít lokální</button>
+<button id="project-conflicts-use-theirs" type="button">Použít vzdálenou</button>
+<button id="project-conflicts-use-both" type="button">Použít obě</button>
+<button id="project-conflicts-delete" type="button" class="secondary-button">Výsledný soubor smazat</button></div>
+</div></dialog></section></div>
 <div id="preview-panel" role="tabpanel" aria-labelledby="preview-tab" hidden>
 <p id="preview-status" role="status">Vyberte podklad ze seznamu vlevo.</p>
 <h2 id="preview-title"></h2><div id="preview-content"></div>
@@ -1087,6 +1120,9 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #main-panel-content{overflow:auto;padding:0 22px 20px;flex:1;min-height:0}#main-panel-content.project-overview-active{overflow:hidden}
 #project-overview-panel{box-sizing:border-box;display:flex;flex-direction:column;width:100%;height:100%;max-width:1180px;margin:0 auto;padding:22px 0}.project-overview-heading{display:block;flex:none;padding:8px 2px 18px}.project-overview-heading h1{font-size:38px;margin:8px 0}.project-overview-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;flex:1;min-height:0}.project-overview-history{display:flex;flex-direction:column;grid-column:span 1;min-height:0;overflow:hidden}.project-overview-history ol{flex:1;min-height:0;list-style:none;margin:0;padding:0;overflow:auto;overscroll-behavior:contain}.project-history-row{padding:10px 0;border-top:1px solid #dce3e9}.project-history-row:first-child{border-top:0}.project-history-row strong,.project-history-row small{display:block;overflow-wrap:anywhere}.project-history-row small{margin-top:4px;color:#526675}.project-overview-description{grid-column:span 2;min-width:0;padding:20px 12px}.project-overview-description p{margin:0;white-space:pre-wrap;font-size:17px;line-height:1.75}.project-overview-description p:empty::after{content:'Projekt zatím nemá stručný popis.';color:#84909b;font-style:italic}
 .project-overview-tasks{grid-column:span 1;width:100%;max-height:none;min-height:0;overflow:hidden}.project-overview-tasks ul{flex:1;min-height:0;max-height:none;overscroll-behavior:contain}.project-overview-tasks>.secondary-button{align-self:flex-start;margin-top:8px}
+.conflict-button{margin-top:10px;background:#a33b32}.conflict-button:hover{background:#842f28}#project-conflicts{width:100%;max-width:1800px;margin:0 auto;padding:10px 0 30px}.conflict-toolbar{display:flex;gap:12px;align-items:end;justify-content:space-between;flex-wrap:wrap;margin:14px 0}.conflict-toolbar label{flex:1;min-width:260px}.conflict-toolbar select{display:block;width:100%;padding:9px}.conflict-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}.conflict-pane{min-width:0;border:1px solid #dce3e9;border-radius:10px;background:#fff;overflow:hidden}.conflict-pane>header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:30px;padding:10px 12px;border-bottom:1px solid #dce3e9;background:#f5f8fa}.conflict-pane h3{margin:0;font-size:15px}.conflict-result{border-color:#77a99e;box-shadow:0 0 0 1px #77a99e}.conflict-result>header{background:#e8f4f0}.conflict-summary{font-size:11px;font-weight:600;color:#526675;text-align:right}.conflict-code,.conflict-editor-stack{height:440px;min-height:260px;overflow:auto;background:#fff}.conflict-code pre,.conflict-editor-stack pre,.conflict-editor-stack textarea{box-sizing:border-box;margin:0;padding:12px;width:100%;min-width:100%;min-height:100%;border:0;font:13px/1.55 ui-monospace,SFMono-Regular,Consolas,monospace;tab-size:4;white-space:pre}.conflict-code pre{overflow:visible}.conflict-editor-stack{display:grid;position:relative}.conflict-editor-stack pre,.conflict-editor-stack textarea{grid-area:1/1;overflow:auto}.conflict-editor-stack pre{pointer-events:none;color:transparent;background:#fff}.conflict-editor-stack textarea{position:relative;resize:none;outline:0;background:transparent;color:#213746}.conflict-editor-stack textarea:focus{box-shadow:inset 0 0 0 2px #176b60}.conflict-line{display:block;min-height:1.55em;padding:0 3px}.diff-local{background:#dceeff;border-left:4px solid #2674a8}.diff-remote{background:#fff0cf;border-left:4px solid #c17b16}.diff-both{background:linear-gradient(90deg,#dceeff 0 50%,#fff0cf 50%);border-left:4px solid #7c5ba7}.conflict-legend{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;font-size:12px}.conflict-legend span{display:inline-block;padding:5px 8px;border-radius:5px}.conflict-rendered [data-conflict-preview]{padding:12px;font-weight:400;overflow-wrap:anywhere;max-height:440px;overflow:auto}.conflict-rendered pre{white-space:pre-wrap}.conflict-rendered p{white-space:pre-wrap}.conflict-rendered .diff-local,.conflict-rendered .diff-remote,.conflict-rendered .diff-both{padding-left:8px}.conflict-missing{color:#6b7780;font-style:italic}#project-conflicts-unresolved{font-weight:700;color:#9b4f30}
+.conflict-code{overflow:auto}.conflict-editor-stack{overflow:hidden}
+.conflict-file-list{display:grid;gap:8px;margin:12px 0;padding:0;list-style:none}.conflict-file-list button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 14px;text-align:left;background:#f5f8fa;color:#213746;border:1px solid #dce3e9}.conflict-file-list button:hover,.conflict-file-list button:focus-visible{background:#e8f4f0;border-color:#77a99e}.conflict-file-path{min-width:0;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}.conflict-file-status{flex:none;padding:4px 7px;border-radius:999px;font-size:11px;font-weight:700}.conflict-file-status.unresolved{background:#fde2dc;color:#8c2e26}.conflict-file-status.resolved{background:#dff2e9;color:#176b60}.conflict-file-status.automatic{background:#e8eef2;color:#456276}.conflict-dialog{box-sizing:border-box;width:min(1760px,calc(100vw - 32px));max-width:none;max-height:92vh;margin:auto;padding:0;border:1px solid #77a99e;border-radius:14px;background:#f8fafb;box-shadow:0 18px 60px #14263855}.conflict-dialog::backdrop{background:#14263899}.conflict-dialog-shell{box-sizing:border-box;max-height:92vh;padding:18px;overflow:auto}.conflict-dialog-header{display:flex;align-items:start;justify-content:space-between;gap:16px}.conflict-dialog-header h2{margin:4px 0 0;overflow-wrap:anywhere}.conflict-dialog-header button{flex:none}
 #preview-status{font-size:12px}#preview-content img{max-width:100%;height:auto}#preview-content pre{white-space:pre-wrap;background:#eff3f6;padding:16px}
 #preview-content p{white-space:pre-wrap;margin:6px 0}#preview-content h1{font-size:28px}#preview-title{font-size:20px}
 #preview-metadata{overflow-wrap:anywhere}#preview-metadata dt{font-weight:600;margin-top:10px}#preview-metadata dd{margin:4px 0;white-space:pre-wrap}
@@ -1161,6 +1197,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
 @media(max-width:700px){.presentation-editor-workspace{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}}
+@media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
 body[data-runtime="pending"]{visibility:hidden}
@@ -2009,6 +2046,7 @@ function syncSidebarProjectAvailability(){
 }
 function clearProject(){
  ++viewRequest;
+ resetProjectConflicts();
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
@@ -2313,7 +2351,7 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
-window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -2441,6 +2479,7 @@ async function openRegisteredProject(projectId){
   document.querySelector('#project-commit').textContent=result.commit_id;
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
+  loadProjectConflictSummary();
   await loadChat();
   syncSidebarProjectAvailability();
   selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
@@ -3415,25 +3454,172 @@ function clearPreview(){
  document.querySelector('#pdf-controls').hidden=true;
  previewStatus.textContent='Vyberte podklad ze seznamu.';
 }
-function renderMarkdown(text){
+function addConflictLineClasses(element,lineClasses,index){for(const name of lineClasses?.get(index)||[])element.classList.add(name);}
+function renderMarkdown(text,target=previewContent,lineClasses=null){
  // Deliberately small Markdown subset; all source text uses textContent, never HTML.
- let fence=null,code=null,list=null;
+ let fence=null,code=null,list=null,lineIndex=0;
  for(const line of text.split('\\n')){
   const marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
   if(marker && (!fence || (marker[1][0]===fence[0] && marker[1].length>=fence.length && !marker[2].trim()))){
    list=null;
-   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');previewContent.append(code);}
+   if(fence){fence=null;code=null;}else{fence=marker[1];code=document.createElement('pre');addConflictLineClasses(code,lineClasses,lineIndex);target.append(code);}
+   lineIndex++;
    continue;
   }
-  if(fence){code.textContent+=line+'\\n';continue;}
+  if(fence){code.textContent+=line+'\\n';addConflictLineClasses(code,lineClasses,lineIndex);lineIndex++;continue;}
   const heading=line.match(/^(#{1,6})\\s+(.*)$/);
   const bullet=line.match(/^\\s*[-*+]\\s+(.*)$/);
-  if(bullet){if(!list){list=document.createElement('ul');previewContent.append(list);}
-   const item=document.createElement('li');item.textContent=bullet[1];list.append(item);continue;}
+  if(bullet){if(!list){list=document.createElement('ul');target.append(list);}
+   const item=document.createElement('li');item.textContent=bullet[1];addConflictLineClasses(item,lineClasses,lineIndex);list.append(item);lineIndex++;continue;}
   list=null;const element=document.createElement(heading?'h'+heading[1].length:'p');
-  element.textContent=heading?heading[2]:line;previewContent.append(element);
+  element.textContent=heading?heading[2]:line;addConflictLineClasses(element,lineClasses,lineIndex);target.append(element);lineIndex++;
  }
 }
+const projectConflicts=document.querySelector('#project-conflicts');
+const projectConflictGrid=document.querySelector('.project-overview-grid');
+const projectConflictHeading=document.querySelector('.project-overview-heading');
+const projectConflictOpen=document.querySelector('#project-conflicts-open');
+const projectConflictStatus=document.querySelector('#project-conflicts-status');
+const projectConflictSelect=document.querySelector('#project-conflicts-select');
+const projectConflictWorkspace=document.querySelector('#project-conflicts-workspace');
+const projectConflictFiles=document.querySelector('#project-conflicts-files');
+const projectConflictDialog=document.querySelector('#project-conflicts-dialog');
+const projectConflictResult=document.querySelector('#project-conflicts-result');
+const projectConflictConfirm=document.querySelector('#project-conflicts-confirm');
+const projectConflictPublish=document.querySelector('#project-conflicts-publish');
+let projectConflictRows=[],projectConflictPreview=null,projectConflictDrafts=new Map(),projectConflictOperation=null,projectConflictRequest=0,projectConflictPath=null;
+function closeConflictDialog(){if(!projectConflictDialog.open)return;if(projectConflictDialog.close)projectConflictDialog.close();else projectConflictDialog.removeAttribute('open');}
+function resetProjectConflicts(){
+ ++projectConflictRequest;projectConflictRows=[];projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictPath=null;closeConflictDialog();
+ projectConflictSelect.replaceChildren();projectConflictFiles.replaceChildren();projectConflictWorkspace.hidden=true;projectConflicts.hidden=true;
+ projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictOpen.hidden=true;projectConflictConfirm.checked=false;projectConflictPublish.disabled=true;
+}
+function conflictDraftChanged(){return [...projectConflictDrafts.values()].some(item=>item.choice && item.choice!=='auto');}
+function closeProjectConflicts(){
+ if(conflictDraftChanged()&&!window.confirm('Zahodit rozepsané řešení konfliktu? Projekt zatím nebyl změněn.'))return;
+ closeConflictDialog();projectConflicts.hidden=true;projectConflictGrid.hidden=false;projectConflictHeading.hidden=false;projectConflictPreview=null;projectConflictDrafts=new Map();projectConflictOperation=null;projectConflictPath=null;
+}
+async function loadProjectConflictSummary(){
+ if(!activeProject)return;const project=activeProject,request=++projectConflictRequest;projectConflictOpen.hidden=true;
+ try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictRows=result.conflicts||[];projectConflictOpen.hidden=!projectConflictRows.length;
+  projectConflictOpen.textContent=projectConflictRows.length===1?'Vyřešit konflikt':'Vyřešit konflikty ('+projectConflictRows.length+')';
+ }catch(error){if(request===projectConflictRequest)projectConflictOpen.hidden=true;}
+}
+async function openProjectConflicts(){
+ if(!activeProject)return;projectConflictGrid.hidden=true;projectConflictHeading.hidden=true;projectConflicts.hidden=false;projectConflictWorkspace.hidden=true;
+ projectConflictStatus.textContent='Načítám zachované protější historie…';projectConflictSelect.replaceChildren();
+ const project=activeProject,request=++projectConflictRequest;
+ try{const result=await projectRequest('/v1/projects/conflicts/list',{project_id:project.id,expected_head:project.head});
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictRows=result.conflicts||[];
+  for(const row of projectConflictRows){const option=document.createElement('option');option.value=row.ref;option.textContent=`${row.branch} · ${row.head.slice(0,10)} · ${row.author} · ${row.subject}`;projectConflictSelect.append(option);}
+  projectConflictStatus.textContent=projectConflictRows.length?'Načítám seznam konfliktních souborů…':'Projekt nemá nevyřešenou divergenci.';
+  if(projectConflictRows.length)await loadConflictPreview();
+ }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
+}
+function selectedConflictFile(){return projectConflictPreview?.files.find(item=>item.path===projectConflictPath);}
+function changedLineIndexes(left,right){
+ const a=left.split('\\n'),b=right.split('\\n'),leftChanged=new Set(),rightChanged=new Set();
+ if(left===right)return {left:leftChanged,right:rightChanged};
+ const markMiddle=()=>{let start=0,endA=a.length-1,endB=b.length-1;while(start<=endA&&start<=endB&&a[start]===b[start])start++;while(endA>=start&&endB>=start&&a[endA]===b[endB]){endA--;endB--;}for(let i=start;i<=endA;i++)leftChanged.add(i);for(let i=start;i<=endB;i++)rightChanged.add(i);};
+ if((a.length+1)*(b.length+1)>250000){markMiddle();return {left:leftChanged,right:rightChanged};}
+ const table=Array.from({length:a.length+1},()=>new Uint32Array(b.length+1));
+ for(let i=a.length-1;i>=0;i--)for(let j=b.length-1;j>=0;j--)table[i][j]=a[i]===b[j]?table[i+1][j+1]+1:Math.max(table[i+1][j],table[i][j+1]);
+ let i=0,j=0;while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;}else if(table[i+1][j]>=table[i][j+1])leftChanged.add(i++);else rightChanged.add(j++);}while(i<a.length)leftChanged.add(i++);while(j<b.length)rightChanged.add(j++);
+ return {left:leftChanged,right:rightChanged};
+}
+function conflictDiffState(item,draft){
+ const resultExists=!draft?.deleted,result=resultExists&&draft?.text!==null?draft?.text:null;
+ const local=item.ours_exists&&item.ours!==null&&result!==null?changedLineIndexes(item.ours,result):null;
+ const remote=item.theirs_exists&&item.theirs!==null&&result!==null?changedLineIndexes(item.theirs,result):null;
+ return {resultExists,result,local,remote};
+}
+function resultLineClasses(state){
+ const classes=new Map(),count=state.result===null?0:state.result.split('\\n').length;
+ for(let index=0;index<count;index++){const local=state.local?.right.has(index),remote=state.remote?.right.has(index);if(local||remote)classes.set(index,[local&&remote?'diff-both':local?'diff-local':'diff-remote']);}
+ return classes;
+}
+function sideLineClasses(diff,name){const classes=new Map();if(diff)for(const index of diff.left)classes.set(index,[name]);return classes;}
+function renderConflictLines(target,value,exists,lineClasses){
+ target.replaceChildren();if(!exists||value===null){const note=document.createElement('p');note.className='conflict-missing';note.textContent=exists?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'Soubor v této verzi neexistuje.';target.append(note);return;}
+ const pre=document.createElement('pre');for(const [index,line] of value.split('\\n').entries()){const row=document.createElement('span');row.className='conflict-line';addConflictLineClasses(row,lineClasses,index);row.textContent=line||' ';pre.append(row);}target.append(pre);
+}
+function conflictDifferenceSummary(diff,unavailable){return unavailable?'Porovnání není dostupné':`${diff?.left.size||0} odlišných řádků`;}
+function renderConflictDiffs(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path),state=conflictDiffState(item,draft);
+ const localTarget=document.querySelector('[data-conflict-diff="ours"]'),remoteTarget=document.querySelector('[data-conflict-diff="theirs"]');
+ renderConflictLines(localTarget,item.ours,item.ours_exists,sideLineClasses(state.local,'diff-local'));renderConflictLines(remoteTarget,item.theirs,item.theirs_exists,sideLineClasses(state.remote,'diff-remote'));
+ document.querySelector('#project-conflicts-local-summary').textContent=conflictDifferenceSummary(state.local,!item.ours_exists||item.ours===null||state.result===null);
+ document.querySelector('#project-conflicts-remote-summary').textContent=conflictDifferenceSummary(state.remote,!item.theirs_exists||item.theirs===null||state.result===null);
+ const resultClasses=resultLineClasses(state),highlight=document.querySelector('#project-conflicts-result-highlight');highlight.replaceChildren();
+ if(state.result!==null)for(const [index,line] of state.result.split('\\n').entries()){const row=document.createElement('span');row.className='conflict-line';addConflictLineClasses(row,resultClasses,index);row.textContent=line||' ';highlight.append(row);}
+ const localCount=state.local?.right.size||0,remoteCount=state.remote?.right.size||0;document.querySelector('#project-conflicts-result-summary').textContent=!state.resultExists?'Výsledný soubor bude odstraněn':state.result===null?'Binární obsah · volba celého souboru':`${localCount} vůči lokální · ${remoteCount} vůči vzdálené`;
+ highlight.scrollTop=projectConflictResult.scrollTop;highlight.scrollLeft=projectConflictResult.scrollLeft;
+}
+function renderConflictPreviews(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path),state=conflictDiffState(item,draft),resultClasses=resultLineClasses(state);
+ for(const target of document.querySelectorAll('[data-conflict-preview]')){
+  target.replaceChildren();const key=target.dataset.conflictPreview,value=key==='result'?(draft?.deleted?null:draft?.text):item[key];
+  const exists=key==='result'?!draft?.deleted:item[key+'_exists'];
+  if(!exists||value===null){const note=document.createElement('p');note.className='conflict-missing';note.textContent=exists?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'Soubor v této verzi neexistuje.';target.append(note);}
+  else{const classes=key==='ours'?sideLineClasses(state.local,'diff-local'):key==='theirs'?sideLineClasses(state.remote,'diff-remote'):resultClasses;if(item.path.toLowerCase().endsWith('.md'))renderMarkdown(value,target,classes);else renderConflictLines(target,value,exists,classes);}
+ }
+}
+function renderConflictFileList(){
+ projectConflictFiles.replaceChildren();if(!projectConflictPreview)return;let conflicts=0,automatic=0;
+ for(const item of projectConflictPreview.files){
+  const draft=projectConflictDrafts.get(item.path),state=item.conflict?(draft?.choice?'resolved':'unresolved'):draft?.choice==='auto'?'automatic':'resolved';if(item.conflict)conflicts++;else automatic++;
+  const row=document.createElement('li'),button=document.createElement('button'),path=document.createElement('span'),status=document.createElement('span');button.type='button';path.className='conflict-file-path';path.textContent=item.path;status.className='conflict-file-status '+state;status.textContent=state==='automatic'?'Automaticky':state==='resolved'?'Vyřešeno':'Nevyřešeno';button.append(path,status);button.addEventListener('click',()=>openConflictDialog(item.path));row.append(button);projectConflictFiles.append(row);
+ }
+ document.querySelector('#project-conflicts-files-summary').textContent=`${conflicts} konfliktních · ${automatic} automaticky sloučených souborů. Kliknutím otevřete porovnání.`;
+}
+function openConflictDialog(path){
+ if(!projectConflictPreview?.files.some(item=>item.path===path))return;projectConflictPath=path;document.querySelector('#project-conflicts-dialog-title').textContent=path;renderConflictFile();
+ if(projectConflictDialog.showModal)projectConflictDialog.showModal();else projectConflictDialog.setAttribute('open','');
+}
+function updateConflictCompletion(){
+ if(!projectConflictPreview)return;let unresolved=0;
+ for(const item of projectConflictPreview.files){const draft=projectConflictDrafts.get(item.path);if(item.conflict&&!draft?.choice)unresolved++;}
+ document.querySelector('#project-conflicts-unresolved').textContent=unresolved?`Zbývá vyřešit ${unresolved} konfliktních souborů.`:'Všechny konfliktní soubory mají explicitní výsledek.';
+ projectConflictConfirm.disabled=Boolean(unresolved)||activeProject?.readOnly;projectConflictPublish.disabled=Boolean(unresolved)||!projectConflictConfirm.checked||activeProject?.readOnly;
+ renderConflictFileList();
+}
+function renderConflictFile(){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);
+ projectConflictResult.value=draft?.deleted?'':draft?.text??'';projectConflictResult.readOnly=!item.editable;projectConflictResult.placeholder=draft?.deleted?'Výsledný soubor bude odstraněn.':!item.editable?'Binární nebo nepodporovaný obsah · použijte volbu celého souboru.':'';
+ document.querySelector('#project-conflicts-use-both').disabled=!item.editable||item.ours===null||item.theirs===null;
+ renderConflictDiffs();renderConflictPreviews();updateConflictCompletion();
+}
+async function loadConflictPreview(){
+ if(!activeProject||!projectConflictSelect.value)return;const project=activeProject,request=++projectConflictRequest;
+ closeConflictDialog();projectConflictPath=null;projectConflictStatus.textContent='Sestavuji izolované 3-way porovnání…';projectConflictWorkspace.hidden=true;
+ try{const result=await projectRequest('/v1/projects/conflicts/preview',{project_id:project.id,expected_head:project.head,incoming_ref:projectConflictSelect.value},120000);
+  if(request!==projectConflictRequest||activeProject!==project)return;
+  projectConflictPreview=result;projectConflictDrafts=new Map();projectConflictOperation=null;
+  for(const item of result.files)projectConflictDrafts.set(item.path,{choice:item.conflict?null:'auto',text:item.result,deleted:!item.result_exists});
+  projectConflictConfirm.checked=false;projectConflictWorkspace.hidden=false;updateConflictCompletion();projectConflictStatus.textContent='Vyberte soubor ze seznamu. Návrh je pouze v prohlížeči; Git ani projekt nebyly změněny.';
+ }catch(error){if(request===projectConflictRequest)projectConflictStatus.textContent=error.message;}
+}
+function chooseConflict(choice){
+ const item=selectedConflictFile();if(!item)return;const draft=projectConflictDrafts.get(item.path);draft.choice=choice;draft.deleted=choice==='delete';
+ if(choice==='ours'){draft.text=item.ours;draft.deleted=!item.ours_exists;}else if(choice==='theirs'){draft.text=item.theirs;draft.deleted=!item.theirs_exists;}else if(choice==='both'){draft.text=(item.ours||'')+((item.ours&&!item.ours.endsWith('\\n'))?'\\n':'')+(item.theirs||'');draft.deleted=false;}else if(choice==='delete')draft.text='';
+ projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictFile();
+}
+projectConflictOpen.addEventListener('click',openProjectConflicts);document.querySelector('#project-conflicts-back').addEventListener('click',closeProjectConflicts);projectConflictSelect.addEventListener('change',loadConflictPreview);document.querySelector('#project-conflicts-dialog-close').addEventListener('click',closeConflictDialog);
+document.querySelector('#project-conflicts-use-ours').addEventListener('click',()=>chooseConflict('ours'));document.querySelector('#project-conflicts-use-theirs').addEventListener('click',()=>chooseConflict('theirs'));document.querySelector('#project-conflicts-use-both').addEventListener('click',()=>chooseConflict('both'));document.querySelector('#project-conflicts-delete').addEventListener('click',()=>chooseConflict('delete'));
+projectConflictResult.addEventListener('input',()=>{const item=selectedConflictFile();if(!item||!item.editable)return;const draft=projectConflictDrafts.get(item.path);draft.choice='manual';draft.text=projectConflictResult.value;draft.deleted=false;projectConflictOperation=null;projectConflictConfirm.checked=false;renderConflictDiffs();renderConflictPreviews();updateConflictCompletion();});
+projectConflictResult.addEventListener('scroll',()=>{const highlight=document.querySelector('#project-conflicts-result-highlight');highlight.scrollTop=projectConflictResult.scrollTop;highlight.scrollLeft=projectConflictResult.scrollLeft;});
+for(const [buttonId,panelId,otherId] of [['project-conflicts-raw','project-conflicts-raw-panel','project-conflicts-rendered-panel'],['project-conflicts-rendered','project-conflicts-rendered-panel','project-conflicts-raw-panel']])document.getElementById(buttonId).addEventListener('click',event=>{document.getElementById(panelId).hidden=false;document.getElementById(otherId).hidden=true;for(const button of event.currentTarget.parentElement.querySelectorAll('button')){const active=button===event.currentTarget;button.setAttribute('aria-selected',String(active));button.classList.toggle('secondary-button',!active);}renderConflictPreviews();});
+projectConflictConfirm.addEventListener('change',()=>updateConflictCompletion());
+projectConflictPublish.addEventListener('click',async()=>{
+ if(!activeProject||!projectConflictPreview||!projectConflictConfirm.checked)return;projectConflictPublish.disabled=true;projectConflictStatus.textContent='Validuji celý projekt a vytvářím potvrzený merge commit…';
+ if(!projectConflictOperation)projectConflictOperation=crypto.randomUUID();
+ const resolution={project_id:projectConflictPreview.project_id,expected_head:projectConflictPreview.expected_head,incoming_ref:projectConflictPreview.incoming_ref,incoming_head:projectConflictPreview.incoming_head,base:projectConflictPreview.base,preview_sha256:projectConflictPreview.preview_sha256,resolutions:projectConflictPreview.files.map(item=>{const draft=projectConflictDrafts.get(item.path);const row={path:item.path,choice:draft.choice};if(draft.choice==='manual')row.text=draft.text;return row;})};
+ try{await projectRequest('/v1/projects/conflicts/confirm',{operation_id:projectConflictOperation,resolution},120000);projectConflictOperation=null;await openRegisteredProject(activeProject.id);}
+ catch(error){projectConflictStatus.textContent=error.message;projectConflictPublish.disabled=false;}
+});
 async function openPreview(id,page=1){
  if(!activeProject)return;
  const project=activeProject;
@@ -5324,6 +5510,8 @@ class DesktopHandler(Handler):
         '/v1/projects/delete/purge/confirm',
         '/v1/notebooklm/preview', '/v1/notebooklm/plan', '/v1/notebooklm/confirm',
         '/v1/artifacts/preview', '/v1/artifacts/history/list', '/v1/artifacts/history/compare',
+        '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
+        '/v1/projects/conflicts/confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
@@ -5775,6 +5963,28 @@ class DesktopHandler(Handler):
             if (self.path == '/v1/projects/open' and isinstance(request, dict)
                     and set(request) == {'project_id'} and isinstance(request['project_id'], str)):
                 return self.reply(200, projects.open(request['project_id']))
+            if self.path.startswith('/v1/projects/conflicts/'):
+                node = getattr(projects, 'node_path', None)
+                if node is None:
+                    return self.send_error(400)
+                conflicts = ConflictResolution(
+                    node, network=getattr(projects, 'network', False))
+                if (self.path == '/v1/projects/conflicts/list'
+                        and isinstance(request, dict)
+                        and set(request) == {'project_id', 'expected_head'}):
+                    return self.reply(200, conflicts.list(**request))
+                if (self.path == '/v1/projects/conflicts/preview'
+                        and isinstance(request, dict)
+                        and set(request) == {
+                            'project_id', 'expected_head', 'incoming_ref'}):
+                    return self.reply(200, conflicts.preview(**request))
+                if (self.path == '/v1/projects/conflicts/confirm'
+                        and isinstance(request, dict)
+                        and set(request) == {'operation_id', 'resolution'}
+                        and isinstance(request['resolution'], dict)):
+                    return self.reply(200, conflicts.confirm(
+                        request['resolution'], request['operation_id']))
+                return self.send_error(400)
             if (self.path == '/v1/artifacts/preview' and isinstance(request, dict)
                     and set(request) == {'project_id', 'artifact_id', 'expected_head', 'page'}):
                 return self.reply(200, projects.preview(**request))

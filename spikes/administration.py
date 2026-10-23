@@ -37,6 +37,46 @@ class AccessDenied(ValueError):
     pass
 
 
+def content_policy(peer, shares, project_id):
+    """Resolve the current internal Git-sharing policy for one project."""
+    if peer['sharing_level'] == 'same-team':
+        return {'mode': 'all'}
+    share = next((row for row in shares
+                  if row['peer_id'] == peer['id']
+                  and row['project_id'] == project_id), None)
+    if not share:
+        return None
+    return {'mode': share['branch_mode'], 'branches': share['branches'],
+            'revision': share['revision']}
+
+
+def content_policy_allows(scope, ref):
+    if scope['mode'] == 'all':
+        return True
+    selected = ref in scope['branches']
+    return selected if scope['mode'] == 'selected-only' else not selected
+
+
+def content_authority(service, peer_id, project_id, ref):
+    """Return the current bounded content-sharing authority for one branch."""
+    identifier(peer_id); identifier(project_id)
+    with service.locked() as (_, state, _, _):
+        peer = next((row for row in state['peers'] if row['id'] == peer_id), None)
+        if (not peer or peer['trust'] != 'approved'
+                or peer['sharing_level'] not in {'same-team', 'same-company'}):
+            raise AccessDenied('Content sync requires an approved internal peer')
+        scope = content_policy(peer, state['project_shares'], project_id)
+        if scope is None or not content_policy_allows(scope, ref):
+            raise AccessDenied(
+                'Project branch is outside the current sharing policy')
+        return {
+            'peer_id': peer['id'],
+            'peer_revision': peer['revision'],
+            'sharing_level': peer['sharing_level'],
+            'scope': scope,
+        }
+
+
 def identifier(value):
     if not isinstance(value, str) or str(UUID(value)) != value:
         raise ValueError('Expected canonical UUID')

@@ -55,47 +55,14 @@ PR #79 jako merge commit `61df652`; jeho implementační evidence je ve WORK_LOG
 a cílová fyzická akceptace byla následně naplněna novým obousměrným řezem.
 `F-M5-PROJECT-CATALOG-01` bylo doručeno PR #80 jako merge commit `ae1b25e`;
 evidence je ve WORK_LOG.
-`F-M5-SHARING-SYNC-01` je fyzicky akceptována a archivována ve WORK_LOG, ale
-její feature větev dosud čeká na jediný PR do `develop`. Navazující dávka se
-neaktivuje před jejím doručením.
+`F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
+evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` dosáhlo na vlastní
+feature větvi úrovně PoC validated a jeho evidence byla archivována ve
+WORK_LOG; PR do `develop` zatím nebyl vytvořen ani sloučen.
 Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
 práce pokračuje bez tvrzení, že je Gate uzavřený.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M5-CONFLICT-RESOLUTION-01 — historie a ruční řešení
-  divergence (cílová úroveň: designed → implemented → PoC validated).** Nad
-  zachovanými lokálními a `refs/federation/incoming/…` heady vytvořit
-  projektový prohlížeč historie a explicitní 3-way resolver. Pro Markdown má
-  nabídnout přepínatelný raw pohled `base / naše / protější / výsledek`, volbu
-  změn po konfliktních blocích, přímou editaci výsledku a bezpečně renderovaný
-  formátovaný náhled stejného návrhu. Výchozí kandidát se sestaví nativním
-  [`git merge-file`](https://git-scm.com/docs/git-merge-file.html) nebo
-  ekvivalentním Git plumbingem; Git zůstává autoritou společného předka,
-  stromu a rodičů merge commitu.
-
-  Pro UI nejprve udělat bounded spike nad MIT
-  [`@codemirror/merge`](https://codemirror.net/docs/ref/#merge), který poskytuje
-  rozdílové bloky, navigaci a accept/reject ovládání, ale pouze dvoustranný
-  merge view. Aplikační 3-way orchestrace a samostatný výsledek proto zůstanou
-  vlastní. Monaco nyní nepřebírat: jeho veřejné API nabízí především
-  [dvoustranný diff editor](https://microsoft.github.io/monaco-editor/typedoc/functions/editor_editor_api.editor.createDiffEditor.html)
-  a oficiálně nepodporuje mobilní prohlížeče. Archivovaný `diff-match-patch`
-  není vhodný základ nové editace. Před přidáním závislosti ověřit aktuální
-  upstream, přesnou verzi, transitive licence, bundling a klávesnicovou i
-  mobilní použitelnost; při nevyhovujícím spike adaptovat stávající editor a
-  historii bez nové UI knihovny.
-
-  Preview nesmí měnit Git, index ani incoming refs. Publikace pod jediným
-  project writer lockem znovu ověří oba heady, base, policy a trust, sémanticky
-  validuje celý kandidátní snapshot a až po explicitním potvrzení vytvoří
-  merge commit s oběma rodiči přes journal/CAS; po commitu obnoví worktree a
-  index z potvrzeného HEAD. Restart před potvrzením pouze zahodí návrh, pád po
-  durable přípravě se idempotentně dokončí nebo pravdivě nabídne obnovu.
-  Akceptace pokryje čistý merge, stejný Markdown blok, raw/rendered shodu,
-  ruční editaci, změnu–smazání, přejmenování–úpravu, sidecar/relationship
-  validaci, stale head/policy/trust, zrušení, restart na každé persistentní
-  hranici a následný sync vytvořeného dvourodičového commitu.
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
   uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční
@@ -413,7 +380,7 @@ Aktualizace M1-07 podle hlášení uživatele (2026-09-13): deploy již proběhl
 
 Aktualizace M1-07 podle hlášení uživatele (2026-09-17): restart routeru zachoval instalaci a data, ale kontejner `workspace-m0` se po bootu nespustil automaticky. Jde o částečný real-device důkaz persistence, nikoli splnění restartové akceptace. Doplnit bezpečný LXC autostart a zopakovat reboot bez ručního startu včetně služby uvnitř kontejneru, dlaždice, přihlášení a náhledu.
 
-**M1-07 je aktivní výhradně v [TODO](TODO.md).** Následující odstavce zachovávají historické důkazy před aktivací, nikoli druhý aktuální stav feature. Navazuje na otevřené LXC nasazení v souhrnném M1 a požadavek uživatele z 2026-09-10 na dlaždici aplikace. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013.
+**Historická poznámka:** M1-07 již není aktivní v [TODO](TODO.md). Následující odstavce zachovávají starší důkazy, nikoli druhý aktuální stav feature; otevřené návaznosti M1 zůstávají v tomto backlogu a roadmapě. Výchozí stav před M1-07: `scripts/deploy_omnia.py` instaloval pouze headless demo, bez webové služby a dlaždice; síťové zpřístupnění musí řešit autentizaci a hranice přístupu podle ADR 0013.
 
 Ověření cílového prostředí (2026-09-13): SSH přístup k cílovému routeru zatím blokuje `Permission denied (publickey,password,keyboard-interactive)`, změna cílové cesty už byla dočasně potvrzena v `docs/lxc-web.md` a v `scripts` kódu. Do odblokování SSH a prvního nasazení zůstává celá položka otevřená.
 

@@ -5,12 +5,64 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-CONFLICT-RESOLUTION-01 — historie a ruční řešení divergence — 2026-10-23
+
+Dávka vznikla na větvi `feature/f-m5-conflict-resolution-01` z `develop` na
+merge commitu `c884cd2` (PR #81) a dosáhla úrovně **PoC validated**. Feature
+akceptace je dokončená; její PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-A — kontrakt, reuse spike a
+  recovery návrh (designed).** ADR 0043 připnulo Git, administrativní policy,
+  Workspace/Journal/Index a validaci celého snapshotu jako autority. MIT
+  `@codemirror/merge` 6.12.2 byl posouzen a odložen kvůli neodpovídajícímu
+  třípanelovému workflow a chybějící auditované JS distribuční pipeline.
+- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-B — historie a read-only 3-way
+  model (implemented).** Resolver čte přesně připnuté divergentní incoming
+  refy, určí společný základ a vytváří kandidátní strom přes Git v dočasném
+  object store bez změny projektových objektů, refs, worktree, indexu nebo
+  journalu. Trust, sharing scope, privacy a podporované cesty ověřuje fail
+  closed.
+- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-C — raw/rendered resolver UI
+  (implemented).** Projekt nejprve ukáže seznam souborů se stavem řešení a
+  konkrétní soubor otevře v modálním třípanelovém pohledu
+  `lokální / výsledek / vzdálená`. Raw i bezpečný Markdown náhled zvýrazňují
+  rozdíly vůči přímo editovanému výsledku; celo-souborové volby obslouží i
+  binární nebo chybějící obsah.
+- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-D — validovaná publikace a
+  recovery (implemented).** Confirm pod project writer lockem znovu ověří
+  heady, base, trust a policy, sémanticky validuje celý snapshot a přes
+  journal/CAS vytvoří jediný commit s lokálním a incoming rodičem. Retry po
+  pádu za změnou refu dokončí projekci bez druhého commitu; incoming ref
+  zůstává auditovatelný.
+- [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-E — automatické a fyzické
+  ověření (PoC validated).** Uživatel na skutečném desktop ↔ LXC scénáři
+  potvrdil, že konflikt šel opravit a výslednou historii následně
+  synchronizovat bez ručního zásahu do `.git`.
+
+### Ověření, recovery a omezení
+
+Úplná sada po poslední změně skončila **750 testy úspěšně, 28 přeskočeno**;
+zahrnuje čistý i konfliktní merge, ruční výsledek, změnu–smazání,
+rename/update, binární obsah, sidecar a relationship validaci, stale
+head/policy/trust, `local-only`, nepodporované cesty, idempotenci a pád po CAS.
+Cílený UI kontrakt seznamu a modálního třípanelového resolveru prošel.
+`py_compile`, oba generované JavaScripty přes `node --check` a finální kódový
+diff přes `git diff --check` prošly.
+
+Preview ani rozepsaný návrh nemění persistentní projektové vrstvy. Před CAS je
+autoritou journal; po commitu lze worktree a obnovitelný SQLite index srovnat z
+HEAD. PoC řeší vlastněné cesty pod `artifacts/` a `registries/`, nepodporuje
+obecný binární merge, více merge bases ani durable rozepsané drafty. Fyzicky
+byl potvrzen uživatelský konflikt a následný sync; specializované fyzické
+scénáře změna–smazání a rename/update se sidecarem zůstávají otevřené v
+roadmapě. External export bez vlastní historie zůstává samostatnou dávkou
+`F-M5-EXTERNAL-EXPORT-01`.
+
 ## F-M5-SHARING-SYNC-01 — obousměrná synchronizace interních projektů — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m5-sharing-sync-01` z `develop` na merge
-commitu `ae1b25e` (PR #80) a dosáhla úrovně **PoC validated**. Feature
-akceptace je uzavřená, ale její jediný PR do `develop` dosud nebyl vytvořen ani
-sloučen.
+commitu `ae1b25e` (PR #80), dosáhla úrovně **PoC validated** a byla doručena
+PR #81 jako merge commit `c884cd2`.
 
 - [x] [completed] **F-M5-SHARING-SYNC-01-A — kontrakt, reuse a recovery
   (designed).** ADR 0042 vymezilo podepsané inventury, branch scope, native Git

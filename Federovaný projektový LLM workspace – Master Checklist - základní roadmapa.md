@@ -118,7 +118,8 @@ Rozšíření o externí vztahy, komunikaci a řízené sdílení drží sekce 2
 - [ ] Stanovit pravidla automatických commitů.
 - [ ] Umožnit ruční commit s komentářem.
 - [ ] Evidovat autora změny.
-- [ ] Připravit mechanismus řešení konfliktů.
+- [x] Připravit mechanismus řešení konfliktů — explicitní validovaný
+  dvourodičový merge implementuje ADR 0043 a `F-M5-CONFLICT-RESOLUTION-01`.
 - [ ] Projektová metadata a registry verzovat v Gitu jako autoritativní data.
 - [ ] SQLite používat jako lokální, z Gitu obnovitelný index pro dotazy a vztahy; databázový soubor nesynchronizovat.
 - [ ] SQLite index neslouží k řešení souběžných změn ani merge konfliktů; ty řešit nad autoritativními soubory před aktualizací indexu.
@@ -478,15 +479,15 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   - [ ] offline node,
   - [ ] návrat uzlu po delší době.
 - [ ] MVP navrhnout jako **eventual consistency**, nikoli distribuovanou transakční DB.
-- [ ] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje. Native Git implementační řez popisuje ADR 0042 a čeká na fyzickou desktop ↔ LXC akceptaci.
+- [x] Automatickou replikaci spustit podle verzované matice projekt × peer: `same-team` zahrnuje všechny projekty, `same-company` jen explicitně zvolené projekty a větve, `external` nikdy background synchronizaci nespouští. Členství uzlu v network group samo nic nereplikuje. Native Git řez podle ADR 0042 i navazující řešení divergence podle ADR 0043 byly fyzicky akceptovány mezi desktopem a LXC.
 - [ ] Úzký implementovaný mezikrok s jedním primárním zapisujícím uzlem a read-only replikou zachovat jako recovery základ, nikoli jako cílový model. `same-team` a `same-company` používají podle ADR 0042 bezpečnou obousměrnou výměnu; fast-forward se aplikuje, divergence se zachová v operation-scoped incoming refu a sémanticky neplatný kandidát se odmítne. Automatické řešení konfliktu zůstává otevřené.
 - [ ] Podepsané offline projekce identit, členství a policy mají výchozí platnost 8 hodin, předem schváleně nejvýše 24 hodin. Vypršelá autorita si nesmí limit sama prodloužit během výpadku.
 - [ ] Na desktop synchronizovat pouze vybrané projekty, ke kterým má uživatel oprávnění.
 - [ ] Lokální úpravy a commity umožnit i offline; po připojení znovu ověřit oprávnění a synchronizovat.
-- [ ] Při divergenci zachovat obě historie a nabídnout řešení konfliktu bez tichého přepsání změn.
+- [x] Při divergenci zachovat obě historie a nabídnout řešení konfliktu bez tichého přepsání změn — PoC validated v `F-M5-CONFLICT-RESOLUTION-01`.
 - [ ] Synchronizaci bezpečně obnovit po uspání, ukončení aplikace nebo výpadku sítě.
 - [ ] V M0 určit topologii MVP, výběr synchronizačního peeru a pravidla větví; oddělit důvěru mezi uzly od směrování synchronizace.
-- [ ] Již v M0 navrhnout UI konfliktu s verzemi „moje“, „příchozí“ a společným základem, náhledem výsledku a možností řešení odložit.
+- [x] Již v M0 navrhnout UI konfliktu s verzemi „moje“, „příchozí“ a společným základem, náhledem výsledku a možností řešení odložit — UI zobrazuje lokální, výslednou a vzdálenou verzi; společný základ zůstává interní autoritou 3-way výpočtu podle ADR 0043.
 - [ ] Pro binární soubory nabídnout výběr verze nebo zachování obou jako samostatných artefaktů.
 - [ ] Nevyřešený merge nepublikovat jako aktuální projektový stav; zachovat původní data a zobrazit blokovanou synchronizaci.
 
@@ -1234,9 +1235,10 @@ podepsaný transport a recovery základ. ADR 0040 jej rozšiřuje cílovými
 úrovněmi sdílení a maticí projekt × peer. `F-M5-PROJECT-CATALOG-01` a fyzicky
 akceptovaný `F-M5-SHARING-SYNC-01` už poskytují obousměrný katalog i Git sync
 pro `same-team` a `same-company`, bezpečně obnovují přenos po restartu a
-zachovávají divergenci. Ruční řešení konfliktu navazuje jako
-`F-M5-CONFLICT-RESOLUTION-01`; external export, kvalifikované identity a chat
-zůstávají otevřené, takže Gate M5 není uzavřený.
+zachovávají divergenci. Fyzicky akceptované `F-M5-CONFLICT-RESOLUTION-01`
+umožňuje ruční validované řešení a následný sync dvourodičového commitu;
+external export, kvalifikované identity a chat zůstávají otevřené, takže Gate
+M5 není uzavřený.
 
 - [ ] Node identity.
 - [ ] Trust.
@@ -1253,7 +1255,10 @@ zůstávají otevřené, takže Gate M5 není uzavřený.
 - [x] Offline/reconnect — fyzicky ověřen návrat automatického sync po restartu.
 
 - [x] Ověřit synchronizaci desktopového a Turris/LXC nebo Linux serverového uzlu.
-- [ ] Ověřit souběžné úpravy stejného souboru a stejné entity registru během offline provozu desktopu a následné řešení konfliktu.
+- [x] Ověřit souběžné úpravy stejného souboru během offline provozu desktopu,
+  následné řešení konfliktu a sync výsledku.
+- [ ] Ověřit souběžné úpravy stejné entity registru během offline provozu
+  desktopu a následné řešení konfliktu.
 - [ ] Ověřit konflikty změna–smazání a přejmenování–úprava u artefaktu se sidecarem, validaci vztahů po merge a aktualizaci indexu až po vyřešení konfliktů.
 - [ ] Ověřit návrat desktopu po uspání a odmítnutí synchronizace při odvolané důvěře/oprávnění.
 
