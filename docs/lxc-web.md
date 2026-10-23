@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # Webový náhled v LXC a dlaždice na routeru
 
-Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO, náhledy Markdown/obrázků/PDF a read-only historii podporovaných Markdown dokumentů; nativní editor zůstává v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../BACKLOG.md).
+Development PoC pro existující Debian LXC na SSD `/srv`, Turris WebApps/lighttpd a Python 3 na routeru. Cílové nasazení zatím není ověřené. Web nabízí čtení registrovaných projektů, TODO, náhledy Markdown/obrázků/PDF a read-only historii podporovaných Markdown dokumentů; nativní editor zůstává v desktopu. [Rozhodnutí a recovery](adr/0020-lxc-web-viewer.md), [aktuální stav M1-07](../TODO.md).
 
 ## Příprava
 
@@ -167,10 +167,10 @@ openssl x509 -in /etc/federated-workspace/tls.crt -noout -checkhost DNS_NAME
 5) Na routeru proveďte deployment kontrol a reálné scénáře:
 
 ```sh
-ssh root@ROUTER "uci show lxc-auto.federated_workspace; lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/omc-federated-workspace-web status; cat /var/lib/federated-workspace/access-key"
+ssh root@ROUTER "uci show lxc-auto.federated_workspace; lxc-attach -P /srv/lxc -n workspace-m0 -- systemctl status federated-workspace.service; /etc/init.d/federated-workspace-entry status; cat /var/lib/federated-workspace/access-key"
 python3 router_tile.py install --container workspace-m0 --lan LAN_SUBNET
 ```
-Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/omc-federated-workspace-web status`.
+Routery bez `systemctl` kontroluj stav tile služby přes `/etc/init.d/federated-workspace-entry status`.
 
 6) Ověření scénářů uživatelem:
 Ověření 1: otevření dlaždice bezchybně načte přihlašovací stránku přes HTTPS 8443.
@@ -211,6 +211,11 @@ lokální recovery. Při pádu nebo timeoutu vypíše stav služby a posledních
 neopakuje; nový pokus musí správce spustit vědomě až po diagnóze.
 Chybějící systémové závislosti řešte běžným deployem bez `--update-only`;
 ten nyní přeskočí apt, pokud jsou všechny požadované balíky již nainstalované.
+Po úspěchu příkaz výslovně připomene, že application-only aktualizace nemění
+routerový autostart. Vypíše přesný read-only UCI check a při chybějící vlastní
+sekci také oddělený staging, `plan` a `install` postup pro `router_tile.py`.
+Instalace se nespouští skrytě: správce nejprve zkontroluje plán a teprve potom
+vědomě změní routerovou integraci.
 
 Při přerušeném nasazení preferujte skutečnou obnovu:
 

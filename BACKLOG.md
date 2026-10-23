@@ -11,7 +11,7 @@ Plánovací horizont tvoří zpravidla tři nejbližší **feature dávky**: jed
 
 ## Nejbližší feature dávky
 
-Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; otevřený Gate M1 neznamená automatické uzavření ostatních požadavků.
+Názvy větví jsou návrhy, PR dosud nejsou vytvořené. Před zahájením každé dávky ověřit začlenění jejích konkrétních závislostí do `develop`; splněný Gate M1 neznamená automatické uzavření ostatních požadavků.
 
 F-M2-CONTEXT-01, F-M2-OLLAMA-01, F-M1-UI-01, F-M2-CHAT-01/02,
 F-M2-SUMMARY-01, F-M2-EXTRACT-01, F-M2-META-AI-01, F-UX-SETTINGS-01 a
@@ -56,11 +56,10 @@ a cílová fyzická akceptace byla následně naplněna novým obousměrným ře
 `F-M5-PROJECT-CATALOG-01` bylo doručeno PR #80 jako merge commit `ae1b25e`;
 evidence je ve WORK_LOG.
 `F-M5-SHARING-SYNC-01` bylo doručeno PR #81 jako merge commit `c884cd2`; jeho
-evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` dosáhlo na vlastní
-feature větvi úrovně PoC validated a jeho evidence byla archivována ve
-WORK_LOG; PR do `develop` zatím nebyl vytvořen ani sloučen.
-Otevřené `M1-07-C` níže zůstává podmínkou Gate M1, ale implementačně nezávislá
-práce pokračuje bez tvrzení, že je Gate uzavřený.
+evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` bylo doručeno PR #82
+jako merge commit `637bf90`; evidence je ve WORK_LOG. `M1-07-C` bylo
+23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1; evidence je ve WORK_LOG a
+feature čeká v TODO na doručení jediného PR do `develop`.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -70,7 +69,8 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   bez vlastní historie, nejvýše s patchi z exportní větve, který styčný
   uživatel výslovně vytvoří a odešle. Protistrana si historii sestaví
   nezávisle; přímý a souborový přenos zůstávají rovnocenné kanály do pozdějšího
-  rozhodnutí o spojení.
+  rozhodnutí o spojení. **Odloženo rozhodnutím uživatele 23. 10. 2026:** tato
+  funkčnost aktuálně není potřeba a nemá se aktivovat bez nového požadavku.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
@@ -129,8 +129,6 @@ práce pokračuje bez tvrzení, že je Gate uzavřený.
   skutečném odeslání už dotaz nelze vzít zpět a neurčitý výsledek se bez nového
   rozhodnutí neopakuje. Režim ani odpočet nesmějí obejít RBAC, privacy, binding,
   limity nebo audit přesných odeslaných bajtů.
-
-- [ ] [blocked] **M1-07-C — Cílová restartová akceptace LXC autostartu (cílová úroveň: PoC validated na Turris Omnia).** PR #24 (`3c09090`) je začleněn a lokální testy jsou uzavřené ve WORK_LOG. Druhý uživatelem provedený restart 2026-09-19 opět naběhl bez kontejnerů; před ním proběhla jen aktualizace aplikace, jejíž `--update-only` režim záměrně nemění routerový UCI/procd autostart. Navazující UX má po takové aktualizaci zobrazit přesný návod pro dodatečné spuštění a kontrolu `scripts/router_tile.py install`, nikoli skrytě měnit hostitele. Po ručním nastavení zopakovat restart a potvrdit automatický běh `workspace-m0` a `federated-workspace.service`, aktuální dlaždici, přihlášení a náhled. M1-LXC-DNS-TLS-01 navíc připravila volitelnou přesnou DNS autoritu; při stejné cílové akceptaci ověřit vydaný certifikát přes `openssl -checkip` i `-checkhost`, klientskou důvěru a přímé otevření IP i DNS URL. Do té doby Gate M1 zůstává otevřený; úkol se nevrací do aktivního TODO bez skutečného termínu restartu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

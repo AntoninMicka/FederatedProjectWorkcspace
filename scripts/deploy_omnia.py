@@ -300,6 +300,30 @@ def main():
         parser.error('retries must be >= 1')
 
     result = None
+
+    def autostart_advice():
+        """Explain the separate, explicit router integration after app-only updates."""
+        stage = '/tmp/federated-workspace-router-tile'
+        copy = shlex.join([
+            'scp', 'scripts/router_tile.py', 'scripts/router_entry.py',
+            args.host + ':' + stage + '/',
+        ])
+        install = shlex.join([
+            'ssh', args.host,
+            'cd ' + stage + ' && python3 router_tile.py plan --container '
+            + shlex.quote(args.container) + ' --lan ' + shlex.quote(args.web_lan)
+            + ' && python3 router_tile.py install --container '
+            + shlex.quote(args.container) + ' --lan ' + shlex.quote(args.web_lan)
+            + ' && uci show lxc-auto.federated_workspace',
+        ])
+        print('Application-only update completed; router LXC autostart was not changed.')
+        print('Before a router restart, verify it explicitly:')
+        print(shlex.join(['ssh', args.host, 'uci show lxc-auto.federated_workspace']))
+        print('If the owned section is missing, stage and review the router integration, then install it:')
+        print(shlex.join(['ssh', args.host, 'mkdir -p ' + stage]))
+        print(copy)
+        print(install)
+
     def advice():
         if not args.web_lan:
             return
@@ -334,6 +358,8 @@ def main():
                 sync_result = sync_ca_to_router(args.host, args.container)
                 if sync_result:
                     print('Application deployed, but copying public CA to router failed. Retry deployment; do not reset the working application.')
+                elif args.update_only:
+                    autostart_advice()
                 return sync_result
             return 0
         if result.returncode == 70:

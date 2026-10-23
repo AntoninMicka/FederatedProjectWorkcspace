@@ -5,11 +5,57 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## M1-07-C — cílová restartová akceptace LXC autostartu — 2026-10-23
+
+Dávka vznikla na větvi `feature/m1-07-c-restart-acceptance` z `develop`
+`637bf90` po začlenění PR #82 a dosáhla úrovně **PoC validated na Turris
+Omnia**. Feature akceptace je dokončená; její PR do `develop` zatím nebyl
+vytvořen ani sloučen.
+
+- [x] [completed] **M1-07-C-A — aktivace a administrativní předání
+  (implemented).** Předchozí PR #82 byl doložen jako doručený, samostatná větev
+  vznikla z čistého `develop` a nepotřebný externí export zůstal jako výslovně
+  odložená feature v BACKLOG.
+- [x] [completed] **M1-07-C-B — viditelný update-only návod (implemented).**
+  Úspěšný application-only deploy uvádí, že UCI/procd autostart nezměnil, a
+  vypíše přesný read-only check i oddělený staging, `plan` a `install` postup.
+  Hostitel se bez vědomé akce správce nemění.
+- [x] [completed] **M1-07-C-C — předrestartová kontrola a instalace
+  (PoC validated).** Čistý rollback journal, běžící LXC/helper/služba a SAN
+  certifikátu byly ověřeny. Explicitní idempotentní instalace vytvořila pouze
+  vlastněnou UCI sekci `lxc-auto.federated_workspace` pro `workspace-m0` s
+  timeoutem `60`.
+- [x] [completed] **M1-07-C-D — skutečný restart a uživatelská akceptace
+  (PoC validated).** Dvě minuty po skutečném restartu byla UCI sekce zachovaná,
+  LXC automaticky `RUNNING` na `192.168.100.247` a aplikace `active`.
+  Uživatel fyzicky doložil aktuální dlaždici, přihlášení, katalog šesti
+  projektů a náhled konkrétního Markdown dokumentu. Po instalaci veřejné CA
+  prošel důvěryhodný IP přístup; application-only deploy se stejným
+  `--web-hostname workspace.cacke.internal` doplnil přesnou Host/Origin
+  autoritu a uživatel potvrdil funkční DNS URL.
+- [x] [completed] **M1-07-C-E — regrese, Gate M1 a předání (PoC validated).**
+  Cílené testy deploye/routeru skončily 18 OK, `py_compile` a
+  `git diff --check` prošly. Úplná sada mimo omezený socketový sandbox skončila
+  **751 testy úspěšně, 28 podmíněně přeskočeno**. Fyzické důkazy uzavřely
+  poslední známou podmínku Gate M1, který je na úrovni PoC validated splněný.
+
+### Recovery a omezení
+
+Routerová instalace zachovává cizí UCI sekce a soubory, před změnou zapisuje
+durable journal a po přerušení se obnovuje přes `router_tile.py recover`.
+Application-only deploy používá oddělený lock/snapshot a při chybě vrací
+předchozí release/službu; nemění projekty, identitu, credentials, CA ani
+routerový autostart. První úplný testovací běh v sandboxu selhal jen na 66
+zakázaných lokálních socketových operacích; opakování v povoleném prostředí
+prošlo. Jde o PoC akceptaci prvního podporovaného nasazení, nikoli obecnou
+produkční certifikaci dalších routerů, sítí nebo klientských trust store.
+
 ## F-M5-CONFLICT-RESOLUTION-01 — historie a ruční řešení divergence — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m5-conflict-resolution-01` z `develop` na
 merge commitu `c884cd2` (PR #81) a dosáhla úrovně **PoC validated**. Feature
-akceptace je dokončená; její PR do `develop` zatím nebyl vytvořen ani sloučen.
+akceptace je dokončená a dávka byla doručena PR #82 jako merge commit
+`637bf90` do `develop`.
 
 - [x] [completed] **F-M5-CONFLICT-RESOLUTION-01-A — kontrakt, reuse spike a
   recovery návrh (designed).** ADR 0043 připnulo Git, administrativní policy,
