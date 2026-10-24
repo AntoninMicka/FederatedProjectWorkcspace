@@ -1185,6 +1185,15 @@ uzavřený.
   Uživatel schválil její společné doručení s explicitním task routingem z
   konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
   `8b24452`.
+- [x] **F-M3-PUBLIC-SOURCE-READER-02 — Strukturovaná čitelná projekce:** nad
+  durable výsledkem readeru zachovat nadpisovou hierarchii, pořadí, seznamy,
+  tabulky a stabilní block anchory, odfiltrovat navigační a formulářový balast
+  a zobrazit inertní čitelný výtah i původní bounded text. Každý úspěšný run má
+  vlastní položku v časové ose a po restartu se otevírá bez nového fetch.
+  Dávka dosáhla 24. 10. 2026 úrovně PoC validated včetně dvou statických
+  originů a JavaScript-only odmítnutí; evidence je ve
+  [WORK_LOG](WORK_LOG.md#f-m3-public-source-reader-02--strukturovaná-čitelná-projekce--2026-10-24).
+  Doručení feature PR do `develop` zůstává otevřené.
 - [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
   aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
   vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.

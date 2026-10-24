@@ -5,6 +5,60 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-PUBLIC-SOURCE-READER-02 — strukturovaná čitelná projekce — 2026-10-24
+
+Dávka vznikla na větvi
+`feature/f-m3-public-source-reader-02-structured-projection` z `develop`
+`6d12902` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-A — parser a reuse kontrakt
+  (designed).** ADR 0046 adaptuje stdlib `HTMLParser`, existující
+  `PublicSourceRuns`, Context Manifest a sdílené inertní UI. Zachovává jediný
+  fetch journal, původní raw/text data a jejich hashe; Readability,
+  BeautifulSoup, headless browser a druhý projekční journal se nezavádějí.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-B — strukturovaná projekce
+  (implemented).** `public-source-structured-v1` drží title, dokumentové
+  pořadí, heading path, sedm bounded typů bloků, tabulkové řádky a
+  deterministické anchory. Nový `projection.json` se fsyncne a atomicky
+  publikuje před stavem `succeeded`; recovery ověřuje schema a hash. Staré
+  text-only runy se nemigrují ani nepřepisují.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-C — čitelné sdílené UI a
+  provenance (implemented).** Desktop i web vykreslují pouze vlastní inertní
+  DOM přes `textContent`, nabízejí původní bounded text a zobrazují schema,
+  počet bloků a hash projekce. Technické block anchory zůstávají v uložené
+  projekci, jejím hashi a `data-anchor`, nikoli v čitelném toku.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-D — regrese a fyzická
+  akceptace (PoC validated).** Realistické HTML pokrývá hierarchii, vnořené
+  seznamy, tabulky, obsahové karty, navigační/formulářový balast, skryté prvky,
+  malformed/deep HTML, limity, restart a tampering. Uživatel fyzicky potvrdil
+  čitelnost dvou nezávislých statických zdrojů a přesnou JavaScript-only hlášku
+  `Stránka bez JavaScriptu neobsahuje podporovaný statický text. Reader
+  JavaScript nespouští.` Durable výsledek má stav `unsupported` a diagnostiku
+  `no-static-text`.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-E — durable položky readeru
+  v časové ose (implemented, ad-hoc).** Každý úspěšný run má samostatnou
+  chronologickou položku podle `fetched_at`, včetně opakovaného načtení stejné
+  URL. Po restartu se přes result endpoint rozbalí uložená projekce bez nového
+  síťového fetch; staré durable výsledky zůstávají beze změny.
+
+### Ověření, recovery a omezení
+
+Cílené reader/Context Manifest testy skončily 24 testy úspěšně; cílené testy
+časové osy, rendereru a HTTP diagnostiky také prošly. Poslední úplná sada
+`python3 -m unittest discover -s tests -v` mimo socketově omezený sandbox
+skončila **781 testy úspěšně, 28 podmíněně přeskočeno**. Python moduly prošly
+`py_compile`, generovaný JavaScript `node --check` a finální diff
+`git diff --check`.
+
+Pád před uzavřením SQLite stavu zůstává podle ADR 0033 `unknown` bez
+automatického retry. Hotový run váže raw, textovou i strukturovanou projekci
+hashi; poškozená nebo chybějící deklarovaná projekce zneplatní staging. UI
+obnovení čte pouze lokální durable výsledek a nemění projektový Git. Reader
+nadále neprovádí browser automation, JavaScript, cookies/login, odkazy ani
+heuristické skórování hlavního článku; složité `rowspan`/`colspan`, CSS
+generovaný obsah, shadow DOM a přesné vizuální pořadí nejsou podporované.
+
 ## F-M3-SEARCH-03 — volitelný automatický dispatch hledání — 2026-10-24
 
 Dávka vznikla na větvi `feature/f-m3-search-03-auto-dispatch` z `develop`

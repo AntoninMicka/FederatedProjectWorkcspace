@@ -26,7 +26,8 @@ from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
 from spikes.presentation_documents import PresentationDocuments
-from spikes.public_source import PublicSourceRejected, PublicSourceUnknown
+from spikes.public_source import (PublicSourceRejected, PublicSourceUnknown,
+                                  PublicSourceUnsupported)
 from spikes.project_creation import ProjectCreation
 from tests import test_local_api
 
@@ -99,6 +100,9 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('function buildChatTimeline(thread,projections)', JS)
         self.assertIn('for(const entry of buildChatTimeline(thread,taskOutcomes))', JS)
         self.assertIn("if(entry.kind==='task'){renderTaskOutcome(entry.value,true)", JS)
+        self.assertIn("if(entry.kind==='public-source'){renderPublicSourceTimelineEntry", JS)
+        self.assertIn("for(const source of projection.public_sources || [])if(source.state==='succeeded')", JS)
+        self.assertIn("created_at:source.result?.fetched_at || projection.created_at", JS)
         self.assertIn('for(const projection of entry.tasks)renderTaskOutcome(projection,false)', JS)
         self.assertIn("if(messageIds.has(messageId))", JS)
         self.assertNotIn(' renderTaskOutcomes();', JS)
@@ -114,7 +118,17 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/tasks/public-source/preview',request)", JS)
         self.assertIn("projectRequest('/v1/tasks/public-source/confirm'", JS)
         self.assertIn("projectRequest('/v1/tasks/public-source/result'", JS)
-        self.assertIn("result.querySelector('pre').textContent=fetched.text", JS)
+        self.assertIn('original.textContent=fetched.text', JS)
+        self.assertIn('renderPublicSourceProjection(structured,fetched.projection)', JS)
+        self.assertIn('function renderPublicSourceTimelineEntry(entry)', JS)
+        self.assertIn("task_id:entry.task_id,run_id:source.run_id", JS)
+        self.assertIn('createPublicSourceResultView()', JS)
+        self.assertIn("cell.textContent=value", JS)
+        self.assertNotIn('cell.innerHTML=value', JS)
+        self.assertIn('wrapper.dataset.anchor=block.anchor', JS)
+        self.assertNotIn("anchor.className='public-source-anchor'", JS)
+        self.assertIn('data-source-view="structured"', HTML)
+        self.assertIn('Původní bounded text', HTML)
         self.assertIn('do projektu nebylo nic zapsáno', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm',
@@ -127,6 +141,8 @@ class DesktopTests(unittest.TestCase):
         driver = test_local_api.LocalAPITests()
         cases = ((PublicSourceRejected('robots', code='robots-disallowed'), 422,
                   'rejected', 'robots.txt'),
+                 (PublicSourceUnsupported('dynamic', code='no-static-text'), 422,
+                  'unsupported', 'bez JavaScriptu neobsahuje podporovaný statický text'),
                  (PublicSourceUnknown('lost', code='response-unknown'), 409,
                   'unknown', 'automaticky opakovat'))
         for error, status, outcome, message in cases:

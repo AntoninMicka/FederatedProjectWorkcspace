@@ -508,6 +508,17 @@ SSRF-safe DNS validace a connect pinning, sekvenční robots preflight a bounded
 automatické redirecty, MIME sniffing a automatická projektová publikace se
 odmítají. Rozhodnutí: [ADR 0033](docs/adr/0033-public-source-retrieval.md).
 
+F-M3-PUBLIC-SOURCE-READER-02 **reuse/adaptuje** stávající stdlib `HTMLParser`,
+`PublicSourceRuns`, kanonickou JSON serializaci, Context Manifest a inertní
+sdílené desktop/web UI. Uzavřená bounded projekce přidává typy bloků,
+nadpisovou cestu, stabilní anchory a tabulkové řádky bez druhého fetch
+journalu. Readability/BeautifulSoup, headless browser, heuristické
+přeskupování článku a nový parserový runtime se odmítají, protože by pro tento
+řez rozšířily závislosti nebo recovery/síťovou hranici. Soukromá inventura
+neposkytuje shodnou komponentu; žádný její kód ani neveřejné detaily se
+nepřenášejí. Rozhodnutí:
+[ADR 0046](docs/adr/0046-structured-public-source-projection.md).
+
 F-M4-WORKFLOW-01-A **reuse/adaptuje** `ContextBuilder`/`PreparedContext`,
 provider-neutral `RoleRegistry` a backend adapter/run journals, durable
 prepare/bind/result/publish vzor `SummaryTasks`, Workspace recovery a bezpečný

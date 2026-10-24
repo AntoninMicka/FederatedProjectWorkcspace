@@ -3,13 +3,14 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — čeká se na doručení F-M3-SEARCH-03
+# TODO — čeká se na doručení F-M3-PUBLIC-SOURCE-READER-02
 
-Feature dávka `F-M3-SEARCH-03 — Volitelný automatický dispatch hledání` byla
-24. 10. 2026 akceptována na úrovni **PoC validated**. Dokončená evidence,
-ověření, recovery a omezení jsou archivované ve
-[WORK_LOG](WORK_LOG.md#f-m3-search-03--volitelný-automatický-dispatch-hledání--2026-10-24).
+Dávka `F-M3-PUBLIC-SOURCE-READER-02 — strukturovaná čitelná projekce` byla
+24. 10. 2026 akceptována na úrovni **PoC validated** a její dokončená evidence
+je ve
+[WORK_LOG](WORK_LOG.md#f-m3-public-source-reader-02--strukturovaná-čitelná-projekce--2026-10-24).
 
-Větev `feature/f-m3-search-03-auto-dispatch` čeká na doručení jediného PR do
-`develop`; PR zatím nebyl vytvořen ani sloučen. Další feature dávka se
-aktivuje až po merge z aktuálního `develop`.
+Feature větev je
+`feature/f-m3-public-source-reader-02-structured-projection`; PR do `develop`
+zatím nebyl vytvořen ani sloučen. Nová nesouvisející dávka bude aktivována až
+po doručení tohoto PR z aktuálního `develop` na vlastní feature větvi.
