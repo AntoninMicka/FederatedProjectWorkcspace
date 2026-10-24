@@ -10,7 +10,7 @@ SPDX-License-Identifier: MPL-2.0
 Dávka vznikla na větvi
 `feature/f-m3-public-source-reader-02-structured-projection` z `develop`
 `6d12902` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+PR #87 byl sloučen do `develop` jako merge commit `023eae1`.
 
 - [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-A — parser a reuse kontrakt
   (designed).** ADR 0046 adaptuje stdlib `HTMLParser`, existující
