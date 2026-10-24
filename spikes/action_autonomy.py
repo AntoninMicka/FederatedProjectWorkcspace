@@ -13,6 +13,8 @@ import sqlite3
 import stat
 
 from spikes.metadata import parse_json, require, uuid
+from spikes.research_workflow import (validate_research_input,
+                                      validate_research_output)
 
 
 MAX_ACTIONS = 64
@@ -31,7 +33,7 @@ CONFIRMATIONS = {'none', 'before-dispatch', 'exact-local-output'}
 MODES = {'manual', 'automatic'}
 VALUE_TYPES = {'string', 'non-empty-string', 'nullable-string', 'integer',
                'positive-integer', 'boolean', 'uuid', 'sha256', 'git-head',
-               'privacy', 'object', 'array'}
+               'privacy', 'object', 'nullable-object', 'array'}
 EXECUTION_BOUNDARIES = {'local-node', 'private-network', 'external-network',
                         'project-write'}
 REVIEWED_ACTIONS = Path(__file__).resolve().parents[1] / 'modules' / 'orchestration-actions'
@@ -117,6 +119,8 @@ def _validate_typed_value(value, value_type, field):
         valid = value in PRIVACY
     elif value_type == 'object':
         valid = isinstance(value, dict)
+    elif value_type == 'nullable-object':
+        valid = value is None or isinstance(value, dict)
     elif value_type == 'array':
         valid = isinstance(value, list) and len(value) <= 1024
     require(valid, f'Invalid autonomy typed field {field}')
@@ -245,10 +249,24 @@ class ActionRegistry:
     def validate_input(self, descriptor, value):
         if descriptor['schema_version'] == 2:
             self._validate_fields(value, descriptor['input_types'], 'input')
+            validate_research_input(descriptor['action_id'], value)
+            if descriptor['action_id'] == 'search.iterative-query':
+                _validate_search_input(value)
 
     def validate_output(self, descriptor, value):
         if descriptor['schema_version'] == 2:
             self._validate_fields(value, descriptor['output_types'], 'output')
+            validate_research_output(descriptor['action_id'], value)
+            if (descriptor['action_id'] == 'research.plan-next'
+                    and value['candidate'] is not None):
+                candidate = value['candidate']
+                target = self.resolve(candidate['action']['id'],
+                                      candidate['action']['version'])
+                require(candidate['privacy'] in target['privacy'],
+                        'Research planner candidate expands privacy')
+                require(candidate['cost_units'] <= target['max_cost_units'],
+                        'Research planner candidate exceeds action cost')
+                self.validate_input(target, candidate['input'])
 
     def validate_transition(self, predecessors, step, *, available_preconditions,
                             permissions, allowed_privacy, allowed_boundaries):
@@ -371,8 +389,6 @@ def parse_plan(value, registry, *, allow_materialized=False):
         registry.validate_input(descriptor, step['input'])
         if descriptor['effect'] == 'local-content-create':
             _validate_local_output(step['input'])
-        if descriptor['action_id'] == 'search.iterative-query':
-            _validate_search_input(step['input'])
         seen.add(step['step_id'])
     require(cost <= budget['max_cost_units'], 'Autonomy plan exceeds cost budget')
     if version == 2:

@@ -114,7 +114,10 @@ class ActionAutonomyTests(unittest.TestCase):
         actions = self.registry.list()
         self.assertEqual([item['action_id'] for item in actions],
             ['analysis.read-only', 'artifact.create-local', 'query.external',
-             'search.iterative-query', 'workflow.role-handoff'])
+             'research.analyze', 'research.compose-report', 'research.plan-next',
+             'research.select-relevant', 'research.verify-evidence',
+             'search.iterative-query', 'source.fetch-public',
+             'workflow.role-handoff'])
         actions[0]['permissions'].append('changed')
         self.assertNotIn('changed', self.registry.resolve(
             'analysis.read-only', '1.0')['permissions'])

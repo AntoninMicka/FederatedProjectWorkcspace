@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "profile_id": "quick-search-v1",
+  "version": "1.0",
+  "display_name": "Quick search",
+  "actions": [
+    {"id": "search.iterative-query", "version": "1.0"},
+    {"id": "research.select-relevant", "version": "1.0"},
+    {"id": "research.compose-report", "version": "1.0"},
+    {"id": "research.plan-next", "version": "1.0"}
+  ],
+  "permissions": ["project-read", "external-dispatch"],
+  "privacy": ["public", "project", "confidential"],
+  "execution_boundaries": ["external-network", "private-network"],
+  "bindings": {"search": "searxng", "reader": "static-html-v1", "llm": "ollama"},
+  "default_budget": {"max_steps": 8, "max_cost_units": 24, "max_seconds": 900},
+  "maximum_budget": {"max_steps": 12, "max_cost_units": 48, "max_seconds": 1800},
+  "start_action": {"id": "search.iterative-query", "version": "1.0"},
+  "finish_reasons": ["completed", "insufficient", "budget-exhausted", "cancelled-by-user"]
+}

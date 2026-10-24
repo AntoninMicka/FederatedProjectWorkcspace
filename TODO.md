@@ -40,11 +40,21 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   uzavřený katalog, tři výchozí profily, planner jako auditovatelný bounded
   krok a přesné recovery hranice. Reuse/reject je zaznamenán v
   [REUSE_CATALOG](REUSE_CATALOG.md).
-- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-B — výzkumný katalog a profily
+- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-B — výzkumný katalog a profily
   (cílová úroveň: implemented).** Přidat uzavřené deskriptory pro fetch,
   ověření evidence, výběr relevance, volitelnou analýzu, sestavení zprávy a
   návrh dalšího kroku. Validovat profilové policy, přesné vnořené vstupy a
   výstupy, povolené návaznosti a celkové limity.
+  Výsledek: reviewovaný katalog obsahuje šest nových verzovaných akcí a
+  profily `quick-search-v1`, `read-and-verify-v1` a `deep-research-v1` jako
+  přesné allowlisty, nikoli pevné pipeline. `ActionRegistry` validuje uzavřené
+  vnořené objekty, digesty, URL/binding readeru, evidence, citace, plannerovy
+  podmíněné výstupy i jeho kandidátní vstup proti cílovému deskriptoru;
+  profil nesmí rozšířit akce, permissions, privacy, hranice ani maximum.
+  Ověření: `python3 -m unittest tests.test_research_workflow
+  tests.test_action_autonomy -v` (28 testů OK), `python3 -m unittest
+  tests.test_spdx -v` (1 test OK), `python3 -m unittest discover -s tests -v`
+  (794 testů OK, 28 skipped) a `git diff --check` bez chyb.
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-C — doménové adaptéry a dynamické
   materializování (cílová úroveň: implemented).** Adaptovat čistý reader
   candidate builder, existující search/reader/provider journaly a bounded
