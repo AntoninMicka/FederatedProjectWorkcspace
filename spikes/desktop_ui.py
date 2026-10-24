@@ -6503,6 +6503,8 @@ class DesktopHandler(Handler):
                 'authentication-required': 'Zdroj vyžaduje přihlášení, které reader nepodporuje.',
                 'unsupported-mime': 'Zdroj není podporovaný statický HTML nebo text.',
                 'unsupported-charset': 'Zdroj nepoužívá podporované UTF-8 kódování.',
+                'no-static-text': ('Stránka bez JavaScriptu neobsahuje podporovaný statický '
+                                   'text. Reader JavaScript nespouští.'),
                 'overloaded': 'Zdroj je přetížený; automatické opakování nebylo provedeno.'}
             return self.reply(422 if state in {'unsupported', 'rejected'} else 502,
                 {'error': messages.get(exc.code, 'Veřejný zdroj nelze bezpečně načíst.'),

@@ -26,7 +26,8 @@ from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.web_search import SearchResponseError
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS, GamepadSettings
 from spikes.presentation_documents import PresentationDocuments
-from spikes.public_source import PublicSourceRejected, PublicSourceUnknown
+from spikes.public_source import (PublicSourceRejected, PublicSourceUnknown,
+                                  PublicSourceUnsupported)
 from spikes.project_creation import ProjectCreation
 from tests import test_local_api
 
@@ -140,6 +141,8 @@ class DesktopTests(unittest.TestCase):
         driver = test_local_api.LocalAPITests()
         cases = ((PublicSourceRejected('robots', code='robots-disallowed'), 422,
                   'rejected', 'robots.txt'),
+                 (PublicSourceUnsupported('dynamic', code='no-static-text'), 422,
+                  'unsupported', 'bez JavaScriptu neobsahuje podporovaný statický text'),
                  (PublicSourceUnknown('lost', code='response-unknown'), 409,
                   'unknown', 'automaticky opakovat'))
         for error, status, outcome, message in cases:
