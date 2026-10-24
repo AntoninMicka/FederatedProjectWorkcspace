@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Application boundary joining governed queue steps to existing domain journals."""
+import hashlib
 import os
 from pathlib import Path
 import stat
@@ -251,6 +252,27 @@ class AutonomyService:
             available_preconditions=self._revision_preconditions(
                 workflow, stored['proposal']))
 
+    def research_draft(self, workflow_id, step_id, *, allow_local_only=True):
+        workflow = self.get(workflow_id, allow_local_only=allow_local_only)
+        step = next((item for item in workflow['steps']
+                     if item['step_id'] == step_id), None)
+        require(step is not None
+                and step['action'] == {
+                    'id': 'research.compose-report', 'version': '1.0'}
+                and step['state'] == 'completed'
+                and isinstance(step.get('result'), dict)
+                and step['result'].get('run_id') == step['input'].get('run_id')
+                and step['result'].get('task_id') == step['input'].get('task_id'),
+                'Completed research report step is unavailable')
+        draft = self.chat_service.research_report_draft(
+            step['result']['run_id'], step['result']['draft_sha256'])
+        return {**draft, 'workflow_id': workflow_id, 'step_id': step_id,
+                'project_id': workflow['project_id'],
+                'task_id': step['result']['task_id'],
+                'selected_source_run_ids': step['input'][
+                    'selected_source_run_ids'],
+                'analysis_run_id': step['input']['analysis_run_id']}
+
     def prepare_search(self, value):
         required = {'workflow_id', 'task_id', 'mode', 'countdown_seconds'}
         follow_up = required | {'parent_search_id', 'query'}
@@ -289,6 +311,53 @@ class AutonomyService:
                 'privacy': preview['privacy'], 'cost_units': 1, 'depends_on': [],
                 'input': {'request': request, 'preview': preview,
                           'preview_sha256': preview_sha256}}]}
+        return self.prepare(plan)
+
+    def prepare_research(self, value):
+        """Prepare one reviewed research profile without dispatching its first search."""
+        fields = {'workflow_id', 'task_id', 'mode', 'countdown_seconds',
+                  'profile_id', 'profile_version'}
+        require(isinstance(value, dict) and set(value) == fields
+                and value['mode'] in {'manual', 'automatic'}
+                and type(value['countdown_seconds']) is int
+                and 3 <= value['countdown_seconds'] <= 5,
+                'Invalid research workflow preparation')
+        uuid(value['workflow_id']); uuid(value['task_id'])
+        profile = self.research_profiles.get(
+            (value['profile_id'], value['profile_version']))
+        require(profile is not None, 'Unsupported research workflow profile')
+        namespace = UUID(value['workflow_id'])
+        request = {'task_id': value['task_id'],
+            'search_id': str(uuid5(namespace, 'initial:search')),
+            'synthesis_run_id': str(uuid5(namespace, 'initial:synthesis-run')),
+            'synthesis_manifest_id': str(uuid5(
+                namespace, 'initial:synthesis-manifest'))}
+        context = self.chat_service.task_search_autonomy_candidate(request)
+        preview = dict(context['preview'])
+        preview_sha256 = preview.pop('preview_sha256'); preview.pop('state', None)
+        require(preview['privacy'] in profile['privacy'],
+                'Research profile does not allow task privacy')
+        goal = preview['purpose']
+        research = {'profile_id': profile['profile_id'],
+            'profile_version': profile['version'],
+            'research_id': str(uuid5(namespace, 'research')),
+            'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest()}
+        plan = {'schema_version': 3, 'workflow_id': value['workflow_id'],
+            'project_id': context['project_id'],
+            'expected_head': context['expected_head'], 'mode': value['mode'],
+            'privacy': preview['privacy'],
+            'countdown_seconds': value['countdown_seconds'],
+            'policy': {'actions': profile['actions'],
+                'permissions': profile['permissions'],
+                'execution_boundaries': profile['execution_boundaries'],
+                'research': research},
+            'budget': profile['default_budget'],
+            'steps': [{'step_id': str(uuid5(namespace, 'initial:step')),
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': preview['privacy'], 'cost_units': 1,
+                'depends_on': [], 'input': {'request': request,
+                    'preview': preview, 'preview_sha256': preview_sha256}}]}
         return self.prepare(plan)
 
     def edit_search(self, workflow_id, query):
@@ -350,8 +419,78 @@ class AutonomyService:
             allowed_privacy={'public', 'project', 'confidential', 'local-only'},
             expected_head=workspace.git.head())
         if result.get('plan_schema_version') == 3:
+            result = self._append_research_planner(result, node_id, user_id)
             return self._materialize_planner(result, node_id, user_id)
         return self._append_search_continuation(result, node_id, user_id)
+
+    def _append_research_planner(self, workflow, node_id, user_id):
+        """Offer one deterministic planner revision after a completed domain action."""
+        policy = workflow.get('policy') or {}; research = policy.get('research')
+        steps = workflow.get('steps') or []
+        if (not isinstance(research, dict) or not steps
+                or any(item.get('state') not in {'completed', 'cancelled'}
+                       for item in steps)
+                or steps[-1].get('state') != 'completed'
+                or steps[-1].get('action') == {
+                    'id': 'research.plan-next', 'version': '1.0'}
+                or any(item.get('state') == 'pending'
+                       for item in workflow.get('revision_proposals', []))):
+            return workflow
+        profile = self.research_profiles.get(
+            (research['profile_id'], research['profile_version']))
+        require(profile is not None, 'Research workflow profile is unavailable')
+        planner_cost = 2; budget = dict(workflow['budget'])
+        maximum = profile['maximum_budget']; last = steps[-1]
+        budget['max_steps'] = max(budget['max_steps'], len(steps) + 1)
+        budget['max_cost_units'] = max(
+            budget['max_cost_units'], workflow['spent_cost'] + planner_cost)
+        if workflow['remaining_seconds'] == 0:
+            budget['max_seconds'] = min(
+                maximum['max_seconds'], budget['max_seconds'] + 300)
+        if any(budget[key] > maximum[key] for key in budget):
+            proposal_id = str(uuid5(UUID(workflow['workflow_id']),
+                'research-planner:' + last['step_id'] + ':budget-finish'))
+            proposal = {'schema_version': 1, 'proposal_id': proposal_id,
+                'workflow_id': workflow['workflow_id'],
+                'base_revision': workflow['plan_revision'],
+                'base_plan_digest': workflow['plan_revisions'][-1]['plan_digest'],
+                'kind': 'finish',
+                'reason': 'The reviewed research profile maximum is exhausted.',
+                'step': None, 'repeat_of': None,
+                'budget': dict(workflow['budget'])}
+            return self.queue.propose_revision(proposal, node_id, user_id,
+                available_preconditions=self._revision_preconditions(
+                    workflow, proposal))
+        ledger = self.research_ledger(workflow); ledger_sha = digest(ledger)
+        marker = 'research-planner:' + last['step_id'] + ':' + ledger_sha
+        planner_input = {**research,
+            'run_id': str(uuid5(UUID(workflow['workflow_id']), marker + ':run')),
+            'manifest_id': str(uuid5(
+                UUID(workflow['workflow_id']), marker + ':manifest')),
+            'plan_revision': workflow['plan_revision'] + 1,
+            'ledger': ledger, 'ledger_sha256': ledger_sha,
+            'remaining_budget': {
+                'max_steps': max(0, budget['max_steps'] - len(steps) - 1),
+                'max_cost_units': max(
+                    0, budget['max_cost_units'] - workflow['spent_cost']
+                    - planner_cost),
+                'max_seconds': workflow['remaining_seconds']}}
+        step = {'step_id': str(uuid5(
+            UUID(workflow['workflow_id']), marker + ':step')),
+            'action': {'id': 'research.plan-next', 'version': '1.0'},
+            'privacy': last['privacy'], 'cost_units': planner_cost,
+            'depends_on': [last['step_id']], 'input': planner_input}
+        proposal = {'schema_version': 1,
+            'proposal_id': str(uuid5(
+                UUID(workflow['workflow_id']), marker + ':revision')),
+            'workflow_id': workflow['workflow_id'],
+            'base_revision': workflow['plan_revision'],
+            'base_plan_digest': workflow['plan_revisions'][-1]['plan_digest'],
+            'kind': 'append',
+            'reason': 'Review the completed domain result and propose the next bounded action.',
+            'step': step, 'repeat_of': None, 'budget': budget}
+        return self.queue.propose_revision(proposal, node_id, user_id,
+            available_preconditions=self._revision_preconditions(workflow, proposal))
 
     def _materialize_planner(self, workflow, node_id, user_id):
         steps = workflow.get('steps') or []

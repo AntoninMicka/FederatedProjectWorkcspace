@@ -1306,6 +1306,42 @@ class ChatService:
         response = adapter.dispatch(handoff, binding, role, 'json')
         return parse_research_model_response(action_id, response.get('response'), value)
 
+    def research_report_draft(self, run_id, draft_sha256):
+        """Read one validated report draft from the existing provider journal."""
+        uuid(run_id)
+        require(isinstance(draft_sha256, str)
+                and re.fullmatch(r'[0-9a-f]{64}', draft_sha256),
+                'Invalid research report draft digest')
+        row = OllamaRuns(self._root()).get(run_id)
+        require(row is not None and row['state'] == 'succeeded'
+                and row['operation'] == 'generate-text'
+                and row['output_format'] == 'json'
+                and row['role_id'] == 'researcher'
+                and row['role_revision'] == 'researcher-v2'
+                and isinstance(row['response'], dict)
+                and isinstance(row['response'].get('response'), str),
+                'Research report draft is unavailable')
+        try:
+            draft = json.loads(row['response']['response'])
+        except (UnicodeError, ValueError) as exc:
+            raise ValidationError('Research report draft is invalid') from exc
+        require(isinstance(draft, dict) and set(draft) == {'markdown', 'citations'}
+                and isinstance(draft['markdown'], str)
+                and draft['markdown'].strip() == draft['markdown']
+                and 0 < len(draft['markdown'].encode()) <= 256 * 1024
+                and '\0' not in draft['markdown']
+                and isinstance(draft['citations'], list)
+                and bool(draft['citations'])
+                and all(isinstance(item, str) for item in draft['citations'])
+                and len(draft['citations']) == len(set(draft['citations'])),
+                'Research report draft is invalid')
+        calculated = hashlib.sha256(json.dumps(draft, ensure_ascii=False,
+            sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        require(calculated == draft_sha256,
+                'Research report draft differs from the completed step')
+        return {'run_id': run_id, 'state': 'draft',
+                'draft_sha256': calculated, **draft, 'project_changed': False}
+
     @staticmethod
     def _search_workflow_display(workflow):
         rounds = []

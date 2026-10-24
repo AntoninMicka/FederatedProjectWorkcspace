@@ -151,6 +151,12 @@ class AutonomyServiceTests(unittest.TestCase):
                 calls.append(('pause-all', None)); return self.list()
             def prepare_search(self, request):
                 calls.append(('prepare-search', request)); return {'state': 'proposed'}
+            def prepare_research(self, request):
+                calls.append(('prepare-research', request)); return {'state': 'proposed'}
+            def research_draft(self, workflow_id, step_id):
+                calls.append(('research-draft', workflow_id, step_id))
+                return {'markdown': '# Draft', 'citations': [], 'run_id': str(uuid4()),
+                        'selected_source_run_ids': [], 'project_changed': False}
             def edit_search(self, workflow_id, query):
                 calls.append(('edit-search', workflow_id, query)); return {'state': 'queued'}
             def send_now(self, workflow_id, step_id, dispatch_digest):
@@ -175,6 +181,14 @@ class AutonomyServiceTests(unittest.TestCase):
             response = driver.request(server, path='/v1/autonomy/search/prepare',
                 body=json.dumps({'workflow_id': self.workflow_id}).encode())
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/research/prepare',
+                body=json.dumps({'workflow_id': self.workflow_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            report_step_id = str(uuid4())
+            response = driver.request(server, path='/v1/autonomy/research/draft',
+                body=json.dumps({'workflow_id': self.workflow_id,
+                                 'step_id': report_step_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
             response = driver.request(server, path='/v1/autonomy/search/edit',
                 body=json.dumps({'workflow_id': self.workflow_id,
                                  'query': 'upravený dotaz'}).encode())
@@ -197,6 +211,8 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertTrue({'/v1/autonomy/status', '/v1/autonomy/replace',
                          '/v1/autonomy/advance',
                          '/v1/autonomy/search/prepare',
+                         '/v1/autonomy/research/prepare',
+                         '/v1/autonomy/research/draft',
                          '/v1/autonomy/search/edit', '/v1/autonomy/send-now',
                          '/v1/autonomy/revision/propose',
                          '/v1/autonomy/revision/confirm',
@@ -205,8 +221,16 @@ class AutonomyServiceTests(unittest.TestCase):
                        'id="autonomy-plan-example"',
                        'id="autonomy-plan-dynamic-example"',
                        '#autonomy-list', '.search-autonomy{',
+                       '.research-phases{',
                        "autonomyRequest('/v1/autonomy/advance'",
                        "projectRequest('/v1/autonomy/search/prepare'",
+                       "projectRequest('/v1/autonomy/research/prepare'",
+                       "projectRequest('/v1/autonomy/research/draft'",
+                       "'quick-search-v1':'Rychlé hledání'",
+                       "'read-and-verify-v1':'Načíst a ověřit'",
+                       "'deep-research-v1':'Hloubkový výzkum'",
+                       'Otevřít jako neuložený dokument',
+                       'Projekt se změní až po stisknutí Uložit.',
                        "autonomyRequest('/v1/autonomy/send-now'",
                        "autonomyRequest('/v1/autonomy/revision/propose'",
                        "autonomyRequest('/v1/autonomy/revision/confirm'",
@@ -301,6 +325,74 @@ class AutonomyServiceTests(unittest.TestCase):
                                       countdown['steps'][0]['dispatch_digest'])
         self.assertEqual(dispatched['steps'][0]['state'], 'completed')
         self.assertEqual([call[0] for call in chat.calls].count('confirm'), 1)
+
+    def test_research_profile_prepares_and_cycles_through_visible_planner(self):
+        task_id = str(uuid4())
+        class ResearchChat(ChatStub):
+            def candidate(inner, request, state):
+                preview = {'schema_version': 2, **request,
+                    'query': 'ověřit tvrzení', 'purpose': 'Ověřit tvrzení',
+                    'privacy': 'project', 'round_index': 1,
+                    'parent_search_id': None, 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_search_autonomy_candidate(inner, request):
+                return {'request': request,
+                    'preview': inner.candidate(request, 'candidate'),
+                    'project_id': self.project_id,
+                    'expected_head': self.git.head()}
+
+            def task_search_candidate(inner, request):
+                return inner.candidate(request, 'candidate')
+
+            def task_search_preview(inner, request):
+                return inner.candidate(request, 'prepared')
+
+            def task_search_confirm(inner, request):
+                inner.calls.append(('search', request))
+                return {'state': 'completed', 'search_workflow': {
+                    'rounds': [{'round_index': 1}], 'next_queries': []}}
+
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                proposal = {'decision': 'finish', 'reason': 'Enough for this test.',
+                    'target_action': None, 'candidate': None,
+                    'repeat_step_id': None, 'finish_reason': 'completed'}
+                return {'schema_version': 1, 'kind': 'research-next-step',
+                    'research_id': value['research_id'], 'run_id': value['run_id'],
+                    'manifest_id': value['manifest_id'], **proposal,
+                    'proposal_sha256': digest(proposal)}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        proposed = service.prepare_research({'workflow_id': self.workflow_id,
+            'task_id': task_id, 'mode': 'manual', 'countdown_seconds': 3,
+            'profile_id': 'quick-search-v1', 'profile_version': '1.0'})
+        self.assertEqual(proposed['policy']['research']['profile_id'],
+                         'quick-search-v1')
+        self.assertEqual(proposed['policy']['research']['goal'], 'Ověřit tvrzení')
+        service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id)
+        service.approve(self.workflow_id, proposed['steps'][0]['step_id'])
+        after_search = service.advance(self.workflow_id)
+        self.assertEqual([item['action']['id'] for item in after_search['steps']],
+                         ['search.iterative-query', 'research.plan-next'])
+        self.assertEqual(after_search['steps'][1]['state'], 'queued')
+        awaiting = service.advance(self.workflow_id)
+        self.assertEqual(awaiting['steps'][1]['state'], 'awaiting-approval')
+        service.approve(self.workflow_id, awaiting['steps'][1]['step_id'])
+        completed = service.advance(self.workflow_id)
+        self.assertEqual((completed['state'], completed['plan_revision']),
+                         ('completed', 3))
+        self.assertEqual([item[0] for item in chat.calls],
+                         ['search', 'research.plan-next'])
 
     def test_unknown_domain_effect_is_terminal_and_stale_head_blocks_dispatch(self):
         self.chat.unknown = True

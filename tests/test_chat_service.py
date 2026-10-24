@@ -481,6 +481,34 @@ class ChatServiceTests(unittest.TestCase):
             'research.select-relevant', research_request, execution), research_result)
         self.assertEqual(len(research_calls), 1)
 
+        report_body = {'markdown': '# Ověřená zpráva\n\nTvrzení se zdrojem.',
+                       'citations': [public_request['run_id']]}
+        report_calls = []
+        reporter = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda binding, raw: (report_calls.append(json.loads(raw))
+                    or {'model': binding.model,
+                        'response': json.dumps(report_body)})))
+        report_request = {'research_id': research_request['research_id'],
+            'goal': research_request['goal'],
+            'goal_sha256': research_request['goal_sha256'],
+            'run_id': str(uuid4()), 'manifest_id': str(uuid4()),
+            'selected_source_run_ids': [public_request['run_id']],
+            'selection_sha256': research_result['selection_sha256'],
+            'analysis_run_id': None, 'analysis_sha256': None,
+            'task_id': route['task_id']}
+        report_result = reporter.research_model_action(
+            'research.compose-report', report_request, execution)
+        restored_draft = reporter.research_report_draft(
+            report_request['run_id'], report_result['draft_sha256'])
+        self.assertEqual(restored_draft['markdown'], report_body['markdown'])
+        self.assertEqual(restored_draft['citations'], report_body['citations'])
+        self.assertFalse(restored_draft['project_changed'])
+        self.assertEqual(len(report_calls), 1)
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            reporter.research_report_draft(report_request['run_id'], '0' * 64)
+
         generated_request = self.route_request(
             public_source_run_ids=[public_request['run_id']])
         generation_calls = []

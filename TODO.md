@@ -75,10 +75,22 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   28 skipped), `python3 -m py_compile spikes/action_autonomy.py
   spikes/autonomy_service.py spikes/chat_service.py spikes/research_workflow.py`
   a `git diff --check` bez chyb.
-- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-D — chatové UI a řízení průchodu
+- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-D — chatové UI a řízení průchodu
   (cílová úroveň: implemented).** Nabídnout profily a režim ruční/automatický,
   zobrazit fáze, zdroje, důvod změny, provenance, zbývající limit a přesné
   revizní potvrzení. Report zůstane návrhem se samostatným uložením.
+  Výsledek: chat nabízí jednorázové hledání i tři reviewované profily v ručním
+  nebo automatickém režimu. Aktivní průchod ukazuje skutečně materializované
+  fáze, zdrojová URL a run ID, počty vazeb, výběr a závěry, důvody aplikovaných
+  i čekajících revizí a zbývající cost/kroky/čas. Zvýšení limitu potvrzuje
+  přesný digest revize. Dokončený report se načítá z provider journalu jako
+  návrh; otevření pouze předvyplní běžný editor a Git se změní až jeho
+  samostatným uložením. Ověření: cílené testy autonomy API, profilového cyklu,
+  materializace revize a obnovení reportu prošly; `python3 -m py_compile
+  spikes/desktop_ui.py spikes/action_autonomy.py spikes/autonomy_service.py
+  spikes/chat_service.py`, kontrola generovaného JavaScriptu přes `node
+  --check`, `python3 -m unittest discover -s tests -v` (797 testů OK, 28
+  skipped) a `git diff --check` bez chyb.
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
   akceptace (cílová úroveň: PoC validated).** Ověřit předčasné ukončení,
   doplňující hledání, opakované načtení, ověření vztahů, výběr zdrojů,

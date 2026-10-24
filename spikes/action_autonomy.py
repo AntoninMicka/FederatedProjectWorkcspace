@@ -420,8 +420,11 @@ def parse_plan(value, registry, *, allow_materialized=False):
                 and 3 <= value['countdown_seconds'] <= 5,
                 'Dynamic autonomy countdown must be 3 to 5 seconds')
         policy = value['policy']
-        _fields(policy, {'actions', 'permissions', 'execution_boundaries'},
-                'dynamic policy')
+        policy_fields = {'actions', 'permissions', 'execution_boundaries'}
+        require(isinstance(policy, dict)
+                and frozenset(policy) in {frozenset(policy_fields),
+                                          frozenset(policy_fields | {'research'})},
+                'Unknown or missing autonomy dynamic policy field')
         require(isinstance(policy['actions'], list)
                 and 0 < len(policy['actions']) <= MAX_ACTIONS,
                 'Invalid dynamic autonomy actions')
@@ -449,6 +452,25 @@ def parse_plan(value, registry, *, allow_materialized=False):
                     in policy['execution_boundaries']
                     for descriptor in policy_descriptors),
                 'Dynamic action execution boundary exceeds policy')
+        if 'research' in policy:
+            research = policy['research']
+            _fields(research, {'profile_id', 'profile_version', 'research_id',
+                               'goal', 'goal_sha256'}, 'research policy')
+            require(research['profile_id'] in {'quick-search-v1',
+                'read-and-verify-v1', 'deep-research-v1'}
+                and research['profile_version'] == '1.0',
+                'Unsupported autonomy research profile')
+            uuid(research['research_id'])
+            require(isinstance(research['goal'], str)
+                    and research['goal'].strip() == research['goal']
+                    and 0 < len(research['goal'].encode()) <= 16384
+                    and '\0' not in research['goal'],
+                    'Invalid autonomy research goal')
+            require(isinstance(research['goal_sha256'], str)
+                    and HASH.fullmatch(research['goal_sha256'])
+                    and research['goal_sha256']
+                    == hashlib.sha256(research['goal'].encode()).hexdigest(),
+                    'Autonomy research goal digest differs')
         for step in value['steps']:
             key = (step['action']['id'], step['action']['version'])
             descriptor = registry.resolve(*key)
@@ -855,6 +877,8 @@ class AutonomyQueue:
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
             result['mode'] = plan['mode']; result['privacy'] = plan['privacy']
             result['plan_schema_version'] = plan['schema_version']
+            result['policy'] = (deepcopy(plan['policy'])
+                                if plan['schema_version'] == 3 else None)
             result['budget'] = plan['budget']
             result['countdown_seconds'] = (plan['countdown_seconds']
                 if plan['schema_version'] in {2, 3} else self.countdown_seconds)
