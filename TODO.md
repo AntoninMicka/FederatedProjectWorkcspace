@@ -86,6 +86,9 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   anchor byl třetí položkou dvousloupcového gridu seznamu a zužoval obsah na
   nečitelný sloupec. UI jej ponechává pouze jako strojové `data-anchor`; hash
   celé projekce zůstává viditelný v provenance a stará durable data se nemění.
+- Opakovaná fyzická kontrola 24. 10. 2026 nad nově načtenou statickou stránkou
+  po opravách parseru a rendereru potvrdila čitelné zobrazení bez pozorované
+  vady. Druhý nezávislý statický origin tím prošel.
 - Návrh, crash hranice, reuse a omezení jsou v
   [ADR 0046](docs/adr/0046-structured-public-source-projection.md), katalogu a
   aktualizovaném [akceptačním checklistu](docs/public-source-reader-acceptance.md).
@@ -99,10 +102,9 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   test, `node --check` generovaného JavaScriptu a zopakovaná úplná sada mimo
   omezený socket sandbox: `781` testů, `28` přeskočených
   volitelných/fyzických testů.
-- Zbývá zopakovat fyzickou kontrolu druhého statického originu po opravě jeho
-  projekce a provést negativní kontrolu JavaScript-only zdroje; automatické
-  testy tabulky/seznamu, restartu a tamperingu již prošly. Bez těchto scénářů
-  dávka není `PoC validated` a není připravena k předání PR.
+- Zbývá negativní fyzická kontrola JavaScript-only zdroje; automatické testy
+  tabulky/seznamu, restartu a tamperingu již prošly. Bez tohoto scénáře dávka
+  není `PoC validated` a není připravena k předání PR.
 
 ## Akceptace
 
