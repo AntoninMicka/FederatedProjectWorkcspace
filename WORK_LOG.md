@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/f-m4-dynamic-workflow-01` z `develop`
 `023eae1` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+PR #88 byl sloučen do `develop` jako merge commit `5d74144`.
 
 - [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-A — současný kontrakt, reuse a
   crash boundaries (designed).** [ADR 0047](docs/adr/0047-dynamic-workflow-plan-revisions.md)
