@@ -75,6 +75,9 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   vlákna. Rozbalení volá pouze lokální result endpoint; předchozí chyba
   obnovovala po restartu metadata, ale plný výtah nechávala jen v dočasném
   panelu a při opakování stejného zdroje zvýraznila pouze poslední run.
+- Fyzická kontrola 24. 10. 2026 potvrdila na stejném uzlu, že po opravě zůstane
+  načtená stránka ve vlákně a její uložený výtah lze znovu načíst. Čitelnost
+  strukturované projekce byla uživatelem hodnocena jako výrazně lepší.
 - Návrh, crash hranice, reuse a omezení jsou v
   [ADR 0046](docs/adr/0046-structured-public-source-projection.md), katalogu a
   aktualizovaném [akceptačním checklistu](docs/public-source-reader-acceptance.md).
@@ -83,9 +86,10 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   omezený socket sandbox prošla:
   `780` testů, `28` přeskočených volitelných/fyzických testů. `py_compile`,
   `node --check` generovaného JavaScriptu a `git diff --check` prošly.
-- Zbývá fyzická desktop/web akceptace nad nejméně dvěma skutečnými statickými
-  stránkami, kontrola tabulky/seznamu a restartu. Bez ní dávka není
-  `PoC validated` a není připravena k předání PR.
+- Zbývá fyzická kontrola druhého nezávislého statického originu a negativního
+  JavaScript-only zdroje; automatické testy tabulky/seznamu, restartu a
+  tamperingu již prošly. Bez těchto dvou scénářů dávka není `PoC validated` a
+  není připravena k předání PR.
 
 ## Akceptace
 
