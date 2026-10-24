@@ -64,22 +64,13 @@ commit `d15cec3`; evidence je ve WORK_LOG.
 doručena PR #85 jako merge commit `7dce1c4`; evidence je ve WORK_LOG.
 `F-M3-SEARCH-03` byla 24. 10. 2026 akceptována na úrovni PoC validated a
 doručena PR #86 jako merge commit `6d12902`; evidence je ve WORK_LOG.
+`F-M3-PUBLIC-SOURCE-READER-02` byla 24. 10. 2026 akceptována na úrovni PoC
+validated a doručena PR #87 jako merge commit `023eae1`; evidence je ve
+WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
+PoC validated; evidence je ve WORK_LOG a její PR do `develop` zatím nebyl
+vytvořen ani sloučen.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01 — katalog činností a dynamický plán
-  (cílová úroveň: designed → implemented).** Rozšířit uzavřený action registry
-  o typované vstupy/výstupy, předpoklady a povolené návaznosti. Aktivovaný
-  workflow smí po dokončeném kroku navrhnout, deterministicky validovat a
-  append-only přidat, zopakovat nebo ukončit činnost v rámci schváleného
-  celkového limitu. Limit je nejzazší hranice, ne povinný počet kroků;
-  rozpracovaný bounded krok se dosažením celkového limitu nepřeruší. Uživatel
-  může potvrdit přesnou novou revizi plánu a kumulativní limit zvýšit; samotný
-  countdown nebo schválení jednoho kroku jej nezvyšuje. Model pouze navrhuje,
-  nikdy nerozšiřuje oprávnění, privacy ani limity. Akceptace: append/repeat/
-  early-finish, odmítnutá neplatná návaznost, atomická revize limitu, restart
-  před/po revizi a `unknown` bez automatického retry; doménové journaly zůstanou
-  autoritou vlastních účinků.
 
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow
   (cílová úroveň: PoC validated).** Nad readerem 02 a dynamickým katalogem

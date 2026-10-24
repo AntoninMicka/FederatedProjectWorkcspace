@@ -1193,7 +1193,7 @@ uzavřený.
   Dávka dosáhla 24. 10. 2026 úrovně PoC validated včetně dvou statických
   originů a JavaScript-only odmítnutí; evidence je ve
   [WORK_LOG](WORK_LOG.md#f-m3-public-source-reader-02--strukturovaná-čitelná-projekce--2026-10-24).
-  Doručení feature PR do `develop` zůstává otevřené.
+  PR #87 byl doručen do `develop` jako merge commit `023eae1`.
 - [x] **F-M3-EXPLICIT-TASK-ROUTING-01 — Explicitní zdroje, výstup a vykonání:**
   aplikace v režimu Zadání úkolu odděluje podklady, jediný výstup a backend,
   vybírá přesnou roli/schéma a u externího modelu nepovolí interní artefakty.

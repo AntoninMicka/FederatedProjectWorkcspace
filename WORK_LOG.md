@@ -5,12 +5,68 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M4-DYNAMIC-WORKFLOW-01 — katalog činností a dynamický plán — 2026-10-24
+
+Dávka vznikla na větvi `feature/f-m4-dynamic-workflow-01` z `develop`
+`023eae1` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-A — současný kontrakt, reuse a
+  crash boundaries (designed).** [ADR 0047](docs/adr/0047-dynamic-workflow-plan-revisions.md)
+  odděluje statickou policy, kumulativní limit a append-only revize a určuje
+  autoritu orchestračního a doménových journalů. Reuse/reject je zaznamenán v
+  [REUSE_CATALOG](REUSE_CATALOG.md).
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-B — typovaný katalog a validátor
+  návazností (implemented).** Action descriptor v2 uzavírá typy vstupů a
+  výstupů, preconditions, verzované successor hrany, typované bindingy a
+  execution boundary. Neznámá či nekompatibilní akce a pokus o rozšíření
+  permissions, privacy nebo boundary selžou před změnou plánu.
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-C — append-only revize plánu a
+  limitu (implemented).** Plán v3 a journal v5 podporují přesně potvrzené
+  `append`, `repeat` a `finish`. Dokončená historie je neměnná; zvýšení
+  kumulativního limitu je atomicky svázané s novou revizí a stale souběh se
+  odmítne. Migrace zachová původní plán jako revizi 1.
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-D — orchestrace, UI a recovery
+  (implemented).** Sdílené desktop/web API a UI zobrazují aktuální plán,
+  důvod, dopad, audit a zbývající step/cost/time limit. Confirmation digest
+  lze potvrdit jen z živého UI; heartbeat revizi nepotvrzuje ani neopakuje.
+  Editor zachovává otevřený stav, draft a kurzor a během aktivního psaní se
+  nepřekreslí.
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-E — regrese a akceptace (PoC
+  validated).** Automatické testy ověřují append, repeat, early-finish,
+  neplatné návaznosti, atomické zvýšení limitu, stale souběh, restartové
+  hranice, rollback a replay, `unknown` bez retry a zachování autority
+  doménových journalů. Uživatel fyzicky ověřil ruční read-only workflow,
+  stabilní editor přes heartbeat, čekající revizi po restartu, potvrzený
+  append se zvýšením limitu, repeat s novým step ID a `repeat_of`, explicitní
+  finish, úplnou historii i nezměněný Git HEAD a pracovní strom projektu.
+
+### Ověření, recovery a omezení
+
+Poslední úplná sada `python3 -m unittest discover -s tests -v` mimo
+socketově omezený sandbox skončila **789 testy bez selhání, z toho 28
+podmíněně přeskočeno**. První omezený běh selhal výhradně na 67 pokusech
+vytvořit loopback socket s `PermissionError`; opakování s povolenými lokálními
+sockety prošlo. Relevantní Python moduly prošly `py_compile`, generovaný
+JavaScript `node --check` a finální diff `git diff --check`.
+
+Pád před commitem revize zanechá původní plán; ztracená odpověď po commitu se
+replayuje bez další revize nebo kroku. Restart čekající návrh zachová, odpojí
+UI a nic automaticky nepotvrdí. `dispatching` s neurčitým doménovým účinkem
+zůstává terminální `unknown` bez retry. Projektový zápis nadále vyžaduje
+vlastní potvrzenou publikační operaci.
+
+Tato feature dodává obecný katalog a revizní mechanismus, nikoli automatický
+výzkumný proces v chatu. Dynamické fáze `vyhledat → načíst → ověřit → vybrat
+→ analyzovat → sestavit zprávu` zůstávají v navazující samostatné dávce
+`F-M4-RESEARCH-WORKFLOW-01`.
+
 ## F-M3-PUBLIC-SOURCE-READER-02 — strukturovaná čitelná projekce — 2026-10-24
 
 Dávka vznikla na větvi
 `feature/f-m3-public-source-reader-02-structured-projection` z `develop`
 `6d12902` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+PR #87 byl sloučen do `develop` jako merge commit `023eae1`.
 
 - [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-A — parser a reuse kontrakt
   (designed).** ADR 0046 adaptuje stdlib `HTMLParser`, existující
