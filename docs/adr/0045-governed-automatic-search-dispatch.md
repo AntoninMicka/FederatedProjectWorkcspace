@@ -5,10 +5,11 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0045 — Řízený automatický dispatch iterativního hledání
 
-Datum: 2026-10-23. Stav: **přijato** v `F-M3-SEARCH-03`; backendový adapter,
-plán v2, dynamická materializace kroku a migrace autonomy journalu jsou
-implementované v úkolu B. Uživatelské ovládání a fyzická akceptace zůstávají
-otevřené v úkolech C–D. Rozšiřuje
+Datum: 2026-10-23. Stav: **přijato a PoC validated** v `F-M3-SEARCH-03`;
+backendový adapter, plán v2, dynamická materializace kroku, migrace autonomy
+journalu a uživatelské ovládání jsou implementované. Hlavní automatický
+průchod byl fyzicky akceptován 24. 10. 2026; restartové a chybové hranice
+dokládají automatické testy a evidence ve WORK_LOG. Rozšiřuje
 [ADR 0008](0008-context-and-publication-contracts.md) a
 [ADR 0044](0044-governed-orchestration-autonomy.md).
 
