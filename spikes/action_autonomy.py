@@ -28,6 +28,11 @@ PRIVACY = {'public', 'project', 'confidential', 'local-only'}
 EFFECTS = {'read-only', 'external-request', 'role-handoff', 'local-content-create'}
 CONFIRMATIONS = {'none', 'before-dispatch', 'exact-local-output'}
 MODES = {'manual', 'automatic'}
+VALUE_TYPES = {'string', 'non-empty-string', 'nullable-string', 'integer',
+               'positive-integer', 'boolean', 'uuid', 'sha256', 'git-head',
+               'privacy', 'object', 'array'}
+EXECUTION_BOUNDARIES = {'local-node', 'private-network', 'external-network',
+                        'project-write'}
 REVIEWED_ACTIONS = Path(__file__).resolve().parents[1] / 'modules' / 'orchestration-actions'
 
 
@@ -73,13 +78,63 @@ def _input_identifiers(value):
     require(len(value) == len(set(value)), 'Duplicate autonomy required input')
 
 
+def _typed_fields(value, required, field):
+    require(isinstance(value, dict) and 0 < len(value) <= 32
+            and set(value) == set(required), f'Invalid autonomy {field}')
+    for key, value_type in value.items():
+        require(isinstance(key, str) and INPUT_IDENTIFIER.fullmatch(key)
+                and value_type in VALUE_TYPES,
+                f'Invalid autonomy {field}')
+
+
+def _validate_typed_value(value, value_type, field):
+    valid = False
+    if value_type == 'string':
+        valid = isinstance(value, str) and len(value.encode()) <= 65536 and '\0' not in value
+    elif value_type == 'non-empty-string':
+        valid = (isinstance(value, str) and value.strip() == value
+                 and 0 < len(value.encode()) <= 65536 and '\0' not in value)
+    elif value_type == 'nullable-string':
+        valid = (value is None or (isinstance(value, str)
+                 and len(value.encode()) <= 65536 and '\0' not in value))
+    elif value_type == 'integer':
+        valid = type(value) is int
+    elif value_type == 'positive-integer':
+        valid = type(value) is int and value > 0
+    elif value_type == 'boolean':
+        valid = type(value) is bool
+    elif value_type == 'uuid':
+        try:
+            uuid(value); valid = True
+        except Exception:
+            valid = False
+    elif value_type == 'sha256':
+        valid = isinstance(value, str) and bool(HASH.fullmatch(value))
+    elif value_type == 'git-head':
+        valid = isinstance(value, str) and bool(GIT_HEAD.fullmatch(value))
+    elif value_type == 'privacy':
+        valid = value in PRIVACY
+    elif value_type == 'object':
+        valid = isinstance(value, dict)
+    elif value_type == 'array':
+        valid = isinstance(value, list) and len(value) <= 1024
+    require(valid, f'Invalid autonomy typed field {field}')
+    canonical(value)
+
+
 def parse_action_descriptor(data):
     value = parse_json(data)
-    _fields(value, {'schema_version', 'action_id', 'version', 'display_name',
-                    'effect', 'permissions', 'privacy', 'required_inputs',
-                    'max_cost_units', 'automatable', 'confirmation'},
-            'action descriptor')
-    require(value['schema_version'] == 1 and type(value['schema_version']) is int,
+    require(isinstance(value, dict) and type(value.get('schema_version')) is int,
+            'Unsupported autonomy action schema')
+    version = value['schema_version']
+    fields = {'schema_version', 'action_id', 'version', 'display_name',
+              'effect', 'permissions', 'privacy', 'required_inputs',
+              'max_cost_units', 'automatable', 'confirmation'}
+    if version == 2:
+        fields |= {'input_types', 'output_types', 'preconditions', 'successors',
+                   'execution_boundary'}
+    _fields(value, fields, 'action descriptor')
+    require(version in {1, 2},
             'Unsupported autonomy action schema')
     _identifier(value['action_id'], 'action ID')
     require(isinstance(value['version'], str) and VERSION.fullmatch(value['version']),
@@ -105,6 +160,42 @@ def parse_action_descriptor(data):
     require(value['effect'] != 'local-content-create'
             or value['confirmation'] == 'exact-local-output',
             'Local content creation requires exact output confirmation')
+    if version == 2:
+        _typed_fields(value['input_types'], value['required_inputs'], 'input types')
+        require(isinstance(value['output_types'], dict)
+                and 0 < len(value['output_types']) <= 32,
+                'Invalid autonomy output types')
+        _typed_fields(value['output_types'], value['output_types'], 'output types')
+        _identifiers(value['preconditions'], 'precondition', allow_empty=True)
+        require(value['execution_boundary'] in EXECUTION_BOUNDARIES,
+                'Unsupported autonomy execution boundary')
+        require(isinstance(value['successors'], list)
+                and len(value['successors']) <= MAX_ACTIONS,
+                'Invalid autonomy successor rules')
+        seen_successors = set()
+        for successor in value['successors']:
+            _fields(successor, {'action', 'bindings'}, 'successor rule')
+            _fields(successor['action'], {'id', 'version'}, 'successor action')
+            _identifier(successor['action']['id'], 'successor action ID')
+            require(isinstance(successor['action']['version'], str)
+                    and VERSION.fullmatch(successor['action']['version']),
+                    'Invalid autonomy successor action version')
+            key = (successor['action']['id'], successor['action']['version'])
+            require(key not in seen_successors, 'Duplicate autonomy successor')
+            seen_successors.add(key)
+            require(isinstance(successor['bindings'], list)
+                    and len(successor['bindings']) <= 32,
+                    'Invalid autonomy successor bindings')
+            seen_bindings = set()
+            for binding in successor['bindings']:
+                _fields(binding, {'output', 'input'}, 'successor binding')
+                require(all(isinstance(binding[item], str)
+                            and INPUT_IDENTIFIER.fullmatch(binding[item])
+                            for item in ('output', 'input')),
+                        'Invalid autonomy successor binding')
+                pair = (binding['output'], binding['input'])
+                require(pair not in seen_bindings, 'Duplicate autonomy successor binding')
+                seen_bindings.add(pair)
     return value
 
 
@@ -119,6 +210,21 @@ class ActionRegistry:
             key = (parsed['action_id'], parsed['version'])
             require(key not in self._actions, 'Duplicate autonomy action')
             self._actions[key] = parsed
+        for descriptor in self._actions.values():
+            if descriptor['schema_version'] != 2:
+                continue
+            for successor in descriptor['successors']:
+                key = (successor['action']['id'], successor['action']['version'])
+                target = self._actions.get(key)
+                require(target is not None and target['schema_version'] == 2,
+                        'Autonomy successor is not a typed action')
+                for binding in successor['bindings']:
+                    output_type = descriptor['output_types'].get(binding['output'])
+                    input_type = target['input_types'].get(binding['input'])
+                    require(output_type is not None and input_type is not None,
+                            'Autonomy successor binding references an unknown field')
+                    require(output_type == input_type,
+                            'Autonomy successor binding types differ')
 
     def resolve(self, action_id, version):
         value = self._actions.get((action_id, version))
@@ -127,6 +233,67 @@ class ActionRegistry:
 
     def list(self):
         return [deepcopy(self._actions[key]) for key in sorted(self._actions)]
+
+    @staticmethod
+    def _validate_fields(value, field_types, field):
+        require(isinstance(value, dict) and set(value) == set(field_types),
+                f'Autonomy {field} fields differ from registry')
+        for name, value_type in field_types.items():
+            _validate_typed_value(value[name], value_type, name)
+
+    def validate_input(self, descriptor, value):
+        if descriptor['schema_version'] == 2:
+            self._validate_fields(value, descriptor['input_types'], 'input')
+
+    def validate_output(self, descriptor, value):
+        if descriptor['schema_version'] == 2:
+            self._validate_fields(value, descriptor['output_types'], 'output')
+
+    def validate_transition(self, predecessors, step, *, available_preconditions,
+                            permissions, allowed_privacy, allowed_boundaries):
+        require(isinstance(predecessors, list) and len(predecessors) <= MAX_STEPS,
+                'Invalid autonomy transition predecessors')
+        require(isinstance(available_preconditions, (set, frozenset)),
+                'Invalid autonomy transition preconditions')
+        require(isinstance(step, dict) and isinstance(step.get('action'), dict)
+                and set(step['action']) == {'id', 'version'}
+                and isinstance(step.get('input'), dict),
+                'Invalid autonomy transition step')
+        descriptor = self.resolve(step['action']['id'], step['action']['version'])
+        require(descriptor['schema_version'] == 2,
+                'Dynamic transition requires a typed action')
+        self.validate_input(descriptor, step['input'])
+        require(set(descriptor['preconditions']) <= set(available_preconditions),
+                'Autonomy transition preconditions are not satisfied')
+        require(set(descriptor['permissions']) <= set(permissions),
+                'Autonomy transition expands permissions')
+        require(step.get('privacy') in descriptor['privacy']
+                and step['privacy'] in set(allowed_privacy),
+                'Autonomy transition expands privacy')
+        require(descriptor['execution_boundary'] in set(allowed_boundaries),
+                'Autonomy transition expands execution boundary')
+        for predecessor in predecessors:
+            _fields(predecessor, {'action', 'result'}, 'transition predecessor')
+            require(isinstance(predecessor['action'], dict)
+                    and set(predecessor['action']) == {'id', 'version'}
+                    and isinstance(predecessor['result'], dict),
+                    'Invalid autonomy transition predecessor')
+            source = self.resolve(predecessor['action']['id'],
+                                  predecessor['action']['version'])
+            require(source['schema_version'] == 2,
+                    'Dynamic transition predecessor is not typed')
+            rule = next((item for item in source['successors']
+                         if item['action'] == step['action']), None)
+            require(rule is not None, 'Autonomy transition is not allowed')
+            for binding in rule['bindings']:
+                require(binding['output'] in predecessor['result'],
+                        'Autonomy transition required output is missing')
+            self.validate_output(source, predecessor['result'])
+            for binding in rule['bindings']:
+                require(predecessor['result'][binding['output']]
+                        == step['input'][binding['input']],
+                        'Autonomy transition output differs from successor input')
+        return deepcopy(descriptor)
 
 
 def load_action_registry(directory=REVIEWED_ACTIONS):
@@ -198,6 +365,7 @@ def parse_plan(value, registry, *, allow_materialized=False):
                 and set(step['input']) == set(descriptor['required_inputs']),
                 'Autonomy action inputs differ from registry')
         canonical(step['input'])
+        registry.validate_input(descriptor, step['input'])
         if descriptor['effect'] == 'local-content-create':
             _validate_local_output(step['input'])
         if descriptor['action_id'] == 'search.iterative-query':
@@ -943,6 +1111,7 @@ class AutonomyQueue:
                 'expected_head': plan['expected_head'],
                 'approval_digest': stored['approval_digest']}
             result = handler(deepcopy(planned['input']), execution)
+            self.registry.validate_output(descriptor, result)
             raw = canonical(result)
         except UnknownEffect as exc:
             return self._finish_effect(workflow_id, planned['step_id'], node_id, user_id,

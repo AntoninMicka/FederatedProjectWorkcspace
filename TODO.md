@@ -45,12 +45,18 @@ mechanismus, nikoli search-only pipeline.
   autority obou journalů a recovery včetně souběhu, pádu před/po revizi a
   `unknown` doménového účinku. Reuse/reject je zaznamenán v
   [REUSE_CATALOG](REUSE_CATALOG.md).
-- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-B — typovaný katalog a validátor
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-B — typovaný katalog a validátor
   návazností (cílová úroveň: implemented).** Deklarovat bounded vstupy,
   výstupy, předpoklady a povolené následníky; odmítnout neznámou akci,
   nekompatibilní vazbu, chybějící výstup a pokus o rozšíření oprávnění,
-  privacy nebo execution boundary.
-- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01-C — append-only revize plánu a
+  privacy nebo execution boundary. Výsledek: action descriptor v2 uzavírá
+  typy vstupů/výstupů, preconditions, verzované successor hrany s typovanými
+  bindingy a execution boundary. Registry kontroluje celý graf při načtení,
+  plán přesný vstup a queue výstup handleru; `validate_transition` fail-closed
+  ověřuje výstupy předchůdců i aktivovanou policy. Ověření: 18 cílených testů
+  `tests.test_action_autonomy` a úplná sada 783 testů prošly, 28 testů bylo
+  přeskočeno podle svých podmínek prostředí.
+- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-C — append-only revize plánu a
   limitu (cílová úroveň: implemented).** Po dokončeném kroku umožnit přesný
   návrh přidání, opakování nebo předčasného ukončení. Zvýšení kumulativního
   limitu musí být atomicky svázané s explicitně potvrzenou novou revizí;

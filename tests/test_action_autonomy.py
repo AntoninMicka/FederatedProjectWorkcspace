@@ -25,7 +25,21 @@ class ActionAutonomyTests(unittest.TestCase):
         self.calls = []
         def handler(name):
             def invoke(value, execution):
-                self.calls.append((name, value)); return {'kind': name, 'ok': True}
+                self.calls.append((name, value))
+                if name == 'analysis':
+                    return {'schema_version': 1, 'kind': 'analysis',
+                        'project_id': self.project_id, 'project_commit': self.head,
+                        'selection_sha256': value['selection_sha256']}
+                if name == 'external':
+                    return {'schema_version': 1, 'kind': 'external',
+                        'approval_id': value['approval_id'], 'state': 'recorded'}
+                if name == 'handoff':
+                    return {'schema_version': 1, 'kind': 'handoff',
+                        'workflow_id': value['workflow_id'], 'step_id': str(uuid4()),
+                        'state': 'prepared', 'approval_digest': '5' * 64}
+                return {'schema_version': 1, 'kind': 'artifact',
+                    'project_id': self.project_id, 'artifact_id': str(uuid4()),
+                    'commit_id': self.head, 'receipt_sha256': '6' * 64}
             return invoke
         self.handlers = {
             ('analysis.read-only', '1.0'): handler('analysis'),
@@ -84,6 +98,76 @@ class ActionAutonomyTests(unittest.TestCase):
             parse_action_descriptor(json.dumps(local).encode())
         with self.assertRaises(ValidationError):
             ActionRegistry([dict(self.registry.list()[0], endpoint='secret')])
+
+    def test_typed_registry_validates_successors_outputs_and_policy_boundary(self):
+        self.assertTrue(all(item['schema_version'] == 2
+                            for item in self.registry.list()))
+        selection = '1' * 64
+        previous = {'action': {'id': 'analysis.read-only', 'version': '1.0'},
+            'result': {'schema_version': 1, 'kind': 'analysis',
+                'project_id': self.project_id, 'project_commit': self.head,
+                'selection_sha256': selection}}
+        following = self.step('analysis.read-only',
+                              {'selection_sha256': selection})
+        descriptor = self.registry.validate_transition([previous], following,
+            available_preconditions={'project-head-current'},
+            permissions={'project-read'}, allowed_privacy={'project'},
+            allowed_boundaries={'local-node'})
+        self.assertEqual(descriptor['execution_boundary'], 'local-node')
+
+        missing = deepcopy(previous); del missing['result']['selection_sha256']
+        with self.assertRaisesRegex(ValidationError, 'required output is missing'):
+            self.registry.validate_transition([missing], following,
+                available_preconditions={'project-head-current'},
+                permissions={'project-read'}, allowed_privacy={'project'},
+                allowed_boundaries={'local-node'})
+        malformed = {'action': previous['action'], 'result': None}
+        with self.assertRaisesRegex(ValidationError, 'transition predecessor'):
+            self.registry.validate_transition([malformed], following,
+                available_preconditions={'project-head-current'},
+                permissions={'project-read'}, allowed_privacy={'project'},
+                allowed_boundaries={'local-node'})
+
+        artifact = {'action': {'id': 'artifact.create-local', 'version': '1.0'},
+            'result': {'schema_version': 1, 'kind': 'artifact',
+                'project_id': self.project_id, 'artifact_id': str(uuid4()),
+                'commit_id': self.head, 'receipt_sha256': '2' * 64}}
+        with self.assertRaisesRegex(ValidationError, 'not allowed'):
+            self.registry.validate_transition([artifact], following,
+                available_preconditions={'project-head-current'},
+                permissions={'project-read'}, allowed_privacy={'project'},
+                allowed_boundaries={'local-node'})
+
+        external = self.step('query.external', {'approval_id': str(uuid4()),
+            'preview_sha256': '3' * 64, 'privacy': 'public'}, privacy='public')
+        with self.assertRaisesRegex(ValidationError, 'permissions'):
+            self.registry.validate_transition([previous], external,
+                available_preconditions={'external-preview-current'}, permissions=set(),
+                allowed_privacy={'public'}, allowed_boundaries={'external-network'})
+        with self.assertRaisesRegex(ValidationError, 'execution boundary'):
+            self.registry.validate_transition([previous], external,
+                available_preconditions={'external-preview-current'},
+                permissions={'external-dispatch'}, allowed_privacy={'public'},
+                allowed_boundaries={'local-node'})
+
+    def test_typed_registry_rejects_bad_binding_and_handler_output(self):
+        actions = self.registry.list()
+        analysis = next(item for item in actions
+                        if item['action_id'] == 'analysis.read-only')
+        analysis['successors'][0]['bindings'][0]['output'] = 'project_id'
+        with self.assertRaisesRegex(ValidationError, 'binding types differ'):
+            ActionRegistry(actions)
+
+        def incomplete(value, execution):
+            return {'schema_version': 1, 'kind': 'analysis'}
+        step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue({('analysis.read-only', '1.0'): incomplete})
+        self.prepare_and_activate(queue, self.plan([step]))
+        with self.assertRaisesRegex(ValidationError, 'output fields differ'):
+            self.advance(queue)
+        failed = queue.get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((failed['state'], failed['steps'][0]['state']),
+                         ('failed', 'failed'))
 
     def test_version_one_journal_is_migrated_in_place(self):
         path = self.state / 'autonomy-queue.sqlite'
@@ -430,7 +514,7 @@ class ActionAutonomyTests(unittest.TestCase):
             'content_type': 'text/markdown', 'content_sha256': 'bad',
             'privacy': 'project', 'provenance': {'source': 'workflow'},
             'request': {'kind': 'test-publication'}})
-        with self.assertRaisesRegex(ValidationError, 'output hash'):
+        with self.assertRaisesRegex(ValidationError, 'content_sha256'):
             parse_plan(self.plan([output]), self.registry)
 
 

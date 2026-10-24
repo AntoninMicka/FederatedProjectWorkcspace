@@ -6,8 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0047 — Typovaný katalog a append-only revize dynamického plánu
 
 Datum: 2026-10-24. Stav: **navrženo** v
-`F-M4-DYNAMIC-WORKFLOW-01-A`; implementace a validace patří do navazujících
-bodů téže dávky. Rozšiřuje [ADR 0044](0044-governed-orchestration-autonomy.md)
+`F-M4-DYNAMIC-WORKFLOW-01-A`; typovaný katalog a validátor návazností jsou
+implementované v bodu B, revize plánu a jejich UI/recovery patří do
+navazujících bodů téže dávky. Rozšiřuje [ADR 0044](0044-governed-orchestration-autonomy.md)
 a zobecňuje search-only continuation z
 [ADR 0045](0045-governed-automatic-search-dispatch.md).
 
