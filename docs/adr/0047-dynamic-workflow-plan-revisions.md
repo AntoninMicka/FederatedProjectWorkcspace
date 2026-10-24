@@ -7,8 +7,9 @@ SPDX-License-Identifier: MPL-2.0
 
 Datum: 2026-10-24. Stav: **navrženo** v
 `F-M4-DYNAMIC-WORKFLOW-01-A`; typovaný katalog a validátor návazností jsou
-implementované v bodu B, revize plánu a jejich UI/recovery patří do
-navazujících bodů téže dávky. Rozšiřuje [ADR 0044](0044-governed-orchestration-autonomy.md)
+implementované v bodu B a append-only revize plánu i limitu v bodu C.
+Orchestrace, sdílené UI a závěrečná recovery akceptace patří do navazujících
+bodů téže dávky. Rozšiřuje [ADR 0044](0044-governed-orchestration-autonomy.md)
 a zobecňuje search-only continuation z
 [ADR 0045](0045-governed-automatic-search-dispatch.md).
 

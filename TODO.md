@@ -56,12 +56,20 @@ mechanismus, nikoli search-only pipeline.
   ověřuje výstupy předchůdců i aktivovanou policy. Ověření: 18 cílených testů
   `tests.test_action_autonomy` a úplná sada 783 testů prošly, 28 testů bylo
   přeskočeno podle svých podmínek prostředí.
-- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-C — append-only revize plánu a
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-C — append-only revize plánu a
   limitu (cílová úroveň: implemented).** Po dokončeném kroku umožnit přesný
   návrh přidání, opakování nebo předčasného ukončení. Zvýšení kumulativního
   limitu musí být atomicky svázané s explicitně potvrzenou novou revizí;
-  staré revize a dokončená historie zůstávají neměnné.
-- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01-D — orchestrace, UI a recovery
+  staré revize a dokončená historie zůstávají neměnné. Výsledek: obecný plán
+  v3 váže typované akce, permissions a execution boundaries; journal v5
+  odděluje immutable aplikované revize od durable návrhů. `append`, `repeat`
+  a `finish` se aplikují pod `BEGIN IMMEDIATE`, stale souběh se odmítá a
+  zvýšení kteréhokoli kumulativního limitu čeká na přesný confirmation digest
+  v živém UI. Migrace v4 zachová existující plán jako revizi 1; rollback před
+  commitem a replay po ztracené odpovědi nevytvoří druhou revizi ani krok.
+  Ověření: 22 cílených testů `tests.test_action_autonomy` a úplná sada 787
+  testů prošly, 28 testů bylo přeskočeno podle podmínek prostředí.
+- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-D — orchestrace, UI a recovery
   (cílová úroveň: implemented).** Zobrazit aktuální plán, důvod a dopad změny,
   zbývající limit a samostatné potvrzení revize. Restart před/po revizi,
   `unknown` doménový účinek a ztráta UI musí zůstat fail-closed bez

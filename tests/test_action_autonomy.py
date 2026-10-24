@@ -63,6 +63,33 @@ class ActionAutonomyTests(unittest.TestCase):
             'budget': {'max_steps': 16, 'max_cost_units': max_cost,
                        'max_seconds': 3600}, 'steps': steps}
 
+    def dynamic_plan(self, steps, *, max_steps=4, max_cost=4):
+        return {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.head,
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': [
+                {'id': 'analysis.read-only', 'version': '1.0'}],
+                'permissions': ['project-read'],
+                'execution_boundaries': ['local-node']},
+            'budget': {'max_steps': max_steps, 'max_cost_units': max_cost,
+                       'max_seconds': 3600}, 'steps': steps}
+
+    def complete_manual_step(self, queue, step):
+        awaiting = self.advance(queue)
+        self.assertEqual(awaiting['steps'][-1]['state'], 'awaiting-approval')
+        queue.approve(self.workflow_id, step['step_id'], self.node_id, self.user_id)
+        return self.advance(queue)
+
+    def revision(self, workflow, kind, *, step=None, repeat_of=None,
+                 budget=None, proposal_id=None):
+        return {'schema_version': 1,
+            'proposal_id': proposal_id or str(uuid4()),
+            'workflow_id': self.workflow_id,
+            'base_revision': workflow['plan_revision'],
+            'base_plan_digest': workflow['plan_revisions'][-1]['plan_digest'],
+            'kind': kind, 'reason': f'Test {kind}', 'step': step,
+            'repeat_of': repeat_of, 'budget': budget or workflow['budget']}
+
     def queue(self, handlers=None):
         return AutonomyQueue(self.state, self.registry,
             self.handlers if handlers is None else handlers, countdown_seconds=0)
@@ -192,7 +219,7 @@ class ActionAutonomyTests(unittest.TestCase):
         path.chmod(0o600)
         queue = self.queue()
         with closing(sqlite3.connect(queue.path)) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 4)
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 5)
             self.assertIn('ui_seen_at', [row[1] for row in
                                         db.execute('PRAGMA table_info(workflows)')])
             self.assertIn('not_before', [row[1] for row in
@@ -202,6 +229,54 @@ class ActionAutonomyTests(unittest.TestCase):
             self.assertEqual([row[1] for row in
                 db.execute('PRAGMA table_info(step_revisions)')],
                 ['workflow_id', 'ordinal', 'revision', 'step_json', 'cancelled_at'])
+            self.assertIn('plan_revision', [row[1] for row in
+                                            db.execute('PRAGMA table_info(workflows)')])
+            self.assertEqual([row[1] for row in
+                db.execute('PRAGMA table_info(plan_revisions)')],
+                ['workflow_id', 'revision', 'proposal_id', 'kind', 'reason',
+                 'previous_plan_digest', 'plan_digest', 'plan_json',
+                 'approval_digest', 'applied_at'])
+
+    def test_version_four_nonempty_journal_migrates_with_initial_plan_revision(self):
+        step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        plan = self.plan([step]); raw = json.dumps(plan, ensure_ascii=False,
+            sort_keys=True, separators=(',', ':')).encode()
+        plan_digest = digest(raw); created = '2026-10-24T10:00:00Z'
+        descriptor = self.registry.resolve('analysis.read-only', '1.0')
+        path = self.state / 'autonomy-queue.sqlite'
+        with closing(sqlite3.connect(path)) as db:
+            db.executescript('''
+                CREATE TABLE schema_info(version INTEGER NOT NULL);
+                INSERT INTO schema_info VALUES(4);
+                CREATE TABLE settings(global_paused INTEGER NOT NULL);
+                INSERT INTO settings VALUES(0);
+                CREATE TABLE workflows(workflow_id TEXT PRIMARY KEY,node_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,project_id TEXT NOT NULL,plan_digest TEXT NOT NULL,
+                    plan_json BLOB NOT NULL,state TEXT NOT NULL,ui_attached INTEGER NOT NULL,
+                    ui_seen_at TEXT,spent_cost INTEGER NOT NULL,created_at TEXT NOT NULL,
+                    activated_at TEXT,activation_digest TEXT,updated_at TEXT NOT NULL,error TEXT);
+                CREATE TABLE steps(workflow_id TEXT NOT NULL,ordinal INTEGER NOT NULL,
+                    step_id TEXT NOT NULL UNIQUE,action_id TEXT NOT NULL,
+                    action_version TEXT NOT NULL,descriptor_digest TEXT NOT NULL,
+                    state TEXT NOT NULL,approval_digest TEXT,not_before TEXT,
+                    result_json BLOB,error TEXT,PRIMARY KEY(workflow_id,ordinal));
+                CREATE TABLE step_revisions(workflow_id TEXT NOT NULL,ordinal INTEGER NOT NULL,
+                    revision INTEGER NOT NULL,step_json BLOB NOT NULL,cancelled_at TEXT NOT NULL,
+                    PRIMARY KEY(workflow_id,ordinal,revision));
+            ''')
+            db.execute('INSERT INTO workflows VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                (self.workflow_id, self.node_id, self.user_id, self.project_id,
+                 plan_digest, raw, 'proposed', 0, None, 0, created, None, None,
+                 created, None))
+            db.execute('INSERT INTO steps VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                (self.workflow_id, 0, step['step_id'], 'analysis.read-only', '1.0',
+                 digest(descriptor), 'queued', None, None, None, None))
+            db.commit()
+        path.chmod(0o600)
+        migrated = self.queue().get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((migrated['plan_revision'], len(migrated['plan_revisions'])),
+                         (1, 1))
+        self.assertEqual(migrated['plan_revisions'][0]['plan_digest'], plan_digest)
 
     def test_automatic_mode_is_only_a_proposal_until_exact_opt_in(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
@@ -422,6 +497,113 @@ class ActionAutonomyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'pending step'):
             queue.append_step(self.workflow_id, search_step('third', 3),
                               self.node_id, self.user_id)
+
+    def test_dynamic_append_repeat_and_finish_keep_immutable_plan_history(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue(); active = self.prepare_and_activate(
+            queue, self.dynamic_plan([first]))
+        completed = self.complete_manual_step(queue, first)
+        self.assertEqual(completed['steps'][0]['state'], 'completed')
+
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        appended = queue.propose_revision(self.revision(completed, 'append', step=second),
+            self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        self.assertEqual((appended['plan_revision'], len(appended['steps'])), (2, 2))
+        self.assertEqual(appended['revision_proposals'][-1]['state'], 'applied')
+        completed = self.complete_manual_step(queue, second)
+
+        repeated = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                             depends=[second['step_id']])
+        repeated_projection = queue.propose_revision(self.revision(
+            completed, 'repeat', step=repeated, repeat_of=second['step_id']),
+            self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        self.assertEqual(repeated_projection['plan_revision'], 3)
+        self.assertEqual(repeated_projection['plan_revisions'][-1]['kind'], 'repeat')
+        completed = self.complete_manual_step(queue, repeated)
+
+        finished = queue.propose_revision(self.revision(completed, 'finish'),
+            self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        self.assertEqual((finished['state'], finished['plan_revision']), ('completed', 4))
+        self.assertEqual([len(item['plan']['steps'])
+                          for item in finished['plan_revisions']], [1, 2, 3, 3])
+        self.assertEqual([item['state'] for item in finished['steps']],
+                         ['completed', 'completed', 'completed'])
+        self.assertEqual(active['activation_digest'], finished['activation_digest'])
+
+    def test_budget_increase_requires_exact_live_confirmation_and_is_atomic(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue(); self.prepare_and_activate(
+            queue, self.dynamic_plan([first], max_steps=1, max_cost=1))
+        completed = self.complete_manual_step(queue, first)
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        expanded_budget = {'max_steps': 2, 'max_cost_units': 2,
+                           'max_seconds': 3600}
+        proposal = self.revision(completed, 'append', step=second,
+                                 budget=expanded_budget)
+        pending = queue.propose_revision(proposal, self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        self.assertEqual((pending['plan_revision'], len(pending['steps'])), (1, 1))
+        stored = pending['revision_proposals'][-1]
+        self.assertEqual(stored['state'], 'pending')
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            queue.confirm_revision(proposal['proposal_id'], self.node_id, self.user_id,
+                '0' * 64, available_preconditions={'project-head-current'})
+
+        restarted = self.queue()
+        with self.assertRaisesRegex(ValidationError, 'live pending'):
+            restarted.confirm_revision(proposal['proposal_id'], self.node_id,
+                self.user_id, stored['approval_digest'],
+                available_preconditions={'project-head-current'})
+        restarted.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        confirmed = restarted.confirm_revision(proposal['proposal_id'], self.node_id,
+            self.user_id, stored['approval_digest'],
+            available_preconditions={'project-head-current'})
+        self.assertEqual((confirmed['plan_revision'], confirmed['budget'],
+                          len(confirmed['steps'])), (2, expanded_budget, 2))
+        self.assertEqual(confirmed['plan_revisions'][-1]['approval_digest'],
+                         stored['approval_digest'])
+
+        stale = dict(proposal, proposal_id=str(uuid4()))
+        with self.assertRaisesRegex(ValidationError, 'stale'):
+            restarted.propose_revision(stale, self.node_id, self.user_id,
+                available_preconditions={'project-head-current'})
+
+    def test_revision_transaction_rolls_back_and_lost_response_is_idempotent(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue(); self.prepare_and_activate(queue,
+            self.dynamic_plan([first]))
+        completed = self.complete_manual_step(queue, first)
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        proposal = self.revision(completed, 'append', step=second)
+
+        def before_commit(stage):
+            if stage == 'before-revision-commit':
+                raise RuntimeError('revision crash')
+        with self.assertRaisesRegex(RuntimeError, 'revision crash'):
+            queue.propose_revision(proposal, self.node_id, self.user_id,
+                available_preconditions={'project-head-current'},
+                checkpoint=before_commit)
+        unchanged = self.queue().get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((unchanged['plan_revision'], len(unchanged['steps']),
+                          unchanged['revision_proposals']), (1, 1, []))
+
+        def after_commit(stage):
+            if stage == 'revision-applied':
+                raise RuntimeError('lost response')
+        with self.assertRaisesRegex(RuntimeError, 'lost response'):
+            queue.propose_revision(proposal, self.node_id, self.user_id,
+                available_preconditions={'project-head-current'},
+                checkpoint=after_commit)
+        replayed = queue.propose_revision(proposal, self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        self.assertEqual((replayed['plan_revision'], len(replayed['steps'])), (2, 2))
+        self.assertEqual(len(replayed['plan_revisions']), 2)
 
     def test_detach_global_pause_permissions_privacy_and_head_fail_closed(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
