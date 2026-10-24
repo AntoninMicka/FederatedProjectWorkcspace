@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sqlite3
 import tempfile
+from threading import Barrier, Thread
 import unittest
 from uuid import uuid4
 
@@ -606,6 +607,50 @@ class ActionAutonomyTests(unittest.TestCase):
             available_preconditions={'project-head-current'})
         self.assertEqual((replayed['plan_revision'], len(replayed['steps'])), (2, 2))
         self.assertEqual(len(replayed['plan_revisions']), 2)
+
+    def test_invalid_and_concurrent_revisions_fail_without_partial_history(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        queue = self.queue(); self.prepare_and_activate(queue,
+            self.dynamic_plan([first]))
+        completed = self.complete_manual_step(queue, first)
+
+        forbidden = self.step('query.external', {'approval_id': str(uuid4()),
+            'preview_sha256': '2' * 64, 'privacy': 'public'}, privacy='public',
+            depends=[first['step_id']])
+        with self.assertRaisesRegex(ValidationError, 'permissions|outside dynamic policy'):
+            queue.propose_revision(self.revision(completed, 'append', step=forbidden),
+                self.node_id, self.user_id,
+                available_preconditions={'project-head-current',
+                                         'external-preview-current'})
+        unchanged = queue.get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((unchanged['plan_revision'], unchanged['revision_proposals']),
+                         (1, []))
+
+        barrier = Barrier(2); outcomes = []
+        def propose(value):
+            contender = self.queue(); barrier.wait()
+            try:
+                projection = contender.propose_revision(value, self.node_id,
+                    self.user_id, available_preconditions={'project-head-current'})
+                outcomes.append(('applied', projection['plan_revision']))
+            except ValidationError as exc:
+                outcomes.append(('rejected', str(exc)))
+        proposals = []
+        for marker in ('1', '2'):
+            step = self.step('analysis.read-only',
+                {'selection_sha256': '1' * 64}, depends=[first['step_id']])
+            proposals.append(self.revision(completed, 'append', step=step,
+                proposal_id=str(uuid4())))
+        threads = [Thread(target=propose, args=(value,)) for value in proposals]
+        for thread in threads: thread.start()
+        for thread in threads: thread.join()
+        self.assertEqual([item[0] for item in outcomes].count('applied'), 1)
+        self.assertEqual([item[0] for item in outcomes].count('rejected'), 1)
+        self.assertIn('stale', next(item[1] for item in outcomes
+                                   if item[0] == 'rejected'))
+        current = queue.get(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((current['plan_revision'], len(current['steps']),
+                          len(current['plan_revisions'])), (2, 2, 2))
 
     def test_detach_global_pause_permissions_privacy_and_head_fail_closed(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})

@@ -876,7 +876,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <details class="autonomy-plan-editor"><summary>Načíst nebo upravit návrh plánu</summary>
 <p>Vložte celý návrh JSON. Kontrola jej pouze připraví; nic nespustí ani neuloží do projektu.</p>
 <label>Návrh plánu (JSON)<textarea id="autonomy-plan-json" rows="8" spellcheck="false"></textarea></label>
-<div class="form-actions"><button id="autonomy-plan-example" class="secondary-button" type="button">Vložit bezpečný read-only příklad</button><button id="autonomy-plan-check" type="button">Zkontrolovat návrh</button></div></details>
+<div class="form-actions"><button id="autonomy-plan-example" class="secondary-button" type="button">Vložit statický read-only příklad</button><button id="autonomy-plan-dynamic-example" class="secondary-button" type="button">Vložit dynamický read-only příklad</button><button id="autonomy-plan-check" type="button">Zkontrolovat návrh</button></div></details>
 <div class="form-actions"><button id="autonomy-refresh" class="secondary-button" type="button">Obnovit</button><button id="autonomy-global-pause" class="secondary-button" type="button">Pozastavit vše</button></div>
 <p id="autonomy-status" role="status" aria-live="polite">Otevřením načtete frontu tohoto projektu.</p><div id="autonomy-list"></div></details>
 <section id="workflow-creator-preview" hidden><h3>Creator — přesný požadavek</h3><pre></pre>
@@ -5389,6 +5389,22 @@ function autonomyButton(label,action,className='secondary-button'){
  const button=document.createElement('button');button.type='button';button.className=className;
  button.textContent=label;button.addEventListener('click',async()=>{button.disabled=true;try{await action();}catch(error){autonomyStatus.textContent=error.message;}finally{button.disabled=false;}});return button;
 }
+function dynamicRevisionDraft(workflow,kind){
+ const lastRevision=workflow.plan_revisions?.at(-1),source=[...workflow.steps].reverse().find(item=>item.state==='completed');
+ const proposal={schema_version:1,proposal_id:crypto.randomUUID(),workflow_id:workflow.workflow_id,
+  base_revision:workflow.plan_revision,base_plan_digest:lastRevision?.plan_digest,kind,
+  reason:kind==='finish'?'Cíl workflow je splněn.':kind==='repeat'?'Zopakovat dokončený krok s novou identitou.':'Pokračovat dalším kompatibilním krokem.',
+  step:null,repeat_of:null,budget:{...workflow.budget}};
+ if(kind!=='finish'){
+  if(!source)throw new Error('Revize kroku vyžaduje alespoň jeden dokončený krok.');
+  proposal.budget.max_steps=Math.max(proposal.budget.max_steps,workflow.steps.length+1);
+  proposal.budget.max_cost_units=Math.max(proposal.budget.max_cost_units,workflow.spent_cost+source.cost_units);
+  proposal.step={step_id:crypto.randomUUID(),action:{...source.action},privacy:source.privacy,
+   cost_units:source.cost_units,depends_on:[source.step_id],input:structuredClone(source.input)};
+  if(kind==='repeat')proposal.repeat_of=source.step_id;
+ }
+ return proposal;
+}
 async function autonomyRequest(path,payload={}){
  const result=await projectRequest(path,payload,120000);if(activeProject)await loadAutonomyQueue(false);return result;
 }
@@ -5428,13 +5444,20 @@ function renderAutonomyQueue(){
    const confirmRevision=autonomyButton('Potvrdit přesnou revizi',async()=>{if(!confirm(`Potvrdit změnu plánu?\n${reason.textContent}\n${impact.textContent}\n${exact.textContent}`))return;await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/revision/confirm',{workflow_id:workflow.workflow_id,proposal_id:pending.proposal_id,approval_digest:pending.approval_digest});});
    box.append(title,reason,impact,exact,confirmRevision);revisionPanels.append(box);
   }
-  if(workflow.plan_schema_version===3&&!autonomyTerminal.has(workflow.state)){
+  const revisionReady=workflow.plan_schema_version===3&&!autonomyTerminal.has(workflow.state)&&
+   !(workflow.revision_proposals||[]).some(item=>item.state==='pending')&&
+   workflow.steps.some(item=>item.state==='completed')&&workflow.steps.every(item=>['completed','cancelled'].includes(item.state));
+  if(revisionReady){
    const editor=document.createElement('details');editor.className='autonomy-revision-editor';
    const editorSummary=document.createElement('summary');editorSummary.textContent='Navrhnout přesnou změnu plánu';
    const textarea=document.createElement('textarea');textarea.rows=8;textarea.spellcheck=false;
-   const last=workflow.plan_revisions.at(-1);textarea.value=JSON.stringify({schema_version:1,proposal_id:crypto.randomUUID(),workflow_id:workflow.workflow_id,base_revision:workflow.plan_revision,base_plan_digest:last?.plan_digest,kind:'finish',reason:'Cíl workflow je splněn.',step:null,repeat_of:null,budget:workflow.budget},null,2);
+   const fill=kind=>{textarea.value=JSON.stringify(dynamicRevisionDraft(workflow,kind),null,2);};fill('finish');
+   const templates=document.createElement('div');templates.className='form-actions';
+   templates.append(autonomyButton('Přidat navazující krok',()=>fill('append')),
+    autonomyButton('Zopakovat poslední krok',()=>fill('repeat')),
+    autonomyButton('Ukončit plán',()=>fill('finish')));
    const submit=autonomyButton('Zkontrolovat a navrhnout revizi',async()=>{const proposal=JSON.parse(textarea.value);if(proposal.workflow_id!==workflow.workflow_id)throw new Error('Revize patří do jiné fronty.');await autonomyRequest('/v1/autonomy/revision/propose',proposal);});
-   editor.append(editorSummary,textarea,submit);revisionPanels.append(editor);
+   editor.append(editorSummary,templates,textarea,submit);revisionPanels.append(editor);
   }
   const actions=document.createElement('div');actions.className='form-actions';
   const attach=()=>projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});
@@ -5464,6 +5487,12 @@ document.querySelector('#autonomy-plan-example').addEventListener('click',async(
  const seed=new TextEncoder().encode(`${activeProject.id}\n${activeProject.head}`);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',seed)),byte=>byte.toString(16).padStart(2,'0')).join('');
  document.querySelector('#autonomy-plan-json').value=JSON.stringify({schema_version:1,workflow_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,mode:'automatic',privacy:'project',budget:{max_steps:1,max_cost_units:1,max_seconds:300},steps:[{step_id:crypto.randomUUID(),action:{id:'analysis.read-only',version:'1.0'},privacy:'project',cost_units:1,depends_on:[],input:{selection_sha256:hash}}]},null,2);
  autonomyStatus.textContent='Příklad je pouze vložený v editoru. Tlačítkem Zkontrolovat návrh jej připravíte bez spuštění.';
+});
+document.querySelector('#autonomy-plan-dynamic-example').addEventListener('click',async()=>{
+ if(!activeProject){autonomyStatus.textContent='Nejprve otevřete projekt.';return;}
+ const seed=new TextEncoder().encode(`${activeProject.id}\n${activeProject.head}`);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',seed)),byte=>byte.toString(16).padStart(2,'0')).join('');
+ document.querySelector('#autonomy-plan-json').value=JSON.stringify({schema_version:3,workflow_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,mode:'manual',privacy:'project',countdown_seconds:3,policy:{actions:[{id:'analysis.read-only',version:'1.0'}],permissions:['project-read'],execution_boundaries:['local-node']},budget:{max_steps:1,max_cost_units:1,max_seconds:300},steps:[{step_id:crypto.randomUUID(),action:{id:'analysis.read-only',version:'1.0'},privacy:'project',cost_units:1,depends_on:[],input:{selection_sha256:hash}}]},null,2);
+ autonomyStatus.textContent='Dynamický read-only příklad je jen v editoru. Kontrola připraví revizi 1 bez spuštění.';
 });
 document.querySelector('#autonomy-plan-check').addEventListener('click',async()=>{
  const button=document.querySelector('#autonomy-plan-check');button.disabled=true;

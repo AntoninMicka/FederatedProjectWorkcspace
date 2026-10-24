@@ -83,11 +83,19 @@ mechanismus, nikoli search-only pipeline.
   testů prošlo, úplná sada 788 testů prošla a 28 testů bylo přeskočeno podle
   podmínek prostředí; Python syntax, generovaný JavaScript a diff kontrola
   prošly.
-- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01-E — regrese a akceptace (cílová
+- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-E — regrese a akceptace (cílová
   úroveň: implemented).** Ověřit append, repeat, early-finish, odmítnutou
   neplatnou návaznost, atomickou revizi limitu, souběh, restartové hranice,
   `unknown` bez retry a zachování autority doménových journalů. Dokončit
   úplnou sadu, statické kontroly, dokumentaci a realistický fyzický průchod.
+  Průběžný výsledek: skutečný souběh dvou revizí dovolí právě jednu a stale
+  návrh odmítne; neplatná návaznost nezanechá proposal ani krok. Sdílené UI
+  nabízí dynamický read-only plán a přesné šablony `append`, `repeat` a
+  `finish`; restartový postup je v
+  [akceptačním checklistu](docs/dynamic-workflow-acceptance.md). Cílených 32
+  testů a úplná sada 789 testů prošly, 28 testů bylo přeskočeno podle podmínek
+  prostředí. Zbývá fyzicky provést checklist a zaznamenat výsledek; do té doby
+  dávka ani PR nejsou uzavřené.
 
 ## Akceptace
 

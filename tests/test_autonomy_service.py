@@ -202,12 +202,14 @@ class AutonomyServiceTests(unittest.TestCase):
                          '/v1/autonomy/pause-all'} <= DesktopHandler.post_paths)
         for marker in ('id="autonomy-queue"', 'id="autonomy-plan-json"',
                        'id="autonomy-plan-example"',
+                       'id="autonomy-plan-dynamic-example"',
                        '#autonomy-list', '.search-autonomy{',
                        "autonomyRequest('/v1/autonomy/advance'",
                        "projectRequest('/v1/autonomy/search/prepare'",
                        "autonomyRequest('/v1/autonomy/send-now'",
                        "autonomyRequest('/v1/autonomy/revision/propose'",
                        "autonomyRequest('/v1/autonomy/revision/confirm'",
+                       "dynamicRevisionDraft(workflow,kind)",
                        'className=\'search-autonomy-countdown\'',
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else

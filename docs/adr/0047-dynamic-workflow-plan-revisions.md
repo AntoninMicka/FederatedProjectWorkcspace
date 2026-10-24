@@ -148,3 +148,7 @@ recovery kontraktem; nekopíruje se z ní kód ani neveřejné detaily.
 
 Konkrétní research akce, fáze a jejich profily nejsou součástí tohoto
 rozhodnutí; patří do `F-M4-RESEARCH-WORKFLOW-01`.
+
+Realistický read-only průchod přes revize, restart před potvrzením limitu a
+kontrolu nezměněného projektového HEAD popisuje
+[akceptační checklist dynamického workflow](../dynamic-workflow-acceptance.md).
