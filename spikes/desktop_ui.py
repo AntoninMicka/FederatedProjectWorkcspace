@@ -5365,6 +5365,7 @@ const autonomyStatus=document.querySelector('#autonomy-status');
 const autonomyList=document.querySelector('#autonomy-list');
 let autonomyQueue={global_paused:false,workflows:[]},autonomyHeartbeatBusy=false;
 const autonomyTimers=new Map();
+const autonomyViewState=new Map();
 const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
 function isSearchAutonomy(workflow){
  return workflow.steps?.some(step=>step.action?.id==='search.iterative-query');
@@ -5423,17 +5424,23 @@ function scheduleAutomaticWorkflow(workflow){
  autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;try{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
 }
 function renderAutonomyQueue(){
+ if(document.activeElement?.matches('.autonomy-revision-editor textarea'))return;
  for(const timer of autonomyTimers.values())clearTimeout(timer);autonomyTimers.clear();
  autonomyList.replaceChildren();const rows=autonomyQueue.workflows||[];
+ const visibleIds=new Set(rows.map(item=>item.workflow_id));
+ for(const workflowId of autonomyViewState.keys())if(!visibleIds.has(workflowId))autonomyViewState.delete(workflowId);
  document.querySelector('#autonomy-global-pause').textContent=autonomyQueue.global_paused?'Zrušit globální pauzu':'Pozastavit vše';
  if(!rows.length){const empty=document.createElement('p');empty.textContent='Pro tento projekt není připravená žádná řízená fronta.';autonomyList.append(empty);return;}
  for(const workflow of rows){const card=document.createElement('article');card.className='autonomy-card';card.dataset.state=workflow.state;
+  const view=autonomyViewState.get(workflow.workflow_id)||{planRevision:workflow.plan_revision,detailOpen:false,revisionOpen:false,draft:null};
+  if(view.planRevision!==workflow.plan_revision)Object.assign(view,{planRevision:workflow.plan_revision,revisionOpen:false,draft:null});
+  autonomyViewState.set(workflow.workflow_id,view);
   const heading=document.createElement('h3');heading.textContent=`${workflow.mode==='automatic'?'Automatická':'Ruční'} fronta · ${workflow.state}`;
   const meta=document.createElement('p');meta.textContent=`${workflow.workflow_id} · revize ${workflow.plan_revision} · náklady ${workflow.spent_cost}/${workflow.budget.max_cost_units} · zbývá ${workflow.remaining_cost} cost / ${workflow.remaining_steps} kroků / ${workflow.remaining_seconds} s`;
   const progress=document.createElement('progress');progress.max=Math.max(1,workflow.budget.max_cost_units);progress.value=workflow.spent_cost;progress.setAttribute('aria-label','Využitý budget');
   const steps=document.createElement('ol');
   for(const step of workflow.steps){const item=document.createElement('li');item.textContent=`${step.action.id} · ${step.state} · privacy ${step.privacy} · cost ${step.cost_units}`;steps.append(item);}
-  const detail=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Přesný plán a mezivýsledky';const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.steps,null,2);detail.append(summary,pre);
+  const detail=document.createElement('details');detail.open=view.detailOpen;detail.addEventListener('toggle',()=>{view.detailOpen=detail.open;});const summary=document.createElement('summary');summary.textContent='Přesný plán a mezivýsledky';const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.steps,null,2);detail.append(summary,pre);
   const revisions=document.createElement('div');revisions.className='autonomy-revision-history';
   revisions.textContent=`Historie plánu: ${(workflow.plan_revisions||[]).map(item=>`r${item.revision} ${item.kind}: ${item.reason}`).join(' · ')}`;
   const revisionPanels=document.createElement('div');
@@ -5451,9 +5458,12 @@ function renderAutonomyQueue(){
    workflow.steps.some(item=>item.state==='completed')&&workflow.steps.every(item=>['completed','cancelled'].includes(item.state));
   if(revisionReady){
    const editor=document.createElement('details');editor.className='autonomy-revision-editor';
+   editor.open=view.revisionOpen;editor.addEventListener('toggle',()=>{view.revisionOpen=editor.open;});
    const editorSummary=document.createElement('summary');editorSummary.textContent='Navrhnout přesnou změnu plánu';
    const textarea=document.createElement('textarea');textarea.rows=8;textarea.spellcheck=false;
-   const fill=kind=>{textarea.value=JSON.stringify(dynamicRevisionDraft(workflow,kind),null,2);};fill('finish');
+   const fill=kind=>{textarea.value=JSON.stringify(dynamicRevisionDraft(workflow,kind),null,2);view.draft=textarea.value;};
+   if(view.draft===null)fill('finish');else textarea.value=view.draft;
+   textarea.addEventListener('input',()=>{view.draft=textarea.value;});
    const templates=document.createElement('div');templates.className='form-actions';
    templates.append(autonomyButton('Přidat navazující krok',()=>fill('append')),
     autonomyButton('Zopakovat poslední krok',()=>fill('repeat')),

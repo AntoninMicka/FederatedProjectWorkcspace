@@ -31,7 +31,8 @@ konkrétní výzkumné fáze navazující dávky.
    Zobrazí se důvod, nový krok, změna step/cost limitu `1 → 2`, prodloužení
    kumulativního času nejméně o 300 s tak, aby po potvrzení zbývalo alespoň
    300 s, a confirmation digest; druhý krok ještě nesmí vzniknout v aktivním
-   plánu.
+   plánu. Během editace vyčkejte alespoň jeden pětisekundový heartbeat: panel
+   musí zůstat otevřený a rozepsaný JSON i kurzor se nesmí ztratit.
 6. Restartujte aplikaci bez potvrzení. Návrh musí zůstat uložený, workflow
    zůstane bezpečně pozastavené a nic se samo nepotvrdí ani neprovede.
 7. Znovu otevřete kartu. Teprve **Potvrdit přesnou revizi** po připojení živého

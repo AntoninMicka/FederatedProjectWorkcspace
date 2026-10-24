@@ -101,7 +101,10 @@ mechanismus, nikoli search-only pipeline.
   zbývalo jen 48 s. Šablony `append`/`repeat` proto nově spolu se step/cost
   limitem explicitně navrhují i zvýšení kumulativního času tak, aby po návrhu
   zbývalo nejméně dalších 300 s; toto potvrzení a následný restartový průchod
-  ještě čekají na fyzické ověření.
+  ještě čekají na fyzické ověření. Druhý fyzický nález: heartbeat při každém
+  načtení znovu sestavil kartu a zavíral editor. UI proto zachovává otevřené
+  sekce a draft po workflow ID a revizi; během aktivního psaní textarea
+  heartbeat projekci vůbec nenahrazuje. Oprava čeká na fyzické potvrzení.
 
 ## Akceptace
 

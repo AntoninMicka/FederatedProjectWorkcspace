@@ -211,6 +211,9 @@ class AutonomyServiceTests(unittest.TestCase):
                        "autonomyRequest('/v1/autonomy/revision/confirm'",
                        "dynamicRevisionDraft(workflow,kind)",
                        'elapsedSeconds+300',
+                       'const autonomyViewState=new Map()',
+                       "matches('.autonomy-revision-editor textarea')",
+                       'view.draft=textarea.value',
                        'className=\'search-autonomy-countdown\'',
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else
