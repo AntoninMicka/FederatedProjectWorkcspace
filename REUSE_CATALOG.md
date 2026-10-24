@@ -486,6 +486,18 @@ implementaci s preview/privacy/`unknown` hranicí; žádný její kód ani neve�
 detaily se nepřenášejí. Rozhodnutí:
 [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#bounded-iterativní-hledání--f-m3-search-02).
 
+F-M3-SEARCH-03 **reuse/adaptuje** `SearchRuns`/`SearXNGAdapter` jako jedinou
+autoritu search síťového účinku, `OllamaRuns` a `TaskOutcomes` pro recovery a
+obecnou `AutonomyQueue`, action registry, approval digest, UI lease a durable
+countdown pro orchestrace. Nové jsou pouze reviewovaná akce
+`search.iterative-query`, striktní bounded continuation envelope a explicitní
+reconciliation mezi existujícími journaly. `query.external` se odmítá, protože
+je svázaný s jiným providerovým approval journalem. Agent framework, obecný
+worker/message queue, druhý search journal, skrytý tool call a automatická
+publikace se nezavádějí. Soukromá inventura nedokládá shodnou dvojici autorit
+a crash kontrakt; nepřebírá se z ní kód ani neveřejné detaily. Rozhodnutí:
+[ADR 0045](docs/adr/0045-governed-automatic-search-dispatch.md).
+
 F-M3-PUBLIC-SOURCE-READER-01 **reuse/adaptuje** stavový a no-retry recovery
 vzor `SearchRuns`, standardní knihovnu pro HTTP/TLS, `ContextBuilder` a bezpečné
 textové vykreslení společného desktop/web UI. Používá však samostatný

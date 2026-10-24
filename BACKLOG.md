@@ -60,11 +60,51 @@ evidence je ve WORK_LOG. `F-M5-CONFLICT-RESOLUTION-01` bylo doručeno PR #82
 jako merge commit `637bf90`; evidence je ve WORK_LOG. `M1-07-C` bylo
 23. 10. 2026 fyzicky naplnilo akceptaci a Gate M1 a bylo doručeno PR #83 jako
 commit `d15cec3`; evidence je ve WORK_LOG.
-`F-M4-AUTONOMY-01` byla 23. 10. 2026 akceptována na úrovni PoC validated;
+`F-M4-AUTONOMY-01` byla 23. 10. 2026 akceptována na úrovni PoC validated a
+doručena PR #85 jako merge commit `7dce1c4`; evidence je ve WORK_LOG.
+`F-M3-SEARCH-03` byla 24. 10. 2026 akceptována na úrovni PoC validated;
 evidence je ve WORK_LOG a feature větev čeká na vytvoření a doručení PR do
 `develop`.
 
 ## Zjištěné mezery a navazující ověření
+
+- [ ] [planned] **F-M3-PUBLIC-SOURCE-READER-02 — strukturovaná čitelná
+  projekce zdroje (cílová úroveň: implemented → PoC validated).** Původ:
+  uživatelská akceptace F-M3-SEARCH-03 zjistila, že zploštěný text některých
+  webů promíchá obsah tak, že se v něm informace ztrácejí. Nad existujícím
+  `PublicSourceRuns` a `static-html-v1` přidat verzovanou strukturovanou projekci,
+  která zachová pořadí, nadpisovou cestu a typ bloků (odstavec, seznam,
+  tabulka) a umožní bezpečně porovnat čistý výtah s původním bounded
+  textem. Neměnit SSRF/robots/MIME limity, automaticky nic dalšího nestahovat
+  ani nepublikovat. Akceptace: realistické statické stránky, tabulky a navigační
+  balast jsou čitelné ve sdíleném UI; pořadí a source anchors jsou
+  deterministické a raw/text hash i recovery zůstávají auditovatelné.
+
+- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01 — katalog činností a dynamický plán
+  (cílová úroveň: designed → implemented).** Rozšířit uzavřený action registry
+  o typované vstupy/výstupy, předpoklady a povolené návaznosti. Aktivovaný
+  workflow smí po dokončeném kroku navrhnout, deterministicky validovat a
+  append-only přidat, zopakovat nebo ukončit činnost v rámci schváleného
+  celkového limitu. Limit je nejzazší hranice, ne povinný počet kroků;
+  rozpracovaný bounded krok se dosažením celkového limitu nepřeruší. Uživatel
+  může potvrdit přesnou novou revizi plánu a kumulativní limit zvýšit; samotný
+  countdown nebo schválení jednoho kroku jej nezvyšuje. Model pouze navrhuje,
+  nikdy nerozšiřuje oprávnění, privacy ani limity. Akceptace: append/repeat/
+  early-finish, odmítnutá neplatná návaznost, atomická revize limitu, restart
+  před/po revizi a `unknown` bez automatického retry; doménové journaly zůstanou
+  autoritou vlastních účinků.
+
+- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow
+  (cílová úroveň: PoC validated).** Nad readerem 02 a dynamickým katalogem
+  sestavovat podle cíle proměnný tok `vyhledat → načíst → ověřit původ a
+  vazby → vybrat relevantní zdroje → volitelně analyzovat → sestavit zprávu`.
+  Během provádění lze v povoleném katalogu činnost přidat nebo vytvořit její
+  nové opakování; dokončená historie zůstane neměnná. UI nabídne více
+  výchozích profilů a ukáže aktuální plán, důvod změny a zbývající limit.
+  Sestavení návrhu není jeho uložení: projektový artefakt nadále vyžaduje
+  samostatné přesné potvrzení. Akceptace zahrne předčasné korektní ukončení,
+  doplňující hledání, opakované načtení, vloženou analýzu, prodloužení
+  schváleného limitu a restart bez ztráty evidence.
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
   uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční
@@ -83,22 +123,6 @@ evidence je ve WORK_LOG a feature větev čeká na vytvoření a doručení PR d
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **F-M3-SEARCH-03 — Volitelný automatický dispatch s časem na
-  zásah (cílová úroveň: designed → PoC validated).** Nad iterativním workflow
-  `F-M3-SEARCH-02` a podle obecného kontraktu `F-M4-AUTONOMY-01` nabídnout pro
-  konkrétní hledání volbu ručního potvrzování každého dotazu nebo automatického
-  režimu. Jde o první vertikální použití obecné řízené autonomie. Automaticky
-  navržený dotaz se zobrazí s účelem, privacy, cílem, číslem kola a zbývajícím
-  budgetem a odešle se až po viditelném uživatelsky zvoleném odpočtu **3–5
-  sekund**. Během něj musí jít automatiku pozastavit a dotaz
-  zkontrolovat/upravit, ihned odeslat nebo zrušit; pauza platí i pro další
-  připravené dotazy. Ztráta viditelnosti UI, odpojení klienta nebo restart
-  odpočet fail-closed pozastaví a vyžádá nové vědomé spuštění. Durable fronta
-  odliší `queued`, `countdown`, `paused`, `dispatching` a terminální stavy; po
-  skutečném odeslání už dotaz nelze vzít zpět a neurčitý výsledek se bez nového
-  rozhodnutí neopakuje. Režim ani odpočet nesmějí obejít RBAC, privacy, binding,
-  limity nebo audit přesných odeslaných bajtů.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

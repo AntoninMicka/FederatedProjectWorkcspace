@@ -72,7 +72,7 @@ class ActionAutonomyTests(unittest.TestCase):
         actions = self.registry.list()
         self.assertEqual([item['action_id'] for item in actions],
             ['analysis.read-only', 'artifact.create-local', 'query.external',
-             'workflow.role-handoff'])
+             'search.iterative-query', 'workflow.role-handoff'])
         actions[0]['permissions'].append('changed')
         self.assertNotIn('changed', self.registry.resolve(
             'analysis.read-only', '1.0')['permissions'])
@@ -108,11 +108,16 @@ class ActionAutonomyTests(unittest.TestCase):
         path.chmod(0o600)
         queue = self.queue()
         with closing(sqlite3.connect(queue.path)) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 2)
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 4)
             self.assertIn('ui_seen_at', [row[1] for row in
                                         db.execute('PRAGMA table_info(workflows)')])
             self.assertIn('not_before', [row[1] for row in
                                         db.execute('PRAGMA table_info(steps)')])
+            self.assertIn('activation_digest', [row[1] for row in
+                db.execute('PRAGMA table_info(workflows)')])
+            self.assertEqual([row[1] for row in
+                db.execute('PRAGMA table_info(step_revisions)')],
+                ['workflow_id', 'ordinal', 'revision', 'step_json', 'cancelled_at'])
 
     def test_automatic_mode_is_only_a_proposal_until_exact_opt_in(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
@@ -268,6 +273,71 @@ class ActionAutonomyTests(unittest.TestCase):
         queue.approve(self.workflow_id, step['step_id'], self.node_id, self.user_id)
         self.advance(queue)
         self.assertEqual(len(self.calls), 1)
+
+    def test_version_two_search_policy_binds_countdown_and_appends_one_exact_step(self):
+        task_id = str(uuid4())
+        def search_step(query, round_index, parent=None, depends=None):
+            request = {'task_id': task_id, 'search_id': str(uuid4()),
+                'synthesis_run_id': str(uuid4()),
+                'synthesis_manifest_id': str(uuid4())}
+            if parent is not None:
+                request.update(parent_search_id=parent, query=query)
+            preview = {'schema_version': 2, **request, 'query': query,
+                'purpose': 'Test', 'privacy': 'project',
+                'round_index': round_index, 'parent_search_id': parent,
+                'result_limit': 3,
+                'budget': {'max_rounds': 3, 'max_queries': 3,
+                           'max_results': 30, 'max_seconds': 300},
+                'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+                'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+            return self.step('search.iterative-query', {
+                'request': request, 'preview': preview,
+                'preview_sha256': digest(preview)}, depends=depends)
+        first = search_step('first', 1)
+        plan = {'schema_version': 2, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.head,
+            'mode': 'automatic', 'privacy': 'project', 'countdown_seconds': 4,
+            'continuation': {'kind': 'iterative-search-v1', 'task_id': task_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'follow_up_policy': 'first-proposed-v1'},
+            'budget': {'max_steps': 3, 'max_cost_units': 3,
+                       'max_seconds': 300}, 'steps': [first]}
+        queue = AutonomyQueue(self.state, self.registry, self.handlers,
+                              countdown_seconds=0)
+        activated = self.prepare_and_activate(queue, plan)
+        self.assertEqual(activated['countdown_seconds'], 4)
+        edited = search_step('edited first', 1)
+        edited['input']['request']['task_id'] = task_id
+        edited['input']['preview']['task_id'] = task_id
+        revised = queue.revise_pending_step(
+            self.workflow_id, edited, self.node_id, self.user_id)
+        self.assertEqual(revised['steps'][0]['input']['preview']['query'], 'edited first')
+        self.assertEqual(revised['revisions'][0]['step']['step_id'], first['step_id'])
+        self.assertEqual(revised['revisions'][0]['state'], 'cancelled')
+        countdown = self.advance(queue)
+        self.assertEqual(countdown['state'], 'countdown')
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            queue.send_now(self.workflow_id, edited['step_id'], self.node_id,
+                           self.user_id, '0' * 64)
+        released = queue.send_now(self.workflow_id, edited['step_id'], self.node_id,
+                                  self.user_id,
+                                  countdown['steps'][0]['dispatch_digest'])
+        self.assertEqual(released['steps'][0]['not_before'], '1970-01-01T00:00:00Z')
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE steps SET state='completed',result_json=? "
+                       "WHERE step_id=?", (b'{}', edited['step_id']))
+            db.execute("UPDATE workflows SET state='queued' WHERE workflow_id=?",
+                       (self.workflow_id,)); db.commit()
+        second = search_step('second', 2, edited['input']['request']['search_id'],
+                             [edited['step_id']])
+        appended = queue.append_step(self.workflow_id, second,
+            self.node_id, self.user_id)
+        self.assertEqual(len(appended['steps']), 2)
+        self.assertEqual(appended['steps'][1]['input']['preview']['query'], 'second')
+        self.assertEqual(appended['activation_digest'], activated['activation_digest'])
+        with self.assertRaisesRegex(ValidationError, 'pending step'):
+            queue.append_step(self.workflow_id, search_step('third', 3),
+                              self.node_id, self.user_id)
 
     def test_detach_global_pause_permissions_privacy_and_head_fail_closed(self):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})

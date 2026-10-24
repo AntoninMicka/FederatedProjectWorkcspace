@@ -1,12 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
+from contextlib import closing
 from pathlib import Path
 import json
+import sqlite3
 import tempfile
 import unittest
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.action_autonomy import digest
 from spikes.autonomy_service import AutonomyService
 from spikes.backend_contract import BackendUnknown
 from spikes.metadata import ValidationError
@@ -15,6 +18,7 @@ from spikes.projects import Projects
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import running_api
+from spikes.web_search import SearchUnknown
 from tests import test_local_api
 
 
@@ -27,7 +31,6 @@ class ChatStub:
         if self.unknown:
             raise BackendUnknown('external outcome unknown')
         return {'approval_id': request['approval_id'], 'state': 'succeeded'}
-
 
 class RoleStub:
     def __init__(self, project_id, creator_sha256):
@@ -134,6 +137,13 @@ class AutonomyServiceTests(unittest.TestCase):
                 calls.append(('attach', workflow_id)); return {'workflow_id': workflow_id}
             def pause_all(self):
                 calls.append(('pause-all', None)); return self.list()
+            def prepare_search(self, request):
+                calls.append(('prepare-search', request)); return {'state': 'proposed'}
+            def edit_search(self, workflow_id, query):
+                calls.append(('edit-search', workflow_id, query)); return {'state': 'queued'}
+            def send_now(self, workflow_id, step_id, dispatch_digest):
+                calls.append(('send-now', workflow_id, step_id, dispatch_digest))
+                return {'state': 'queued'}
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler) as server:
             server.autonomy_service = Service()
@@ -145,18 +155,82 @@ class AutonomyServiceTests(unittest.TestCase):
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
             response = driver.request(server, path='/v1/autonomy/pause-all', body=b'{}')
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/search/prepare',
+                body=json.dumps({'workflow_id': self.workflow_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/search/edit',
+                body=json.dumps({'workflow_id': self.workflow_id,
+                                 'query': 'upravený dotaz'}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/send-now',
+                body=json.dumps({'workflow_id': self.workflow_id,
+                    'step_id': str(uuid4()), 'dispatch_digest': '1' * 64}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
         self.assertEqual(calls[:3], [('list', self.project_id),
                                     ('attach', self.workflow_id), ('pause-all', None)])
         self.assertTrue({'/v1/autonomy/status', '/v1/autonomy/replace',
                          '/v1/autonomy/advance',
+                         '/v1/autonomy/search/prepare',
+                         '/v1/autonomy/search/edit', '/v1/autonomy/send-now',
                          '/v1/autonomy/pause-all'} <= DesktopHandler.post_paths)
         for marker in ('id="autonomy-queue"', 'id="autonomy-plan-json"',
                        'id="autonomy-plan-example"',
-                       '#autonomy-list',
+                       '#autonomy-list', '.search-autonomy{',
                        "autonomyRequest('/v1/autonomy/advance'",
+                       "projectRequest('/v1/autonomy/search/prepare'",
+                       "autonomyRequest('/v1/autonomy/send-now'",
+                       'className=\'search-autonomy-countdown\'',
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else
-                          CSS if marker.startswith('#') else JS)
+                          CSS if marker.startswith(('#', '.')) else JS)
+
+    def test_search_ui_plan_can_be_edited_and_sent_now_through_exact_queue_step(self):
+        task_id, parent_id = str(uuid4()), str(uuid4())
+        class SearchChat(ChatStub):
+            def candidate(inner, request, state):
+                preview = {'schema_version': 2, **request,
+                    'query': request['query'], 'purpose': 'Ověřit tvrzení',
+                    'privacy': 'project', 'round_index': 2,
+                    'parent_search_id': request['parent_search_id'], 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'cs-CZ',
+                    'binding': {'adapter': 'searxng', 'endpoint': 'http://127.0.0.1:8888',
+                                'target_id': 'local-process'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+            def task_search_autonomy_candidate(inner, request):
+                inner.calls.append(('autonomy-candidate', request))
+                return {'request': request, 'preview': inner.candidate(request, 'candidate'),
+                        'project_id': self.project_id, 'expected_head': self.git.head()}
+            def task_search_candidate(inner, request):
+                inner.calls.append(('candidate', request))
+                return inner.candidate(request, 'candidate')
+            def task_search_preview(inner, request):
+                inner.calls.append(('preview', request))
+                return inner.candidate(request, 'prepared')
+            def task_search_confirm(inner, request):
+                inner.calls.append(('confirm', request))
+                return {'state': 'completed', 'search_workflow': {
+                    'rounds': [{'round_index': 2}], 'next_queries': []}}
+        chat = SearchChat()
+        service = AutonomyService(self.node, Projects(self.node), state_dir=self.state,
+            chat_service=chat, role_workflow_service=self.roles, countdown_seconds=0)
+        proposed = service.prepare_search({'workflow_id': self.workflow_id,
+            'task_id': task_id, 'mode': 'automatic', 'countdown_seconds': 4,
+            'parent_search_id': parent_id, 'query': 'první návrh'})
+        self.assertEqual((proposed['state'], proposed['countdown_seconds']), ('proposed', 4))
+        service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        edited = service.edit_search(self.workflow_id, 'upravený dotaz')
+        self.assertEqual(edited['steps'][0]['input']['preview']['query'], 'upravený dotaz')
+        self.assertEqual(edited['revisions'][0]['state'], 'cancelled')
+        countdown = service.advance(self.workflow_id)
+        self.assertEqual(countdown['state'], 'countdown')
+        dispatched = service.send_now(self.workflow_id, countdown['steps'][0]['step_id'],
+                                      countdown['steps'][0]['dispatch_digest'])
+        self.assertEqual(dispatched['steps'][0]['state'], 'completed')
+        self.assertEqual([call[0] for call in chat.calls].count('confirm'), 1)
 
     def test_unknown_domain_effect_is_terminal_and_stale_head_blocks_dispatch(self):
         self.chat.unknown = True
@@ -177,6 +251,58 @@ class AutonomyServiceTests(unittest.TestCase):
             body='Changed after activation.\n', new=True), str(uuid4()))
         with self.assertRaisesRegex(ValidationError, 'Project changed'):
             self.service.advance(self.workflow_id)
+
+    def test_unknown_search_effect_is_not_retried_by_autonomy_adapter(self):
+        task_id, search_id = str(uuid4()), str(uuid4())
+        request = {'task_id': task_id, 'search_id': search_id,
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+        preview = {'schema_version': 2, **request, 'query': 'uncertain',
+            'purpose': 'Test', 'privacy': 'project', 'round_index': 1,
+            'parent_search_id': None, 'result_limit': 3,
+            'budget': {'max_rounds': 3, 'max_queries': 3,
+                       'max_results': 30, 'max_seconds': 300},
+            'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+            'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+        preview_sha256 = digest(preview)
+        class SearchChat(ChatStub):
+            def task_search_candidate(inner, value):
+                inner.calls.append(('candidate', value))
+                return dict(preview, preview_sha256=preview_sha256, state='candidate')
+            def task_search_preview(inner, value):
+                inner.calls.append(('preview', value))
+                return dict(preview, preview_sha256=preview_sha256, state='prepared')
+            def task_search_confirm(inner, value):
+                inner.calls.append(('confirm', value))
+                raise SearchUnknown('search outcome unknown')
+        chat = SearchChat()
+        service = AutonomyService(self.node, Projects(self.node), state_dir=self.state,
+            chat_service=chat, role_workflow_service=self.roles, countdown_seconds=0)
+        step_id = str(uuid4())
+        plan = {'schema_version': 2, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'automatic', 'privacy': 'project', 'countdown_seconds': 3,
+            'continuation': {'kind': 'iterative-search-v1', 'task_id': task_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'follow_up_policy': 'first-proposed-v1'},
+            'budget': {'max_steps': 3, 'max_cost_units': 3, 'max_seconds': 300},
+            'steps': [{'step_id': step_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': 'project', 'cost_units': 1, 'depends_on': [],
+                'input': {'request': request, 'preview': preview,
+                          'preview_sha256': preview_sha256}}]}
+        proposed = service.prepare(plan); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id)
+        with closing(sqlite3.connect(service.queue.path)) as db:
+            db.execute("UPDATE steps SET not_before='2000-01-01T00:00:00Z' "
+                       "WHERE step_id=?", (step_id,)); db.commit()
+        service.attach(self.workflow_id)
+        unknown = service.advance(self.workflow_id)
+        self.assertEqual((unknown['state'], unknown['steps'][0]['state']),
+                         ('unknown', 'unknown'))
+        with self.assertRaisesRegex(ValidationError, 'not runnable'):
+            service.advance(self.workflow_id)
+        self.assertEqual([item[0] for item in chat.calls].count('confirm'), 1)
 
     def test_exact_local_output_fields_are_rechecked_by_domain_adapter(self):
         role_workflow_id = str(uuid4())

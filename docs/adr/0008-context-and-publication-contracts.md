@@ -392,7 +392,8 @@ zpřesnění. To vytvoří nové preview navázané na poslední kolo a odeslán
 vyžaduje ruční kontrolu a potvrzení jeho hashe. UI tento stav označí přímo u
 karty i v placeholderu composeru; evaluator dostává explicitní pokyn zachovat
 jazyk uživatelova focus požadavku.
-Automatický dispatch a countdown patří až do F-M3-SEARCH-03.
+Automatický dispatch a countdown patří do F-M3-SEARCH-03 a jejich přijatý
+integrační kontrakt popisuje [ADR 0045](0045-governed-automatic-search-dispatch.md).
 
 Crash/recovery zachovává původní autority. `SearchRuns.succeeded` předchází
 modelovému Context Manifestu a po restartu se znovu použije bez search retry.

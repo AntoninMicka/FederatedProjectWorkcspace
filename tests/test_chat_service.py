@@ -1,14 +1,17 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 import base64
+from contextlib import closing
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.autonomy_service import AutonomyService
 from spikes.chat_service import ChatService, parse_search_evaluation
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -26,7 +29,7 @@ from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
 from spikes.desktop_ui import DesktopHandler
 from spikes.local_api import running_api
 from tests import test_local_api
-from tests.fixtures import AUTHOR, ENTITY, encoded
+from tests.fixtures import ENTITY, encoded
 from tests.test_configuration import project
 
 
@@ -703,6 +706,88 @@ class ChatServiceTests(unittest.TestCase):
                          'round-budget-exhausted')
         self.assertEqual(projection['outcome']['assessment'], 'intermediate')
         self.assertEqual(projection['outcome']['budget_used']['rounds_used'], 3)
+
+    def test_governed_search_adapter_appends_first_follow_up_without_second_writer(self):
+        request = self.route_request(web_query='q1')
+        outcome = {'schema_version': 1, 'kind': 'web-search', 'purpose': 'Research',
+                   'query': 'q1', 'message_ids': [request['message_id']],
+                   'artifact_ids': []}
+        search_calls, model_calls = [], []
+        evaluations = [
+            {'schema_version': 1, 'assessment': 'intermediate',
+             'answer': 'Partial.', 'rationale': 'Continue.',
+             'used_source_ids': [], 'limitations': ['Missing detail.'],
+             'follow_up_queries': ['q2', 'unused alternative']},
+            {'schema_version': 1, 'assessment': 'final', 'answer': 'Complete.',
+             'rationale': 'Enough.', 'used_source_ids': [], 'limitations': [],
+             'follow_up_queries': []},
+        ]
+        def model_transport(binding, raw):
+            provider_request = json.loads(raw); model_calls.append(provider_request)
+            is_evaluation = 'fpw-iterative-search-context-v1' in provider_request['prompt']
+            evaluation_count = sum('fpw-iterative-search-context-v1' in item['prompt']
+                                   for item in model_calls)
+            response = (evaluations[evaluation_count - 1]
+                        if is_evaluation else outcome)
+            return {'model': binding.model, 'response': json.dumps(response)}
+        def search_transport(_binding, query):
+            search_calls.append(query); return {'query': query, 'results': []}
+        chat = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs, transport=model_transport),
+            search_adapter_factory=lambda runs: SearXNGAdapter(
+                runs, transport=search_transport))
+        chat.configure(self.binding)
+        chat.configure_search({'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'search-one', 'adapter': 'searxng', 'boundary': 'same-node',
+            'endpoint': 'http://127.0.0.1:8888', 'target_id': 'local-process',
+            'result_limit': 3, 'timeout_seconds': 15})
+        routed = chat.task_route(request)
+        search_request = {'task_id': routed['task_id'], 'search_id': str(uuid4()),
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+        candidate = chat.task_search_candidate(search_request)
+        self.assertFalse((self.chat_state / 'search-runs.sqlite').exists())
+        preview = dict(candidate); preview_sha256 = preview.pop('preview_sha256')
+        preview.pop('state')
+        workflow_id, step_id = str(uuid4()), str(uuid4())
+        plan = {'schema_version': 2, 'workflow_id': workflow_id,
+            'project_id': ENTITY, 'expected_head': self.git.head(),
+            'mode': 'automatic', 'privacy': 'project', 'countdown_seconds': 3,
+            'continuation': {'kind': 'iterative-search-v1',
+                'task_id': routed['task_id'],
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'follow_up_policy': 'first-proposed-v1'},
+            'budget': {'max_steps': 3, 'max_cost_units': 3, 'max_seconds': 300},
+            'steps': [{'step_id': step_id,
+                'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                'privacy': 'project', 'cost_units': 1, 'depends_on': [],
+                'input': {'request': search_request, 'preview': preview,
+                          'preview_sha256': preview_sha256}}]}
+        autonomy = AutonomyService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, chat_service=chat,
+            role_workflow_service=object(), countdown_seconds=0)
+        proposed = autonomy.prepare(plan); autonomy.attach(workflow_id)
+        autonomy.activate(workflow_id, proposed['activation_digest'])
+        for expected_query in ('q1', 'q2'):
+            countdown = autonomy.advance(workflow_id)
+            self.assertEqual(countdown['state'], 'countdown')
+            with closing(sqlite3.connect(autonomy.queue.path)) as db:
+                db.execute("UPDATE steps SET not_before='2000-01-01T00:00:00Z' "
+                           "WHERE workflow_id=? AND state='countdown'", (workflow_id,))
+                db.commit()
+            autonomy.attach(workflow_id)
+            current = autonomy.advance(workflow_id)
+            self.assertEqual(search_calls[-1], expected_query)
+            if expected_query == 'q1':
+                self.assertEqual(len(current['steps']), 2)
+                self.assertEqual(current['steps'][1]['input']['preview']['query'], 'q2')
+                self.assertNotIn('unused alternative', json.dumps(current))
+        completed = autonomy.advance(workflow_id)
+        self.assertEqual(completed['state'], 'completed')
+        self.assertEqual(search_calls, ['q1', 'q2'])
+        owner_node, owner_user = chat._identity()
+        self.assertEqual(len(SearchRuns(self.chat_state).workflow(
+            routed['task_id'], owner_node, owner_user)['rounds']), 2)
 
     def test_iterative_search_time_budget_expires_before_dispatch(self):
         request = self.route_request(web_query='delayed query')

@@ -45,6 +45,26 @@ explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privac
 5. Obnovte aplikaci po prvním kole. Mezivýsledek a nabídnutý follow-up musí
    zůstat viditelné; potvrzení pokračuje stejným workflow bez opakování kola.
 
+## Volitelný automatický průchod
+
+1. Pro konkrétní hledání zvolte automatický režim a countdown 3–5 sekund.
+   Samotný návrh automatiku neaktivuje; potvrďte digest přesného plánu.
+2. Každý navazující dotaz musí před odesláním ukázat dotaz, účel, endpoint,
+   target, privacy, kolo a zbývající budget. Počíná se nový durable countdown.
+3. Během countdownu ověřte pause/resume, editaci, potvrzené **Odeslat nyní**
+   a zrušení. Editace musí zrušit starou revizi a nový dotaz znovu odpočítat;
+   nesmí předem vytvořit ani přepsat `SearchRuns` záznam.
+4. Skryjte kartu nebo odpojte UI. Lease musí vypršet a další dispatch se
+   pozastavit. Restart také odpojí UI; pokračování vyžaduje nové připojení a
+   vědomé resume.
+5. Nechte workflow doběhnout do modelového `final` nebo limitu. Automatika smí
+   zvolit pouze první validovaný follow-up policy `first-proposed-v1`, nejvýše
+   jeden nový krok za kolo a nikdy nesmí sama publikovat lokální artefakt.
+
+Tento řez není obecný dynamický research workflow. Čtení stránek, ověření
+původu a vazeb zdrojů, jejich výběr, analýza a sestavení zprávy zůstávají
+samostatné činnosti s vlastními journaly a approval hranicemi.
+
 ## Chybové a recovery scénáře
 
 - `local-only` odmítnout před preview a před sítí.

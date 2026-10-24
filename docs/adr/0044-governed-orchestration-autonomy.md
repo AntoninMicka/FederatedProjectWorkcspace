@@ -5,9 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0044 — Řízená autonomie orchestračních akcí
 
-Datum: 2026-10-23. Stav: přijato; registry, durable fronta, integrační service
-a sdílené desktop/web ovládání jsou implementované v rozpracované dávce
-`F-M4-AUTONOMY-01`; fyzická UI akceptace ještě není uzavřená.
+Datum: 2026-10-23. Stav: přijato a PoC validated v `F-M4-AUTONOMY-01`,
+doručeno PR #85. Bounded dynamické search kroky jsou samostatné rozšíření
+[ADR 0045](0045-governed-automatic-search-dispatch.md).
 
 ## Kontext a rozhodnutí
 
@@ -87,6 +87,7 @@ nahradit návrh, samostatně potvrdit jeho aktivaci, zobrazit budget a přesné
 mezivýsledky a frontu pozastavit či zrušit. Webová projekce je pouze pro
 administrátory a nikdy nezobrazí ani nepřijme plán s `local-only` obsahem.
 
-Jde stále o orchestrační obálku, nikoli zapojení automatického hledání
-`F-M3-SEARCH-03`, obecný background worker nebo autonomní publikaci. Aktuální
-stav fyzické akceptace eviduje [TODO](../../TODO.md).
+Jde stále o orchestrační obálku, nikoli obecný background worker nebo
+autonomní publikaci. Zapojení automatického hledání `F-M3-SEARCH-03`
+rozšiřuje pouze bounded search workflow podle ADR 0045; stav jeho implementace
+eviduje [TODO](../../TODO.md).

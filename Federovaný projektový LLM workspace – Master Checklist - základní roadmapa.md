@@ -688,7 +688,7 @@ Podklady ověřené 2026-09-17: [Drive download/export](https://developers.googl
   stávající přísnější approval pravidla jiných účinků zůstávají v platnosti.
   Dávka byla 23. 10. 2026 fyzicky akceptována na úrovni PoC validated;
   evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23),
-  doručení PR do `develop` zatím není dokončené.
+  PR #85 byl doručen do `develop` jako merge commit `7dce1c4`.
 
 ---
 
@@ -1129,14 +1129,16 @@ uzavřený.
   se SearXNG a Gemmou ověřil mezivýsledek i ruční zpřesnění. Výstup je omezený
   na titulky, URL a úryvky search výsledků: cílové stránky automaticky nečte a
   bez další capability proto negarantuje konkrétní údaje ukryté za odkazem.
-- [ ] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
+- [x] Volitelná autonomie hledání — F-M3-SEARCH-03: uživatel pro konkrétní
   hledání zvolí ruční potvrzování nebo automatické odesílání navržených dotazů
   s viditelným odpočtem 3–5 sekund. Během odpočtu lze automatiku pozastavit,
   dotaz zkontrolovat/upravit, ihned odeslat nebo zrušit. Ztráta viditelnosti,
   odpojení či restart odpočet fail-closed pozastaví; odeslaný síťový účinek
   nelze odvolat a `unknown` se automaticky neopakuje. Jde o první vertikální
   použití společného kontraktu F-M4-AUTONOMY-01; případné vytvoření lokálního
-  výstupu zůstává vždy za samostatným explicitním potvrzením.
+  výstupu zůstává vždy za samostatným explicitním potvrzením. Dávka byla
+  24. 10. 2026 akceptována na úrovni PoC validated; evidence je ve WORK_LOG a
+  doručení feature PR do `develop` zůstává otevřené.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
@@ -1191,7 +1193,7 @@ uzavřený.
   [WORK_LOG](WORK_LOG.md). Uživatel schválil její společné doručení s readerem
   z konsolidované větve; PR #71 byl doručen do `develop` jako merge commit
   `8b24452`.
-- [ ] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
+- [x] **F-M3-SEARCH-03 — Volitelný automatický dispatch:** po F-M3-SEARCH-02
   a podle F-M4-AUTONOMY-01 přidat per-search režim `manual` versus automatický
   s odloženým odesláním.
   Každý automatický dotaz musí být před sítí viditelný spolu s přesným cílem,
@@ -1201,6 +1203,7 @@ uzavřený.
   odpojení či restartu. Stav po dispatch respektuje stávající hranici
   `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
   Uložení výsledku jako lokálního dokumentu/artefaktu automatizovat nelze.
+  PoC akceptace a omezení jsou ve WORK_LOG; feature PR zatím nebyl doručen.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
@@ -1224,7 +1227,7 @@ začlenění feature větve do `develop` zůstává otevřené.
   nebo artefaktu vždy čeká na explicitní schválení konkrétního výstupu.
   PoC akceptace a omezení jsou ve
   [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23);
-  PR do `develop` zatím nebyl doručen.
+  PR #85 byl doručen do `develop` jako merge commit `7dce1c4`.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez

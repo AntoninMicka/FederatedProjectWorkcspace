@@ -662,7 +662,7 @@ class ChatService:
         selected = [messages[value] for value in outcome['message_ids']]
         return workspace, request, outcome, selected
 
-    def task_search_preview(self, request):
+    def _task_search_candidate(self, request):
         request = self._search_request_fields(request)
         root = self._root(); node_id, user_id = self._identity()
         tasks = TaskOutcomes(root); row = tasks.get(request['task_id'], node_id, user_id)
@@ -673,8 +673,7 @@ class ChatService:
                     if search_runs.path.exists() else None)
         if workflow is not None and 'parent_search_id' not in request:
             latest = workflow['rounds'][-1]['search']
-            return dict(latest['preview'], preview_sha256=latest['preview_sha256'],
-                        state=latest['state'])
+            return {'existing': latest, 'request': request}
         if workflow is None:
             query, parent_search_id, round_index = outcome['query'], None, 1
             search_task_id = request['task_id']
@@ -716,12 +715,53 @@ class ChatService:
                    'artifact_ids': outcome['artifact_ids'],
                    'warning': ('Search query leaves the Workspace trust boundary. Results and '
                                'URLs are untrusted text and are not opened automatically.')}
-        prepared = search_runs.prepare_round(search_id=request['search_id'],
-            task_id=request['task_id'], search_task_id=search_task_id,
-            node_id=node_id, user_id=user_id, project_id=row['project_id'],
-            privacy=row['privacy'], expected_head=row['project_commit'],
-            request=search_request, preview=preview, binding=binding,
-            round_index=round_index, parent_search_id=parent_search_id,
+        raw_preview = json.dumps(preview, ensure_ascii=False, sort_keys=True,
+            separators=(',', ':')).encode('utf-8')
+        return {'existing': None, 'request': request, 'search_request': search_request,
+                'preview': preview,
+                'preview_sha256': hashlib.sha256(raw_preview).hexdigest(),
+                'search_runs': search_runs, 'binding': binding, 'row': row,
+                'node_id': node_id, 'user_id': user_id,
+                'search_task_id': search_task_id, 'round_index': round_index,
+                'parent_search_id': parent_search_id}
+
+    def task_search_candidate(self, request):
+        """Validate and display an exact search proposal without persisting a run."""
+        candidate = self._task_search_candidate(request)
+        if candidate['existing'] is not None:
+            existing = candidate['existing']
+            return dict(existing['preview'], preview_sha256=existing['preview_sha256'],
+                        state=existing['state'])
+        return dict(candidate['preview'],
+                    preview_sha256=candidate['preview_sha256'], state='candidate')
+
+    def task_search_autonomy_candidate(self, request):
+        """Return an exact unpersisted proposal plus its validated project binding."""
+        candidate = self._task_search_candidate(request)
+        require(candidate['existing'] is None,
+                'Search run is already prepared and cannot enter automatic countdown')
+        preview = dict(candidate['preview'],
+                       preview_sha256=candidate['preview_sha256'], state='candidate')
+        return {'request': candidate['request'], 'preview': preview,
+                'project_id': candidate['row']['project_id'],
+                'expected_head': candidate['row']['project_commit']}
+
+    def task_search_preview(self, request):
+        candidate = self._task_search_candidate(request)
+        request = candidate['request']
+        if candidate['existing'] is not None:
+            existing = candidate['existing']
+            return dict(existing['preview'], preview_sha256=existing['preview_sha256'],
+                        state=existing['state'])
+        prepared = candidate['search_runs'].prepare_round(search_id=request['search_id'],
+            task_id=request['task_id'], search_task_id=candidate['search_task_id'],
+            node_id=candidate['node_id'], user_id=candidate['user_id'],
+            project_id=candidate['row']['project_id'],
+            privacy=candidate['row']['privacy'],
+            expected_head=candidate['row']['project_commit'],
+            request=candidate['search_request'], preview=candidate['preview'],
+            binding=candidate['binding'], round_index=candidate['round_index'],
+            parent_search_id=candidate['parent_search_id'],
             synthesis_run_id=request['synthesis_run_id'],
             synthesis_manifest_id=request['synthesis_manifest_id'])
         return dict(prepared['preview'], preview_sha256=prepared['preview_sha256'],

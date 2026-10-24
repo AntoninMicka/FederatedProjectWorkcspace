@@ -5,12 +5,61 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-SEARCH-03 — volitelný automatický dispatch hledání — 2026-10-24
+
+Dávka vznikla na větvi `feature/f-m3-search-03-auto-dispatch` z `develop`
+`7dce1c4` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-SEARCH-03-A — integrační kontrakt a reuse
+  (designed).** ADR 0045 ponechává `SearchRuns` autoritou search účinku a
+  `AutonomyQueue` autoritou orchestrace. Registrovaná akce
+  `search.iterative-query` používá existující preview, binding, budget,
+  providerové journaly a explicitní reconciliation bez druhého writeru.
+- [x] [completed] **F-M3-SEARCH-03-B — automatický search adapter
+  (implemented).** Aktivovaný plán v2 váže task, HEAD, privacy, binding,
+  budget, countdown a policy `first-proposed-v1`. Po dokončeném kole smí
+  idempotentně připojit nejvýše jeden přesný navazující krok; změna autority
+  nebo neurčitý účinek tok fail-closed zastaví bez retry.
+- [x] [completed] **F-M3-SEARCH-03-C — ovládání ruční/automatické fronty
+  (implemented).** Search karta nabízí ruční tok nebo explicitně aktivovanou
+  automatiku s 3–5sekundovým countdownem, přesným preview a akcemi pause,
+  review/edit, send-now a cancel. Editace vytváří novou auditovatelnou revizi
+  před vznikem search runu; skrytí UI nebo ztráta lease další dispatch
+  pozastaví.
+- [x] [completed] **F-M3-SEARCH-03-C1 — jednotná časová osa chatu a úloh
+  (implemented, ad-hoc).** Task projekce se vkládá podle `created_at` za
+  odpovídající vstup a již uložený prompt se neduplikuje. Změna nemění
+  persistentní data ani recovery.
+- [x] [completed] **F-M3-SEARCH-03-D — regrese a fyzická akceptace
+  (PoC validated).** Uživatel v reálném UI potvrdil, že automatická fronta
+  doběhla a základní tok funguje. Následné použití odhalilo dvě neblokující
+  produktové mezery: pevná search continuation není obecný dynamický workflow
+  a zploštěná projekce některých webů je obtížně čitelná. Obě jsou předány
+  jako samostatné navazující feature.
+
+### Ověření, recovery a omezení
+
+Cílená sada `tests.test_action_autonomy`, `tests.test_autonomy_service`,
+`tests.test_chat_service` a `tests.test_desktop` skončila **130 testy
+úspěšně, 3 podmíněně přeskočeny**. Úplná sada
+`python3 -m unittest discover -s tests -v` mimo socketově omezený sandbox
+skončila **776 testy úspěšně, 28 podmíněně přeskočeno**. Statické
+kontroly a finální diff jsou součástí závěrečného předání.
+
+Automatické testy dokládají restart v jednotlivých stavech, ztrátu lease,
+pause, editaci a send-now, vyčerpání round/time budgetu, změnu HEAD/bindingu,
+durable `unknown` a zákaz opakování. Fyzicky byl ověřen hlavní automatický
+průchod, nikoli jednotlivé navozené restartové a chybové varianty. Automatika
+stále používá pouze search-specifickou policy `first-proposed-v1`; nevytváří
+obecný dynamický plán a automaticky nepublikuje lokální obsah.
+
 ## F-M4-AUTONOMY-01 — obecná řízená autonomie orchestrace — 2026-10-23
 
 Dávka vznikla na větvi `feature/f-m4-autonomy-01` z `develop` `8ed574f` a
-dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; implementace
-aplikačního řezu končí commitem `1dfcf64`, ale závěrečný evidenční diff ještě
-není commitnutý a PR do `develop` zatím nebyl vytvořen ani sloučen.
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; aplikační
+řez skončil commitem `1dfcf64`, závěrečná evidence commitem `cec744a` a PR #85
+byl sloučen do `develop` jako merge commit `7dce1c4`.
 
 - [x] [completed] **F-M4-AUTONOMY-01-A — Action registry a policy kontrakt
   (implemented).** Uzavřený verzovaný registry deklaruje účinek, permissions,
