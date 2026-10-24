@@ -210,6 +210,7 @@ class AutonomyServiceTests(unittest.TestCase):
                        "autonomyRequest('/v1/autonomy/revision/propose'",
                        "autonomyRequest('/v1/autonomy/revision/confirm'",
                        "dynamicRevisionDraft(workflow,kind)",
+                       'elapsedSeconds+300',
                        'className=\'search-autonomy-countdown\'',
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else

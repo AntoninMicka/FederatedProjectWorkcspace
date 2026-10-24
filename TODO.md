@@ -95,7 +95,13 @@ mechanismus, nikoli search-only pipeline.
   [akceptačním checklistu](docs/dynamic-workflow-acceptance.md). Cílených 32
   testů a úplná sada 789 testů prošly, 28 testů bylo přeskočeno podle podmínek
   prostředí. Zbývá fyzicky provést checklist a zaznamenat výsledek; do té doby
-  dávka ani PR nejsou uzavřené.
+  dávka ani PR nejsou uzavřené. První fyzický krok potvrdil 24. 10. 2026
+  revizi 1, ruční approval, dokončený read-only krok a čekání na explicitní
+  revizi. Zjištěný nedostatek testovací šablony: po delší ruční kontrole
+  zbývalo jen 48 s. Šablony `append`/`repeat` proto nově spolu se step/cost
+  limitem explicitně navrhují i zvýšení kumulativního času tak, aby po návrhu
+  zbývalo nejméně dalších 300 s; toto potvrzení a následný restartový průchod
+  ještě čekají na fyzické ověření.
 
 ## Akceptace
 

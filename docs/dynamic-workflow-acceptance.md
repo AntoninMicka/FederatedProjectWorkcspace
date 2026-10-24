@@ -28,8 +28,10 @@ konkrétní výzkumné fáze navazující dávky.
 4. Karta musí zůstat aktivní a zobrazit revizi 1, dokončený krok a nulovou
    zbývající kapacitu. Další kliknutí nesmí plán implicitně dokončit.
 5. V editoru revize zvolte **Přidat navazující krok** a odešlete návrh.
-   Zobrazí se důvod, nový krok, změna limitu `1 → 2` a confirmation digest;
-   druhý krok ještě nesmí vzniknout v aktivním plánu.
+   Zobrazí se důvod, nový krok, změna step/cost limitu `1 → 2`, prodloužení
+   kumulativního času nejméně o 300 s tak, aby po potvrzení zbývalo alespoň
+   300 s, a confirmation digest; druhý krok ještě nesmí vzniknout v aktivním
+   plánu.
 6. Restartujte aplikaci bez potvrzení. Návrh musí zůstat uložený, workflow
    zůstane bezpečně pozastavené a nic se samo nepotvrdí ani neprovede.
 7. Znovu otevřete kartu. Teprve **Potvrdit přesnou revizi** po připojení živého

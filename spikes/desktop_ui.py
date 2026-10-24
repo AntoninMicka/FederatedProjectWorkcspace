@@ -5399,6 +5399,8 @@ function dynamicRevisionDraft(workflow,kind){
   if(!source)throw new Error('Revize kroku vyžaduje alespoň jeden dokončený krok.');
   proposal.budget.max_steps=Math.max(proposal.budget.max_steps,workflow.steps.length+1);
   proposal.budget.max_cost_units=Math.max(proposal.budget.max_cost_units,workflow.spent_cost+source.cost_units);
+  const activated=Date.parse(workflow.activated_at||''),elapsedSeconds=Number.isFinite(activated)?Math.max(0,Math.ceil((Date.now()-activated)/1000)):0;
+  proposal.budget.max_seconds=Math.min(86400,Math.max(proposal.budget.max_seconds+300,elapsedSeconds+300));
   proposal.step={step_id:crypto.randomUUID(),action:{...source.action},privacy:source.privacy,
    cost_units:source.cost_units,depends_on:[source.step_id],input:structuredClone(source.input)};
   if(kind==='repeat')proposal.repeat_of=source.step_id;
