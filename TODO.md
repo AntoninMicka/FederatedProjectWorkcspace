@@ -82,6 +82,10 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   položky seznamu dostávaly chybnou nadpisovou vazbu a že se do výtahu
   promítala hlavička, skryté prvky a formulářový balast. Oprava zůstává v
   `F-M3-PUBLIC-SOURCE-READER-02-D`; nemění durable data starých runů ani fetch.
+- Fyzická kontrola starého uloženého runu odhalila UI chybu: viditelný technický
+  anchor byl třetí položkou dvousloupcového gridu seznamu a zužoval obsah na
+  nečitelný sloupec. UI jej ponechává pouze jako strojové `data-anchor`; hash
+  celé projekce zůstává viditelný v provenance a stará durable data se nemění.
 - Návrh, crash hranice, reuse a omezení jsou v
   [ADR 0046](docs/adr/0046-structured-public-source-projection.md), katalogu a
   aktualizovaném [akceptačním checklistu](docs/public-source-reader-acceptance.md).
@@ -91,8 +95,10 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   `780` testů, `28` přeskočených volitelných/fyzických testů. `py_compile`,
   `node --check` generovaného JavaScriptu a `git diff --check` prošly.
 - Po opravě projekce druhého statického originu prošlo 24 cílených testů
-  readeru a Context Manifestu. Úplná sada mimo omezený socket sandbox prošla:
-  `781` testů, `28` přeskočených volitelných/fyzických testů.
+  readeru a Context Manifestu. Po následné opravě rendereru prošel jeho cílený
+  test, `node --check` generovaného JavaScriptu a zopakovaná úplná sada mimo
+  omezený socket sandbox: `781` testů, `28` přeskočených
+  volitelných/fyzických testů.
 - Zbývá zopakovat fyzickou kontrolu druhého statického originu po opravě jeho
   projekce a provést negativní kontrolu JavaScript-only zdroje; automatické
   testy tabulky/seznamu, restartu a tamperingu již prošly. Bez těchto scénářů

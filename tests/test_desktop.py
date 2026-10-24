@@ -124,6 +124,8 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('createPublicSourceResultView()', JS)
         self.assertIn("cell.textContent=value", JS)
         self.assertNotIn('cell.innerHTML=value', JS)
+        self.assertIn('wrapper.dataset.anchor=block.anchor', JS)
+        self.assertNotIn("anchor.className='public-source-anchor'", JS)
         self.assertIn('data-source-view="structured"', HTML)
         self.assertIn('Původní bounded text', HTML)
         self.assertIn('do projektu nebylo nic zapsáno', JS)

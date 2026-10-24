@@ -36,6 +36,10 @@ inline elementy mohou přispět pouze svým viditelným textem k právě otevře
 bloku. Parser nespouští HTML, JavaScript, odkazy ani další síťový účinek.
 Prompt injection zůstává inertním nedůvěryhodným textem.
 
+UI drží block anchor jako strojové `data-anchor`, ale nevkládá jeho technický
+hash do čitelného toku. Audit celku zůstává viditelný přes schema, počet bloků
+a SHA-256 projekce; anchor je nadále součástí uložené projekce a jejího hashe.
+
 `projection.txt` zůstává vstupem pro model a auditovatelným textovým
 fallbackem. U nového HTML se deterministicky renderuje ze strukturovaných
 bloků; `projection.json` je jeho čitelná doprovodná projekce. Výsledek i
