@@ -9,6 +9,10 @@ Datum: 2026-10-17. Stav: přijato jako návrhová hranice
 `F-M3-PUBLIC-SOURCES-01`; první řez implementuje
 `F-M3-PUBLIC-SOURCE-READER-01` na vlastní feature větvi.
 
+Čitelnou strukturovanou projekci druhého řezu doplňuje
+[ADR 0046](0046-structured-public-source-projection.md); síťové, privacy a
+recovery hranice tohoto rozhodnutí nemění.
+
 ## Kontext
 
 `F-M3-SEARCH-02` pracuje jen s bounded titulkem, URL a úryvkem ze SearXNG.

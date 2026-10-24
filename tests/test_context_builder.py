@@ -119,7 +119,9 @@ class ContextBuilderTests(unittest.TestCase):
         content = b'Bounded inert public text.'
         digest = __import__('hashlib').sha256(content).hexdigest()
         source = PublicSourceInput(str(uuid4()), content, 'project', 'static-html-v1',
-            'static-html-v1', 'a' * 64, digest, 'https://example.test/article')
+            'static-html-v1', 'a' * 64, digest, 'https://example.test/article',
+            projection_schema='public-source-structured-v1',
+            projection_sha256='b' * 64)
         prepared = self.builder.prepare(manifest_id=str(uuid4()), run_id=str(uuid4()),
             authority=self.authority, target=self.target,
             project_inputs=(ProjectInput(self.artifact_id),),
@@ -128,6 +130,8 @@ class ContextBuilderTests(unittest.TestCase):
         self.assertEqual((record['source'], record['run_id'], record['raw_sha256'],
                           record['text_sha256'], record['untrusted']),
                          ('public-source', source.run_id, 'a' * 64, digest, True))
+        self.assertEqual((record['projection_schema'], record['projection_sha256']),
+                         ('public-source-structured-v1', 'b' * 64))
         self.assertEqual(json.loads(prepared.payload)['inputs'][1]['input_id'], source.run_id)
 
     def test_stale_head_authority_and_target_are_rejected(self):

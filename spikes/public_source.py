@@ -26,6 +26,10 @@ from spikes.metadata import require, timestamp, uuid
 MAX_WIRE_BYTES = 2 * 1024 * 1024
 MAX_DECODED_BYTES = 2 * 1024 * 1024
 MAX_TEXT_CHARS = 200_000
+MAX_PROJECTION_BLOCKS = 2048
+MAX_TABLE_ROWS = 512
+MAX_TABLE_CELLS = 4096
+MAX_PROJECTION_BYTES = 2 * 1024 * 1024
 MAX_COMPRESSION_RATIO = 100
 MAX_HEADER_VALUE = 8192
 MAX_PURPOSE_BYTES = 4096
@@ -242,65 +246,292 @@ class HTTPResult:
     url: str
 
 
-class _VisibleHTML(HTMLParser):
+class _StructuredHTML(HTMLParser):
     hidden_tags = {'script', 'style', 'noscript', 'template', 'svg', 'canvas',
-                   'iframe', 'object', 'head'}
-    block_tags = {'title', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li',
-                  'dt', 'dd', 'blockquote', 'pre', 'th', 'td', 'caption'}
+                   'iframe', 'object', 'head', 'nav', 'footer', 'aside'}
+    content_tags = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'dt', 'dd',
+                    'blockquote', 'pre'}
+    boundary_tags = content_tags | {'table', 'tr', 'th', 'td', 'caption', 'ul', 'ol'}
     void_tags = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
                  'link', 'meta', 'param', 'source', 'track', 'wbr'}
 
     def __init__(self, limit):
         super().__init__(convert_charrefs=True)
-        self.limit = limit; self.hidden = 0; self.depth = 0; self.parts = []
-        self.in_title = False; self.visible_content_chars = 0
+        self.limit = limit; self.hidden = 0; self.stack = []; self.in_title = False
+        self.title_parts = []; self.loose = []; self.captures = []; self.blocks = []
+        self.heading_levels = [''] * 6; self.list_stack = []; self.table = None
+        self.table_depth = 0; self.input_chars = 0; self.output_chars = 0
+        self.anchor_counts = {}
+
+    @staticmethod
+    def _normalized(parts, *, preserve=False):
+        value = ''.join(parts).replace('\r\n', '\n').replace('\r', '\n')
+        if preserve:
+            return '\n'.join(line.rstrip() for line in value.splitlines()).strip()
+        return ' '.join(value.split())
+
+    def _heading_path(self):
+        return [value for value in self.heading_levels if value]
+
+    def _add_block(self, block):
+        if not block.get('text') and block['type'] != 'table': return
+        require(len(self.blocks) < MAX_PROJECTION_BLOCKS,
+                'Public source projection has too many blocks')
+        identity = dict(block); base = _digest(_canonical(identity))
+        occurrence = self.anchor_counts.get(base, 0) + 1
+        self.anchor_counts[base] = occurrence
+        anchor = 'block-' + base + ('' if occurrence == 1 else '-' + str(occurrence))
+        value = {'anchor': anchor, **block}
+        self.output_chars += (len(block.get('text', '')) + sum(
+            len(cell) for row in block.get('rows', []) for cell in row))
+        if self.output_chars > self.limit:
+            raise PublicSourceUnsupported('Projected public source text is too large',
+                                          code='text-too-large')
+        self.blocks.append(value)
+
+    def _flush_loose(self):
+        value = self._normalized(self.loose); self.loose = []
+        if value:
+            self._add_block({'type': 'paragraph', 'text': value,
+                             'heading_path': self._heading_path()})
+
+    def _start_capture(self, tag, kind, **fields):
+        self._flush_loose()
+        self.captures.append({'tag': tag, 'type': kind, 'parts': [], **fields})
+
+    def _finish_capture(self, tag):
+        index = next((position for position in range(len(self.captures) - 1, -1, -1)
+                      if self.captures[position]['tag'] == tag), None)
+        if index is None: return
+        capture = self.captures.pop(index)
+        value = self._normalized(capture['parts'], preserve=capture['type'] == 'pre')
+        if capture['type'] == 'table-cell':
+            if self.table is not None and self.table.get('row') is not None:
+                self.table['row'].append((value, capture['header']))
+            return
+        if capture['type'] == 'caption':
+            if self.table is not None: self.table['caption'] = value
+            return
+        if not value: return
+        if capture['type'] == 'heading':
+            level = capture['level']
+            self.heading_levels[level - 1] = value
+            for offset in range(level, 6): self.heading_levels[offset] = ''
+            self._add_block({'type': 'heading', 'level': level, 'text': value,
+                             'heading_path': self._heading_path()})
+        elif capture['type'] == 'list-item':
+            self._add_block({'type': 'list-item', 'text': value,
+                'ordered': capture['ordered'], 'depth': capture['depth'],
+                'heading_path': capture['heading_path']})
+        else:
+            self._add_block({'type': capture['type'], 'text': value,
+                             'heading_path': capture['heading_path']})
+
+    def _finish_row(self):
+        if self.table is None or self.table.get('row') is None: return
+        row = self.table.pop('row')
+        require(sum(len(item) for item in self.table['rows']) + len(row)
+                <= MAX_TABLE_CELLS, 'Public source table has too many cells')
+        if any(text for text, _ in row):
+            index = len(self.table['rows'])
+            self.table['rows'].append([text for text, _ in row])
+            if row and all(header for _, header in row):
+                self.table['header_rows'].append(index)
+
+    def _finish_table(self):
+        if self.table is None: return
+        self._finish_capture('td'); self._finish_capture('th'); self._finish_row()
+        table, self.table = self.table, None
+        if table['rows']:
+            self._add_block({'type': 'table', 'caption': table['caption'],
+                'rows': table['rows'], 'header_rows': table['header_rows'],
+                'heading_path': table['heading_path']})
 
     def handle_starttag(self, tag, attrs):
-        tag = tag.lower()
-        if tag not in self.void_tags: self.depth += 1
-        if self.depth > 256:
+        tag = tag.lower(); attributes = {key.lower(): value for key, value in attrs}
+        hidden = (tag in self.hidden_tags or 'hidden' in attributes
+                  or str(attributes.get('aria-hidden', '')).lower() == 'true'
+                  or str(attributes.get('role', '')).lower() == 'navigation')
+        if tag not in self.void_tags:
+            self.stack.append((tag, hidden)); self.hidden += int(hidden)
+        if len(self.stack) > 256:
             raise PublicSourceUnsupported('HTML nesting exceeds supported depth',
                                           code='html-too-deep')
         if tag == 'title': self.in_title = True
-        if tag in self.hidden_tags: self.hidden += 1
-        if not self.hidden and tag in self.block_tags: self.parts.append('\n')
+        if self.hidden: return
+        if tag == 'br':
+            target = self.captures[-1]['parts'] if self.captures else self.loose
+            target.append('\n'); return
+        if tag in {'ul', 'ol'}:
+            if self.captures and self.captures[-1]['type'] == 'list-item':
+                self._finish_capture(self.captures[-1]['tag'])
+            self._flush_loose(); self.list_stack.append(tag == 'ol'); return
+        if tag == 'table':
+            self._flush_loose()
+            if self.table is None:
+                self.table = {'caption': '', 'rows': [], 'header_rows': [],
+                              'heading_path': self._heading_path()}
+                self.table_depth = 1
+            else: self.table_depth += 1
+            return
+        if self.table is not None:
+            if self.table_depth > 1: return
+            if tag == 'tr':
+                self._finish_row()
+                require(len(self.table['rows']) < MAX_TABLE_ROWS,
+                        'Public source table has too many rows')
+                self.table['row'] = []
+            elif tag in {'th', 'td'}:
+                self._finish_capture('th'); self._finish_capture('td')
+                if self.table.get('row') is None: self.table['row'] = []
+                self._start_capture(tag, 'table-cell', header=tag == 'th')
+            elif tag == 'caption': self._start_capture(tag, 'caption')
+            return
+        if tag in self.content_tags:
+            if tag[0] == 'h' and tag[1:].isdigit():
+                self._start_capture(tag, 'heading', level=int(tag[1:]))
+            elif tag == 'li':
+                self._start_capture(tag, 'list-item',
+                    ordered=self.list_stack[-1] if self.list_stack else False,
+                    depth=max(1, len(self.list_stack)), heading_path=self._heading_path())
+            elif not self.captures:
+                kind = {'p': 'paragraph', 'dt': 'definition-term',
+                        'dd': 'definition-description'}.get(tag, tag)
+                self._start_capture(tag, kind, heading_path=self._heading_path())
 
     def handle_startendtag(self, tag, attrs):
-        if not self.hidden and tag.lower() in self.block_tags: self.parts.append('\n')
+        self.handle_starttag(tag, attrs)
+        if tag.lower() not in self.void_tags: self.handle_endtag(tag)
 
     def handle_endtag(self, tag):
-        if tag.lower() == 'title':
-            self.in_title = False; self.parts.append('\n')
-        if tag.lower() in self.hidden_tags and self.hidden: self.hidden -= 1
-        elif not self.hidden and tag.lower() in self.block_tags: self.parts.append('\n')
-        self.depth = max(0, self.depth - 1)
+        tag = tag.lower()
+        if tag == 'title': self.in_title = False
+        if not self.hidden:
+            if self.table is not None:
+                if tag in {'td', 'th', 'caption'}: self._finish_capture(tag)
+                elif tag == 'tr': self._finish_row()
+                elif tag == 'table':
+                    self.table_depth -= 1
+                    if self.table_depth == 0: self._finish_table()
+            else:
+                if tag in self.content_tags: self._finish_capture(tag)
+                if tag in {'ul', 'ol'} and self.list_stack:
+                    self.list_stack.pop(); self._flush_loose()
+        if tag not in self.void_tags:
+            match = next((position for position in range(len(self.stack) - 1, -1, -1)
+                          if self.stack[position][0] == tag), None)
+            if match is not None:
+                removed = self.stack[match:]; del self.stack[match:]
+                self.hidden = max(0, self.hidden - sum(item[1] for item in removed))
 
     def handle_data(self, data):
-        if not self.hidden or self.in_title:
-            self.parts.append(data)
-            if not self.hidden and not self.in_title:
-                self.visible_content_chars += len(' '.join(data.split()))
-            if sum(len(item) for item in self.parts) > self.limit * 2 + 4096:
-                raise PublicSourceUnsupported('Projected public source text is too large',
-                                              code='text-too-large')
+        self.input_chars += len(data)
+        if self.input_chars > self.limit * 4 + 16_384:
+            raise PublicSourceUnsupported('Projected public source text is too large',
+                                          code='text-too-large')
+        if self.in_title: self.title_parts.append(data); return
+        if self.hidden: return
+        if self.captures: self.captures[-1]['parts'].append(data)
+        elif self.table is None: self.loose.append(data)
 
-    def text(self):
-        if self.visible_content_chars == 0:
+    def projection(self):
+        for tag in [item['tag'] for item in reversed(self.captures)]:
+            self._finish_capture(tag)
+        self._finish_table(); self._flush_loose()
+        if not self.blocks:
             raise PublicSourceUnsupported(
                 'Static page contains no supported visible body text',
                 code='no-static-text')
-        lines = []
-        for line in ''.join(self.parts).splitlines():
-            normalized = ' '.join(line.split())
-            if normalized: lines.append(normalized)
-        value = '\n'.join(lines)
-        if len(value) > self.limit:
-            raise PublicSourceUnsupported('Projected public source text is too large',
-                                          code='text-too-large')
-        return value
+        return {'schema_version': 1, 'kind': 'public-source-structured-v1',
+                'mime': 'text/html', 'title': self._normalized(self.title_parts) or None,
+                'blocks': self.blocks, 'warnings': []}
 
 
-def project_text(body, content_type, limit):
+def _render_projection(projection):
+    parts = []
+    if projection['title']: parts.append(projection['title'])
+    for block in projection['blocks']:
+        kind = block['type']
+        if kind == 'heading': value = '#' * block['level'] + ' ' + block['text']
+        elif kind == 'list-item':
+            marker = '1.' if block['ordered'] else '-'
+            value = '  ' * (block['depth'] - 1) + marker + ' ' + block['text']
+        elif kind == 'blockquote':
+            value = '\n'.join('> ' + line for line in block['text'].splitlines())
+        elif kind == 'pre': value = block['text']
+        elif kind == 'table':
+            rows = [' | '.join(cell for cell in row) for row in block['rows']]
+            value = (('Tabulka: ' + block['caption'] + '\n') if block['caption'] else '')
+            value += '\n'.join(rows)
+        elif kind == 'definition-term': value = block['text'] + ':'
+        elif kind == 'definition-description': value = '  ' + block['text']
+        else: value = block['text']
+        if value: parts.append(value)
+    return '\n\n'.join(parts).strip()
+
+
+def _validate_projection(value):
+    require(isinstance(value, dict) and set(value) == {
+        'schema_version', 'kind', 'mime', 'title', 'blocks', 'warnings'},
+        'Invalid structured public source projection')
+    require(value['schema_version'] == 1
+            and value['kind'] == 'public-source-structured-v1'
+            and value['mime'] in ALLOWED_MIME
+            and (value['title'] is None or isinstance(value['title'], str))
+            and isinstance(value['warnings'], list) and not value['warnings']
+            and isinstance(value['blocks'], list)
+            and 0 < len(value['blocks']) <= MAX_PROJECTION_BLOCKS,
+            'Invalid structured public source projection')
+    counts = {}
+    for block in value['blocks']:
+        require(isinstance(block, dict) and isinstance(block.get('anchor'), str)
+                and isinstance(block.get('heading_path'), list)
+                and all(isinstance(item, str) for item in block['heading_path']),
+                'Invalid structured public source block')
+        identity = dict(block); anchor = identity.pop('anchor')
+        kind = identity.get('type')
+        base_fields = {'type', 'heading_path'}
+        if kind == 'heading':
+            expected = base_fields | {'level', 'text'}
+            require(type(identity.get('level')) is int and 1 <= identity['level'] <= 6,
+                    'Invalid structured public source heading')
+        elif kind == 'list-item':
+            expected = base_fields | {'ordered', 'depth', 'text'}
+            require(type(identity.get('ordered')) is bool
+                    and type(identity.get('depth')) is int
+                    and 1 <= identity['depth'] <= 256,
+                    'Invalid structured public source list item')
+        elif kind == 'table':
+            expected = base_fields | {'caption', 'rows', 'header_rows'}
+            require(isinstance(identity.get('caption'), str)
+                    and isinstance(identity.get('rows'), list)
+                    and 0 < len(identity['rows']) <= MAX_TABLE_ROWS
+                    and all(isinstance(row, list) and row
+                            and all(isinstance(cell, str) for cell in row)
+                            for row in identity['rows'])
+                    and sum(len(row) for row in identity['rows']) <= MAX_TABLE_CELLS
+                    and isinstance(identity.get('header_rows'), list)
+                    and all(type(item) is int and 0 <= item < len(identity['rows'])
+                            for item in identity['header_rows']),
+                    'Invalid structured public source table')
+        else:
+            require(kind in {'paragraph', 'blockquote', 'pre', 'definition-term',
+                             'definition-description'},
+                    'Invalid structured public source block type')
+            expected = base_fields | {'text'}
+        require(set(identity) == expected, 'Unknown structured public source block field')
+        if 'text' in identity:
+            require(isinstance(identity['text'], str) and bool(identity['text']),
+                    'Invalid structured public source block text')
+        base = _digest(_canonical(identity)); occurrence = counts.get(base, 0) + 1
+        counts[base] = occurrence
+        expected_anchor = ('block-' + base
+                           + ('' if occurrence == 1 else '-' + str(occurrence)))
+        require(anchor == expected_anchor, 'Structured public source anchor changed')
+    return value
+
+
+def project_document(body, content_type, limit):
     pieces = [item.strip() for item in content_type.split(';')]
     mime = pieces[0].lower()
     require(mime in ALLOWED_MIME, 'Unsupported public source MIME')
@@ -316,18 +547,41 @@ def project_text(body, content_type, limit):
         raise PublicSourceUnsupported('Public source is not valid UTF-8',
                                       code='invalid-utf8') from exc
     if mime == 'text/plain':
-        value = '\n'.join(' '.join(line.split()) for line in decoded.splitlines()).strip()
-        if len(value) > limit:
+        text = '\n'.join(' '.join(line.split()) for line in decoded.splitlines()).strip()
+        if len(text) > limit:
             raise PublicSourceUnsupported('Projected public source text is too large',
                                           code='text-too-large')
-        return value
-    parser = _VisibleHTML(limit)
-    try: parser.feed(decoded); parser.close()
+        blocks = []
+        anchor_counts = {}
+        for paragraph in re.split(r'\n\s*\n', decoded):
+            value = ' '.join(paragraph.split())
+            if not value: continue
+            identity = {'type': 'paragraph', 'text': value, 'heading_path': []}
+            base = _digest(_canonical(identity))
+            occurrence = anchor_counts.get(base, 0) + 1
+            anchor_counts[base] = occurrence
+            anchor = ('block-' + base
+                      + ('' if occurrence == 1 else '-' + str(occurrence)))
+            blocks.append({'anchor': anchor, **identity})
+        require(blocks, 'Static page contains no supported visible text')
+        projection = {'schema_version': 1, 'kind': 'public-source-structured-v1',
+            'mime': mime, 'title': None, 'blocks': blocks, 'warnings': []}
+        return text, _validate_projection(projection)
+    parser = _StructuredHTML(limit)
+    try: parser.feed(decoded); parser.close(); projection = parser.projection()
     except PublicSourceError: raise
     except Exception as exc:
         raise PublicSourceUnsupported('Malformed HTML is unsupported',
                                       code='malformed-html') from exc
-    return parser.text()
+    text = _render_projection(projection)
+    if len(text) > limit:
+        raise PublicSourceUnsupported('Projected public source text is too large',
+                                      code='text-too-large')
+    return text, _validate_projection(projection)
+
+
+def project_text(body, content_type, limit):
+    return project_document(body, content_type, limit)[0]
 
 
 def _robots_allowed(raw, path, user_agent):
@@ -465,16 +719,22 @@ class PublicSourceRuns:
             db.commit()
         return self.get(run_id)
 
-    def write_staging(self, run_id, raw, projected):
+    def write_staging(self, run_id, raw, projected, structured=None):
         uuid(run_id)
-        require(isinstance(raw, bytes) and isinstance(projected, bytes),
+        require(isinstance(raw, bytes) and isinstance(projected, bytes)
+                and (structured is None or isinstance(structured, bytes)),
                 'Public source staging requires bytes')
         self.staging.mkdir(mode=0o700, exist_ok=True)
         require(stat.S_IMODE(self.staging.stat().st_mode) == 0o700,
                 'Unsafe public source staging directory')
         folder = self.staging / run_id
         folder.mkdir(mode=0o700, exist_ok=True)
-        for name, data in (('raw.bin', raw), ('projection.txt', projected)):
+        files = [('raw.bin', raw), ('projection.txt', projected)]
+        if structured is not None:
+            require(len(structured) <= MAX_PROJECTION_BYTES,
+                    'Structured public source projection is too large')
+            files.append(('projection.json', structured))
+        for name, data in files:
             temporary = folder / ('.' + name + '.tmp')
             fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
             try:
@@ -491,8 +751,12 @@ class PublicSourceRuns:
         parent = os.open(self.staging, os.O_RDONLY | os.O_DIRECTORY)
         try: os.fsync(parent)
         finally: os.close(parent)
-        return {'raw_file': 'raw.bin', 'text_file': 'projection.txt',
-                'raw_sha256': _digest(raw), 'text_sha256': _digest(projected)}
+        result = {'raw_file': 'raw.bin', 'text_file': 'projection.txt',
+                  'raw_sha256': _digest(raw), 'text_sha256': _digest(projected)}
+        if structured is not None:
+            result.update(projection_file='projection.json',
+                          projection_sha256=_digest(structured))
+        return result
 
     def read_staging(self, run_id):
         row = self.get(run_id)
@@ -506,6 +770,25 @@ class PublicSourceRuns:
                     'Public source staging hash mismatch')
             values.append(data)
         return tuple(values)
+
+    def read_structured(self, run_id):
+        row = self.get(run_id)
+        require(row is not None and row['state'] == 'succeeded' and row['result'],
+                'Public source result is not available')
+        staging = row['result'].get('staging', {})
+        if 'projection_file' not in staging:
+            return None
+        require(staging.get('projection_file') == 'projection.json'
+                and isinstance(staging.get('projection_sha256'), str),
+                'Invalid structured public source staging descriptor')
+        data = self._read_staging_file(self.staging / run_id / 'projection.json')
+        require(len(data) <= MAX_PROJECTION_BYTES
+                and _digest(data) == staging['projection_sha256'],
+                'Public source structured staging hash mismatch')
+        try: value = json.loads(data)
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise ValueError('Invalid structured public source staging') from exc
+        return _validate_projection(value)
 
     @staticmethod
     def _read_staging_file(path):
@@ -539,10 +822,19 @@ class PublicSourceRuns:
                     recovered.append(run_id); continue
                 try:
                     result = json.loads(result_json); folder = self.staging / run_id
+                    files = [('raw.bin', 'raw_sha256'),
+                             ('projection.txt', 'text_sha256')]
+                    staging = result['staging']
+                    if 'projection_file' in staging:
+                        require(staging.get('projection_file') == 'projection.json',
+                                'Invalid structured public source staging descriptor')
+                        files.append(('projection.json', 'projection_sha256'))
                     valid = all(
                         _digest(self._read_staging_file(folder / name)) == result['staging'][key]
-                        for name, key in (('raw.bin', 'raw_sha256'),
-                                          ('projection.txt', 'text_sha256')))
+                        for name, key in files)
+                    if valid and 'projection_file' in staging:
+                        _validate_projection(json.loads(
+                            self._read_staging_file(folder / 'projection.json')))
                 except (OSError, KeyError, TypeError, ValueError): valid = False
                 if not valid:
                     db.execute("UPDATE runs SET state='failed',error=?,error_code=? "
@@ -675,13 +967,16 @@ class StaticHTMLAdapter:
                                               code='unsupported-mime')
             decoded = self._decode(HTTPResult(target.status, headers, target.body,
                                               target.url), request)
-            projected = project_text(decoded, content_type, request['max_text_chars'])
+            projected, structured = project_document(
+                decoded, content_type, request['max_text_chars'])
             if not projected:
                 raise PublicSourceUnsupported(
                     'Static page contains no supported visible text', code='no-static-text')
             projected_bytes = projected.encode('utf-8')
-            staging = self.runs.write_staging(run_id, target.body, projected_bytes)
-            result = {'schema_version': 1, 'state': 'succeeded', 'run_id': run_id,
+            structured_bytes = _canonical(structured)
+            staging = self.runs.write_staging(
+                run_id, target.body, projected_bytes, structured_bytes)
+            result = {'schema_version': 2, 'state': 'succeeded', 'run_id': run_id,
                 'request_digest': row['request_digest'],
                 'requested_url': request['candidate_url'], 'final_url': target.url,
                 'fetched_at': self.now(), 'http_status': target.status,
@@ -693,11 +988,16 @@ class StaticHTMLAdapter:
                     or headers.get('last-modified'), 'external_time': headers.get('date'),
                 'license': None, 'warnings': ['Remote content is untrusted data.'],
                 'truncated': False, 'staging': staging,
+                'projection': {'schema': structured['kind'],
+                    'sha256': _digest(structured_bytes),
+                    'block_count': len(structured['blocks'])},
                 'context_input': {'schema_version': 1, 'kind': 'public-source-run',
                     'run_id': run_id, 'adapter': binding.adapter_id,
                     'adapter_revision': binding.revision,
                     'raw_sha256': _digest(target.body),
                     'text_sha256': _digest(projected_bytes),
+                    'projection_schema': structured['kind'],
+                    'projection_sha256': _digest(structured_bytes),
                     'source_url': request['candidate_url'],
                     'privacy': request['privacy'], 'untrusted': True}}
         except PublicSourceError as exc:

@@ -416,7 +416,12 @@ class ChatServiceTests(unittest.TestCase):
             'preview_sha256': public_preview['preview_sha256'], 'approved': True})
         self.assertIn('Full fact', public_result['text'])
         self.assertNotIn('ignore()', public_result['text'])
+        self.assertEqual([item['type'] for item in public_result['projection']['blocks']],
+                         ['heading', 'paragraph'])
+        self.assertEqual(public_result['result']['projection']['block_count'], 2)
         self.assertTrue(public_result['context_input']['untrusted'])
+        self.assertEqual(public_result['context_input']['projection_schema'],
+                         'public-source-structured-v1')
         self.assertEqual(public_result['context_input']['source_url'], source['url'])
         self.assertFalse(public_result['project_changed'])
         self.assertEqual(public_calls, ['robots', 'target'])
@@ -427,9 +432,10 @@ class ChatServiceTests(unittest.TestCase):
         restored_projection = next(item for item in reader.task_outcomes(project_id=ENTITY)
                                    if item['task_id'] == route['task_id'])
         self.assertEqual(restored_projection['public_sources'][0]['state'], 'succeeded')
-        self.assertEqual(reader.task_public_source_result({
-            'task_id': route['task_id'], 'run_id': public_request['run_id']})['text'],
-            public_result['text'])
+        restored_result = reader.task_public_source_result({
+            'task_id': route['task_id'], 'run_id': public_request['run_id']})
+        self.assertEqual(restored_result['text'], public_result['text'])
+        self.assertEqual(restored_result['projection'], public_result['projection'])
         self.assertEqual(public_calls, ['robots', 'target'])
         generated_request = self.route_request(
             public_source_run_ids=[public_request['run_id']])

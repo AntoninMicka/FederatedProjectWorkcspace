@@ -455,10 +455,22 @@ class ChatService:
                     and descriptor.get('text_sha256') == hashlib.sha256(projected).hexdigest()
                     and descriptor.get('source_url') == row['request']['candidate_url'],
                     'Selected public source provenance changed')
+            structured = runs.read_structured(run_id)
+            projection_schema = descriptor.get('projection_schema')
+            projection_sha256 = descriptor.get('projection_sha256')
+            if projection_schema is not None or projection_sha256 is not None:
+                require(structured is not None
+                        and projection_schema == structured['kind']
+                        and projection_sha256 == hashlib.sha256(
+                            json.dumps(structured, ensure_ascii=False, sort_keys=True,
+                                       separators=(',', ':')).encode()).hexdigest(),
+                        'Selected public source structured projection changed')
             result.append(PublicSourceInput(run_id, projected,
                 descriptor['privacy'], descriptor['adapter'],
                 descriptor['adapter_revision'], descriptor['raw_sha256'],
-                descriptor['text_sha256'], descriptor['source_url']))
+                descriptor['text_sha256'], descriptor['source_url'],
+                projection_schema=projection_schema,
+                projection_sha256=projection_sha256))
         return tuple(result)
 
     def task_route(self, request):
@@ -1016,11 +1028,12 @@ class ChatService:
         _, projected = runs.read_staging(request['run_id'])
         require(hashlib.sha256(projected).hexdigest() == result['text_sha256'],
                 'Public source projection changed after fetch')
-        return {'schema_version': 1, 'run_id': request['run_id'],
+        return {'schema_version': 2, 'run_id': request['run_id'],
                 'task_id': request['task_id'], 'search_id': request['search_id'],
                 'source_id': request['source_id'], 'title': source['title'],
                 'state': result['state'], 'result': result,
                 'text': projected.decode('utf-8'), 'project_changed': False,
+                'projection': runs.read_structured(request['run_id']),
                 'context_input': result['context_input']}
 
     def task_public_source_result(self, request):
@@ -1037,11 +1050,12 @@ class ChatService:
                 and durable['state'] == 'succeeded',
                 'Public source result is unavailable')
         _, projected = runs.read_staging(request['run_id'])
-        return {'schema_version': 1, 'task_id': request['task_id'],
+        return {'schema_version': 2, 'task_id': request['task_id'],
                 'run_id': request['run_id'], 'state': durable['state'],
                 'source_id': durable['request']['candidate_source_id'],
                 'title': durable['preview']['title'], 'text': projected.decode('utf-8'),
                 'result': durable['result'], 'project_changed': False,
+                'projection': runs.read_structured(request['run_id']),
                 'context_input': durable['result']['context_input']}
 
     @staticmethod

@@ -114,7 +114,12 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("projectRequest('/v1/tasks/public-source/preview',request)", JS)
         self.assertIn("projectRequest('/v1/tasks/public-source/confirm'", JS)
         self.assertIn("projectRequest('/v1/tasks/public-source/result'", JS)
-        self.assertIn("result.querySelector('pre').textContent=fetched.text", JS)
+        self.assertIn('original.textContent=fetched.text', JS)
+        self.assertIn('renderPublicSourceProjection(structured,fetched.projection)', JS)
+        self.assertIn("cell.textContent=value", JS)
+        self.assertNotIn('cell.innerHTML=value', JS)
+        self.assertIn('data-source-view="structured"', HTML)
+        self.assertIn('Původní bounded text', HTML)
         self.assertIn('do projektu nebylo nic zapsáno', JS)
         self.assertTrue({'/v1/search/status', '/v1/search/configure', '/v1/search/test',
                          '/v1/tasks/search/preview', '/v1/tasks/search/confirm',

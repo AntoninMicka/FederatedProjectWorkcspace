@@ -838,7 +838,11 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="confirm"><input id="public-source-confirm-check" type="checkbox"> Potvrzuji oba zobrazené GET účinky, cílovou URL, privacy a limity.</label>
 <button id="public-source-confirm" type="button" disabled>Načíst vybranou stránku</button>
 <button id="public-source-cancel" class="secondary-button" type="button">Zrušit</button>
-<div id="public-source-result" hidden><h3>Inertní text veřejného zdroje</h3><pre></pre><small></small></div>
+<div id="public-source-result" hidden><h3>Čitelný inertní výtah veřejného zdroje</h3>
+<div class="public-source-view-tabs" role="group" aria-label="Zobrazení veřejného zdroje">
+<button type="button" data-source-view="structured" aria-pressed="true">Strukturovaný výtah</button>
+<button type="button" class="secondary-button" data-source-view="text" aria-pressed="false">Původní bounded text</button></div>
+<div class="public-source-structured" role="document"></div><pre class="public-source-text" hidden></pre><small></small></div>
 </section></div>
 <p id="chat-run-usage" hidden></p>
 <div id="summary-panel" role="tabpanel" aria-labelledby="summary-tab" hidden><h2>Lokální souhrn</h2>
@@ -1067,6 +1071,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .provider-link{color:#176b60;font-weight:600}
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.public-source-view-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.public-source-view-tabs button{padding:8px 12px}.public-source-structured{max-height:min(58vh,620px);overflow:auto;border:1px solid #dce3e9;border-radius:10px;background:#fff;padding:16px}.public-source-structured h4,.public-source-structured h5,.public-source-structured h6{margin:18px 0 8px;color:#18384a}.public-source-structured>h4:first-child{margin-top:0}.public-source-block{margin:10px 0;overflow-wrap:anywhere}.public-source-block>small{display:block;margin-bottom:4px;color:#657d89}.public-source-block blockquote{margin:8px 0;border-left:3px solid #8db6c8;padding-left:12px}.public-source-block pre{background:#f4f7fa;padding:10px;border-radius:7px}.public-source-list-item{display:grid;grid-template-columns:2rem minmax(0,1fr);gap:4px}.public-source-list-marker{text-align:right;color:#456276}.public-source-table-wrap{overflow:auto;margin:12px 0}.public-source-table{border-collapse:collapse;min-width:min(100%,520px);background:#fff}.public-source-table caption{text-align:left;font-weight:700;margin-bottom:6px}.public-source-table th,.public-source-table td{border:1px solid #bfcdc9;padding:7px 9px;text-align:left;vertical-align:top}.public-source-table th{background:#edf5f3}.public-source-anchor{font-family:ui-monospace,monospace;color:#71838e}
 .search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}.search-autonomy-controls{border:1px solid #bfcdc9;border-radius:9px;padding:10px}.search-autonomy-controls label{margin-right:10px}.search-autonomy{width:100%;border:1px solid #bfcdc9;border-left:5px solid #c69224;border-radius:10px;background:#f8fbfc;padding:12px}.search-autonomy[data-state="countdown"]{border-left-color:#2d8a62}.search-autonomy h4{margin:0 0 8px}.search-autonomy-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:8px 0}.search-autonomy-facts dt{font-weight:700}.search-autonomy-facts dd{margin:0;overflow-wrap:anywhere}.search-autonomy progress{width:100%;accent-color:#176b60}.search-autonomy .task-actions input{min-width:min(28rem,100%);flex:1}.search-next-query{width:100%;display:grid;gap:7px}
 #resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
 #resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
@@ -4461,11 +4466,59 @@ async function preparePublicSource(projection,searchId,source){
 function displayPublicSourceResult(fetched){
  const panel=document.querySelector('#public-source-preview');panel.hidden=false;
  const result=document.querySelector('#public-source-result');
- result.querySelector('pre').textContent=fetched.text;
+ const structured=result.querySelector('.public-source-structured');
+ const original=result.querySelector('.public-source-text');original.textContent=fetched.text;
+ renderPublicSourceProjection(structured,fetched.projection);
+ const hasStructured=Boolean(fetched.projection?.blocks?.length);
+ result.querySelector('[data-source-view="structured"]').hidden=!hasStructured;
+ selectPublicSourceView(result,hasStructured?'structured':'text');
  result.querySelector('small').textContent=
-  `run ${fetched.run_id} · SHA-256 ${fetched.result.text_sha256} · ${fetched.result.text_length} znaků · do projektu nebylo nic zapsáno`;
+  `run ${fetched.run_id} · text SHA-256 ${fetched.result.text_sha256} · ${fetched.result.text_length} znaků${fetched.result.projection?' · '+fetched.result.projection.block_count+' bloků · projekce '+fetched.result.projection.sha256:''} · do projektu nebylo nic zapsáno`;
  result.hidden=false;
 }
+function selectPublicSourceView(result,view){
+ const structured=result.querySelector('.public-source-structured');
+ const original=result.querySelector('.public-source-text');
+ structured.hidden=view!=='structured';original.hidden=view!=='text';
+ for(const button of result.querySelectorAll('[data-source-view]')){
+  const active=button.dataset.sourceView===view;button.setAttribute('aria-pressed',String(active));
+  button.classList.toggle('secondary-button',!active);
+ }
+}
+function renderPublicSourceProjection(container,projection){
+ container.replaceChildren();if(!projection?.blocks?.length)return;
+ if(projection.title){const title=document.createElement('h4');title.textContent=projection.title;container.append(title);}
+ let previousPath='';
+ for(const block of projection.blocks){
+  if(!block || typeof block.type!=='string' || typeof block.anchor!=='string')continue;
+  const wrapper=document.createElement('section');wrapper.className='public-source-block';wrapper.dataset.anchor=block.anchor;
+  const path=Array.isArray(block.heading_path)?block.heading_path.join(' › '):'';
+  if(path && block.type!=='heading' && path!==previousPath){const breadcrumb=document.createElement('small');breadcrumb.textContent=path;wrapper.append(breadcrumb);}
+  previousPath=path;
+  if(block.type==='heading'){
+   const heading=document.createElement(block.level<=2?'h4':block.level<=4?'h5':'h6');heading.textContent=block.text;wrapper.append(heading);
+  }else if(block.type==='table' && Array.isArray(block.rows)){
+   const scroll=document.createElement('div');scroll.className='public-source-table-wrap';const table=document.createElement('table');table.className='public-source-table';
+   if(block.caption){const caption=document.createElement('caption');caption.textContent=block.caption;table.append(caption);}
+   const body=document.createElement('tbody'),headers=new Set(block.header_rows || []);
+   block.rows.forEach((row,rowIndex)=>{const tr=document.createElement('tr');for(const value of row){const cell=document.createElement(headers.has(rowIndex)?'th':'td');cell.textContent=value;tr.append(cell);}body.append(tr);});
+   table.append(body);scroll.append(table);wrapper.append(scroll);
+  }else if(block.type==='list-item'){
+   wrapper.classList.add('public-source-list-item');wrapper.style.paddingLeft=`${Math.min(Math.max(Number(block.depth)||1,1),16)-1}rem`;
+   const marker=document.createElement('span');marker.className='public-source-list-marker';marker.textContent=block.ordered?'1.':'•';const text=document.createElement('span');text.textContent=block.text;wrapper.append(marker,text);
+  }else if(block.type==='blockquote'){
+   const quote=document.createElement('blockquote');quote.textContent=block.text;wrapper.append(quote);
+  }else if(block.type==='pre'){
+   const pre=document.createElement('pre');pre.textContent=block.text;wrapper.append(pre);
+  }else{
+   const text=document.createElement(block.type==='definition-term'?'strong':'p');text.textContent=block.text;wrapper.append(text);
+  }
+  const anchor=document.createElement('small');anchor.className='public-source-anchor';anchor.textContent=block.anchor;wrapper.append(anchor);container.append(wrapper);
+ }
+}
+document.querySelector('#public-source-result').addEventListener('click',event=>{
+ const button=event.target.closest('[data-source-view]');if(button)selectPublicSourceView(event.currentTarget,button.dataset.sourceView);
+});
 async function showPublicSource(taskId,runId){
  chatOperationStatus.textContent='Načítám ověřenou lokální projekci veřejného zdroje…';
  try{const fetched=await projectRequest('/v1/tasks/public-source/result',{

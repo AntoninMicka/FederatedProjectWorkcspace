@@ -93,6 +93,8 @@ class PublicSourceInput:
     text_sha256: str
     source_url: str
     required: bool = True
+    projection_schema: str | None = None
+    projection_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -242,14 +244,26 @@ class ContextBuilder:
                     and bool(re.fullmatch(r'[0-9a-f]{64}', choice.text_sha256))
                     and choice.text_sha256 == _digest(choice.content),
                     'Public source input hash mismatch')
+            require((choice.projection_schema is None
+                     and choice.projection_sha256 is None)
+                    or (isinstance(choice.projection_schema, str)
+                        and choice.projection_schema == 'public-source-structured-v1'
+                        and isinstance(choice.projection_sha256, str)
+                        and bool(re.fullmatch(r'[0-9a-f]{64}',
+                                             choice.projection_sha256))),
+                    'Invalid public source structured projection provenance')
             seen.add(choice.run_id); total += len(choice.content)
             require(total <= MAX_CONTEXT, 'Context exceeds 16 MiB')
-            records.append(dict(input_id=choice.run_id, source='public-source',
+            record = dict(input_id=choice.run_id, source='public-source',
                 required=choice.required, privacy=choice.privacy, size=len(choice.content),
                 sha256=choice.text_sha256, run_id=choice.run_id, adapter=choice.adapter,
                 adapter_revision=choice.adapter_revision, raw_sha256=choice.raw_sha256,
                 text_sha256=choice.text_sha256, source_url=choice.source_url,
-                untrusted=True))
+                untrusted=True)
+            if choice.projection_schema is not None:
+                record.update(projection_schema=choice.projection_schema,
+                              projection_sha256=choice.projection_sha256)
+            records.append(record)
             parts.append(dict(input_id=choice.run_id,
                               content_b64=base64.b64encode(choice.content).decode()))
         for choice in ad_hoc_inputs:
