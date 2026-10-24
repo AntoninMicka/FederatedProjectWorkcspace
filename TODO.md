@@ -55,11 +55,26 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   tests.test_action_autonomy -v` (28 testů OK), `python3 -m unittest
   tests.test_spdx -v` (1 test OK), `python3 -m unittest discover -s tests -v`
   (794 testů OK, 28 skipped) a `git diff --check` bez chyb.
-- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-C — doménové adaptéry a dynamické
+- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-C — doménové adaptéry a dynamické
   materializování (cílová úroveň: implemented).** Adaptovat čistý reader
   candidate builder, existující search/reader/provider journaly a bounded
   source ledger. Plannerův výstup pouze navrhne append/repeat/finish;
   deterministický validátor z něj idempotentně vytvoří nejvýše jednu revizi.
+  Výsledek: reader candidate je bez durable zápisu a opakované preview je
+  stabilní i přes neautoritativní čas vytvoření; fetch, evidence, selection,
+  analysis, report a planner používají stávající reader/Ollama journaly a
+  hashově svázané source reference. Modelové JSON výstupy procházejí přesnými
+  fail-closed validátory a nemohou doplnit cizí source ID. Plannerovo
+  `append`/`repeat`/`finish` se materializuje z run ID a proposal hashe na
+  deterministická UUID; replay ani restart nevytvoří druhou revizi a zvýšení
+  limitu zůstává pending do přesného potvrzení. Ověření:
+  `python3 -m unittest tests.test_research_workflow
+  tests.test_autonomy_service.AutonomyServiceTests.test_research_planner_materializes_one_confirmed_budget_revision
+  tests.test_chat_service.ChatServiceTests.test_web_search_requires_preview_and_reuses_results_after_restart
+  -v` (8 testů OK), `python3 -m unittest discover -s tests -v` (796 testů OK,
+  28 skipped), `python3 -m py_compile spikes/action_autonomy.py
+  spikes/autonomy_service.py spikes/chat_service.py spikes/research_workflow.py`
+  a `git diff --check` bez chyb.
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-D — chatové UI a řízení průchodu
   (cílová úroveň: implemented).** Nabídnout profily a režim ruční/automatický,
   zobrazit fáze, zdroje, důvod změny, provenance, zbývající limit a přesné

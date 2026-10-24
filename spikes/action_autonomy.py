@@ -1504,6 +1504,7 @@ class AutonomyQueue:
                 'node_id': node_id, 'user_id': user_id,
                 'project_id': plan['project_id'],
                 'expected_head': plan['expected_head'],
+                'privacy': planned['privacy'],
                 'approval_digest': stored['approval_digest']}
             result = handler(deepcopy(planned['input']), execution)
             self.registry.validate_output(descriptor, result)

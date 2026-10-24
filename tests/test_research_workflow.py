@@ -10,6 +10,7 @@ import unittest
 from uuid import uuid4
 
 from spikes.action_autonomy import digest, load_action_registry
+from spikes.chat_service import parse_research_model_response
 from spikes.metadata import ValidationError
 from spikes.research_workflow import (load_research_profiles,
                                       parse_research_profile)
@@ -240,6 +241,49 @@ class ResearchWorkflowTest(unittest.TestCase):
         bad = deepcopy(output); bad['target_action'] = 'research.analyze'
         with self.assertRaisesRegex(ValidationError, 'finish proposal'):
             self.validate('research.plan-next', bad, output=True)
+
+    def test_model_response_parser_fails_closed_and_binds_source_ids(self):
+        select = {**self.model_base(), 'evidence': self.evidence,
+                  'evidence_sha256': sha(self.evidence)}
+        response = {'selected_source_run_ids': [self.run_id],
+                    'rejected': [], 'limitations': ['One source.']}
+        selected = parse_research_model_response(
+            'research.select-relevant', json.dumps(response), select)
+        self.assertEqual(selected['selection'], response)
+        self.validate('research.select-relevant', selected, output=True)
+
+        malformed = dict(response, selected_source_run_ids=[{}])
+        with self.assertRaises(ValidationError):
+            parse_research_model_response(
+                'research.select-relevant', json.dumps(malformed), select)
+        second = deepcopy(self.source_ref)
+        second.update(run_id=str(uuid4()), source_id='source-' + 'b' * 32,
+                      url='https://example.test/second')
+        two_sources = deepcopy(select)
+        two_sources['evidence']['sources'].append(second)
+        two_sources['evidence_sha256'] = sha(two_sources['evidence'])
+        omitted = dict(response)
+        with self.assertRaisesRegex(ValidationError, 'decide every source'):
+            parse_research_model_response(
+                'research.select-relevant', json.dumps(omitted), two_sources)
+
+        analysis = {**self.model_base(), 'selection': self.selection,
+                    'selection_sha256': sha(self.selection)}
+        invented = {'claims': [{'claim': 'Invented',
+            'source_run_ids': [str(uuid4())], 'confidence': 'low'}],
+            'limitations': []}
+        with self.assertRaisesRegex(ValidationError, 'unavailable source'):
+            parse_research_model_response(
+                'research.analyze', json.dumps(invented), analysis)
+
+        report = {**self.model_base(), 'task_id': self.task_id,
+            'selected_source_run_ids': [self.run_id],
+            'selection_sha256': sha(self.selection),
+            'analysis_run_id': None, 'analysis_sha256': None}
+        invalid_citations = {'markdown': 'Draft', 'citations': [{}]}
+        with self.assertRaises(ValidationError):
+            parse_research_model_response(
+                'research.compose-report', json.dumps(invalid_citations), report)
 
 
 if __name__ == '__main__':

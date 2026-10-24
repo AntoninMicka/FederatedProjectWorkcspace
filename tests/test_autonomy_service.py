@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 from contextlib import closing
 from pathlib import Path
+import hashlib
 import json
 import sqlite3
 import tempfile
@@ -395,6 +396,99 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertEqual((result['state'], result['steps'][0]['state']),
                          ('failed', 'failed'))
         self.assertEqual(self.roles.published, [])
+
+    def test_research_planner_materializes_one_confirmed_budget_revision(self):
+        research_id, planner_run_id = str(uuid4()), str(uuid4())
+        source_run_id, task_id, search_id = (str(uuid4()) for _ in range(3))
+        source_ref = {'task_id': task_id, 'search_id': search_id,
+            'source_id': 'source-' + 'a' * 32, 'run_id': source_run_id,
+            'adapter': 'static-html-v1', 'binding_revision': 'reader-r1',
+            'url': 'https://example.test/evidence',
+            'origin': 'https://example.test', 'raw_sha256': '1' * 64,
+            'text_sha256': '2' * 64, 'projection_sha256': '3' * 64}
+        selection = {'selected_source_run_ids': [source_run_id],
+                     'rejected': [], 'limitations': []}
+        goal = 'Prepare a bounded report draft.'
+        report_input = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'run_id': str(uuid4()), 'manifest_id': str(uuid4()),
+            'selected_source_run_ids': [source_run_id],
+            'selection_sha256': digest(selection), 'analysis_run_id': None,
+            'analysis_sha256': None, 'task_id': task_id}
+        candidate = {'action': {'id': 'research.compose-report', 'version': '1.0'},
+            'privacy': 'project', 'cost_units': 8, 'input': report_input}
+        proposal = {'decision': 'append', 'reason': 'Evidence is selected.',
+            'target_action': 'research.compose-report', 'candidate': candidate,
+            'repeat_step_id': None, 'finish_reason': None}
+        planner_output = {'schema_version': 1, 'kind': 'research-next-step',
+            'research_id': research_id, 'run_id': planner_run_id,
+            'manifest_id': str(uuid4()), **proposal,
+            'proposal_sha256': digest(proposal)}
+
+        class ResearchChat(ChatStub):
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                return planner_output
+
+            def research_public_source(inner, run_id):
+                if run_id != source_run_id:
+                    raise ValueError('unknown source')
+                return {'reference': source_ref, 'project_id': self.project_id,
+                        'privacy': 'project', 'content': b'Evidence',
+                        'projection_schema': 'public-source-structured-v1'}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        ledger = []
+        planner_input = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'run_id': planner_run_id, 'manifest_id': planner_output['manifest_id'],
+            'profile_id': 'quick-search-v1', 'profile_version': '1.0',
+            'plan_revision': 1, 'ledger': ledger,
+            'ledger_sha256': digest(ledger), 'remaining_budget': {
+                'max_steps': 0, 'max_cost_units': 0, 'max_seconds': 900}}
+        planner = self.step('research.plan-next', planner_input)
+        planner['cost_units'] = 2
+        dynamic = {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': [
+                {'id': 'research.plan-next', 'version': '1.0'},
+                {'id': 'research.compose-report', 'version': '1.0'}],
+                'permissions': ['project-read', 'external-dispatch'],
+                'execution_boundaries': ['private-network']},
+            'budget': {'max_steps': 1, 'max_cost_units': 2,
+                       'max_seconds': 900}, 'steps': [planner]}
+        proposed = service.prepare(dynamic); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        awaiting = service.advance(self.workflow_id)
+        self.assertEqual(awaiting['steps'][0]['state'], 'awaiting-approval')
+        service.approve(self.workflow_id, planner['step_id'])
+        pending = service.advance(self.workflow_id)
+        self.assertEqual(pending['steps'][0]['state'], 'completed')
+        self.assertEqual(len(pending['revision_proposals']), 1)
+        revision = pending['revision_proposals'][0]
+        self.assertEqual(revision['state'], 'pending')
+        self.assertEqual(revision['proposal']['budget'], {
+            'max_steps': 2, 'max_cost_units': 10, 'max_seconds': 900})
+
+        restarted = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        recovered = restarted.get(self.workflow_id)
+        node_id, user_id = restarted._identity()
+        replayed = restarted._materialize_planner(recovered, node_id, user_id)
+        self.assertEqual(len(replayed['revision_proposals']), 1)
+        restarted.attach(self.workflow_id)
+        confirmed = restarted.confirm_revision(self.workflow_id,
+            revision['proposal_id'], revision['approval_digest'])
+        self.assertEqual((confirmed['plan_revision'], len(confirmed['steps'])),
+                         (2, 2))
+        self.assertEqual(confirmed['steps'][1]['action']['id'],
+                         'research.compose-report')
+        self.assertEqual(len(chat.calls), 1)
 
     def test_web_projection_hides_local_only_plans(self):
         local = self.step('analysis.read-only', {'selection_sha256': '1' * 64},

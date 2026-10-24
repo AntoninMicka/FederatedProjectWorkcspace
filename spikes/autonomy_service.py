@@ -13,6 +13,8 @@ from spikes.backend_contract import BackendUnknown
 from spikes.configuration import parse_node, read_config
 from spikes.metadata import require, uuid
 from spikes.project_creation import ProjectCreation
+from spikes.public_source import PublicSourceUnknown
+from spikes.research_workflow import load_research_profiles
 from spikes.web_search import SearchUnknown
 
 
@@ -25,6 +27,7 @@ class AutonomyService:
         self.chat_service = chat_service
         self.role_workflow_service = role_workflow_service
         self.registry = load_action_registry()
+        self.research_profiles = load_research_profiles(self.registry)
         root = Path(state_dir).absolute()
         if not os.path.lexists(root):
             root.mkdir(mode=0o700)
@@ -36,6 +39,12 @@ class AutonomyService:
             ('analysis.read-only', '1.0'): self._read_only,
             ('query.external', '1.0'): self._external,
             ('search.iterative-query', '1.0'): self._search,
+            ('source.fetch-public', '1.0'): self._fetch_public_source,
+            ('research.verify-evidence', '1.0'): self._verify_evidence,
+            ('research.select-relevant', '1.0'): self._select_relevant,
+            ('research.analyze', '1.0'): self._analyze_research,
+            ('research.compose-report', '1.0'): self._compose_report,
+            ('research.plan-next', '1.0'): self._plan_next,
             ('workflow.role-handoff', '1.0'): self._role_handoff,
             ('artifact.create-local', '1.0'): self._publish_artifact,
         }, countdown_seconds=countdown_seconds)
@@ -156,7 +165,71 @@ class AutonomyService:
                     and creator.get('state') == 'succeeded'
                     and creator.get('response_sha256') == value.get('creator_sha256')):
                 available.add('creator-result-current')
+        elif action == 'source.fetch-public':
+            candidate = self.chat_service.task_public_source_candidate(
+                value.get('request'))
+            preview = dict(candidate); preview_sha256 = preview.pop(
+                'preview_sha256', None)
+            preview.pop('state', None)
+            if (preview == value.get('preview')
+                    and preview_sha256 == value.get('preview_sha256')):
+                available.add('public-source-preview-current')
+        elif action == 'research.verify-evidence':
+            if self._source_refs_current(value.get('source_refs'), workflow['project_id']):
+                available.add('source-ledger-current')
+        elif action == 'research.select-relevant':
+            evidence = value.get('evidence')
+            if (isinstance(evidence, dict)
+                    and self._source_refs_current(evidence.get('sources'),
+                                                  workflow['project_id'])):
+                available.add('source-evidence-current')
+        elif action in {'research.analyze', 'research.compose-report'}:
+            selection = (value.get('selection') if action == 'research.analyze'
+                         else {'selected_source_run_ids':
+                               value.get('selected_source_run_ids')})
+            if self._selection_current(selection, workflow['project_id']):
+                available.add('research-selection-current')
+        elif action == 'research.plan-next':
+            if value.get('ledger') == self.research_ledger(workflow):
+                available.add('research-ledger-current')
         return available
+
+    def _source_refs_current(self, source_refs, project_id):
+        if not isinstance(source_refs, list) or not source_refs:
+            return False
+        try:
+            current = [self.chat_service.research_public_source(
+                item.get('run_id')) for item in source_refs]
+        except (AttributeError, ValueError):
+            return False
+        return all(item['project_id'] == project_id for item in current) and [
+            item['reference'] for item in current] == source_refs
+
+    def _selection_current(self, selection, project_id):
+        if not isinstance(selection, dict):
+            return False
+        run_ids = selection.get('selected_source_run_ids')
+        if not isinstance(run_ids, list) or not run_ids:
+            return False
+        try:
+            sources = [self.chat_service.research_public_source(value)
+                       for value in run_ids]
+        except (AttributeError, ValueError):
+            return False
+        return all(item['project_id'] == project_id for item in sources)
+
+    @staticmethod
+    def research_ledger(workflow):
+        """Project completed history to bounded immutable result references."""
+        result = []
+        for step in workflow.get('steps', []):
+            if step.get('state') not in {'completed', 'failed', 'unknown', 'cancelled'}:
+                continue
+            value = step.get('result')
+            result.append({'step_id': step['step_id'],
+                'action_id': step['action']['id'], 'state': step['state'],
+                'result_sha256': digest(value) if isinstance(value, dict) else None})
+        return result
 
     def propose_revision(self, proposal, *, allow_local_only=True):
         proposal = parse_revision_proposal(proposal)
@@ -276,7 +349,62 @@ class AutonomyService:
                          'project-write'},
             allowed_privacy={'public', 'project', 'confidential', 'local-only'},
             expected_head=workspace.git.head())
+        if result.get('plan_schema_version') == 3:
+            return self._materialize_planner(result, node_id, user_id)
         return self._append_search_continuation(result, node_id, user_id)
+
+    def _materialize_planner(self, workflow, node_id, user_id):
+        steps = workflow.get('steps') or []
+        if not steps or steps[-1].get('state') != 'completed' or steps[-1].get(
+                'action') != {'id': 'research.plan-next', 'version': '1.0'}:
+            return workflow
+        planner = steps[-1]; result = planner.get('result')
+        require(isinstance(result, dict), 'Research planner result is unavailable')
+        profile_key = (planner['input']['profile_id'],
+                       planner['input']['profile_version'])
+        profile = self.research_profiles.get(profile_key)
+        require(profile is not None, 'Research planner profile is unavailable')
+        profile_actions = {item['id'] for item in profile['actions']}
+        kind = result['decision']; step = repeat_of = None
+        if kind in {'append', 'repeat'}:
+            candidate = result['candidate']
+            require(candidate['action']['id'] in profile_actions,
+                    'Research planner proposed an action outside its profile')
+            repeat_of = result['repeat_step_id'] if kind == 'repeat' else None
+            dependency = repeat_of or planner['step_id']
+            step_id = str(uuid5(UUID(workflow['workflow_id']),
+                'research-planner:' + result['run_id'] + ':'
+                + result['proposal_sha256'] + ':step'))
+            step = {'step_id': step_id, 'action': candidate['action'],
+                'privacy': candidate['privacy'],
+                'cost_units': candidate['cost_units'],
+                'depends_on': [dependency], 'input': candidate['input']}
+        budget = dict(workflow['budget'])
+        maximum = profile['maximum_budget']
+        if step is not None:
+            budget['max_steps'] = max(budget['max_steps'], len(steps) + 1)
+            spent = budget['max_cost_units'] - workflow['remaining_cost']
+            budget['max_cost_units'] = max(budget['max_cost_units'],
+                                           spent + step['cost_units'])
+            if workflow['remaining_seconds'] == 0:
+                budget['max_seconds'] = min(maximum['max_seconds'],
+                                             budget['max_seconds'] + 300)
+        require(all(budget[key] <= maximum[key] for key in budget),
+                'Research planner proposal exceeds the profile maximum')
+        proposal_id = str(uuid5(UUID(workflow['workflow_id']),
+            'research-planner:' + result['run_id'] + ':'
+            + result['proposal_sha256'] + ':revision'))
+        reason = result['reason']
+        if kind == 'finish':
+            reason += ' [' + result['finish_reason'] + ']'
+        proposal = {'schema_version': 1, 'proposal_id': proposal_id,
+            'workflow_id': workflow['workflow_id'],
+            'base_revision': workflow['plan_revision'],
+            'base_plan_digest': workflow['plan_revisions'][-1]['plan_digest'],
+            'kind': kind, 'reason': reason, 'step': step,
+            'repeat_of': repeat_of, 'budget': budget}
+        return self.queue.propose_revision(proposal, node_id, user_id,
+            available_preconditions=self._revision_preconditions(workflow, proposal))
 
     @staticmethod
     def _read_only(value, execution):
@@ -332,6 +460,94 @@ class AutonomyService:
                 'round_index': (rounds[-1]['round_index'] if rounds else
                                 value['preview']['round_index']),
                 'next_query': next_queries[0] if next_queries else None}
+
+    def _fetch_public_source(self, value, execution):
+        request = value['request']
+        candidate = self.chat_service.task_public_source_candidate(request)
+        candidate_preview = dict(candidate)
+        candidate_sha = candidate_preview.pop('preview_sha256', None)
+        candidate_preview.pop('state', None)
+        require(candidate_preview == value['preview']
+                and candidate_sha == value['preview_sha256'],
+                'Public source preview changed before dispatch')
+        prepared = self.chat_service.task_public_source_preview(request)
+        require(prepared['preview_sha256'] == value['preview_sha256'],
+                'Public source preview changed while preparing dispatch')
+        try:
+            self.chat_service.task_public_source_confirm({**request,
+                'preview_sha256': value['preview_sha256'], 'approved': True})
+        except PublicSourceUnknown as exc:
+            raise UnknownEffect(str(exc)) from exc
+        reference = self.chat_service.task_public_source_reference(
+            {'task_id': request['task_id'], 'run_id': request['run_id']})
+        require(reference['search_id'] == request['search_id']
+                and reference['source_id'] == request['source_id'],
+                'Public source result differs from the approved request')
+        return {'schema_version': 1, 'kind': 'public-source-reference',
+            'task_id': reference['task_id'], 'search_id': reference['search_id'],
+            'source_id': reference['source_id'], 'run_id': reference['run_id'],
+            'state': 'succeeded', 'raw_sha256': reference['raw_sha256'],
+            'text_sha256': reference['text_sha256'],
+            'projection_sha256': reference['projection_sha256'],
+            'final_url': reference['url']}
+
+    def _verify_evidence(self, value, execution):
+        require(self._source_refs_current(value['source_refs'],
+                                          execution['project_id']),
+                'Research source ledger changed before verification')
+        relations = []
+        sources = value['source_refs']
+        for index, left in enumerate(sources):
+            for right in sources[index + 1:]:
+                if len(relations) >= 128:
+                    break
+                if left['origin'] == right['origin']:
+                    relations.append({'kind': 'same-origin',
+                        'source_run_ids': [left['run_id'], right['run_id']],
+                        'observation': 'Both fetched URLs have the same canonical origin.'})
+                if (len(relations) < 128
+                        and left['raw_sha256'] == right['raw_sha256']):
+                    relations.append({'kind': 'same-content',
+                        'source_run_ids': [left['run_id'], right['run_id']],
+                        'observation': 'Both reader runs have the same raw content digest.'})
+        warnings = ([] if len(sources) > 1 else
+                    ['Only one fetched source is available; independence is not established.'])
+        evidence = {'sources': sources, 'relations': relations,
+                    'warnings': warnings}
+        return {'schema_version': 1, 'kind': 'research-evidence',
+            'research_id': value['research_id'], 'evidence': evidence,
+            'evidence_sha256': digest(evidence)}
+
+    def _research_model(self, action_id, value, execution):
+        try:
+            return self.chat_service.research_model_action(
+                action_id, value, execution)
+        except BackendUnknown as exc:
+            raise UnknownEffect(str(exc)) from exc
+
+    def _select_relevant(self, value, execution):
+        require(self._source_refs_current(value['evidence']['sources'],
+                                          execution['project_id']),
+                'Research evidence changed before selection')
+        return self._research_model('research.select-relevant', value, execution)
+
+    def _analyze_research(self, value, execution):
+        require(self._selection_current(value['selection'], execution['project_id']),
+                'Research selection changed before analysis')
+        return self._research_model('research.analyze', value, execution)
+
+    def _compose_report(self, value, execution):
+        require(self._selection_current({'selected_source_run_ids':
+            value['selected_source_run_ids']}, execution['project_id']),
+            'Research selection changed before report composition')
+        return self._research_model('research.compose-report', value, execution)
+
+    def _plan_next(self, value, execution):
+        workflow = self._owned(execution['workflow_id'])
+        require(value['plan_revision'] == workflow['plan_revision']
+                and value['ledger'] == self.research_ledger(workflow),
+                'Research planner input is stale')
+        return self._research_model('research.plan-next', value, execution)
 
     @staticmethod
     def _derived_id(workflow_id, round_index, revision, label):
