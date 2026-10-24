@@ -8,8 +8,9 @@ SPDX-License-Identifier: MPL-2.0
 Datum: 2026-10-24. Stav: **navrženo** v
 `F-M4-DYNAMIC-WORKFLOW-01-A`; typovaný katalog a validátor návazností jsou
 implementované v bodu B a append-only revize plánu i limitu v bodu C.
-Orchestrace, sdílené UI a závěrečná recovery akceptace patří do navazujících
-bodů téže dávky. Rozšiřuje [ADR 0044](0044-governed-orchestration-autonomy.md)
+Orchestrace a sdílené UI jsou implementované v bodu D; závěrečná recovery
+akceptace patří do bodu E téže dávky. Rozšiřuje
+[ADR 0044](0044-governed-orchestration-autonomy.md)
 a zobecňuje search-only continuation z
 [ADR 0045](0045-governed-automatic-search-dispatch.md).
 
@@ -122,6 +123,14 @@ závislosti, stav a důvod navržené změny, její dopad na policy/limit a zbý
 steps/cost/time. Tlačítko potvrzení revize bude dostupné jen pro přesný
 aktuální digest v živém UI. Pause, cancel, doménové approval a countdown
 zůstanou oddělené akce.
+
+Implementovaná aplikační hranice nepřebírá preconditions z klientského
+požadavku. Znovu ověří aktuální projektový HEAD a podporované doménové
+preconditions proti jejich autoritám, než návrh předá journalu. Sdílená karta
+zobrazuje aktuální revizi, důvod, změnu budgetu, kapacitu kroků, cost a čas;
+zvýšení limitu lze potvrdit jen uloženým digestem po obnovení živého UI.
+Dynamický plán po dokončení posledního kroku nezíská implicitní stav
+`completed`: čeká na další platnou revizi nebo explicitní `finish`.
 
 ## Reuse a odmítnuté varianty
 

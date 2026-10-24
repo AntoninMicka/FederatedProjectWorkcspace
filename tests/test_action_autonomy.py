@@ -504,6 +504,8 @@ class ActionAutonomyTests(unittest.TestCase):
             queue, self.dynamic_plan([first]))
         completed = self.complete_manual_step(queue, first)
         self.assertEqual(completed['steps'][0]['state'], 'completed')
+        with self.assertRaisesRegex(ValidationError, 'awaits a revision'):
+            self.advance(queue)
 
         second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
                            depends=[first['step_id']])

@@ -7,7 +7,8 @@ import stat
 from uuid import UUID, uuid5
 
 from spikes.action_autonomy import (AutonomyQueue, UnknownEffect, digest,
-                                     load_action_registry)
+                                     load_action_registry,
+                                     parse_revision_proposal)
 from spikes.backend_contract import BackendUnknown
 from spikes.configuration import parse_node, read_config
 from spikes.metadata import require, uuid
@@ -122,6 +123,60 @@ class AutonomyService:
     def cancel(self, workflow_id):
         node_id, user_id = self._identity()
         return self.queue.cancel(workflow_id, node_id, user_id)
+
+    def _revision_preconditions(self, workflow, proposal):
+        """Derive current preconditions from domain authorities, never the client."""
+        plan = workflow['plan_revisions'][-1]['plan']
+        workspace = self.projects.workspace(workflow['project_id'], blocking=False)
+        available = set()
+        require(workspace.git.head() == plan['expected_head'],
+                'Project changed before autonomy plan revision')
+        available.add('project-head-current')
+        step = proposal.get('step')
+        if not isinstance(step, dict):
+            return available
+        action = step.get('action', {}).get('id')
+        value = step.get('input', {})
+        if (action == 'search.iterative-query'
+                and isinstance(value.get('request'), dict)
+                and isinstance(value.get('preview'), dict)
+                and isinstance(value.get('preview_sha256'), str)):
+            candidate = self.chat_service.task_search_candidate(value['request'])
+            preview = dict(candidate); preview_sha256 = preview.pop('preview_sha256', None)
+            preview.pop('state', None)
+            if (preview == value.get('preview')
+                    and preview_sha256 == value.get('preview_sha256')):
+                available.add('search-budget-current')
+        elif (action == 'workflow.role-handoff'
+              and isinstance(value.get('workflow_id'), str)
+              and isinstance(value.get('creator_sha256'), str)):
+            role = self.role_workflow_service.get(value['workflow_id'])
+            creator = (role.get('steps') or [{}])[0]
+            if (role.get('project_id') == workflow['project_id']
+                    and creator.get('state') == 'succeeded'
+                    and creator.get('response_sha256') == value.get('creator_sha256')):
+                available.add('creator-result-current')
+        return available
+
+    def propose_revision(self, proposal, *, allow_local_only=True):
+        proposal = parse_revision_proposal(proposal)
+        workflow = self.get(proposal.get('workflow_id'),
+                            allow_local_only=allow_local_only)
+        node_id, user_id = self._identity()
+        return self.queue.propose_revision(proposal, node_id, user_id,
+            available_preconditions=self._revision_preconditions(workflow, proposal))
+
+    def confirm_revision(self, workflow_id, proposal_id, approval_digest, *,
+                         allow_local_only=True):
+        workflow = self.get(workflow_id, allow_local_only=allow_local_only)
+        stored = next((item for item in workflow['revision_proposals']
+                       if item['proposal_id'] == proposal_id), None)
+        require(stored is not None, 'Unknown autonomy revision proposal')
+        node_id, user_id = self._identity()
+        return self.queue.confirm_revision(proposal_id, node_id, user_id,
+            approval_digest,
+            available_preconditions=self._revision_preconditions(
+                workflow, stored['proposal']))
 
     def prepare_search(self, value):
         required = {'workflow_id', 'task_id', 'mode', 'countdown_seconds'}

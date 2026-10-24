@@ -81,6 +81,17 @@ class AutonomyServiceTests(unittest.TestCase):
             'budget': {'max_steps': 16, 'max_cost_units': 100,
                        'max_seconds': 3600}, 'steps': steps}
 
+    def dynamic_plan(self, steps, *, max_steps=1, max_cost=1):
+        return {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': [
+                {'id': 'analysis.read-only', 'version': '1.0'}],
+                'permissions': ['project-read'],
+                'execution_boundaries': ['local-node']},
+            'budget': {'max_steps': max_steps, 'max_cost_units': max_cost,
+                       'max_seconds': 3600}, 'steps': steps}
+
     def activate(self, plan):
         proposed = self.service.prepare(plan)
         self.service.attach(self.workflow_id)
@@ -144,6 +155,11 @@ class AutonomyServiceTests(unittest.TestCase):
             def send_now(self, workflow_id, step_id, dispatch_digest):
                 calls.append(('send-now', workflow_id, step_id, dispatch_digest))
                 return {'state': 'queued'}
+            def propose_revision(self, request):
+                calls.append(('revision-propose', request)); return {'state': 'queued'}
+            def confirm_revision(self, workflow_id, proposal_id, approval_digest):
+                calls.append(('revision-confirm', workflow_id, proposal_id,
+                              approval_digest)); return {'state': 'queued'}
         driver = test_local_api.LocalAPITests()
         with running_api('http', handler=DesktopHandler) as server:
             server.autonomy_service = Service()
@@ -166,12 +182,23 @@ class AutonomyServiceTests(unittest.TestCase):
                 body=json.dumps({'workflow_id': self.workflow_id,
                     'step_id': str(uuid4()), 'dispatch_digest': '1' * 64}).encode())
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            proposal = {'workflow_id': self.workflow_id, 'proposal_id': str(uuid4())}
+            response = driver.request(server, path='/v1/autonomy/revision/propose',
+                body=json.dumps(proposal).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/revision/confirm',
+                body=json.dumps({'workflow_id': self.workflow_id,
+                    'proposal_id': proposal['proposal_id'],
+                    'approval_digest': '2' * 64}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
         self.assertEqual(calls[:3], [('list', self.project_id),
                                     ('attach', self.workflow_id), ('pause-all', None)])
         self.assertTrue({'/v1/autonomy/status', '/v1/autonomy/replace',
                          '/v1/autonomy/advance',
                          '/v1/autonomy/search/prepare',
                          '/v1/autonomy/search/edit', '/v1/autonomy/send-now',
+                         '/v1/autonomy/revision/propose',
+                         '/v1/autonomy/revision/confirm',
                          '/v1/autonomy/pause-all'} <= DesktopHandler.post_paths)
         for marker in ('id="autonomy-queue"', 'id="autonomy-plan-json"',
                        'id="autonomy-plan-example"',
@@ -179,10 +206,46 @@ class AutonomyServiceTests(unittest.TestCase):
                        "autonomyRequest('/v1/autonomy/advance'",
                        "projectRequest('/v1/autonomy/search/prepare'",
                        "autonomyRequest('/v1/autonomy/send-now'",
+                       "autonomyRequest('/v1/autonomy/revision/propose'",
+                       "autonomyRequest('/v1/autonomy/revision/confirm'",
                        'className=\'search-autonomy-countdown\'',
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else
                           CSS if marker.startswith(('#', '.')) else JS)
+
+    def test_service_stages_and_confirms_exact_dynamic_budget_revision(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        proposed = self.service.prepare(self.dynamic_plan([first]))
+        self.service.attach(self.workflow_id)
+        self.service.activate(self.workflow_id, proposed['activation_digest'])
+        self.service.advance(self.workflow_id)
+        self.service.approve(self.workflow_id, first['step_id'])
+        completed = self.service.advance(self.workflow_id)
+        self.assertEqual((completed['plan_schema_version'],
+                          completed['remaining_steps'], completed['remaining_cost']),
+                         (3, 0, 0))
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        revision = {'schema_version': 1, 'proposal_id': str(uuid4()),
+            'workflow_id': self.workflow_id,
+            'base_revision': completed['plan_revision'],
+            'base_plan_digest': completed['plan_revisions'][-1]['plan_digest'],
+            'kind': 'append', 'reason': 'Pokračovat druhou analýzou.',
+            'step': second, 'repeat_of': None,
+            'budget': {'max_steps': 2, 'max_cost_units': 2,
+                       'max_seconds': 3600}}
+        pending = self.service.propose_revision(revision)
+        stored = pending['revision_proposals'][-1]
+        self.assertEqual((stored['state'], pending['plan_revision']), ('pending', 1))
+        self.service.detach(self.workflow_id)
+        with self.assertRaisesRegex(ValidationError, 'live pending'):
+            self.service.confirm_revision(self.workflow_id, revision['proposal_id'],
+                                          stored['approval_digest'])
+        self.service.attach(self.workflow_id)
+        confirmed = self.service.confirm_revision(
+            self.workflow_id, revision['proposal_id'], stored['approval_digest'])
+        self.assertEqual((confirmed['plan_revision'], confirmed['remaining_steps'],
+                          len(confirmed['steps'])), (2, 0, 2))
 
     def test_search_ui_plan_can_be_edited_and_sent_now_through_exact_queue_step(self):
         task_id, parent_id = str(uuid4()), str(uuid4())

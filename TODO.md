@@ -69,11 +69,20 @@ mechanismus, nikoli search-only pipeline.
   commitem a replay po ztracené odpovědi nevytvoří druhou revizi ani krok.
   Ověření: 22 cílených testů `tests.test_action_autonomy` a úplná sada 787
   testů prošly, 28 testů bylo přeskočeno podle podmínek prostředí.
-- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-D — orchestrace, UI a recovery
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-D — orchestrace, UI a recovery
   (cílová úroveň: implemented).** Zobrazit aktuální plán, důvod a dopad změny,
   zbývající limit a samostatné potvrzení revize. Restart před/po revizi,
   `unknown` doménový účinek a ztráta UI musí zůstat fail-closed bez
-  automatického retry nebo implicitního zvýšení limitu.
+  automatického retry nebo implicitního zvýšení limitu. Výsledek: aplikační
+  služba a sdílené desktop/web API přijímají přesný návrh a potvrzují pouze
+  uložený confirmation digest; aktuální Git HEAD a doménové preconditions
+  odvozuje server. Karta fronty zobrazuje revizi, audit, důvod, dopad, zbývající
+  kroky/cost/čas a čekající zvýšení limitu potvrzuje samostatně jen se živým UI.
+  Heartbeat čekající revizi nepotvrzuje ani neopakuje; dynamický plán bez kroku
+  čeká na `append`, `repeat` nebo explicitní `finish`. Ověření: 31 cílených
+  testů prošlo, úplná sada 788 testů prošla a 28 testů bylo přeskočeno podle
+  podmínek prostředí; Python syntax, generovaný JavaScript a diff kontrola
+  prošly.
 - [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01-E — regrese a akceptace (cílová
   úroveň: implemented).** Ověřit append, repeat, early-finish, odmítnutou
   neplatnou návaznost, atomickou revizi limitu, souběh, restartové hranice,

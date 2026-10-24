@@ -838,6 +838,7 @@ class AutonomyQueue:
             result['global_paused'] = bool(
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
             result['mode'] = plan['mode']; result['privacy'] = plan['privacy']
+            result['plan_schema_version'] = plan['schema_version']
             result['budget'] = plan['budget']
             result['countdown_seconds'] = (plan['countdown_seconds']
                 if plan['schema_version'] in {2, 3} else self.countdown_seconds)
@@ -845,9 +846,19 @@ class AutonomyQueue:
                 'workflow_id': workflow_id, 'plan_digest': row['plan_digest'],
                 'mode': plan['mode'], 'budget': plan['budget']})
             result['activation_digest'] = row['activation_digest'] or proposed_activation
-            result['remaining_cost'] = plan['budget']['max_cost_units'] - row['spent_cost']
-            result['remaining_steps'] = (plan['budget']['max_steps']
-                                         - len(plan['steps']))
+            result['remaining_cost'] = max(
+                0, plan['budget']['max_cost_units'] - row['spent_cost'])
+            result['remaining_steps'] = max(
+                0, plan['budget']['max_steps'] - len(plan['steps']))
+            if row['activated_at'] is None:
+                result['remaining_seconds'] = plan['budget']['max_seconds']
+            else:
+                activated = datetime.fromisoformat(
+                    row['activated_at'].replace('Z', '+00:00'))
+                elapsed = int((datetime.now(timezone.utc) - activated).total_seconds())
+                result['remaining_seconds'] = max(0, min(
+                    plan['budget']['max_seconds'],
+                    plan['budget']['max_seconds'] - elapsed))
             result['steps'] = []
             for stored, planned in zip(steps, plan['steps']):
                 item = deepcopy(planned)
@@ -1420,6 +1431,8 @@ class AutonomyQueue:
             if candidate is None:
                 require(all(item['state'] == 'completed' for item in stored_steps),
                         'Autonomy workflow has no runnable step')
+                require(plan['schema_version'] != 3,
+                        'Dynamic autonomy plan awaits a revision or explicit finish')
                 db.execute("UPDATE workflows SET state='completed',updated_at=? "
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
                 return self.get(workflow_id, node_id, user_id)
