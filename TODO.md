@@ -35,13 +35,17 @@ mechanismus, nikoli search-only pipeline.
 
 ## Úkoly
 
-- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-A — současný kontrakt, reuse a
+- [x] [completed] **F-M4-DYNAMIC-WORKFLOW-01-A — současný kontrakt, reuse a
   crash boundaries (cílová úroveň: designed).** Prověřit `ActionRegistry`,
   `AutonomyQueue`, plan/step revisions, doménové adaptéry a sdílené UI.
   Vymezit typovaný katalog návazností, append/repeat/early-finish kontrakt,
   vlastnictví persistentních stavů a recovery před/po revizi bez druhého
-  writeru.
-- [ ] [planned] **F-M4-DYNAMIC-WORKFLOW-01-B — typovaný katalog a validátor
+  writeru. Výsledek: [ADR 0047](docs/adr/0047-dynamic-workflow-plan-revisions.md)
+  odděluje statickou policy, kumulativní limit a append-only revize, určuje
+  autority obou journalů a recovery včetně souběhu, pádu před/po revizi a
+  `unknown` doménového účinku. Reuse/reject je zaznamenán v
+  [REUSE_CATALOG](REUSE_CATALOG.md).
+- [ ] [in progress] **F-M4-DYNAMIC-WORKFLOW-01-B — typovaný katalog a validátor
   návazností (cílová úroveň: implemented).** Deklarovat bounded vstupy,
   výstupy, předpoklady a povolené následníky; odmítnout neznámou akci,
   nekompatibilní vazbu, chybějící výstup a pokus o rozšíření oprávnění,

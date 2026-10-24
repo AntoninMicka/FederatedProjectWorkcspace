@@ -498,6 +498,17 @@ publikace se nezavádějí. Soukromá inventura nedokládá shodnou dvojici auto
 a crash kontrakt; nepřebírá se z ní kód ani neveřejné detaily. Rozhodnutí:
 [ADR 0045](docs/adr/0045-governed-automatic-search-dispatch.md).
 
+`F-M4-DYNAMIC-WORKFLOW-01` **reuse/adaptuje `ActionRegistry`,
+`AutonomyQueue`, activation/approval digesty, SQLite `BEGIN IMMEDIATE`, UI
+lease/countdown, audit `step_revisions`, search continuation a explicitní
+doménovou reconciliation**. Typované vstupy/výstupy, obecné návaznosti a
+append-only revize plánu jsou rozšíření téže node-local autority, nikoli nový
+planner writer. Agent framework, message queue, mutable přepis plánu,
+automatické zvýšení limitu, retry `unknown` a druhý doménový writer se
+odmítají. Soukromá inventura nedokládá shodný approval/privacy/recovery
+kontrakt; nepřebírá se z ní kód ani neveřejné detaily. Rozhodnutí:
+[ADR 0047](docs/adr/0047-dynamic-workflow-plan-revisions.md).
+
 F-M3-PUBLIC-SOURCE-READER-01 **reuse/adaptuje** stavový a no-retry recovery
 vzor `SearchRuns`, standardní knihovnu pro HTTP/TLS, `ContextBuilder` a bezpečné
 textové vykreslení společného desktop/web UI. Používá však samostatný
