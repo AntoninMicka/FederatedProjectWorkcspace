@@ -91,6 +91,17 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   spikes/chat_service.py`, kontrola generovaného JavaScriptu přes `node
   --check`, `python3 -m unittest discover -s tests -v` (797 testů OK, 28
   skipped) a `git diff --check` bez chyb.
+  Doplňující požadavek z fyzické kontroly: dlouhé operace musí mít zřetelnou
+  dočasnou stavovou zprávu přímo na konci časové osy chatu (např.
+  „Vyhledávám…“, „Načítám zdroj…“, „Model přemýšlí…“), kterou po dokončení
+  nahradí durable výsledek nebo navazující stav workflow. Výsledek doplnění:
+  jednotná živá položka se spinnerem a časem je za běhu přímo poslední položkou
+  `role=log`, přežije překreslení časové osy a po dokončení se odstraní. Stav
+  rozlišuje search, reader, ověření vazeb, selection, analýzu, report a planner
+  v ručním i automatickém režimu; funguje také pro streamované i nestreamované
+  modelové odpovědi. Ověření: tři cílené UI/API testy OK, `node --check`
+  generovaného JavaScriptu, `python3 -m unittest discover -s tests -v` (797
+  testů OK, 28 skipped) a `git diff --check` bez chyb.
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
   akceptace (cílová úroveň: PoC validated).** Ověřit předčasné ukončení,
   doplňující hledání, opakované načtení, ověření vztahů, výběr zdrojů,

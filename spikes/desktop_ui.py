@@ -3837,7 +3837,7 @@ const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 const presentationApprovalAttempts=new Map();
-let streamScrollPending=false,streamAutoFollow=false;
+let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
  return getComputedStyle(mainPanelContent).overflowY==='visible' ?
   document.scrollingElement : mainPanelContent;
@@ -3859,12 +3859,22 @@ function finishChatAutoFollow(){
  if(follow)requestAnimationFrame(()=>{const owner=chatScrollOwner();owner.scrollTop=owner.scrollHeight;});
 }
 function startChatProgress(initialState){
- let state=initialState,started=Date.now();streamAutoFollow=true;chatStreamStatus.hidden=false;
+ const sequence=++chatProgressSequence;let state=initialState,started=Date.now();
+ chatProgressActive=true;streamAutoFollow=true;chatStreamStatus.hidden=false;
+ chatMessages.setAttribute('aria-busy','true');
+ chatMessages.append(chatStreamStatus);
  const render=()=>{const seconds=Math.floor((Date.now()-started)/1000);
   chatStreamProgressText.textContent=`${state} · ${seconds} s`;keepChatStreamVisible();};
  const timer=setInterval(render,1000);render();
- return {set(nextState){state=nextState;render();},stop(){clearInterval(timer);
-  chatStreamStatus.hidden=true;chatStreamProgressText.textContent='';}};
+ return {set(nextState){if(sequence!==chatProgressSequence)return;state=nextState;render();},stop(){clearInterval(timer);
+  if(sequence!==chatProgressSequence)return;chatProgressActive=false;
+  chatMessages.removeAttribute('aria-busy');chatStreamStatus.hidden=true;
+  chatStreamProgressText.textContent='';chatStreamStatus.remove();}};
+}
+async function withChatProgress(initialState,action){
+ const progress=startChatProgress(initialState);
+ try{await waitForVisiblePaint();return await action(progress);}
+ finally{progress.stop();}
 }
 function waitForVisiblePaint(){
  return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -3954,6 +3964,7 @@ function renderChat(thread){
   chatMessages.append(renderThreadMessage(entry.value,thread));
   for(const projection of entry.tasks)renderTaskOutcome(projection,false);
  }
+ if(chatProgressActive)chatMessages.append(chatStreamStatus);
  draft.placeholder=activeSearchContinuation()?
   'Zpřesněte další kolo hledání…':'Co chcete v projektu zpracovat?';
  const composerDisabled=!activeProject || !draft.value.trim() || !threadWritable();
@@ -4131,6 +4142,17 @@ const researchPhaseLabels={
  'research.compose-report':'Sestavení návrhu zprávy',
  'research.plan-next':'Rozhodnutí o dalším kroku'
 };
+function researchActivityLabel(step){
+ const action=step?.action?.id;
+ if(action==='search.iterative-query')return 'Vyhledávám a vyhodnocuji zdroje…';
+ if(action==='source.fetch-public')return 'Načítám a bezpečně zpracovávám zdroj…';
+ if(action==='research.verify-evidence')return 'Ověřuji původ a vazby zdrojů…';
+ if(action==='research.select-relevant')return 'Model vybírá relevantní zdroje…';
+ if(action==='research.analyze')return 'Model analyzuje vybrané zdroje…';
+ if(action==='research.compose-report')return 'Model sestavuje návrh zprávy…';
+ if(action==='research.plan-next')return 'Model přemýšlí o dalším kroku…';
+ return 'Provádím další krok workflow…';
+}
 async function prepareResearch(projection,mode,countdownSeconds,profileId){
  chatOperationStatus.textContent='Připravuji kontrolovatelný výzkumný plán bez odeslání…';
  try{await projectRequest('/v1/autonomy/research/prepare',{
@@ -4209,8 +4231,9 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
    workflow_id:workflow.workflow_id,activation_digest:workflow.activation_digest});renderChat(activeThread);
  }));
  if(['queued','running'].includes(workflow.state)&&workflow.mode==='manual')actions.append(taskButton('Provést další krok',async()=>{
-  await attach();await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});
-  await refreshActiveTaskOutcomes();renderChat(activeThread);
+  await withChatProgress(researchActivityLabel(step),async()=>{await attach();
+   await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});
+   await refreshActiveTaskOutcomes();renderChat(activeThread);});
  }));
  for(const awaiting of workflow.steps.filter(item=>item.state==='awaiting-approval'))actions.append(taskButton('Schválit přesný krok',async()=>{
   if(!confirm(`Potvrdit pouze tento krok?\n\n${researchPhaseLabels[awaiting.action.id] || awaiting.action.id}\n${JSON.stringify(awaiting.input,null,2)}`))return;
@@ -4218,9 +4241,10 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
  }));
  if(workflow.state==='countdown')actions.append(taskButton('Odeslat nyní',async()=>{
   if(!confirm(`Odeslat nyní přesně zobrazený dotaz?\n\n${preview.query}`))return;
-  await autonomyRequest('/v1/autonomy/send-now',{workflow_id:workflow.workflow_id,
-   step_id:step.step_id,dispatch_digest:step.dispatch_digest});
-  await refreshActiveTaskOutcomes();renderChat(activeThread);
+  await withChatProgress(researchActivityLabel(step),async()=>{
+   await autonomyRequest('/v1/autonomy/send-now',{workflow_id:workflow.workflow_id,
+    step_id:step.step_id,dispatch_digest:step.dispatch_digest});
+   await refreshActiveTaskOutcomes();renderChat(activeThread);});
  }));
  if(['queued','countdown'].includes(workflow.state))actions.append(taskButton('Pozastavit',async()=>{
   await autonomyRequest('/v1/autonomy/pause',{workflow_id:workflow.workflow_id});renderChat(activeThread);
@@ -4538,9 +4562,10 @@ document.querySelector('#search-confirm').addEventListener('click',async event=>
  if(!pendingSearchPreview)return;event.currentTarget.disabled=true;
  chatOperationStatus.textContent='SearXNG hledá a Ollama zpracovává bounded výsledky…';
  const preview=pendingSearchPreview.preview;
- try{const projection=await projectRequest('/v1/tasks/search/confirm',{
-   task_id:preview.task_id,search_id:preview.search_id,
-   preview_sha256:preview.preview_sha256,approved:true},210000);
+ try{const projection=await withChatProgress('Vyhledávám a model vyhodnocuje výsledky…',()=>
+   projectRequest('/v1/tasks/search/confirm',{
+    task_id:preview.task_id,search_id:preview.search_id,
+    preview_sha256:preview.preview_sha256,approved:true},210000));
   replaceTaskProjection(projection);pendingSearchPreview=null;
   document.querySelector('#search-preview').hidden=true;
   chatOperationStatus.textContent=projection.temporary ?
@@ -4677,8 +4702,9 @@ document.querySelector('#public-source-confirm').addEventListener('click',async 
  if(!pendingPublicSourcePreview)return;event.currentTarget.disabled=true;
  const {request,preview}=pendingPublicSourcePreview;
  chatOperationStatus.textContent='Ověřuji robots.txt a načítám jednu bounded statickou stránku…';
- try{const fetched=await projectRequest('/v1/tasks/public-source/confirm',{
-   ...request,preview_sha256:preview.preview_sha256,approved:true},65000);
+ try{const fetched=await withChatProgress('Načítám a bezpečně zpracovávám zdroj…',()=>
+   projectRequest('/v1/tasks/public-source/confirm',{
+    ...request,preview_sha256:preview.preview_sha256,approved:true},65000));
   displayPublicSourceResult(fetched);
   const owner=taskOutcomes.find(item=>item.task_id===fetched.task_id);
   if(owner){const refreshed=await projectRequest('/v1/tasks/list',{
@@ -5299,9 +5325,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const submit=document.querySelector('#chat-submit');submit.disabled=true;
   chatOperationStatus.textContent='Odesílám do OpenAI…';
   chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
-  const liveProgress=externalStreaming?startChatProgress('Připojuji se k OpenAI…'):null;
+  const liveProgress=externalStreaming ? startChatProgress('Připojuji se k OpenAI…') :
+   startChatProgress('Model přemýšlí…');
   let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
-  try{if(liveProgress)await waitForVisiblePaint();
+  try{await waitForVisiblePaint();
    const result=externalStreaming ?
    await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
@@ -5315,7 +5342,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   }catch(error){
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatOperationStatus.textContent=error.message;
-  }finally{if(liveProgress)liveProgress.stop();chatStream.hidden=true;
+  }finally{liveProgress.stop();chatStream.hidden=true;
    finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
   return;
  }
@@ -5337,11 +5364,11 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    'waiting-first-token':'Čekám na první část odpovědi…',thinking:'Ollama přemýšlí…',
    generating:'Ollama generuje odpověď…',
    completed:'Generování je dokončeno.'};
-  const liveProgress=ollamaStreaming?startChatProgress(streamStates.preparing):null;
+  const liveProgress=startChatProgress(ollamaStreaming?streamStates.preparing:'Model přemýšlí…');
   let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
-  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
+  const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';liveProgress.set('Model přemýšlí…');},250);
   try{
-   if(liveProgress)await waitForVisiblePaint();
+   await waitForVisiblePaint();
    const result=ollamaStreaming ? await streamRequest('/v1/chat/send-stream',pendingChatRequest,
     delta=>{receivedDeltas+=1;if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
      chatStream.textContent+=delta;keepChatStreamVisible();},status=>{
@@ -5357,7 +5384,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
     ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
-  }finally{clearTimeout(thinking);if(liveProgress)liveProgress.stop();
+  }finally{clearTimeout(thinking);liveProgress.stop();
    submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
    finishChatAutoFollow();}
   return;
@@ -5400,7 +5427,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const liveProgress=startChatProgress(adapter==='ollama'?
   'Ollama zpracovává explicitní úkol…':'Připravuji explicitní externí náhled…');
- const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';},250);
+ const thinking=setTimeout(()=>{chatOperationStatus.textContent='Model přemýšlí…';
+  liveProgress.set(pendingChatRequest?.task_plan?.search_query ?
+   'Vyhledávám a model vyhodnocuje výsledky…':'Model přemýšlí…');},250);
  try{
   await waitForVisiblePaint();
   const result=await projectRequest('/v1/tasks/route',pendingChatRequest,210000);
@@ -5517,7 +5546,7 @@ function scheduleAutomaticWorkflow(workflow){
  if(workflow.state==='queued'&&step?.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
  if(workflow.state==='countdown'&&step?.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
  if(delay===null)return;
- autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;try{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
+ autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;try{await withChatProgress(researchActivityLabel(step),async()=>{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);});}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
 }
 function renderAutonomyQueue(){
  if(document.activeElement?.matches('.autonomy-revision-editor textarea'))return;

@@ -882,6 +882,12 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chat-stream-status" class="chat-message assistant chat-live-progress" role="status" aria-live="polite"', HTML)
         self.assertIn('id="chat-stream-progress-text"', HTML)
         self.assertIn('id="chat-stream" class="chat-message assistant" aria-live="off"', HTML)
+        self.assertIn('chatMessages.append(chatStreamStatus)', JS)
+        self.assertIn('if(chatProgressActive)chatMessages.append(chatStreamStatus)', JS)
+        self.assertIn('chatStreamStatus.remove()', JS)
+        self.assertIn("withChatProgress('Vyhledávám a model vyhodnocuje výsledky…'", JS)
+        self.assertIn("withChatProgress('Načítám a bezpečně zpracovávám zdroj…'", JS)
+        self.assertIn("'research.plan-next')return 'Model přemýšlí o dalším kroku…'", JS)
         self.assertIn("projectRequest('/v1/external/request',{run_id:turn.run_id})", JS)
         self.assertIn('Zobrazit odeslaný request', JS)
         self.assertIn('Ollama nevrátila platný návrh externího volání',
@@ -1174,6 +1180,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chat-stream"', chat_panel)
         self.assertGreater(chat_panel.index('id="chat-stream-status"'),
                            chat_panel.index('id="chat-messages"'))
+        self.assertIn('chatMessages.append(chatStreamStatus)', JS)
+        self.assertIn('chatProgressActive=true', JS)
+        self.assertIn('chatProgressActive=false', JS)
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
         self.assertIn("mainPanelContent.addEventListener('scroll',updateChatAutoFollow", JS)
