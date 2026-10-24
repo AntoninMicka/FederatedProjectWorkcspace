@@ -53,6 +53,12 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   seznamy, tabulky, navigační balast, malformed/deep HTML, truncation, starý
   run, restart a tampering. Dokončit úplnou sadu, statické kontroly,
   dokumentaci a fyzický desktop/web průchod nad skutečnými stránkami.
+- [x] [completed] **F-M3-PUBLIC-SOURCE-READER-02-E — durable položky readeru
+  v časové ose (cílová úroveň: implemented).** Ad-hoc oprava z fyzické
+  akceptace 24. 10. 2026: úspěšně načtené stránky se po restartu nesmějí
+  ztratit v dočasném společném panelu. Každý run se zobrazí samostatně podle
+  `fetched_at`, včetně opakovaných načtení stejného zdroje, a rozbalí přesnou
+  lokální projekci bez nového síťového fetch.
 
 ## Průběžné výsledky a ověření
 
@@ -65,10 +71,16 @@ auditovatelné; nová projekce nesmí změnit recovery autoritu fetch runu.
   schema; text-only run první verze zůstává čitelný bez migrace.
 - Sdílené UI vykresluje strukturu pouze přes DOM `textContent`, nabízí
   přepnutí na původní bounded text a nezavádí síťový ani Git účinek.
+- Oprava z fyzické akceptace promítá každý úspěšný reader run do časové osy
+  vlákna. Rozbalení volá pouze lokální result endpoint; předchozí chyba
+  obnovovala po restartu metadata, ale plný výtah nechávala jen v dočasném
+  panelu a při opakování stejného zdroje zvýraznila pouze poslední run.
 - Návrh, crash hranice, reuse a omezení jsou v
   [ADR 0046](docs/adr/0046-structured-public-source-projection.md), katalogu a
   aktualizovaném [akceptačním checklistu](docs/public-source-reader-acceptance.md).
-- Cílená sada 25 testů prošla. Úplná sada mimo omezený socket sandbox prošla:
+- Původní cílená sada 25 testů prošla; cílená regrese durable časové osy má
+  dalších 16 úspěšných testů. Úplná sada zopakovaná po opravě časové osy mimo
+  omezený socket sandbox prošla:
   `780` testů, `28` přeskočených volitelných/fyzických testů. `py_compile`,
   `node --check` generovaného JavaScriptu a `git diff --check` prošly.
 - Zbývá fyzická desktop/web akceptace nad nejméně dvěma skutečnými statickými

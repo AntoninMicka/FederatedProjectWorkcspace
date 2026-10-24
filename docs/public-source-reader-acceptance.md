@@ -38,7 +38,10 @@ crawler, browser ani automatický import do projektu.
    SHA-256 a výslovnou informaci, že projekt nebyl změněn. `git status` a HEAD
    testovacího projektu zůstanou stejné.
 6. Restartujte desktop. U stejného výsledku použijte **Zobrazit načtený text**;
-   musí se načíst z durable stagingu bez nového síťového požadavku.
+   každé úspěšné načtení musí mít vlastní chronologickou položku **Načtená
+   veřejná stránka**. Rozbalení načte structured/text projekci z durable
+   stagingu bez nového síťového požadavku. Opakované načtení stejné URL nesmí
+   skrýt předchozí run.
 7. Stejný průchod zopakujte na druhém nezávislém statickém originu.
 8. Dynamická/JavaScript-only stránka musí skončit viditelně `unsupported`,
    nikoli prázdným úspěchem nebo spuštěním browserového fallbacku.

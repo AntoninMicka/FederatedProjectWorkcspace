@@ -3904,6 +3904,11 @@ function buildChatTimeline(thread,projections){
    tasksByPrompt.get(messageId).push(projection);
   }else entries.push({kind:'task',created_at:projection.created_at,
    stable_id:projection.task_id,value:projection});
+  for(const source of projection.public_sources || [])if(source.state==='succeeded'){
+   entries.push({kind:'public-source',
+    created_at:source.result?.fetched_at || projection.created_at,
+    stable_id:source.run_id,value:{task_id:projection.task_id,source}});
+  }
  }
  for(const [index,item] of messages.entries())entries.push({kind:'message',
   created_at:item.created_at,stable_id:String(index).padStart(12,'0'),value:item,
@@ -3945,6 +3950,7 @@ function renderChat(thread){
  if(responseLanguagePolicy)applyResponseLanguageStatus({response_language_policy:responseLanguagePolicy});
  for(const entry of buildChatTimeline(thread,taskOutcomes)){
   if(entry.kind==='task'){renderTaskOutcome(entry.value,true);continue;}
+  if(entry.kind==='public-source'){renderPublicSourceTimelineEntry(entry.value);continue;}
   chatMessages.append(renderThreadMessage(entry.value,thread));
   for(const projection of entry.tasks)renderTaskOutcome(projection,false);
  }
@@ -4466,6 +4472,9 @@ async function preparePublicSource(projection,searchId,source){
 function displayPublicSourceResult(fetched){
  const panel=document.querySelector('#public-source-preview');panel.hidden=false;
  const result=document.querySelector('#public-source-result');
+ populatePublicSourceResult(result,fetched);
+}
+function populatePublicSourceResult(result,fetched){
  const structured=result.querySelector('.public-source-structured');
  const original=result.querySelector('.public-source-text');original.textContent=fetched.text;
  renderPublicSourceProjection(structured,fetched.projection);
@@ -4475,6 +4484,40 @@ function displayPublicSourceResult(fetched){
  result.querySelector('small').textContent=
   `run ${fetched.run_id} · text SHA-256 ${fetched.result.text_sha256} · ${fetched.result.text_length} znaků${fetched.result.projection?' · '+fetched.result.projection.block_count+' bloků · projekce '+fetched.result.projection.sha256:''} · do projektu nebylo nic zapsáno`;
  result.hidden=false;
+}
+function createPublicSourceResultView(){
+ const result=document.createElement('div');result.className='public-source-inline-result';result.hidden=true;
+ const tabs=document.createElement('div');tabs.className='public-source-view-tabs';tabs.setAttribute('role','group');tabs.setAttribute('aria-label','Zobrazení veřejného zdroje');
+ const structuredButton=document.createElement('button');structuredButton.type='button';structuredButton.dataset.sourceView='structured';structuredButton.textContent='Strukturovaný výtah';
+ const textButton=document.createElement('button');textButton.type='button';textButton.dataset.sourceView='text';textButton.className='secondary-button';textButton.textContent='Původní bounded text';
+ const structured=document.createElement('div');structured.className='public-source-structured';structured.setAttribute('role','document');
+ const original=document.createElement('pre');original.className='public-source-text';original.hidden=true;
+ const detail=document.createElement('small');tabs.append(structuredButton,textButton);result.append(tabs,structured,original,detail);
+ result.addEventListener('click',event=>{const button=event.target.closest('[data-source-view]');if(button)selectPublicSourceView(result,button.dataset.sourceView);});
+ return result;
+}
+function renderPublicSourceTimelineEntry(entry){
+ const source=entry.source,card=document.createElement('section');card.className='task-outcome terminal public-source-timeline-entry';
+ const heading=document.createElement('h3');heading.textContent='Načtená veřejná stránka';
+ const title=document.createElement('strong');title.textContent=source.title;
+ const url=document.createElement('code');url.textContent=source.url;
+ const projection=source.result?.projection;
+ const detail=document.createElement('small');detail.textContent=
+  `${source.result?.fetched_at || 'čas neuveden'} · run ${source.run_id}${projection?' · '+projection.block_count+' bloků':''}`;
+ const actions=document.createElement('div');actions.className='task-actions';
+ const button=document.createElement('button');button.type='button';button.textContent='Zobrazit uložený výtah';
+ let view=null;
+ button.addEventListener('click',async()=>{
+  if(view){view.hidden=!view.hidden;button.textContent=view.hidden?'Zobrazit uložený výtah':'Skrýt uložený výtah';return;}
+  button.disabled=true;
+  try{const fetched=await projectRequest('/v1/tasks/public-source/result',{
+    task_id:entry.task_id,run_id:source.run_id});
+   view=createPublicSourceResultView();populatePublicSourceResult(view,fetched);card.append(view);
+   button.textContent='Skrýt uložený výtah';
+  }catch(error){chatOperationStatus.textContent=error.message;}
+  finally{button.disabled=false;}
+ });
+ actions.append(button);card.append(heading,title,url,detail,actions);chatMessages.append(card);
 }
 function selectPublicSourceView(result,view){
  const structured=result.querySelector('.public-source-structured');
