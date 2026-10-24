@@ -66,8 +66,9 @@ doručena PR #85 jako merge commit `7dce1c4`; evidence je ve WORK_LOG.
 doručena PR #86 jako merge commit `6d12902`; evidence je ve WORK_LOG.
 `F-M3-PUBLIC-SOURCE-READER-02` byla 24. 10. 2026 akceptována na úrovni PoC
 validated a doručena PR #87 jako merge commit `023eae1`; evidence je ve
-WORK_LOG. Navazující `F-M4-DYNAMIC-WORKFLOW-01` byla aktivována v TODO na
-vlastní feature větvi.
+WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
+PoC validated; evidence je ve WORK_LOG a její PR do `develop` zatím nebyl
+vytvořen ani sloučen.
 
 ## Zjištěné mezery a navazující ověření
 
