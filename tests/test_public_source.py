@@ -341,6 +341,28 @@ class PublicSourceTests(unittest.TestCase):
         self.assertEqual(project_document(html, 'text/html', 10_000),
                          (text, projection))
 
+    def test_structured_projection_filters_chrome_forms_and_keeps_cards_coherent(self):
+        html = (b'<html><head><title>Events</title></head><body>\xef\xbb\xbf'
+                b'<div class="element-invisible">Skip to content</div>'
+                b'<header>Brand language menu</header><main><h1>News</h1>'
+                b'<ul><li><span>21 Oct</span><h2>Open call</h2>'
+                b'<p>Three day residency.</p><a>More</a></li>'
+                b'<li style="display: none">Hidden card</li></ul>'
+                b'<h2>Newsletter</h2><p>Monthly updates.</p>'
+                b'<form><label>Email</label><p>Consent boilerplate</p></form>'
+                b'</main></body></html>')
+        text, projection = project_document(html, 'text/html', 10_000)
+        self.assertEqual([item['type'] for item in projection['blocks']],
+                         ['heading', 'list-item', 'heading', 'paragraph'])
+        self.assertEqual(projection['blocks'][1]['text'],
+                         '21 Oct Open call Three day residency. More')
+        self.assertEqual(projection['blocks'][1]['heading_path'], ['News'])
+        self.assertNotIn('Skip to content', text)
+        self.assertNotIn('\ufeff', text)
+        self.assertNotIn('Brand language menu', text)
+        self.assertNotIn('Hidden card', text)
+        self.assertNotIn('Consent boilerplate', text)
+
     def test_duplicate_blocks_have_unique_stable_anchors_for_html_and_text(self):
         for body, mime in ((b'<p>Same</p><p>Same</p>', 'text/html'),
                            (b'Same\n\nSame', 'text/plain')):

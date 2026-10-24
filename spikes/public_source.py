@@ -248,7 +248,10 @@ class HTTPResult:
 
 class _StructuredHTML(HTMLParser):
     hidden_tags = {'script', 'style', 'noscript', 'template', 'svg', 'canvas',
-                   'iframe', 'object', 'head', 'nav', 'footer', 'aside'}
+                   'iframe', 'object', 'head', 'header', 'nav', 'footer', 'aside',
+                   'form'}
+    hidden_classes = {'element-invisible', 'screen-reader-only', 'sr-only',
+                      'visually-hidden', 'u-hidden'}
     content_tags = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'dt', 'dd',
                     'blockquote', 'pre'}
     boundary_tags = content_tags | {'table', 'tr', 'th', 'td', 'caption', 'ul', 'ol'}
@@ -265,7 +268,8 @@ class _StructuredHTML(HTMLParser):
 
     @staticmethod
     def _normalized(parts, *, preserve=False):
-        value = ''.join(parts).replace('\r\n', '\n').replace('\r', '\n')
+        value = (''.join(parts).replace('\ufeff', '').replace('\u200b', '')
+                 .replace('\r\n', '\n').replace('\r', '\n'))
         if preserve:
             return '\n'.join(line.rstrip() for line in value.splitlines()).strip()
         return ' '.join(value.split())
@@ -349,9 +353,13 @@ class _StructuredHTML(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower(); attributes = {key.lower(): value for key, value in attrs}
+        classes = set(str(attributes.get('class', '')).lower().split())
+        style = re.sub(r'\s+', '', str(attributes.get('style', '')).lower())
         hidden = (tag in self.hidden_tags or 'hidden' in attributes
                   or str(attributes.get('aria-hidden', '')).lower() == 'true'
-                  or str(attributes.get('role', '')).lower() == 'navigation')
+                  or str(attributes.get('role', '')).lower() == 'navigation'
+                  or bool(classes & self.hidden_classes)
+                  or 'display:none' in style or 'visibility:hidden' in style)
         if tag not in self.void_tags:
             self.stack.append((tag, hidden)); self.hidden += int(hidden)
         if len(self.stack) > 256:
@@ -388,6 +396,12 @@ class _StructuredHTML(HTMLParser):
             elif tag == 'caption': self._start_capture(tag, 'caption')
             return
         if tag in self.content_tags:
+            if self.captures and self.captures[-1]['type'] == 'list-item' and tag != 'li':
+                # Cards are commonly encoded as <li> with a heading and paragraphs
+                # inside. Keep the card as one coherent list item instead of emitting
+                # a heading followed by text assigned to the previous heading path.
+                self.captures[-1]['parts'].append('\n')
+                return
             if tag[0] == 'h' and tag[1:].isdigit():
                 self._start_capture(tag, 'heading', level=int(tag[1:]))
             elif tag == 'li':
@@ -414,7 +428,11 @@ class _StructuredHTML(HTMLParser):
                     self.table_depth -= 1
                     if self.table_depth == 0: self._finish_table()
             else:
-                if tag in self.content_tags: self._finish_capture(tag)
+                if (tag in self.content_tags and self.captures
+                        and self.captures[-1]['type'] == 'list-item' and tag != 'li'):
+                    self.captures[-1]['parts'].append('\n')
+                elif tag in self.content_tags:
+                    self._finish_capture(tag)
                 if tag in {'ul', 'ol'} and self.list_stack:
                     self.list_stack.pop(); self._flush_loose()
         if tag not in self.void_tags:

@@ -31,7 +31,9 @@ crawler, browser ani automatický import do projektu.
    nový run, starý `prepared` záznam se nesmí automaticky odeslat.
 4. Připravte náhled znovu, potvrďte jej a ověřte výchozí **Strukturovaný
    výtah**. Nadpisy, odstavce, vnořené seznamy a tabulky musí být ve
-   srozumitelném pořadí; navigace a footer se nesmí promíchat s článkem.
+   srozumitelném pořadí; obsahové karty musí zůstat pohromadě a hlavička,
+   navigace, footer, skryté prvky ani formulářový balast se nesmí promíchat
+   s článkem.
    Skripty, styly, skryté elementy a odkazy se nespustí ani nestáhnou.
 5. Přepněte na **Původní bounded text** a zpět. Obě zobrazení jsou inertní a
    přepnutí nevyvolá síť. Ověřte run ID, počet bloků, textový i projekční

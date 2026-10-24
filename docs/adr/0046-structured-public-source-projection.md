@@ -28,10 +28,13 @@ nese aktuální nadpisovou cestu a deterministický anchor odvozený z kanonick�
 obsahu; opakovaný shodný blok dostane pořadové zakončení. Tabulky mají zvlášť
 caption, bounded řádky, buňky a indexy plně hlavičkových řádků.
 
-Navigace, footer, aside, aktivní/skryté elementy a `role=navigation` nejsou
-obsahové bloky. Neznámé inline elementy mohou přispět pouze svým viditelným
-textem k právě otevřenému bloku. Parser nespouští HTML, JavaScript, odkazy ani
-další síťový účinek. Prompt injection zůstává inertním nedůvěryhodným textem.
+Hlavička stránky, navigace, footer, aside, formuláře, explicitně skryté
+elementy a `role=navigation` nejsou obsahové bloky. Běžná obsahová karta
+zapsaná jako položka seznamu s vnořeným nadpisem a odstavcem zůstane jedním
+souvislým blokem; vnořený nadpis nesmí změnit cestu následující karty. Neznámé
+inline elementy mohou přispět pouze svým viditelným textem k právě otevřenému
+bloku. Parser nespouští HTML, JavaScript, odkazy ani další síťový účinek.
+Prompt injection zůstává inertním nedůvěryhodným textem.
 
 `projection.txt` zůstává vstupem pro model a auditovatelným textovým
 fallbackem. U nového HTML se deterministicky renderuje ze strukturovaných
@@ -71,4 +74,3 @@ Jde o čitelnou statickou projekci, ne o úplnou implementaci HTML layoutu.
 Složité tabulky s `rowspan`/`colspan`, CSS generovaný obsah, shadow DOM,
 JavaScript-only stránky a přesné vizuální pořadí nejsou podporované. Reader
 neodhaduje hlavní článek pomocí skórování a nadále nestahuje navazující zdroje.
-
