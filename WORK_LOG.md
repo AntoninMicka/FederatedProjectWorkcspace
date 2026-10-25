@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/ops-node-monitor-01` z lokálního `develop`
 `f3faf26` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+doručena byla PR #90 jako merge commit `57009e2` do `develop`.
 
 - [x] [completed] **OPS-NODE-MONITOR-01-A — diagnostický kontrakt, provenance
   a recovery (designed).** [ADR 0049](docs/adr/0049-node-and-ollama-runtime-telemetry.md)
@@ -83,7 +83,8 @@ node-local, váže se na přesný binding a běh zachytí jeho revizi při dispa
 Tokenové součty jsou obnovitelná read-only projekce durable odpovědí, nikoli
 další účetní autorita. Obecný monitoring, alerting, automatická náprava a
 souběžná obsluha dlouhého streamu zůstávají mimo tuto dávku; poslední mezera je
-předána jako `OPS-WEB-CONCURRENCY-01` do [BACKLOG](BACKLOG.md).
+předána jako `OPS-WEB-CONCURRENCY-01` a po doručení PR #90 aktivována v
+[TODO](TODO.md) na vlastní feature větvi.
 
 ## F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow — 2026-10-25
 

@@ -1132,9 +1132,9 @@ Gate M3 proto není vydáván za celý uzavřený.
   a explicitního očekávání. Fyzické same-node i připnuté private-network běhy,
   restart a CPU-only varování prošly; partial-GPU zůstává na hostu se sdílenou
   pamětí nevyvolatelné a výslovně neověřené. Diagnostika nic automaticky
-  nerestartuje, nepřepíná ani neopakuje. Evidence je ve WORK_LOG; PR feature
-  větve do `develop` zatím nebyl vytvořen ani sloučen. Souběh monitoru s
-  dlouhým streamem je samostatná dávka `OPS-WEB-CONCURRENCY-01` v BACKLOG.
+  nerestartuje, nepřepíná ani neopakuje. Evidence je ve WORK_LOG; dávka byla
+  doručena PR #90 jako merge commit `57009e2`. Souběh monitoru s dlouhým
+  streamem je aktivní samostatná dávka `OPS-WEB-CONCURRENCY-01` v TODO.
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
