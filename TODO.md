@@ -123,7 +123,11 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   se ukázalo, že kompaktní panel zobrazoval pouze neutrální `cpu`; navazující
   úprava G přidala varování i tam a následná fyzická kontrola jeho zobrazení
   potvrdila.
-- D zůstává otevřené pouze pro private-network pinning.
+- Uživatel 25. 10. 2026 potvrdil, že dostupnost Ollamy po privátní síti byla
+  opravena. Jde o provozní důkaz dosažitelnosti; zbývající akceptace ještě musí
+  doložit, že Workspace běh a jeho runtime evidence zachovaly přesné binding
+  ID/revizi, boundary, target ID a TLS pin bez fallbacku.
+- D zůstává otevřené pouze pro toto ověření private-network pinningu.
   Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
   a GPU používají sdílenou paměť; tento scénář zůstává explicitně neověřený,
   nikoli neúspěšný. Ollama běží v Dockeru, proto lze CPU-only průchod provést
