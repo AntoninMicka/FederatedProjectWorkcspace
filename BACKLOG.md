@@ -68,9 +68,9 @@ doručena PR #86 jako merge commit `6d12902`; evidence je ve WORK_LOG.
 validated a doručena PR #87 jako merge commit `023eae1`; evidence je ve
 WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
 PoC validated a doručena PR #88 jako merge commit `5d74144`; evidence je ve
-WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` je po fyzické regresi znovu
-aktivní v TODO na vlastní feature větvi; PR do `develop` nebyl vytvořen ani
-sloučen.
+WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regrese
+25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
+WORK_LOG; PR do `develop` nebyl vytvořen ani sloučen.
 
 ## Zjištěné mezery a navazující ověření
 

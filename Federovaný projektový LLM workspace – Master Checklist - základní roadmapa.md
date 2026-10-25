@@ -1244,11 +1244,12 @@ PR #47 byl sloučen do `develop` jako `8854d69`.
   fyzická akceptace jsou ve
   [WORK_LOG](WORK_LOG.md#f-m4-dynamic-workflow-01--katalog-činností-a-dynamický-plán--2026-10-24);
   PR #88 byl doručen do `develop` jako merge commit `5d74144`.
-- [ ] Dynamický výzkumný workflow — F-M4-RESEARCH-WORKFLOW-01: profilová
+- [x] Dynamický výzkumný workflow — F-M4-RESEARCH-WORKFLOW-01: profilová
   policy nad hledáním, readerem, ověřením evidence, výběrem relevance,
-  volitelnou analýzou a návrhem zprávy je po fyzické regresi znovu aktivní v
-  [TODO](TODO.md). Implementace a automatické ověření jsou hotové; zbývá
-  zopakovat fyzické sestavení a otevření návrhu zprávy.
+  volitelnou analýzou a návrhem zprávy je fyzicky akceptovaná na úrovni PoC
+  validated; recovery, regrese koncového newline, ověření a omezení jsou ve
+  [WORK_LOG](WORK_LOG.md#f-m4-research-workflow-01--dynamický-výzkumný-workflow--2026-10-25).
+  PR do `develop` zatím nebyl vytvořen ani sloučen.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
