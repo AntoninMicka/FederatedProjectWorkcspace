@@ -32,6 +32,13 @@ M0-01 adaptuje existující `spikes/journal.py`, `spikes/storage.py` a jejich te
 
 Shellový launcher adaptuje existující unittest příkaz a `spikes.check_project`; dočasné demo používá `Workspace`/`Git` přímo. Nevytváří další storage implementaci ani aplikační server.
 
+TEST-EXECUTION-01 **reuse/adaptuje** stávající stdlib `unittest`, shellový
+launcher a GitHub Actions matrix. Malý stdlib shard runner pouze projektuje
+všechny top-level testovací moduly do izolovaných procesů; nemění jejich
+význam ani testovací runtime. Nový framework nebo `pytest-xdist` se nepřidává,
+protože souběh uvnitř společného procesu/worktree by oslabil izolaci socketů,
+globálního stavu, Qt a recovery scénářů a přidal by zbytečnou závislost.
+
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 
 M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).

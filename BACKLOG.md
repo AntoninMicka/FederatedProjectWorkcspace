@@ -78,9 +78,11 @@ doručena PR #90 jako merge commit `57009e2`; evidence je ve
 akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
 `25d065f`; evidence je ve WORK_LOG. `F-M3-MODEL-CATALOG-01` byla doručena PR
 #92 jako merge commit `2da2628`; evidence je ve WORK_LOG.
-`F-M3-ATLASCLOUD-01` byla 25. 10. 2026 akceptována na úrovni PoC validated;
-evidence je ve WORK_LOG a větev `feature/f-m3-atlascloud-01` čeká na vytvoření
-a doručení PR do `develop`.
+`F-M3-ATLASCLOUD-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
+doručena PR #93 jako merge commit `0405d14`; evidence je ve WORK_LOG.
+Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla lokálně akceptována a
+na vlastní feature větvi čeká na doručení PR; evidence je ve WORK_LOG.
+Nejbližší produktovou dávkou zůstává `UX-BACKEND-MODEL-01`.
 
 ### UX-BACKEND-MODEL-01 — výběr backendu a modelu v chatu
 
