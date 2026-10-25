@@ -37,7 +37,22 @@ Každá projekce nese vlastní digest/revizi a u každé spustitelné nabídky:
 - efektivní capabilities se stavem, zdrojem a revizí podle fail-closed
   precedence ADR 0051;
 - `knowledge_revision`, `discovery_revision` a capability revision použité
-  projekcí.
+projekcí.
+
+Nad adapter registry vznikne read-only **katalog podporovaných backendů**.
+Descriptor backendu je kódem/verzovaným manifestem doložená identita a nese
+zobrazovaný název, stav podpory, typ hranice a množinu služeb. Služby jsou
+oddělené od modelových capabilities; první kontrakt rozlišuje alespoň
+`text-generation`, `image-generation`, `web-search`, `storage-import` a
+`resource-metrics`. Backend tedy nemusí poskytovat modely a jeden backend může
+poskytovat více nesouvisejících služeb. Neznámá služba ani capability se
+nepředstírá jako podporovaná.
+
+Nastavení spojení je providerově specifický `BackendProfile` (endpoint,
+credential reference, hranice, timeouty a další pravidla adapteru), nikoli
+volba modelu. Dosavadní bindingy s modelem se migrují beze ztráty jako legacy
+profil plus doložená nabídka; dokud migrace neumí oddělení prokázat, zůstane
+profil čitelný, ale nový obecný dispatch se z něj nepovolí optimisticky.
 
 Stejný providerový název nikdy automaticky neslučuje modely. Nabídka bez
 explicitní kanonické vazby je samostatná scoped volba; může být vybrána po
@@ -79,6 +94,59 @@ Kompatibilní preferované modely jsou v první úrovni, ostatní pod „Další
 Preference nevybírají backend, nabídku ani model, nejsou autorizací, fallbackem
 ani součástí providerového credentialu.
 
+### Nastavení backendů a modelový katalog
+
+Sekce Nastavení zobrazí backendy stejným seznamovým vzorem jako federaci:
+jedna tabulka všech podporovaných backendů, jejich stav připojení,
+dostupnost a deklarované služby. Tabulka má pouze akce **Nastavit** a
+**Resetovat**. Nastavit otevře vlastní dialog adapteru; dialog mění jen profil
+připojení/credentials a smí explicitně provést read-only discovery nebo test.
+Model pro běh se v dialogu backendu nevybírá. Reset vyžaduje samostatné
+potvrzení, odstraní profil a jeho credential bezpečným providerovým lifecycle,
+ale nemaže historii runů, modelovou knowledge vrstvu, poslední bezpečně
+čitelné discovery snapshoty ani modelové preference. Ty se pouze promítnou jako
+nedostupné/stale a nelze jimi autorizovat dispatch.
+
+Obecný modelový katalog dostane samostatnou stránku Nastavení. Tabulka ukáže
+všechny kanonické modely i nesloučené scoped nabídky napříč backendy, jejich
+dostupnost, čerstvost a souhrn schopností. Detail modelu je v této dávce
+striktně read-only: oddělí obecné reviewované capabilities od efektivních
+capabilities každé providerové nabídky a u každé hodnoty ukáže stav/provenance,
+protokol a revizi. Konflikt, unknown a chybějící kanonická vazba zůstanou
+viditelné. Dosavadní JSON import znalostí není součástí tohoto uživatelského
+pohledu a nesmí z read-only dialogu vzniknout skrytá editace.
+
+Konfigurace backendů je pouze pro oprávněného správce uzlu. Read-only katalog
+smí vidět běžný uživatel v rozsahu backendů dostupných jeho uzlu, ale nikdy
+endpoint secret, credential reference ani providerová account data, k nimž nemá
+oprávnění.
+
+### Zdroje a spotřeba backendů
+
+Backend descriptor deklaruje také podporované resource metriky. Jednotná
+read-only projekce rozliší:
+
+- spotřebu uložených runů (`tokens`, requesty, trvání), jejímž zdrojem jsou
+  validované providerové odpovědi v run journalu;
+- providerový account usage/cost za vymezené období;
+- aktuální balance/credits a quota/limit, pouze pokud je backend skutečně
+  reportuje doloženým API;
+- kapacitní zdroje jako storage, pouze pokud je jejich scope a jednotka
+  adapterem jednoznačně definovaná.
+
+Každá hodnota nese adapter/backend, resource kind, scope, jednotku, období nebo
+okamžik měření, `fetched_at`, stav čerstvosti a provenance. Spotřeba se nesmí
+vydávat za zůstatek a chybějící metrika se z nuly neodhaduje. AtlasCloud dnes
+dokládá tokeny z dokončených runů; to není důkaz živého kreditního zůstatku.
+Monitor zobrazí obecné provider cards a u AtlasCloud ihned tuto doloženou
+tokenovou spotřebu. Kredity zobrazí až po implementaci a ověření příslušného
+provider resource adapteru.
+
+Read-only otevření monitoru samo neprovádí placený ani mutující dotaz.
+Explicitní refresh má bounded odpověď, deadline, bez automatického retry;
+selhání zachová poslední validní cache jako stale a nikdy nemění routing,
+binding ani run.
+
 ### Pinning a revalidace před účinkem
 
 Klient potvrzuje `selection_revision` a přesnou identitu nabídky, ne volný text
@@ -114,21 +182,34 @@ odeslání, pokud nutný credential už přesné revizi neodpovídá.
    jako legacy bez domýšleného offeru, ale nový dispatch se bez plného
    `RunSelection` nepřipraví. Projektový Git se mění až samostatnou publikací
    výsledku.
+6. Reset backendu je vícevrstvá operace jen nad profilem a credentialem. Nejprve
+   se durable odstaví profil pro nové dispatch, poté se odstraní credential;
+   ztracená odpověď se obnoví read-only stavem. Historické runy a katalogové
+   snapshoty se nemažou. Pokud adapter neumí atomický reset doložit, stav je
+   `reset-pending` a nový dispatch zůstane zakázaný.
+7. Resource refresh publikuje pouze kompletní validovanou cache. Pád nebo chyba
+   provideru ponechá poslední validní report stale; nikdy nedoplní nulu,
+   neodečte kredit lokálním odhadem ani nespustí inference.
 
 ## Reuse a odmítnuté varianty
 
 Adaptujeme `ModelKnowledgeStore`/`ModelDiscoveryStore`, `BackendRegistry`,
 `BackendCapabilities`, `ChatRunChoice`, existující binding stores, atomický JSON
-vzor a jediné provider run journals. Sdílený composer pouze vykreslí
-serverovou projekci. Odmítáme porovnání modelů podle názvu, ruční model mimo
+vzor, `backend_metrics`, jediné provider run journals, settings tabulky/dialogy
+a provider cards monitoru. Sdílený composer i Nastavení pouze vykreslí
+serverové projekce. Odmítáme porovnání modelů podle názvu, ruční model mimo
 nabídku pro nový tok, implicitní první kompatibilní offer, provider fallback,
 automatický refresh při submitu, preference providerových offerů a nový
-framework či druhý UI/store/journal.
+framework či druhý UI/store/journal, jednu univerzální konfigurační formu pro
+všechny providery a smíšení backendových služeb, modelových capabilities,
+spotřeby a zůstatku do jednoho boolean příznaku.
 
 ## Důsledky
 
 Nastavení nadále slouží k připojení backendu a získání jeho nabídek; konkrétní
-model se volí v chatu. Bez čerstvé a doložené nabídky se nový run neodešle.
+model se volí v chatu. Tabulka backendů je rozšiřitelná i na providery bez
+modelů a modelový katalog je samostatný read-only pohled. Bez čerstvé a
+doložené nabídky se nový run neodešle.
 První implementace smí migrovat dosavadní bindingy do read modelu, ale nesmí
 jejich providerové rozdíly skrýt optimistickou normalizací. Automatické
 hodnocení kvality/ceny, auto-selection a fallback zůstávají mimo rozhodnutí.

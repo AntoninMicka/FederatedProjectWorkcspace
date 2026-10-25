@@ -1135,7 +1135,11 @@ Gate M3 proto není vydáván za celý uzavřený.
   identity modelu. Explicitní node-local preference řadí oblíbené modely do
   první úrovně a ostatní pod „Další“, ale nejsou autorizací, automatickým
   výběrem ani fallbackem. Přesný pár a revize se před dispatch zafixují v runu;
-  podrobný rozsah a akceptace jsou v TODO.
+  Nastavení současně dostane tabulku podporovaných backendů a jejich služeb
+  s providerovými dialogy Nastavit/Resetovat, samostatný read-only katalog
+  modelů a provider-neutral resource monitor. Spotřeba uložených runů, account
+  usage/cost, kreditní zůstatek a quota zůstanou pravdivě oddělené; chybějící
+  providerová data se neodhadují. Podrobný rozsah a akceptace jsou v TODO.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
