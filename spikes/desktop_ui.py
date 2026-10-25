@@ -66,6 +66,11 @@ CHAT_VALIDATION_ERRORS = {
     'Selected messages must use thread order': (
         'Vybrané zprávy nejsou v aktuálním pořadí vlákna. Obnovte výběr kontextu.'),
 }
+AUTONOMY_VALIDATION_ERRORS = {
+    'Autonomy time budget is exhausted': (
+        'Časový limit automatického workflow je vyčerpán. Potvrďte nabízenou '
+        'revizi rozpočtu, nebo workflow ukončete.'),
+}
 
 
 def scan_gamepads():
@@ -6832,6 +6837,11 @@ class DesktopHandler(Handler):
                         'nebo povolené vazby na zdroje a layouty. '
                         'Projekt ani předchozí vlákno nebyly změněny.'})
                 message = CHAT_VALIDATION_ERRORS.get(str(exc))
+                if message is not None:
+                    return self.reply(422, {'error': message})
+            if isinstance(exc, ValidationError) and self.path.startswith(
+                    '/v1/autonomy/'):
+                message = AUTONOMY_VALIDATION_ERRORS.get(str(exc))
                 if message is not None:
                     return self.reply(422, {'error': message})
             if self.path == '/v1/external/propose':

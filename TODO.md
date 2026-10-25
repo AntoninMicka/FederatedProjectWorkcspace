@@ -220,6 +220,23 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   28 skipped). Fyzicky zbývá po restartu potvrdit bezpečnou revizi vyčerpaného
   časového rozpočtu a průchod přes výběr relevantních zdrojů až k návrhu
   závěrečné zprávy.
+  Potvrzení této revize odhalilo další chybu: navýšení `1800 → 2100 s` se
+  aplikovalo, ale čas se stále počítal od původní aktivace, takže všech 300
+  nově potvrzených sekund bylo vyčerpáno ještě před potvrzením a queued planner
+  končil interně jako `Autonomy time budget is exhausted`. Aplikace časové
+  revize nyní atomicky zastropuje dosavadní spotřebu starým limitem, takže
+  potvrzený rozdíl je skutečně dostupný. Resume umí stejným deterministickým
+  pravidlem jednou dorovnat i revizi potvrzenou před opravou; opakovaný restart
+  ani resume čas znovu nepřidá. Kopie reálného journalu po dorovnání doložila
+  revizi 10, queued `research.plan-next`, 300 zbývajících sekund a idempotentní
+  druhé resume bez změny aktivace. Známé vyčerpání time budgetu navíc desktop
+  zobrazí konkrétně místo obecné chatové chyby; ostatní interní výjimky dál
+  nepropouští. Ověření: cílené budget, restart, resume a HTTP diagnostické
+  testy OK, `python3 -m py_compile` dotčených modulů, `node --check`
+  generovaného JavaScriptu, `python3 -m unittest discover -s tests -v`
+  (805 testů OK, 28 skipped).
+  Fyzicky zbývá po restartu kliknout na `Pokračovat` a potvrdit průchod planneru
+  přes výběr relevantních zdrojů až k návrhu závěrečné zprávy.
 
 ## Akceptace
 

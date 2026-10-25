@@ -282,6 +282,20 @@ class AutonomyServiceTests(unittest.TestCase):
             self.assertIn(marker, HTML if marker.startswith('id=') else
                           CSS if marker.startswith(('#', '.')) else JS)
 
+    def test_desktop_reports_exhausted_autonomy_time_budget(self):
+        class Service:
+            def resume(inner, workflow_id):
+                raise ValidationError('Autonomy time budget is exhausted')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.autonomy_service = Service()
+            response = driver.request(server, path='/v1/autonomy/resume',
+                body=json.dumps({'workflow_id': self.workflow_id}).encode())
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 422 ', head.split(b'\r\n', 1)[0])
+        self.assertIn('Časový limit automatického workflow je vyčerpán',
+                      json.loads(body)['error'])
+
     def test_service_stages_and_confirms_exact_dynamic_budget_revision(self):
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         proposed = self.service.prepare(self.dynamic_plan([first]))

@@ -1052,11 +1052,44 @@ class AutonomyQueue:
                     'Paused autonomy workflow requires an attached UI to resume')
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
+            resumed = now()
+            row = self._reconcile_confirmed_time_increases(db, row, resumed)
             if row['state'] == 'paused':
                 db.execute("UPDATE workflows SET state='queued',updated_at=?,error=NULL "
-                           "WHERE workflow_id=?", (now(), workflow_id))
+                           "WHERE workflow_id=?", (resumed, workflow_id))
             db.commit()
         return self.get(workflow_id, node_id, user_id)
+
+    @staticmethod
+    def _reconcile_confirmed_time_increases(db, row, reconciled_at):
+        """Give an already confirmed time increase its unspent delta exactly once."""
+        revisions = db.execute('SELECT plan_json,applied_at FROM plan_revisions '
+            'WHERE workflow_id=? ORDER BY revision', (row['workflow_id'],)).fetchall()
+        if len(revisions) < 2 or row['activated_at'] is None:
+            return row
+        activated = datetime.fromisoformat(
+            row['activated_at'].replace('Z', '+00:00'))
+        reconciled = datetime.fromisoformat(reconciled_at.replace('Z', '+00:00'))
+        previous = json.loads(bytes(revisions[0]['plan_json']))['budget']['max_seconds']
+        changed = False
+        for revision in revisions[1:]:
+            current = json.loads(bytes(revision['plan_json']))['budget']['max_seconds']
+            if current > previous:
+                applied = datetime.fromisoformat(
+                    revision['applied_at'].replace('Z', '+00:00'))
+                original_floor = applied - timedelta(seconds=previous)
+                if activated < original_floor:
+                    activated = max(
+                        activated, reconciled - timedelta(seconds=previous))
+                    changed = True
+            previous = current
+        if changed:
+            value = activated.isoformat().replace('+00:00', 'Z')
+            db.execute('UPDATE workflows SET activated_at=? WHERE workflow_id=?',
+                       (value, row['workflow_id']))
+            row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
+                             (row['workflow_id'],)).fetchone()
+        return row
 
     def _set_state(self, workflow_id, node_id, user_id, state):
         with closing(self._connect()) as db:
@@ -1377,9 +1410,19 @@ class AutonomyQueue:
                  digest(descriptor), 'queued'))
         following = ('completed' if proposal['kind'] == 'finish'
                      else ('paused' if row['state'] == 'paused' else 'queued'))
+        previous = json.loads(bytes(row['plan_json']))['budget']['max_seconds']
+        current = updated['budget']['max_seconds']
+        activated = row['activated_at']
+        if current > previous and activated is not None:
+            activated_at = datetime.fromisoformat(activated.replace('Z', '+00:00'))
+            applied_at = datetime.fromisoformat(applied.replace('Z', '+00:00'))
+            activated = max(activated_at,
+                applied_at - timedelta(seconds=previous)).isoformat().replace(
+                    '+00:00', 'Z')
         db.execute('UPDATE workflows SET plan_digest=?,plan_json=?,plan_revision=?,'
-            'state=?,updated_at=?,error=NULL WHERE workflow_id=?',
-            (plan_digest, raw, revision, following, applied, proposal['workflow_id']))
+            'state=?,activated_at=?,updated_at=?,error=NULL WHERE workflow_id=?',
+            (plan_digest, raw, revision, following, activated, applied,
+             proposal['workflow_id']))
         db.execute('INSERT INTO plan_revisions VALUES(?,?,?,?,?,?,?,?,?,?)',
             (proposal['workflow_id'], revision, proposal['proposal_id'],
              proposal['kind'], proposal['reason'], row['plan_digest'], plan_digest,

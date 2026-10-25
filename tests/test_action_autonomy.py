@@ -611,6 +611,38 @@ class ActionAutonomyTests(unittest.TestCase):
             restarted.propose_revision(stale, self.node_id, self.user_id,
                 available_preconditions={'project-head-current'})
 
+    def test_confirmed_time_increase_has_available_delta_and_legacy_recovery(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        plan = self.dynamic_plan([first], max_steps=1, max_cost=1)
+        plan['budget']['max_seconds'] = 300
+        queue = self.queue(); self.prepare_and_activate(queue, plan)
+        completed = self.complete_manual_step(queue, first)
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
+                       'WHERE workflow_id=?', (self.workflow_id,)); db.commit()
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        proposal = self.revision(completed, 'append', step=second,
+            budget={'max_steps': 2, 'max_cost_units': 2, 'max_seconds': 600})
+        pending = queue.propose_revision(proposal, self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        stored = pending['revision_proposals'][-1]
+        confirmed = queue.confirm_revision(proposal['proposal_id'], self.node_id,
+            self.user_id, stored['approval_digest'],
+            available_preconditions={'project-head-current'})
+        self.assertGreaterEqual(confirmed['remaining_seconds'], 299)
+
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
+                       'WHERE workflow_id=?', (self.workflow_id,)); db.commit()
+        restarted = self.queue()
+        restarted.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        recovered = restarted.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertGreaterEqual(recovered['remaining_seconds'], 299)
+        recovered_activation = recovered['activated_at']
+        replayed = restarted.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual(replayed['activated_at'], recovered_activation)
+
     def test_revision_transaction_rolls_back_and_lost_response_is_idempotent(self):
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); self.prepare_and_activate(queue,
