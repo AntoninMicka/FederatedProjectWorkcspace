@@ -21,7 +21,7 @@ from spikes.configuration import read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
-from spikes.openai_backend import OpenAIUnknownRun
+from spikes.openai_backend import OpenAICredentials, OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
@@ -1481,6 +1481,27 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed before save'):
             self.service.configure_model_preferences({
                 'expected_revision': 0, 'preferred_model_ids': []})
+
+    def test_backend_reset_disables_profile_before_erasing_credential_and_preserves_preferences(self):
+        saved = self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:preferred']})
+        external = self.service.configure_external(dict(
+            schema_version=1, binding_id=str(uuid4()), revision='external-reset',
+            adapter='openai-responses', boundary='external-provider',
+            endpoint='https://api.openai.com/v1/responses', model='gpt-5.6-luna',
+            target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'r' * 32))
+        reference = external['binding']['credential_ref']
+        with self.assertRaisesRegex(ValueError, 'confirmation'):
+            self.service.reset_backend({'backend_id': 'openai-responses',
+                                        'confirmed': False})
+        result = self.service.reset_backend({
+            'backend_id': 'openai-responses', 'confirmed': True})
+        rows = {item['backend_id']: item for item in result['backends']}
+        self.assertFalse(rows['openai-responses']['configured'])
+        self.assertIsNone(self.service.external_status()['binding'])
+        self.assertFalse(OpenAICredentials(self.chat_state).status(reference)['available'])
+        self.assertEqual(self.service.model_selection_status()['preferences'], saved)
 
     def test_external_backend_configuration_is_visible_without_returning_secret(self):
         secret = 'sk-test-' + 'q' * 32

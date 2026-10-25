@@ -110,6 +110,18 @@ modelů; monitor nově zobrazuje AtlasCloud tokeny doložené uloženými runy a
 pravdivý stav chybějícího balance reportu. Cílená sada 150 testů
 `test_backend_catalog`, `test_model_catalog`, `test_chat_service`, `test_desktop`
 a `test_web_server` mimo socketově omezený sandbox prošla, 7 volitelných
-WebEngine testů bylo přeskočeno. Zbývají providerové Nastavit/Resetovat dialogy,
+WebEngine testů bylo přeskočeno.
+
+Druhý implementační řez přesunul všech šest podporovaných backendů z inline
+nastavení do akcí `Nastavit`/`Resetovat` v jedné tabulce. Jednotný reset je na
+webu omezen na administrátora; nejprve trvale zneplatní aktivní profil a až
+potom odstraní credential. OpenAI reset zahrnuje i navázaný Images profil,
+Google Drive maže konfiguraci a tokeny jednou SQLite transakcí a všechny
+varianty zachovávají historii běhů/importů, katalogy a preference. Credentialové
+backendy mají malý durable reset journal, takže pád mezi oběma kroky zanechá
+`reset-pending` a opakování bezpečně dokončí odstranění credentialu. Cílená sada
+162 testů `test_backend_catalog`, `test_chat_service`, `test_media_service`,
+`test_google_drive_import`, `test_desktop` a `test_web_server` mimo socketově
+omezený sandbox prošla; 7 volitelných WebEngine testů bylo přeskočeno. Zbývá
 obousměrný composer, serverové pinning/revalidace a fyzická akceptace; B/C proto
 zůstávají rozpracované.

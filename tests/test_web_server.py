@@ -461,6 +461,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/search/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/model-catalog/import', body='{}',
                                       headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/backend-catalog/reset', body='{}',
+                                      headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/model-selection/preferences', body='{}',
+                                      headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/preview', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/confirm', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)

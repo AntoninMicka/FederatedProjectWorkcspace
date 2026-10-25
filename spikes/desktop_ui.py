@@ -522,7 +522,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
 <h2 id="settings-backend-title">Podporované backendy</h2>
 <p>Backend může poskytovat modely, obraz, hledání, import úložiště nebo metriky zdrojů.</p>
-<div class="settings-table-wrap"><table id="backend-catalog-table"><thead><tr><th>Backend</th><th>Služby</th><th>Stav</th></tr></thead><tbody></tbody></table></div>
+<div class="settings-table-wrap"><table id="backend-catalog-table"><thead><tr><th>Backend</th><th>Služby</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
+<div id="backend-settings-legacy" hidden>
 <hr><h2>Lokální AI backend</h2>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
@@ -617,7 +618,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
-<button id="atlascloud-remove" type="button">Odstranit AtlasCloud binding a klíč</button></form>
+<button id="atlascloud-remove" type="button" hidden>Odstranit AtlasCloud binding a klíč</button></form>
 <small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
 <hr><h2>OpenAI Images</h2>
 <p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
@@ -631,7 +632,13 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <input name="secret" type="password" autocomplete="new-password" maxlength="4096"></label>
 <button type="submit">Uložit administrátorský klíč</button>
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
-<pre id="backend-metrics-report" hidden></pre></section>
+<pre id="backend-metrics-report" hidden></pre></section></div>
+<dialog id="backend-settings-dialog" aria-labelledby="backend-settings-dialog-title"><h2 id="backend-settings-dialog-title">Nastavit backend</h2>
+<div id="backend-settings-dialog-body"></div><p id="backend-settings-dialog-status" role="status" aria-live="polite"></p>
+<button id="backend-settings-dialog-close" type="button">Zavřít</button></dialog>
+<dialog id="backend-reset-dialog" aria-labelledby="backend-reset-dialog-title"><h2 id="backend-reset-dialog-title">Resetovat backend</h2>
+<p id="backend-reset-dialog-text"></p><p>Historie běhů, katalogy a preference modelů zůstanou zachované.</p>
+<button id="backend-reset-confirm" type="button">Resetovat připojení</button><button id="backend-reset-cancel" type="button">Zrušit</button></dialog>
 </section>
 <section id="settings-models-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-models-tab" hidden>
 <h2>Katalog modelů</h2><p>Read-only přehled kanonických modelů a doložených nabídek napříč backendy.</p>
@@ -1137,7 +1144,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
-.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{padding:4px 7px;background:transparent;color:#176b60;text-align:left}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
@@ -3392,6 +3399,51 @@ applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPl
 });
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
+const backendSettingsForms={
+ 'ollama':['settings-backend-status','chat-backend-form'],
+ 'openai-responses':['settings-external-status','external-backend-form',
+                     'settings-openai-image-status','openai-image-form'],
+ 'atlascloud-text':['settings-atlascloud-status','atlascloud-backend-form'],
+ 'comfyui':['settings-comfy-status','comfy-backend-form'],
+ 'searxng':['settings-search-status','search-backend-form'],
+ 'google-drive':['settings-google-drive-status','google-drive-config-form']
+};
+const backendSettingsDialog=document.querySelector('#backend-settings-dialog');
+const backendSettingsBody=document.querySelector('#backend-settings-dialog-body');
+let backendFormPlaces=[];
+function restoreBackendForms(){
+ for(const [form,place] of backendFormPlaces)place.replaceWith(form);
+ backendFormPlaces=[];backendSettingsBody.replaceChildren();
+}
+function openBackendSettings(backend){
+ restoreBackendForms();
+ document.querySelector('#backend-settings-dialog-title').textContent=`Nastavit · ${backend.display_name}`;
+ document.querySelector('#backend-settings-dialog-status').textContent=backend.detail||'';
+ for(const id of backendSettingsForms[backend.backend_id]||[]){
+  const form=document.getElementById(id),place=document.createComment('backend-form-place');
+  form.replaceWith(place);backendFormPlaces.push([form,place]);backendSettingsBody.append(form);
+ }
+ backendSettingsDialog.showModal();backendSettingsBody.querySelector('input,select,textarea,button')?.focus();
+}
+document.querySelector('#backend-settings-dialog-close').addEventListener('click',()=>backendSettingsDialog.close());
+backendSettingsDialog.addEventListener('close',()=>{restoreBackendForms();loadBackendCatalog();});
+const backendResetDialog=document.querySelector('#backend-reset-dialog');
+let backendResetTarget=null;
+function openBackendReset(backend){
+ backendResetTarget=backend;
+ document.querySelector('#backend-reset-dialog-title').textContent=`Resetovat · ${backend.display_name}`;
+ document.querySelector('#backend-reset-dialog-text').textContent='Aktivní profil a uložené přihlašovací údaje budou odstraněny z tohoto uzlu.';
+ backendResetDialog.showModal();document.querySelector('#backend-reset-confirm').focus();
+}
+document.querySelector('#backend-reset-cancel').addEventListener('click',()=>backendResetDialog.close());
+backendResetDialog.addEventListener('close',()=>{backendResetTarget=null;});
+document.querySelector('#backend-reset-confirm').addEventListener('click',async event=>{
+ if(!backendResetTarget)return;event.currentTarget.disabled=true;
+ try{const result=await projectRequest('/v1/backend-catalog/reset',{backend_id:backendResetTarget.backend_id,confirmed:true});
+  backendResetDialog.close();renderBackendCatalog(result);await loadBackendBinding();}
+ catch(error){document.querySelector('#backend-reset-dialog-text').textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
 function renderBackendCatalog(value){
  const body=document.querySelector('#backend-catalog-table tbody');body.replaceChildren();
  for(const backend of value.backends||[]){
@@ -3400,6 +3452,10 @@ function renderBackendCatalog(value){
    backend.configured?`nastaveno · ${backend.availability}`:'nenastaveno']){
    const cell=document.createElement('td');cell.textContent=text;row.append(cell);
   }
+  const actions=document.createElement('td'),configure=document.createElement('button'),reset=document.createElement('button');
+  configure.type='button';configure.textContent='Nastavit';configure.addEventListener('click',()=>openBackendSettings(backend));
+  reset.type='button';reset.textContent='Resetovat';reset.disabled=!backend.configured;
+  reset.addEventListener('click',()=>openBackendReset(backend));actions.append(configure,reset);row.append(actions);
   body.append(row);
  }
 }
@@ -6580,7 +6636,8 @@ class DesktopHandler(Handler):
         '/v1/atlascloud/status', '/v1/atlascloud/models',
         '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
-        '/v1/backend-catalog/status', '/v1/model-selection/status',
+        '/v1/backend-catalog/status', '/v1/backend-catalog/reset',
+        '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -6617,9 +6674,51 @@ class DesktopHandler(Handler):
         '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
         '/v1/publication-cms/deployment/preview', '/v1/publication-cms/deployment/confirm'}
 
+    def backend_catalog_status(self):
+        states = {}
+        media = getattr(self.server, 'media_service', None)
+        if media is not None:
+            try:
+                configured = media.status().get('bindings', {}).get('comfyui') is not None
+            except (ValueError, OSError, sqlite3.Error):
+                states['comfyui'] = {'configured': False, 'availability': 'unavailable',
+                                     'detail': 'status-unavailable'}
+            else:
+                states['comfyui'] = {'configured': configured,
+                                     'availability': 'unknown'}
+        drive = getattr(self.server, 'google_drive_import', None)
+        if drive is not None:
+            try: configured = drive.status().get('configured', False)
+            except (ValueError, OSError, sqlite3.Error):
+                states['google-drive'] = {'configured': False,
+                                          'availability': 'unavailable',
+                                          'detail': 'status-unavailable'}
+            else:
+                states['google-drive'] = {'configured': configured,
+                                          'availability': 'unknown'}
+        return self.server.chat_service.backend_catalog_status(states)
+
+    def reset_backend(self, request):
+        if not isinstance(request, dict) or set(request) != {'backend_id', 'confirmed'}:
+            raise ValueError('Invalid backend reset request')
+        backend_id = request['backend_id']
+        if backend_id in {'ollama', 'openai-responses', 'atlascloud-text', 'searxng'}:
+            self.server.chat_service.reset_backend(request)
+        elif backend_id == 'comfyui':
+            self.server.media_service.reset_comfy({'confirmed': request['confirmed']})
+        elif backend_id == 'google-drive':
+            self.server.google_drive_import.reset({'confirmed': request['confirmed']})
+        else:
+            raise ValueError('Unsupported backend reset target')
+        return self.backend_catalog_status()
+
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/backend-catalog/reset':
+            try: return self.reply(200, self.reset_backend(request))
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/user-profile' and isinstance(request, dict):
             service = getattr(self.server, 'user_profile', None)
             if service is None:
@@ -6894,7 +6993,7 @@ class DesktopHandler(Handler):
                 return self.reply(200,
                     self.server.chat_service.import_model_catalog_knowledge(request))
             if self.path == '/v1/backend-catalog/status' and request == {}:
-                return self.reply(200, self.server.chat_service.backend_catalog_status())
+                return self.reply(200, self.backend_catalog_status())
             if self.path == '/v1/model-selection/status' and request == {}:
                 return self.reply(200, self.server.chat_service.model_selection_status())
             if self.path == '/v1/model-selection/preferences' and isinstance(request, dict):

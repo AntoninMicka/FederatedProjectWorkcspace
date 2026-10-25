@@ -289,7 +289,8 @@ class WebHandler(DesktopHandler):
                          '/v1/search/configure', '/v1/search/test',
                          '/v1/model-catalog/import', '/v1/atlascloud/models',
                          '/v1/atlascloud/configure',
-                         '/v1/atlascloud/remove'} \
+                         '/v1/atlascloud/remove', '/v1/backend-catalog/reset',
+                         '/v1/model-selection/preferences'} \
                 and not self.server.administration.is_admin(self.actor):
             return self.send_error(403)
         if self.path == '/v1/session':

@@ -12,6 +12,7 @@ from types import MappingProxyType
 from uuid import uuid4
 
 from spikes.backend_contract import BackendResponseError, BackendUnknown
+from spikes.backend_catalog import BackendResetJournal, durable_unlink
 from spikes.configuration import committed_project, parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     PreparedContext, TaskInstruction)
@@ -107,12 +108,25 @@ class MediaService:
         return SummaryTasks(root, 'media-approvals.sqlite'), MediaRuns(root)
 
     def configure_comfy(self, value):
+        require(BackendResetJournal(self._root(), 'comfyui').load() is None,
+                'ComfyUI reset is pending; retry reset before configuration')
         binding = MEDIA_BACKENDS.parse_binding(value)
         require(binding.adapter_id == 'comfyui', 'ComfyUI binding is required')
         ComfyBindings(self._root()).save(binding)
         return {'binding': binding.serialize()}
 
+    def reset_comfy(self, value):
+        require(value == {'confirmed': True},
+                'Explicit ComfyUI reset confirmation is required')
+        root = self._root(); journal = BackendResetJournal(root, 'comfyui')
+        if journal.load() is None: journal.begin()
+        durable_unlink(ComfyBindings(root).path)
+        journal.finish()
+        return self.status()
+
     def configure_openai(self, value):
+        require(BackendResetJournal(self._root(), 'openai-responses').load() is None,
+                'OpenAI reset is pending; retry reset before configuration')
         require(isinstance(value, dict) and set(value) == {'model', 'timeout_seconds'},
                 'Invalid OpenAI Images configuration')
         root = self._root()
@@ -163,8 +177,14 @@ class MediaService:
 
     def _binding(self, adapter_id):
         root = self._root()
-        if adapter_id == 'openai-images': return OpenAIImageBindings(root).load()
-        if adapter_id == 'comfyui': return ComfyBindings(root).load()
+        if adapter_id == 'openai-images':
+            require(BackendResetJournal(root, 'openai-responses').load() is None,
+                    'OpenAI reset is pending; retry reset before dispatch')
+            return OpenAIImageBindings(root).load()
+        if adapter_id == 'comfyui':
+            require(BackendResetJournal(root, 'comfyui').load() is None,
+                    'ComfyUI reset is pending; retry reset before dispatch')
+            return ComfyBindings(root).load()
         raise ValueError('Unsupported image adapter')
 
     def _adapter(self, binding, runs):

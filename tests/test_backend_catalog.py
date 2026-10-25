@@ -5,7 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from spikes.backend_catalog import (ModelPreferences, backend_catalog,
+from spikes.backend_catalog import (BackendResetJournal, ModelPreferences,
+                                    backend_catalog, durable_unlink,
                                     resource_metric)
 
 
@@ -48,6 +49,18 @@ class BackendCatalogTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unsafe model preference'):
             store.load()
 
+    def test_reset_journal_is_durable_and_recoverable(self):
+        journal = BackendResetJournal(self.root, 'openai-responses')
+        value = journal.begin(['credential:openai-test'])
+        self.assertEqual(journal.load(), value)
+        self.assertEqual(oct(journal.path.stat().st_mode & 0o777), '0o600')
+        profile = self.root / 'profile.json'
+        profile.write_text('{}')
+        self.assertTrue(durable_unlink(profile))
+        self.assertFalse(durable_unlink(profile))
+        journal.finish()
+        self.assertIsNone(journal.load())
+
     def test_free_and_prepaid_tokens_are_balances_not_consumption(self):
         free = resource_metric(backend_id='atlascloud-text',
             kind='free-token-balance', name='free_tokens', value=1200,
@@ -70,10 +83,15 @@ class BackendCatalogTests(unittest.TestCase):
         from spikes.desktop_ui import HTML, JS
         for marker in ('id="backend-catalog-table"', 'id="settings-models-tab"',
                        'id="settings-models-table"', 'id="settings-model-detail"',
-                       'id="atlascloud-run-usage"', 'id="resource-atlascloud-balance"'):
+                       'id="atlascloud-run-usage"', 'id="resource-atlascloud-balance"',
+                       'id="backend-settings-dialog"', 'id="backend-reset-dialog"',
+                       'id="backend-settings-legacy" hidden'):
             self.assertIn(marker, HTML)
         self.assertIn("'/v1/backend-catalog/status'", JS)
+        self.assertIn("'/v1/backend-catalog/reset'", JS)
         self.assertIn("'/v1/model-selection/status'", JS)
+        self.assertIn("configure.textContent='Nastavit'", JS)
+        self.assertIn("reset.textContent='Resetovat'", JS)
         self.assertIn("providers.get('atlascloud-text')", JS)
         self.assertNotIn('innerHTML', JS[JS.index('function renderBackendCatalog'):JS.index('function selectSettingsTab')])
 

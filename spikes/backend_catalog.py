@@ -25,6 +25,7 @@ BACKENDS = (
     ('searxng', 'SearXNG', ('web-search',)),
     ('google-drive', 'Google Drive', ('storage-import',)),
 )
+BACKEND_IDS = frozenset(item[0] for item in BACKENDS)
 
 
 def _now():
@@ -33,7 +34,7 @@ def _now():
 
 def backend_catalog(states):
     """Project adapter status into one bounded, non-secret settings catalog."""
-    require(isinstance(states, dict) and set(states) <= {item[0] for item in BACKENDS},
+    require(isinstance(states, dict) and set(states) <= BACKEND_IDS,
             'Invalid backend state projection')
     rows = []
     for backend_id, name, services in BACKENDS:
@@ -152,3 +153,83 @@ class ModelPreferences:
             if fd >= 0: os.close(fd)
             if temporary.exists(): temporary.unlink()
         return value
+
+
+class BackendResetJournal:
+    """Durable marker for profile-first, credential-second backend reset recovery."""
+    def __init__(self, state_dir, backend_id):
+        require(backend_id in BACKEND_IDS, 'Unknown backend reset target')
+        self.root = Path(state_dir).absolute(); info = self.root.stat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.getuid()
+                and stat.S_IMODE(info.st_mode) == 0o700,
+                'Backend reset state directory requires owned mode 0700')
+        self.backend_id = backend_id
+        self.path = self.root / ('backend-reset-' + backend_id + '.json')
+
+    def load(self):
+        try:
+            fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return None
+        try:
+            info = os.fstat(fd)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                    and info.st_nlink == 1 and not info.st_mode & 0o077,
+                    'Unsafe backend reset journal')
+            raw = os.read(fd, 16 * 1024 + 1)
+        finally:
+            os.close(fd)
+        require(len(raw) <= 16 * 1024, 'Backend reset journal exceeds 16 KiB')
+        value = json.loads(raw)
+        require(isinstance(value, dict)
+                and set(value) == {'schema_version', 'backend_id', 'credential_refs'}
+                and value['schema_version'] == SCHEMA
+                and value['backend_id'] == self.backend_id
+                and isinstance(value['credential_refs'], list)
+                and len(value['credential_refs']) <= 8
+                and len(value['credential_refs']) == len(set(value['credential_refs']))
+                and all(isinstance(item, str) and item and len(item) <= 256
+                        and not any(char in item for char in '\0\r\n')
+                        for item in value['credential_refs']),
+                'Invalid backend reset journal')
+        return value
+
+    def begin(self, credential_refs=()):
+        require(self.load() is None, 'Backend reset is already pending')
+        value = {'schema_version': SCHEMA, 'backend_id': self.backend_id,
+                 'credential_refs': list(credential_refs)}
+        raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
+        temporary = self.root / ('.backend-reset-' + os.urandom(8).hex() + '.tmp')
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                     0o600)
+        try:
+            with os.fdopen(fd, 'wb', closefd=False) as stream:
+                stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+            os.close(fd); fd = -1
+            os.replace(temporary, self.path)
+            self._sync_root()
+        finally:
+            if fd >= 0: os.close(fd)
+            if temporary.exists(): temporary.unlink()
+        return value
+
+    def finish(self):
+        try: self.path.unlink()
+        except FileNotFoundError: return
+        self._sync_root()
+
+    def _sync_root(self):
+        directory = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        try: os.fsync(directory)
+        finally: os.close(directory)
+
+
+def durable_unlink(path):
+    """Remove one node-local profile and durably record its absence."""
+    path = Path(path)
+    try: path.unlink()
+    except FileNotFoundError: return False
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try: os.fsync(directory)
+    finally: os.close(directory)
+    return True
