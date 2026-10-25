@@ -1125,6 +1125,15 @@ Gate M3 proto není vydáván za celý uzavřený.
   neurčitého výsledku. Evidence je ve WORK_LOG; PR do `develop` zatím nebyl
   vytvořen ani sloučen. Media/MCP, Anthropic/Gemini a automatický fallback
   zůstávají mimo první řez.
+- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01` po
+  doručení AtlasCloud oddělí backendové připojení od modelové nabídky pro
+  konkrétní run. Backend-first i model-first volba se obousměrně filtrují podle
+  dostupných providerových nabídek a požadovaných capabilities; backendový
+  modifikátor přidá protokol, endpoint a providerová pravidla bez změny obecné
+  identity modelu. Explicitní node-local preference řadí oblíbené modely do
+  první úrovně a ostatní pod „Další“, ale nejsou autorizací, automatickým
+  výběrem ani fallbackem. Přesný pár a revize se před dispatch zafixují v runu;
+  podrobný rozsah a akceptace jsou v BACKLOG.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

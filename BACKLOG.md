@@ -82,6 +82,47 @@ akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
 evidence je ve WORK_LOG a větev `feature/f-m3-atlascloud-01` čeká na vytvoření
 a doručení PR do `develop`.
 
+### UX-BACKEND-MODEL-01 — výběr backendu a modelu v chatu
+
+- [ ] [planned] **Navazující feature po doručení F-M3-ATLASCLOUD-01**
+  (cílová úroveň: designed → implemented → PoC validated; navržená větev
+  `feature/ux-backend-model-01-chat-selector`, cíl PR `develop`). Původ:
+  uživatelský požadavek 25. 10. 2026 na společný částečný facelift backendů a
+  modelů. AtlasCloud integrace se tím znovu neotevírá; použije se jako jeden z
+  providerů společného katalogu.
+- **Výstup:** oddělit připojení/credential/backendový profil od volby přesné
+  modelové nabídky. Backend a model se vybírají až v chatovém composeru pro
+  konkrétní běh. Výběr backendu zúží modely na jeho dostupné nabídky; výběr
+  kanonického modelu zúží backendy na kompatibilní nabídky. Filtr se řídí také
+  požadovanými dovednostmi/capabilities dané role, akce a výstupního formátu a
+  server jej před dispatch znovu ověří nad přesnou čerstvou revizí katalogu.
+- **Backendové modifikátory:** jedna obecná identita modelu může mít více
+  providerových nabídek. Vybraná nabídka přidá backendově specifický protokol,
+  endpoint, request/response pravidla, limity a doložené capabilities; nesmí
+  měnit identitu kanonického modelu ani optimisticky doplnit neznámou
+  dovednost.
+- **Preference:** přidat explicitní node-local pořadí oblíbených kanonických
+  modelů, nikoli providerových nabídek. Kompatibilní oblíbené modely se zobrazí
+  v první úrovni, ostatní pod volbou „Další“; po volbě backendu se zachová
+  pořadí jen jeho dostupného průniku. Preference ovlivní pouze řazení a
+  prezentaci, nic sama nevybere, neautorizuje dispatch, nepřepíná backend a
+  není implicitním fallbackem.
+- **Hranice a recovery:** potvrzený run musí zachytit přesný pár
+  backend/binding + offer/model, protokol, capability snapshot a jejich revize
+  před externím účinkem. Změna katalogu či preferencí nesmí změnit připravený
+  nebo rozpracovaný run. Node-local preference jsou oddělené od projektového
+  Gitu, credential store a autoritativního run journalu; jejich atomické
+  uložení a obnovu popsat před implementací.
+- **Mimo rozsah:** automatický výběr bez viditelné uživatelské volby,
+  automatické přepnutí při chybě, žebříček odvozený z nedoložené kvality nebo
+  ceny a změna providerových credentialů během chatového dispatch.
+- **Akceptace:** stejný sdílený desktop/web composer obousměrně filtruje
+  backendy a modely bez providerových hard-code větví; role/capability filtr,
+  oblíbené vs. „Další“, prázdný/stale/offline katalog, více nabídek téhož
+  modelu, restart, změna revize a RBAC/privacy projdou automatickými testy.
+  Fyzický průchod ověří nejméně backend-first i model-first tok na dvou
+  backendech a potvrdí, že odeslaný run použil zobrazený přesný pár.
+
 ## Zjištěné mezery a navazující ověření
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
@@ -95,12 +136,14 @@ a doručení PR do `develop`.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
-  akceptaci UX-FACELIFT-01 výslovně odložil další kolo faceliftu na budoucí
-  dobu. Před aktivací znovu vygenerovat A4 inventuru ze skutečného sdíleného
-  UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit již
-  přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
-  paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
-  právě upravených stránek.
+  akceptaci UX-FACELIFT-01 výslovně odložil obecné další kolo faceliftu.
+  Konkrétní první navazující řez backendů/modelů je nyní samostatná nejbližší
+  dávka `UX-BACKEND-MODEL-01`; tato položka drží pouze zbytek dosud nevybraných
+  stránek. Před jejich aktivací znovu vygenerovat A4 inventuru ze skutečného
+  sdíleného UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit
+  již přijaté vzory bez konkrétní potřeby. Akceptace zachová
+  mobilní/klávesnicovou paritu, RBAC, privacy, potvrzení a recovery a bude
+  zahrnovat fyzický průchod právě upravených stránek.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

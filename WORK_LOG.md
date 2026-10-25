@@ -63,6 +63,10 @@ pouze při dostupném explicitním credentialu; automatické a integrační prů
 nepředstírají živou inference dostupnost providera. Živý read-only katalog byl
 ověřen samostatně bez placeného inference volání. Media/MCP/CLI, billing,
 Anthropic/Gemini a automatický výběr či fallback zůstávají mimo dávku.
+Uživatel AtlasCloud integraci akceptoval jako hotovou a dynamickou volbu modelu
+v chatu, obousměrné filtrování backend/model a preferenční pořadí vymezil jako
+samostatnou navazující dávku `UX-BACKEND-MODEL-01` v BACKLOG; současný přesný
+modelový binding je proto stav tohoto PoC, nikoli cílový společný UX kontrakt.
 
 ## F-M3-MODEL-CATALOG-01 — provider-neutral katalog modelů — 2026-10-25
 
