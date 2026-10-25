@@ -102,6 +102,12 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   modelové odpovědi. Ověření: tři cílené UI/API testy OK, `node --check`
   generovaného JavaScriptu, `python3 -m unittest discover -s tests -v` (797
   testů OK, 28 skipped) a `git diff --check` bez chyb.
+  Oprava z fyzické kontroly: výzkumný požadavek již nepoužívá 120s klientský
+  timeout proti 180s limitu Ollamy, ale čeká 210 s. Prohlížečové „signal timed
+  out“ se převádí na akční diagnostiku s výsledkem `unknown`, zákazem
+  automatického opakování a upozorněním přímo ve vlákně. Po opravě:
+  `python3 -m unittest discover -s tests -v` (797 testů OK, 28 skipped),
+  `node --check` generovaného JavaScriptu a `git diff --check` bez chyb.
 - [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
   akceptace (cílová úroveň: PoC validated).** Ověřit předčasné ukončení,
   doplňující hledání, opakované načtení, ověření vztahů, výběr zdrojů,

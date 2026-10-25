@@ -2106,8 +2106,14 @@ function clearProject(){
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
- const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
- body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+ let response;
+ try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+  body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+ }catch(error){if(error?.name==='TimeoutError' || error?.name==='AbortError' ||
+    String(error?.message || '').toLowerCase().includes('signal timed out')){
+   const timeoutError=new Error('Čekání na odpověď vypršelo. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
+   timeoutError.status=408;timeoutError.outcome='unknown';throw timeoutError;
+  }throw error;}
  const result=await response.json();
  if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
   error.status=response.status;error.diagnostic=result.diagnostic;
@@ -3871,9 +3877,17 @@ function startChatProgress(initialState){
   chatMessages.removeAttribute('aria-busy');chatStreamStatus.hidden=true;
   chatStreamProgressText.textContent='';chatStreamStatus.remove();}};
 }
+function appendChatOperationNotice(error){
+ if(error?.status!==408)return;
+ const notice=document.createElement('div');notice.className='chat-message assistant';
+ notice.textContent=error.message;const detail=document.createElement('small');
+ detail.textContent='Výsledek operace není z pohledu UI potvrzený.';
+ notice.append(detail);chatMessages.append(notice);
+}
 async function withChatProgress(initialState,action){
  const progress=startChatProgress(initialState);
  try{await waitForVisiblePaint();return await action(progress);}
+ catch(error){appendChatOperationNotice(error);throw error;}
  finally{progress.stop();}
 }
 function waitForVisiblePaint(){
@@ -5340,6 +5354,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=externalStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
+   appendChatOperationNotice(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatOperationStatus.textContent=error.message;
   }finally{liveProgress.stop();chatStream.hidden=true;
@@ -5380,6 +5395,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    chatOperationStatus.textContent=ollamaStreaming ?
     `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí.` : 'Odpověď je připravena.';
   }catch(error){
+   appendChatOperationNotice(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
@@ -5437,6 +5453,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   chatOperationStatus.textContent=result.projection.temporary ?
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
+  appendChatOperationNotice(error);
   const failed=pendingChatRequest;
   try{
    const recovered=await projectRequest('/v1/tasks/list',{
@@ -5534,7 +5551,7 @@ function dynamicRevisionDraft(workflow,kind){
  return proposal;
 }
 async function autonomyRequest(path,payload={}){
- const result=await projectRequest(path,payload,120000);if(activeProject)await loadAutonomyQueue(false);return result;
+ const result=await projectRequest(path,payload,210000);if(activeProject)await loadAutonomyQueue(false);return result;
 }
 function scheduleAutomaticWorkflow(workflow){
  if(workflow.mode!=='automatic'||autonomyQueue.global_paused||!autonomyWorkflowVisible(workflow))return;
