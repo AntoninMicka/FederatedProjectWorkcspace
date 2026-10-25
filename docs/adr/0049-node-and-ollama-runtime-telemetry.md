@@ -129,5 +129,6 @@ monitoring nejsou součástí tohoto rozhodnutí.
 
 Současný HTTP server obsluhuje stream a monitorovací požadavky sekvenčně, takže
 živý monitor může během dlouhé streamované odpovědi čekat. Omezená souběžnost
-je samostatný navazující úkol `OPS-WEB-CONCURRENCY-01`; toto rozhodnutí ji bez
-samostatného návrhu zápisové serializace nezavádí.
+je samostatný navazující úkol `OPS-WEB-CONCURRENCY-01`; jeho návrh drží
+[ADR 0050](0050-bounded-http-monitor-concurrency.md). Toto rozhodnutí ji bez
+samostatné implementace zápisové serializace nezavádí.

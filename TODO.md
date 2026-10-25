@@ -22,10 +22,14 @@ bindingu/privacy/autorizace ani paralelní inference.
 
 ## Úkoly dávky
 
-- [ ] [planned] **OPS-WEB-CONCURRENCY-01-A — kontrakt souběhu, vlastnictví a
-  recovery (cílová úroveň: designed).** Zmapovat současný server, stream,
-  SQLite/Git writery a shutdown cestu; určit přesně povolené read-only requesty,
-  limity workerů, serializační hranice a chování při pádu či odpojení klienta.
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-A — kontrakt souběhu, vlastnictví a
+  recovery (výsledek: designed).** [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md)
+  omezuje souběh na jediný `POST /v1/node-telemetry/status` vedle jediné
+  aplikační linky, nejvýše čtyři request workery, dvousekundový backpressure a
+  jednoho vlastníka socketu/odpovědi. Před implementací vyžaduje read-only
+  autentizaci a journal connections po jednovláknovém startup bootstrapu,
+  per-request webovou autoritu a bounded shutdown; projektové a node-local
+  journally/zámky zůstávají autoritativní a `unknown` se neopakuje.
 - [ ] [planned] **OPS-WEB-CONCURRENCY-01-B — omezená souběžná HTTP obsluha
   (cílová úroveň: implemented).** Umožnit periodické telemetrii dokončit během
   dlouhého streamu, aniž by se změnil request ownership, autentizace, RBAC,
@@ -49,6 +53,13 @@ provider dispatch nesmí způsobit druhý dispatch; autoritativní journal nadá
 rozhoduje mezi `succeeded`, `failed` a `unknown`. Shutdown musí přestat přijímat
 nové requesty, bounded čekat na vlastněné operace a nesmí uzavřít sdílený stav
 pod aktivním writerem.
+
+Část A potvrdila, že nynější telemetrické čtení může přes běžné SQLite
+`connect()` inicializovat či migrovat schéma a webová autentizace může
+bootstrapovat administrační registry. Část B proto nesmí jen zapnout obecný
+threading: inicializaci dokončí před admission a paralelní monitorovací cestu
+udrží fyzicky read-only podle ADR 0050. Úplné testy ani fyzická akceptace po
+této čistě návrhové změně spuštěny nebyly.
 
 ## Akceptace dávky
 
