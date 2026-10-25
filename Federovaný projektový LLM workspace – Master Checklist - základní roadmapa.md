@@ -1125,11 +1125,16 @@ Gate M3 proto není vydáván za celý uzavřený.
   feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
   zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
   UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
-- [ ] Telemetrie uzlu a evidence runtime Ollamy — OPS-NODE-MONITOR-01 na
-  feature větvi odděluje ephemerální CPU/RAM/disk/síť/GPU vzorek od durable
-  evidence `cpu`/`partial-gpu`/`gpu` konkrétního dokončeného runu. Diagnostika
-  nic automaticky nerestartuje, nepřepíná ani neopakuje; dokončení čeká na
-  automatické regrese a fyzickou akceptaci podle ADR 0049.
+- [x] Telemetrie uzlu a evidence runtime Ollamy — OPS-NODE-MONITOR-01 byla
+  25. 10. 2026 akceptována na úrovni PoC validated. Odděluje ephemerální
+  CPU/RAM/disk/síť/GPU vzorek od durable evidence
+  `cpu`/`partial-gpu`/`gpu` konkrétního dokončeného runu, providerových tokenů
+  a explicitního očekávání. Fyzické same-node i připnuté private-network běhy,
+  restart a CPU-only varování prošly; partial-GPU zůstává na hostu se sdílenou
+  pamětí nevyvolatelné a výslovně neověřené. Diagnostika nic automaticky
+  nerestartuje, nepřepíná ani neopakuje. Evidence je ve WORK_LOG; PR feature
+  větve do `develop` zatím nebyl vytvořen ani sloučen. Souběh monitoru s
+  dlouhým streamem je samostatná dávka `OPS-WEB-CONCURRENCY-01` v BACKLOG.
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
