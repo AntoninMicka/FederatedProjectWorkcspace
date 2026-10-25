@@ -124,10 +124,14 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   úprava G přidala varování i tam a následná fyzická kontrola jeho zobrazení
   potvrdila.
 - Uživatel 25. 10. 2026 potvrdil, že dostupnost Ollamy po privátní síti byla
-  opravena. Jde o provozní důkaz dosažitelnosti; zbývající akceptace ještě musí
-  doložit, že Workspace běh a jeho runtime evidence zachovaly přesné binding
-  ID/revizi, boundary, target ID a TLS pin bez fallbacku.
-- D zůstává otevřené pouze pro toto ověření private-network pinningu.
+  opravena. Následný fyzický průchod ve webovém Workspace LXC na
+  `192.168.100.247:8443` doložil dokončenou streamovanou odpověď přes backend
+  `Ollama v privátní síti` a model `gemma4:latest`: provider reportoval 78
+  vstupních a 1067 výstupních tokenů, UI přijalo 313 částí a běh dokončilo za
+  58,5 s. Nejde už jen o důkaz dosažitelnosti ani samostatný `/api/tags` probe.
+- D zůstává otevřené pouze pro zobrazení historické runtime evidence tohoto
+  běhu a závěrečné spojení fyzického výsledku s automaticky ověřeným přesným
+  binding ID/revizí, boundary, target ID, TLS pinem a zákazem fallbacku.
   Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
   a GPU používají sdílenou paměť; tento scénář zůstává explicitně neověřený,
   nikoli neúspěšný. Ollama běží v Dockeru, proto lze CPU-only průchod provést
