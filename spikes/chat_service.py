@@ -108,17 +108,20 @@ def parse_research_model_response(action_id, raw, value):
                       ensure_ascii=False, sort_keys=True,
                       separators=(',', ':')).encode()).hexdigest()}
     elif action_id == 'research.compose-report':
-        require(set(parsed) == {'markdown', 'citations'}
-                and isinstance(parsed['markdown'], str)
-                and parsed['markdown'].strip() == parsed['markdown']
-                and 0 < len(parsed['markdown'].encode()) <= 256 * 1024
-                and '\0' not in parsed['markdown']
-                and isinstance(parsed['citations'], list)
+        require(set(parsed) == {'markdown', 'citations'},
+                'Research report response has unknown or missing fields')
+        require(isinstance(parsed['markdown'], str)
+                and bool(parsed['markdown'].strip())
+                and len(parsed['markdown'].encode()) <= 256 * 1024
+                and '\0' not in parsed['markdown'],
+                'Research report Markdown is invalid')
+        require(isinstance(parsed['citations'], list)
                 and bool(parsed['citations'])
                 and all(isinstance(item, str) for item in parsed['citations'])
-                and len(parsed['citations']) == len(set(parsed['citations']))
-                and set(parsed['citations']) <= set(value['selected_source_run_ids']),
-                'Research report response is invalid or cites unavailable sources')
+                and len(parsed['citations']) == len(set(parsed['citations'])),
+                'Research report citations are invalid')
+        require(set(parsed['citations']) <= set(value['selected_source_run_ids']),
+                'Research report cites unavailable sources')
         output = {**base, 'kind': 'research-report-draft',
                   'task_id': value['task_id'], 'state': 'draft',
                   'draft_sha256': hashlib.sha256(json.dumps(parsed,
@@ -1347,16 +1350,16 @@ class ChatService:
             draft = json.loads(row['response']['response'])
         except (UnicodeError, ValueError) as exc:
             raise ValidationError('Research report draft is invalid') from exc
-        require(isinstance(draft, dict) and set(draft) == {'markdown', 'citations'}
-                and isinstance(draft['markdown'], str)
-                and draft['markdown'].strip() == draft['markdown']
-                and 0 < len(draft['markdown'].encode()) <= 256 * 1024
-                and '\0' not in draft['markdown']
-                and isinstance(draft['citations'], list)
-                and bool(draft['citations'])
+        require(isinstance(draft, dict) and set(draft) == {'markdown', 'citations'},
+                'Research report draft has unknown or missing fields')
+        require(isinstance(draft['markdown'], str) and bool(draft['markdown'].strip())
+                and len(draft['markdown'].encode()) <= 256 * 1024
+                and '\0' not in draft['markdown'],
+                'Research report draft Markdown is invalid')
+        require(isinstance(draft['citations'], list) and bool(draft['citations'])
                 and all(isinstance(item, str) for item in draft['citations'])
                 and len(draft['citations']) == len(set(draft['citations'])),
-                'Research report draft is invalid')
+                'Research report draft citations are invalid')
         calculated = hashlib.sha256(json.dumps(draft, ensure_ascii=False,
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         require(calculated == draft_sha256,

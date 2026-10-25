@@ -301,10 +301,18 @@ class ResearchWorkflowTest(unittest.TestCase):
             'selected_source_run_ids': [self.run_id],
             'selection_sha256': sha(self.selection),
             'analysis_run_id': None, 'analysis_sha256': None}
+        trailing_newline = {'markdown': '# Draft\n', 'citations': [self.run_id]}
+        composed = parse_research_model_response(
+            'research.compose-report', json.dumps(trailing_newline), report)
+        self.assertEqual(composed['kind'], 'research-report-draft')
         invalid_citations = {'markdown': 'Draft', 'citations': [{}]}
-        with self.assertRaises(ValidationError):
+        with self.assertRaisesRegex(ValidationError, 'citations are invalid'):
             parse_research_model_response(
                 'research.compose-report', json.dumps(invalid_citations), report)
+        unavailable = {'markdown': 'Draft', 'citations': [str(uuid4())]}
+        with self.assertRaisesRegex(ValidationError, 'cites unavailable sources'):
+            parse_research_model_response(
+                'research.compose-report', json.dumps(unavailable), report)
 
 
 if __name__ == '__main__':

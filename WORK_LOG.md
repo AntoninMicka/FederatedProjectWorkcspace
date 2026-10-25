@@ -5,65 +5,6 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
-## F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow — 2026-10-25
-
-Dávka vznikla na větvi `feature/f-m4-research-workflow-01` z `develop`
-`5d74144` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
-
-- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-A — kontrakt, profily, reuse a
-  crash boundaries (designed).** [ADR 0048](docs/adr/0048-dynamic-research-workflow.md)
-  vymezuje uzavřený katalog činností, tři profilové policy, bounded planner,
-  doménové autority a recovery bez druhého writeru. Reuse/reject je zachycen v
-  [REUSE_CATALOG](REUSE_CATALOG.md).
-- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-B — výzkumný katalog a profily
-  (implemented).** Verzionované deskriptory přesně validují fetch, evidenci,
-  výběr relevance, analýzu, návrh zprávy a planner včetně privacy,
-  preconditions, návazností a profilových maxim.
-- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-C — doménové adaptéry a
-  dynamické materializování (implemented).** Search, reader a LLM běhy
-  zachovávají své existující journaly. Aplikace staví přesné kandidáty a model
-  vybírá jen jejich digest nebo `finish`; validovaný výsledek materializuje
-  nejvýše jednu idempotentní append-only revizi `append`/`repeat`/`finish`.
-- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-D — chatové UI a řízení průchodu
-  (implemented).** Chat nabízí profily `quick-search-v1`,
-  `read-and-verify-v1` a `deep-research-v1`, ruční i automatický režim,
-  explicitní potvrzení revizí a návrh zprávy bez automatické publikace.
-  Durable kola, načtené zdroje, kroky, revize a odpověď tvoří jednu stabilní
-  chronologickou osu; mění se jen stream, dočasný stav a živá ovládací karta.
-  Plannerova karta zobrazuje český význam i přesnou hodnotu rozhodnutí
-  `append`, `repeat` nebo `finish`, cílovou akci či důvod ukončení.
-- [x] [completed] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
-  akceptace (PoC validated).** Automatické scénáře pokrývají předčasné
-  ukončení, doplnění a opakování kroků, známou chybu readeru, `unknown` bez
-  retry, přesné zvýšení limitu, restart/resume, stale kandidáty a nezměněný
-  projekt před samostatným uložením. Fyzické průchody odhalily a následně
-  ověřily obnovu vlákna i fronty, idempotentní resume, pokračování po odmítnutém
-  zdroji, českou jazykovou preferenci, stabilní návrh přes heartbeat, časový
-  limit jako součet skutečných běhů a jednotnou historii. Uživatel 25. 10. 2026
-  potvrdil plnou funkčnost, terminální stav `Automatický Načíst a ověřit ·
-  completed` a použitelnost workflow.
-
-### Ověření, recovery a omezení
-
-Poslední úplná sada `python3 -m unittest discover -s tests -v` mimo socketově
-omezený sandbox skončila **805 testy bez selhání, z toho 28 podmíněně
-přeskočeno**. Cílený desktopový test posledního zobrazení rozhodnutí prošel;
-dotčené Python moduly prošly `py_compile`, generovaný JavaScript `node --check`
-a finální diff `git diff --check`.
-
-Autonomy journal uchovává append-only plán, revize a skutečné intervaly běhu;
-čekání na uživatele, pause a restart časový budget nespotřebovávají. Pád během
-dispatch započte rozběhnutý interval a ponechá účinek `unknown` bez
-automatického retry. Search, reader a provider journaly zůstávají autoritou
-svých účinků a po restartu z nich UI znovu sestaví historii. Projektový artefakt
-vzniká až samostatnou potvrzenou publikační operací.
-
-Jde o fyzicky přijatý PoC, nikoli produkční garanci kvality modelových úsudků,
-veřejných zdrojů nebo dostupnosti backendu. Systémová telemetrie CPU/GPU a
-doložení skutečného Ollama offloadu byly předány do `OPS-NODE-MONITOR-01` v
-[BACKLOG](BACKLOG.md).
-
 ## F-M4-DYNAMIC-WORKFLOW-01 — katalog činností a dynamický plán — 2026-10-24
 
 Dávka vznikla na větvi `feature/f-m4-dynamic-workflow-01` z `develop`

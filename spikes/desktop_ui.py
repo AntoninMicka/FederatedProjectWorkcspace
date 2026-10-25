@@ -4302,6 +4302,7 @@ function renderSearchAutonomy(container,projection,query,parentSearchId,workflow
  fact('Cíl',preview.binding ? `${preview.binding.endpoint || preview.binding.adapter || 'SearXNG'} · ${preview.binding.target_id || '—'}` : '—');
  fact('Privacy',step?.privacy);fact('Kolo',preview.round_index);
  fact('Aktuální fáze',step?`${researchPhaseLabels[step.action.id] || step.action.id} · ${step.state}`:'žádná čekající úloha');
+ if(workflow.error || step?.error)fact('Chyba',workflow.error || step.error);
  fact('Limit',`${workflow.spent_cost}/${workflow.budget.max_cost_units} cost · nejvýše ${workflow.budget.max_steps} kroků · ${Number(workflow.spent_seconds||0).toFixed(1)}/${workflow.budget.max_seconds} s běhu`);
  fact('Zbývá',`${workflow.remaining_cost} cost · ${workflow.remaining_steps} kroků · ${Number(workflow.remaining_seconds||0).toFixed(1)} s běhu`);
  if(workflow.state==='countdown'&&step?.not_before){const term=document.createElement('dt');term.textContent='Odeslání za';

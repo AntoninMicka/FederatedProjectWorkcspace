@@ -105,6 +105,7 @@ class DesktopTests(unittest.TestCase):
         self.assertNotIn("const phases=document.createElement('ol')", JS)
         self.assertNotIn("summary.textContent='Důvody změn plánu'", JS)
         self.assertIn("fact('Aktuální fáze'", JS)
+        self.assertIn("if(workflow.error || step?.error)fact('Chyba',workflow.error || step.error)", JS)
         self.assertIn("finish:'ukončit workflow'", JS)
         self.assertIn('rozhodnutí ${researchDecisionLabels[result.decision] || result.decision} (${result.decision})', JS)
         self.assertIn('cílová akce ${researchPhaseLabels[result.target_action] || result.target_action}', JS)

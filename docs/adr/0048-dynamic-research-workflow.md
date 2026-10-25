@@ -120,7 +120,10 @@ Relevance, analýza a zpráva používají existující Context Manifest a
 providerový journal. Aplikace přijme jen uzavřené schema, dostupná source/run
 ID a doložené citace. Neznámá citace, chybějící staging, změněný hash nebo
 nevalidní modelový JSON krok ukončí známou chybou; výstup se heuristicky
-neopravuje.
+neopravuje. Neprázdný bounded Markdown se přijímá v přesných vrácených bajtech,
+včetně běžného koncového newline; jeho přijetí není trimování ani oprava
+modelového výstupu. Strukturální chyba Markdown pole a chyba citací mají
+samostatnou diagnostiku.
 
 Sestavená zpráva je dočasný task draft. Uložení do projektového Gitu zůstává
 samostatnou existující operací s přesným preview, expected HEAD, content hash,

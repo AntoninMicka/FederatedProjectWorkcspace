@@ -483,7 +483,7 @@ class ChatServiceTests(unittest.TestCase):
             'research.select-relevant', research_request, execution), research_result)
         self.assertEqual(len(research_calls), 1)
 
-        report_body = {'markdown': '# Ověřená zpráva\n\nTvrzení se zdrojem.',
+        report_body = {'markdown': '# Ověřená zpráva\n\nTvrzení se zdrojem.\n',
                        'citations': [public_request['run_id']]}
         report_calls = []
         reporter = ChatService(self.node_path, Projects(self.node_path),
