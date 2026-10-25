@@ -94,12 +94,19 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
 - Fyzická kontrola po restartu aplikace doložila obnovený kompaktní součet
   `Tokeny běhů · 451 101` a poslední Ollama runtime `gpu`. OpenAI účetní řádek
   zůstal samostatný, takže node-local součet providerových run journalů není v
-  UI zaměněn s účetním reportem. Screenshot dokládá načtení obou durable
-  projekcí po novém startu; sám o sobě neporovnává součet před a po restartu.
-- D zůstává otevřené pouze pro scénáře, jejichž infrastruktura dosud nebyla
-  fyzicky doložena: partial-GPU, záměrné CPU-only varování a private-network
-  pinning. Plný GPU Workspace běh, jeho historická evidence, tokeny a restartová
-  obnova jsou na aktuálním hostu ověřeny.
+  UI zaměněn s účetním reportem.
+- Navazující fyzické porovnání začalo na součtu `451 101`, po jediném dalším
+  Ollama běhu ukázalo `451 360` (přesný přírůstek 259 tokenů) a po následujícím
+  restartu zůstalo `451 360`. Tím je doložena aktualizace agregátu z dokončeného
+  run journalu, restartová obnova i absence dvojího započtení při samotném
+  restartu.
+- D zůstává otevřené pouze pro záměrné CPU-only varování a private-network
+  pinning. Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
+  a GPU používají sdílenou paměť; tento scénář zůstává explicitně neověřený,
+  nikoli neúspěšný. Ollama běží v Dockeru, proto lze CPU-only průchod provést
+  izolovanou vedlejší instancí bez GPU na jiném loopback portu, aniž by se
+  měnila funkční instance. Plný GPU Workspace běh, jeho historická evidence,
+  tokeny a restartová obnova jsou na aktuálním hostu ověřeny.
 
 ## Crash boundaries
 
