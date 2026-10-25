@@ -131,7 +131,15 @@ class AutonomyService:
 
     def resume(self, workflow_id):
         node_id, user_id = self._identity()
-        return self.queue.resume(workflow_id, node_id, user_id)
+        resumed = self.queue.resume(workflow_id, node_id, user_id)
+        # A restored automatic research workflow must not depend on a later
+        # browser render or heartbeat to reconcile its next durable step.
+        # advance() still preserves the normal countdown/approval boundary
+        # before any domain effect is dispatched.
+        if (resumed.get('plan_schema_version') == 3
+                and resumed.get('mode') == 'automatic'):
+            return self.advance(workflow_id)
+        return resumed
 
     def cancel(self, workflow_id):
         node_id, user_id = self._identity()

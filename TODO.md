@@ -186,7 +186,18 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   výzkumu…`. Ruční akce zůstává dostupná. Ověření doplnění: dva cílené UI
   testy OK, `node --check` generovaného JavaScriptu, `python3 -m py_compile
   spikes/desktop_ui.py`, `python3 -m unittest discover -s tests -v` (799 testů
-  OK, 28 skipped) a `git diff --check` bez chyb.
+  OK, 28 skipped) a `git diff --check` bez chyb. Fyzické opakování po restartu
+  potvrdilo dostupné `Pokračovat`, ale resume pouze změnilo frontu z `paused`
+  na `queued`; poslední dokončené `research.verify-evidence` zůstalo bez
+  navazujícího planneru a bez čekající revize. Automatické dynamické workflow
+  proto při explicitním resume nově provede první backendové `advance` přímo,
+  bez závislosti na pozdějším překreslení nebo heartbeat klienta. Běžný
+  countdown, approval i fail-closed hranice doménového účinku zůstávají v
+  `advance`; ruční workflow se automaticky neposune. Ověření opravy: tři
+  cílené testy resume/recovery OK, `python3 -m py_compile` dotčených modulů,
+  `python3 -m unittest discover -s tests -v` (801 testů OK, 28 skipped) a
+  `git diff --check` bez chyb. Fyzicky zbývá potvrdit, že obnovená fronta
+  projde přes výběr relevantních zdrojů až k návrhu závěrečné zprávy.
 
 ## Akceptace
 
