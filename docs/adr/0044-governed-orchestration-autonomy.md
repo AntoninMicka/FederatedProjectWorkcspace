@@ -90,4 +90,4 @@ administrátory a nikdy nezobrazí ani nepřijme plán s `local-only` obsahem.
 Jde stále o orchestrační obálku, nikoli obecný background worker nebo
 autonomní publikaci. Zapojení automatického hledání `F-M3-SEARCH-03`
 rozšiřuje pouze bounded search workflow podle ADR 0045; stav jeho implementace
-eviduje [TODO](../../TODO.md).
+eviduje [WORK_LOG](../../WORK_LOG.md#f-m3-search-03--volitelný-automatický-dispatch-hledání--2026-10-24).

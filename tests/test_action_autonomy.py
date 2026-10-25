@@ -114,7 +114,10 @@ class ActionAutonomyTests(unittest.TestCase):
         actions = self.registry.list()
         self.assertEqual([item['action_id'] for item in actions],
             ['analysis.read-only', 'artifact.create-local', 'query.external',
-             'search.iterative-query', 'workflow.role-handoff'])
+             'research.analyze', 'research.compose-report', 'research.plan-next',
+             'research.select-relevant', 'research.verify-evidence',
+             'search.iterative-query', 'source.fetch-public',
+             'workflow.role-handoff'])
         actions[0]['permissions'].append('changed')
         self.assertNotIn('changed', self.registry.resolve(
             'analysis.read-only', '1.0')['permissions'])
@@ -220,11 +223,13 @@ class ActionAutonomyTests(unittest.TestCase):
         path.chmod(0o600)
         queue = self.queue()
         with closing(sqlite3.connect(queue.path)) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 5)
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 6)
             self.assertIn('ui_seen_at', [row[1] for row in
                                         db.execute('PRAGMA table_info(workflows)')])
             self.assertIn('not_before', [row[1] for row in
                                         db.execute('PRAGMA table_info(steps)')])
+            self.assertTrue({'started_at', 'finished_at', 'elapsed_ms'} <= {
+                row[1] for row in db.execute('PRAGMA table_info(steps)')})
             self.assertIn('activation_digest', [row[1] for row in
                 db.execute('PRAGMA table_info(workflows)')])
             self.assertEqual([row[1] for row in
@@ -310,6 +315,35 @@ class ActionAutonomyTests(unittest.TestCase):
                          {self.workflow_id, second_id})
         self.assertEqual(queue.list(str(uuid4()), str(uuid4()))['workflows'], [])
 
+    def test_terminal_plan_from_older_registry_does_not_hide_current_workflows(self):
+        queue = self.queue(); legacy_id = str(uuid4())
+        valid = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        legacy = self.step('analysis.read-only', {'selection_sha256': '2' * 64})
+        queue.prepare(self.plan([valid]), self.node_id, self.user_id)
+        queue.prepare(self.plan([legacy], workflow_id=legacy_id),
+                      self.node_id, self.user_id)
+        with closing(sqlite3.connect(queue.path)) as db:
+            raw = json.loads(bytes(db.execute(
+                'SELECT plan_json FROM workflows WHERE workflow_id=?',
+                (legacy_id,)).fetchone()[0]))
+            raw['steps'][0]['input']['retired_field'] = True
+            db.execute('UPDATE workflows SET plan_json=?,state=? WHERE workflow_id=?',
+                (json.dumps(raw).encode(), 'failed', legacy_id))
+            db.commit()
+        listed = queue.list(self.node_id, self.user_id, self.project_id)
+        self.assertEqual([item['workflow_id'] for item in listed['workflows']],
+                         [self.workflow_id])
+        self.assertEqual(listed['incompatible_workflows'], [{
+            'workflow_id': legacy_id, 'state': 'failed',
+            'updated_at': listed['incompatible_workflows'][0]['updated_at'],
+            'error': 'Autonomy action inputs differ from registry'}])
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET state='proposed' WHERE workflow_id=?",
+                       (legacy_id,)); db.commit()
+        with self.assertRaisesRegex(ValidationError,
+                                    'Autonomy action inputs differ from registry'):
+            queue.list(self.node_id, self.user_id, self.project_id)
+
     def test_second_dispatch_in_same_workflow_is_rejected(self):
         queue = self.queue()
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
@@ -329,8 +363,8 @@ class ActionAutonomyTests(unittest.TestCase):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); self.prepare_and_activate(queue, self.plan([step]))
         with closing(sqlite3.connect(queue.path)) as db:
-            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
-                       "WHERE workflow_id=?", (self.workflow_id,))
+            db.execute("UPDATE steps SET elapsed_ms=3600000 WHERE step_id=?",
+                       (step['step_id'],))
             db.commit()
         with self.assertRaisesRegex(ValidationError, 'time budget'):
             self.advance(queue)
@@ -354,7 +388,10 @@ class ActionAutonomyTests(unittest.TestCase):
         self.assertEqual((paused['state'], paused['steps'][0]['state']),
                          ('paused', 'queued'))
         queue.attach_ui(self.workflow_id, self.node_id, self.user_id)
-        queue.resume(self.workflow_id, self.node_id, self.user_id)
+        resumed = queue.resume(self.workflow_id, self.node_id, self.user_id)
+        replayed = queue.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((resumed['state'], replayed['state']), ('queued', 'queued'))
+        self.assertEqual(resumed['updated_at'], replayed['updated_at'])
         with closing(sqlite3.connect(queue.path)) as db:
             db.execute("UPDATE workflows SET ui_seen_at='2000-01-01T00:00:00Z' "
                        "WHERE workflow_id=?", (self.workflow_id,)); db.commit()
@@ -576,6 +613,40 @@ class ActionAutonomyTests(unittest.TestCase):
             restarted.propose_revision(stale, self.node_id, self.user_id,
                 available_preconditions={'project-head-current'})
 
+    def test_confirmed_time_increase_preserves_runtime_across_restart(self):
+        first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        plan = self.dynamic_plan([first], max_steps=1, max_cost=1)
+        plan['budget']['max_seconds'] = 300
+        queue = self.queue(); self.prepare_and_activate(queue, plan)
+        completed = self.complete_manual_step(queue, first)
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
+                       'WHERE workflow_id=?', (self.workflow_id,)); db.commit()
+        second = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
+                           depends=[first['step_id']])
+        proposal = self.revision(completed, 'append', step=second,
+            budget={'max_steps': 2, 'max_cost_units': 2, 'max_seconds': 600})
+        pending = queue.propose_revision(proposal, self.node_id, self.user_id,
+            available_preconditions={'project-head-current'})
+        stored = pending['revision_proposals'][-1]
+        confirmed = queue.confirm_revision(proposal['proposal_id'], self.node_id,
+            self.user_id, stored['approval_digest'],
+            available_preconditions={'project-head-current'})
+        self.assertGreaterEqual(confirmed['remaining_seconds'], 599)
+        self.assertEqual(confirmed['spent_seconds'], sum(
+            item['elapsed_seconds'] for item in confirmed['steps']))
+
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
+                       'WHERE workflow_id=?', (self.workflow_id,)); db.commit()
+        restarted = self.queue()
+        restarted.attach_ui(self.workflow_id, self.node_id, self.user_id)
+        recovered = restarted.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual(recovered['remaining_seconds'], confirmed['remaining_seconds'])
+        recovered_activation = recovered['activated_at']
+        replayed = restarted.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual(replayed['activated_at'], recovered_activation)
+
     def test_revision_transaction_rolls_back_and_lost_response_is_idempotent(self):
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); self.prepare_and_activate(queue,
@@ -694,6 +765,11 @@ class ActionAutonomyTests(unittest.TestCase):
         recovered = self.queue().get(self.workflow_id, self.node_id, self.user_id)
         self.assertEqual((recovered['state'], recovered['steps'][0]['state']),
                          ('unknown', 'unknown'))
+        self.assertIsNotNone(recovered['steps'][0]['started_at'])
+        self.assertIsNotNone(recovered['steps'][0]['finished_at'])
+        self.assertGreater(recovered['steps'][0]['elapsed_seconds'], 0)
+        self.assertEqual(recovered['spent_seconds'],
+                         recovered['steps'][0]['elapsed_seconds'])
         self.assertEqual(self.calls, [])
 
     def test_unknown_effect_is_terminal_and_never_retried(self):

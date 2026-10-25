@@ -1093,10 +1093,10 @@ začleněná do `develop`. F-M3-OLLAMA-STREAM-01 má 2026-10-12 splněnou
 feature i fyzickou desktopovou akceptaci a byla doručena PR #63.
 F-M3-SEARCH-01 je po PR #64 (`7373d81`) PoC validated a začleněná do `develop`.
 F-M3-SEARCH-02 je PoC validated a bylo doručeno PR #67 do `develop` jako merge
-commit `6c94047`. Volitelný automatický dispatch `F-M3-SEARCH-03`, obecné
-zpracování veřejných zdrojů, explicitní jazyk odpovědi a obecný workflow
-zůstávají samostatné navazující schopnosti. Gate M3 proto není vydáván za celý
-uzavřený.
+commit `6c94047`. Volitelný automatický dispatch `F-M3-SEARCH-03` byl doručen
+PR #86 jako merge commit `6d12902`. Obecné zpracování veřejných zdrojů,
+explicitní jazyk odpovědi a obecný workflow zůstávají samostatné schopnosti.
+Gate M3 proto není vydáván za celý uzavřený.
 
 - [x] Backend abstraction — F-M3-BACKEND-01: explicitní adapter registry bez discovery/fallbacku, verzované capabilities a execution identita svázaná s bindingem, rolí, manifestem a request digestem; první implementací zůstává Ollama.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
@@ -1138,7 +1138,7 @@ uzavřený.
   použití společného kontraktu F-M4-AUTONOMY-01; případné vytvoření lokálního
   výstupu zůstává vždy za samostatným explicitním potvrzením. Dávka byla
   24. 10. 2026 akceptována na úrovni PoC validated; evidence je ve WORK_LOG a
-  doručení feature PR do `develop` zůstává otevřené.
+  PR #86 byl doručen do `develop` jako merge commit `6d12902`.
 - [x] Obrazová capability — F-M3-MEDIA-01: explicitní OpenAI Images a same-node
   ComfyUI binding, přesný preview/confirm, bounded PNG výsledek, durable
   `unknown` bez retry a samostatná recovery-safe publikace s generation
@@ -1212,7 +1212,8 @@ uzavřený.
   odpojení či restartu. Stav po dispatch respektuje stávající hranici
   `unknown` bez retry a automatika nikdy nerozšiřuje oprávnění ani kontext.
   Uložení výsledku jako lokálního dokumentu/artefaktu automatizovat nelze.
-  PoC akceptace a omezení jsou ve WORK_LOG; feature PR zatím nebyl doručen.
+  PoC akceptace a omezení jsou ve WORK_LOG; PR #86 byl doručen do `develop`
+  jako merge commit `6d12902`.
 
 **Gate M3:** lze bezpečně předat omezený projektový kontext vybranému LLM.
 
@@ -1222,7 +1223,7 @@ Akceptovaná dávka `F-M4-WORKFLOW-01` lokálně PoC validovala první explicitn
 creator → opponent handoff přes hashovaný materializovaný výstup a samostatné
 Context Manifesty; nejde o implicitní sdílení celé konverzace ani o obecný
 pluginový router. Evidence je ve [WORK_LOG](WORK_LOG.md#f-m4-workflow-01--artifact-based-creatoropponent-handoff--2026-10-07);
-začlenění feature větve do `develop` zůstává otevřené.
+PR #47 byl sloučen do `develop` jako `8854d69`.
 
 - [x] Creator — jeden explicitně potvrzený bounded krok přes Context Manifest.
 - [x] Opponent — nový run pouze nad hashovaným creator výstupem a explicitními zdroji.
@@ -1237,12 +1238,24 @@ začlenění feature větve do `develop` zůstává otevřené.
   PoC akceptace a omezení jsou ve
   [WORK_LOG](WORK_LOG.md#f-m4-autonomy-01--obecná-řízená-autonomie-orchestrace--2026-10-23);
   PR #85 byl doručen do `develop` jako merge commit `7dce1c4`.
+- [x] Typovaný dynamický plán — F-M4-DYNAMIC-WORKFLOW-01: reviewovaný katalog
+  deklaruje vstupy, výstupy, preconditions a následníky; append/repeat/finish
+  i zvýšení limitu mají append-only revizi a přesné potvrzení. Recovery a
+  fyzická akceptace jsou ve
+  [WORK_LOG](WORK_LOG.md#f-m4-dynamic-workflow-01--katalog-činností-a-dynamický-plán--2026-10-24);
+  PR #88 byl doručen do `develop` jako merge commit `5d74144`.
+- [x] Dynamický výzkumný workflow — F-M4-RESEARCH-WORKFLOW-01: profilová
+  policy nad hledáním, readerem, ověřením evidence, výběrem relevance,
+  volitelnou analýzou a návrhem zprávy je fyzicky akceptovaná na úrovni PoC
+  validated; recovery, regrese koncového newline, ověření a omezení jsou ve
+  [WORK_LOG](WORK_LOG.md#f-m4-research-workflow-01--dynamický-výzkumný-workflow--2026-10-25).
+  PR do `develop` zatím nebyl vytvořen ani sloučen.
 - [x] Artifact-based context isolation — opponent nedostává implicitní chat ani zdroje.
 
 **Gate M4:** [x] lokálně PoC validated — lze provést nezávislou oponenturu bez
 sdílení původní konverzační historie; automatická regrese, skutečný
 Qt/WebEngine panel a same-node Ollama smoke prošly. Produkční/private-network
-akceptace a merge do `develop` zůstávají otevřené.
+akceptace zůstává otevřená.
 
 ## Milestone M5 – Federation
 

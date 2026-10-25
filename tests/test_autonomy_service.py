@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MPL-2.0
 from contextlib import closing
 from pathlib import Path
+import hashlib
 import json
 import sqlite3
 import tempfile
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
@@ -15,6 +17,8 @@ from spikes.backend_contract import BackendUnknown
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
+from spikes.public_source import PublicSourceUnsupported
+from spikes.research_workflow import validate_research_input
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import running_api
@@ -73,6 +77,41 @@ class AutonomyServiceTests(unittest.TestCase):
             'action': {'id': action_id, 'version': '1.0'},
             'privacy': privacy, 'cost_units': 1,
             'depends_on': list(depends or []), 'input': value}
+
+    def test_resume_reconciles_automatic_dynamic_workflow_immediately(self):
+        resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
+            'plan_schema_version': 3, 'mode': 'automatic',
+            'steps': [{'state': 'completed'}], 'revision_proposals': []}
+        reconciled = {**resumed, 'plan_revision': 4}
+        with patch.object(self.service.queue, 'resume', return_value=resumed) as resume:
+            with patch.object(self.service, 'advance', return_value=reconciled) as advance:
+                result = self.service.resume(self.workflow_id)
+
+        self.assertEqual(result, reconciled)
+        resume.assert_called_once()
+        advance.assert_called_once_with(self.workflow_id)
+
+    def test_resume_does_not_advance_manual_dynamic_workflow(self):
+        resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
+            'plan_schema_version': 3, 'mode': 'manual'}
+        with patch.object(self.service.queue, 'resume', return_value=resumed):
+            with patch.object(self.service, 'advance') as advance:
+                result = self.service.resume(self.workflow_id)
+
+        self.assertEqual(result, resumed)
+        advance.assert_not_called()
+
+    def test_resume_does_not_advance_an_existing_queued_step(self):
+        resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
+            'plan_schema_version': 3, 'mode': 'automatic',
+            'steps': [{'state': 'completed'}, {'state': 'queued'}],
+            'revision_proposals': []}
+        with patch.object(self.service.queue, 'resume', return_value=resumed):
+            with patch.object(self.service, 'advance') as advance:
+                result = self.service.resume(self.workflow_id)
+
+        self.assertEqual(result, resumed)
+        advance.assert_not_called()
 
     def plan(self, steps, *, privacy='public'):
         return {'schema_version': 1, 'workflow_id': self.workflow_id,
@@ -150,6 +189,12 @@ class AutonomyServiceTests(unittest.TestCase):
                 calls.append(('pause-all', None)); return self.list()
             def prepare_search(self, request):
                 calls.append(('prepare-search', request)); return {'state': 'proposed'}
+            def prepare_research(self, request):
+                calls.append(('prepare-research', request)); return {'state': 'proposed'}
+            def research_draft(self, workflow_id, step_id):
+                calls.append(('research-draft', workflow_id, step_id))
+                return {'markdown': '# Draft', 'citations': [], 'run_id': str(uuid4()),
+                        'selected_source_run_ids': [], 'project_changed': False}
             def edit_search(self, workflow_id, query):
                 calls.append(('edit-search', workflow_id, query)); return {'state': 'queued'}
             def send_now(self, workflow_id, step_id, dispatch_digest):
@@ -174,6 +219,14 @@ class AutonomyServiceTests(unittest.TestCase):
             response = driver.request(server, path='/v1/autonomy/search/prepare',
                 body=json.dumps({'workflow_id': self.workflow_id}).encode())
             self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            response = driver.request(server, path='/v1/autonomy/research/prepare',
+                body=json.dumps({'workflow_id': self.workflow_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
+            report_step_id = str(uuid4())
+            response = driver.request(server, path='/v1/autonomy/research/draft',
+                body=json.dumps({'workflow_id': self.workflow_id,
+                                 'step_id': report_step_id}).encode())
+            self.assertIn(b' 200 ', response.split(b'\r\n', 1)[0])
             response = driver.request(server, path='/v1/autonomy/search/edit',
                 body=json.dumps({'workflow_id': self.workflow_id,
                                  'query': 'upravený dotaz'}).encode())
@@ -196,6 +249,8 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertTrue({'/v1/autonomy/status', '/v1/autonomy/replace',
                          '/v1/autonomy/advance',
                          '/v1/autonomy/search/prepare',
+                         '/v1/autonomy/research/prepare',
+                         '/v1/autonomy/research/draft',
                          '/v1/autonomy/search/edit', '/v1/autonomy/send-now',
                          '/v1/autonomy/revision/propose',
                          '/v1/autonomy/revision/confirm',
@@ -204,13 +259,23 @@ class AutonomyServiceTests(unittest.TestCase):
                        'id="autonomy-plan-example"',
                        'id="autonomy-plan-dynamic-example"',
                        '#autonomy-list', '.search-autonomy{',
+                       '.timeline-record{',
                        "autonomyRequest('/v1/autonomy/advance'",
                        "projectRequest('/v1/autonomy/search/prepare'",
+                       "projectRequest('/v1/autonomy/research/prepare'",
+                       "projectRequest('/v1/autonomy/research/draft'",
+                       "'quick-search-v1':'Rychlé hledání'",
+                       "'read-and-verify-v1':'Načíst a ověřit'",
+                       "'deep-research-v1':'Hloubkový výzkum'",
+                       'Otevřít jako neuložený dokument',
+                       'Projekt se změní až po stisknutí Uložit.',
                        "autonomyRequest('/v1/autonomy/send-now'",
                        "autonomyRequest('/v1/autonomy/revision/propose'",
                        "autonomyRequest('/v1/autonomy/revision/confirm'",
                        "dynamicRevisionDraft(workflow,kind)",
-                       'elapsedSeconds+300',
+                       'spentSeconds+300',
+                       'researchDrafts:new Map()',
+                       'view.researchDrafts.set(step.step_id,draft)',
                        'const autonomyViewState=new Map()',
                        "matches('.autonomy-revision-editor textarea')",
                        'view.draft=textarea.value',
@@ -218,6 +283,20 @@ class AutonomyServiceTests(unittest.TestCase):
                        "setInterval(refreshAutonomyLease,5000)"):
             self.assertIn(marker, HTML if marker.startswith('id=') else
                           CSS if marker.startswith(('#', '.')) else JS)
+
+    def test_desktop_reports_exhausted_autonomy_time_budget(self):
+        class Service:
+            def resume(inner, workflow_id):
+                raise ValidationError('Autonomy time budget is exhausted')
+        driver = test_local_api.LocalAPITests()
+        with running_api('http', handler=DesktopHandler) as server:
+            server.autonomy_service = Service()
+            response = driver.request(server, path='/v1/autonomy/resume',
+                body=json.dumps({'workflow_id': self.workflow_id}).encode())
+        head, body = response.split(b'\r\n\r\n', 1)
+        self.assertIn(b' 422 ', head.split(b'\r\n', 1)[0])
+        self.assertIn('Časový limit automatického workflow je vyčerpán',
+                      json.loads(body)['error'])
 
     def test_service_stages_and_confirms_exact_dynamic_budget_revision(self):
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
@@ -301,6 +380,271 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertEqual(dispatched['steps'][0]['state'], 'completed')
         self.assertEqual([call[0] for call in chat.calls].count('confirm'), 1)
 
+    def test_research_profile_prepares_and_cycles_through_visible_planner(self):
+        task_id = str(uuid4())
+        class ResearchChat(ChatStub):
+            source_id = 'source-' + 'a' * 32
+
+            def candidate(inner, request, state):
+                preview = {'schema_version': 2, **request,
+                    'query': 'ověřit tvrzení', 'purpose': 'Ověřit tvrzení',
+                    'privacy': 'project', 'round_index': 1,
+                    'parent_search_id': None, 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_search_autonomy_candidate(inner, request):
+                return {'request': request,
+                    'preview': inner.candidate(request, 'candidate'),
+                    'project_id': self.project_id,
+                    'expected_head': self.git.head()}
+
+            def task_search_candidate(inner, request):
+                return inner.candidate(request, 'candidate')
+
+            def task_search_preview(inner, request):
+                return inner.candidate(request, 'prepared')
+
+            def task_search_confirm(inner, request):
+                inner.calls.append(('search', request))
+                return {'state': 'completed', 'search_workflow': {
+                    'rounds': [{'round_index': 1}], 'next_queries': []}}
+
+            def task_outcomes(inner, *, project_id):
+                return [{'task_id': task_id, 'outcome': {'rounds': [{
+                    'round_index': 1, 'search_id': proposed['steps'][0]['input'][
+                        'request']['search_id'],
+                    'sources': [{'source_id': inner.source_id}]}]}}]
+
+            def task_public_source_autonomy_candidate(inner, request):
+                binding = {'schema_version': 1, 'binding_id': str(uuid4()),
+                    'revision': 'static-html-v1', 'adapter': 'static-html-v1',
+                    'origins': ['https://example.test'], 'user_agent': 'Test/1.0',
+                    'auth': 'none', 'max_wire_bytes': 2 * 1024 * 1024,
+                    'max_decoded_bytes': 2 * 1024 * 1024,
+                    'max_text_chars': 200000, 'max_compression_ratio': 100,
+                    'timeout_seconds': 15}
+                preview = {'schema_version': 1, **request,
+                    'project_id': self.project_id, 'privacy': 'project',
+                    'expected_head': self.git.head(), 'title': 'Evidence',
+                    'url': 'https://example.test/evidence',
+                    'origin': 'https://example.test', 'adapter': 'static-html-v1',
+                    'binding': binding, 'effects': [
+                        {'method': 'GET', 'url': 'https://example.test/robots.txt',
+                         'purpose': 'RFC 9309 preflight'},
+                        {'method': 'GET', 'url': 'https://example.test/evidence',
+                         'purpose': 'selected public document when robots allows'}],
+                    'limits': {'wire_bytes': 2 * 1024 * 1024,
+                        'decoded_bytes': 2 * 1024 * 1024,
+                        'text_chars': 200000, 'compression_ratio': 100,
+                        'seconds': 15, 'redirects': 0},
+                    'warning': 'Untrusted source.', 'search_provenance': {
+                        'search_id': request['search_id'], 'round_index': 1,
+                        'source_id': request['source_id']}}
+                return {'request': request, 'preview': dict(preview,
+                    preview_sha256=digest(preview), state='candidate'),
+                    'project_id': self.project_id, 'expected_head': self.git.head()}
+
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                proposal = {'decision': 'finish', 'reason': 'Enough for this test.',
+                    'target_action': None, 'candidate': None,
+                    'repeat_step_id': None, 'finish_reason': 'completed'}
+                return {'schema_version': 1, 'kind': 'research-next-step',
+                    'research_id': value['research_id'], 'run_id': value['run_id'],
+                    'manifest_id': value['manifest_id'], **proposal,
+                    'proposal_sha256': digest(proposal)}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        proposed = service.prepare_research({'workflow_id': self.workflow_id,
+            'task_id': task_id, 'mode': 'manual', 'countdown_seconds': 3,
+            'profile_id': 'read-and-verify-v1', 'profile_version': '1.0'})
+        self.assertEqual(proposed['policy']['research']['profile_id'],
+                         'read-and-verify-v1')
+        self.assertEqual(proposed['policy']['research']['goal'], 'Ověřit tvrzení')
+        service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id)
+        service.approve(self.workflow_id, proposed['steps'][0]['step_id'])
+        after_search = service.advance(self.workflow_id)
+        self.assertEqual([item['action']['id'] for item in after_search['steps']],
+                         ['search.iterative-query', 'research.plan-next'])
+        self.assertEqual(after_search['steps'][1]['state'], 'queued')
+        awaiting = service.advance(self.workflow_id)
+        self.assertEqual(awaiting['steps'][1]['state'], 'awaiting-approval')
+        service.approve(self.workflow_id, awaiting['steps'][1]['step_id'])
+        completed = service.advance(self.workflow_id)
+        self.assertEqual((completed['state'], completed['plan_revision']),
+                         ('completed', 3))
+        self.assertEqual([item[0] for item in chat.calls],
+                         ['search', 'research.plan-next'])
+        candidate = chat.calls[-1][1]['available_candidates'][0]
+        self.assertEqual(candidate['candidate']['action']['id'],
+                         'source.fetch-public')
+        self.assertEqual(candidate['candidate_id'],
+                         digest(candidate['candidate']))
+
+    def test_failed_public_source_continues_with_remaining_planner_candidates(self):
+        task_id, search_id = str(uuid4()), str(uuid4())
+        first_source = 'source-' + 'a' * 32
+        second_source = 'source-' + 'b' * 32
+
+        class ResearchChat(ChatStub):
+            def search_candidate(inner, request, state):
+                preview = {'schema_version': 2, **request,
+                    'query': 'ověřit tvrzení', 'purpose': 'Ověřit tvrzení',
+                    'privacy': 'project', 'round_index': 1,
+                    'parent_search_id': None, 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_search_candidate(inner, request):
+                return inner.search_candidate(request, 'candidate')
+
+            def task_search_preview(inner, request):
+                return inner.search_candidate(request, 'prepared')
+
+            def task_search_confirm(inner, request):
+                return {'state': 'completed', 'search_workflow': {
+                    'rounds': [{'round_index': 1}], 'next_queries': []}}
+
+            def source_candidate(inner, request, state):
+                binding = {'schema_version': 1, 'binding_id': request['run_id'],
+                    'revision': 'static-html-v1', 'adapter': 'static-html-v1',
+                    'origins': ['https://example.test'], 'user_agent': 'Test/1.0',
+                    'auth': 'none', 'max_wire_bytes': 2 * 1024 * 1024,
+                    'max_decoded_bytes': 2 * 1024 * 1024,
+                    'max_text_chars': 200000, 'max_compression_ratio': 100,
+                    'timeout_seconds': 15}
+                preview = {'schema_version': 1, **request,
+                    'project_id': self.project_id, 'privacy': 'project',
+                    'expected_head': self.git.head(), 'title': 'Evidence',
+                    'url': 'https://example.test/' + request['source_id'],
+                    'origin': 'https://example.test', 'adapter': 'static-html-v1',
+                    'binding': binding, 'effects': [
+                        {'method': 'GET', 'url': 'https://example.test/robots.txt',
+                         'purpose': 'RFC 9309 preflight'},
+                        {'method': 'GET',
+                         'url': 'https://example.test/' + request['source_id'],
+                         'purpose': 'selected public document when robots allows'}],
+                    'limits': {'wire_bytes': 2 * 1024 * 1024,
+                        'decoded_bytes': 2 * 1024 * 1024, 'text_chars': 200000,
+                        'compression_ratio': 100, 'seconds': 15, 'redirects': 0},
+                    'warning': 'Untrusted source.', 'search_provenance': {
+                        'search_id': request['search_id'], 'round_index': 1,
+                        'source_id': request['source_id']}}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_public_source_autonomy_candidate(inner, request):
+                return {'request': request,
+                    'preview': inner.source_candidate(request, 'candidate'),
+                    'project_id': self.project_id, 'expected_head': self.git.head()}
+
+            def task_public_source_candidate(inner, request):
+                return inner.source_candidate(request, 'candidate')
+
+            def task_public_source_preview(inner, request):
+                return inner.source_candidate(request, 'prepared')
+
+            def task_public_source_confirm(inner, request):
+                inner.calls.append(('fetch', request))
+                raise PublicSourceUnsupported('Public source requires access credentials')
+
+            def task_outcomes(inner, *, project_id):
+                return [{'task_id': task_id, 'outcome': {'rounds': [{
+                    'round_index': 1, 'search_id': search_id, 'sources': [
+                        {'source_id': first_source}, {'source_id': second_source}]}]}}]
+
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                proposal = {'decision': 'finish', 'reason': 'No more work needed.',
+                    'target_action': None, 'candidate': None,
+                    'repeat_step_id': None, 'finish_reason': 'completed'}
+                return {'schema_version': 1, 'kind': 'research-next-step',
+                    'research_id': value['research_id'], 'run_id': value['run_id'],
+                    'manifest_id': value['manifest_id'], **proposal,
+                    'proposal_sha256': digest(proposal)}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        search_request = {'task_id': task_id, 'search_id': search_id,
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+        search_candidate = chat.search_candidate(search_request, 'candidate')
+        search_sha = search_candidate.pop('preview_sha256')
+        search_candidate.pop('state')
+        fetch_request = {'task_id': task_id, 'search_id': search_id,
+            'source_id': first_source, 'run_id': str(uuid4())}
+        fetch_candidate = chat.source_candidate(fetch_request, 'candidate')
+        fetch_sha = fetch_candidate.pop('preview_sha256')
+        fetch_candidate.pop('state')
+        search_step_id, fetch_step_id = str(uuid4()), str(uuid4())
+        profile = service.research_profiles[('read-and-verify-v1', '1.0')]
+        goal = 'Ověřit tvrzení'
+        plan = {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': profile['actions'],
+                'permissions': profile['permissions'],
+                'execution_boundaries': profile['execution_boundaries'],
+                'research': {'profile_id': profile['profile_id'],
+                    'profile_version': profile['version'],
+                    'research_id': str(uuid4()), 'goal': goal,
+                    'goal_sha256': hashlib.sha256(goal.encode()).hexdigest()}},
+            'budget': profile['default_budget'], 'steps': [
+                {'step_id': search_step_id,
+                 'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                 'privacy': 'project', 'cost_units': 1, 'depends_on': [],
+                 'input': {'request': search_request, 'preview': search_candidate,
+                           'preview_sha256': search_sha}},
+                {'step_id': fetch_step_id,
+                 'action': {'id': 'source.fetch-public', 'version': '1.0'},
+                 'privacy': 'project', 'cost_units': 2,
+                 'depends_on': [search_step_id],
+                 'input': {'request': fetch_request, 'preview': fetch_candidate,
+                           'preview_sha256': fetch_sha}}]}
+        proposed = service.prepare(plan); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id); service.approve(self.workflow_id, search_step_id)
+        service.advance(self.workflow_id); service.approve(self.workflow_id, fetch_step_id)
+        node_id, user_id = service._identity()
+        failed = service.queue.advance(self.workflow_id, node_id, user_id,
+            permissions={'project-read', 'external-dispatch'},
+            allowed_privacy={'project'}, expected_head=self.git.head())
+        self.assertEqual([item['state'] for item in failed['steps']],
+                         ['completed', 'failed'])
+
+        restarted = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        restarted.attach(self.workflow_id)
+        recovered = restarted.advance(self.workflow_id)
+
+        self.assertEqual((recovered['state'], recovered['spent_cost']), ('paused', 3))
+        self.assertEqual([item['state'] for item in recovered['steps']],
+                         ['completed', 'failed', 'queued'])
+        self.assertIn('access credentials', recovered['steps'][1]['error'])
+        planner = recovered['steps'][2]
+        self.assertEqual(planner['action']['id'], 'research.plan-next')
+        candidate_ids = [item['candidate']['input']['request']['source_id']
+            for item in planner['input']['available_candidates']
+            if item['candidate']['action']['id'] == 'source.fetch-public']
+        self.assertEqual(candidate_ids, [second_source])
+        self.assertEqual(planner['input']['ledger'][-1], {
+            'step_id': fetch_step_id, 'action_id': 'source.fetch-public',
+            'state': 'failed', 'result_sha256': None})
+        self.assertEqual([item[0] for item in chat.calls].count('fetch'), 1)
+
     def test_unknown_domain_effect_is_terminal_and_stale_head_blocks_dispatch(self):
         self.chat.unknown = True
         external = self.step('query.external', {'approval_id': str(uuid4()),
@@ -373,6 +717,59 @@ class AutonomyServiceTests(unittest.TestCase):
             service.advance(self.workflow_id)
         self.assertEqual([item[0] for item in chat.calls].count('confirm'), 1)
 
+    def test_research_candidates_exclude_profile_only_fields(self):
+        research_id, planner_run_id = str(uuid4()), str(uuid4())
+        task_id, source_run_id = str(uuid4()), str(uuid4())
+        goal = 'Prepare a bounded report draft.'
+        research = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'profile_id': 'read-and-verify-v1', 'profile_version': '1.0'}
+        source = {'task_id': task_id, 'search_id': str(uuid4()),
+            'source_id': 'source-' + 'a' * 32, 'run_id': source_run_id,
+            'adapter': 'static-html-v1', 'binding_revision': 'reader-r1',
+            'url': 'https://example.test/evidence',
+            'origin': 'https://example.test', 'raw_sha256': '1' * 64,
+            'text_sha256': '2' * 64, 'projection_sha256': '3' * 64}
+        evidence = {'sources': [source], 'relations': [], 'warnings': []}
+        selection = {'selected_source_run_ids': [source_run_id],
+            'rejected': [], 'limitations': []}
+
+        def step(action_id, result):
+            return {'action': {'id': action_id}, 'state': 'completed',
+                    'result': result}
+
+        cases = [
+            ('research.select-relevant', [step('research.verify-evidence', {
+                'evidence': evidence, 'evidence_sha256': digest(evidence)})]),
+            ('research.analyze', [step('research.select-relevant', {
+                'selection': selection, 'selection_sha256': digest(selection)})]),
+            ('research.compose-report', [
+                step('search.iterative-query', {'task_id': task_id}),
+                step('research.select-relevant', {'selection': selection,
+                    'selection_sha256': digest(selection)}),
+                step('research.analyze', {'run_id': str(uuid4()),
+                    'analysis_sha256': '4' * 64})]),
+        ]
+        base_fields = {'research_id', 'goal', 'goal_sha256', 'run_id',
+                       'manifest_id'}
+        action_fields = {
+            'research.select-relevant': {'evidence', 'evidence_sha256'},
+            'research.analyze': {'selection', 'selection_sha256'},
+            'research.compose-report': {'selected_source_run_ids',
+                'selection_sha256', 'analysis_run_id', 'analysis_sha256',
+                'task_id'},
+        }
+        for action_id, steps in cases:
+            with self.subTest(action_id=action_id):
+                workflow = {'project_id': self.project_id, 'privacy': 'project',
+                    'policy': {'actions': [{'id': action_id}]}, 'steps': steps}
+                candidates = self.service._research_candidates(
+                    workflow, research, planner_run_id)
+                self.assertEqual(len(candidates), 1)
+                value = candidates[0]['candidate']['input']
+                self.assertEqual(set(value), base_fields | action_fields[action_id])
+                validate_research_input(action_id, value)
+
     def test_exact_local_output_fields_are_rechecked_by_domain_adapter(self):
         role_workflow_id = str(uuid4())
         artifact_id = str(uuid4())
@@ -396,6 +793,101 @@ class AutonomyServiceTests(unittest.TestCase):
                          ('failed', 'failed'))
         self.assertEqual(self.roles.published, [])
 
+    def test_research_planner_materializes_one_confirmed_budget_revision(self):
+        research_id, planner_run_id = str(uuid4()), str(uuid4())
+        source_run_id, task_id, search_id = (str(uuid4()) for _ in range(3))
+        source_ref = {'task_id': task_id, 'search_id': search_id,
+            'source_id': 'source-' + 'a' * 32, 'run_id': source_run_id,
+            'adapter': 'static-html-v1', 'binding_revision': 'reader-r1',
+            'url': 'https://example.test/evidence',
+            'origin': 'https://example.test', 'raw_sha256': '1' * 64,
+            'text_sha256': '2' * 64, 'projection_sha256': '3' * 64}
+        selection = {'selected_source_run_ids': [source_run_id],
+                     'rejected': [], 'limitations': []}
+        goal = 'Prepare a bounded report draft.'
+        report_input = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'run_id': str(uuid4()), 'manifest_id': str(uuid4()),
+            'selected_source_run_ids': [source_run_id],
+            'selection_sha256': digest(selection), 'analysis_run_id': None,
+            'analysis_sha256': None, 'task_id': task_id}
+        candidate = {'action': {'id': 'research.compose-report', 'version': '1.0'},
+            'privacy': 'project', 'cost_units': 8, 'input': report_input}
+        proposal = {'decision': 'append', 'reason': 'Evidence is selected.',
+            'target_action': 'research.compose-report', 'candidate': candidate,
+            'repeat_step_id': None, 'finish_reason': None}
+        planner_output = {'schema_version': 1, 'kind': 'research-next-step',
+            'research_id': research_id, 'run_id': planner_run_id,
+            'manifest_id': str(uuid4()), **proposal,
+            'proposal_sha256': digest(proposal)}
+
+        class ResearchChat(ChatStub):
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                return planner_output
+
+            def research_public_source(inner, run_id):
+                if run_id != source_run_id:
+                    raise ValueError('unknown source')
+                return {'reference': source_ref, 'project_id': self.project_id,
+                        'privacy': 'project', 'content': b'Evidence',
+                        'projection_schema': 'public-source-structured-v1'}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        ledger = []
+        planner_input = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'run_id': planner_run_id, 'manifest_id': planner_output['manifest_id'],
+            'profile_id': 'quick-search-v1', 'profile_version': '1.0',
+            'plan_revision': 1, 'ledger': ledger,
+            'ledger_sha256': digest(ledger), 'remaining_budget': {
+                'max_steps': 0, 'max_cost_units': 0, 'max_seconds': 900},
+            'available_candidates': [{
+                'candidate_id': digest(candidate), 'candidate': candidate}]}
+        planner = self.step('research.plan-next', planner_input)
+        planner['cost_units'] = 2
+        dynamic = {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': [
+                {'id': 'research.plan-next', 'version': '1.0'},
+                {'id': 'research.compose-report', 'version': '1.0'}],
+                'permissions': ['project-read', 'external-dispatch'],
+                'execution_boundaries': ['private-network']},
+            'budget': {'max_steps': 1, 'max_cost_units': 2,
+                       'max_seconds': 900}, 'steps': [planner]}
+        proposed = service.prepare(dynamic); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        awaiting = service.advance(self.workflow_id)
+        self.assertEqual(awaiting['steps'][0]['state'], 'awaiting-approval')
+        service.approve(self.workflow_id, planner['step_id'])
+        pending = service.advance(self.workflow_id)
+        self.assertEqual(pending['steps'][0]['state'], 'completed')
+        self.assertEqual(len(pending['revision_proposals']), 1)
+        revision = pending['revision_proposals'][0]
+        self.assertEqual(revision['state'], 'pending')
+        self.assertEqual(revision['proposal']['budget'], {
+            'max_steps': 2, 'max_cost_units': 10, 'max_seconds': 900})
+
+        restarted = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        recovered = restarted.get(self.workflow_id)
+        node_id, user_id = restarted._identity()
+        replayed = restarted._materialize_planner(recovered, node_id, user_id)
+        self.assertEqual(len(replayed['revision_proposals']), 1)
+        restarted.attach(self.workflow_id)
+        confirmed = restarted.confirm_revision(self.workflow_id,
+            revision['proposal_id'], revision['approval_digest'])
+        self.assertEqual((confirmed['plan_revision'], len(confirmed['steps'])),
+                         (2, 2))
+        self.assertEqual(confirmed['steps'][1]['action']['id'],
+                         'research.compose-report')
+        self.assertEqual(len(chat.calls), 1)
+
     def test_web_projection_hides_local_only_plans(self):
         local = self.step('analysis.read-only', {'selection_sha256': '1' * 64},
                           privacy='local-only')
@@ -403,6 +895,8 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertEqual(len(self.service.list(self.project_id)['workflows']), 1)
         self.assertEqual(self.service.list(
             self.project_id, allow_local_only=False)['workflows'], [])
+        self.assertEqual(self.service.list(
+            self.project_id, allow_local_only=False)['incompatible_workflows'], [])
         with self.assertRaisesRegex(ValidationError, 'does not expose local-only'):
             self.service.get(self.workflow_id, allow_local_only=False)
 

@@ -509,6 +509,20 @@ odmítají. Soukromá inventura nedokládá shodný approval/privacy/recovery
 kontrakt; nepřebírá se z ní kód ani neveřejné detaily. Rozhodnutí:
 [ADR 0047](docs/adr/0047-dynamic-workflow-plan-revisions.md).
 
+`F-M4-RESEARCH-WORKFLOW-01` **reuse/adaptuje obecné append-only revize,
+`SearchRuns`, search candidate builder, `PublicSourceRuns`, strukturovanou
+projekci, `ContextBuilder`, `OllamaRuns`, `TaskOutcomes` a samostatnou
+publikaci draftu**. Reader dostane čistý candidate builder obdobný search
+builderu, ale search, fetch ani providerový účinek nedostanou druhého writera.
+Nové jsou uzavřené výzkumné akce, profilová policy, bounded source ledger a
+planner krok, jehož validovaný výstup může idempotentně navrhnout nejvýše jednu
+revizi. Pevná pipeline, nový research journal, agent framework, skrytý tool
+loop, crawler, automatické zvýšení limitu, retry `unknown` a automatická
+publikace se odmítají. Soukromá inventura nedokládá komponentu se shodným
+kontraktem autorit, privacy a recovery; nepřebírá se z ní kód ani neveřejné
+detaily. Rozhodnutí:
+[ADR 0048](docs/adr/0048-dynamic-research-workflow.md).
+
 F-M3-PUBLIC-SOURCE-READER-01 **reuse/adaptuje** stavový a no-retry recovery
 vzor `SearchRuns`, standardní knihovnu pro HTTP/TLS, `ContextBuilder` a bezpečné
 textové vykreslení společného desktop/web UI. Používá však samostatný

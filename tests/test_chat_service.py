@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 import base64
 from contextlib import closing
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
@@ -23,7 +24,7 @@ from spikes.openai_backend import OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
-from spikes.public_source import HTTPResult, StaticHTMLAdapter
+from spikes.public_source import HTTPResult, PublicSourceRuns, StaticHTMLAdapter
 from spikes.task_outcomes import TaskOutcomes
 from spikes.web_search import SearXNGAdapter, SearchResponseError, SearchRuns
 from spikes.desktop_ui import DesktopHandler
@@ -408,10 +409,17 @@ class ChatServiceTests(unittest.TestCase):
         public_request = {'task_id': route['task_id'],
             'search_id': projection['outcome']['rounds'][0]['search_id'],
             'source_id': source['source_id'], 'run_id': str(uuid4())}
+        candidate = reader.task_public_source_candidate(public_request)
+        self.assertEqual(candidate['state'], 'candidate')
+        self.assertIsNone(PublicSourceRuns(self.chat_state).get(
+            public_request['run_id']))
         public_preview = reader.task_public_source_preview(public_request)
         self.assertEqual(public_preview['url'], source['url'])
         self.assertEqual([item['method'] for item in public_preview['effects']], ['GET', 'GET'])
         self.assertEqual(public_calls, [])
+        self.assertEqual(reader.task_public_source_preview(public_request), public_preview)
+        self.assertEqual(reader.task_public_source_candidate(public_request)['state'],
+                         'prepared')
         public_result = reader.task_public_source_confirm({**public_request,
             'preview_sha256': public_preview['preview_sha256'], 'approved': True})
         self.assertIn('Full fact', public_result['text'])
@@ -437,6 +445,74 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(restored_result['text'], public_result['text'])
         self.assertEqual(restored_result['projection'], public_result['projection'])
         self.assertEqual(public_calls, ['robots', 'target'])
+
+        research_calls = []
+        def research_transport(binding, raw):
+            research_calls.append(json.loads(raw))
+            return {'model': binding.model, 'response': json.dumps({
+                'selected_source_run_ids': [public_request['run_id']],
+                'rejected': [], 'limitations': ['Single fetched source.']})}
+        researcher = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(
+                runs, transport=research_transport))
+        reference = researcher.task_public_source_reference({
+            'task_id': route['task_id'], 'run_id': public_request['run_id']})
+        evidence = {'sources': [reference], 'relations': [], 'warnings': []}
+        canonical_evidence = json.dumps(evidence, ensure_ascii=False, sort_keys=True,
+                                        separators=(',', ':')).encode()
+        research_request = {'research_id': str(uuid4()),
+            'goal': 'Select evidence for the answer.',
+            'goal_sha256': hashlib.sha256(
+                b'Select evidence for the answer.').hexdigest(),
+            'run_id': str(uuid4()), 'manifest_id': str(uuid4()),
+            'evidence': evidence,
+            'evidence_sha256': hashlib.sha256(canonical_evidence).hexdigest()}
+        node_id, user_id = researcher._identity()
+        execution = {'project_id': ENTITY, 'expected_head': self.git.head(),
+            'privacy': 'project', 'node_id': node_id, 'user_id': user_id}
+        research_result = researcher.research_model_action(
+            'research.select-relevant', research_request, execution)
+        self.assertEqual(research_result['selection'][
+            'selected_source_run_ids'], [public_request['run_id']])
+        self.assertIn('Full fact', research_calls[0]['prompt'])
+        self.assertIn('untrusted data', research_calls[0]['prompt'].lower())
+        self.assertIn('Response language requirement: write the answer in Czech (cs-CZ).',
+                      research_calls[0]['prompt'])
+        self.assertEqual(researcher.research_model_action(
+            'research.select-relevant', research_request, execution), research_result)
+        self.assertEqual(len(research_calls), 1)
+
+        report_body = {'markdown': '# Ověřená zpráva\n\nTvrzení se zdrojem.\n',
+                       'citations': [public_request['run_id']]}
+        report_calls = []
+        reporter = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state,
+            adapter_factory=lambda runs: OllamaAdapter(runs,
+                transport=lambda binding, raw: (report_calls.append(json.loads(raw))
+                    or {'model': binding.model,
+                        'response': json.dumps(report_body)})))
+        report_request = {'research_id': research_request['research_id'],
+            'goal': research_request['goal'],
+            'goal_sha256': research_request['goal_sha256'],
+            'run_id': str(uuid4()), 'manifest_id': str(uuid4()),
+            'selected_source_run_ids': [public_request['run_id']],
+            'selection_sha256': research_result['selection_sha256'],
+            'analysis_run_id': None, 'analysis_sha256': None,
+            'task_id': route['task_id']}
+        report_result = reporter.research_model_action(
+            'research.compose-report', report_request, execution)
+        restored_draft = reporter.research_report_draft(
+            report_request['run_id'], report_result['draft_sha256'])
+        self.assertEqual(restored_draft['markdown'], report_body['markdown'])
+        self.assertEqual(restored_draft['citations'], report_body['citations'])
+        self.assertFalse(restored_draft['project_changed'])
+        self.assertEqual(len(report_calls), 1)
+        self.assertIn('Response language requirement: write the answer in Czech (cs-CZ).',
+                      report_calls[0]['prompt'])
+        with self.assertRaisesRegex(ValidationError, 'differs'):
+            reporter.research_report_draft(report_request['run_id'], '0' * 64)
+
         generated_request = self.route_request(
             public_source_run_ids=[public_request['run_id']])
         generation_calls = []

@@ -67,22 +67,12 @@ doručena PR #86 jako merge commit `6d12902`; evidence je ve WORK_LOG.
 `F-M3-PUBLIC-SOURCE-READER-02` byla 24. 10. 2026 akceptována na úrovni PoC
 validated a doručena PR #87 jako merge commit `023eae1`; evidence je ve
 WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
-PoC validated; evidence je ve WORK_LOG a její PR do `develop` zatím nebyl
-vytvořen ani sloučen.
+PoC validated a doručena PR #88 jako merge commit `5d74144`; evidence je ve
+WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regrese
+25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
+WORK_LOG; PR do `develop` nebyl vytvořen ani sloučen.
 
 ## Zjištěné mezery a navazující ověření
-
-- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow
-  (cílová úroveň: PoC validated).** Nad readerem 02 a dynamickým katalogem
-  sestavovat podle cíle proměnný tok `vyhledat → načíst → ověřit původ a
-  vazby → vybrat relevantní zdroje → volitelně analyzovat → sestavit zprávu`.
-  Během provádění lze v povoleném katalogu činnost přidat nebo vytvořit její
-  nové opakování; dokončená historie zůstane neměnná. UI nabídne více
-  výchozích profilů a ukáže aktuální plán, důvod změny a zbývající limit.
-  Sestavení návrhu není jeho uložení: projektový artefakt nadále vyžaduje
-  samostatné přesné potvrzení. Akceptace zahrne předčasné korektní ukončení,
-  doplňující hledání, opakované načtení, vloženou analýzu, prodloužení
-  schváleného limitu a restart bez ztráty evidence.
 
 - [ ] [planned] **F-M5-EXTERNAL-EXPORT-01 — externí datový balíček a styčný
   uživatel (cílová úroveň: designed → implemented → PoC validated).** Ruční
@@ -101,6 +91,24 @@ vytvořen ani sloučen.
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
+
+- [ ] [planned] **OPS-NODE-MONITOR-01 — systémová telemetrie a viditelný
+  runtime Ollamy (cílová úroveň: implemented → PoC validated).** Původ:
+  uživatelské zjištění při `F-M4-RESEARCH-WORKFLOW-01`, že Ollama může po změně
+  prostředí začít tiše provádět inference pouze na CPU. Adaptovat již
+  připravený panel Zdroje a jeho ukazatele CPU, GPU, RAM, VRAM, DISK a NET na
+  omezenou read-only telemetrii skutečného uzlu. U každého Ollama běhu rozlišit
+  očekávaný a doložený režim CPU/GPU, částečný offload a stav `unknown`;
+  samotná konfigurace GPU, dostupné zařízení ani okamžité vytížení se nesmějí
+  vydávat za důkaz GPU inference. Pro lokální i private-network backend
+  definovat podporovaný diagnostický kontrakt a provenance měření; nedostupná
+  vzdálená telemetrie zůstane explicitně neznámá. Při očekávaném GPU a doloženém
+  CPU-only běhu zobrazit výrazné varování v panelu i u běhu, ale nic
+  automaticky nerestartovat, nepřepínat ani neopakovat. Akceptace: fyzicky
+  ověřit GPU běh, CPU-only regresi, částečný offload, nedostupnou/opožděnou
+  telemetrii, restart aplikace a oddělení historického run evidence od živého
+  systémového vzorku; žádná diagnostika nesmí zpřístupnit credentials ani
+  obejít hranici důvěry uzlu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
