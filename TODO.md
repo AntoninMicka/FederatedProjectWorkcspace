@@ -83,8 +83,8 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   uvedena v souhrnném automatickém ověření níže.
 - G je na úrovni **implemented**: kompaktní řádek Ollamy při doloženém CPU-only
   běhu a očekávaném GPU zobrazuje kontrastní textové varování; po odstranění
-  bindingu se jeho stav i styl explicitně vyčistí. Fyzické ověření kompaktního
-  varování čeká na nasazení této úpravy.
+  bindingu se jeho stav i styl explicitně vyčistí. Fyzická kontrola uživatele
+  po nasazení potvrdila správné zobrazení kompaktního varování.
 - Automatické ověření 25. 10. 2026: nová cílená sada monitoru, backendů,
   chat služby a desktop/web rozhraní prošla v rozsahu **197 testů, 6 skipped**.
   Generovaný JS prošel `node --check`; úplná sada
@@ -121,8 +121,9 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
 - Záměrný CPU-only průchod při očekávaném GPU fyzicky doložil správnou
   klasifikaci i výrazné varování ve velkém monitorovacím dialogu. Při akceptaci
   se ukázalo, že kompaktní panel zobrazoval pouze neutrální `cpu`; navazující
-  úprava G přidává varování i tam a čeká na fyzické potvrzení po nasazení.
-- D zůstává otevřené pro toto kompaktní potvrzení a private-network pinning.
+  úprava G přidala varování i tam a následná fyzická kontrola jeho zobrazení
+  potvrdila.
+- D zůstává otevřené pouze pro private-network pinning.
   Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
   a GPU používají sdílenou paměť; tento scénář zůstává explicitně neověřený,
   nikoli neúspěšný. Ollama běží v Dockeru, proto lze CPU-only průchod provést
