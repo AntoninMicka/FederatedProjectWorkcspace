@@ -5,6 +5,66 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## OPS-WEB-CONCURRENCY-01 — omezená souběžnost webového monitoru — 2026-10-25
+
+Dávka vznikla na větvi `feature/ops-web-concurrency-01` z `develop`
+`57009e2` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-A — kontrakt souběhu, vlastnictví a
+  recovery (designed).** [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md)
+  vymezuje nejvýše čtyři request workery, jednu aplikační a jednu přesně
+  vyhrazenou read-only telemetrickou linku, dvousekundový backpressure,
+  request-local autoritu a jednoho vlastníka socketu a odpovědi. Projektové a
+  node-local journaly a zámky zůstávají autoritou zápisů; `unknown` se
+  automaticky neopakuje.
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-B — omezená souběžná HTTP obsluha
+  (implemented).** Desktopový TCP i webový TLS server používají společný
+  bounded server. Pouze přesný `POST /v1/node-telemetry/status` vstupuje do
+  telemetrické linky; všechny ostatní requesty zůstávají serializované v
+  aplikační lince. Read-only autentizace a providerové journal connections
+  nebootstrapují ani nemigrují stav a webová autorita je per-request.
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-C — zápisové a shutdown regrese
+  (implemented).** Souběžný zápis při obsazené aplikační lince končí `503`
+  před dispatch, páté spojení nevytvoří další worker a server bounded čeká na
+  vlastněné requesty. Po produkční grace 225 sekund uzavře aktivní klientské
+  sockety jako crash boundary. Odpojení po provider dispatch ponechá durable
+  `unknown` bez částečné odpovědi a restart stejný run znovu neodešle.
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-D — úplná regrese a fyzická
+  akceptace (PoC validated).** Izolovaný skutečný TLS `WebServer` z feature
+  větve použil potvrzený same-node binding a reálnou Ollamu
+  `qwen3-coder:latest`. Dlouhý stream, read-only telemetrie, odmítnutý zápis,
+  restart, historická evidence, fyzické TCP odpojení po delta rámci a zákaz
+  redispatch prošly nad dočasným projektem bez změny uživatelského projektu.
+
+### Ověření, recovery a omezení
+
+Úspěšný fyzický běh trval **25,351 s**, přijal **1820 delta částí** a provider
+vykázal **147 vstupních a 1828 výstupních tokenů**. Runtime evidence byla
+`available` s procesorem `gpu`. Tři telemetrické requesty dokončené během
+aktivního streamu trvaly **0,033 s**, **0,054 s** a **0,047 s**; souběžný
+zápis skončil po **2,002 s** jako `503` a uloženou streaming preference
+nezměnil. Po čistém restartu zůstal jediný `succeeded` run a jeho historická
+evidence byla dostupná read-only za 0,007 s bez nového journal řádku.
+
+Druhý skutečný providerový stream byl po prvním textovém delta rámci ukončen
+TCP resetem. Journal jej uložil jako `unknown` s diagnostikou
+`transport-unknown`; po restartu skončil přesný opakovaný chatový request za
+0,040 s fail-closed stavem `422` a počet providerových runů zůstal **2**.
+Všechny tři shutdowny akceptačního serveru byly čisté. Dočasný uzel, projekt,
+certifikát a journaly byly po průchodu odstraněny; uživatelský projektový Git a
+node-local journaly se neměnily.
+
+Cílená sada
+`python3 -m unittest tests.test_local_api tests.test_ollama_backend
+tests.test_desktop tests.test_web_server -v` prošla jako **122 testů bez
+selhání, 6 přeskočeno**. Závěrečná úplná sada
+`python3 -m unittest discover -s tests -v` prošla jako **824 testů bez
+selhání, 28 přeskočeno**. Přeskočené scénáře jsou volitelné platformní a
+Qt/WebEngine testy; skutečný HTTPS/providerový průchod byl proveden samostatně
+výše. Feature zachovává jeden aplikační writer a nepřidává obecný job server,
+paralelní inference, automatický retry ani změnu privacy/binding autority.
+
 ## OPS-NODE-MONITOR-01 — telemetrie uzlu a evidence runtime Ollamy — 2026-10-25
 
 Dávka vznikla na větvi `feature/ops-node-monitor-01` z lokálního `develop`
@@ -81,10 +141,10 @@ providerově dokončené odpovědi, ale před atomickým dokončením run journa
 pád před durable dokončením ponechá `unknown` bez retry. Očekávání je
 node-local, váže se na přesný binding a běh zachytí jeho revizi při dispatch.
 Tokenové součty jsou obnovitelná read-only projekce durable odpovědí, nikoli
-další účetní autorita. Obecný monitoring, alerting, automatická náprava a
-souběžná obsluha dlouhého streamu zůstávají mimo tuto dávku; poslední mezera je
-předána jako `OPS-WEB-CONCURRENCY-01` a po doručení PR #90 aktivována v
-[TODO](TODO.md) na vlastní feature větvi.
+další účetní autorita. Obecný monitoring, alerting a automatická náprava
+zůstávají mimo tuto dávku. Tehdy předaná mezera souběžné obsluhy dlouhého
+streamu byla následně dokončena jako `OPS-WEB-CONCURRENCY-01`; její evidence je
+výše v tomto WORK_LOG.
 
 ## F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow — 2026-10-25
 

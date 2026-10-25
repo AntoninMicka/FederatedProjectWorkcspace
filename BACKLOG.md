@@ -74,9 +74,10 @@ WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
 
 `OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
 doručena PR #90 jako merge commit `57009e2`; evidence je ve
-[WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` je aktivní v
-[TODO](TODO.md) na větvi `feature/ops-web-concurrency-01`. Následující
-plánovací horizont tvoří dvě samostatné dávky v pořadí
+[WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026
+akceptována na úrovni PoC validated a její evidence je ve WORK_LOG; na větvi
+`feature/ops-web-concurrency-01` čeká na doručení jednoho PR do `develop`.
+Následující plánovací horizont tvoří dvě doložené samostatné dávky v pořadí
 `F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`. Provider-neutral katalog
 předchází AtlasCloud adapteru. Aktivace jedné dávky nemění stav druhé.
 

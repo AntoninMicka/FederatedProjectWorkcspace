@@ -1133,8 +1133,15 @@ Gate M3 proto není vydáván za celý uzavřený.
   restart a CPU-only varování prošly; partial-GPU zůstává na hostu se sdílenou
   pamětí nevyvolatelné a výslovně neověřené. Diagnostika nic automaticky
   nerestartuje, nepřepíná ani neopakuje. Evidence je ve WORK_LOG; dávka byla
-  doručena PR #90 jako merge commit `57009e2`. Souběh monitoru s dlouhým
-  streamem je aktivní samostatná dávka `OPS-WEB-CONCURRENCY-01` v TODO.
+  doručena PR #90 jako merge commit `57009e2`.
+- [x] Omezená souběžnost monitoru s dlouhým streamem —
+  `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026 akceptována na úrovni PoC
+  validated. Desktopový TCP a webový TLS server mají nejvýše čtyři request
+  workery, jednu aplikační a jednu read-only telemetrickou linku, bounded
+  backpressure a shutdown bez druhého writeru nebo automatického retry.
+  Skutečný TLS/Ollama průchod ověřil telemetrii během dlouhého GPU streamu,
+  `503` souběžného zápisu, restart a `unknown` po odpojení bez redispatch.
+  Evidence je ve WORK_LOG; doručení jednoho PR do `develop` zatím čeká.
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
