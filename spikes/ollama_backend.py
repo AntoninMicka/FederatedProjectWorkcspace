@@ -924,7 +924,7 @@ class OllamaAdapter:
                 pass
 
     @staticmethod
-    def probe(binding, *, timeout=10):
+    def discover_models(binding, *, timeout=10):
         require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
         value = OllamaAdapter._json_transport(
             binding, 'GET', '/api/tags', timeout=timeout, uncertain_after_send=False)
@@ -937,6 +937,13 @@ class OllamaAdapter:
             if not (isinstance(name, str) and name and len(name.encode()) <= 4096):
                 raise OllamaResponseError('Invalid Ollama model catalog', code='invalid-envelope')
             names.append(name)
+        if len(names) != len(set(names)):
+            raise OllamaResponseError('Invalid Ollama model catalog', code='invalid-envelope')
+        return sorted(names)
+
+    @staticmethod
+    def probe(binding, *, timeout=10):
+        names = OllamaAdapter.discover_models(binding, timeout=timeout)
         return {'status': 'available', 'diagnostic': ('ok' if binding.model in names
                 else 'model-unavailable'), 'model': binding.model,
                 'model_available': binding.model in names, 'model_count': len(names),

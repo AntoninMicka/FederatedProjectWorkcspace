@@ -453,6 +453,7 @@ class WebTests(unittest.TestCase):
             'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/models', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/models', body='{}', headers=headers)[0], 403)

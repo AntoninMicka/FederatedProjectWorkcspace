@@ -152,6 +152,29 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(probe.call_args.args[0].model, 'other:latest')
         self.assertEqual(self.service.status()['binding'], before)
 
+    def test_ollama_discovery_populates_chat_offers_and_keeps_manual_binding_fallback(self):
+        with patch.object(OllamaAdapter, 'discover_models',
+                          return_value=['gemma3', 'qwen3:8b']):
+            candidate = dict(self.binding, revision='unsaved-candidate')
+            preview = self.service.refresh_ollama_models(candidate)
+            self.assertEqual(preview['models'], ['gemma3', 'qwen3:8b'])
+            self.assertEqual(list(self.chat_state.glob('model-discovery-*.json')), [])
+            catalog = self.service.refresh_ollama_models(self.binding)
+        self.assertEqual(catalog['models'], ['gemma3', 'qwen3:8b'])
+        offers = [item for item in self.service.model_selection_status()['offers']
+                  if item['adapter_id'] == 'ollama']
+        self.assertEqual([item['provider_model_id'] for item in offers],
+                         ['gemma3', 'qwen3:8b'])
+        self.assertTrue(all(item['binding_id'] == self.binding['binding_id']
+                            for item in offers))
+
+        changed = dict(self.binding, revision='manual-two', model='manual:model')
+        self.service.configure(changed)
+        fallback = [item for item in self.service.model_selection_status()['offers']
+                    if item['adapter_id'] == 'ollama']
+        self.assertEqual([item['provider_model_id'] for item in fallback],
+                         ['manual:model'])
+
     def test_streaming_preference_defaults_on_and_survives_restart(self):
         self.assertEqual(self.service.status()['preferences'],
                          {'schema_version': 1, 'streaming': True})

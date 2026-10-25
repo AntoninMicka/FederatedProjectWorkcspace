@@ -85,13 +85,18 @@ class BackendCatalogTests(unittest.TestCase):
                        'id="settings-models-table"', 'id="settings-model-detail"',
                        'id="atlascloud-run-usage"', 'id="resource-atlascloud-balance"',
                        'id="backend-settings-dialog"', 'id="backend-reset-dialog"',
-                       'id="backend-settings-legacy" hidden'):
+                       'id="backend-settings-legacy" hidden',
+                       'id="ollama-load-models"', 'id="ollama-models"',
+                       'id="chat-run-model"><option value="">Vyberte model'):
             self.assertIn(marker, HTML)
         self.assertIn("'/v1/backend-catalog/status'", JS)
         self.assertIn("'/v1/backend-catalog/reset'", JS)
         self.assertIn("'/v1/model-selection/status'", JS)
         self.assertIn("configure.textContent='Nastavit'", JS)
         self.assertIn("reset.textContent='Resetovat'", JS)
+        self.assertIn("'/v1/chat/models'", JS)
+        self.assertIn('function renderChatRunSelectors()', JS)
+        self.assertIn('function selectedRunOffer()', JS)
         self.assertIn("providers.get('atlascloud-text')", JS)
         self.assertNotIn('innerHTML', JS[JS.index('function renderBackendCatalog'):JS.index('function selectSettingsTab')])
 

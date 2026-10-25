@@ -528,7 +528,10 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
-<label>Model <input name="model" placeholder="gemma3" required></label>
+<label>Model <input name="model" list="ollama-models" placeholder="gemma3" maxlength="128" required></label>
+<datalist id="ollama-models"></datalist>
+<button id="ollama-load-models" type="button">Načíst modely z Ollamy</button>
+<p id="ollama-model-catalog-status" role="status" aria-live="polite">Model lze zadat ručně.</p>
 <label>ID cíle <input name="target_id" value="local-process" required></label>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
 <label class="settings-toggle"><input id="ollama-streaming-enabled" type="checkbox" disabled> Streamovat odpovědi Ollamy v režimu Brainstorming</label>
@@ -1042,8 +1045,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
-<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option><option value="atlascloud-text">AtlasCloud</option></select></label>
-<label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="">Vyberte backend</option></select></label>
+<label class="prompt-control" for="chat-run-model"><span>Model</span><select id="chat-run-model"><option value="">Vyberte model</option></select></label>
 </div>
 <button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
 </div>
@@ -3459,7 +3462,9 @@ function renderBackendCatalog(value){
   body.append(row);
  }
 }
+let modelSelectionProjection=null;
 function renderModelSelection(value){
+ modelSelectionProjection=value;renderChatRunSelectors();
  const body=document.querySelector('#settings-models-table tbody');body.replaceChildren();
  const names=new Map((value.models||[]).map(item=>[item.model_id,item.display_name]));
  for(const offer of value.offers||[]){
@@ -5285,6 +5290,7 @@ async function loadBackendBinding(){
   settingsGoogleDriveStatus.textContent=drive.configured ?
    `OAuth klient je uložen · scope drive.file · konfigurace ${drive.credential_revision} · ${drive.client_id_hint}.` :
    'Google OAuth klient zatím není nastaven.';
+  await loadModelSelection();
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
   probeBackendAvailability();
   return true;}
@@ -5364,6 +5370,47 @@ document.querySelector('#backend-metrics-refresh').addEventListener('click',asyn
  }catch(error){backendMetricsStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud'};
+let chatRunFilter={backend:'',model:''};
+function runOfferModelKey(offer){return offer.canonical_model_id?
+ `model:${offer.canonical_model_id}`:`offer:${offer.adapter_id}:${offer.offer_id}`;}
+function runnableModelOffers(){const mode=document.querySelector('#chat-mode')?.value;return (modelSelectionProjection?.offers||[]).filter(offer=>
+ offer.binding_id&&offer.binding_revision&&offer.availability==='available'&&offer.freshness==='fresh'&&
+ (offer.capabilities||[]).some(item=>item.name==='generate-text'&&item.supported)&&
+ (offer.capabilities||[]).some(item=>item.name==='text-output'&&item.supported)&&
+ !(mode==='orchestration'&&offer.adapter_id==='ollama'&&offer.provider_model_id!==chatBinding?.model));}
+function renderChatRunSelectors(){
+ const backend=document.querySelector('#chat-run-adapter'),model=document.querySelector('#chat-run-model');
+ if(!backend||!model)return;
+ const offers=runnableModelOffers(),models=new Map((modelSelectionProjection?.models||[]).map(item=>[item.model_id,item.display_name]));
+ let backendOffers=chatRunFilter.model?offers.filter(item=>runOfferModelKey(item)===chatRunFilter.model):offers;
+ const backendIds=[...new Set(backendOffers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
+ if(chatRunFilter.backend&&!backendIds.includes(chatRunFilter.backend))chatRunFilter.backend='';
+ backend.replaceChildren(new Option('Vyberte backend',''));
+ for(const id of backendIds)backend.append(new Option(runBackendNames[id]||id,id));
+ backend.value=chatRunFilter.backend;
+ let modelOffers=chatRunFilter.backend?offers.filter(item=>item.adapter_id===chatRunFilter.backend):offers;
+ const choices=new Map();
+ for(const offer of modelOffers){const key=runOfferModelKey(offer),known=choices.get(key);
+  if(!known)choices.set(key,{key,label:offer.canonical_model_id?
+   (models.get(offer.canonical_model_id)||offer.provider_model_id):offer.provider_model_id,
+   canonical_model_id:offer.canonical_model_id});}
+ if(chatRunFilter.model&&!choices.has(chatRunFilter.model))chatRunFilter.model='';
+ model.replaceChildren(new Option('Vyberte model',''));
+ const preferred=new Set(modelSelectionProjection?.preferences?.preferred_model_ids||[]);
+ const first=document.createElement('optgroup');first.label='Preferované';
+ const other=document.createElement('optgroup');other.label='Další';
+ for(const choice of [...choices.values()].sort((a,b)=>a.label.localeCompare(b.label))){
+  const option=new Option(choice.label,choice.key);
+  (choice.canonical_model_id&&preferred.has(choice.canonical_model_id)?first:other).append(option);}
+ if(first.children.length)model.append(first);if(other.children.length)model.append(other);
+ model.value=chatRunFilter.model;
+}
+function selectedRunOffer(){
+ const matches=runnableModelOffers().filter(offer=>(!chatRunFilter.backend||offer.adapter_id===chatRunFilter.backend)
+  &&(!chatRunFilter.model||runOfferModelKey(offer)===chatRunFilter.model));
+ return chatRunFilter.backend&&chatRunFilter.model&&matches.length===1?matches[0]:null;
+}
 function configuredRunBinding(adapter){
  return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
 }
@@ -5380,7 +5427,6 @@ function refreshChatModeControls(){
  const artifacts=document.querySelector('#task-artifacts');
  const action=document.querySelector('#task-action');
  const output=document.querySelector('#task-output-kind');
- const ollamaOption=adapter.querySelector('option[value="ollama"]');
  const target=document.querySelector('#chat-orchestration-target');
  const routing=document.querySelector('#task-routing');
  const artifactSource=document.querySelector('#task-source-artifacts');
@@ -5390,13 +5436,11 @@ function refreshChatModeControls(){
  const conversationSource=document.querySelector('#task-source-conversation-label');
  const artifactSourceLabel=document.querySelector('#task-source-artifacts-label');
  const publicSourceLabel=document.querySelector('#task-source-public-label');
- const lan=chatBinding?.boundary==='private-network';
- ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
+ renderChatRunSelectors();
  if(mode==='orchestration'){
   adapter.disabled=false;routing.hidden=false;
   const external=adapter.value!=='ollama',selectedBinding=configuredRunBinding(adapter.value);
-  model.value=external ? (selectedBinding?.model || model.value) : (chatBinding?.model || '');
-  model.disabled=!external;
+  model.disabled=false;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
   action.value=publicSource.checked?'search':'answer';
@@ -5413,6 +5457,8 @@ function refreshChatModeControls(){
    if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   }
   const warnings=[];
+  if(!chatRunFilter.backend||!chatRunFilter.model)warnings.push('Vyberte backend a model běhu.');
+  else if(!selectedRunOffer())warnings.push('Výběr nevede k jediné čerstvé nabídce; zvolte jinou kombinaci.');
   if(publicSource.checked&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
   if(external&&!selectedBinding)warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`);
   if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
@@ -5424,13 +5470,18 @@ function refreshChatModeControls(){
   publicSource.disabled=false;output.disabled=false;
   if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
-  if(!model.value)model.value=configuredRunBinding(adapter.value)?.model || '';
  }
  updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
- document.querySelector('#chat-run-model').value=configuredRunBinding(event.currentTarget.value)?.model || '';
- refreshChatModeControls();
+ chatRunFilter.backend=event.currentTarget.value;
+ if(chatRunFilter.model&&!runnableModelOffers().some(item=>item.adapter_id===chatRunFilter.backend&&runOfferModelKey(item)===chatRunFilter.model))chatRunFilter.model='';
+ renderChatRunSelectors();refreshChatModeControls();
+});
+document.querySelector('#chat-run-model').addEventListener('change',event=>{
+ chatRunFilter.model=event.currentTarget.value;
+ if(chatRunFilter.backend&&!runnableModelOffers().some(item=>item.adapter_id===chatRunFilter.backend&&runOfferModelKey(item)===chatRunFilter.model))chatRunFilter.backend='';
+ renderChatRunSelectors();refreshChatModeControls();
 });
 document.querySelector('#task-action').addEventListener('change',event=>{
  document.querySelector('#task-source-public').checked=event.currentTarget.value==='search';
@@ -5498,6 +5549,10 @@ function backendCandidate(){
  if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
  return binding;
 }
+function fillOllamaModels(models){
+ const list=document.querySelector('#ollama-models');list.replaceChildren();
+ for(const model of models||[]){const option=document.createElement('option');option.value=model;list.append(option);}
+}
 function normalizeFingerprint(value){return value.trim()
  .replace(/^sha256\\s*fingerprint\\s*=\\s*/i,'').replaceAll(':','').toLowerCase();}
 function searchCandidate(){
@@ -5547,6 +5602,16 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
  }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+document.querySelector('#ollama-load-models').addEventListener('click',async event=>{
+ const status=document.querySelector('#ollama-model-catalog-status');event.currentTarget.disabled=true;
+ status.textContent='Načítám modely z přesně zadaného Ollama endpointu…';
+ try{const result=await projectRequest('/v1/chat/models',backendCandidate(),15000);
+  fillOllamaModels(result.models);status.textContent=result.models.length?
+   `Načteno ${result.models.length} modelů. Vyberte některý nebo ponechte ručně zadané ID.`:
+   'Ollama nevrátila žádný model; ID modelu zadejte ručně.';}
+ catch(error){fillOllamaModels([]);status.textContent=`${error.message} ID modelu můžete zadat ručně.`;}
+ finally{event.currentTarget.disabled=false;}
+});
 ollamaStreamingToggle.addEventListener('change',async event=>{
  const requested=event.currentTarget.checked;event.currentTarget.disabled=true;
  ollamaStreamingState.textContent='Ukládám nastavení streamování…';
@@ -5580,7 +5645,12 @@ chatForm.addEventListener('submit',async event=>{
  settingsBackendStatus.textContent='Ukládám backend…';
  try{const result=await projectRequest('/v1/chat/configure',binding);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
-  settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
+  settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;
+  try{const catalog=await projectRequest('/v1/chat/models',result.binding,15000);
+   fillOllamaModels(catalog.models);document.querySelector('#ollama-model-catalog-status').textContent=
+    `Uloženo a načteno ${catalog.models.length} modelů pro chat.`;await loadModelSelection();}
+  catch(error){document.querySelector('#ollama-model-catalog-status').textContent=
+    `Backend je uložen; katalog se nepodařilo načíst. Model lze zadat ručně. ${error.message}`;}}
  catch(error){
   const message=error.message;const reloaded=await loadBackendBinding();
   settingsBackendStatus.textContent=reloaded ? message+' Poslední potvrzené nastavení bylo znovu načteno.' :
@@ -5698,16 +5768,17 @@ async function showExternalPreview(request){
 }
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
  if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
- const selectedAdapter=document.querySelector('#chat-run-adapter').value;
+ const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
+ const selectedAdapter=selectedOffer.adapter_id;
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
-  created_at:new Date().toISOString()};
+ created_at:new Date().toISOString()};
  if(selectedAdapter!=='ollama')request.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:document.querySelector('#chat-run-model').value.trim()};
+  model:selectedOffer.provider_model_id};
  event.currentTarget.disabled=true;await showExternalPreview(request);
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
@@ -5748,9 +5819,10 @@ document.querySelector('#external-proposal-use').addEventListener('click',async(
   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
   selected_message_ids:selected,content:request.content,privacy:request.privacy,
   created_at:request.created_at};
- const selectedAdapter=document.querySelector('#chat-run-adapter').value;
+ const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
+ const selectedAdapter=selectedOffer.adapter_id;
  if(selectedAdapter!=='ollama')external.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:document.querySelector('#chat-run-model').value.trim()};
+  model:selectedOffer.provider_model_id};
  document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
 });
 document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
@@ -5803,12 +5875,13 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  }
  selectMainTab(document.querySelector('#chat-tab'));
  const mode=document.querySelector('#chat-mode').value;
- const adapter=document.querySelector('#chat-run-adapter').value;
+ const offer=selectedRunOffer();
+ if(!offer){chatOperationStatus.textContent='Vyberte právě jednu čerstvou kombinaci backendu a modelu.';return;}
+ const adapter=offer.adapter_id;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
  if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
- const model=document.querySelector('#chat-run-model').value.trim();
- if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
+ const model=offer.provider_model_id;
  const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
  const responseLanguage=document.querySelector('#chat-response-language').value || null;
  if(mode==='orchestration'){
@@ -6619,7 +6692,7 @@ class DesktopHandler(Handler):
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
-        '/v1/chat/status', '/v1/chat/configure',
+        '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
         '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
@@ -7071,6 +7144,8 @@ class DesktopHandler(Handler):
                     self.server.chat_service.task_public_source_result(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
+            if self.path == '/v1/chat/models' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.refresh_ollama_models(request))
             if self.path == '/v1/chat/preferences' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_preferences(request))
             if self.path == '/v1/chat/response-language' and isinstance(request, dict):

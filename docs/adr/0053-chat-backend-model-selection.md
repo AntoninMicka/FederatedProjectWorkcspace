@@ -107,6 +107,13 @@ ale nemaže historii runů, modelovou knowledge vrstvu, poslední bezpečně
 čitelné discovery snapshoty ani modelové preference. Ty se pouze promítnou jako
 nedostupné/stale a nelze jimi autorizovat dispatch.
 
+Do dokončení migrace legacy Ollama bindingu je jeho povinné pole `model`
+výslovnou bootstrap výjimkou: dialog nabídne read-only načtení `/api/tags`, ale
+při nedostupném discovery dovolí přesné ID zadat ručně. Ruční hodnota nevytváří
+libovolnou per-run nabídku; až uložený revizovaný binding ji promítne jako jedinou
+binding-scoped fallback nabídku. Úspěšné discovery se uloží pro přesnou revizi
+bindingu a umožní výběr dalších doložených Ollama modelů v chatu.
+
 Obecný modelový katalog dostane samostatnou stránku Nastavení. Tabulka ukáže
 všechny kanonické modely i nesloučené scoped nabídky napříč backendy, jejich
 dostupnost, čerstvost a souhrn schopností. Detail modelu je v této dávce
@@ -201,7 +208,8 @@ a provider cards monitoru. Sdílený composer i Nastavení pouze vykreslí
 serverové projekce. Odmítáme porovnání modelů podle názvu, ruční model mimo
 nabídku pro nový tok, implicitní první kompatibilní offer, provider fallback,
 automatický refresh při submitu, preference providerových offerů a nový
-framework či druhý UI/store/journal, jednu univerzální konfigurační formu pro
+framework či druhý UI/store/journal, ruční per-run model mimo doložené discovery
+nebo přesný legacy binding fallback, jednu univerzální konfigurační formu pro
 všechny providery a smíšení backendových služeb, modelových capabilities,
 spotřeby a zůstatku do jednoho boolean příznaku.
 

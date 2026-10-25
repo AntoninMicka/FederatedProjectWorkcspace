@@ -691,3 +691,13 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertFalse(result['model_available'])
         self.assertEqual(result['model_count'], 1)
         self.assertEqual(events, [('timeout', 10), 'connect', ('GET', '/api/tags', None), 'close'])
+
+    def test_discovery_returns_sorted_unique_model_names(self):
+        with patch.object(OllamaAdapter, '_json_transport', return_value={
+                'models': [{'name': 'qwen3:8b'}, {'name': 'gemma3'}]}):
+            self.assertEqual(OllamaAdapter.discover_models(self.binding),
+                             ['gemma3', 'qwen3:8b'])
+        with patch.object(OllamaAdapter, '_json_transport', return_value={
+                'models': [{'name': 'gemma3'}, {'name': 'gemma3'}]}):
+            with self.assertRaisesRegex(OllamaResponseError, 'catalog'):
+                OllamaAdapter.discover_models(self.binding)

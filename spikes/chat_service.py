@@ -34,7 +34,7 @@ from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.metadata import ValidationError, require, timestamp, uuid
-from spikes.model_catalog import ModelKnowledgeStore
+from spikes.model_catalog import ModelDiscoveryStore, ModelKnowledgeStore
 from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
@@ -309,6 +309,33 @@ class ChatService:
         """Probe a candidate without saving it or sending project content."""
         binding = BACKENDS.parse_binding(value)
         return OllamaAdapter.probe(binding)
+
+    def refresh_ollama_models(self, value):
+        """Discover a bounded Ollama catalog without changing the active binding."""
+        self._require_backend_reset_complete('ollama')
+        binding = BACKENDS.parse_binding(value)
+        names = OllamaAdapter.discover_models(binding)
+        require(all(len(name.encode()) <= 256 for name in names),
+                'Ollama model name exceeds catalog limit')
+        observed = now(); capabilities = []
+        for name in ('generate-text', 'json-output', 'streaming', 'text-output'):
+            capabilities.append({'name': name, 'value': True, 'state': 'reported',
+                'source': 'ollama:api-tags', 'revision': 'ollama-api-tags-v1',
+                'observed_at': observed})
+        offers = [{'offer_id': 'ollama:' + hashlib.sha256(name.encode()).hexdigest()[:32],
+            'provider_id': 'ollama', 'provider_model_id': name,
+            'protocol': 'ollama-generate-v1', 'availability': 'available',
+            'capabilities': capabilities} for name in names]
+        snapshot = {
+            'schema_version': 1, 'provider_id': 'ollama',
+            'scope_id': binding.binding_id, 'binding_revision': binding.revision,
+            'credential_revision': None, 'fetched_at': observed, 'offers': offers}
+        try: active = OllamaBindings(self._root()).load()
+        except FileNotFoundError: active = None
+        if active == binding:
+            snapshot = ModelDiscoveryStore(
+                self._root(), 'ollama', binding.binding_id).publish(snapshot)
+        return dict(snapshot, freshness='fresh', refresh_error=None, models=names)
 
     @staticmethod
     def _runtime_assessment(evidence):
@@ -704,24 +731,51 @@ class ChatService:
         try: atlas_binding = AtlasCloudBindings(root).load()
         except FileNotFoundError: atlas_binding = None
         for item in atlas['offers']:
+            bound = atlas_binding is not None and item['offer_id'] == atlas_binding.offer_id
             offers[('atlascloud-text', item['offer_id'])] = dict(
                 item, adapter_id='atlascloud-text',
-                binding_id=None if atlas_binding is None else atlas_binding.binding_id,
-                binding_revision=None if atlas_binding is None else atlas_binding.revision)
+                binding_id=atlas_binding.binding_id if bound else None,
+                binding_revision=atlas_binding.revision if bound else None)
         try: ollama = OllamaBindings(root).load()
         except FileNotFoundError: ollama = None
         if ollama is not None:
-            offer_id = 'ollama-binding:' + ollama.binding_id
-            offers[('ollama', offer_id)] = {'offer_id': offer_id,
-                'adapter_id': 'ollama', 'provider_id': 'ollama',
-                'provider_model_id': ollama.model, 'protocol': 'ollama-generate-v1',
-                'canonical_model_id': None, 'availability': 'available',
-                'freshness': 'fresh', 'fetched_at': None, 'refresh_error': None,
-                'capabilities': [
-                    {'name': name, 'supported': True, 'state': 'reported',
-                     'reported': None, 'reviewed': None}
-                    for name in ('generate-text', 'json-output', 'text-output')],
-                'binding_id': ollama.binding_id, 'binding_revision': ollama.revision}
+            try:
+                discovered = ModelDiscoveryStore(root, 'ollama', ollama.binding_id).load(
+                    ollama.revision, None)
+            except (FileNotFoundError, ValueError):
+                discovered = None
+            reviewed = {(item['provider_id'], item['provider_model_id'], item['protocol']): item
+                        for item in knowledge['offers']}
+            if discovered is not None and discovered['freshness'] == 'fresh':
+                for item in discovered['offers']:
+                    if item['availability'] != 'available': continue
+                    known = reviewed.get(('ollama', item['provider_model_id'], item['protocol']))
+                    offer_id = item['offer_id']
+                    offers[('ollama', offer_id)] = {'offer_id': offer_id,
+                        'adapter_id': 'ollama', 'provider_id': 'ollama',
+                        'provider_model_id': item['provider_model_id'],
+                        'protocol': item['protocol'],
+                        'canonical_model_id': None if known is None else known['canonical_model_id'],
+                        'availability': item['availability'], 'freshness': 'fresh',
+                        'fetched_at': discovered['fetched_at'], 'refresh_error': None,
+                        'capabilities': [{'name': capability['name'],
+                            'supported': capability['value'], 'state': capability['state'],
+                            'reported': capability, 'reviewed': None}
+                            for capability in item['capabilities']],
+                        'binding_id': ollama.binding_id,
+                        'binding_revision': ollama.revision}
+            if not any(key[0] == 'ollama' for key in offers):
+                offer_id = 'ollama-binding:' + ollama.binding_id
+                offers[('ollama', offer_id)] = {'offer_id': offer_id,
+                    'adapter_id': 'ollama', 'provider_id': 'ollama',
+                    'provider_model_id': ollama.model, 'protocol': 'ollama-generate-v1',
+                    'canonical_model_id': None, 'availability': 'available',
+                    'freshness': 'fresh', 'fetched_at': None, 'refresh_error': None,
+                    'capabilities': [
+                        {'name': name, 'supported': True, 'state': 'reported',
+                         'reported': None, 'reviewed': None}
+                        for name in ('generate-text', 'json-output', 'text-output')],
+                    'binding_id': ollama.binding_id, 'binding_revision': ollama.revision}
         preferences = ModelPreferences(root).load()
         order = {model_id: index for index, model_id in
                  enumerate(preferences['preferred_model_ids'])}

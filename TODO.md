@@ -125,3 +125,19 @@ backendy mají malý durable reset journal, takže pád mezi oběma kroky zanech
 omezený sandbox prošla; 7 volitelných WebEngine testů bylo přeskočeno. Zbývá
 obousměrný composer, serverové pinning/revalidace a fyzická akceptace; B/C proto
 zůstávají rozpracované.
+
+Třetí implementační řez přidal explicitní načtení modelů Ollamy z přesně
+zadaného endpointu přes `/api/tags`. Před uložením jde pouze o dočasnou nabídku
+v dialogu; teprve úspěšné načtení pro právě aktivní revizi bindingu vytvoří
+durable discovery snapshot. Nedostupný nebo neplatný katalog neblokuje ruční
+zadání přesného ID modelu a nevytváří osiřelý snapshot. Sdílený composer nyní
+čte serverovou projekci čerstvých nabídek, podporuje backend-first i model-first
+zúžení a odděluje preferované kanonické modely od nabídky „Další“, aniž by
+cokoliv automaticky vybral. Pro orchestration je Ollama do dokončení nového
+serverového run kontraktu bezpečně omezena na model aktivního bindingu. Zbývá
+serverové pinning/revalidace přesné nabídky, plná regrese a fyzická akceptace;
+B/C proto zůstávají rozpracované. Cílená sada 197 testů
+`test_backend_catalog`, `test_model_catalog`, `test_ollama_backend`,
+`test_chat_modes`, `test_chat_service`, `test_desktop` a `test_web_server`
+mimo socketově omezený sandbox prošla; 7 volitelných WebEngine testů bylo
+přeskočeno.
