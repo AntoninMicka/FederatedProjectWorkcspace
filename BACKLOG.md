@@ -80,50 +80,10 @@ akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
 #92 jako merge commit `2da2628`; evidence je ve WORK_LOG.
 `F-M3-ATLASCLOUD-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
 doručena PR #93 jako merge commit `0405d14`; evidence je ve WORK_LOG.
-Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla lokálně akceptována a
-na vlastní feature větvi čeká na doručení PR; evidence je ve WORK_LOG.
-Nejbližší produktovou dávkou zůstává `UX-BACKEND-MODEL-01`.
-
-### UX-BACKEND-MODEL-01 — výběr backendu a modelu v chatu
-
-- [ ] [planned] **Navazující feature po doručení F-M3-ATLASCLOUD-01**
-  (cílová úroveň: designed → implemented → PoC validated; navržená větev
-  `feature/ux-backend-model-01-chat-selector`, cíl PR `develop`). Původ:
-  uživatelský požadavek 25. 10. 2026 na společný částečný facelift backendů a
-  modelů. AtlasCloud integrace se tím znovu neotevírá; použije se jako jeden z
-  providerů společného katalogu.
-- **Výstup:** oddělit připojení/credential/backendový profil od volby přesné
-  modelové nabídky. Backend a model se vybírají až v chatovém composeru pro
-  konkrétní běh. Výběr backendu zúží modely na jeho dostupné nabídky; výběr
-  kanonického modelu zúží backendy na kompatibilní nabídky. Filtr se řídí také
-  požadovanými dovednostmi/capabilities dané role, akce a výstupního formátu a
-  server jej před dispatch znovu ověří nad přesnou čerstvou revizí katalogu.
-- **Backendové modifikátory:** jedna obecná identita modelu může mít více
-  providerových nabídek. Vybraná nabídka přidá backendově specifický protokol,
-  endpoint, request/response pravidla, limity a doložené capabilities; nesmí
-  měnit identitu kanonického modelu ani optimisticky doplnit neznámou
-  dovednost.
-- **Preference:** přidat explicitní node-local pořadí oblíbených kanonických
-  modelů, nikoli providerových nabídek. Kompatibilní oblíbené modely se zobrazí
-  v první úrovni, ostatní pod volbou „Další“; po volbě backendu se zachová
-  pořadí jen jeho dostupného průniku. Preference ovlivní pouze řazení a
-  prezentaci, nic sama nevybere, neautorizuje dispatch, nepřepíná backend a
-  není implicitním fallbackem.
-- **Hranice a recovery:** potvrzený run musí zachytit přesný pár
-  backend/binding + offer/model, protokol, capability snapshot a jejich revize
-  před externím účinkem. Změna katalogu či preferencí nesmí změnit připravený
-  nebo rozpracovaný run. Node-local preference jsou oddělené od projektového
-  Gitu, credential store a autoritativního run journalu; jejich atomické
-  uložení a obnovu popsat před implementací.
-- **Mimo rozsah:** automatický výběr bez viditelné uživatelské volby,
-  automatické přepnutí při chybě, žebříček odvozený z nedoložené kvality nebo
-  ceny a změna providerových credentialů během chatového dispatch.
-- **Akceptace:** stejný sdílený desktop/web composer obousměrně filtruje
-  backendy a modely bez providerových hard-code větví; role/capability filtr,
-  oblíbené vs. „Další“, prázdný/stale/offline katalog, více nabídek téhož
-  modelu, restart, změna revize a RBAC/privacy projdou automatickými testy.
-  Fyzický průchod ověří nejméně backend-first i model-first tok na dvou
-  backendech a potvrdí, že odeslaný run použil zobrazený přesný pár.
+Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla doručena PR #94 jako
+commit `b19d46a`; všechny čtyři CI shardy i souhrnný check uspěly a evidence je ve
+WORK_LOG. `UX-BACKEND-MODEL-01` byla přesunuta jako jediná aktivní dávka do
+[TODO](TODO.md); backlog ji již nedrží jako druhý stavový záznam.
 
 ## Zjištěné mezery a navazující ověření
 

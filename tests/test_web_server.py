@@ -453,6 +453,7 @@ class WebTests(unittest.TestCase):
             'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/chat/models', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/models', body='{}', headers=headers)[0], 403)
@@ -460,6 +461,10 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/search/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/model-catalog/import', body='{}',
+                                      headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/backend-catalog/reset', body='{}',
+                                      headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/model-selection/preferences', body='{}',
                                       headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/preview', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/confirm', body='{}', headers=headers)[0], 403)

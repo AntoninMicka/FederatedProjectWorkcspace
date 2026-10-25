@@ -896,7 +896,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('openai-chat-completions-v1', JS)
         self.assertIn("projectRequest('/v1/atlascloud/configure',binding)", JS)
         self.assertIn("projectRequest('/v1/atlascloud/remove',{confirmed:true})", JS)
-        self.assertIn('<option value="atlascloud-text">AtlasCloud</option>', HTML)
+        self.assertIn('id="chat-run-adapter"><option value="">Vyberte backend</option>', HTML)
+        self.assertIn("const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud'}", JS)
+        self.assertIn('function renderChatRunSelectors(){', JS)
         self.assertIn('id="model-catalog-status"', HTML)
         self.assertIn('id="model-catalog-offers"', HTML)
         self.assertIn('id="model-catalog-knowledge"', HTML)
@@ -1291,7 +1293,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
 
     def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
-        self.assertIn("lan?'Ollama v privátní síti':'Ollama na tomto uzlu'", JS)
+        self.assertIn("warnings.push('Vyberte backend a model běhu.')", JS)
+        self.assertIn("const external=adapter.value!=='ollama'", JS)
         controls = JS.split('function refreshChatModeControls(){', 1)[1].split('\n}', 1)[0]
         self.assertIn("warnings.push('Pro vyhledávání nejprve nastavte SearXNG.')", controls)
         self.assertIn('warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`)', controls)

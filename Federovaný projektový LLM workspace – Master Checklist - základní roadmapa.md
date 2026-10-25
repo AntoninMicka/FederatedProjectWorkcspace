@@ -1119,22 +1119,27 @@ Gate M3 proto není vydáván za celý uzavřený.
   katalog neprovádí automatický fallback mezi nabídkami. Evidence je ve
   WORK_LOG; dávka byla doručena PR #92 jako merge commit `2da2628`.
 - [x] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 je na větvi
-  `feature/f-m3-atlascloud-01` PoC validated: samostatný external-provider
+  `feature/f-m3-atlascloud-01` PoC validated a byl doručen PR #93 jako commit
+  `0405d14`: samostatný external-provider
   adapter používá přesný živě objevený offer a jeho deklarovaný Chat
   Completions/Responses protokol jako backendový modifikátor,
   node-local credential a durable run recovery bez fallbacku či retry
-  neurčitého výsledku. Evidence je ve WORK_LOG; PR do `develop` zatím nebyl
-  vytvořen ani sloučen. Media/MCP, Anthropic/Gemini a automatický fallback
+  neurčitého výsledku. Evidence je ve WORK_LOG. Media/MCP, Anthropic/Gemini a
+  automatický fallback
   zůstávají mimo první řez.
-- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01` po
-  doručení AtlasCloud oddělí backendové připojení od modelové nabídky pro
+- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01` je
+  aktivní dávka v TODO a oddělí backendové připojení od modelové nabídky pro
   konkrétní run. Backend-first i model-first volba se obousměrně filtrují podle
   dostupných providerových nabídek a požadovaných capabilities; backendový
   modifikátor přidá protokol, endpoint a providerová pravidla bez změny obecné
   identity modelu. Explicitní node-local preference řadí oblíbené modely do
   první úrovně a ostatní pod „Další“, ale nejsou autorizací, automatickým
   výběrem ani fallbackem. Přesný pár a revize se před dispatch zafixují v runu;
-  podrobný rozsah a akceptace jsou v BACKLOG.
+  Nastavení současně dostane tabulku podporovaných backendů a jejich služeb
+  s providerovými dialogy Nastavit/Resetovat, samostatný read-only katalog
+  modelů a provider-neutral resource monitor. Spotřeba uložených runů, account
+  usage/cost, kreditní zůstatek a quota zůstanou pravdivě oddělené; chybějící
+  providerová data se neodhadují. Podrobný rozsah a akceptace jsou v TODO.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

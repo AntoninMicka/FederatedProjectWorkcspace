@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import threading
 from types import MappingProxyType
 import unicodedata
 from uuid import UUID, uuid4, uuid5
@@ -18,6 +19,8 @@ from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
 from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
+from spikes.backend_catalog import (BackendResetJournal, ModelPreferences,
+                                    backend_catalog, durable_unlink)
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
@@ -31,7 +34,7 @@ from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.metadata import ValidationError, require, timestamp, uuid
-from spikes.model_catalog import ModelKnowledgeStore
+from spikes.model_catalog import ModelDiscoveryStore, ModelKnowledgeStore
 from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
@@ -264,6 +267,7 @@ class ChatService:
         self.search_adapter_factory = search_adapter_factory
         self.public_source_adapter_factory = public_source_adapter_factory
         self.node_telemetry = NodeTelemetry(self.node_path.parent)
+        self.backend_configuration_lock = threading.RLock()
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
@@ -285,20 +289,53 @@ class ChatService:
         adapter = self.adapter_factory(runs) if self.adapter_factory else OllamaAdapter(runs)
         return threads, OllamaBindings(root), adapter
 
+    def _require_backend_reset_complete(self, backend_id):
+        require(BackendResetJournal(self._root(), backend_id).load() is None,
+                'Backend reset is pending; retry reset before configuration or dispatch')
+
     def configure(self, value):
-        _, bindings, _ = self._stores()
-        # The bounded draft is non-authoritative and may remain invalid. Persist it first so
-        # a rejected confirmation or restart does not force the administrator to retype it.
-        if isinstance(value, dict) and value.get('adapter') == 'ollama':
-            bindings.save_draft(value)
-        binding = BACKENDS.parse_binding(value)
-        bindings.save(binding)
-        return self.status()
+        with self.backend_configuration_lock:
+            self._require_backend_reset_complete('ollama')
+            _, bindings, _ = self._stores()
+            # The bounded draft is non-authoritative and may remain invalid. Persist it first so
+            # a rejected confirmation or restart does not force the administrator to retype it.
+            if isinstance(value, dict) and value.get('adapter') == 'ollama':
+                bindings.save_draft(value)
+            binding = BACKENDS.parse_binding(value)
+            bindings.save(binding)
+            return self.status()
 
     def test_binding(self, value):
         """Probe a candidate without saving it or sending project content."""
         binding = BACKENDS.parse_binding(value)
         return OllamaAdapter.probe(binding)
+
+    def refresh_ollama_models(self, value):
+        """Discover a bounded Ollama catalog without changing the active binding."""
+        self._require_backend_reset_complete('ollama')
+        binding = BACKENDS.parse_binding(value)
+        names = OllamaAdapter.discover_models(binding)
+        require(all(len(name.encode()) <= 256 for name in names),
+                'Ollama model name exceeds catalog limit')
+        observed = now(); capabilities = []
+        for name in ('generate-text', 'json-output', 'streaming', 'text-output'):
+            capabilities.append({'name': name, 'value': True, 'state': 'reported',
+                'source': 'ollama:api-tags', 'revision': 'ollama-api-tags-v1',
+                'observed_at': observed})
+        offers = [{'offer_id': 'ollama:' + hashlib.sha256(name.encode()).hexdigest()[:32],
+            'provider_id': 'ollama', 'provider_model_id': name,
+            'protocol': 'ollama-generate-v1', 'availability': 'available',
+            'capabilities': capabilities} for name in names]
+        snapshot = {
+            'schema_version': 1, 'provider_id': 'ollama',
+            'scope_id': binding.binding_id, 'binding_revision': binding.revision,
+            'credential_revision': None, 'fetched_at': observed, 'offers': offers}
+        try: active = OllamaBindings(self._root()).load()
+        except FileNotFoundError: active = None
+        if active == binding:
+            snapshot = ModelDiscoveryStore(
+                self._root(), 'ollama', binding.binding_id).publish(snapshot)
+        return dict(snapshot, freshness='fresh', refresh_error=None, models=names)
 
     @staticmethod
     def _runtime_assessment(evidence):
@@ -407,9 +444,11 @@ class ChatService:
         return {'scope': scope, 'tag': tag, 'policy': policy}
 
     def configure_search(self, value):
-        binding = SearXNGBinding.parse(value)
-        SearXNGBindings(self._root()).save(binding)
-        return self.search_status()
+        with self.backend_configuration_lock:
+            self._require_backend_reset_complete('searxng')
+            binding = SearXNGBinding.parse(value)
+            SearXNGBindings(self._root()).save(binding)
+            return self.search_status()
 
     def test_search(self, value):
         binding = SearXNGBinding.parse(value)
@@ -423,6 +462,7 @@ class ChatService:
         return {'binding': binding, 'capabilities': {'web_search': True}}
 
     def _search_binding(self):
+        self._require_backend_reset_complete('searxng')
         try:
             return SearXNGBindings(self._root()).load()
         except FileNotFoundError as exc:
@@ -490,29 +530,32 @@ class ChatService:
                   'endpoint', 'model', 'target_id', 'max_output_tokens',
                   'timeout_seconds', 'secret'}
         require(set(value) == fields, 'Unknown or missing external backend field')
-        secret = value['secret']
-        root = self._root(); credentials = OpenAICredentials(root)
-        reference = 'credential:openai-' + str(uuid4())
-        credential = credentials.put(reference, secret)
-        candidate = dict(value); candidate.pop('secret')
-        candidate.update(credential_ref=reference,
-                         credential_revision=credential['revision'])
-        try:
-            binding = OpenAIBinding.parse(candidate)
-            bindings = OpenAIBindings(root)
+        with self.backend_configuration_lock:
+            self._require_backend_reset_complete('openai-responses')
+            secret = value['secret']
+            root = self._root(); credentials = OpenAICredentials(root)
+            reference = 'credential:openai-' + str(uuid4())
+            credential = credentials.put(reference, secret)
+            candidate = dict(value); candidate.pop('secret')
+            candidate.update(credential_ref=reference,
+                             credential_revision=credential['revision'])
             try:
-                previous = bindings.load()
-            except FileNotFoundError:
-                previous = None
-            bindings.save(binding)
-        except Exception:
-            credentials.delete(reference)
-            raise
-        if previous is not None and previous.credential_ref != reference:
-            credentials.delete(previous.credential_ref)
-        return self.external_status()
+                binding = OpenAIBinding.parse(candidate)
+                bindings = OpenAIBindings(root)
+                try:
+                    previous = bindings.load()
+                except FileNotFoundError:
+                    previous = None
+                bindings.save(binding)
+            except Exception:
+                credentials.delete(reference)
+                raise
+            if previous is not None and previous.credential_ref != reference:
+                credentials.delete(previous.credential_ref)
+            return self.external_status()
 
     def external_models(self, catalog_factory=OpenAIModelCatalog):
+        self._require_backend_reset_complete('openai-responses')
         root = self._root()
         binding = OpenAIBindings(root).load()
         credentials = OpenAICredentials(root)
@@ -540,31 +583,34 @@ class ChatService:
                   'knowledge_revision', 'capabilities', 'max_output_tokens',
                   'timeout_seconds', 'secret'}
         require(set(value) == fields, 'Unknown or missing AtlasCloud backend field')
-        root = self._root(); candidate = dict(value); secret = candidate.pop('secret')
-        AtlasCloudCatalog(root).validate_binding_offer(candidate)
-        credentials = AtlasCloudCredentials(root)
-        reference = 'credential:atlascloud-' + str(uuid4())
-        credential = credentials.put(reference, secret)
-        candidate.update(credential_ref=reference,
-                         credential_revision=credential['revision'])
-        try:
-            binding = AtlasCloudBinding.parse(candidate)
-            bindings = AtlasCloudBindings(root)
+        with self.backend_configuration_lock:
+            self._require_backend_reset_complete('atlascloud-text')
+            root = self._root(); candidate = dict(value); secret = candidate.pop('secret')
+            AtlasCloudCatalog(root).validate_binding_offer(candidate)
+            credentials = AtlasCloudCredentials(root)
+            reference = 'credential:atlascloud-' + str(uuid4())
+            credential = credentials.put(reference, secret)
+            candidate.update(credential_ref=reference,
+                             credential_revision=credential['revision'])
             try:
-                previous = bindings.load()
-            except FileNotFoundError:
-                previous = None
-            bindings.save(binding)
-        except Exception:
-            credentials.delete(reference)
-            raise
-        if previous is not None and previous.credential_ref != reference:
-            credentials.delete(previous.credential_ref)
-        return self.atlascloud_status()
+                binding = AtlasCloudBinding.parse(candidate)
+                bindings = AtlasCloudBindings(root)
+                try:
+                    previous = bindings.load()
+                except FileNotFoundError:
+                    previous = None
+                bindings.save(binding)
+            except Exception:
+                credentials.delete(reference)
+                raise
+            if previous is not None and previous.credential_ref != reference:
+                credentials.delete(previous.credential_ref)
+            return self.atlascloud_status()
 
     def refresh_atlascloud_models(self, value, catalog_factory=AtlasCloudCatalog):
         require(isinstance(value, dict) and set(value) == {'secret'},
                 'AtlasCloud model refresh requires exactly one credential')
+        self._require_backend_reset_complete('atlascloud-text')
         catalog = catalog_factory(self._root()).refresh(value['secret'])
         result = self.atlascloud_status()
         result['model_catalog'] = catalog
@@ -573,28 +619,53 @@ class ChatService:
     def remove_atlascloud(self, value):
         require(value == {'confirmed': True},
                 'Explicit AtlasCloud removal confirmation is required')
-        root = self._root(); bindings = AtlasCloudBindings(root)
-        try:
-            binding = bindings.load()
-        except FileNotFoundError:
-            return self.atlascloud_status()
-        AtlasCloudCredentials(root).delete(binding.credential_ref)
-        try:
-            bindings.path.unlink()
-        except FileNotFoundError:
-            pass
-        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        self.reset_backend({'backend_id': 'atlascloud-text', 'confirmed': True})
         return self.atlascloud_status()
+
+    def reset_backend(self, value):
+        """Disable one chat backend before erasing its credential; recover on retry."""
+        require(isinstance(value, dict)
+                and set(value) == {'backend_id', 'confirmed'}
+                and value['confirmed'] is True,
+                'Explicit backend reset confirmation is required')
+        backend_id = value['backend_id']
+        require(backend_id in {'ollama', 'openai-responses', 'atlascloud-text',
+                               'searxng'}, 'Unsupported chat backend reset target')
+        with self.backend_configuration_lock:
+            root = self._root(); journal = BackendResetJournal(root, backend_id)
+            pending = journal.load()
+            if pending is None:
+                references = []
+                if backend_id == 'openai-responses':
+                    try: references.append(OpenAIBindings(root).load().credential_ref)
+                    except FileNotFoundError: pass
+                elif backend_id == 'atlascloud-text':
+                    try: references.append(AtlasCloudBindings(root).load().credential_ref)
+                    except FileNotFoundError: pass
+                pending = journal.begin(references)
+            paths = {
+                'ollama': (OllamaBindings(root).path,),
+                'openai-responses': (OpenAIBindings(root).path,
+                                     root / 'openai-image-binding.json'),
+                'atlascloud-text': (AtlasCloudBindings(root).path,),
+                'searxng': (SearXNGBindings(root).path,),
+            }[backend_id]
+            for path in paths: durable_unlink(path)
+            credentials = (OpenAICredentials(root) if backend_id == 'openai-responses'
+                           else AtlasCloudCredentials(root)
+                           if backend_id == 'atlascloud-text' else None)
+            if credentials is not None:
+                for reference in pending['credential_refs']:
+                    credentials.delete(reference)
+            journal.finish()
+            return self.backend_catalog_status()
 
     def _external_runtime(self, request):
         root = self._root()
         choice = (ChatRunChoice.parse(request['run_choice'])
                   if 'run_choice' in request else None)
         adapter_id = choice.adapter_id if choice is not None else 'openai-responses'
+        self._require_backend_reset_complete(adapter_id)
         if adapter_id == 'openai-responses':
             base = OpenAIBindings(root).load()
             binding = (choice.resolve(ollama=None, openai=base) if choice else base)
@@ -615,6 +686,117 @@ class ChatService:
 
     def model_catalog_knowledge(self):
         return ModelKnowledgeStore(self._root()).load_or_empty(now())
+
+    def backend_catalog_status(self, additional_states=None):
+        """Return supported backend services without credentials or routing side effects."""
+        root = self._root(); states = dict(additional_states or {})
+        loaders = (
+            ('ollama', lambda: OllamaBindings(root).load()),
+            ('openai-responses', lambda: OpenAIBindings(root).load()),
+            ('atlascloud-text', lambda: AtlasCloudBindings(root).load()),
+            ('searxng', lambda: SearXNGBindings(root).load()),
+        )
+        for backend_id, load in loaders:
+            try:
+                binding = load()
+            except FileNotFoundError:
+                continue
+            states[backend_id] = {'configured': True, 'availability': 'unknown',
+                                  'detail': getattr(binding, 'boundary', None)}
+        for backend_id in ('ollama', 'openai-responses', 'atlascloud-text', 'searxng'):
+            if BackendResetJournal(root, backend_id).load() is not None:
+                states[backend_id] = {'configured': False, 'availability': 'unavailable',
+                                      'detail': 'reset-pending'}
+        return backend_catalog(states)
+
+    def model_selection_status(self):
+        """Read-only cross-provider catalog; it never refreshes or selects an offer."""
+        root = self._root(); knowledge = ModelKnowledgeStore(root).load_or_empty(now())
+        models = {item['model_id']: dict(item) for item in knowledge['models']}
+        offers = {}
+        try:
+            openai_binding = OpenAIBindings(root).load()
+        except FileNotFoundError:
+            openai_binding = None
+        if openai_binding is not None:
+            try: projected = OpenAIModelCatalog(root, OpenAICredentials(root)).load(openai_binding)
+            except (FileNotFoundError, ValueError): projected = None
+            if projected:
+                for item in projected['offers']:
+                    offers[('openai-responses', item['offer_id'])] = dict(
+                        item, adapter_id='openai-responses',
+                        binding_id=openai_binding.binding_id,
+                        binding_revision=openai_binding.revision)
+        atlas = AtlasCloudCatalog(root).load()
+        try: atlas_binding = AtlasCloudBindings(root).load()
+        except FileNotFoundError: atlas_binding = None
+        for item in atlas['offers']:
+            bound = atlas_binding is not None and item['offer_id'] == atlas_binding.offer_id
+            offers[('atlascloud-text', item['offer_id'])] = dict(
+                item, adapter_id='atlascloud-text',
+                binding_id=atlas_binding.binding_id if bound else None,
+                binding_revision=atlas_binding.revision if bound else None)
+        try: ollama = OllamaBindings(root).load()
+        except FileNotFoundError: ollama = None
+        if ollama is not None:
+            try:
+                discovered = ModelDiscoveryStore(root, 'ollama', ollama.binding_id).load(
+                    ollama.revision, None)
+            except (FileNotFoundError, ValueError):
+                discovered = None
+            reviewed = {(item['provider_id'], item['provider_model_id'], item['protocol']): item
+                        for item in knowledge['offers']}
+            if discovered is not None and discovered['freshness'] == 'fresh':
+                for item in discovered['offers']:
+                    if item['availability'] != 'available': continue
+                    known = reviewed.get(('ollama', item['provider_model_id'], item['protocol']))
+                    offer_id = item['offer_id']
+                    offers[('ollama', offer_id)] = {'offer_id': offer_id,
+                        'adapter_id': 'ollama', 'provider_id': 'ollama',
+                        'provider_model_id': item['provider_model_id'],
+                        'protocol': item['protocol'],
+                        'canonical_model_id': None if known is None else known['canonical_model_id'],
+                        'availability': item['availability'], 'freshness': 'fresh',
+                        'fetched_at': discovered['fetched_at'], 'refresh_error': None,
+                        'capabilities': [{'name': capability['name'],
+                            'supported': capability['value'], 'state': capability['state'],
+                            'reported': capability, 'reviewed': None}
+                            for capability in item['capabilities']],
+                        'binding_id': ollama.binding_id,
+                        'binding_revision': ollama.revision}
+            if not any(key[0] == 'ollama' for key in offers):
+                offer_id = 'ollama-binding:' + ollama.binding_id
+                offers[('ollama', offer_id)] = {'offer_id': offer_id,
+                    'adapter_id': 'ollama', 'provider_id': 'ollama',
+                    'provider_model_id': ollama.model, 'protocol': 'ollama-generate-v1',
+                    'canonical_model_id': None, 'availability': 'available',
+                    'freshness': 'fresh', 'fetched_at': None, 'refresh_error': None,
+                    'capabilities': [
+                        {'name': name, 'supported': True, 'state': 'reported',
+                         'reported': None, 'reviewed': None}
+                        for name in ('generate-text', 'json-output', 'text-output')],
+                    'binding_id': ollama.binding_id, 'binding_revision': ollama.revision}
+        preferences = ModelPreferences(root).load()
+        order = {model_id: index for index, model_id in
+                 enumerate(preferences['preferred_model_ids'])}
+        rows = sorted(offers.values(), key=lambda item: (
+            order.get(item.get('canonical_model_id'), len(order)),
+            item.get('canonical_model_id') or item['provider_model_id'],
+            item['adapter_id'], item['offer_id']))
+        digest = hashlib.sha256(json.dumps({'knowledge': knowledge['revision'],
+            'preferences': preferences['revision'], 'offers': rows}, sort_keys=True,
+            separators=(',', ':')).encode()).hexdigest()[:24]
+        return {'schema_version': 1, 'revision': 'model-selection-' + digest,
+                'knowledge_revision': knowledge['revision'],
+                'models': sorted(models.values(), key=lambda item: item['model_id']),
+                'offers': rows, 'preferences': preferences}
+
+    def configure_model_preferences(self, value):
+        require(isinstance(value, dict)
+                and set(value) == {'expected_revision', 'preferred_model_ids'},
+                'Invalid model preference request')
+        return ModelPreferences(self._root()).save(
+            value['preferred_model_ids'], value['expected_revision'])
 
     def import_model_catalog_knowledge(self, value):
         require(isinstance(value, dict)
@@ -666,6 +848,7 @@ class ChatService:
 
     def external_propose(self, request):
         request = self._proposal_fields(request)
+        self._require_backend_reset_complete('ollama')
         workspace = self.projects.workspace(request['project_id'], blocking=False)
         require(workspace.git.head() == request['expected_head'],
                 'Project changed before external proposal')
@@ -819,6 +1002,7 @@ class ChatService:
         prior = [messages[value] for value in ordered]
         choice = ChatRunChoice.parse(request.get('run_choice', {
             'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
+        self._require_backend_reset_complete(choice.adapter_id)
         require(choice.mode == 'orchestration',
                 'Explicit task routing requires task mode')
         plan.validate_execution(choice)
@@ -1133,6 +1317,7 @@ class ChatService:
                                                 preview_sha256=request['preview_sha256'])
         require(workspace.git.head() == row['project_commit'],
                 'Project changed between web search and synthesis')
+        self._require_backend_reset_complete('ollama')
         _, ollama_bindings, adapter = self._stores()
         configured = ollama_bindings.load()
         choice = ChatRunChoice.parse(original.get('run_choice', {
@@ -1465,6 +1650,7 @@ class ChatService:
         require(execution.get('project_id') is not None
                 and execution.get('privacy') in ALLOWED_PUBLIC_SOURCE_PRIVACY,
                 'Invalid research model execution')
+        self._require_backend_reset_complete('ollama')
         workspace = self.projects.workspace(execution['project_id'], blocking=False)
         require(workspace.git.head() == execution.get('expected_head'),
                 'Project changed before research model dispatch')
@@ -2277,6 +2463,7 @@ class ChatService:
             uuid(value)
         require(message_id not in selected_message_ids, 'New message cannot already be selected')
 
+        self._require_backend_reset_complete('ollama')
         workspace = self.projects.workspace(project_id, blocking=False)
         require(workspace.git.head() == expected_head, 'Project changed before chat dispatch')
         node_id, user_id = self._identity()

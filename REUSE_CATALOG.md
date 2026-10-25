@@ -39,6 +39,16 @@ význam ani testovací runtime. Nový framework nebo `pytest-xdist` se nepřidá
 protože souběh uvnitř společného procesu/worktree by oslabil izolaci socketů,
 globálního stavu, Qt a recovery scénářů a přidal by zbytečnou závislost.
 
+UX-BACKEND-MODEL-01 **adaptuje** provider-neutral `ModelKnowledgeStore` a
+`ModelDiscoveryStore`, `BackendRegistry`/`BackendCapabilities`, stávající
+binding stores, `ChatRunChoice`, jediné provider run journals a sdílený
+`spikes/desktop_ui.py`, existující tabulkové/dialogové vzory federace a
+provider cards/resource schémata z `backend_metrics`. Nový framework, paralelní
+UI, katalog, router ani journal se nepřidává. Revizované projekce jsou
+obnovitelné read modely a preference reuse mode-0600 atomický JSON vzor;
+přesné reuse/reject hranice a
+crash recovery určuje [ADR 0053](docs/adr/0053-chat-backend-model-selection.md).
+
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 
 M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).

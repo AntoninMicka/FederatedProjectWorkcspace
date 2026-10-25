@@ -90,6 +90,21 @@ class GoogleDriveImportTests(unittest.TestCase):
         self.service.callback(query['state'][0], 'authorization-code', ','.join(ids))
         return started['selection_id']
 
+    def test_reset_erases_oauth_configuration_and_tokens_but_keeps_history_tables(self):
+        started = self.service.authorize(self.actor, {
+            'project_id': self.project_id,
+            'expected_head': Projects(self.node).open(self.project_id)['commit_id'],
+            'privacy': 'project'}, 'http://127.0.0.1:12345/')
+        with self.assertRaisesRegex(ValueError, 'potvrzení'):
+            self.service.reset({'confirmed': False})
+        reset = self.service.reset({'confirmed': True})
+        self.assertFalse(reset['configured'])
+        with self.service.locked() as db:
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM tokens').fetchone()[0], 0)
+            row = db.execute('SELECT status,error FROM selections').fetchone()
+        self.assertEqual(row, ('failed', 'backend-reset'))
+        self.assertIn('state=', started['authorization_url'])
+
     def project_root(self):
         return Path(parse_node(read_config(self.node), location=self.node)['projects'][0]['root'])
 

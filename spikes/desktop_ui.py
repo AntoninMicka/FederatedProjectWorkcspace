@@ -277,6 +277,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Nastavení</h2><p>Jednotlivá nastavení tohoto uzlu.</p>
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-models-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-models-tab">Modely</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení modelů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-models-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
@@ -315,6 +316,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
 <article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p><p id="openai-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p></article>
+<article id="atlascloud-resource-provider"><strong>AtlasCloud</strong><p id="resource-atlascloud-balance">Volné ani předplacené tokeny provider zatím nedoložil.</p><p id="atlascloud-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p></article>
 <article><strong>Ollama runtime</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><p id="ollama-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p><p id="ollama-runtime-warning" class="runtime-warning" hidden></p><small>Historická evidence běhu a spotřeba tokenů pocházejí z uložených providerových odpovědí; živé systémové hodnoty níže vždy patří tomuto workspace uzlu.</small></article>
 </div></section>
 <section><h3>Systémové monitory</h3><p class="resource-placeholder-note">Read-only živý vzorek tohoto workspace uzlu; není historickou evidencí inference.</p>
@@ -511,17 +513,25 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-models-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-models-panel" tabindex="-1">Modely</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
-<h2 id="settings-backend-title">Lokální AI backend</h2>
+<h2 id="settings-backend-title">Podporované backendy</h2>
+<p>Backend může poskytovat modely, obraz, hledání, import úložiště nebo metriky zdrojů.</p>
+<div class="settings-table-wrap"><table id="backend-catalog-table"><thead><tr><th>Backend</th><th>Služby</th><th>Stav</th><th>Akce</th></tr></thead><tbody></tbody></table></div>
+<div id="backend-settings-legacy" hidden>
+<hr><h2>Lokální AI backend</h2>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
-<label>Model <input name="model" placeholder="gemma3" required></label>
+<label>Model <input name="model" list="ollama-models" placeholder="gemma3" maxlength="128" required></label>
+<datalist id="ollama-models"></datalist>
+<button id="ollama-load-models" type="button">Načíst modely z Ollamy</button>
+<p id="ollama-model-catalog-status" role="status" aria-live="polite">Model lze zadat ručně.</p>
 <label>ID cíle <input name="target_id" value="local-process" required></label>
 <label>SHA-256 certifikátu pro LAN <input name="tls_cert_sha256" placeholder="68:34:… nebo 6834…"></label>
 <label class="settings-toggle"><input id="ollama-streaming-enabled" type="checkbox" disabled> Streamovat odpovědi Ollamy v režimu Brainstorming</label>
@@ -611,7 +621,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
-<button id="atlascloud-remove" type="button">Odstranit AtlasCloud binding a klíč</button></form>
+<button id="atlascloud-remove" type="button" hidden>Odstranit AtlasCloud binding a klíč</button></form>
 <small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
 <hr><h2>OpenAI Images</h2>
 <p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
@@ -625,7 +635,19 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <input name="secret" type="password" autocomplete="new-password" maxlength="4096"></label>
 <button type="submit">Uložit administrátorský klíč</button>
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
-<pre id="backend-metrics-report" hidden></pre></section>
+<pre id="backend-metrics-report" hidden></pre></section></div>
+<dialog id="backend-settings-dialog" aria-labelledby="backend-settings-dialog-title"><h2 id="backend-settings-dialog-title">Nastavit backend</h2>
+<div id="backend-settings-dialog-body"></div><p id="backend-settings-dialog-status" role="status" aria-live="polite"></p>
+<button id="backend-settings-dialog-close" type="button">Zavřít</button></dialog>
+<dialog id="backend-reset-dialog" aria-labelledby="backend-reset-dialog-title"><h2 id="backend-reset-dialog-title">Resetovat backend</h2>
+<p id="backend-reset-dialog-text"></p><p>Historie běhů, katalogy a preference modelů zůstanou zachované.</p>
+<button id="backend-reset-confirm" type="button">Resetovat připojení</button><button id="backend-reset-cancel" type="button">Zrušit</button></dialog>
+</section>
+<section id="settings-models-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-models-tab" hidden>
+<h2>Katalog modelů</h2><p>Read-only přehled kanonických modelů a doložených nabídek napříč backendy.</p>
+<p id="settings-models-status" role="status" aria-live="polite">Načítám modelový katalog…</p>
+<div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backend</th><th>Protokol</th><th>Schopnosti</th><th>Stav</th></tr></thead><tbody></tbody></table></div>
+<dialog id="settings-model-detail" aria-labelledby="settings-model-detail-title"><h2 id="settings-model-detail-title">Detail modelu</h2><pre></pre><button type="button" class="secondary-button">Zavřít</button></dialog>
 </section>
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
 <h2>Publikační CMS</h2>
@@ -1023,8 +1045,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
-<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option><option value="atlascloud-text">AtlasCloud</option></select></label>
-<label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="">Vyberte backend</option></select></label>
+<label class="prompt-control" for="chat-run-model"><span>Model</span><select id="chat-run-model"><option value="">Vyberte model</option></select></label>
 </div>
 <button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
 </div>
@@ -1125,6 +1147,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
+.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
@@ -3379,6 +3402,88 @@ applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPl
 });
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
+const backendSettingsForms={
+ 'ollama':['settings-backend-status','chat-backend-form'],
+ 'openai-responses':['settings-external-status','external-backend-form',
+                     'settings-openai-image-status','openai-image-form'],
+ 'atlascloud-text':['settings-atlascloud-status','atlascloud-backend-form'],
+ 'comfyui':['settings-comfy-status','comfy-backend-form'],
+ 'searxng':['settings-search-status','search-backend-form'],
+ 'google-drive':['settings-google-drive-status','google-drive-config-form']
+};
+const backendSettingsDialog=document.querySelector('#backend-settings-dialog');
+const backendSettingsBody=document.querySelector('#backend-settings-dialog-body');
+let backendFormPlaces=[];
+function restoreBackendForms(){
+ for(const [form,place] of backendFormPlaces)place.replaceWith(form);
+ backendFormPlaces=[];backendSettingsBody.replaceChildren();
+}
+function openBackendSettings(backend){
+ restoreBackendForms();
+ document.querySelector('#backend-settings-dialog-title').textContent=`Nastavit · ${backend.display_name}`;
+ document.querySelector('#backend-settings-dialog-status').textContent=backend.detail||'';
+ for(const id of backendSettingsForms[backend.backend_id]||[]){
+  const form=document.getElementById(id),place=document.createComment('backend-form-place');
+  form.replaceWith(place);backendFormPlaces.push([form,place]);backendSettingsBody.append(form);
+ }
+ backendSettingsDialog.showModal();backendSettingsBody.querySelector('input,select,textarea,button')?.focus();
+}
+document.querySelector('#backend-settings-dialog-close').addEventListener('click',()=>backendSettingsDialog.close());
+backendSettingsDialog.addEventListener('close',()=>{restoreBackendForms();loadBackendCatalog();});
+const backendResetDialog=document.querySelector('#backend-reset-dialog');
+let backendResetTarget=null;
+function openBackendReset(backend){
+ backendResetTarget=backend;
+ document.querySelector('#backend-reset-dialog-title').textContent=`Resetovat · ${backend.display_name}`;
+ document.querySelector('#backend-reset-dialog-text').textContent='Aktivní profil a uložené přihlašovací údaje budou odstraněny z tohoto uzlu.';
+ backendResetDialog.showModal();document.querySelector('#backend-reset-confirm').focus();
+}
+document.querySelector('#backend-reset-cancel').addEventListener('click',()=>backendResetDialog.close());
+backendResetDialog.addEventListener('close',()=>{backendResetTarget=null;});
+document.querySelector('#backend-reset-confirm').addEventListener('click',async event=>{
+ if(!backendResetTarget)return;event.currentTarget.disabled=true;
+ try{const result=await projectRequest('/v1/backend-catalog/reset',{backend_id:backendResetTarget.backend_id,confirmed:true});
+  backendResetDialog.close();renderBackendCatalog(result);await loadBackendBinding();}
+ catch(error){document.querySelector('#backend-reset-dialog-text').textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+function renderBackendCatalog(value){
+ const body=document.querySelector('#backend-catalog-table tbody');body.replaceChildren();
+ for(const backend of value.backends||[]){
+  const row=document.createElement('tr');
+  for(const text of [backend.display_name,(backend.services||[]).join(', '),
+   backend.configured?`nastaveno · ${backend.availability}`:'nenastaveno']){
+   const cell=document.createElement('td');cell.textContent=text;row.append(cell);
+  }
+  const actions=document.createElement('td'),configure=document.createElement('button'),reset=document.createElement('button');
+  configure.type='button';configure.textContent='Nastavit';configure.addEventListener('click',()=>openBackendSettings(backend));
+  reset.type='button';reset.textContent='Resetovat';reset.disabled=!backend.configured;
+  reset.addEventListener('click',()=>openBackendReset(backend));actions.append(configure,reset);row.append(actions);
+  body.append(row);
+ }
+}
+let modelSelectionProjection=null;
+function renderModelSelection(value){
+ modelSelectionProjection=value;renderChatRunSelectors();
+ const body=document.querySelector('#settings-models-table tbody');body.replaceChildren();
+ const names=new Map((value.models||[]).map(item=>[item.model_id,item.display_name]));
+ for(const offer of value.offers||[]){
+  const row=document.createElement('tr'),model=document.createElement('td'),button=document.createElement('button');
+  button.type='button';button.textContent=names.get(offer.canonical_model_id)||offer.provider_model_id;
+  button.addEventListener('click',()=>{const dialog=document.querySelector('#settings-model-detail');
+   dialog.querySelector('pre').textContent=JSON.stringify(offer,null,2);dialog.showModal();});
+  model.append(button);row.append(model);
+  const supported=(offer.capabilities||[]).filter(item=>item.supported).map(item=>item.name).join(', ')||'žádné doložené';
+  for(const text of [offer.adapter_id,offer.protocol,supported,
+   `${offer.availability} · ${offer.freshness}`]){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}
+  body.append(row);
+ }
+ document.querySelector('#settings-models-status').textContent=
+  `${(value.models||[]).length} kanonických modelů · ${(value.offers||[]).length} providerových nabídek · ${value.revision}`;
+}
+async function loadBackendCatalog(){try{renderBackendCatalog(await projectRequest('/v1/backend-catalog/status',{}));}catch(error){document.querySelector('#settings-backend-status').textContent=error.message;}}
+async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
+document.querySelector('#settings-model-detail button').addEventListener('click',()=>document.querySelector('#settings-model-detail').close());
 function selectSettingsTab(selected){
  for(const tab of settingsTabs){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
@@ -3388,6 +3493,8 @@ function selectSettingsTab(selected){
  if(selected.id==='settings-cms-tab')loadCmsStatus();
  if(selected.id==='settings-access-tab')loadApplicationAccess();
  if(selected.id==='settings-profile-tab')loadUserProfile();
+ if(selected.id==='settings-backend-tab')loadBackendCatalog();
+ if(selected.id==='settings-models-tab')loadModelSelection();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -3904,10 +4011,11 @@ function tokenUsageText(report){
 }
 function renderTokenUsage(value){
  const providers=new Map((value?.providers||[]).map(item=>[item.adapter_id,item]));
- const ollama=providers.get('ollama'),openai=providers.get('openai-responses');
+ const ollama=providers.get('ollama'),openai=providers.get('openai-responses'),atlas=providers.get('atlascloud-text');
  document.querySelector('#ollama-run-usage').textContent=tokenUsageText(ollama);
  document.querySelector('#openai-run-usage').textContent=tokenUsageText(openai);
- const reports=[ollama,openai].filter(Boolean);
+ document.querySelector('#atlascloud-run-usage').textContent=tokenUsageText(atlas);
+ const reports=[ollama,openai,atlas].filter(Boolean);
  const total=reports.reduce((sum,item)=>sum+item.total_tokens,0);
  const unreported=reports.reduce((sum,item)=>sum+item.unreported_runs,0);
  runTokenIndicator.textContent=`Tokeny běhů · ${total.toLocaleString('cs-CZ')}`+
@@ -5182,6 +5290,7 @@ async function loadBackendBinding(){
   settingsGoogleDriveStatus.textContent=drive.configured ?
    `OAuth klient je uložen · scope drive.file · konfigurace ${drive.credential_revision} · ${drive.client_id_hint}.` :
    'Google OAuth klient zatím není nastaven.';
+  await loadModelSelection();
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
   probeBackendAvailability();
   return true;}
@@ -5261,6 +5370,47 @@ document.querySelector('#backend-metrics-refresh').addEventListener('click',asyn
  }catch(error){backendMetricsStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud'};
+let chatRunFilter={backend:'',model:''};
+function runOfferModelKey(offer){return offer.canonical_model_id?
+ `model:${offer.canonical_model_id}`:`offer:${offer.adapter_id}:${offer.offer_id}`;}
+function runnableModelOffers(){const mode=document.querySelector('#chat-mode')?.value;return (modelSelectionProjection?.offers||[]).filter(offer=>
+ offer.binding_id&&offer.binding_revision&&offer.availability==='available'&&offer.freshness==='fresh'&&
+ (offer.capabilities||[]).some(item=>item.name==='generate-text'&&item.supported)&&
+ (offer.capabilities||[]).some(item=>item.name==='text-output'&&item.supported)&&
+ !(mode==='orchestration'&&offer.adapter_id==='ollama'&&offer.provider_model_id!==chatBinding?.model));}
+function renderChatRunSelectors(){
+ const backend=document.querySelector('#chat-run-adapter'),model=document.querySelector('#chat-run-model');
+ if(!backend||!model)return;
+ const offers=runnableModelOffers(),models=new Map((modelSelectionProjection?.models||[]).map(item=>[item.model_id,item.display_name]));
+ let backendOffers=chatRunFilter.model?offers.filter(item=>runOfferModelKey(item)===chatRunFilter.model):offers;
+ const backendIds=[...new Set(backendOffers.map(item=>item.adapter_id))].sort((a,b)=>(runBackendNames[a]||a).localeCompare(runBackendNames[b]||b));
+ if(chatRunFilter.backend&&!backendIds.includes(chatRunFilter.backend))chatRunFilter.backend='';
+ backend.replaceChildren(new Option('Vyberte backend',''));
+ for(const id of backendIds)backend.append(new Option(runBackendNames[id]||id,id));
+ backend.value=chatRunFilter.backend;
+ let modelOffers=chatRunFilter.backend?offers.filter(item=>item.adapter_id===chatRunFilter.backend):offers;
+ const choices=new Map();
+ for(const offer of modelOffers){const key=runOfferModelKey(offer),known=choices.get(key);
+  if(!known)choices.set(key,{key,label:offer.canonical_model_id?
+   (models.get(offer.canonical_model_id)||offer.provider_model_id):offer.provider_model_id,
+   canonical_model_id:offer.canonical_model_id});}
+ if(chatRunFilter.model&&!choices.has(chatRunFilter.model))chatRunFilter.model='';
+ model.replaceChildren(new Option('Vyberte model',''));
+ const preferred=new Set(modelSelectionProjection?.preferences?.preferred_model_ids||[]);
+ const first=document.createElement('optgroup');first.label='Preferované';
+ const other=document.createElement('optgroup');other.label='Další';
+ for(const choice of [...choices.values()].sort((a,b)=>a.label.localeCompare(b.label))){
+  const option=new Option(choice.label,choice.key);
+  (choice.canonical_model_id&&preferred.has(choice.canonical_model_id)?first:other).append(option);}
+ if(first.children.length)model.append(first);if(other.children.length)model.append(other);
+ model.value=chatRunFilter.model;
+}
+function selectedRunOffer(){
+ const matches=runnableModelOffers().filter(offer=>(!chatRunFilter.backend||offer.adapter_id===chatRunFilter.backend)
+  &&(!chatRunFilter.model||runOfferModelKey(offer)===chatRunFilter.model));
+ return chatRunFilter.backend&&chatRunFilter.model&&matches.length===1?matches[0]:null;
+}
 function configuredRunBinding(adapter){
  return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
 }
@@ -5277,7 +5427,6 @@ function refreshChatModeControls(){
  const artifacts=document.querySelector('#task-artifacts');
  const action=document.querySelector('#task-action');
  const output=document.querySelector('#task-output-kind');
- const ollamaOption=adapter.querySelector('option[value="ollama"]');
  const target=document.querySelector('#chat-orchestration-target');
  const routing=document.querySelector('#task-routing');
  const artifactSource=document.querySelector('#task-source-artifacts');
@@ -5287,13 +5436,11 @@ function refreshChatModeControls(){
  const conversationSource=document.querySelector('#task-source-conversation-label');
  const artifactSourceLabel=document.querySelector('#task-source-artifacts-label');
  const publicSourceLabel=document.querySelector('#task-source-public-label');
- const lan=chatBinding?.boundary==='private-network';
- ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
+ renderChatRunSelectors();
  if(mode==='orchestration'){
   adapter.disabled=false;routing.hidden=false;
   const external=adapter.value!=='ollama',selectedBinding=configuredRunBinding(adapter.value);
-  model.value=external ? (selectedBinding?.model || model.value) : (chatBinding?.model || '');
-  model.disabled=!external;
+  model.disabled=false;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
   action.value=publicSource.checked?'search':'answer';
@@ -5310,6 +5457,8 @@ function refreshChatModeControls(){
    if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   }
   const warnings=[];
+  if(!chatRunFilter.backend||!chatRunFilter.model)warnings.push('Vyberte backend a model běhu.');
+  else if(!selectedRunOffer())warnings.push('Výběr nevede k jediné čerstvé nabídce; zvolte jinou kombinaci.');
   if(publicSource.checked&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
   if(external&&!selectedBinding)warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`);
   if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
@@ -5321,13 +5470,18 @@ function refreshChatModeControls(){
   publicSource.disabled=false;output.disabled=false;
   if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
-  if(!model.value)model.value=configuredRunBinding(adapter.value)?.model || '';
  }
  updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
- document.querySelector('#chat-run-model').value=configuredRunBinding(event.currentTarget.value)?.model || '';
- refreshChatModeControls();
+ chatRunFilter.backend=event.currentTarget.value;
+ if(chatRunFilter.model&&!runnableModelOffers().some(item=>item.adapter_id===chatRunFilter.backend&&runOfferModelKey(item)===chatRunFilter.model))chatRunFilter.model='';
+ renderChatRunSelectors();refreshChatModeControls();
+});
+document.querySelector('#chat-run-model').addEventListener('change',event=>{
+ chatRunFilter.model=event.currentTarget.value;
+ if(chatRunFilter.backend&&!runnableModelOffers().some(item=>item.adapter_id===chatRunFilter.backend&&runOfferModelKey(item)===chatRunFilter.model))chatRunFilter.backend='';
+ renderChatRunSelectors();refreshChatModeControls();
 });
 document.querySelector('#task-action').addEventListener('change',event=>{
  document.querySelector('#task-source-public').checked=event.currentTarget.value==='search';
@@ -5395,6 +5549,10 @@ function backendCandidate(){
  if(boundary==='private-network')binding.tls_cert_sha256=normalizeFingerprint(fields.tls_cert_sha256.value);
  return binding;
 }
+function fillOllamaModels(models){
+ const list=document.querySelector('#ollama-models');list.replaceChildren();
+ for(const model of models||[]){const option=document.createElement('option');option.value=model;list.append(option);}
+}
 function normalizeFingerprint(value){return value.trim()
  .replace(/^sha256\\s*fingerprint\\s*=\\s*/i,'').replaceAll(':','').toLowerCase();}
 function searchCandidate(){
@@ -5444,6 +5602,16 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
  }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+document.querySelector('#ollama-load-models').addEventListener('click',async event=>{
+ const status=document.querySelector('#ollama-model-catalog-status');event.currentTarget.disabled=true;
+ status.textContent='Načítám modely z přesně zadaného Ollama endpointu…';
+ try{const result=await projectRequest('/v1/chat/models',backendCandidate(),15000);
+  fillOllamaModels(result.models);status.textContent=result.models.length?
+   `Načteno ${result.models.length} modelů. Vyberte některý nebo ponechte ručně zadané ID.`:
+   'Ollama nevrátila žádný model; ID modelu zadejte ručně.';}
+ catch(error){fillOllamaModels([]);status.textContent=`${error.message} ID modelu můžete zadat ručně.`;}
+ finally{event.currentTarget.disabled=false;}
+});
 ollamaStreamingToggle.addEventListener('change',async event=>{
  const requested=event.currentTarget.checked;event.currentTarget.disabled=true;
  ollamaStreamingState.textContent='Ukládám nastavení streamování…';
@@ -5477,7 +5645,12 @@ chatForm.addEventListener('submit',async event=>{
  settingsBackendStatus.textContent='Ukládám backend…';
  try{const result=await projectRequest('/v1/chat/configure',binding);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
-  settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;}
+  settingsBackendStatus.textContent=`Backend ${result.binding.model} byl uložen.`;
+  try{const catalog=await projectRequest('/v1/chat/models',result.binding,15000);
+   fillOllamaModels(catalog.models);document.querySelector('#ollama-model-catalog-status').textContent=
+    `Uloženo a načteno ${catalog.models.length} modelů pro chat.`;await loadModelSelection();}
+  catch(error){document.querySelector('#ollama-model-catalog-status').textContent=
+    `Backend je uložen; katalog se nepodařilo načíst. Model lze zadat ručně. ${error.message}`;}}
  catch(error){
   const message=error.message;const reloaded=await loadBackendBinding();
   settingsBackendStatus.textContent=reloaded ? message+' Poslední potvrzené nastavení bylo znovu načteno.' :
@@ -5595,16 +5768,17 @@ async function showExternalPreview(request){
 }
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
  if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
- const selectedAdapter=document.querySelector('#chat-run-adapter').value;
+ const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
+ const selectedAdapter=selectedOffer.adapter_id;
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
-  created_at:new Date().toISOString()};
+ created_at:new Date().toISOString()};
  if(selectedAdapter!=='ollama')request.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:document.querySelector('#chat-run-model').value.trim()};
+  model:selectedOffer.provider_model_id};
  event.currentTarget.disabled=true;await showExternalPreview(request);
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
@@ -5645,9 +5819,10 @@ document.querySelector('#external-proposal-use').addEventListener('click',async(
   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
   selected_message_ids:selected,content:request.content,privacy:request.privacy,
   created_at:request.created_at};
- const selectedAdapter=document.querySelector('#chat-run-adapter').value;
+ const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
+ const selectedAdapter=selectedOffer.adapter_id;
  if(selectedAdapter!=='ollama')external.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:document.querySelector('#chat-run-model').value.trim()};
+  model:selectedOffer.provider_model_id};
  document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
 });
 document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
@@ -5700,12 +5875,13 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  }
  selectMainTab(document.querySelector('#chat-tab'));
  const mode=document.querySelector('#chat-mode').value;
- const adapter=document.querySelector('#chat-run-adapter').value;
+ const offer=selectedRunOffer();
+ if(!offer){chatOperationStatus.textContent='Vyberte právě jednu čerstvou kombinaci backendu a modelu.';return;}
+ const adapter=offer.adapter_id;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
  if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
- const model=document.querySelector('#chat-run-model').value.trim();
- if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
+ const model=offer.provider_model_id;
  const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
  const responseLanguage=document.querySelector('#chat-response-language').value || null;
  if(mode==='orchestration'){
@@ -6516,7 +6692,7 @@ class DesktopHandler(Handler):
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
-        '/v1/chat/status', '/v1/chat/configure',
+        '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
         '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
@@ -6533,6 +6709,9 @@ class DesktopHandler(Handler):
         '/v1/atlascloud/status', '/v1/atlascloud/models',
         '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
+        '/v1/backend-catalog/status', '/v1/backend-catalog/reset',
+        '/v1/model-selection/status',
+        '/v1/model-selection/preferences',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -6568,9 +6747,51 @@ class DesktopHandler(Handler):
         '/v1/publication-cms/deployment/configure', '/v1/publication-cms/deployment/status',
         '/v1/publication-cms/deployment/preview', '/v1/publication-cms/deployment/confirm'}
 
+    def backend_catalog_status(self):
+        states = {}
+        media = getattr(self.server, 'media_service', None)
+        if media is not None:
+            try:
+                configured = media.status().get('bindings', {}).get('comfyui') is not None
+            except (ValueError, OSError, sqlite3.Error):
+                states['comfyui'] = {'configured': False, 'availability': 'unavailable',
+                                     'detail': 'status-unavailable'}
+            else:
+                states['comfyui'] = {'configured': configured,
+                                     'availability': 'unknown'}
+        drive = getattr(self.server, 'google_drive_import', None)
+        if drive is not None:
+            try: configured = drive.status().get('configured', False)
+            except (ValueError, OSError, sqlite3.Error):
+                states['google-drive'] = {'configured': False,
+                                          'availability': 'unavailable',
+                                          'detail': 'status-unavailable'}
+            else:
+                states['google-drive'] = {'configured': configured,
+                                          'availability': 'unknown'}
+        return self.server.chat_service.backend_catalog_status(states)
+
+    def reset_backend(self, request):
+        if not isinstance(request, dict) or set(request) != {'backend_id', 'confirmed'}:
+            raise ValueError('Invalid backend reset request')
+        backend_id = request['backend_id']
+        if backend_id in {'ollama', 'openai-responses', 'atlascloud-text', 'searxng'}:
+            self.server.chat_service.reset_backend(request)
+        elif backend_id == 'comfyui':
+            self.server.media_service.reset_comfy({'confirmed': request['confirmed']})
+        elif backend_id == 'google-drive':
+            self.server.google_drive_import.reset({'confirmed': request['confirmed']})
+        else:
+            raise ValueError('Unsupported backend reset target')
+        return self.backend_catalog_status()
+
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/backend-catalog/reset':
+            try: return self.reply(200, self.reset_backend(request))
+            except (ValueError, OSError, sqlite3.Error) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/user-profile' and isinstance(request, dict):
             service = getattr(self.server, 'user_profile', None)
             if service is None:
@@ -6844,6 +7065,13 @@ class DesktopHandler(Handler):
             if self.path == '/v1/model-catalog/import' and isinstance(request, dict):
                 return self.reply(200,
                     self.server.chat_service.import_model_catalog_knowledge(request))
+            if self.path == '/v1/backend-catalog/status' and request == {}:
+                return self.reply(200, self.backend_catalog_status())
+            if self.path == '/v1/model-selection/status' and request == {}:
+                return self.reply(200, self.server.chat_service.model_selection_status())
+            if self.path == '/v1/model-selection/preferences' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.configure_model_preferences(request))
             if self.path == '/v1/external/propose' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_propose(request))
             if self.path == '/v1/external/send' and isinstance(request, dict):
@@ -6916,6 +7144,8 @@ class DesktopHandler(Handler):
                     self.server.chat_service.task_public_source_result(request))
             if self.path == '/v1/chat/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure(request))
+            if self.path == '/v1/chat/models' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.refresh_ollama_models(request))
             if self.path == '/v1/chat/preferences' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_preferences(request))
             if self.path == '/v1/chat/response-language' and isinstance(request, dict):

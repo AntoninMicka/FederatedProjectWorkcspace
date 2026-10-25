@@ -91,6 +91,13 @@ class MediaServiceTests(unittest.TestCase):
             'operation_id': str(uuid4()), 'privacy': result['privacy']}
         value.update(changes); return value
 
+    def test_comfy_reset_removes_only_active_binding(self):
+        with self.assertRaisesRegex(ValueError, 'confirmation'):
+            self.service.reset_comfy({'confirmed': False})
+        result = self.service.reset_comfy({'confirmed': True})
+        self.assertIsNone(result['bindings']['comfyui'])
+        self.assertTrue(self.state.exists())
+
     def test_preview_confirmation_restart_and_publication_are_separate(self):
         request = self.request(); head = self.git.head()
         preview = self.service.preview(request)

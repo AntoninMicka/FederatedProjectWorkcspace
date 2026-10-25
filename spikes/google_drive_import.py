@@ -257,6 +257,21 @@ class GoogleDriveImport:
             return {'configured': True, 'credential_revision': revision,
                     'scope': SCOPE, 'client_id_hint': client_id.strip()[-24:]}
 
+    def reset(self, value):
+        """Atomically disable OAuth and erase tokens without deleting import history."""
+        require(value == {'confirmed': True},
+                'Reset Google Drive vyžaduje výslovné potvrzení.')
+        with self.locked() as db:
+            require(not db.execute('SELECT 1 FROM imports WHERE done=0').fetchone(),
+                    'Nejprve dokončete potvrzený Drive import.')
+            db.execute('BEGIN IMMEDIATE')
+            db.execute("UPDATE selections SET status='failed',error='backend-reset' "
+                       "WHERE status IN ('authorizing','selected','planned')")
+            db.execute('DELETE FROM tokens')
+            db.execute('DELETE FROM configuration WHERE singleton=1')
+            db.commit()
+        return self.status()
+
     def status(self, actor_id=None):
         if not self.database.exists():
             return {'configured': False, 'credential_revision': None, 'scope': SCOPE,

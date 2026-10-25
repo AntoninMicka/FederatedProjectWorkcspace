@@ -21,7 +21,7 @@ from spikes.configuration import read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
-from spikes.openai_backend import OpenAIUnknownRun
+from spikes.openai_backend import OpenAICredentials, OpenAIUnknownRun
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
@@ -151,6 +151,29 @@ class ChatServiceTests(unittest.TestCase):
             self.assertEqual(self.service.test_binding(candidate), expected)
         self.assertEqual(probe.call_args.args[0].model, 'other:latest')
         self.assertEqual(self.service.status()['binding'], before)
+
+    def test_ollama_discovery_populates_chat_offers_and_keeps_manual_binding_fallback(self):
+        with patch.object(OllamaAdapter, 'discover_models',
+                          return_value=['gemma3', 'qwen3:8b']):
+            candidate = dict(self.binding, revision='unsaved-candidate')
+            preview = self.service.refresh_ollama_models(candidate)
+            self.assertEqual(preview['models'], ['gemma3', 'qwen3:8b'])
+            self.assertEqual(list(self.chat_state.glob('model-discovery-*.json')), [])
+            catalog = self.service.refresh_ollama_models(self.binding)
+        self.assertEqual(catalog['models'], ['gemma3', 'qwen3:8b'])
+        offers = [item for item in self.service.model_selection_status()['offers']
+                  if item['adapter_id'] == 'ollama']
+        self.assertEqual([item['provider_model_id'] for item in offers],
+                         ['gemma3', 'qwen3:8b'])
+        self.assertTrue(all(item['binding_id'] == self.binding['binding_id']
+                            for item in offers))
+
+        changed = dict(self.binding, revision='manual-two', model='manual:model')
+        self.service.configure(changed)
+        fallback = [item for item in self.service.model_selection_status()['offers']
+                    if item['adapter_id'] == 'ollama']
+        self.assertEqual([item['provider_model_id'] for item in fallback],
+                         ['manual:model'])
 
     def test_streaming_preference_defaults_on_and_survives_restart(self):
         self.assertEqual(self.service.status()['preferences'],
@@ -1462,6 +1485,46 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Unsupported backend adapter'):
             self.service.configure(dict(self.binding, adapter='unknown'))
         self.assertEqual(self.service.status()['binding'], before)
+
+    def test_backend_and_model_selection_catalogs_are_read_only_and_preferences_use_cas(self):
+        backends = self.service.backend_catalog_status()
+        rows = {item['backend_id']: item for item in backends['backends']}
+        self.assertTrue(rows['ollama']['configured'])
+        self.assertIn('storage-import', rows['google-drive']['services'])
+        selected = self.service.model_selection_status()
+        ollama = [item for item in selected['offers'] if item['adapter_id'] == 'ollama']
+        self.assertEqual(len(ollama), 1)
+        self.assertEqual(ollama[0]['provider_model_id'], self.binding['model'])
+        saved = self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:preferred']})
+        self.assertEqual(saved['revision'], 1)
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.model_selection_status()['preferences'], saved)
+        with self.assertRaisesRegex(ValueError, 'changed before save'):
+            self.service.configure_model_preferences({
+                'expected_revision': 0, 'preferred_model_ids': []})
+
+    def test_backend_reset_disables_profile_before_erasing_credential_and_preserves_preferences(self):
+        saved = self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:preferred']})
+        external = self.service.configure_external(dict(
+            schema_version=1, binding_id=str(uuid4()), revision='external-reset',
+            adapter='openai-responses', boundary='external-provider',
+            endpoint='https://api.openai.com/v1/responses', model='gpt-5.6-luna',
+            target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'r' * 32))
+        reference = external['binding']['credential_ref']
+        with self.assertRaisesRegex(ValueError, 'confirmation'):
+            self.service.reset_backend({'backend_id': 'openai-responses',
+                                        'confirmed': False})
+        result = self.service.reset_backend({
+            'backend_id': 'openai-responses', 'confirmed': True})
+        rows = {item['backend_id']: item for item in result['backends']}
+        self.assertFalse(rows['openai-responses']['configured'])
+        self.assertIsNone(self.service.external_status()['binding'])
+        self.assertFalse(OpenAICredentials(self.chat_state).status(reference)['available'])
+        self.assertEqual(self.service.model_selection_status()['preferences'], saved)
 
     def test_external_backend_configuration_is_visible_without_returning_secret(self):
         secret = 'sk-test-' + 'q' * 32
