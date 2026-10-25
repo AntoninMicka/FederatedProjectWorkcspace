@@ -197,7 +197,17 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   cílené testy resume/recovery OK, `python3 -m py_compile` dotčených modulů,
   `python3 -m unittest discover -s tests -v` (801 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Fyzicky zbývá potvrdit, že obnovená fronta
-  projde přes výběr relevantních zdrojů až k návrhu závěrečné zprávy.
+  projde přes výběr relevantních zdrojů až k návrhu závěrečné zprávy. První
+  opakování odhalilo závod mezi starým `paused` snapshotem UI a již obnoveným
+  durable stavem `queued`: druhý resume byl odmítnut obecnou chatovou chybou,
+  přestože žádný nový krok ani externí účinek nevznikl. Resume je nyní
+  idempotentní i pro již `queued` frontu a backendové dorovnání provede pouze
+  tehdy, když jsou všechny dosavadní kroky terminální, chybí následník a není
+  čekající revize. Existující queued krok druhý požadavek automaticky
+  neposune. Ověření: šest cílených resume, recovery a global-pause testů OK,
+  `python3 -m py_compile` dotčených modulů,
+  `python3 -m unittest discover -s tests -v` (802 testů OK, 28 skipped) a
+  `git diff --check` bez chyb. Realistické pokračování zůstává k opakování.
 
 ## Akceptace
 

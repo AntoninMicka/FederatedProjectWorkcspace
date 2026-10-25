@@ -136,8 +136,14 @@ class AutonomyService:
         # browser render or heartbeat to reconcile its next durable step.
         # advance() still preserves the normal countdown/approval boundary
         # before any domain effect is dispatched.
+        settled = all(step.get('state') in {'completed', 'failed', 'cancelled'}
+                      for step in resumed.get('steps', []))
+        pending_revision = any(
+            item.get('state') == 'pending'
+            for item in resumed.get('revision_proposals', []))
         if (resumed.get('plan_schema_version') == 3
-                and resumed.get('mode') == 'automatic'):
+                and resumed.get('mode') == 'automatic'
+                and resumed.get('steps') and settled and not pending_revision):
             return self.advance(workflow_id)
         return resumed
 

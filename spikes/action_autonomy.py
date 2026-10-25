@@ -1048,12 +1048,14 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            require(row['state'] == 'paused' and self._ui_live(row),
+            require(row['state'] in {'paused', 'queued'} and self._ui_live(row),
                     'Paused autonomy workflow requires an attached UI to resume')
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
-            db.execute("UPDATE workflows SET state='queued',updated_at=?,error=NULL "
-                       "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
+            if row['state'] == 'paused':
+                db.execute("UPDATE workflows SET state='queued',updated_at=?,error=NULL "
+                           "WHERE workflow_id=?", (now(), workflow_id))
+            db.commit()
         return self.get(workflow_id, node_id, user_id)
 
     def _set_state(self, workflow_id, node_id, user_id, state):

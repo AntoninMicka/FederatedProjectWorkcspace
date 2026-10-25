@@ -386,7 +386,10 @@ class ActionAutonomyTests(unittest.TestCase):
         self.assertEqual((paused['state'], paused['steps'][0]['state']),
                          ('paused', 'queued'))
         queue.attach_ui(self.workflow_id, self.node_id, self.user_id)
-        queue.resume(self.workflow_id, self.node_id, self.user_id)
+        resumed = queue.resume(self.workflow_id, self.node_id, self.user_id)
+        replayed = queue.resume(self.workflow_id, self.node_id, self.user_id)
+        self.assertEqual((resumed['state'], replayed['state']), ('queued', 'queued'))
+        self.assertEqual(resumed['updated_at'], replayed['updated_at'])
         with closing(sqlite3.connect(queue.path)) as db:
             db.execute("UPDATE workflows SET ui_seen_at='2000-01-01T00:00:00Z' "
                        "WHERE workflow_id=?", (self.workflow_id,)); db.commit()

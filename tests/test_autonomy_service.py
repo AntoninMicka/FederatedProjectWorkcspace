@@ -79,7 +79,8 @@ class AutonomyServiceTests(unittest.TestCase):
 
     def test_resume_reconciles_automatic_dynamic_workflow_immediately(self):
         resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
-            'plan_schema_version': 3, 'mode': 'automatic'}
+            'plan_schema_version': 3, 'mode': 'automatic',
+            'steps': [{'state': 'completed'}], 'revision_proposals': []}
         reconciled = {**resumed, 'plan_revision': 4}
         with patch.object(self.service.queue, 'resume', return_value=resumed) as resume:
             with patch.object(self.service, 'advance', return_value=reconciled) as advance:
@@ -92,6 +93,18 @@ class AutonomyServiceTests(unittest.TestCase):
     def test_resume_does_not_advance_manual_dynamic_workflow(self):
         resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
             'plan_schema_version': 3, 'mode': 'manual'}
+        with patch.object(self.service.queue, 'resume', return_value=resumed):
+            with patch.object(self.service, 'advance') as advance:
+                result = self.service.resume(self.workflow_id)
+
+        self.assertEqual(result, resumed)
+        advance.assert_not_called()
+
+    def test_resume_does_not_advance_an_existing_queued_step(self):
+        resumed = {'workflow_id': self.workflow_id, 'state': 'queued',
+            'plan_schema_version': 3, 'mode': 'automatic',
+            'steps': [{'state': 'completed'}, {'state': 'queued'}],
+            'revision_proposals': []}
         with patch.object(self.service.queue, 'resume', return_value=resumed):
             with patch.object(self.service, 'advance') as advance:
                 result = self.service.resume(self.workflow_id)
