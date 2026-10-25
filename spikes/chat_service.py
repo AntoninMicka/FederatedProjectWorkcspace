@@ -28,6 +28,7 @@ from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.metadata import ValidationError, require, timestamp, uuid
+from spikes.model_catalog import ModelKnowledgeStore
 from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
@@ -511,6 +512,16 @@ class ChatService:
         binding = OpenAIBindings(root).load()
         credentials = OpenAICredentials(root)
         return catalog_factory(root, credentials).refresh(binding)
+
+    def model_catalog_knowledge(self):
+        return ModelKnowledgeStore(self._root()).load_or_empty(now())
+
+    def import_model_catalog_knowledge(self, value):
+        require(isinstance(value, dict)
+                and set(value) == {'expected_revision', 'catalog'},
+                'Model knowledge import must include expected revision and catalog')
+        return ModelKnowledgeStore(self._root()).save(
+            value['catalog'], expected_revision=value['expected_revision'])
 
     def account_metrics_status(self):
         return OpenAIAccountMetrics(self._root()).status()

@@ -6,7 +6,14 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální feature `M1-07-C` dosáhla **PoC validated na Turris Omnia** a čeká na doručení PR; Gate M1 je splněný. Aktuální feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do `develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje samostatně.
+Aktuální feature `F-M3-MODEL-CATALOG-01` dosáhla **PoC validated** a čeká na
+doručení jednoho PR do `develop`; Gate M3 jako celek zůstává otevřený. Aktuální
+feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a
+strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
+[WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
+dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do
+`develop`; milník se skládá z více takových dávek a jeho gate se vyhodnocuje
+samostatně.
 
 Tento dokument drží strategii, milníky, gates a původní katalog požadavků. Průběžné implementační podrobnosti a ad-hoc úkoly patří do TODO; BACKLOG a WORK_LOG se aktualizují při uzavření a předání dávky podle AGENTS. Nezaškrtnuté požadavky neznamenají, že se již přijatá architektonická rozhodnutí znovu otevírají. U dokončených bodů rozlišujeme **designed** a **PoC validated**; ani jeden stav sám o sobě neznamená produkční implementaci. M1–M6 zůstávají otevřené i tam, kde existuje související M0 experiment.
 
@@ -1102,12 +1109,14 @@ Gate M3 proto není vydáván za celý uzavřený.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
   OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
   artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
-- [ ] Dynamické model discovery a sdílený znalostní katalog —
-  F-M3-MODEL-CATALOG-01 oddělí kanonickou identitu modelu, providerovou nabídku
+- [x] Dynamické model discovery a sdílený znalostní katalog —
+  F-M3-MODEL-CATALOG-01 je na větvi `feature/f-m3-model-catalog-01` PoC
+  validated: odděluje kanonickou identitu modelu, providerovou nabídku
   a lokální backendový binding. Providerem hlášené schopnosti mají přednost;
   chybějící údaje může doplnit pouze dohledatelný zkontrolovaný katalog.
   Konflikt ani neznámý údaj se nesmí proměnit v optimistickou capability a
-  katalog nesmí provést automatický fallback mezi nabídkami.
+  katalog neprovádí automatický fallback mezi nabídkami. Evidence je ve
+  WORK_LOG; PR do `develop` zatím nebyl vytvořen ani sloučen.
 - [ ] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 po společném katalogu
   přidá samostatný external-provider adapter s přesným protokolem konkrétní
   modelové nabídky, node-local credential a durable run recovery. První řez
@@ -1141,7 +1150,8 @@ Gate M3 proto není vydáván za celý uzavřený.
   backpressure a shutdown bez druhého writeru nebo automatického retry.
   Skutečný TLS/Ollama průchod ověřil telemetrii během dlouhého GPU streamu,
   `503` souběžného zápisu, restart a `unknown` po odpojení bez redispatch.
-  Evidence je ve WORK_LOG; doručení jednoho PR do `develop` zatím čeká.
+  Dávka byla doručena PR #91 jako merge commit `25d065f`; evidence je ve
+  WORK_LOG.
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné

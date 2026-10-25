@@ -79,11 +79,21 @@ class OpenAIBackendTests(unittest.TestCase):
                 {'id': 'gpt-4o-realtime-preview'}, {'id': 'gpt-5.6-luna'}]}
         catalog = OpenAIModelCatalog(self.state, self.credentials, transport)
         value = catalog.refresh(self.binding)
-        self.assertEqual(value['models'], ['gpt-5.6-luna', 'o3'])
+        self.assertEqual([item['provider_model_id'] for item in value['offers']],
+                         ['gpt-5.6-luna', 'o3'])
+        selected = value['offers'][0]
+        self.assertEqual(selected['availability'], 'available')
+        self.assertEqual({item['state'] for item in selected['capabilities']},
+                         {'reported'})
+        other = value['offers'][1]
+        self.assertEqual({item['state'] for item in other['capabilities']},
+                         {'unknown'})
         self.assertEqual(catalog.load(self.binding), value)
         self.assertEqual(calls[0][0], self.binding.model)
-        self.assertNotIn(calls[0][1], catalog.path.read_text())
-        self.assertEqual(catalog.path.stat().st_mode & 0o777, 0o600)
+        paths = list(self.state.glob('model-discovery-*.json'))
+        self.assertEqual(len(paths), 1)
+        self.assertNotIn(calls[0][1], paths[0].read_text())
+        self.assertEqual(paths[0].stat().st_mode & 0o777, 0o600)
 
     def test_failed_model_refresh_preserves_previous_cache(self):
         catalog = OpenAIModelCatalog(self.state, self.credentials,
@@ -91,9 +101,41 @@ class OpenAIBackendTests(unittest.TestCase):
         previous = catalog.refresh(self.binding)
         failing = OpenAIModelCatalog(self.state, self.credentials,
             lambda *_: {'object': 'list', 'data': [{'missing': 'id'}]})
-        with self.assertRaisesRegex(ValidationError, 'model entry'):
-            failing.refresh(self.binding)
+        stale = failing.refresh(self.binding)
+        self.assertEqual((stale['freshness'], stale['refresh_error']),
+                         ('stale', 'invalid-response'))
+        self.assertEqual([item['provider_model_id'] for item in stale['offers']],
+                         [item['provider_model_id'] for item in previous['offers']])
+        self.assertTrue(all(item['freshness'] == 'stale'
+                            and item['refresh_error'] == 'invalid-response'
+                            for item in stale['offers']))
         self.assertEqual(catalog.load(self.binding), previous)
+        limited = OpenAIModelCatalog(self.state, self.credentials,
+            lambda *_: (_ for _ in ()).throw(
+                OpenAIResponseError('OpenAI model list was rejected with HTTP 429')))
+        stale = limited.refresh(self.binding)
+        self.assertEqual((stale['freshness'], stale['refresh_error']),
+                         ('stale', 'rate-limited'))
+        self.credentials.delete(self.binding.credential_ref)
+        stale = catalog.refresh(self.binding)
+        self.assertEqual((stale['freshness'], stale['refresh_error']),
+                         ('stale', 'unavailable'))
+
+    def test_legacy_model_cache_projects_stale_readonly_without_capabilities(self):
+        legacy = {'schema_version': 1, 'binding_id': self.binding.binding_id,
+                  'credential_revision': 1, 'fetched_at': '2026-10-01T00:00:00+00:00',
+                  'models': ['gpt-5.6-luna']}
+        path = self.state / 'openai-models.json'
+        path.write_text(json.dumps(legacy)); path.chmod(0o600)
+        catalog = OpenAIModelCatalog(self.state, self.credentials,
+                                     lambda *_: self.fail('load must not refresh'))
+        value = catalog.load(self.binding)
+        self.assertEqual(value['freshness'], 'stale')
+        self.assertEqual(value['offers'][0]['provider_model_id'], 'gpt-5.6-luna')
+        self.assertTrue(all(item['state'] == 'unknown'
+                            for item in value['offers'][0]['capabilities']))
+        self.assertTrue(path.exists())
+        self.assertEqual(list(self.state.glob('model-discovery-*.json')), [])
 
     def test_success_is_durable_and_request_is_explicit(self):
         calls = []

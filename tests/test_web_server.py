@@ -265,6 +265,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("querySelector('#backend-metrics-indicator').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#openai-resource-provider').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#resource-runtime-policy').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#model-catalog-import').hidden=!admin", WEB_JS)
+        self.assertIn("querySelector('#model-catalog-knowledge').readOnly=!admin", WEB_JS)
         self.assertIn("'/v1/node-telemetry/status'", WEB_JS)
         self.assertIn("'/v1/node-telemetry/configure'", WEB_JS)
         self.assertIn("'/v1/node-telemetry/run'", WEB_JS)
@@ -453,6 +455,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/configure', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/model-catalog/import', body='{}',
+                                      headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/preview', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/tasks/search/confirm', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/backend-metrics/status', headers=headers)[0], 403)

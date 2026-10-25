@@ -888,6 +888,13 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="external-load-models"', HTML)
         self.assertIn('id="external-models"', HTML)
         self.assertIn("projectRequest('/v1/external/models',{})", JS)
+        self.assertIn('id="model-catalog-status"', HTML)
+        self.assertIn('id="model-catalog-offers"', HTML)
+        self.assertIn('id="model-catalog-knowledge"', HTML)
+        self.assertIn("projectRequest('/v1/model-catalog/knowledge',{})", JS)
+        self.assertIn("projectRequest('/v1/model-catalog/import',{expected_revision:value.revision,catalog:value})", JS)
+        self.assertIn("offer.capabilities.filter", JS)
+        self.assertIn("offer.freshness", JS)
         self.assertIn('id="external-preview-button"', HTML)
         self.assertIn('id="external-propose-button"', HTML)
         self.assertIn('id="external-proposal-messages"', HTML)
@@ -1616,6 +1623,61 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
             payload = json.loads(public.split(b'\r\n\r\n', 1)[1])
             self.assertTrue(payload['visible'])
             self.assertEqual(payload['content']['title'], 'Audience regression')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_renders_model_catalog_source_freshness_and_capabilities(self):
+        script = r'''
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+app = QApplication([])
+with running_api('http', handler=DesktopHandler) as server:
+    class Interceptor(QWebEngineUrlRequestInterceptor):
+        def interceptRequest(self, info):
+            policy = request_policy(info.requestUrl().toString(), info.initiator().toString(),
+                                    bytes(info.requestMethod()).decode(), server.origin)
+            if policy == 'block': info.block(True)
+            elif policy == 'authenticate':
+                info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
+    profile = QWebEngineProfile(app); interceptor = Interceptor(profile)
+    profile.setUrlRequestInterceptor(interceptor); page = QWebEnginePage(profile, app)
+    catalog = {'freshness':'fresh','fetched_at':'2026-10-25T12:00:00+00:00',
+      'refresh_error':None,'offers':[
+       {'provider_id':'openai','provider_model_id':'gpt-smoke','protocol':'openai-responses-v1',
+        'availability':'available','freshness':'fresh','capabilities':[
+         {'name':'generate-text','state':'reported','supported':True}]},
+       {'provider_id':'openai','provider_model_id':'removed-smoke','protocol':'openai-responses-v1',
+        'availability':'removed','freshness':'stale','capabilities':[
+         {'name':'streaming','state':'conflicting','supported':False}]}]}
+    def received(value):
+        if not value: return
+        options, status, rows = json.loads(value)
+        assert options == ['gpt-smoke']
+        assert 'Aktuální snapshot' in status and 'Binding nebyl změněn' in status
+        assert 'generate-text: reported' in rows[0]
+        assert 'streaming: conflicting' in rows[1]
+        print('model catalog: rendered offers, freshness and capability provenance verified', flush=True)
+        app.exit(0)
+    def loaded(ok):
+        if not ok: return app.exit(3)
+        payload = json.dumps(catalog, ensure_ascii=False)
+        page.runJavaScript("fillExternalModels(" + payload + ");JSON.stringify(["
+          "[...document.querySelectorAll('#external-models option')].map(x=>x.value),"
+          "document.querySelector('#model-catalog-status').textContent,"
+          "[...document.querySelectorAll('#model-catalog-offers li')].map(x=>x.textContent)]);",
+          0, received)
+    page.loadFinished.connect(loaded); page.setUrl(QUrl(server.origin + '/'))
+    QTimer.singleShot(10000, lambda: app.exit(2)); raise SystemExit(app.exec())
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('capability provenance verified', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_webengine_audience_renders_approved_slide(self):
