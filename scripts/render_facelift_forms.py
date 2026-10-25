@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from spikes.desktop_ui import CSS, HTML
 
 
-EDITION = "2026-10-23"
+EDITION = "2026-10-25"
 
 
 def sheet(key, title, selectors=(), forms=(), *, scale=.78, source="Sdílené web/desktop UI", native_html="", notes=True):
@@ -73,6 +73,8 @@ SHEETS = [
     sheet("openai", "Nastavení — OpenAI text, obrázky a náklady",
           ("#external-backend-form", "#openai-image-form", "#backend-metrics"),
           ("external-backend-form", "openai-image-form", "backend-metrics-form"), scale=.67),
+    sheet("atlascloud", "Nastavení — AtlasCloud textový backend",
+          ("#atlascloud-backend-form",), ("atlascloud-backend-form",), scale=.82),
     sheet("cms", "Publikační CMS — obsah webů", ("#settings-cms-panel",),
           ("cms-deployment-form",), scale=.56),
     sheet("application-access", "Nastavení — dostupnost aplikace",

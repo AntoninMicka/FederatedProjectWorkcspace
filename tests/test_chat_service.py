@@ -12,6 +12,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.atlascloud_backend import AtlasCloudCatalog, AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
 from spikes.chat_service import ChatService, parse_search_evaluation
 from spikes.external_dispatch import ExternalDispatches
@@ -231,6 +232,30 @@ class ChatServiceTests(unittest.TestCase):
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'e' * 32))
         return service
+
+    def atlascloud_service(self, calls):
+        provider_catalog = {'code': '200', 'data': [{'model': 'atlas-text-v1',
+            'type': 'Text', 'display_console': True,
+            'supported_protocols': ['openai.chat.completions'],
+            'supported_features': ['json_mode'], 'output_modalities': ['text']}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        projected = AtlasCloudCatalog(self.chat_state,
+            lambda _secret: provider_catalog).refresh('atlas-test-' + 'd' * 32)
+        offer = projected['offers'][0]
+        status = service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-one',
+            'adapter': 'atlascloud-text', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/chat/completions',
+            'model': 'atlas-text-v1', 'target_id': 'api.atlascloud.ai',
+            'offer_id': offer['offer_id'],
+            'protocol': 'openai-chat-completions-v1',
+            'knowledge_revision': 'empty-v1',
+            'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'a' * 32})
+        return service, status
 
     @staticmethod
     def proposal_value(message_ids, **changes):
@@ -1487,6 +1512,101 @@ class ChatServiceTests(unittest.TestCase):
                          'gpt-5.6-luna')
         self.assertNotIn(secret, json.dumps(self.service.model_catalog_knowledge()))
 
+    def test_atlascloud_configuration_exact_dispatch_and_removal_are_restart_safe(self):
+        calls = []
+        service, status = self.atlascloud_service(calls)
+        encoded = json.dumps(status)
+        self.assertTrue(status['binding']['offer_id'].startswith('atlascloud:'))
+        self.assertEqual(status['binding']['knowledge_revision'], 'empty-v1')
+        self.assertEqual(status['capabilities'], {'streaming': True, 'json': True})
+        self.assertTrue(status['credential']['available'])
+        self.assertNotIn('atlas-test-', encoded)
+        self.assertNotIn('secret', encoded)
+
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': 'atlas-text-v1'})
+        preview = service.external_preview(request)
+        self.assertEqual(preview['target']['provider'], 'AtlasCloud')
+        self.assertEqual(preview['target']['endpoint'],
+                         'https://api.atlascloud.ai/v1/chat/completions')
+        result = service.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        self.assertEqual(result['target']['adapter'], 'atlascloud-text')
+        self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        self.assertEqual(AtlasCloudRuns(self.chat_state).get(request['run_id'])['state'],
+                         'succeeded')
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        self.assertEqual(restarted.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}), result)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        removed = restarted.remove_atlascloud({'confirmed': True})
+        self.assertIsNone(removed['binding'])
+        self.assertIsNone(removed['credential'])
+
+    def test_atlascloud_live_discovery_populates_empty_catalog_before_binding(self):
+        before = self.service.atlascloud_status()
+        self.assertEqual(before['model_catalog']['offers'], [])
+        payload = {'code': '200', 'data': [{'model': 'atlas-live/model-v1',
+            'type': 'Text', 'display_console': True,
+            'supported_protocols': ['openai.chat.completions'],
+            'supported_features': ['structured_outputs'],
+            'output_modalities': ['text']}]}
+        class Catalog(AtlasCloudCatalog):
+            def __init__(self, root): super().__init__(root, lambda _secret: payload)
+        result = self.service.refresh_atlascloud_models(
+            {'secret': 'atlas-live-' + 'c' * 24}, catalog_factory=Catalog)
+        offer = result['model_catalog']['offers'][0]
+        self.assertIsNone(result['binding'])
+        self.assertIsNone(result['credential'])
+        self.assertEqual(offer['provider_model_id'], 'atlas-live/model-v1')
+        self.assertEqual(offer['protocol'], 'openai-chat-completions-v1')
+        caps = {item['name']: item for item in offer['capabilities']}
+        self.assertTrue(caps['generate-text']['supported'])
+        self.assertTrue(caps['streaming']['supported'])
+        self.assertTrue(caps['json-output']['supported'])
+        self.assertEqual(caps['streaming']['reported']['source'],
+                         'atlascloud:protocol-profile')
+        self.assertFalse((self.chat_state / 'atlascloud-credentials.sqlite').exists())
+        configured = self.service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-live-binding',
+            'adapter': 'atlascloud-text', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/chat/completions',
+            'model': offer['provider_model_id'], 'target_id': 'api.atlascloud.ai',
+            'offer_id': offer['offer_id'], 'protocol': offer['protocol'],
+            'knowledge_revision': result['model_catalog']['knowledge_revision'],
+            'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-live-' + 'c' * 24})
+        self.assertEqual(configured['binding']['offer_id'], offer['offer_id'])
+        self.assertTrue(configured['credential']['available'])
+
+    def test_atlascloud_rejects_unreviewed_run_model_and_offer(self):
+        service, _ = self.atlascloud_service([])
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': 'unreviewed-model'})
+        with self.assertRaisesRegex(ValueError, 'exact bound offer model'):
+            service.external_preview(request)
+        invalid = {'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'atlas-two', 'adapter': 'atlascloud-text',
+            'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/chat/completions',
+            'model': 'atlas-text-v1', 'target_id': 'api.atlascloud.ai',
+            'offer_id': 'atlascloud:not-discovered',
+            'protocol': 'openai-chat-completions-v1',
+            'knowledge_revision': 'empty-v1',
+            'capabilities': ['generate-text', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'b' * 32}
+        with self.assertRaisesRegex(ValueError, 'offer is unavailable'):
+            service.configure_atlascloud(invalid)
+        self.assertEqual(service.atlascloud_status()['binding']['revision'], 'atlas-one')
+
     def test_chat_uses_common_unscoped_execution_contract(self):
         calls = []
         service = ChatService(self.node_path, Projects(self.node_path),
@@ -2020,12 +2140,26 @@ class ChatServiceTests(unittest.TestCase):
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body)['offers'], [])
+            provider_catalog = {'code': '200', 'data': [{
+                'model': 'atlas/api-live', 'type': 'Text', 'display_console': True,
+                'supported_protocols': ['openai.chat.completions'],
+                'supported_features': [], 'output_modalities': ['text']}]}
+            with patch('spikes.atlascloud_backend.AtlasCloudCatalog._http_transport',
+                       return_value=provider_catalog):
+                response = driver.request(server, path='/v1/atlascloud/models',
+                    body=json.dumps({'secret': 'atlas-api-' + 'a' * 24}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            discovered = json.loads(body)
+            self.assertEqual(discovered['model_catalog']['offers'][0]['provider_model_id'],
+                             'atlas/api-live')
             knowledge = {'schema_version': 1, 'revision': 'api-review-v1',
                 'reviewed_at': NOW,
                 'models': [{'model_id': 'canonical:test', 'display_name': 'Test'}],
                 'offers': []}
             response = driver.request(server, path='/v1/model-catalog/import', body=json.dumps(
-                {'expected_revision': 'empty-v1', 'catalog': knowledge}).encode())
+                {'expected_revision': discovered['model_catalog']['knowledge_revision'],
+                 'catalog': knowledge}).encode())
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body), knowledge)

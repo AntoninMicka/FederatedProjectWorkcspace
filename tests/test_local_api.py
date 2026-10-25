@@ -3,6 +3,7 @@
 #
 """Real loopback and Unix sockets; no internet, credentials, Git or LLM calls."""
 from contextlib import contextmanager, redirect_stderr
+import errno
 import io
 import json
 import os
@@ -166,7 +167,12 @@ class LocalAPITests(unittest.TestCase):
             while server.active_worker_count() != 4 and time.monotonic() < deadline:
                 time.sleep(0.005)
             self.assertEqual(server.active_worker_count(), 4)
-            excess = self.request(server, path='/v1/counter', body=b'{}')
+            try:
+                excess = self.request(server, path='/v1/counter', body=b'{}')
+            except OSError as exc:
+                self.assertIn(exc.errno, {
+                    errno.ECONNRESET, errno.ENOTCONN, errno.EPIPE})
+                excess = b''
             self.assertEqual(excess, b'')
             self.assertEqual(server.active_worker_count(), 4)
             release.set()

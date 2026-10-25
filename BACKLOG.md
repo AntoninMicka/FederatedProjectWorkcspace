@@ -76,29 +76,52 @@ WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
 doručena PR #90 jako merge commit `57009e2`; evidence je ve
 [WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026
 akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
-`25d065f`; evidence je ve WORK_LOG. `F-M3-MODEL-CATALOG-01` byla na větvi
-`feature/f-m3-model-catalog-01` akceptována na úrovni PoC validated; její
-evidence je ve WORK_LOG a před doručením PR drží TODO pouze stav předání.
-Následující samostatnou dávkou zůstává `F-M3-ATLASCLOUD-01`; neaktivuje se v
-této větvi.
-- [ ] [planned] **F-M3-ATLASCLOUD-01 — AtlasCloud textový backend (cílová
-   úroveň: designed → implemented → PoC validated).** Po
-   `F-M3-MODEL-CATALOG-01` přidat samostatný `external-provider` adapter a
-   binding pro AtlasCloud nad společným Context Manifestem, privacy/RBAC
-   kontrolou, credential storem, backend run journalem a dynamickým katalogem.
-   První řez podporuje pouze textové LLM přes providerem pro konkrétní nabídku
-   doložený protokol; image/video/audio/3D, MCP a automatické quick-generate
-   zůstávají mimo tuto dávku. Endpoint/host, protokol, modelová nabídka,
-   credential revize, limity a streaming capability musí být přesné součásti
-   bindingu a request digestu; redirect, neznámý protokol, tajný převod mezi
-   protokoly, retry stavu `unknown` a fallback na jinou nabídku jsou zakázané.
-   Akceptace: konfigurace a odstranění API klíče bez jeho úniku, providerové
-   discovery pouze přes doložené rozhraní a jinak zkontrolovaný katalog či
-   ruční model, podporovaný a nepodporovaný protokol, text/JSON a
-   případný stream podle deklarované capability, privacy třídy, timeout/
-   přerušená odpověď/restart, providerem odmítnutý request, změna či zmizení
-   nabídky, usage dostupné v run response a fyzický AtlasCloud smoke s
-   kontrolou durable historie. Návrh větve: `feature/f-m3-atlascloud-01`.
+`25d065f`; evidence je ve WORK_LOG. `F-M3-MODEL-CATALOG-01` byla doručena PR
+#92 jako merge commit `2da2628`; evidence je ve WORK_LOG.
+`F-M3-ATLASCLOUD-01` byla 25. 10. 2026 akceptována na úrovni PoC validated;
+evidence je ve WORK_LOG a větev `feature/f-m3-atlascloud-01` čeká na vytvoření
+a doručení PR do `develop`.
+
+### UX-BACKEND-MODEL-01 — výběr backendu a modelu v chatu
+
+- [ ] [planned] **Navazující feature po doručení F-M3-ATLASCLOUD-01**
+  (cílová úroveň: designed → implemented → PoC validated; navržená větev
+  `feature/ux-backend-model-01-chat-selector`, cíl PR `develop`). Původ:
+  uživatelský požadavek 25. 10. 2026 na společný částečný facelift backendů a
+  modelů. AtlasCloud integrace se tím znovu neotevírá; použije se jako jeden z
+  providerů společného katalogu.
+- **Výstup:** oddělit připojení/credential/backendový profil od volby přesné
+  modelové nabídky. Backend a model se vybírají až v chatovém composeru pro
+  konkrétní běh. Výběr backendu zúží modely na jeho dostupné nabídky; výběr
+  kanonického modelu zúží backendy na kompatibilní nabídky. Filtr se řídí také
+  požadovanými dovednostmi/capabilities dané role, akce a výstupního formátu a
+  server jej před dispatch znovu ověří nad přesnou čerstvou revizí katalogu.
+- **Backendové modifikátory:** jedna obecná identita modelu může mít více
+  providerových nabídek. Vybraná nabídka přidá backendově specifický protokol,
+  endpoint, request/response pravidla, limity a doložené capabilities; nesmí
+  měnit identitu kanonického modelu ani optimisticky doplnit neznámou
+  dovednost.
+- **Preference:** přidat explicitní node-local pořadí oblíbených kanonických
+  modelů, nikoli providerových nabídek. Kompatibilní oblíbené modely se zobrazí
+  v první úrovni, ostatní pod volbou „Další“; po volbě backendu se zachová
+  pořadí jen jeho dostupného průniku. Preference ovlivní pouze řazení a
+  prezentaci, nic sama nevybere, neautorizuje dispatch, nepřepíná backend a
+  není implicitním fallbackem.
+- **Hranice a recovery:** potvrzený run musí zachytit přesný pár
+  backend/binding + offer/model, protokol, capability snapshot a jejich revize
+  před externím účinkem. Změna katalogu či preferencí nesmí změnit připravený
+  nebo rozpracovaný run. Node-local preference jsou oddělené od projektového
+  Gitu, credential store a autoritativního run journalu; jejich atomické
+  uložení a obnovu popsat před implementací.
+- **Mimo rozsah:** automatický výběr bez viditelné uživatelské volby,
+  automatické přepnutí při chybě, žebříček odvozený z nedoložené kvality nebo
+  ceny a změna providerových credentialů během chatového dispatch.
+- **Akceptace:** stejný sdílený desktop/web composer obousměrně filtruje
+  backendy a modely bez providerových hard-code větví; role/capability filtr,
+  oblíbené vs. „Další“, prázdný/stale/offline katalog, více nabídek téhož
+  modelu, restart, změna revize a RBAC/privacy projdou automatickými testy.
+  Fyzický průchod ověří nejméně backend-first i model-first tok na dvou
+  backendech a potvrdí, že odeslaný run použil zobrazený přesný pár.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -113,12 +136,14 @@ této větvi.
 
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
-  akceptaci UX-FACELIFT-01 výslovně odložil další kolo faceliftu na budoucí
-  dobu. Před aktivací znovu vygenerovat A4 inventuru ze skutečného sdíleného
-  UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit již
-  přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
-  paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
-  právě upravených stránek.
+  akceptaci UX-FACELIFT-01 výslovně odložil obecné další kolo faceliftu.
+  Konkrétní první navazující řez backendů/modelů je nyní samostatná nejbližší
+  dávka `UX-BACKEND-MODEL-01`; tato položka drží pouze zbytek dosud nevybraných
+  stránek. Před jejich aktivací znovu vygenerovat A4 inventuru ze skutečného
+  sdíleného UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit
+  již přijaté vzory bez konkrétní potřeby. Akceptace zachová
+  mobilní/klávesnicovou paritu, RBAC, privacy, potvrzení a recovery a bude
+  zahrnovat fyzický průchod právě upravených stránek.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.
@@ -137,6 +162,16 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
+
+- [ ] [planned] **DEV-ROADMAP-GRAPH-01 — generovaná vizualizace roadmapy a
+  závislostí (cílová úroveň: PoC validated).** Ze stabilních ID, stavů a
+  explicitních závislostí v autoritativní roadmapě/TODO/BACKLOG/WORK_LOG
+  generovat jeden čitelný DAG s milestone swimlanes, kritickou cestou a
+  zvýrazněním souběžně proveditelných dávek; graf nesmí být druhý ručně
+  udržovaný plán. Nejdřív uzavřít strojově čitelnou anotaci hran a validaci
+  chybějících ID/cyklů, potom dodat interaktivní webový pohled a statický
+  export. Návaznost: formát může později reuseovat `DEV-01`, ale první
+  read-only projekce nesmí měnit stav úkolů ani vytvářet nové závislosti.
 
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.

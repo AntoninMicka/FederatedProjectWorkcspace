@@ -53,7 +53,7 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
             value = response.get(source)
             if type(value) is int and value >= 0:
                 metrics.append(_metric(name, value, unit))
-    elif adapter_id == 'openai-responses':
+    elif adapter_id in {'openai-responses', 'atlascloud-text'}:
         usage = response.get('usage')
         if isinstance(usage, dict):
             for source, name in (('input_tokens', 'input_tokens'),
@@ -74,7 +74,7 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
 
 def completed_run_usage(run_store, adapter_id, fetched_at=None):
     """Aggregate exact token counts already stored in one provider run journal."""
-    require(adapter_id in {'ollama', 'openai-responses'},
+    require(adapter_id in {'ollama', 'openai-responses', 'atlascloud-text'},
             'Unsupported backend usage adapter')
     observed = fetched_at or _now(); timestamp(observed)
     summary = {'schema_version': 1, 'kind': 'usage', 'status': 'available',

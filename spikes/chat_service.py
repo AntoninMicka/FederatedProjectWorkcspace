@@ -24,6 +24,9 @@ from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     PreparedContext, ProjectInput, PublicSourceInput,
                                     ResponseLanguage, TaskInstruction)
 from spikes.ai_outcome import AITaskOutcome
+from spikes.atlascloud_backend import (AtlasCloudAdapter, AtlasCloudBinding,
+    AtlasCloudBindings, AtlasCloudCatalog, AtlasCloudCredentials,
+    AtlasCloudResponseError, AtlasCloudRuns, AtlasCloudUnknownRun)
 from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -249,7 +252,7 @@ def now():
 class ChatService:
     def __init__(self, node_path, projects, *, state_dir=None, adapter_factory=None,
                  external_adapter_factory=None, search_adapter_factory=None,
-                 public_source_adapter_factory=None):
+                 public_source_adapter_factory=None, atlascloud_adapter_factory=None):
         self.node_path = Path(node_path).absolute()
         self.projects = projects
         self.state_dir = (Path(state_dir).absolute() if state_dir else
@@ -257,6 +260,7 @@ class ChatService:
         self.session_id = str(uuid4())
         self.adapter_factory = adapter_factory
         self.external_adapter_factory = external_adapter_factory
+        self.atlascloud_adapter_factory = atlascloud_adapter_factory
         self.search_adapter_factory = search_adapter_factory
         self.public_source_adapter_factory = public_source_adapter_factory
         self.node_telemetry = NodeTelemetry(self.node_path.parent)
@@ -337,6 +341,7 @@ class ChatService:
                 'providers': [
                     completed_run_usage(runs, 'ollama'),
                     completed_run_usage(OpenAIRuns(root), 'openai-responses'),
+                    completed_run_usage(AtlasCloudRuns(root), 'atlascloud-text'),
                 ]}
         return result
 
@@ -512,6 +517,101 @@ class ChatService:
         binding = OpenAIBindings(root).load()
         credentials = OpenAICredentials(root)
         return catalog_factory(root, credentials).refresh(binding)
+
+    def atlascloud_status(self):
+        root = self._root()
+        catalog = AtlasCloudCatalog(root).load()
+        try:
+            binding = AtlasCloudBindings(root).load()
+        except FileNotFoundError:
+            return {'binding': None, 'credential': None, 'model_catalog': catalog,
+                    'capabilities': {'streaming': False}}
+        return {'binding': binding.serialize(),
+                'credential': AtlasCloudCredentials(root).status(binding.credential_ref),
+                'model_catalog': catalog,
+                'capabilities': {
+                    'streaming': 'streaming' in binding.capability_names,
+                    'json': 'json-output' in binding.capability_names}}
+
+    def configure_atlascloud(self, value):
+        require(isinstance(value, dict), 'AtlasCloud backend request must be an object')
+        fields = {'schema_version', 'binding_id', 'revision', 'adapter', 'boundary',
+                  'endpoint', 'model', 'target_id', 'offer_id', 'protocol',
+                  'knowledge_revision', 'capabilities', 'max_output_tokens',
+                  'timeout_seconds', 'secret'}
+        require(set(value) == fields, 'Unknown or missing AtlasCloud backend field')
+        root = self._root(); candidate = dict(value); secret = candidate.pop('secret')
+        AtlasCloudCatalog(root).validate_binding_offer(candidate)
+        credentials = AtlasCloudCredentials(root)
+        reference = 'credential:atlascloud-' + str(uuid4())
+        credential = credentials.put(reference, secret)
+        candidate.update(credential_ref=reference,
+                         credential_revision=credential['revision'])
+        try:
+            binding = AtlasCloudBinding.parse(candidate)
+            bindings = AtlasCloudBindings(root)
+            try:
+                previous = bindings.load()
+            except FileNotFoundError:
+                previous = None
+            bindings.save(binding)
+        except Exception:
+            credentials.delete(reference)
+            raise
+        if previous is not None and previous.credential_ref != reference:
+            credentials.delete(previous.credential_ref)
+        return self.atlascloud_status()
+
+    def refresh_atlascloud_models(self, value, catalog_factory=AtlasCloudCatalog):
+        require(isinstance(value, dict) and set(value) == {'secret'},
+                'AtlasCloud model refresh requires exactly one credential')
+        catalog = catalog_factory(self._root()).refresh(value['secret'])
+        result = self.atlascloud_status()
+        result['model_catalog'] = catalog
+        return result
+
+    def remove_atlascloud(self, value):
+        require(value == {'confirmed': True},
+                'Explicit AtlasCloud removal confirmation is required')
+        root = self._root(); bindings = AtlasCloudBindings(root)
+        try:
+            binding = bindings.load()
+        except FileNotFoundError:
+            return self.atlascloud_status()
+        AtlasCloudCredentials(root).delete(binding.credential_ref)
+        try:
+            bindings.path.unlink()
+        except FileNotFoundError:
+            pass
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+        return self.atlascloud_status()
+
+    def _external_runtime(self, request):
+        root = self._root()
+        choice = (ChatRunChoice.parse(request['run_choice'])
+                  if 'run_choice' in request else None)
+        adapter_id = choice.adapter_id if choice is not None else 'openai-responses'
+        if adapter_id == 'openai-responses':
+            base = OpenAIBindings(root).load()
+            binding = (choice.resolve(ollama=None, openai=base) if choice else base)
+            runs, credentials = OpenAIRuns(root), OpenAICredentials(root)
+            factory = self.external_adapter_factory
+            adapter = (factory(runs, credentials) if factory else
+                       OpenAIAdapter(runs, credentials))
+            return binding, OpenAIAdapter, adapter, runs, 'OpenAI'
+        require(adapter_id == 'atlascloud-text',
+                'Unsupported external backend adapter')
+        base = AtlasCloudBindings(root).load()
+        binding = choice.resolve(ollama=None, atlascloud=base)
+        runs, credentials = AtlasCloudRuns(root), AtlasCloudCredentials(root)
+        factory = self.atlascloud_adapter_factory
+        adapter = (factory(runs, credentials) if factory else
+                   AtlasCloudAdapter(runs, credentials))
+        return binding, AtlasCloudAdapter, adapter, runs, 'AtlasCloud'
 
     def model_catalog_knowledge(self):
         return ModelKnowledgeStore(self._root()).load_or_empty(now())
@@ -725,7 +825,10 @@ class ChatService:
         configured = bindings.load() if choice.adapter_id == 'ollama' else None
         external_binding = (OpenAIBindings(root).load()
                             if choice.adapter_id == 'openai-responses' else None)
-        binding = choice.resolve(ollama=configured, openai=external_binding)
+        atlascloud_binding = (AtlasCloudBindings(root).load()
+                              if choice.adapter_id == 'atlascloud-text' else None)
+        binding = choice.resolve(ollama=configured, openai=external_binding,
+                                 atlascloud=atlascloud_binding)
         choice.validate_context(
             project_input_ids=tuple(request['selected_artifact_ids']),
             text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
@@ -763,7 +866,9 @@ class ChatService:
             response_language=ResponseLanguage(language['tag'], language['source']))
         require(choice.resolve(ollama=(bindings.load() if choice.adapter_id == 'ollama' else None),
                 openai=(OpenAIBindings(root).load()
-                if choice.adapter_id == 'openai-responses' else None)) == binding,
+                if choice.adapter_id == 'openai-responses' else None),
+                atlascloud=(AtlasCloudBindings(root).load()
+                if choice.adapter_id == 'atlascloud-text' else None)) == binding,
                 'Selected task execution binding changed')
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
@@ -773,7 +878,7 @@ class ChatService:
                 'query': plan.search_query,
                 'message_ids': request['selected_message_ids'] + [request['message_id']],
                 'artifact_ids': request['selected_artifact_ids']})
-        elif choice.adapter_id == 'openai-responses':
+        elif choice.adapter_id in {'openai-responses', 'atlascloud-text'}:
             outcome = AITaskOutcome.parse({'schema_version': 1,
                 'kind': 'external-request',
                 'purpose': 'Generate explicit ' + plan.output_kind + ' output',
@@ -1640,7 +1745,7 @@ class ChatService:
             choice = ChatRunChoice.parse(request['run_choice'])
             task_plan = (ExplicitTaskPlan.parse(request['task_plan'])
                          if 'task_plan' in request else None)
-            require(choice.adapter_id == 'openai-responses'
+            require(choice.adapter_id in {'openai-responses', 'atlascloud-text'}
                     and ((task_plan is None and choice.mode == 'brainstorming')
                          or (task_plan is not None and choice.mode == 'orchestration'
                              and not request['record_chat'])),
@@ -1702,10 +1807,8 @@ class ChatService:
             run_tag=request.get('response_language'))
         require(not any(item['privacy'] == 'local-only' for item in selected),
                 'local-only data cannot be sent to an external provider')
-        base_binding = OpenAIBindings(root).load()
-        binding = (ChatRunChoice.parse(request['run_choice']).resolve(
-            ollama=None, openai=base_binding)
-            if 'run_choice' in request else base_binding)
+        binding, adapter_type, _adapter, _runs, provider_name = \
+            self._external_runtime(request)
         plan = (ExplicitTaskPlan.parse(request['task_plan'])
                 if 'task_plan' in request else None)
         role_revision = plan.role_revision if plan is not None else 'external-chat-v1'
@@ -1735,7 +1838,7 @@ class ChatService:
             hashlib.sha256(prepared.manifest_bytes).hexdigest(), binding.target(), prepared.payload)
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
-        provider_request, _, _ = OpenAIAdapter._request(
+        provider_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=request['stream'])
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
@@ -1755,7 +1858,7 @@ class ChatService:
         payload = json.loads(prepared.payload)
         return {'approval_id': request['approval_id'], 'preview_sha256': preview_sha256,
                 'project_commit': prepared.manifest['project_commit'],
-                'target': {'provider': 'OpenAI', 'endpoint': binding.endpoint,
+                'target': {'provider': provider_name, 'endpoint': binding.endpoint,
                            'boundary': binding.boundary, 'model': binding.model},
                 'privacy': strongest, 'payload_size': len(prepared.payload),
                 'response_language': prepared.manifest['response_language'],
@@ -1816,22 +1919,27 @@ class ChatService:
         node_id, user_id = self._identity(); root = self._root()
         store = ExternalDispatches(root)
         approval = store.get(request['approval_id'], node_id, user_id)
+        error_adapter = approval['request'].get('run_choice', {}).get(
+            'adapter', 'openai-responses')
+        unknown_error = (AtlasCloudUnknownRun if error_adapter == 'atlascloud-text'
+                         else OpenAIUnknownRun)
+        response_error = (AtlasCloudResponseError
+                          if error_adapter == 'atlascloud-text'
+                          else OpenAIResponseError)
         if approval['state'] == 'succeeded':
             return approval['result']
         if approval['state'] == 'unknown':
-            raise OpenAIUnknownRun(approval['error'] or 'External result is unknown')
+            raise unknown_error(approval['error'] or 'External result is unknown')
         if approval['state'] == 'failed':
-            raise OpenAIResponseError(approval['error'] or 'External dispatch failed')
+            raise response_error(approval['error'] or 'External dispatch failed')
         require(approval['state'] == 'prepared', 'External preview is already closed')
         require(request['preview_sha256'] == approval['preview_sha256']
                 and request['privacy'] == approval['privacy'],
                 'External preview approval does not match')
         original = self._external_fields(approval['request'])
         workspace = self.projects.workspace(original['project_id'], blocking=False)
-        base_binding = OpenAIBindings(root).load()
-        binding = (ChatRunChoice.parse(original['run_choice']).resolve(
-            ollama=None, openai=base_binding)
-            if 'run_choice' in original else base_binding)
+        binding, adapter_type, adapter, runs, _provider_name = \
+            self._external_runtime(original)
         current_binding_sha256 = hashlib.sha256(json.dumps(binding.serialize(),
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         require(current_binding_sha256 == approval['binding_sha256'],
@@ -1850,13 +1958,10 @@ class ChatService:
                                                  target=binding.target())
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
-        current_request, _, _ = OpenAIAdapter._request(
+        current_request, _, _ = adapter_type._request(
             handoff, binding, role, output_format, stream=original['stream'])
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
-        adapter = (self.external_adapter_factory(OpenAIRuns(root), OpenAICredentials(root))
-                   if self.external_adapter_factory else
-                   OpenAIAdapter(OpenAIRuns(root), OpenAICredentials(root)))
         if not original['record_chat']:
             try:
                 adapter.prepare(handoff, binding, role, output_format)
@@ -1872,7 +1977,7 @@ class ChatService:
             result = {'target': binding.serialize(), 'run_id': original['run_id'],
                       'provider_response_id': response.get('id'),
                       'usage': response.get('usage'),
-                      'usage_report': run_usage('openai-responses', binding.binding_id,
+                      'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                                 original['run_id'], response)}
             if plan is not None:
                 result['response'] = response['response']
@@ -1901,14 +2006,14 @@ class ChatService:
                     and turn['language_source'] == (approved_language or {}).get('source'),
                     'External turn differs from approved request')
             if turn['state'] == 'completed':
-                response = OpenAIRuns(root).get(original['run_id'])['response']
+                response = runs.get(original['run_id'])['response']
                 require(isinstance(response, dict), 'Completed external response is unavailable')
                 result = {'thread': thread, 'turn': threads.get_turn(
                               original['turn_id'], node_id, user_id),
                           'target': binding.serialize(),
                           'provider_response_id': response.get('id'),
                           'usage': response.get('usage'),
-                          'usage_report': run_usage('openai-responses', binding.binding_id,
+                          'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                                     original['run_id'], response)}
                 store.finish(original['approval_id'], node_id, user_id,
                              'succeeded', result=result)
@@ -1917,8 +2022,8 @@ class ChatService:
                 store.finish(original['approval_id'], node_id, user_id,
                              turn['state'], error=turn['error'])
                 if turn['state'] == 'unknown':
-                    raise OpenAIUnknownRun(turn['error'] or 'External result is unknown')
-                raise OpenAIResponseError(turn['error'] or 'External dispatch failed')
+                    raise unknown_error(turn['error'] or 'External result is unknown')
+                raise response_error(turn['error'] or 'External dispatch failed')
             require(thread['revision'] == expected_revision + 1
                     and turn['state'] in {'prepared', 'run-bound'},
                     'Chat thread changed after external preview')
@@ -1959,7 +2064,7 @@ class ChatService:
         result = {'thread': threads.get(original['thread_id'], node_id, user_id),
                   'turn': completed, 'target': binding.serialize(),
                   'provider_response_id': response.get('id'), 'usage': response.get('usage'),
-                  'usage_report': run_usage('openai-responses', binding.binding_id,
+                  'usage_report': run_usage(binding.adapter_id, binding.binding_id,
                                             original['run_id'], response)}
         store.finish(original['approval_id'], node_id, user_id, 'succeeded', result=result)
         return result

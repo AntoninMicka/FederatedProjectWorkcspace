@@ -10,7 +10,7 @@ from spikes.metadata import require, uuid
 
 SOURCE_ORDER = ('conversation', 'artifacts', 'public-web')
 OUTPUT_KINDS = frozenset({'conversation', 'document', 'presentation'})
-EXECUTIONS = frozenset({'local-ollama', 'external-openai'})
+EXECUTIONS = frozenset({'local-ollama', 'external-openai', 'external-atlascloud'})
 MAX_SEARCH_QUERY_BYTES = 4096
 
 
@@ -60,7 +60,7 @@ class ExplicitTaskPlan:
                     'Search query is allowed only before public source selection')
         require(('public-web' in sources) == bool(runs or query),
                 'Public web source selection is inconsistent')
-        if value['execution'] == 'external-openai':
+        if value['execution'] != 'local-ollama':
             require('artifacts' not in sources,
                     'External task execution cannot include project artifacts')
         return cls(tuple(sources), value['output_kind'], value['execution'], query,
@@ -100,8 +100,8 @@ class ExplicitTaskPlan:
 
     def validate_execution(self, choice):
         adapter = getattr(choice, 'adapter_id', None)
-        expected = ('ollama' if self.execution == 'local-ollama'
-                    else 'openai-responses')
+        expected = {'local-ollama': 'ollama', 'external-openai': 'openai-responses',
+                    'external-atlascloud': 'atlascloud-text'}[self.execution]
         require(adapter == expected,
                 'Task execution does not match the selected backend')
         return self

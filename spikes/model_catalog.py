@@ -17,7 +17,8 @@ MAX_MODELS = 10000
 MAX_OFFERS = 10000
 MAX_CATALOG_BYTES = 1024 * 1024
 CAPABILITIES = ('generate-text', 'json-output', 'streaming', 'text-output')
-PROTOCOLS = {'ollama-generate-v1', 'openai-responses-v1'}
+PROTOCOLS = {'ollama-generate-v1', 'openai-chat-completions-v1',
+             'openai-responses-v1'}
 _ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}')
 
 

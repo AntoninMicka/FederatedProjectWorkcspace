@@ -6,9 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Aktuální feature `F-M3-MODEL-CATALOG-01` dosáhla **PoC validated** a čeká na
-doručení jednoho PR do `develop`; Gate M3 jako celek zůstává otevřený. Aktuální
-feature dávka je v [TODO.md](TODO.md), další připravené feature dávky a
+Feature `F-M3-ATLASCLOUD-01` je na větvi `feature/f-m3-atlascloud-01`
+akceptovaná a čeká na doručení PR; Gate M3 jako celek zůstává otevřený.
+Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
 dávka představuje jednu ucelenou feature, jednu feature větev a jeden PR do
@@ -1116,11 +1116,24 @@ Gate M3 proto není vydáván za celý uzavřený.
   chybějící údaje může doplnit pouze dohledatelný zkontrolovaný katalog.
   Konflikt ani neznámý údaj se nesmí proměnit v optimistickou capability a
   katalog neprovádí automatický fallback mezi nabídkami. Evidence je ve
-  WORK_LOG; PR do `develop` zatím nebyl vytvořen ani sloučen.
-- [ ] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 po společném katalogu
-  přidá samostatný external-provider adapter s přesným protokolem konkrétní
-  modelové nabídky, node-local credential a durable run recovery. První řez
-  nezahrnuje media/MCP a nesmí tajně přepnout protokol, model ani backend.
+  WORK_LOG; dávka byla doručena PR #92 jako merge commit `2da2628`.
+- [x] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 je na větvi
+  `feature/f-m3-atlascloud-01` PoC validated: samostatný external-provider
+  adapter používá přesný živě objevený offer a jeho deklarovaný Chat
+  Completions/Responses protokol jako backendový modifikátor,
+  node-local credential a durable run recovery bez fallbacku či retry
+  neurčitého výsledku. Evidence je ve WORK_LOG; PR do `develop` zatím nebyl
+  vytvořen ani sloučen. Media/MCP, Anthropic/Gemini a automatický fallback
+  zůstávají mimo první řez.
+- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01` po
+  doručení AtlasCloud oddělí backendové připojení od modelové nabídky pro
+  konkrétní run. Backend-first i model-first volba se obousměrně filtrují podle
+  dostupných providerových nabídek a požadovaných capabilities; backendový
+  modifikátor přidá protokol, endpoint a providerová pravidla bez změny obecné
+  identity modelu. Explicitní node-local preference řadí oblíbené modely do
+  první úrovně a ostatní pod „Další“, ale nejsou autorizací, automatickým
+  výběrem ani fallbackem. Přesný pár a revize se před dispatch zafixují v runu;
+  podrobný rozsah a akceptace jsou v BACKLOG.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

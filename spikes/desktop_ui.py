@@ -597,6 +597,22 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p><a class="provider-link" href="https://platform.openai.com/api-keys">Vytvořit nebo spravovat klíč u OpenAI ↗</a></p>
 <button type="submit">Uložit externí backend</button></form>
 <small>Správa klíče se otevře v systémovém prohlížeči; workspace nevidí přihlášení ani vytvořený klíč. Klíč sem potom vložíte jednou, po odeslání se vymaže z formuláře a server jej nikdy nevrací. Externí volání bude dostupné až po samostatném náhledu a potvrzení.</small>
+<hr><h2>AtlasCloud textový backend</h2>
+<p id="settings-atlascloud-status" role="status" aria-live="polite">Načítám stav AtlasCloud…</p>
+<form id="atlascloud-backend-form">
+<label>Provider <input value="AtlasCloud text API" disabled></label>
+<label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
+<button id="atlascloud-load-models" type="button">Připojit a načíst modely</button>
+<label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
+<label>Model <input name="model" readonly required></label>
+<label>Protokol <input name="protocol_label" readonly required></label>
+<label>Endpoint <input name="endpoint" readonly required></label>
+<label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
+<label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
+<p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
+<button type="submit">Uložit AtlasCloud backend</button>
+<button id="atlascloud-remove" type="button">Odstranit AtlasCloud binding a klíč</button></form>
+<small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
 <hr><h2>OpenAI Images</h2>
 <p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
 <form id="openai-image-form"><label>Model <input name="model" value="gpt-image-1" maxlength="128" required></label>
@@ -1007,7 +1023,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
-<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option></select></label>
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option><option value="atlascloud-text">AtlasCloud</option></select></label>
 <label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
 </div>
 <button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
@@ -1015,7 +1031,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="chat-orchestration-target" role="status" aria-live="polite"></p>
 <details id="advanced-external" hidden aria-hidden="true"><summary>Pokročilé ruční externí volání</summary>
 <button id="external-propose-button" type="button" disabled>Navrhnout přes Ollamu</button>
-<button id="external-preview-button" type="button" disabled>Připravit pro OpenAI</button>
+<button id="external-preview-button" type="button" disabled>Připravit externí náhled</button>
 <section id="external-proposal" hidden aria-label="Návrh externího volání">
 <h3>Návrh Ollamy</h3><p id="external-proposal-purpose"></p>
 <fieldset><legend>Zprávy navržené k odeslání</legend><div id="external-proposal-messages"></div></fieldset>
@@ -1027,7 +1043,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h3>Co bude odesláno externímu provideru</h3>
 <pre id="external-preview-content"></pre>
 <label><input id="external-privacy-confirm" type="checkbox"> Potvrzuji odeslání zobrazených dat a uvedené úrovně soukromí.</label>
-<button id="external-confirm" type="button" disabled>Odeslat do OpenAI</button>
+<button id="external-confirm" type="button" disabled>Odeslat externímu backendu</button>
 <button id="external-cancel" class="secondary-button" type="button">Zrušit</button>
 </section>
 </form></section>
@@ -3825,6 +3841,7 @@ document.querySelector('#google-drive-callback-guide').textContent=googleDriveDe
 document.querySelector('#google-drive-callback').textContent=googleDriveDesktop ?
  location.origin+'/' : location.origin+'/oauth/google-drive/callback';
 const settingsExternalStatus=document.querySelector('#settings-external-status');
+const settingsAtlasCloudStatus=document.querySelector('#settings-atlascloud-status');
 const backendMetricsStatus=document.querySelector('#backend-metrics-status');
 const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator');
 const resourceOpenAIDetail=document.querySelector('#resource-openai-detail');
@@ -3988,7 +4005,7 @@ const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
+let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
@@ -4077,7 +4094,29 @@ function fillExternalModels(catalog){
  for(const offer of offers){const item=document.createElement('li');
   const known=offer.capabilities.filter(capability=>capability.state!=='unknown');
   const capabilityText=known.length?known.map(capability=>`${capability.name}: ${capability.state}${capability.supported?' ✓':' ×'}`).join(', '):'capabilities neznámé';
-  item.textContent=`${offer.provider_model_id} · ${offer.protocol} · ${offer.availability} · ${offer.freshness} · ${capabilityText}`;view.append(item);}
+ item.textContent=`${offer.provider_model_id} · ${offer.protocol} · ${offer.availability} · ${offer.freshness} · ${capabilityText}`;view.append(item);}
+}
+function atlasCloudSupportedCapabilities(offer){
+ return (offer?.capabilities || []).filter(item=>item.supported && ['reviewed','reported'].includes(item.state)).map(item=>item.name).sort();
+}
+function fillAtlasCloudOffers(catalog,binding=null){
+ atlasCloudCatalog=catalog;const form=document.querySelector('#atlascloud-backend-form');
+ const select=form.elements.offer_id,model=form.elements.model;select.replaceChildren();
+ const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte načtenou nabídku';select.append(empty);
+ for(const offer of catalog?.offers || []){
+  const caps=atlasCloudSupportedCapabilities(offer);
+  if(offer.provider_id!=='atlascloud'||offer.availability!=='available'||offer.freshness!=='fresh'||!caps.includes('generate-text')||!caps.includes('text-output'))continue;
+  const option=document.createElement('option');option.value=offer.offer_id;
+  option.textContent=`${offer.provider_model_id} · ${offer.protocol} · ${caps.join(', ')}`;select.append(option);
+ }
+ const requested=binding?.offer_id;
+ if(requested&&[...select.options].some(option=>option.value===requested))select.value=requested;
+ const selected=(catalog?.offers || []).find(offer=>offer.offer_id===select.value);
+ model.value=selected?.provider_model_id || binding?.model || '';
+ form.elements.protocol_label.value=selected?.protocol || binding?.protocol || '';
+ form.elements.endpoint.value=selected?.protocol==='openai-responses-v1'?
+  'https://api.atlascloud.ai/v1/responses':selected?.protocol==='openai-chat-completions-v1'?
+  'https://api.atlascloud.ai/v1/chat/completions':binding?.endpoint || '';
 }
 function autonomyTaskId(workflow){
  for(const step of workflow?.steps || []){
@@ -4539,7 +4578,7 @@ function taskPlanSummary(plan){
  if(!plan)return '';
  const sources={conversation:'konverzace',artifacts:'interní artefakty','public-web':'veřejné zdroje'};
  const outputs={conversation:'konverzace',document:'dokument',presentation:'prezentace'};
- const execution={'local-ollama':'lokální Ollama','external-openai':'externí OpenAI'};
+ const execution={'local-ollama':'lokální Ollama','external-openai':'externí OpenAI','external-atlascloud':'externí AtlasCloud'};
  return `Zdroje: ${plan.source_kinds.map(value=>sources[value] || value).join(', ')} · výstup: ${outputs[plan.output_kind] || plan.output_kind} · provedení: ${execution[plan.execution] || plan.execution}`;
 }
 function renderSearchRoundContent(container,item,projection=null){
@@ -5124,6 +5163,13 @@ async function loadBackendBinding(){
   settingsExternalStatus.textContent=external.binding ?
    `Nastaven externí backend ${external.binding.model}; klíč ${external.credential?.available?'je uložen':'chybí'}.` :
    'Externí backend zatím není nastaven.';
+  const atlas=await projectRequest('/v1/atlascloud/status',{});
+  atlasCloudBinding=atlas.binding;atlasCloudStreaming=atlas.capabilities?.streaming===true;
+  fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
+  settingsAtlasCloudStatus.textContent=atlas.binding ?
+   `AtlasCloud ${atlas.binding.model} · ${atlas.binding.protocol}; klíč ${atlas.credential?.available?'je uložen':'chybí'}.` :
+   `AtlasCloud zatím není nastaven. Načtených nabídek: ${(atlas.model_catalog?.offers || []).length}.`;
+  refreshChatModeControls();
   const media=await projectRequest('/v1/media/status',{}),comfy=media.bindings?.comfyui;
   document.querySelector('#settings-comfy-status').textContent=comfy ?
    `ComfyUI ${comfy.workflow_revision} · ${comfy.boundary} · ${comfy.endpoint}` :
@@ -5215,6 +5261,15 @@ document.querySelector('#backend-metrics-refresh').addEventListener('click',asyn
  }catch(error){backendMetricsStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
+function configuredRunBinding(adapter){
+ return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
+}
+function runSupportsStreaming(adapter){
+ return adapter==='openai-responses'?externalStreaming:adapter==='atlascloud-text'?atlasCloudStreaming:ollamaStreaming;
+}
+function runProviderLabel(adapter){
+ return adapter==='openai-responses'?'OpenAI':adapter==='atlascloud-text'?'AtlasCloud':'Ollama';
+}
 function refreshChatModeControls(){
  const mode=document.querySelector('#chat-mode').value;
  const adapter=document.querySelector('#chat-run-adapter');
@@ -5236,8 +5291,8 @@ function refreshChatModeControls(){
  ollamaOption.textContent=lan?'Ollama v privátní síti':'Ollama na tomto uzlu';
  if(mode==='orchestration'){
   adapter.disabled=false;routing.hidden=false;
-  const external=adapter.value==='openai-responses';
-  model.value=external ? (externalBinding?.model || model.value) : (chatBinding?.model || '');
+  const external=adapter.value!=='ollama',selectedBinding=configuredRunBinding(adapter.value);
+  model.value=external ? (selectedBinding?.model || model.value) : (chatBinding?.model || '');
   model.disabled=!external;
   artifactSource.disabled=external;
   if(external){artifactSource.checked=false;for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;}
@@ -5256,7 +5311,7 @@ function refreshChatModeControls(){
   }
   const warnings=[];
   if(publicSource.checked&&!searchBinding)warnings.push('Pro vyhledávání nejprve nastavte SearXNG.');
-  if(external&&!externalBinding)warnings.push('Externí úkol vyžaduje nejprve nastavit OpenAI backend.');
+  if(external&&!selectedBinding)warnings.push(`Externí úkol vyžaduje nejprve nastavit ${runProviderLabel(adapter.value)} backend.`);
   if(!external&&!chatBinding)warnings.push('Lokální úkol vyžaduje nejprve nastavit Ollama backend.');
   target.textContent=warnings.join(' ');target.hidden=!warnings.length;
  }else{
@@ -5266,13 +5321,12 @@ function refreshChatModeControls(){
   publicSource.disabled=false;output.disabled=false;
   if(output.dataset.beforeSearch){output.value=output.dataset.beforeSearch;delete output.dataset.beforeSearch;}
   for(const input of document.querySelectorAll('#task-artifact-list input'))input.checked=false;
-  if(!model.value)model.value=adapter.value==='openai-responses' ? (externalBinding?.model || '') : (chatBinding?.model || '');
+  if(!model.value)model.value=configuredRunBinding(adapter.value)?.model || '';
  }
  updatePromptInputSummary();
 }
 document.querySelector('#chat-run-adapter').addEventListener('change',event=>{
- document.querySelector('#chat-run-model').value=event.currentTarget.value==='openai-responses' ?
-  (externalBinding?.model || '') : (chatBinding?.model || '');
+ document.querySelector('#chat-run-model').value=configuredRunBinding(event.currentTarget.value)?.model || '';
  refreshChatModeControls();
 });
 document.querySelector('#task-action').addEventListener('change',event=>{
@@ -5306,14 +5360,17 @@ async function loadChat(){
  const selectionRevision=chatSelectionRevision;
  const projectId=activeProject?.id || null;
  try{
-  const [result,external,tasks]=await Promise.all([
+  const [result,external,atlas,tasks]=await Promise.all([
    projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{}),
+   projectRequest('/v1/atlascloud/status',{}),
    projectId?projectRequest('/v1/tasks/list',{project_id:projectId}):Promise.resolve({outcomes:[]})]);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
   externalBinding=external.binding;
   externalStreaming=external.capabilities?.streaming===true;
+  atlasCloudBinding=atlas.binding;atlasCloudStreaming=atlas.capabilities?.streaming===true;
+  fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
   fillExternalModels(external.model_catalog);
   if(selectionRevision!==chatSelectionRevision)return;
   if(projectId!==(activeProject?.id || null))return;
@@ -5449,6 +5506,57 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  }catch(error){settingsExternalStatus.textContent=error.message+' Uložené nastavení nebylo změněno.';}
  finally{event.currentTarget.disabled=false;}
 });
+document.querySelector('#atlascloud-backend-form').elements.offer_id.addEventListener('change',event=>{
+ const form=document.querySelector('#atlascloud-backend-form');
+ const offer=(atlasCloudCatalog?.offers || []).find(item=>item.offer_id===event.currentTarget.value);
+ form.elements.model.value=offer?.provider_model_id || '';
+ form.elements.protocol_label.value=offer?.protocol || '';
+ form.elements.endpoint.value=offer?.protocol==='openai-responses-v1'?
+  'https://api.atlascloud.ai/v1/responses':offer?.protocol==='openai-chat-completions-v1'?
+  'https://api.atlascloud.ai/v1/chat/completions':'';
+});
+document.querySelector('#atlascloud-load-models').addEventListener('click',async event=>{
+ const form=document.querySelector('#atlascloud-backend-form'),fields=form.elements;
+ if(!fields.secret.value){settingsAtlasCloudStatus.textContent='Nejprve vložte AtlasCloud API klíč.';return;}
+ event.currentTarget.disabled=true;settingsAtlasCloudStatus.textContent='Připojuji a načítám AtlasCloud modely…';
+ try{const result=await projectRequest('/v1/atlascloud/models',{
+   secret:fields.secret.value});
+  atlasCloudBinding=result.binding;atlasCloudStreaming=result.capabilities?.streaming===true;
+  fillAtlasCloudOffers(result.model_catalog,result.binding);
+  const available=(result.model_catalog?.offers || []).filter(item=>item.availability==='available'&&item.freshness==='fresh').length;
+  settingsAtlasCloudStatus.textContent=`Načteno ${available} použitelných AtlasCloud nabídek. Vyberte model a uložte backend.`;
+ }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#atlascloud-backend-form').addEventListener('submit',async event=>{
+ event.preventDefault();const form=event.currentTarget,fields=form.elements;
+ const offer=(atlasCloudCatalog?.offers || []).find(item=>item.offer_id===fields.offer_id.value);
+ if(!offer){settingsAtlasCloudStatus.textContent='Nejprve načtěte a vyberte dostupnou nabídku.';return;}
+ const capabilities=atlasCloudSupportedCapabilities(offer);
+ const binding={schema_version:1,binding_id:crypto.randomUUID(),revision:crypto.randomUUID(),
+  adapter:'atlascloud-text',boundary:'external-provider',endpoint:fields.endpoint.value,
+  model:offer.provider_model_id,target_id:'api.atlascloud.ai',offer_id:offer.offer_id,
+  protocol:offer.protocol,knowledge_revision:atlasCloudCatalog.knowledge_revision,capabilities,
+  max_output_tokens:Number(fields.max_output_tokens.value),
+  timeout_seconds:Number(fields.timeout_seconds.value),secret:fields.secret.value};
+ settingsAtlasCloudStatus.textContent='Ukládám AtlasCloud binding…';
+ try{const result=await projectRequest('/v1/atlascloud/configure',binding);
+  fields.secret.value='';atlasCloudBinding=result.binding;
+  atlasCloudStreaming=result.capabilities?.streaming===true;
+  fillAtlasCloudOffers(result.model_catalog,result.binding);refreshChatModeControls();
+  settingsAtlasCloudStatus.textContent=`AtlasCloud ${result.binding.model} byl uložen; klíč server nevrátil.`;
+ }catch(error){fields.secret.value='';settingsAtlasCloudStatus.textContent=error.message;}
+});
+document.querySelector('#atlascloud-remove').addEventListener('click',async event=>{
+ if(!confirm('Odstranit AtlasCloud binding i uložený API klíč z tohoto uzlu?'))return;
+ event.currentTarget.disabled=true;
+ try{const result=await projectRequest('/v1/atlascloud/remove',{confirmed:true});
+  atlasCloudBinding=null;atlasCloudStreaming=false;
+  fillAtlasCloudOffers(result.model_catalog,null);refreshChatModeControls();
+  settingsAtlasCloudStatus.textContent='AtlasCloud binding a klíč byly odstraněny.';
+ }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
 document.querySelector('#model-catalog-export').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;
  try{const value=await projectRequest('/v1/model-catalog/knowledge',{});
@@ -5463,7 +5571,8 @@ document.querySelector('#model-catalog-import').addEventListener('click',async e
   const saved=await projectRequest('/v1/model-catalog/import',{expected_revision:value.revision,catalog:value});
   document.querySelector('#model-catalog-knowledge').value=JSON.stringify(saved,null,2);
   document.querySelector('#model-catalog-status').textContent=`Znalostní vrstva ${saved.revision} byla atomicky importována. Aktivní binding nebyl změněn.`;
-  const external=await projectRequest('/v1/external/status',{});fillExternalModels(external.model_catalog);
+  const [external,atlas]=await Promise.all([projectRequest('/v1/external/status',{}),projectRequest('/v1/atlascloud/status',{})]);
+  fillExternalModels(external.model_catalog);fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
  }catch(error){document.querySelector('#model-catalog-status').textContent=error.message+' Předchozí znalostní vrstva zůstala zachována.';}
  finally{event.currentTarget.disabled=false;}
 });
@@ -5486,6 +5595,7 @@ async function showExternalPreview(request){
 }
 document.querySelector('#external-preview-button').addEventListener('click',async event=>{
  if(!activeProject || !draft.value.trim())return;selectMainTab(document.querySelector('#chat-tab'));
+ const selectedAdapter=document.querySelector('#chat-run-adapter').value;
  const request={approval_id:crypto.randomUUID(),project_id:activeProject.id,
   expected_head:activeProject.head,thread_id:activeThread?.thread_id || crypto.randomUUID(),
   turn_id:crypto.randomUUID(),message_id:crypto.randomUUID(),run_id:crypto.randomUUID(),
@@ -5493,6 +5603,8 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
   created_at:new Date().toISOString()};
+ if(selectedAdapter!=='ollama')request.run_choice={mode:'brainstorming',adapter:selectedAdapter,
+  model:document.querySelector('#chat-run-model').value.trim()};
  event.currentTarget.disabled=true;await showExternalPreview(request);
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
@@ -5533,6 +5645,9 @@ document.querySelector('#external-proposal-use').addEventListener('click',async(
   manifest_id:crypto.randomUUID(),assistant_message_id:crypto.randomUUID(),
   selected_message_ids:selected,content:request.content,privacy:request.privacy,
   created_at:request.created_at};
+ const selectedAdapter=document.querySelector('#chat-run-adapter').value;
+ if(selectedAdapter!=='ollama')external.run_choice={mode:'brainstorming',adapter:selectedAdapter,
+  model:document.querySelector('#chat-run-model').value.trim()};
  document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
 });
 document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
@@ -5557,8 +5672,8 @@ document.querySelector('#external-cancel').addEventListener('click',async()=>{
 });
 document.querySelector('#external-confirm').addEventListener('click',async event=>{
  if(!pendingExternalPreview)return;event.currentTarget.disabled=true;
- chatOperationStatus.textContent='Odesílám potvrzený požadavek do OpenAI…';
  const preview=pendingExternalPreview.preview;
+ chatOperationStatus.textContent=`Odesílám potvrzený požadavek do ${preview.target.provider}…`;
  try{if(pendingExternalPreview.task){
     const projection=await projectRequest('/v1/tasks/external/confirm',{
      task_id:pendingExternalPreview.taskId,approval_id:preview.approval_id,
@@ -5588,6 +5703,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const adapter=document.querySelector('#chat-run-adapter').value;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
+ if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
@@ -5609,11 +5725,11 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Obsah Jen na tomto počítači nelze odeslat Ollamě v privátní síti.';return;}
  }
- if(mode==='orchestration' && adapter==='openai-responses'
+ if(mode==='orchestration' && adapter!=='ollama'
     && document.querySelector('#chat-privacy').value==='local-only'){
   chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;
  }
- if(mode==='brainstorming' && adapter==='openai-responses'){
+ if(mode==='brainstorming' && adapter!=='ollama'){
   if(document.querySelector('#chat-privacy').value==='local-only'){
    chatOperationStatus.textContent='Text jen na tomto počítači nelze odeslat externímu modelu.';return;}
   if(!pendingChatRequest)pendingChatRequest={approval_id:crypto.randomUUID(),project_id:activeProject.id,
@@ -5625,21 +5741,22 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    privacy:document.querySelector('#chat-privacy').value,created_at:new Date().toISOString(),
    run_choice:runChoice,response_language:responseLanguage};
  const submit=document.querySelector('#chat-submit');submit.disabled=true;
-  chatOperationStatus.textContent='Odesílám do OpenAI…';
-  chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!externalStreaming;
-  const liveProgress=externalStreaming ? startChatProgress('Připojuji se k OpenAI…') :
+  const providerLabel=runProviderLabel(adapter),providerStreaming=runSupportsStreaming(adapter);
+  chatOperationStatus.textContent=`Odesílám do ${providerLabel}…`;
+  chatStream.textContent='';delete chatStream.dataset.progress;chatStream.hidden=!providerStreaming;
+  const liveProgress=providerStreaming ? startChatProgress(`Připojuji se k ${providerLabel}…`) :
    startChatProgress('Model přemýšlí…');
   let receivedDeltas=0,firstDeltaMs=null,streamStarted=performance.now();
   try{await waitForVisiblePaint();
-   const result=externalStreaming ?
+   const result=providerStreaming ?
    await externalStreamRequest(pendingChatRequest,delta=>{receivedDeltas+=1;
     if(firstDeltaMs===null)firstDeltaMs=performance.now()-streamStarted;
-    liveProgress.set('OpenAI generuje odpověď…');chatStream.textContent+=delta;keepChatStreamVisible();}) :
+    liveProgress.set(`${providerLabel} generuje odpověď…`);chatStream.textContent+=delta;keepChatStreamVisible();}) :
    await projectRequest('/v1/external/send',pendingChatRequest,210000);
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
-    {enabled:externalStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
-   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=externalStreaming ?
+    {enabled:providerStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;
+   chatStream.hidden=true;draft.value='';draft.focus();chatOperationStatus.textContent=providerStreaming ?
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    appendChatOperationNotice(error);
@@ -5727,7 +5844,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   response_language:responseLanguage,
   task_plan:{schema_version:1,source_kinds:sourceKinds,
    output_kind:document.querySelector('#task-output-kind').value,
-   execution:adapter==='ollama'?'local-ollama':'external-openai',
+   execution:adapter==='ollama'?'local-ollama':adapter==='openai-responses'?'external-openai':'external-atlascloud',
    search_query:searchQuery,public_source_run_ids:publicRunIds}};}
  const submit=document.querySelector('#chat-submit');submit.disabled=true;chatOperationStatus.textContent='Odesílám…';
  const liveProgress=startChatProgress(adapter==='ollama'?
@@ -6413,6 +6530,8 @@ class DesktopHandler(Handler):
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
+        '/v1/atlascloud/status', '/v1/atlascloud/models',
+        '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -6711,6 +6830,15 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.configure_external(request))
             if self.path == '/v1/external/models' and request == {}:
                 return self.reply(200, self.server.chat_service.external_models())
+            if self.path == '/v1/atlascloud/status' and request == {}:
+                return self.reply(200, self.server.chat_service.atlascloud_status())
+            if self.path == '/v1/atlascloud/models' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.refresh_atlascloud_models(request))
+            if self.path == '/v1/atlascloud/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_atlascloud(request))
+            if self.path == '/v1/atlascloud/remove' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.remove_atlascloud(request))
             if self.path == '/v1/model-catalog/knowledge' and request == {}:
                 return self.reply(200, self.server.chat_service.model_catalog_knowledge())
             if self.path == '/v1/model-catalog/import' and isinstance(request, dict):
@@ -6738,9 +6866,9 @@ class DesktopHandler(Handler):
                     result = self.server.chat_service.external_send_stream(
                         request, lambda delta: emit({'type': 'delta', 'delta': delta}))
                     emit({'type': 'result', 'result': result})
-                except OpenAIUnknownRun:
+                except BackendUnknown:
                     emit_error(409, 'Výsledek externího běhu není známý; požadavek automaticky neopakujte.')
-                except OpenAIResponseError:
+                except BackendResponseError:
                     emit_error(502, 'Externí LLM odpověď nebylo možné bezpečně přijmout.')
                 except (ValueError, OSError, sqlite3.Error):
                     emit_error(422, 'Streamovaný chat požadavek nelze provést.')
@@ -7001,11 +7129,14 @@ class DesktopHandler(Handler):
             return self.reply(409, {'error': 'Výsledek externího běhu není známý. Požadavek '
                                    'automaticky neopakujte; stav byl zachován.'})
         except BackendUnknown:
-            message = ('Výsledek workflow kroku není známý. Požadavek automaticky '
+            message = ('Výsledek externího běhu není známý. Požadavek automaticky '
+                       'neopakujte; stav byl zachován.'
+                       if self.path.startswith('/v1/external/') else
+                       ('Výsledek workflow kroku není známý. Požadavek automaticky '
                        'neopakujte; pro nový pokus vytvořte nové workflow.'
                        if self.path.startswith('/v1/workflows/') else
                        'Výsledek obrazového běhu není známý. Požadavek automaticky '
-                       'neopakujte; pro nový pokus použijte nové ID.')
+                       'neopakujte; pro nový pokus použijte nové ID.'))
             return self.reply(409, {'error': message})
         except CloudflareUnknown:
             return self.reply(409, {'error': 'Výsledek Cloudflare deploymentu není známý. '
@@ -7085,8 +7216,12 @@ class DesktopHandler(Handler):
             return self.reply(502, {'error': 'Externí LLM odpověď nebylo možné bezpečně přijmout. '
                                    'Běh byl ukončen bez automatického opakování.'})
         except BackendResponseError:
-            return self.reply(502, {'error': 'Obrazový backend nevrátil bezpečně použitelný PNG '
-                                   'výsledek. Běh byl ukončen bez automatického opakování.'})
+            message = ('Externí LLM odpověď nebylo možné bezpečně přijmout. '
+                       'Běh byl ukončen bez automatického opakování.'
+                       if self.path.startswith('/v1/external/') else
+                       'Obrazový backend nevrátil bezpečně použitelný PNG výsledek. '
+                       'Běh byl ukončen bez automatického opakování.')
+            return self.reply(502, {'error': message})
         except PendingOperation:
             return self.reply(409, {'error': 'Projekt má nedokončenou operaci. Nejprve proveďte obnovu.'})
         except StaleIndex:
