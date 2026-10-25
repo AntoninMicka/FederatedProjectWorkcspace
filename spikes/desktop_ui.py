@@ -4216,6 +4216,9 @@ const researchPhaseLabels={
  'research.compose-report':'Sestavení návrhu zprávy',
  'research.plan-next':'Rozhodnutí o dalším kroku'
 };
+const researchDecisionLabels={
+ append:'přidat další krok',repeat:'opakovat krok',finish:'ukončit workflow'
+};
 const pendingResearchPreparations=new Set();
 function researchActivityLabel(step){
  const action=step?.action?.id;
@@ -4416,6 +4419,9 @@ function renderSearchAnswerTimelineEntry(projection){
 function researchStepDetail(step){
  const result=step.result || {},values=[`${step.state} · ${step.privacy} · cost ${step.cost_units}`];
  if(step.elapsed_seconds!==undefined)values.push(`${Number(step.elapsed_seconds).toFixed(3)} s běhu`);
+ if(result.decision)values.push(`rozhodnutí ${researchDecisionLabels[result.decision] || result.decision} (${result.decision})`);
+ if(result.target_action)values.push(`cílová akce ${researchPhaseLabels[result.target_action] || result.target_action}`);
+ if(result.finish_reason)values.push(`důvod ukončení ${result.finish_reason}`);
  if(result.run_id)values.push(`run ${result.run_id}`);
  if(result.final_url)values.push(result.final_url);
  if(result.source_run_id)values.push(`source ${result.source_run_id}`);
