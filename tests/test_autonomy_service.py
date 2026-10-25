@@ -16,6 +16,7 @@ from spikes.backend_contract import BackendUnknown
 from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
+from spikes.public_source import PublicSourceUnsupported
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import running_api
@@ -435,6 +436,161 @@ class AutonomyServiceTests(unittest.TestCase):
                          'source.fetch-public')
         self.assertEqual(candidate['candidate_id'],
                          digest(candidate['candidate']))
+
+    def test_failed_public_source_continues_with_remaining_planner_candidates(self):
+        task_id, search_id = str(uuid4()), str(uuid4())
+        first_source = 'source-' + 'a' * 32
+        second_source = 'source-' + 'b' * 32
+
+        class ResearchChat(ChatStub):
+            def search_candidate(inner, request, state):
+                preview = {'schema_version': 2, **request,
+                    'query': 'ověřit tvrzení', 'purpose': 'Ověřit tvrzení',
+                    'privacy': 'project', 'round_index': 1,
+                    'parent_search_id': None, 'result_limit': 3,
+                    'budget': {'max_rounds': 3, 'max_queries': 3,
+                               'max_results': 30, 'max_seconds': 300},
+                    'language': 'cs-CZ', 'binding': {'adapter': 'searxng'},
+                    'message_ids': [], 'artifact_ids': [], 'warning': 'Untrusted.'}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_search_candidate(inner, request):
+                return inner.search_candidate(request, 'candidate')
+
+            def task_search_preview(inner, request):
+                return inner.search_candidate(request, 'prepared')
+
+            def task_search_confirm(inner, request):
+                return {'state': 'completed', 'search_workflow': {
+                    'rounds': [{'round_index': 1}], 'next_queries': []}}
+
+            def source_candidate(inner, request, state):
+                binding = {'schema_version': 1, 'binding_id': request['run_id'],
+                    'revision': 'static-html-v1', 'adapter': 'static-html-v1',
+                    'origins': ['https://example.test'], 'user_agent': 'Test/1.0',
+                    'auth': 'none', 'max_wire_bytes': 2 * 1024 * 1024,
+                    'max_decoded_bytes': 2 * 1024 * 1024,
+                    'max_text_chars': 200000, 'max_compression_ratio': 100,
+                    'timeout_seconds': 15}
+                preview = {'schema_version': 1, **request,
+                    'project_id': self.project_id, 'privacy': 'project',
+                    'expected_head': self.git.head(), 'title': 'Evidence',
+                    'url': 'https://example.test/' + request['source_id'],
+                    'origin': 'https://example.test', 'adapter': 'static-html-v1',
+                    'binding': binding, 'effects': [
+                        {'method': 'GET', 'url': 'https://example.test/robots.txt',
+                         'purpose': 'RFC 9309 preflight'},
+                        {'method': 'GET',
+                         'url': 'https://example.test/' + request['source_id'],
+                         'purpose': 'selected public document when robots allows'}],
+                    'limits': {'wire_bytes': 2 * 1024 * 1024,
+                        'decoded_bytes': 2 * 1024 * 1024, 'text_chars': 200000,
+                        'compression_ratio': 100, 'seconds': 15, 'redirects': 0},
+                    'warning': 'Untrusted source.', 'search_provenance': {
+                        'search_id': request['search_id'], 'round_index': 1,
+                        'source_id': request['source_id']}}
+                return dict(preview, preview_sha256=digest(preview), state=state)
+
+            def task_public_source_autonomy_candidate(inner, request):
+                return {'request': request,
+                    'preview': inner.source_candidate(request, 'candidate'),
+                    'project_id': self.project_id, 'expected_head': self.git.head()}
+
+            def task_public_source_candidate(inner, request):
+                return inner.source_candidate(request, 'candidate')
+
+            def task_public_source_preview(inner, request):
+                return inner.source_candidate(request, 'prepared')
+
+            def task_public_source_confirm(inner, request):
+                inner.calls.append(('fetch', request))
+                raise PublicSourceUnsupported('Public source requires access credentials')
+
+            def task_outcomes(inner, *, project_id):
+                return [{'task_id': task_id, 'outcome': {'rounds': [{
+                    'round_index': 1, 'search_id': search_id, 'sources': [
+                        {'source_id': first_source}, {'source_id': second_source}]}]}}]
+
+            def research_model_action(inner, action_id, value, execution):
+                inner.calls.append((action_id, value, execution))
+                proposal = {'decision': 'finish', 'reason': 'No more work needed.',
+                    'target_action': None, 'candidate': None,
+                    'repeat_step_id': None, 'finish_reason': 'completed'}
+                return {'schema_version': 1, 'kind': 'research-next-step',
+                    'research_id': value['research_id'], 'run_id': value['run_id'],
+                    'manifest_id': value['manifest_id'], **proposal,
+                    'proposal_sha256': digest(proposal)}
+
+        chat = ResearchChat()
+        service = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        search_request = {'task_id': task_id, 'search_id': search_id,
+            'synthesis_run_id': str(uuid4()), 'synthesis_manifest_id': str(uuid4())}
+        search_candidate = chat.search_candidate(search_request, 'candidate')
+        search_sha = search_candidate.pop('preview_sha256')
+        search_candidate.pop('state')
+        fetch_request = {'task_id': task_id, 'search_id': search_id,
+            'source_id': first_source, 'run_id': str(uuid4())}
+        fetch_candidate = chat.source_candidate(fetch_request, 'candidate')
+        fetch_sha = fetch_candidate.pop('preview_sha256')
+        fetch_candidate.pop('state')
+        search_step_id, fetch_step_id = str(uuid4()), str(uuid4())
+        profile = service.research_profiles[('read-and-verify-v1', '1.0')]
+        goal = 'Ověřit tvrzení'
+        plan = {'schema_version': 3, 'workflow_id': self.workflow_id,
+            'project_id': self.project_id, 'expected_head': self.git.head(),
+            'mode': 'manual', 'privacy': 'project', 'countdown_seconds': 3,
+            'policy': {'actions': profile['actions'],
+                'permissions': profile['permissions'],
+                'execution_boundaries': profile['execution_boundaries'],
+                'research': {'profile_id': profile['profile_id'],
+                    'profile_version': profile['version'],
+                    'research_id': str(uuid4()), 'goal': goal,
+                    'goal_sha256': hashlib.sha256(goal.encode()).hexdigest()}},
+            'budget': profile['default_budget'], 'steps': [
+                {'step_id': search_step_id,
+                 'action': {'id': 'search.iterative-query', 'version': '1.0'},
+                 'privacy': 'project', 'cost_units': 1, 'depends_on': [],
+                 'input': {'request': search_request, 'preview': search_candidate,
+                           'preview_sha256': search_sha}},
+                {'step_id': fetch_step_id,
+                 'action': {'id': 'source.fetch-public', 'version': '1.0'},
+                 'privacy': 'project', 'cost_units': 2,
+                 'depends_on': [search_step_id],
+                 'input': {'request': fetch_request, 'preview': fetch_candidate,
+                           'preview_sha256': fetch_sha}}]}
+        proposed = service.prepare(plan); service.attach(self.workflow_id)
+        service.activate(self.workflow_id, proposed['activation_digest'])
+        service.advance(self.workflow_id); service.approve(self.workflow_id, search_step_id)
+        service.advance(self.workflow_id); service.approve(self.workflow_id, fetch_step_id)
+        node_id, user_id = service._identity()
+        failed = service.queue.advance(self.workflow_id, node_id, user_id,
+            permissions={'project-read', 'external-dispatch'},
+            allowed_privacy={'project'}, expected_head=self.git.head())
+        self.assertEqual([item['state'] for item in failed['steps']],
+                         ['completed', 'failed'])
+
+        restarted = AutonomyService(self.node, Projects(self.node),
+            state_dir=self.state, chat_service=chat,
+            role_workflow_service=self.roles, countdown_seconds=0)
+        restarted.attach(self.workflow_id)
+        recovered = restarted.advance(self.workflow_id)
+
+        self.assertEqual((recovered['state'], recovered['spent_cost']), ('paused', 3))
+        self.assertEqual([item['state'] for item in recovered['steps']],
+                         ['completed', 'failed', 'queued'])
+        self.assertIn('access credentials', recovered['steps'][1]['error'])
+        planner = recovered['steps'][2]
+        self.assertEqual(planner['action']['id'], 'research.plan-next')
+        candidate_ids = [item['candidate']['input']['request']['source_id']
+            for item in planner['input']['available_candidates']
+            if item['candidate']['action']['id'] == 'source.fetch-public']
+        self.assertEqual(candidate_ids, [second_source])
+        self.assertEqual(planner['input']['ledger'][-1], {
+            'step_id': fetch_step_id, 'action_id': 'source.fetch-public',
+            'state': 'failed', 'result_sha256': None})
+        self.assertEqual([item[0] for item in chat.calls].count('fetch'), 1)
 
     def test_unknown_domain_effect_is_terminal_and_stale_head_blocks_dispatch(self):
         self.chat.unknown = True

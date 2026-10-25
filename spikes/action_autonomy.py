@@ -278,7 +278,8 @@ class ActionRegistry:
                 self.validate_input(target, candidate['input'])
 
     def validate_transition(self, predecessors, step, *, available_preconditions,
-                            permissions, allowed_privacy, allowed_boundaries):
+                            permissions, allowed_privacy, allowed_boundaries,
+                            allow_missing_result=False):
         require(isinstance(predecessors, list) and len(predecessors) <= MAX_STEPS,
                 'Invalid autonomy transition predecessors')
         require(isinstance(available_preconditions, (set, frozenset)),
@@ -304,7 +305,9 @@ class ActionRegistry:
             _fields(predecessor, {'action', 'result'}, 'transition predecessor')
             require(isinstance(predecessor['action'], dict)
                     and set(predecessor['action']) == {'id', 'version'}
-                    and isinstance(predecessor['result'], dict),
+                    and (isinstance(predecessor['result'], dict)
+                         or (allow_missing_result
+                             and predecessor['result'] is None)),
                     'Invalid autonomy transition predecessor')
             source = self.resolve(predecessor['action']['id'],
                                   predecessor['action']['version'])
@@ -313,6 +316,10 @@ class ActionRegistry:
             rule = next((item for item in source['successors']
                          if item['action'] == step['action']), None)
             require(rule is not None, 'Autonomy transition is not allowed')
+            require(predecessor['result'] is not None or not rule['bindings'],
+                    'Autonomy transition required output is missing')
+            if predecessor['result'] is None:
+                continue
             for binding in rule['bindings']:
                 require(binding['output'] in predecessor['result'],
                         'Autonomy transition required output is missing')
@@ -618,6 +625,10 @@ def _validate_search_input(value):
 
 class UnknownEffect(RuntimeError):
     """The adapter may have produced an effect but no result is provable."""
+
+
+class RecoverableEffect(RuntimeError):
+    """A known failed effect may be followed by a reviewed recovery step."""
 
 
 class AutonomyQueue:
@@ -1292,8 +1303,12 @@ class AutonomyQueue:
         stored_steps = db.execute('SELECT * FROM steps WHERE workflow_id=? '
                                   'ORDER BY ordinal',
                                   (proposal['workflow_id'],)).fetchall()
+        recoverable = {item['step_id'] for item in stored_steps
+            if item['state'] == 'failed'
+            and item['action_id'] == 'source.fetch-public'}
         require(stored_steps
                 and all(item['state'] in {'completed', 'cancelled'}
+                        or item['step_id'] in recoverable
                         for item in stored_steps)
                 and any(item['state'] == 'completed' for item in stored_steps),
                 'Autonomy revision requires completed steps and no pending effect')
@@ -1308,8 +1323,13 @@ class AutonomyQueue:
             require(isinstance(step.get('depends_on'), list)
                     and bool(step['depends_on'])
                     and len(step['depends_on']) == len(set(step['depends_on']))
-                    and set(step['depends_on']) <= set(completed),
+                    and set(step['depends_on']) <= set(completed) | recoverable,
                     'Autonomy revision dependencies are not completed')
+            if set(step['depends_on']) & recoverable:
+                require(step.get('action') == {
+                    'id': 'research.plan-next', 'version': '1.0'}
+                    and set(step['depends_on']) <= recoverable,
+                    'Only the research planner may recover a failed source fetch')
             if proposal['kind'] == 'repeat':
                 require(proposal['repeat_of'] in completed
                         and step['depends_on'] == [proposal['repeat_of']],
@@ -1322,17 +1342,21 @@ class AutonomyQueue:
             for dependency in step['depends_on']:
                 planned = next(item for item in plan['steps']
                                if item['step_id'] == dependency)
-                result = completed[dependency]['result_json']
-                require(result is not None,
+                stored = completed.get(dependency)
+                result = None if stored is None else stored['result_json']
+                require(result is not None or dependency in recoverable,
                         'Autonomy transition required output is missing')
                 predecessors.append({'action': planned['action'],
-                                     'result': json.loads(bytes(result))})
+                    'result': (None if result is None else
+                               json.loads(bytes(result)))})
             descriptor = self.registry.validate_transition(predecessors, step,
                 available_preconditions=set(available_preconditions),
                 permissions=set(plan['policy']['permissions']),
                 allowed_privacy={privacy for privacy in PRIVACY
                     if PRIVACY_ORDER[privacy] >= PRIVACY_ORDER[plan['privacy']]},
-                allowed_boundaries=set(plan['policy']['execution_boundaries']))
+                allowed_boundaries=set(plan['policy']['execution_boundaries']),
+                allow_missing_result=bool(
+                    set(step['depends_on']) & recoverable))
             updated['steps'].append(step)
         updated = parse_plan(updated, self.registry, allow_materialized=True)
         return plan, updated, descriptor
@@ -1498,8 +1522,17 @@ class AutonomyQueue:
                            "WHERE workflow_id=?", (now(), workflow_id)); db.commit()
                 return self.get(workflow_id, node_id, user_id)
             stored, planned = candidate
-            require(all(next(item for item in stored_steps if item['step_id'] == dependency)
-                        ['state'] == 'completed' for dependency in planned['depends_on']),
+            planned_by_id = {item['step_id']: item for item in plan['steps']}
+            def dependency_ready(dependency):
+                state = next(item for item in stored_steps
+                             if item['step_id'] == dependency)['state']
+                source = planned_by_id[dependency]['action']
+                return (state == 'completed' or (state == 'failed'
+                    and source == {'id': 'source.fetch-public', 'version': '1.0'}
+                    and planned['action'] == {
+                        'id': 'research.plan-next', 'version': '1.0'}))
+            require(all(dependency_ready(dependency)
+                        for dependency in planned['depends_on']),
                     'Autonomy step dependencies are incomplete')
             descriptor = self.registry.resolve(planned['action']['id'],
                                                planned['action']['version'])
@@ -1557,6 +1590,10 @@ class AutonomyQueue:
         except UnknownEffect as exc:
             return self._finish_effect(workflow_id, planned['step_id'], node_id, user_id,
                                        'unknown', None, str(exc))
+        except RecoverableEffect as exc:
+            return self._finish_effect(
+                workflow_id, planned['step_id'], node_id, user_id,
+                'failed', None, str(exc), planned['cost_units'], recoverable=True)
         except Exception as exc:
             self._finish_effect(workflow_id, planned['step_id'], node_id, user_id,
                                 'failed', None, str(exc))
@@ -1566,7 +1603,7 @@ class AutonomyQueue:
                                    'completed', raw, None, planned['cost_units'])
 
     def _finish_effect(self, workflow_id, step_id, node_id, user_id, state,
-                       result, error, cost=0):
+                       result, error, cost=0, *, recoverable=False):
         with closing(self._connect()) as db:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
@@ -1576,7 +1613,8 @@ class AutonomyQueue:
                     'Autonomy step is not dispatching')
             db.execute('UPDATE steps SET state=?,result_json=?,error=? WHERE step_id=?',
                        (state, result, error, step_id))
-            terminal = state if state in {'failed', 'unknown'} else 'queued'
+            terminal = ('queued' if recoverable else
+                        (state if state in {'failed', 'unknown'} else 'queued'))
             db.execute('UPDATE workflows SET state=?,spent_cost=spent_cost+?,updated_at=?,error=? '
                        'WHERE workflow_id=?',
                        (terminal, cost, now(), error, workflow_id)); db.commit()

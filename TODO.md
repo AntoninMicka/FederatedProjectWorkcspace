@@ -148,7 +148,18 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   spikes/desktop_ui.py`, `node --check` generovaného JavaScriptu,
   `python3 -m unittest discover -s tests -v` (798 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Realistický restart a pokračování zůstávají k
-  fyzickému potvrzení.
+  fyzickému potvrzení. Další fyzický průchod ukázal, že známé odmítnutí
+  jednoho zdroje (např. požadované přihlášení) terminálně ukončilo celý
+  výzkumný workflow. Readerův neúspěšný pokus nyní zůstává auditovatelně
+  `failed` a spotřebuje svůj cost, ale pouze reviewovaný planner na něj smí
+  navázat; již zkoušený source ID znovu nenabízí a `unknown` zůstává
+  terminální bez retry. Při pádu mezi zapsáním známé chyby a připojením
+  planneru se po restartu doplní jediná idempotentní revize a workflow zůstane
+  bezpečně pozastavené do pokračování uživatelem. Ověření: 57 cílených testů
+  autonomy, research a readeru OK, restartový test doložil zachování chyby a
+  nabídku pouze zbývajícího zdroje, `python3 -m unittest discover -s tests -v`
+  (799 testů OK, 28 skipped) a `python3 -m py_compile` dotčených modulů.
+  Reálné pokračování po odmítnutém zdroji zůstává k fyzickému potvrzení.
 
 ## Akceptace
 

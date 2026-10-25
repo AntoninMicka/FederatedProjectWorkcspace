@@ -7,14 +7,14 @@ from pathlib import Path
 import stat
 from uuid import UUID, uuid5
 
-from spikes.action_autonomy import (AutonomyQueue, UnknownEffect, digest,
-                                     load_action_registry,
+from spikes.action_autonomy import (AutonomyQueue, RecoverableEffect,
+                                     UnknownEffect, digest, load_action_registry,
                                      parse_revision_proposal)
 from spikes.backend_contract import BackendUnknown
 from spikes.configuration import parse_node, read_config
 from spikes.metadata import require, uuid
 from spikes.project_creation import ProjectCreation
-from spikes.public_source import PublicSourceUnknown
+from spikes.public_source import PublicSourceError, PublicSourceUnknown
 from spikes.research_workflow import load_research_profiles
 from spikes.web_search import SearchUnknown
 
@@ -255,7 +255,10 @@ class AutonomyService:
                         if item['action']['id'] == 'search.iterative-query']
         fetch_steps = [item for item in completed
                        if item['action']['id'] == 'source.fetch-public']
-        fetched_source_ids = {item['result']['source_id'] for item in fetch_steps}
+        attempted_source_ids = {item['input']['request']['source_id']
+            for item in workflow['steps']
+            if item['action']['id'] == 'source.fetch-public'
+            and item['state'] in {'completed', 'failed', 'unknown'}}
 
         if ('source.fetch-public' in allowed and search_steps
                 and last_action in {'search.iterative-query', 'source.fetch-public'}):
@@ -270,7 +273,8 @@ class AutonomyService:
             for round_record in rounds:
                 for source in round_record.get('sources', []):
                     source_id = source.get('source_id')
-                    if not isinstance(source_id, str) or source_id in fetched_source_ids:
+                    if (not isinstance(source_id, str)
+                            or source_id in attempted_source_ids):
                         continue
                     request = {'task_id': task_id,
                         'search_id': round_record['search_id'],
@@ -521,8 +525,16 @@ class AutonomyService:
 
     def advance(self, workflow_id):
         current = self._owned(workflow_id)
-        workspace = self.projects.workspace(current['project_id'], blocking=False)
         node_id, user_id = self._identity()
+        if current.get('plan_schema_version') == 3:
+            reconciled = self._append_research_planner(current, node_id, user_id)
+            reconciled = self._materialize_planner(reconciled, node_id, user_id)
+            if (reconciled['plan_revision'] != current['plan_revision']
+                    or len(reconciled['steps']) != len(current['steps'])
+                    or len(reconciled.get('revision_proposals', []))
+                    != len(current.get('revision_proposals', []))):
+                return reconciled
+        workspace = self.projects.workspace(current['project_id'], blocking=False)
         result = self.queue.advance(workflow_id, node_id, user_id,
             permissions={'project-read', 'external-dispatch', 'role-dispatch',
                          'project-write'},
@@ -538,9 +550,12 @@ class AutonomyService:
         policy = workflow.get('policy') or {}; research = policy.get('research')
         steps = workflow.get('steps') or []
         if (not isinstance(research, dict) or not steps
-                or any(item.get('state') not in {'completed', 'cancelled'}
+                or any(item.get('state') not in {'completed', 'cancelled', 'failed'}
+                       or (item.get('state') == 'failed'
+                           and item.get('action') != {
+                               'id': 'source.fetch-public', 'version': '1.0'})
                        for item in steps)
-                or steps[-1].get('state') != 'completed'
+                or steps[-1].get('state') not in {'completed', 'failed'}
                 or steps[-1].get('action') == {
                     'id': 'research.plan-next', 'version': '1.0'}
                 or any(item.get('state') == 'pending'
@@ -734,6 +749,8 @@ class AutonomyService:
                 'preview_sha256': value['preview_sha256'], 'approved': True})
         except PublicSourceUnknown as exc:
             raise UnknownEffect(str(exc)) from exc
+        except PublicSourceError as exc:
+            raise RecoverableEffect(str(exc)) from exc
         reference = self.chat_service.task_public_source_reference(
             {'task_id': request['task_id'], 'run_id': request['run_id']})
         require(reference['search_id'] == request['search_id']
