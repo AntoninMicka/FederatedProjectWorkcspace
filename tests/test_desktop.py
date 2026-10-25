@@ -986,7 +986,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
         self.assertIn("projectId?projectRequest('/v1/tasks/list',{project_id:projectId})", JS)
         self.assertIn("tasks.outcomes.filter(item=>item.thread_id===restored.thread_id)", JS)
-        self.assertIn('const queueLoaded=!projectId || await loadAutonomyQueue(false)', JS)
+        self.assertIn('loadAutonomyQueue(false,projectId)', JS)
         self.assertIn('Frontu automatizace nelze načíst:', JS)
         self.assertIn('starší terminální záznamy nelze zobrazit', JS)
         self.assertIn('Obnoveno poslední uložené vlákno projektu.', JS)
@@ -1221,7 +1221,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("querySelector('#chat-new-thread').addEventListener", JS)
         self.assertIn('Nové vlákno pro projekt ${activeProject.title}', JS)
         self.assertIn("++chatSelectionRevision;pendingChatRequest=null;activeTaskThreadId=crypto.randomUUID()", JS)
-        self.assertIn('if(selectionRevision!==chatSelectionRevision)return', JS)
+        self.assertIn('selectionRevision!==chatSelectionRevision)return', JS)
         self.assertIn("project_id:failed.project_id,thread_id:failed.thread_id", JS)
         self.assertNotIn("}catch(error){await loadChat();chatOperationStatus.textContent=error.message;}", JS)
         self.assertIn("projectRequest('/v1/chat/assign'", JS)
@@ -1284,12 +1284,29 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
         self.assertIn('applyOllamaStreamingStatus(result)', load_chat)
         self.assertIn('externalStreaming=external.capabilities?.streaming===true', load_chat)
-        self.assertLess(load_chat.index('applyOllamaStreamingStatus(result)'),
-                        load_chat.index('if(selectionRevision!==chatSelectionRevision)return'))
+        self.assertLess(load_chat.index('if(loadRevision!==chatLoadRevision'),
+                        load_chat.index('applyOllamaStreamingStatus(result)'))
         status = JS.split('function applyOllamaStreamingStatus(result){', 1)[1].split('\n}', 1)[0]
         self.assertIn('ollamaStreamingSupported=result.capabilities?.streaming===true', status)
         self.assertIn('const enabled=result.preferences?.streaming!==false', status)
         self.assertIn('ollamaStreaming=ollamaStreamingSupported&&enabled', status)
+
+    def test_project_chat_history_is_rendered_before_optional_statuses(self):
+        load_chat = JS.split('async function loadChat(){', 1)[1].split(
+            '\n}\nfunction backendCandidate()', 1)[0]
+        history = "result=await projectRequest('/v1/chat/status',{})"
+        optional = 'const auxiliary=await Promise.allSettled(['
+        self.assertIn(history, load_chat)
+        self.assertIn(optional, load_chat)
+        self.assertLess(load_chat.index(history), load_chat.index('renderThreadList(ordered)'))
+        self.assertLess(load_chat.index('renderThreadList(ordered)'), load_chat.index(optional))
+        self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
+        self.assertIn("projectRequest('/v1/atlascloud/status',{})", load_chat)
+        self.assertIn("warnings.push('navázané úlohy nejsou dostupné')", load_chat)
+        self.assertIn('Chaty byly načteny;', load_chat)
+        self.assertIn('Chaty nelze načíst:', load_chat)
+        self.assertIn('++chatLoadRevision', JS)
+        self.assertIn('expectedProjectId!==(activeProject?.id || null)', JS)
 
     def test_orchestration_only_shows_actionable_configuration_warnings(self):
         self.assertIn('id="chat-orchestration-target"', HTML)
