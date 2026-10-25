@@ -125,7 +125,19 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   cílené kontraktové, katalogové, materializační a UI testy prošly;
   `python3 -m py_compile` dotčených modulů, `node --check` generovaného
   JavaScriptu, `python3 -m unittest discover -s tests -v` (797 testů OK,
-  28 skipped) a `git diff --check` bez chyb.
+  28 skipped) a `git diff --check` bez chyb. Následná fyzická kontrola odhalila
+  zdánlivý reset po restartu: task outcome, nulové orchestration vlákno i
+  autonomy journal zůstaly durable, ale UI po otevření projektu žádné uložené
+  vlákno nevybralo. Během čekání šlo navíc opakovaně spustit přípravu stejného
+  profilu a vznikly tři souběžné navržené fronty. UI nyní obnoví nejnovější
+  aktivní projektové vlákno a jeho task outcomes, bezpečně pozastavený workflow
+  nabídne k pokračování a souběžnou přípravu pro stejné task ID odmítne se
+  živou stavovou položkou. Existující duplicitní fronty se automaticky nemažou.
+  Ověření doplnění: tři cílené desktopové testy OK, `python3 -m py_compile
+  spikes/desktop_ui.py`, `node --check` generovaného JavaScriptu,
+  `python3 -m unittest discover -s tests -v` (797 testů OK, 28 skipped) a
+  `git diff --check` bez chyb. Realistický restart a pokračování zůstávají k
+  fyzickému potvrzení.
 
 ## Akceptace
 

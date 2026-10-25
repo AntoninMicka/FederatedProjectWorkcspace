@@ -934,6 +934,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/tasks/route',pendingChatRequest,210000)", JS)
         self.assertIn("projectRequest('/v1/tasks/list',{", JS)
         self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
+        self.assertIn("projectId?projectRequest('/v1/tasks/list',{project_id:projectId})", JS)
+        self.assertIn("tasks.outcomes.filter(item=>item.thread_id===restored.thread_id)", JS)
+        self.assertIn('Obnoveno poslední uložené vlákno projektu.', JS)
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
         self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
@@ -1188,6 +1191,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("timeoutError.status=408;timeoutError.outcome='unknown'", JS)
         self.assertIn('appendChatOperationNotice(error)', JS)
         self.assertIn("projectRequest(path,payload,210000)", JS)
+        self.assertIn('const pendingResearchPreparations=new Set()', JS)
+        self.assertIn('Příprava výzkumného plánu už probíhá; nevytvářím druhou frontu.', JS)
         self.assertIn("if(item.error)provenance.push(`Chyba: ${item.error}`)", JS)
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)

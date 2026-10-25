@@ -4156,6 +4156,7 @@ const researchPhaseLabels={
  'research.compose-report':'Sestavení návrhu zprávy',
  'research.plan-next':'Rozhodnutí o dalším kroku'
 };
+const pendingResearchPreparations=new Set();
 function researchActivityLabel(step){
  const action=step?.action?.id;
  if(action==='search.iterative-query')return 'Vyhledávám a vyhodnocuji zdroje…';
@@ -4168,13 +4169,20 @@ function researchActivityLabel(step){
  return 'Provádím další krok workflow…';
 }
 async function prepareResearch(projection,mode,countdownSeconds,profileId){
+ if(pendingResearchPreparations.has(projection.task_id)){
+  chatOperationStatus.textContent='Příprava výzkumného plánu už probíhá; nevytvářím druhou frontu.';return;
+ }
+ pendingResearchPreparations.add(projection.task_id);
  chatOperationStatus.textContent='Připravuji kontrolovatelný výzkumný plán bez odeslání…';
- try{await projectRequest('/v1/autonomy/research/prepare',{
-   workflow_id:crypto.randomUUID(),task_id:projection.task_id,mode,
-   countdown_seconds:countdownSeconds,profile_id:profileId,profile_version:'1.0'});
-  await loadAutonomyQueue(false);renderChat(activeThread);chatOperationStatus.textContent=
+ try{await withChatProgress('Připravuji kontrolovatelný výzkumný plán…',async()=>{
+   await projectRequest('/v1/autonomy/research/prepare',{
+    workflow_id:crypto.randomUUID(),task_id:projection.task_id,mode,
+    countdown_seconds:countdownSeconds,profile_id:profileId,profile_version:'1.0'});
+   await loadAutonomyQueue(false);renderChat(activeThread);
+  });chatOperationStatus.textContent=
    'Výzkumný plán je připravený. Před spuštěním zkontrolujte profil, cíl, privacy a limity.';
  }catch(error){chatOperationStatus.textContent=error.message;offerSearchRecovery(error);}
+ finally{pendingResearchPreparations.delete(projection.task_id);}
 }
 function renderResearchPreparation(container,projection,query,parentSearchId){
  const controls=document.createElement('fieldset');controls.className='search-autonomy-controls';
@@ -5049,9 +5057,11 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
 });
 async function loadChat(){
  const selectionRevision=chatSelectionRevision;
+ const projectId=activeProject?.id || null;
  try{
-  const [result,external]=await Promise.all([
-   projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{})]);
+  const [result,external,tasks]=await Promise.all([
+   projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{}),
+   projectId?projectRequest('/v1/tasks/list',{project_id:projectId}):Promise.resolve({outcomes:[]})]);
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
@@ -5059,9 +5069,16 @@ async function loadChat(){
   externalStreaming=external.capabilities?.streaming===true;
   fillExternalModels(external.model_catalog);
   if(selectionRevision!==chatSelectionRevision)return;
-  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];renderChat(null);
-  renderThreadList([...result.threads].reverse());
-  chatOperationStatus.textContent='';
+  if(projectId!==(activeProject?.id || null))return;
+  const ordered=[...result.threads].reverse();
+  const projectThreads=projectId?ordered.filter(thread=>thread.project_id===projectId):[];
+  const restored=projectThreads.find(thread=>thread.status==='active') || projectThreads[0] || null;
+  activeThread=restored;activeTaskThreadId=restored?.thread_id || null;
+  taskOutcomes=restored?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
+  renderThreadList(ordered);renderTaskPublicSources();renderChat(restored);
+  if(restored){document.querySelector('#chat-mode').value=restored.classification;refreshChatModeControls();}
+  chatOperationStatus.textContent=restored?
+   'Obnoveno poslední uložené vlákno projektu. Rozpracovaná automatika po restartu zůstává bezpečně pozastavená.':'';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
 function backendCandidate(){
