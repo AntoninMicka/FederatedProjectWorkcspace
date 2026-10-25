@@ -5,11 +5,67 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-MODEL-CATALOG-01 — provider-neutral katalog modelů — 2026-10-25
+
+Dávka vznikla na větvi `feature/f-m3-model-catalog-01` z `develop`
+`25d065f` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-MODEL-CATALOG-01-A — autority, identity a recovery
+  katalogu (designed).** [ADR 0051](docs/adr/0051-provider-neutral-model-catalog.md)
+  odděluje kanonický model, providerovou nabídku a potvrzený lokální binding.
+  Určuje fail-closed precedence `reported`/`reviewed`/`conflicting`/`unknown`,
+  stale projekci, bounded discovery, read-only migraci a crash boundaries
+  atomické publikace mimo projektový Git.
+- [x] [completed] **F-M3-MODEL-CATALOG-01-B — provider-neutral katalog a
+  persistence (implemented).** Striktní schema v1 validuje reviewovanou
+  znalostní vrstvu a discovery snapshoty, používá CAS import, omezuje soubory
+  na 1 MiB a katalog na 10 000 položek a publikuje mode-0600 JSON přes
+  `fsync`/`replace`/`fsync`. Odstranění je tombstone a neznámá či konfliktní
+  capability nikdy neopravňuje použití.
+- [x] [completed] **F-M3-MODEL-CATALOG-01-C — discovery adaptéry, API a
+  sdílené UI (implemented).** OpenAI discovery používá společnou projekci,
+  bounded stránkování bez automatického retry a zachová poslední validní cache
+  při chybě. Sdílené desktop/web UI ukazuje nabídku, protokol, dostupnost,
+  čerstvost a provenance capabilities; ruční model zůstává možný. Import
+  reviewované znalosti je na webu pouze pro administrátora a katalog nikdy
+  nemění binding ani neprovádí fallback.
+- [x] [completed] **F-M3-MODEL-CATALOG-01-D — regrese, restart a fyzická
+  akceptace (PoC validated).** Automatické testy pokryly více nabídek a identit,
+  konflikty a neznámé capabilities, tombstone, limity, stránkování, rate-limit,
+  stale/offline cache, CAS, restart, změny revizí, legacy projekci a RBAC.
+  Skutečný OpenAI refresh i Qt/WebEngine průchod ověřily fresh katalog a
+  vykreslení provenance bez změny potvrzeného bindingu.
+
+### Ověření, recovery a omezení
+
+Cílená sada
+`python3 -m unittest tests.test_model_catalog tests.test_openai_backend
+tests.test_chat_service tests.test_desktop tests.test_web_server -v` prošla
+jako **154 testů bez selhání, 6 přeskočeno**. Závěrečná úplná sada
+`python3 -m unittest discover -s tests -v` prošla jako **834 testů bez
+selhání, 29 přeskočeno**. Dotčené Python moduly prošly kompilací a generovaný
+JavaScript `node --check`. Samostatný skutečný Qt/WebEngine smoke vykreslil
+nabídky, fresh/stale stav a capability provenance.
+
+Explicitní refresh nad existujícím node-local OpenAI credentialem načetl
+**78 nabídek**, nalezl potvrzený model a vykázal jeho čtyři capability jako
+`reported`. Hash bindingu se nezměnil a nový `ChatService` po restartu načetl
+stejných 78 nabídek ve stavu `fresh`. Refresh zapsal pouze nový node-local
+discovery snapshot; credential, binding ani projektový Git nezměnil.
+
+Pád před atomickým `replace` ponechá starou autoritu, pád po něm se obnoví
+read-only načtením nového snapshotu. Neúspěšný provider refresh nepřepisuje
+poslední validní cache a automaticky se neopakuje. Znalostní import nejprve
+validuje celý dokument a vyžaduje očekávanou revizi. Katalog není router ani
+execution autorita: AtlasCloud adapter, ceny/account usage, media/MCP,
+automatický výběr a fallback zůstávají mimo dávku.
+
 ## OPS-WEB-CONCURRENCY-01 — omezená souběžnost webového monitoru — 2026-10-25
 
 Dávka vznikla na větvi `feature/ops-web-concurrency-01` z `develop`
 `57009e2` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+dávka byla doručena PR #91 do `develop` jako merge commit `25d065f`.
 
 - [x] [completed] **OPS-WEB-CONCURRENCY-01-A — kontrakt souběhu, vlastnictví a
   recovery (designed).** [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md)

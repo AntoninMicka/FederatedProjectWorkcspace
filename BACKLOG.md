@@ -75,37 +75,12 @@ WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
 `OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
 doručena PR #90 jako merge commit `57009e2`; evidence je ve
 [WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026
-akceptována na úrovni PoC validated a její evidence je ve WORK_LOG; na větvi
-`feature/ops-web-concurrency-01` čeká na doručení jednoho PR do `develop`.
-Následující plánovací horizont tvoří dvě doložené samostatné dávky v pořadí
-`F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`. Provider-neutral katalog
-předchází AtlasCloud adapteru. Aktivace jedné dávky nemění stav druhé.
-
-- [ ] [planned] **F-M3-MODEL-CATALOG-01 — dynamické načtení a sdílený
-   znalostní katalog modelů (cílová úroveň: designed → implemented → PoC
-   validated).** Zobecnit existující bounded `OpenAIModelCatalog` na
-   provider-neutral read-only discovery cache a oddělit tři identity:
-   kanonický model, konkrétní providerovou nabídku modelu a lokální backendový
-   binding. Jeden znalostní záznam tak může odkazovat na více nabídek téhož
-   modelu přes Ollamu, OpenAI, AtlasCloud nebo další adapter, ale shoda názvu
-   sama modely nikdy nesloučí. Každá capability, limit, podporovaný protokol a
-   modality nese zdroj, revizi/čas zjištění a stav `reported`, `reviewed`,
-   `conflicting` nebo `unknown`. Hybridní vyhodnocení použije ověřený údaj
-   backendu; jen pokud jej backend neposkytuje, smí použít explicitně
-   zkontrolovaný údaj znalostního katalogu. Rozpor se nesjednotí optimistickou
-   unií a bezpečnostně významná neznámá hodnota zůstane nepodporovaná.
-   Providerová dostupnost, cena a účetní údaje zůstávají oddělené od schopností
-   modelu. Discovery cache i uživatelská znalostní vrstva budou node-local mimo
-   projektový Git, atomicky publikované a čitelné i jako stale po neúspěšném
-   refreshi; přesná autorita, editace, import/export a migrace se uzavřou v
-   návrhové části dávky. UI dynamicky načte modely, ukáže zdroj a čerstvost
-   schopností a zachová ruční explicitní model. Změna katalogu nesmí změnit
-   potvrzený binding, rozběhnutý request ani sama zvolit jiný backend.
-   Akceptace: více nabídek jednoho modelu, stejné jméno různých modelů,
-   provider bez capabilities, konflikt provider/katalog, odstraněný model,
-   stránkování/limit/rate-limit, offline a stale cache, restart v každém
-   persistentním přechodu, změna credential/binding revize a explicitní volba
-   nabídky bez fallbacku. Návrh větve: `feature/f-m3-model-catalog-01`.
+akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
+`25d065f`; evidence je ve WORK_LOG. `F-M3-MODEL-CATALOG-01` byla na větvi
+`feature/f-m3-model-catalog-01` akceptována na úrovni PoC validated; její
+evidence je ve WORK_LOG a před doručením PR drží TODO pouze stav předání.
+Následující samostatnou dávkou zůstává `F-M3-ATLASCLOUD-01`; neaktivuje se v
+této větvi.
 - [ ] [planned] **F-M3-ATLASCLOUD-01 — AtlasCloud textový backend (cílová
    úroveň: designed → implemented → PoC validated).** Po
    `F-M3-MODEL-CATALOG-01` přidat samostatný `external-provider` adapter a

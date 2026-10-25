@@ -18,6 +18,8 @@ from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendResponseError, BackendUnknown, ROLES)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
+from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
+                                  project_catalog)
 from spikes.ollama_backend import BACKENDS, BackendRuns, OllamaAdapter
 
 
@@ -196,43 +198,108 @@ class OpenAICredentials:
 
 
 class OpenAIModelCatalog:
-    """Bounded node-local projection of model IDs visible to one credential."""
+    """OpenAI discovery adapter over the provider-neutral model catalog."""
     def __init__(self, state_dir, credentials, transport=None):
         require(isinstance(credentials, OpenAICredentials),
                 'OpenAI credential store is required')
         self.root = _safe_root(state_dir)
-        self.path = self.root / 'openai-models.json'
+        self.legacy_path = self.root / 'openai-models.json'
         self.credentials = credentials
         self.transport = transport or self._http_transport
 
     def refresh(self, binding):
         require(isinstance(binding, OpenAIBinding), 'OpenAI binding is required')
-        secret, revision = self.credentials.resolve(binding.credential_ref)
-        require(revision == binding.credential_revision,
-                'OpenAI credential revision differs from binding')
-        models = self._parse(self.transport(binding, secret))
-        value = {'schema_version': 1, 'binding_id': binding.binding_id,
-                 'credential_revision': revision,
-                 'fetched_at': datetime.now(timezone.utc).isoformat(),
-                 'models': models}
-        raw = (json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n').encode()
-        _atomic_replace(self.root, self.path, raw, '.openai-models-')
-        return value
+        observed_at = datetime.now(timezone.utc).isoformat()
+        store = ModelDiscoveryStore(self.root, 'openai', binding.binding_id)
+        try:
+            secret, revision = self.credentials.resolve(binding.credential_ref)
+            require(revision == binding.credential_revision,
+                    'OpenAI credential revision differs from binding')
+            models = self._parse(self.transport(binding, secret))
+            offers = [self._offer(model, binding, observed_at) for model in models]
+            snapshot = store.publish({
+                'schema_version': 1, 'provider_id': 'openai',
+                'scope_id': binding.binding_id,
+                'binding_revision': binding.revision,
+                'credential_revision': revision, 'fetched_at': observed_at,
+                'offers': offers})
+            discovery = dict(snapshot, freshness='fresh', refresh_error=None)
+        except (OpenAIResponseError, ValueError, OSError) as exc:
+            try:
+                discovery = store.load(binding.revision, binding.credential_revision,
+                                       refresh_error=self._error_category(exc))
+            except FileNotFoundError:
+                raise exc
+        return self._project(binding, discovery)
 
     def load(self, binding):
         require(isinstance(binding, OpenAIBinding), 'OpenAI binding is required')
-        value = _read_json(self.path, 'OpenAI model catalog')
+        store = ModelDiscoveryStore(self.root, 'openai', binding.binding_id)
+        try:
+            discovery = store.load(binding.revision, binding.credential_revision)
+        except FileNotFoundError:
+            discovery = self._read_legacy(binding)
+        return self._project(binding, discovery)
+
+    def _read_legacy(self, binding):
+        value = _read_json(self.legacy_path, 'legacy OpenAI model catalog')
         required = {'schema_version', 'binding_id', 'credential_revision',
                     'fetched_at', 'models'}
         require(isinstance(value, dict) and set(value) == required
                 and value['schema_version'] == 1
-                and value['binding_id'] == binding.binding_id
-                and value['credential_revision'] == binding.credential_revision,
-                'OpenAI model catalog does not match the current binding')
-        value['models'] = self._validate_models(value['models'])
-        require(isinstance(value['fetched_at'], str) and value['fetched_at'],
-                'Invalid OpenAI model catalog timestamp')
+                and value['binding_id'] == binding.binding_id,
+                'Legacy OpenAI model catalog does not match the current binding')
+        models = self._validate_models(value['models'])
+        snapshot = {
+            'schema_version': 1, 'provider_id': 'openai',
+            'scope_id': binding.binding_id, 'binding_revision': 'legacy-unknown-v1',
+            'credential_revision': value['credential_revision'],
+            'fetched_at': value['fetched_at'],
+            'offers': [{'offer_id': 'openai-responses:' + model,
+                        'provider_id': 'openai', 'provider_model_id': model,
+                        'protocol': 'openai-responses-v1',
+                        'availability': 'available', 'capabilities': []}
+                       for model in models]}
+        return dict(snapshot, freshness='stale', refresh_error=None)
+
+    def _project(self, binding, discovery):
+        knowledge = ModelKnowledgeStore(self.root).load_or_empty(discovery['fetched_at'])
+        value = project_catalog(knowledge, [discovery])
+        value.update(provider_id='openai', scope_id=binding.binding_id,
+                     binding_revision=binding.revision,
+                     credential_revision=binding.credential_revision,
+                     fetched_at=discovery['fetched_at'],
+                     freshness=discovery['freshness'],
+                     refresh_error=discovery['refresh_error'])
         return value
+
+    @staticmethod
+    def _offer(model, binding, observed_at):
+        capabilities = []
+        if model == binding.model:
+            revision = binding.capabilities().revision
+            source = 'binding:' + binding.binding_id
+            capabilities = [
+                {'name': name, 'value': True, 'state': 'reported',
+                 'source': source, 'revision': revision, 'observed_at': observed_at}
+                for name in ('generate-text', 'json-output', 'streaming', 'text-output')]
+        return {'offer_id': 'openai-responses:' + model,
+                'provider_id': 'openai', 'provider_model_id': model,
+                'protocol': 'openai-responses-v1', 'availability': 'available',
+                'capabilities': capabilities}
+
+    @staticmethod
+    def _error_category(exc):
+        message = str(exc).lower()
+        if '429' in message or 'rate' in message:
+            return 'rate-limited'
+        if 'rejected' in message or '401' in message or '403' in message:
+            return 'rejected'
+        if 'unavailable' in message:
+            return 'unavailable'
+        if isinstance(exc, (ValueError, UnicodeError, json.JSONDecodeError)):
+            return 'invalid-response'
+        return 'unavailable'
 
     @staticmethod
     def _parse(value):

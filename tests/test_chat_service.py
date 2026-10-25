@@ -1468,6 +1468,25 @@ class ChatServiceTests(unittest.TestCase):
         self.assertNotIn(secret, json.dumps(models))
         self.assertIsNone(self.service.external_status()['model_catalog'])
 
+        empty = self.service.model_catalog_knowledge()
+        self.assertEqual((empty['models'], empty['offers']), ([], []))
+        reviewed = {'schema_version': 1, 'revision': 'operator-v1',
+                    'reviewed_at': NOW,
+                    'models': [{'model_id': 'canonical:gpt-luna',
+                                'display_name': 'GPT Luna'}],
+                    'offers': [{'offer_id': 'openai-responses:gpt-5.6-luna',
+                                'provider_id': 'openai',
+                                'provider_model_id': 'gpt-5.6-luna',
+                                'protocol': 'openai-responses-v1',
+                                'canonical_model_id': 'canonical:gpt-luna',
+                                'capabilities': []}]}
+        self.assertEqual(self.service.import_model_catalog_knowledge(
+            {'expected_revision': 'empty-v1', 'catalog': reviewed}), reviewed)
+        self.assertEqual(self.service.model_catalog_knowledge(), reviewed)
+        self.assertEqual(self.service.external_status()['binding']['model'],
+                         'gpt-5.6-luna')
+        self.assertNotIn(secret, json.dumps(self.service.model_catalog_knowledge()))
+
     def test_chat_uses_common_unscoped_execution_contract(self):
         calls = []
         service = ChatService(self.node_path, Projects(self.node_path),
@@ -1997,6 +2016,19 @@ class ChatServiceTests(unittest.TestCase):
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body)['binding']['model'], 'gemma3')
+            response = driver.request(server, path='/v1/model-catalog/knowledge', body=b'{}')
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body)['offers'], [])
+            knowledge = {'schema_version': 1, 'revision': 'api-review-v1',
+                'reviewed_at': NOW,
+                'models': [{'model_id': 'canonical:test', 'display_name': 'Test'}],
+                'offers': []}
+            response = driver.request(server, path='/v1/model-catalog/import', body=json.dumps(
+                {'expected_revision': 'empty-v1', 'catalog': knowledge}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            self.assertEqual(json.loads(body), knowledge)
             response = driver.request(server, path='/v1/chat/preferences',
                                       body=b'{"streaming":false}')
             head, body = response.split(b'\r\n\r\n', 1)

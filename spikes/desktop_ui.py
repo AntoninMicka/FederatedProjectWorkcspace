@@ -582,6 +582,15 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Model <input name="model" list="external-models" placeholder="gpt-5.6-luna" value="gpt-5.6-luna" required></label>
 <datalist id="external-models"></datalist>
 <button id="external-load-models" type="button">Načíst dostupné modely</button>
+<section class="form-section" aria-labelledby="model-catalog-title"><h3 id="model-catalog-title">Katalog modelů</h3>
+<p id="model-catalog-status" role="status" aria-live="polite">Discovery katalog zatím nebyl načten.</p>
+<ul id="model-catalog-offers" class="compact-list"></ul>
+<details><summary>Reviewovaná znalostní vrstva</summary>
+<p><small>JSON je node-local mimo projektový Git. Import nemění aktivní binding ani nespouští model.</small></p>
+<textarea id="model-catalog-knowledge" rows="10" spellcheck="false" aria-label="Reviewovaný JSON katalogu modelů"></textarea>
+<button id="model-catalog-export" type="button">Načíst pro kontrolu</button>
+<button id="model-catalog-import" type="button">Importovat validovaný JSON</button>
+</details></section>
 <label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -1075,7 +1084,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #gamepad-list{list-style:none;padding-left:0;margin:12px 0 0;display:flex;flex-direction:column;gap:8px}
 #gamepad-list li{background:#edf7f4;border:1px solid #d2e5e0;border-radius:8px;padding:8px 12px;color:#1f3a41}
 .home-heading,.settings-heading{margin-top:28px}.home-heading h1{font-size:38px}
-.settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}
+.settings-card{max-width:720px;background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px 26px;margin:24px 0}.settings-card label{display:block;margin:12px 0}.settings-card input,.settings-card select,.settings-card textarea{padding:9px;max-width:100%}.settings-card input,.settings-card textarea{width:100%}.settings-card textarea{resize:vertical}.settings-card small{display:block;margin-top:16px}.form-section{margin:14px 0;padding:12px;border:1px solid #dce3e9;border-radius:10px;background:#f8fbfc}.form-section h3{margin:0 0 8px}.compact-list{max-height:220px;overflow:auto;padding-left:22px}.compact-list li{margin:5px 0;overflow-wrap:anywhere}
 .settings-card .settings-toggle{display:flex;align-items:center;gap:9px}.settings-card .settings-toggle input{width:auto}
 .cms-card{max-width:900px}.cms-actions,.cms-domain-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin:18px 0}.cms-domain-row label{flex:1}.cms-domain-row input,.cms-domain-row select{width:100%}#cms-sections{display:flex;gap:18px;flex-wrap:wrap;margin:18px 0;border:1px solid #dce3e9;border-radius:10px;padding:12px}#cms-sections label{margin:0}#cms-sections input{width:auto}#cms-sections small{display:block;color:#61706d;margin-left:22px}#cms-preview{border-top:1px solid #dce3e9;margin-top:20px;padding-top:14px}#cms-request-preview{white-space:pre-wrap;max-height:260px;overflow:auto;background:#f5f7fb;padding:12px;border-radius:8px}#cms-preview-frame{width:100%;min-height:520px;border:1px solid #bfcdc9;border-radius:10px;background:white}.confirm{padding:12px;background:#fffaf0;border:1px solid #d6b36a;border-radius:8px}.confirm input{width:auto}
 .provider-link{color:#176b60;font-weight:600}
@@ -4055,7 +4064,20 @@ async function externalStreamRequest(request,onDelta){
 }
 function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
- for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
+ const offers=Array.isArray(catalog?.offers)?catalog.offers:[];
+ const legacy=Array.isArray(catalog?.models)&&catalog.models.every(item=>typeof item==='string') ? catalog.models : [];
+ for(const model of legacy){const option=document.createElement('option');option.value=model;list.append(option);}
+ for(const offer of offers){if(offer.provider_id!=='openai'||offer.availability!=='available')continue;
+  const option=document.createElement('option');option.value=offer.provider_model_id;
+  option.label=`${offer.provider_model_id} · ${offer.freshness}`;list.append(option);}
+ const status=document.querySelector('#model-catalog-status');
+ const view=document.querySelector('#model-catalog-offers');view.replaceChildren();
+ if(!catalog){status.textContent='Discovery katalog zatím nebyl načten.';return;}
+ status.textContent=`${catalog.freshness==='stale'?'Zastaralý':'Aktuální'} snapshot · ${catalog.fetched_at || 'čas neznámý'}${catalog.refresh_error?' · obnova: '+catalog.refresh_error:''}. Binding nebyl změněn.`;
+ for(const offer of offers){const item=document.createElement('li');
+  const known=offer.capabilities.filter(capability=>capability.state!=='unknown');
+  const capabilityText=known.length?known.map(capability=>`${capability.name}: ${capability.state}${capability.supported?' ✓':' ×'}`).join(', '):'capabilities neznámé';
+  item.textContent=`${offer.provider_model_id} · ${offer.protocol} · ${offer.availability} · ${offer.freshness} · ${capabilityText}`;view.append(item);}
 }
 function autonomyTaskId(workflow){
  for(const step of workflow?.steps || []){
@@ -5422,8 +5444,27 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  event.currentTarget.disabled=true;settingsExternalStatus.textContent='Načítám dostupné modely…';
  try{const result=await projectRequest('/v1/external/models',{});
   fillExternalModels(result);
-  settingsExternalStatus.textContent=`Načteno ${result.models.length} kandidátů pro textový Responses backend · ${result.fetched_at}. Ruční ID zůstává povoleno.`;
+  const available=(result.offers || []).filter(item=>item.provider_id==='openai'&&item.availability==='available').length;
+  settingsExternalStatus.textContent=`Načteno ${available} nabídek pro textový Responses backend · ${result.fetched_at}. ${result.freshness==='stale'?'Zobrazuje se poslední platný stale snapshot.':'Snapshot je aktuální.'} Ruční ID zůstává povoleno.`;
  }catch(error){settingsExternalStatus.textContent=error.message+' Uložené nastavení nebylo změněno.';}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#model-catalog-export').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;
+ try{const value=await projectRequest('/v1/model-catalog/knowledge',{});
+  document.querySelector('#model-catalog-knowledge').value=JSON.stringify(value,null,2);
+  document.querySelector('#model-catalog-status').textContent='Reviewovaná znalostní vrstva byla načtena pro kontrolu.';
+ }catch(error){document.querySelector('#model-catalog-status').textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#model-catalog-import').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;
+ try{const value=JSON.parse(document.querySelector('#model-catalog-knowledge').value);
+  const saved=await projectRequest('/v1/model-catalog/import',{expected_revision:value.revision,catalog:value});
+  document.querySelector('#model-catalog-knowledge').value=JSON.stringify(saved,null,2);
+  document.querySelector('#model-catalog-status').textContent=`Znalostní vrstva ${saved.revision} byla atomicky importována. Aktivní binding nebyl změněn.`;
+  const external=await projectRequest('/v1/external/status',{});fillExternalModels(external.model_catalog);
+ }catch(error){document.querySelector('#model-catalog-status').textContent=error.message+' Předchozí znalostní vrstva zůstala zachována.';}
  finally{event.currentTarget.disabled=false;}
 });
 draft.addEventListener('input',()=>{
@@ -6372,6 +6413,7 @@ class DesktopHandler(Handler):
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
+        '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -6669,6 +6711,11 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.configure_external(request))
             if self.path == '/v1/external/models' and request == {}:
                 return self.reply(200, self.server.chat_service.external_models())
+            if self.path == '/v1/model-catalog/knowledge' and request == {}:
+                return self.reply(200, self.server.chat_service.model_catalog_knowledge())
+            if self.path == '/v1/model-catalog/import' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.import_model_catalog_knowledge(request))
             if self.path == '/v1/external/propose' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_propose(request))
             if self.path == '/v1/external/send' and isinstance(request, dict):
