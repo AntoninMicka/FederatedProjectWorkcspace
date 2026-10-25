@@ -633,6 +633,8 @@ class AutonomyServiceTests(unittest.TestCase):
         self.assertEqual(len(self.service.list(self.project_id)['workflows']), 1)
         self.assertEqual(self.service.list(
             self.project_id, allow_local_only=False)['workflows'], [])
+        self.assertEqual(self.service.list(
+            self.project_id, allow_local_only=False)['incompatible_workflows'], [])
         with self.assertRaisesRegex(ValidationError, 'does not expose local-only'):
             self.service.get(self.workflow_id, allow_local_only=False)
 

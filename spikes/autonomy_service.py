@@ -104,6 +104,9 @@ class AutonomyService:
         if not allow_local_only:
             result['workflows'] = [workflow for workflow in result['workflows']
                                    if not self._local_only(workflow)]
+            # An incompatible historical plan cannot be safely classified by
+            # privacy, so its local diagnostic never crosses the web boundary.
+            result['incompatible_workflows'] = []
         return result
 
     def attach(self, workflow_id):

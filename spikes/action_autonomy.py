@@ -12,7 +12,7 @@ import re
 import sqlite3
 import stat
 
-from spikes.metadata import parse_json, require, uuid
+from spikes.metadata import ValidationError, parse_json, require, uuid
 from spikes.research_workflow import (validate_research_input,
                                       validate_research_output)
 
@@ -22,6 +22,7 @@ MAX_STEPS = 32
 MAX_JSON = 1024 * 1024
 MAX_REASON_BYTES = 4096
 UI_LEASE_SECONDS = 15
+TERMINAL_WORKFLOW_STATES = {'completed', 'failed', 'unknown', 'cancelled'}
 IDENTIFIER = re.compile(r'[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*')
 INPUT_IDENTIFIER = re.compile(r'[a-z][a-z0-9]*(?:_[a-z0-9]+)*')
 VERSION = re.compile(r'[0-9]+\.[0-9]+')
@@ -964,13 +965,25 @@ class AutonomyQueue:
             where = 'node_id=? AND user_id=?'
             if project_id is not None:
                 where += ' AND project_id=?'; parameters.append(project_id)
-            rows = db.execute('SELECT workflow_id FROM workflows WHERE ' + where
+            rows = db.execute('SELECT workflow_id,state,updated_at FROM workflows WHERE ' + where
                 + ' ORDER BY updated_at DESC,workflow_id LIMIT 128', parameters).fetchall()
             global_paused = bool(
                 db.execute('SELECT global_paused FROM settings').fetchone()[0])
+        workflows, incompatible = [], []
+        for row in rows:
+            try:
+                workflows.append(self.get(row['workflow_id'], node_id, user_id))
+            except ValidationError as exc:
+                # Historical terminal records remain authoritative journal evidence,
+                # but an older action descriptor must not hide current runnable work.
+                # Active incompatible plans still fail closed.
+                if row['state'] not in TERMINAL_WORKFLOW_STATES:
+                    raise
+                incompatible.append({'workflow_id': row['workflow_id'],
+                    'state': row['state'], 'updated_at': row['updated_at'],
+                    'error': str(exc)})
         return {'schema_version': 1, 'global_paused': global_paused,
-                'workflows': [self.get(row['workflow_id'], node_id, user_id)
-                              for row in rows]}
+                'workflows': workflows, 'incompatible_workflows': incompatible}
 
     def attach_ui(self, workflow_id, node_id, user_id):
         return self._set_attached(workflow_id, node_id, user_id, True)

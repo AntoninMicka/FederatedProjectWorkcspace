@@ -5077,8 +5077,8 @@ async function loadChat(){
   taskOutcomes=restored?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
   renderThreadList(ordered);renderTaskPublicSources();renderChat(restored);
   if(restored){document.querySelector('#chat-mode').value=restored.classification;refreshChatModeControls();}
-  if(projectId)await loadAutonomyQueue(false);
-  chatOperationStatus.textContent=restored?
+  const queueLoaded=!projectId || await loadAutonomyQueue(false);
+  if(queueLoaded)chatOperationStatus.textContent=restored?
    'Obnoveno poslední uložené vlákno projektu. Rozpracovaná automatika po restartu zůstává bezpečně pozastavená.':'';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
 }
@@ -5647,8 +5647,8 @@ function renderAutonomyQueue(){
 async function loadAutonomyQueue(showStatus=true){
  if(!activeProject){autonomyQueue={global_paused:false,workflows:[]};renderAutonomyQueue();return;}
  if(showStatus)autonomyStatus.textContent='Načítám řízenou frontu…';
- try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')renderChat(activeThread);if(showStatus)autonomyStatus.textContent=`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;}
- catch(error){autonomyStatus.textContent=error.message;}
+ try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')renderChat(activeThread);const incompatible=autonomyQueue.incompatible_workflows?.length || 0;autonomyStatus.textContent=incompatible?`Fronty: ${autonomyQueue.workflows.length}. ${incompatible} starší terminální záznamy nelze zobrazit s aktuálním katalogem; v journalu zůstávají zachované.`:`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;return true;}
+ catch(error){autonomyStatus.textContent=error.message;if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')chatOperationStatus.textContent=`Frontu automatizace nelze načíst: ${error.message}`;return false;}
 }
 async function refreshAutonomyLease(){
  if(autonomyHeartbeatBusy)return;autonomyHeartbeatBusy=true;

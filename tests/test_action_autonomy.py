@@ -313,6 +313,35 @@ class ActionAutonomyTests(unittest.TestCase):
                          {self.workflow_id, second_id})
         self.assertEqual(queue.list(str(uuid4()), str(uuid4()))['workflows'], [])
 
+    def test_terminal_plan_from_older_registry_does_not_hide_current_workflows(self):
+        queue = self.queue(); legacy_id = str(uuid4())
+        valid = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
+        legacy = self.step('analysis.read-only', {'selection_sha256': '2' * 64})
+        queue.prepare(self.plan([valid]), self.node_id, self.user_id)
+        queue.prepare(self.plan([legacy], workflow_id=legacy_id),
+                      self.node_id, self.user_id)
+        with closing(sqlite3.connect(queue.path)) as db:
+            raw = json.loads(bytes(db.execute(
+                'SELECT plan_json FROM workflows WHERE workflow_id=?',
+                (legacy_id,)).fetchone()[0]))
+            raw['steps'][0]['input']['retired_field'] = True
+            db.execute('UPDATE workflows SET plan_json=?,state=? WHERE workflow_id=?',
+                (json.dumps(raw).encode(), 'failed', legacy_id))
+            db.commit()
+        listed = queue.list(self.node_id, self.user_id, self.project_id)
+        self.assertEqual([item['workflow_id'] for item in listed['workflows']],
+                         [self.workflow_id])
+        self.assertEqual(listed['incompatible_workflows'], [{
+            'workflow_id': legacy_id, 'state': 'failed',
+            'updated_at': listed['incompatible_workflows'][0]['updated_at'],
+            'error': 'Autonomy action inputs differ from registry'}])
+        with closing(sqlite3.connect(queue.path)) as db:
+            db.execute("UPDATE workflows SET state='proposed' WHERE workflow_id=?",
+                       (legacy_id,)); db.commit()
+        with self.assertRaisesRegex(ValidationError,
+                                    'Autonomy action inputs differ from registry'):
+            queue.list(self.node_id, self.user_id, self.project_id)
+
     def test_second_dispatch_in_same_workflow_is_rejected(self):
         queue = self.queue()
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})

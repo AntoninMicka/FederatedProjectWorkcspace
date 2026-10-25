@@ -137,9 +137,16 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   outcomes, ale autonomy journal až po samostatném kliknutí na hlavní záložku
   Chat; bez něj se proto nezobrazila akce `Aktivovat plán`. Obnova projektu nyní
   načte i projektovou frontu před prvním vykreslením obnoveného workflow.
+  Následná fyzická kontrola odhalila vlastní příčinu úplného výpadku zobrazení:
+  dva starší již terminální workflow zůstaly validní journalovou historií, ale
+  jejich vstupy už neodpovídaly novější revizi katalogu činností. Validace
+  prvního z nich shodila celý výpis a skryla i nově úspěšně připravené plány.
+  Výpis nyní takovou terminální historii zachová a explicitně diagnostikuje,
+  ale dovolí zobrazit aktuální validní fronty; nekompatibilní aktivní plán dál
+  selže uzavřeně. Chybu načtení fronty už Chat neskrývá.
   Ověření doplnění: tři cílené desktopové testy OK, `python3 -m py_compile
   spikes/desktop_ui.py`, `node --check` generovaného JavaScriptu,
-  `python3 -m unittest discover -s tests -v` (797 testů OK, 28 skipped) a
+  `python3 -m unittest discover -s tests -v` (798 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Realistický restart a pokračování zůstávají k
   fyzickému potvrzení.
 
