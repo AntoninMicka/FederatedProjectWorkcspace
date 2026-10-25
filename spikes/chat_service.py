@@ -1308,6 +1308,8 @@ class ChatService:
         authority = Authority('research:' + value['research_id'] + ':' + action_id,
             execution['user_id'], execution['node_id'], 'research-workflow-v1',
             frozenset())
+        language = ResponseLanguagePolicy(self._root()).resolve(
+            project_id=execution['project_id'])
         builder = ContextBuilder(workspace, execution['project_id'])
         prepared = builder.prepare(manifest_id=value['manifest_id'],
             run_id=value['run_id'], authority=authority, target=binding.target(),
@@ -1315,7 +1317,8 @@ class ChatService:
                                       execution['privacy']),),
             public_source_inputs=public_inputs,
             task=TaskInstruction('researcher', 'researcher-v2',
-                                 RESEARCH_INSTRUCTIONS[action_id], input_id))
+                                 RESEARCH_INSTRUCTIONS[action_id], input_id),
+            response_language=ResponseLanguage(language['tag'], language['source']))
         require(bindings.load() == binding,
                 'Research model binding changed before dispatch')
         handoff = builder.authorize_for_dispatch(prepared, authority=authority,

@@ -223,11 +223,13 @@ class ActionAutonomyTests(unittest.TestCase):
         path.chmod(0o600)
         queue = self.queue()
         with closing(sqlite3.connect(queue.path)) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 5)
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone()[0], 6)
             self.assertIn('ui_seen_at', [row[1] for row in
                                         db.execute('PRAGMA table_info(workflows)')])
             self.assertIn('not_before', [row[1] for row in
                                         db.execute('PRAGMA table_info(steps)')])
+            self.assertTrue({'started_at', 'finished_at', 'elapsed_ms'} <= {
+                row[1] for row in db.execute('PRAGMA table_info(steps)')})
             self.assertIn('activation_digest', [row[1] for row in
                 db.execute('PRAGMA table_info(workflows)')])
             self.assertEqual([row[1] for row in
@@ -361,8 +363,8 @@ class ActionAutonomyTests(unittest.TestCase):
         step = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         queue = self.queue(); self.prepare_and_activate(queue, self.plan([step]))
         with closing(sqlite3.connect(queue.path)) as db:
-            db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
-                       "WHERE workflow_id=?", (self.workflow_id,))
+            db.execute("UPDATE steps SET elapsed_ms=3600000 WHERE step_id=?",
+                       (step['step_id'],))
             db.commit()
         with self.assertRaisesRegex(ValidationError, 'time budget'):
             self.advance(queue)
@@ -611,7 +613,7 @@ class ActionAutonomyTests(unittest.TestCase):
             restarted.propose_revision(stale, self.node_id, self.user_id,
                 available_preconditions={'project-head-current'})
 
-    def test_confirmed_time_increase_has_available_delta_and_legacy_recovery(self):
+    def test_confirmed_time_increase_preserves_runtime_across_restart(self):
         first = self.step('analysis.read-only', {'selection_sha256': '1' * 64})
         plan = self.dynamic_plan([first], max_steps=1, max_cost=1)
         plan['budget']['max_seconds'] = 300
@@ -630,7 +632,9 @@ class ActionAutonomyTests(unittest.TestCase):
         confirmed = queue.confirm_revision(proposal['proposal_id'], self.node_id,
             self.user_id, stored['approval_digest'],
             available_preconditions={'project-head-current'})
-        self.assertGreaterEqual(confirmed['remaining_seconds'], 299)
+        self.assertGreaterEqual(confirmed['remaining_seconds'], 599)
+        self.assertEqual(confirmed['spent_seconds'], sum(
+            item['elapsed_seconds'] for item in confirmed['steps']))
 
         with closing(sqlite3.connect(queue.path)) as db:
             db.execute("UPDATE workflows SET activated_at='2000-01-01T00:00:00Z' "
@@ -638,7 +642,7 @@ class ActionAutonomyTests(unittest.TestCase):
         restarted = self.queue()
         restarted.attach_ui(self.workflow_id, self.node_id, self.user_id)
         recovered = restarted.resume(self.workflow_id, self.node_id, self.user_id)
-        self.assertGreaterEqual(recovered['remaining_seconds'], 299)
+        self.assertEqual(recovered['remaining_seconds'], confirmed['remaining_seconds'])
         recovered_activation = recovered['activated_at']
         replayed = restarted.resume(self.workflow_id, self.node_id, self.user_id)
         self.assertEqual(replayed['activated_at'], recovered_activation)
@@ -761,6 +765,11 @@ class ActionAutonomyTests(unittest.TestCase):
         recovered = self.queue().get(self.workflow_id, self.node_id, self.user_id)
         self.assertEqual((recovered['state'], recovered['steps'][0]['state']),
                          ('unknown', 'unknown'))
+        self.assertIsNotNone(recovered['steps'][0]['started_at'])
+        self.assertIsNotNone(recovered['steps'][0]['finished_at'])
+        self.assertGreater(recovered['steps'][0]['elapsed_seconds'], 0)
+        self.assertEqual(recovered['spent_seconds'],
+                         recovered['steps'][0]['elapsed_seconds'])
         self.assertEqual(self.calls, [])
 
     def test_unknown_effect_is_terminal_and_never_retried(self):

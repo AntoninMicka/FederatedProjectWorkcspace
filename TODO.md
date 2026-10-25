@@ -237,6 +237,24 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   (805 testů OK, 28 skipped).
   Fyzicky zbývá po restartu kliknout na `Pokračovat` a potvrdit průchod planneru
   přes výběr relevantních zdrojů až k návrhu závěrečné zprávy.
+  Následný průchod dokončil výběr, planner i sestavení návrhu zprávy (revize 13),
+  ale fyzická kontrola odhalila tři navazující vady: modelový výzkumný krok
+  nedostával explicitní jazykovou preferenci projektu, zobrazený návrh zprávy
+  zmizel při pětisekundovém heartbeat překreslení a časový limit stále měřil
+  dobu od aktivace včetně čekání na uživatele a restartu. Nové výzkumné modelové
+  požadavky nyní vážou do Context Manifestu projektovou nebo uzlovou BCP 47
+  preferenci (výchozí `cs-CZ`, shoda zůstává označena jako neověřená). Již
+  vzniklý anglický návrh se auditně zachovává a automaticky se nepřepisuje.
+  Načtený návrh se drží ve view state podle workflow a step ID, takže heartbeat
+  jej znovu zobrazí. Journal verze 6 nově ukládá začátek, konec a dobu každého
+  skutečně dispatchovaného kroku; `max_seconds` se spotřebovává jejich součtem,
+  nikoli čekáním na approval/revizi, pause, odpojené UI nebo restart. Pád během
+  dispatch započte interval do recovery, označí účinek `unknown` a zachová zákaz
+  automatického retry; historickým dokončeným krokům bez měření migrace dobu
+  nevymýšlí. Ověření: 27 cílených testů autonomy, výzkumného jazyka a desktopu
+  OK; `python3 -m unittest discover -s tests -v` (805 testů OK, 28 skipped).
+  Fyzicky zbývá po restartu ověřit nový český návrh, jeho nezavírající se
+  zobrazení přes heartbeat a nezměněný zbývající čas během čekání na uživatele.
 
 ## Akceptace
 

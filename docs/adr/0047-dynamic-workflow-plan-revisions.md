@@ -84,7 +84,10 @@ Snížení limitu nesmí být nižší než již spotřebovaná hodnota.
 Pokud už `max_steps` nebo cost nestačí na další navržený krok, workflow
 zůstane bezpečně zastavený s vysvětlením. Běžící krok dokončí svůj bounded
 handler; limit se vyhodnotí před další revizí nebo dispatch. `max_seconds` je
-deadline pro zahájení dalšího kroku, nikoli asynchronní přerušovač handleru.
+kumulativní limit skutečného běhu zahájených handlerů a deadline pro zahájení
+dalšího kroku, nikoli asynchronní přerušovač handleru. Countdown, čekání na
+approval či revizi, pause, odpojené UI a doba mezi restartem a explicitním
+resume se do spotřeby nepočítají.
 
 ### Persistentní autority
 
@@ -108,7 +111,7 @@ journal a další reviewované executory) zůstávají jedinou autoritou vlastn�
 | Návrh uložen, před validací nebo potvrzením | Návrh zůstane neaktivní. Po restartu se znovu ověří katalog, policy, HEAD, předchozí revize a limit; nic se samo nepotvrdí. |
 | Pád v transakci revize | SQLite atomicky zachová buď starou revizi, nebo celou novou revizi včetně limitu a kroku; poloviční revize není viditelná. |
 | Revize uložena, krok dosud neodeslán | Queue je autoritou. Restart odpojí UI a workflow pozastaví; countdown ani approval se neobnoví jako implicitní souhlas. |
-| Krok `dispatching` | Platí ADR 0044/0045: bez pozitivní doménové reconciliation je stav `unknown`, bez automatického retry a bez další revize plánu. |
+| Krok durable `dispatching`, handler dosud nevrátil výsledek | Queue drží `started_at`. Terminální zápis uloží `finished_at` a dobu běhu kroku; restart interval uzavře časem recovery. Platí ADR 0044/0045: bez pozitivní doménové reconciliation je stav `unknown`, bez automatického retry a bez další revize plánu. |
 | Doménový účinek dokončen, queue výsledek chybí | Pouze doménový adapter smí doložit shodnou identitu a digest; queue pak uzavře původní krok, nevytváří nový účinek. |
 | Dva souběžné návrhy | Uspěje nejvýše jeden s aktuální očekávanou revizí. Druhý se odmítne jako stale a musí být sestaven z nové projekce. |
 | Limit vyčerpán po dokončení kroku | Další dispatch nevznikne. Early finish je možný; zvýšení limitu čeká na přesné potvrzení nové revize. |

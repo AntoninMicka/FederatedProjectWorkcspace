@@ -668,7 +668,7 @@ class AutonomyQueue:
             if not tables:
                 db.executescript('''
                     CREATE TABLE schema_info(version INTEGER NOT NULL);
-                    INSERT INTO schema_info VALUES(5);
+                    INSERT INTO schema_info VALUES(6);
                     CREATE TABLE settings(global_paused INTEGER NOT NULL);
                     INSERT INTO settings VALUES(0);
                     CREATE TABLE workflows(
@@ -685,7 +685,8 @@ class AutonomyQueue:
                         step_id TEXT NOT NULL UNIQUE, action_id TEXT NOT NULL,
                         action_version TEXT NOT NULL, descriptor_digest TEXT NOT NULL,
                         state TEXT NOT NULL, approval_digest TEXT, not_before TEXT,
-                        result_json BLOB, error TEXT,
+                        result_json BLOB, error TEXT, started_at TEXT,
+                        finished_at TEXT, elapsed_ms INTEGER NOT NULL DEFAULT 0,
                         PRIMARY KEY(workflow_id, ordinal),
                         FOREIGN KEY(workflow_id) REFERENCES workflows(workflow_id));
                     CREATE TABLE step_revisions(
@@ -715,7 +716,7 @@ class AutonomyQueue:
                                    'plan_revision_proposals'}
                 require(tables in (legacy_tables, legacy_tables | {'step_revisions'},
                                    legacy_tables | revision_tables)
-                        and versions in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)]),
+                        and versions in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)], [(6,)]),
                         'Unknown or incomplete autonomy schema')
                 workflow_columns = [row[1] for row in
                     db.execute('PRAGMA table_info(workflows)')]
@@ -797,6 +798,18 @@ class AutonomyQueue:
                     workflow_columns.append('plan_revision')
                     tables |= {'plan_revisions', 'plan_revision_proposals'}
                     versions = [(5,)]
+                if versions == [(5,)]:
+                    require('started_at' not in step_columns
+                            and 'finished_at' not in step_columns
+                            and 'elapsed_ms' not in step_columns,
+                            'Unexpected autonomy runtime accounting columns')
+                    db.execute('ALTER TABLE steps ADD COLUMN started_at TEXT')
+                    db.execute('ALTER TABLE steps ADD COLUMN finished_at TEXT')
+                    db.execute('ALTER TABLE steps ADD COLUMN '
+                               'elapsed_ms INTEGER NOT NULL DEFAULT 0')
+                    db.execute('UPDATE schema_info SET version=6')
+                    step_columns += ['started_at', 'finished_at', 'elapsed_ms']
+                    versions = [(6,)]
                 require(tables == legacy_tables | revision_tables,
                         'Unknown or incomplete autonomy schema')
                 require(set(workflow_columns) == {'workflow_id', 'node_id', 'user_id',
@@ -806,8 +819,9 @@ class AutonomyQueue:
                     and len(workflow_columns) == 16
                     and set(step_columns) == {'workflow_id', 'ordinal', 'step_id',
                     'action_id', 'action_version', 'descriptor_digest', 'state',
-                    'approval_digest', 'not_before', 'result_json', 'error'}
-                    and len(step_columns) == 11
+                    'approval_digest', 'not_before', 'result_json', 'error',
+                    'started_at', 'finished_at', 'elapsed_ms'}
+                    and len(step_columns) == 14
                     and revision_columns == ['workflow_id', 'ordinal', 'revision',
                                               'step_json', 'cancelled_at'],
                     'Unknown or incomplete autonomy schema')
@@ -822,15 +836,24 @@ class AutonomyQueue:
                         'base_plan_digest', 'proposal_digest', 'proposal_json',
                         'state', 'approval_digest', 'created_at', 'resolved_at'],
                     'Unknown or incomplete autonomy plan revision schema')
-                db.execute("UPDATE steps SET state='unknown', error=? "
-                           "WHERE state='dispatching'",
-                           ('Restart occurred during action dispatch',))
+                recovered_at = now()
+                for dispatched in db.execute(
+                        "SELECT step_id,started_at FROM steps "
+                        "WHERE state='dispatching'").fetchall():
+                    started = dispatched['started_at'] or recovered_at
+                    elapsed_ms = max(1, int((datetime.fromisoformat(
+                        recovered_at.replace('Z', '+00:00')) - datetime.fromisoformat(
+                        started.replace('Z', '+00:00'))).total_seconds() * 1000))
+                    db.execute("UPDATE steps SET state='unknown',error=?,finished_at=?,"
+                        "elapsed_ms=? WHERE step_id=?", (
+                            'Restart occurred during action dispatch', recovered_at,
+                            elapsed_ms, dispatched['step_id']))
                 db.execute("UPDATE steps SET state='queued',not_before=NULL "
                            "WHERE state='countdown'")
                 db.execute("UPDATE workflows SET state='unknown', ui_attached=0, ui_seen_at=NULL, "
                            "error=?, updated_at=? WHERE workflow_id IN "
                            "(SELECT workflow_id FROM steps WHERE state='unknown')",
-                           ('Restart found an uncertain action effect', now()))
+                           ('Restart found an uncertain action effect', recovered_at))
                 db.execute("UPDATE workflows SET state='paused', ui_attached=0, ui_seen_at=NULL, "
                            "updated_at=? WHERE state IN ('queued','running','countdown')", (now(),))
                 db.execute("UPDATE workflows SET ui_attached=0,ui_seen_at=NULL WHERE state NOT IN "
@@ -910,15 +933,10 @@ class AutonomyQueue:
                 0, plan['budget']['max_cost_units'] - row['spent_cost'])
             result['remaining_steps'] = max(
                 0, plan['budget']['max_steps'] - len(plan['steps']))
-            if row['activated_at'] is None:
-                result['remaining_seconds'] = plan['budget']['max_seconds']
-            else:
-                activated = datetime.fromisoformat(
-                    row['activated_at'].replace('Z', '+00:00'))
-                elapsed = int((datetime.now(timezone.utc) - activated).total_seconds())
-                result['remaining_seconds'] = max(0, min(
-                    plan['budget']['max_seconds'],
-                    plan['budget']['max_seconds'] - elapsed))
+            elapsed_ms = sum(item['elapsed_ms'] for item in steps)
+            result['spent_seconds'] = elapsed_ms / 1000
+            remaining_ms = max(0, plan['budget']['max_seconds'] * 1000 - elapsed_ms)
+            result['remaining_seconds'] = remaining_ms // 1000
             result['steps'] = []
             for stored, planned in zip(steps, plan['steps']):
                 item = deepcopy(planned)
@@ -930,6 +948,9 @@ class AutonomyQueue:
                             automatable=descriptor['automatable'],
                             confirmation=descriptor['confirmation'],
                             permissions=descriptor['permissions'],
+                            started_at=stored['started_at'],
+                            finished_at=stored['finished_at'],
+                            elapsed_seconds=stored['elapsed_ms'] / 1000,
                             result=(json.loads(bytes(stored['result_json']))
                                     if stored['result_json'] is not None else None),
                             error=stored['error'])
@@ -1053,43 +1074,11 @@ class AutonomyQueue:
             require(not db.execute('SELECT global_paused FROM settings').fetchone()[0],
                     'Autonomy queue is globally paused')
             resumed = now()
-            row = self._reconcile_confirmed_time_increases(db, row, resumed)
             if row['state'] == 'paused':
                 db.execute("UPDATE workflows SET state='queued',updated_at=?,error=NULL "
                            "WHERE workflow_id=?", (resumed, workflow_id))
             db.commit()
         return self.get(workflow_id, node_id, user_id)
-
-    @staticmethod
-    def _reconcile_confirmed_time_increases(db, row, reconciled_at):
-        """Give an already confirmed time increase its unspent delta exactly once."""
-        revisions = db.execute('SELECT plan_json,applied_at FROM plan_revisions '
-            'WHERE workflow_id=? ORDER BY revision', (row['workflow_id'],)).fetchall()
-        if len(revisions) < 2 or row['activated_at'] is None:
-            return row
-        activated = datetime.fromisoformat(
-            row['activated_at'].replace('Z', '+00:00'))
-        reconciled = datetime.fromisoformat(reconciled_at.replace('Z', '+00:00'))
-        previous = json.loads(bytes(revisions[0]['plan_json']))['budget']['max_seconds']
-        changed = False
-        for revision in revisions[1:]:
-            current = json.loads(bytes(revision['plan_json']))['budget']['max_seconds']
-            if current > previous:
-                applied = datetime.fromisoformat(
-                    revision['applied_at'].replace('Z', '+00:00'))
-                original_floor = applied - timedelta(seconds=previous)
-                if activated < original_floor:
-                    activated = max(
-                        activated, reconciled - timedelta(seconds=previous))
-                    changed = True
-            previous = current
-        if changed:
-            value = activated.isoformat().replace('+00:00', 'Z')
-            db.execute('UPDATE workflows SET activated_at=? WHERE workflow_id=?',
-                       (value, row['workflow_id']))
-            row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
-                             (row['workflow_id'],)).fetchone()
-        return row
 
     def _set_state(self, workflow_id, node_id, user_id, state):
         with closing(self._connect()) as db:
@@ -1410,19 +1399,9 @@ class AutonomyQueue:
                  digest(descriptor), 'queued'))
         following = ('completed' if proposal['kind'] == 'finish'
                      else ('paused' if row['state'] == 'paused' else 'queued'))
-        previous = json.loads(bytes(row['plan_json']))['budget']['max_seconds']
-        current = updated['budget']['max_seconds']
-        activated = row['activated_at']
-        if current > previous and activated is not None:
-            activated_at = datetime.fromisoformat(activated.replace('Z', '+00:00'))
-            applied_at = datetime.fromisoformat(applied.replace('Z', '+00:00'))
-            activated = max(activated_at,
-                applied_at - timedelta(seconds=previous)).isoformat().replace(
-                    '+00:00', 'Z')
         db.execute('UPDATE workflows SET plan_digest=?,plan_json=?,plan_revision=?,'
-            'state=?,activated_at=?,updated_at=?,error=NULL WHERE workflow_id=?',
-            (plan_digest, raw, revision, following, activated, applied,
-             proposal['workflow_id']))
+            'state=?,updated_at=?,error=NULL WHERE workflow_id=?',
+            (plan_digest, raw, revision, following, applied, proposal['workflow_id']))
         db.execute('INSERT INTO plan_revisions VALUES(?,?,?,?,?,?,?,?,?,?)',
             (proposal['workflow_id'], revision, proposal['proposal_id'],
              proposal['kind'], proposal['reason'], row['plan_digest'], plan_digest,
@@ -1546,9 +1525,9 @@ class AutonomyQueue:
             require(plan['expected_head'] == expected_head,
                     'Project changed after autonomy plan preparation')
             require(row['activated_at'] is not None, 'Autonomy workflow was not activated')
-            elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(
-                row['activated_at'].replace('Z', '+00:00'))).total_seconds()
-            require(elapsed <= plan['budget']['max_seconds'],
+            elapsed_ms = db.execute('SELECT COALESCE(SUM(elapsed_ms),0) FROM steps '
+                'WHERE workflow_id=?', (workflow_id,)).fetchone()[0]
+            require(elapsed_ms < plan['budget']['max_seconds'] * 1000,
                     'Autonomy time budget is exhausted')
             stored_steps = db.execute(
                 'SELECT * FROM steps WHERE workflow_id=? ORDER BY ordinal',
@@ -1617,10 +1596,12 @@ class AutonomyQueue:
                         'Autonomy countdown is still active')
             handler = self.handlers.get((descriptor['action_id'], descriptor['version']))
             require(handler is not None, 'No reviewed autonomy action handler')
-            db.execute("UPDATE steps SET state='dispatching',not_before=NULL WHERE step_id=?",
-                       (planned['step_id'],))
+            started = now()
+            db.execute("UPDATE steps SET state='dispatching',not_before=NULL,"
+                       "started_at=?,finished_at=NULL,elapsed_ms=0 WHERE step_id=?",
+                       (started, planned['step_id']))
             db.execute("UPDATE workflows SET state='running',updated_at=? WHERE workflow_id=?",
-                       (now(), workflow_id)); db.commit()
+                       (started, workflow_id)); db.commit()
         checkpoint('dispatching')
         try:
             execution = {'workflow_id': workflow_id, 'step_id': planned['step_id'],
@@ -1653,16 +1634,22 @@ class AutonomyQueue:
             db.execute('BEGIN IMMEDIATE')
             row = db.execute('SELECT * FROM workflows WHERE workflow_id=?',
                              (workflow_id,)).fetchone(); self._owned(row, node_id, user_id)
-            step = db.execute('SELECT state FROM steps WHERE step_id=?', (step_id,)).fetchone()
+            step = db.execute('SELECT state,started_at FROM steps WHERE step_id=?',
+                              (step_id,)).fetchone()
             require(step is not None and step['state'] == 'dispatching',
                     'Autonomy step is not dispatching')
-            db.execute('UPDATE steps SET state=?,result_json=?,error=? WHERE step_id=?',
-                       (state, result, error, step_id))
+            finished = now()
+            started = datetime.fromisoformat(step['started_at'].replace('Z', '+00:00'))
+            elapsed_ms = max(1, int((datetime.fromisoformat(
+                finished.replace('Z', '+00:00')) - started).total_seconds() * 1000))
+            db.execute('UPDATE steps SET state=?,result_json=?,error=?,finished_at=?,'
+                       'elapsed_ms=? WHERE step_id=?',
+                       (state, result, error, finished, elapsed_ms, step_id))
             terminal = ('queued' if recoverable else
                         (state if state in {'failed', 'unknown'} else 'queued'))
             db.execute('UPDATE workflows SET state=?,spent_cost=spent_cost+?,updated_at=?,error=? '
                        'WHERE workflow_id=?',
-                       (terminal, cost, now(), error, workflow_id)); db.commit()
+                       (terminal, cost, finished, error, workflow_id)); db.commit()
         return self.get(workflow_id, node_id, user_id)
 
     @staticmethod

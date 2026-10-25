@@ -37,7 +37,9 @@ konkrétní výzkumné fáze navazující dávky.
    zůstane bezpečně pozastavené a nic se samo nepotvrdí ani neprovede.
 7. Znovu otevřete kartu. Teprve **Potvrdit přesnou revizi** po připojení živého
    UI smí atomicky vytvořit revizi 2, zvýšit limit a přidat druhý krok. Proveďte
-   jej se samostatným schválením jako v bodu 3.
+   jej se samostatným schválením jako v bodu 3. Spotřeba času musí odpovídat
+   součtu dob skutečně spuštěných kroků; čekání na potvrzení revize ani doba
+   restartu se od zbývajícího času nesmí odečíst.
 8. Zvolte **Zopakovat poslední krok**. Návrh musí použít nové step ID, uvést
    `repeat_of`, zvýšit limit na 3 a znovu vyžádat samostatné potvrzení revize.
    Po potvrzení a provedení zůstane původní krok i celá historie viditelná.

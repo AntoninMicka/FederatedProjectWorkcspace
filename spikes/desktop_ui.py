@@ -4232,6 +4232,7 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
  }
  const research=workflow.policy?.research || null;
  const step=currentSearchAutonomyStep(workflow),preview=step?.input?.preview || {};
+ const view=autonomyWorkflowView(workflow);
  const panel=document.createElement('section');panel.className='search-autonomy';panel.dataset.state=workflow.state;
  const title=document.createElement('h4');title.textContent=
   `${workflow.mode==='automatic'?'Automatický':'Ruční'} ${research ?
@@ -4243,8 +4244,8 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
  if(research)fact('Profil',`${researchProfileLabels[research.profile_id] || research.profile_id} · ${research.profile_version}`);
  fact('Cíl',preview.binding ? `${preview.binding.endpoint || preview.binding.adapter || 'SearXNG'} · ${preview.binding.target_id || '—'}` : '—');
  fact('Privacy',step?.privacy);fact('Kolo',preview.round_index);
- fact('Limit',`${workflow.spent_cost}/${workflow.budget.max_cost_units} cost · nejvýše ${workflow.budget.max_steps} kroků · ${workflow.budget.max_seconds} s`);
- fact('Zbývá',`${workflow.remaining_cost} cost · ${workflow.remaining_steps} kroků · ${workflow.remaining_seconds} s`);
+ fact('Limit',`${workflow.spent_cost}/${workflow.budget.max_cost_units} cost · nejvýše ${workflow.budget.max_steps} kroků · ${Number(workflow.spent_seconds||0).toFixed(1)}/${workflow.budget.max_seconds} s běhu`);
+ fact('Zbývá',`${workflow.remaining_cost} cost · ${workflow.remaining_steps} kroků · ${Number(workflow.remaining_seconds||0).toFixed(1)} s běhu`);
  if(workflow.state==='countdown'&&step?.not_before){const term=document.createElement('dt');term.textContent='Odeslání za';
   const detail=document.createElement('dd'),count=document.createElement('strong');count.className='search-autonomy-countdown';
   count.dataset.notBefore=step.not_before;detail.append(count);facts.append(term,detail);}
@@ -4324,15 +4325,18 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
   const box=document.createElement('section');box.className='research-draft';
   const heading=document.createElement('strong');heading.textContent='Návrh výzkumné zprávy';
   const note=document.createElement('p');note.textContent='Pouhé zobrazení ani otevření v editoru projekt nemění.';
-  const show=taskButton('Zobrazit návrh zprávy',async()=>{const draft=await projectRequest('/v1/autonomy/research/draft',{workflow_id:workflow.workflow_id,step_id:report.step_id});
+  const display=draft=>{
    let pre=box.querySelector('pre');if(!pre){pre=document.createElement('pre');box.append(pre);}pre.textContent=draft.markdown;
    let provenance=box.querySelector('small');if(!provenance){provenance=document.createElement('small');box.append(provenance);}provenance.textContent=`run ${draft.run_id} · zdroje ${draft.selected_source_run_ids.join(', ')} · citace ${draft.citations.length}`;
    if(!box.querySelector('[data-open-research-draft]')){const open=taskButton('Otevřít jako neuložený dokument',()=>openResearchDraftEditor(draft));open.dataset.openResearchDraft='true';box.append(open);}
-  });box.append(heading,note,show);drafts.append(box);
+  };
+  const show=taskButton('Zobrazit návrh zprávy',async()=>{const draft=await projectRequest('/v1/autonomy/research/draft',{workflow_id:workflow.workflow_id,step_id:report.step_id});
+   view.researchDrafts.set(report.step_id,draft);display(draft);
+  });box.append(heading,note,show);const cached=view.researchDrafts.get(report.step_id);if(cached)display(cached);drafts.append(box);
  }
  panel.append(title,facts,progress,phases,revisionPanels,drafts,actions);
  if((workflow.plan_revisions || []).length>1){const history=document.createElement('details');
-  const view=autonomyWorkflowView(workflow);history.open=view.planReasonsOpen;
+  history.open=view.planReasonsOpen;
   history.addEventListener('toggle',()=>{view.planReasonsOpen=history.open;});
   const summary=document.createElement('summary');summary.textContent='Důvody změn plánu';
   const list=document.createElement('ol');for(const revision of workflow.plan_revisions.slice(1)){
@@ -5542,8 +5546,10 @@ const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
 function autonomyWorkflowView(workflow){
  let view=autonomyViewState.get(workflow.workflow_id);
  if(!view){view={planRevision:workflow.plan_revision,detailOpen:false,
-  revisionOpen:false,planReasonsOpen:false,searchRevisionsOpen:false,draft:null};
+  revisionOpen:false,planReasonsOpen:false,searchRevisionsOpen:false,draft:null,
+  researchDrafts:new Map()};
   autonomyViewState.set(workflow.workflow_id,view);}
+ if(!view.researchDrafts)view.researchDrafts=new Map();
  if(view.planRevision!==workflow.plan_revision)Object.assign(view,{
   planRevision:workflow.plan_revision,revisionOpen:false,draft:null});
  return view;
@@ -5581,8 +5587,8 @@ function dynamicRevisionDraft(workflow,kind){
   if(!source)throw new Error('Revize kroku vyžaduje alespoň jeden dokončený krok.');
   proposal.budget.max_steps=Math.max(proposal.budget.max_steps,workflow.steps.length+1);
   proposal.budget.max_cost_units=Math.max(proposal.budget.max_cost_units,workflow.spent_cost+source.cost_units);
-  const activated=Date.parse(workflow.activated_at||''),elapsedSeconds=Number.isFinite(activated)?Math.max(0,Math.ceil((Date.now()-activated)/1000)):0;
-  proposal.budget.max_seconds=Math.min(86400,Math.max(proposal.budget.max_seconds+300,elapsedSeconds+300));
+  const spentSeconds=Math.max(0,Math.ceil(Number(workflow.spent_seconds)||0));
+  proposal.budget.max_seconds=Math.min(86400,Math.max(proposal.budget.max_seconds+300,spentSeconds+300));
   proposal.step={step_id:crypto.randomUUID(),action:{...source.action},privacy:source.privacy,
    cost_units:source.cost_units,depends_on:[source.step_id],input:structuredClone(source.input)};
   if(kind==='repeat')proposal.repeat_of=source.step_id;

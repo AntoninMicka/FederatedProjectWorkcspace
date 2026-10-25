@@ -477,6 +477,8 @@ class ChatServiceTests(unittest.TestCase):
             'selected_source_run_ids'], [public_request['run_id']])
         self.assertIn('Full fact', research_calls[0]['prompt'])
         self.assertIn('untrusted data', research_calls[0]['prompt'].lower())
+        self.assertIn('Response language requirement: write the answer in Czech (cs-CZ).',
+                      research_calls[0]['prompt'])
         self.assertEqual(researcher.research_model_action(
             'research.select-relevant', research_request, execution), research_result)
         self.assertEqual(len(research_calls), 1)
@@ -506,6 +508,8 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(restored_draft['citations'], report_body['citations'])
         self.assertFalse(restored_draft['project_changed'])
         self.assertEqual(len(report_calls), 1)
+        self.assertIn('Response language requirement: write the answer in Czech (cs-CZ).',
+                      report_calls[0]['prompt'])
         with self.assertRaisesRegex(ValidationError, 'differs'):
             reporter.research_report_draft(report_request['run_id'], '0' * 64)
 
