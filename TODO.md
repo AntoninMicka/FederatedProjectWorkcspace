@@ -129,10 +129,14 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   zdánlivý reset po restartu: task outcome, nulové orchestration vlákno i
   autonomy journal zůstaly durable, ale UI po otevření projektu žádné uložené
   vlákno nevybralo. Během čekání šlo navíc opakovaně spustit přípravu stejného
-  profilu a vznikly tři souběžné navržené fronty. UI nyní obnoví nejnovější
+  profilu a postupně vznikly čtyři souběžné navržené fronty. UI nyní obnoví nejnovější
   aktivní projektové vlákno a jeho task outcomes, bezpečně pozastavený workflow
   nabídne k pokračování a souběžnou přípravu pro stejné task ID odmítne se
   živou stavovou položkou. Existující duplicitní fronty se automaticky nemažou.
+  První opakování fyzické kontroly ještě odhalilo, že obnovení načetlo task
+  outcomes, ale autonomy journal až po samostatném kliknutí na hlavní záložku
+  Chat; bez něj se proto nezobrazila akce `Aktivovat plán`. Obnova projektu nyní
+  načte i projektovou frontu před prvním vykreslením obnoveného workflow.
   Ověření doplnění: tři cílené desktopové testy OK, `python3 -m py_compile
   spikes/desktop_ui.py`, `node --check` generovaného JavaScriptu,
   `python3 -m unittest discover -s tests -v` (797 testů OK, 28 skipped) a

@@ -5077,6 +5077,7 @@ async function loadChat(){
   taskOutcomes=restored?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
   renderThreadList(ordered);renderTaskPublicSources();renderChat(restored);
   if(restored){document.querySelector('#chat-mode').value=restored.classification;refreshChatModeControls();}
+  if(projectId)await loadAutonomyQueue(false);
   chatOperationStatus.textContent=restored?
    'Obnoveno poslední uložené vlákno projektu. Rozpracovaná automatika po restartu zůstává bezpečně pozastavená.':'';
  }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}

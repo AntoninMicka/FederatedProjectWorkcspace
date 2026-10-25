@@ -936,6 +936,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("project_id:thread.project_id,thread_id:thread.thread_id", JS)
         self.assertIn("projectId?projectRequest('/v1/tasks/list',{project_id:projectId})", JS)
         self.assertIn("tasks.outcomes.filter(item=>item.thread_id===restored.thread_id)", JS)
+        self.assertIn('if(projectId)await loadAutonomyQueue(false)', JS)
         self.assertIn('Obnoveno poslední uložené vlákno projektu.', JS)
         self.assertIn("projectRequest('/v1/chat/delete/preview'", JS)
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
