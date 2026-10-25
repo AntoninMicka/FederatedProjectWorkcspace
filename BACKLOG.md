@@ -70,7 +70,58 @@ WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
 PoC validated a doručena PR #88 jako merge commit `5d74144`; evidence je ve
 WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regrese
 25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
-WORK_LOG; PR do `develop` nebyl vytvořen ani sloučen.
+WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
+
+Plánovací horizont po PR #89 tvoří tři samostatné dávky v pořadí
+`OPS-NODE-MONITOR-01` → `F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`.
+Nejprve se zviditelní skutečný runtime, potom vznikne provider-neutral katalog
+a teprve nad jeho stabilní identitou nabídek se přidá AtlasCloud. Aktivace jedné
+dávky nemění stav dalších dvou. Úplný záznam `OPS-NODE-MONITOR-01` zůstává v
+navazujících mezerách níže; dvě nové dávky jsou připraveny zde:
+
+- [ ] [planned] **F-M3-MODEL-CATALOG-01 — dynamické načtení a sdílený
+   znalostní katalog modelů (cílová úroveň: designed → implemented → PoC
+   validated).** Zobecnit existující bounded `OpenAIModelCatalog` na
+   provider-neutral read-only discovery cache a oddělit tři identity:
+   kanonický model, konkrétní providerovou nabídku modelu a lokální backendový
+   binding. Jeden znalostní záznam tak může odkazovat na více nabídek téhož
+   modelu přes Ollamu, OpenAI, AtlasCloud nebo další adapter, ale shoda názvu
+   sama modely nikdy nesloučí. Každá capability, limit, podporovaný protokol a
+   modality nese zdroj, revizi/čas zjištění a stav `reported`, `reviewed`,
+   `conflicting` nebo `unknown`. Hybridní vyhodnocení použije ověřený údaj
+   backendu; jen pokud jej backend neposkytuje, smí použít explicitně
+   zkontrolovaný údaj znalostního katalogu. Rozpor se nesjednotí optimistickou
+   unií a bezpečnostně významná neznámá hodnota zůstane nepodporovaná.
+   Providerová dostupnost, cena a účetní údaje zůstávají oddělené od schopností
+   modelu. Discovery cache i uživatelská znalostní vrstva budou node-local mimo
+   projektový Git, atomicky publikované a čitelné i jako stale po neúspěšném
+   refreshi; přesná autorita, editace, import/export a migrace se uzavřou v
+   návrhové části dávky. UI dynamicky načte modely, ukáže zdroj a čerstvost
+   schopností a zachová ruční explicitní model. Změna katalogu nesmí změnit
+   potvrzený binding, rozběhnutý request ani sama zvolit jiný backend.
+   Akceptace: více nabídek jednoho modelu, stejné jméno různých modelů,
+   provider bez capabilities, konflikt provider/katalog, odstraněný model,
+   stránkování/limit/rate-limit, offline a stale cache, restart v každém
+   persistentním přechodu, změna credential/binding revize a explicitní volba
+   nabídky bez fallbacku. Návrh větve: `feature/f-m3-model-catalog-01`.
+- [ ] [planned] **F-M3-ATLASCLOUD-01 — AtlasCloud textový backend (cílová
+   úroveň: designed → implemented → PoC validated).** Po
+   `F-M3-MODEL-CATALOG-01` přidat samostatný `external-provider` adapter a
+   binding pro AtlasCloud nad společným Context Manifestem, privacy/RBAC
+   kontrolou, credential storem, backend run journalem a dynamickým katalogem.
+   První řez podporuje pouze textové LLM přes providerem pro konkrétní nabídku
+   doložený protokol; image/video/audio/3D, MCP a automatické quick-generate
+   zůstávají mimo tuto dávku. Endpoint/host, protokol, modelová nabídka,
+   credential revize, limity a streaming capability musí být přesné součásti
+   bindingu a request digestu; redirect, neznámý protokol, tajný převod mezi
+   protokoly, retry stavu `unknown` a fallback na jinou nabídku jsou zakázané.
+   Akceptace: konfigurace a odstranění API klíče bez jeho úniku, providerové
+   discovery pouze přes doložené rozhraní a jinak zkontrolovaný katalog či
+   ruční model, podporovaný a nepodporovaný protokol, text/JSON a
+   případný stream podle deklarované capability, privacy třídy, timeout/
+   přerušená odpověď/restart, providerem odmítnutý request, změna či zmizení
+   nabídky, usage dostupné v run response a fyzický AtlasCloud smoke s
+   kontrolou durable historie. Návrh větve: `feature/f-m3-atlascloud-01`.
 
 ## Zjištěné mezery a navazující ověření
 
