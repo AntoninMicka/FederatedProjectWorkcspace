@@ -167,7 +167,16 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   testy OK, `node --check` generovaného JavaScriptu,
   `python3 -m unittest discover -s tests -v` (799 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Zbývající fáze realistické akceptace této
-  položky zůstávají otevřené.
+  položky zůstávají otevřené. Tentýž průchod po ověření evidence zůstal ve
+  stavu `queued` bez materializovaného kroku a nevytvořil závěrečnou zprávu:
+  klientský scheduler předčasně vracel dynamický plán bez pending kroku a
+  historické známé chyby readeru nepovažoval za uzavřené pokusy. Automatika
+  nyní v tomto přesném stavu vyžádá backendovou idempotentní revizi; `unknown`
+  mezi uzavřené pokusy nezařazuje. Ověření opravy: dva cílené UI testy OK,
+  `node --check` generovaného JavaScriptu,
+  `python3 -m unittest discover -s tests -v` (799 testů OK, 28 skipped) a
+  `git diff --check` bez chyb. Fyzicky zbývá potvrdit pokračování přes výběr
+  relevantních zdrojů a zobrazení návrhu závěrečné zprávy.
 
 ## Akceptace
 

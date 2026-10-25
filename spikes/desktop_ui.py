@@ -5590,9 +5590,9 @@ function scheduleAutomaticWorkflow(workflow){
  if(workflow.mode!=='automatic'||autonomyQueue.global_paused||!autonomyWorkflowVisible(workflow))return;
  if(workflow.revision_proposals?.some(item=>item.state==='pending'))return;
  const step=workflow.steps.find(item=>!['completed','failed','unknown','cancelled'].includes(item.state));
- if(workflow.plan_schema_version===3&&!step)return;
  let delay=null;
- if(workflow.state==='queued'&&!step&&workflow.steps.every(item=>item.state==='completed'))delay=350;
+ const settled=workflow.steps.every(item=>['completed','failed','cancelled'].includes(item.state));
+ if(workflow.state==='queued'&&!step&&settled)delay=350;
  if(workflow.state==='queued'&&step?.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
  if(workflow.state==='countdown'&&step?.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
  if(delay===null)return;
