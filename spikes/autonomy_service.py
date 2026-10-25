@@ -319,7 +319,9 @@ class AutonomyService:
         if (evidence_steps and 'research.select-relevant' in allowed
                 and last_action == 'research.verify-evidence'):
             result = evidence_steps[-1]['result']
-            selection = {**research,
+            selection = {'research_id': research['research_id'],
+                'goal': research['goal'],
+                'goal_sha256': research['goal_sha256'],
                 'run_id': str(uuid5(UUID(planner_run_id), 'selection:run')),
                 'manifest_id': str(uuid5(UUID(planner_run_id), 'selection:manifest')),
                 'evidence': result['evidence'],
@@ -335,7 +337,9 @@ class AutonomyService:
             selected = selection_steps[-1]['result']; selection = selected['selection']
             if ('research.analyze' in allowed
                     and last_action == 'research.select-relevant'):
-                analysis = {**research,
+                analysis = {'research_id': research['research_id'],
+                    'goal': research['goal'],
+                    'goal_sha256': research['goal_sha256'],
                     'run_id': str(uuid5(UUID(planner_run_id), 'analysis:run')),
                     'manifest_id': str(uuid5(UUID(planner_run_id), 'analysis:manifest')),
                     'selection': selection,
@@ -347,7 +351,9 @@ class AutonomyService:
                                         'research.analyze'}):
                 analyzed = analysis_steps[-1]['result'] if analysis_steps else None
                 task_id = search_steps[0]['result']['task_id']
-                report = {**research,
+                report = {'research_id': research['research_id'],
+                    'goal': research['goal'],
+                    'goal_sha256': research['goal_sha256'],
                     'run_id': str(uuid5(UUID(planner_run_id), 'report:run')),
                     'manifest_id': str(uuid5(UUID(planner_run_id), 'report:manifest')),
                     'selected_source_run_ids': selection['selected_source_run_ids'],

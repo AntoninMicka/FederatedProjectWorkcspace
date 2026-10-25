@@ -208,6 +208,18 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   `python3 -m py_compile` dotčených modulů,
   `python3 -m unittest discover -s tests -v` (802 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Realistické pokračování zůstává k opakování.
+  Další opakování doložilo, že idempotentní resume už do backendového
+  dorovnání vstoupilo, ale to skončilo konkrétní validační chybou `Unknown or
+  missing research selection input field`: kandidát pro výběr zdrojů přebíral
+  z profilu i `profile_id` a `profile_version`, které jeho uzavřené vstupní
+  schéma nepovoluje. Kandidáty výběru, analýzy a závěrečné zprávy nyní skládá
+  backend explicitně pouze z polí jejich schémat; regresní test ověřuje přesné
+  množiny polí a doménovou validaci všech tří následníků. Ověření opravy: čtyři
+  cílené kandidátní a resume testy OK, `python3 -m py_compile` dotčených
+  modulů, `python3 -m unittest discover -s tests -v` (803 testů OK,
+  28 skipped). Fyzicky zbývá po restartu potvrdit bezpečnou revizi vyčerpaného
+  časového rozpočtu a průchod přes výběr relevantních zdrojů až k návrhu
+  závěrečné zprávy.
 
 ## Akceptace
 

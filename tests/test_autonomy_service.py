@@ -18,6 +18,7 @@ from spikes.metadata import ValidationError
 from spikes.project_creation import ProjectCreation
 from spikes.projects import Projects
 from spikes.public_source import PublicSourceUnsupported
+from spikes.research_workflow import validate_research_input
 from spikes.storage import Git
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
 from spikes.local_api import running_api
@@ -699,6 +700,59 @@ class AutonomyServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'not runnable'):
             service.advance(self.workflow_id)
         self.assertEqual([item[0] for item in chat.calls].count('confirm'), 1)
+
+    def test_research_candidates_exclude_profile_only_fields(self):
+        research_id, planner_run_id = str(uuid4()), str(uuid4())
+        task_id, source_run_id = str(uuid4()), str(uuid4())
+        goal = 'Prepare a bounded report draft.'
+        research = {'research_id': research_id, 'goal': goal,
+            'goal_sha256': hashlib.sha256(goal.encode()).hexdigest(),
+            'profile_id': 'read-and-verify-v1', 'profile_version': '1.0'}
+        source = {'task_id': task_id, 'search_id': str(uuid4()),
+            'source_id': 'source-' + 'a' * 32, 'run_id': source_run_id,
+            'adapter': 'static-html-v1', 'binding_revision': 'reader-r1',
+            'url': 'https://example.test/evidence',
+            'origin': 'https://example.test', 'raw_sha256': '1' * 64,
+            'text_sha256': '2' * 64, 'projection_sha256': '3' * 64}
+        evidence = {'sources': [source], 'relations': [], 'warnings': []}
+        selection = {'selected_source_run_ids': [source_run_id],
+            'rejected': [], 'limitations': []}
+
+        def step(action_id, result):
+            return {'action': {'id': action_id}, 'state': 'completed',
+                    'result': result}
+
+        cases = [
+            ('research.select-relevant', [step('research.verify-evidence', {
+                'evidence': evidence, 'evidence_sha256': digest(evidence)})]),
+            ('research.analyze', [step('research.select-relevant', {
+                'selection': selection, 'selection_sha256': digest(selection)})]),
+            ('research.compose-report', [
+                step('search.iterative-query', {'task_id': task_id}),
+                step('research.select-relevant', {'selection': selection,
+                    'selection_sha256': digest(selection)}),
+                step('research.analyze', {'run_id': str(uuid4()),
+                    'analysis_sha256': '4' * 64})]),
+        ]
+        base_fields = {'research_id', 'goal', 'goal_sha256', 'run_id',
+                       'manifest_id'}
+        action_fields = {
+            'research.select-relevant': {'evidence', 'evidence_sha256'},
+            'research.analyze': {'selection', 'selection_sha256'},
+            'research.compose-report': {'selected_source_run_ids',
+                'selection_sha256', 'analysis_run_id', 'analysis_sha256',
+                'task_id'},
+        }
+        for action_id, steps in cases:
+            with self.subTest(action_id=action_id):
+                workflow = {'project_id': self.project_id, 'privacy': 'project',
+                    'policy': {'actions': [{'id': action_id}]}, 'steps': steps}
+                candidates = self.service._research_candidates(
+                    workflow, research, planner_run_id)
+                self.assertEqual(len(candidates), 1)
+                value = candidates[0]['candidate']['input']
+                self.assertEqual(set(value), base_fields | action_fields[action_id])
+                validate_research_input(action_id, value)
 
     def test_exact_local_output_fields_are_rechecked_by_domain_adapter(self):
         role_workflow_id = str(uuid4())
