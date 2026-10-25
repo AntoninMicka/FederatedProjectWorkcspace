@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/test-execution-01-parallel-ci` z `develop`
 `0405d14` a dosáhla lokální úrovně **PoC validated**. Feature akceptace je
-dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+dokončená; byla doručena PR #94 do `develop` jako commit `b19d46a`.
 
 - [x] [completed] **TEST-EXECUTION-01-A — deterministické shardy
   (implemented).** `scripts/test_shards.py` automaticky objeví každý současný
@@ -18,7 +18,7 @@ dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
   velikost zdroje jako stabilní lokální odhad nákladů; nejde o tvrzení přesné
   predikce runtime.
 - [x] [completed] **TEST-EXECUTION-01-B — izolovaná paralelní CI
-  (implemented, skutečný CI běh čeká na PR).** GitHub Actions používá čtyři
+  (PoC validated).** GitHub Actions používá čtyři
   matrix joby s `fail-fast: false`, samostatnými checkouty/procesy, pip cache a
   20minutovým limitem. Souhrnný job zachovává původní required-check jméno
   `tests` a uspěje pouze po úspěchu všech shardů.
@@ -41,8 +41,10 @@ přeskočených**; jejich časy byly 81,543 / 34,037 / 44,740 / 56,847 s, takže
 lokální wall-time určoval první shard. Kanonický sekvenční discovery běh prošel
 stejných **853 testů, 29 přeskočeno, za 207,997 s**. Souběžná simulace tedy
 zkrátila naměřený lokální wall-time o 60,8 %, ale není měřením GitHub runnerů,
-instalace závislostí ani fronty Actions. Skutečnou CI funkčnost a čas lze
-potvrdit až joby otevřeného PR.
+instalace závislostí ani fronty Actions. V PR #94 následně uspěly všechny čtyři
+matrix joby `tests (1/4)` až `tests (4/4)`, licensing i souhrnný required check
+`tests`; tím je ověřen i skutečný GitHub Actions tok, nikoli však srovnatelné
+měření jeho celkového wall-time proti původní CI konfiguraci.
 
 `bash -n run.sh`, `py_compile` nového runneru/testu, parsování CI YAML přes
 PyYAML a `git diff --check` prošly. Shardy jsou izolované v CI; lokální
