@@ -127,6 +127,14 @@ samostatnou existující operací s přesným preview, expected HEAD, content ha
 provenance a potvrzením. Aktivace profilu, countdown ani plannerovo `finish`
 nejsou souhlasem s publikací.
 
+Chat promítá dokončená kola hledání, načtené zdroje, terminální výzkumné kroky,
+potvrzené revize a závěrečnou odpověď do jediné chronologické časové osy podle
+durable časů a stabilních ID. Starší záznam se kvůli novému kroku nepřepisuje
+ani nevytváří druhou vnořenou historii v původním návrhu hledání. Měnit se smí
+jen právě streamovaná odpověď, výslovně dočasná stavová zpráva a jedna aktuální
+ovládací karta workflow; po restartu se historie znovu odvodí z doménových
+journalů a task projection.
+
 ## Persistentní autority a crash boundaries
 
 Nevznikne nový `ResearchRuns` journal. `autonomy-queue.sqlite` je autoritou

@@ -255,6 +255,18 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   OK; `python3 -m unittest discover -s tests -v` (805 testů OK, 28 skipped).
   Fyzicky zbývá po restartu ověřit nový český návrh, jeho nezavírající se
   zobrazení přes heartbeat a nezměněný zbývající čas během čekání na uživatele.
+  Poslední připomínka fyzické kontroly sjednotila časovou posloupnost chatu:
+  dokončená kola hledání, načtené zdroje, terminální výzkumné kroky, potvrzené
+  revize, nahrazené dotazy a konečná odpověď se nyní promítají jako samostatné
+  stabilní záznamy jediné hlavní časové osy podle durable časů a ID. Původní
+  `Návrh webového hledání` už nedrží druhou vnořenou historii. Na aktuálním
+  konci se může měnit pouze jedna živá ovládací karta workflow; stream a
+  dočasná časovaná stavová zpráva zůstávají záměrnými výjimkami. Návrh zprávy
+  se otevírá přímo ze svého dokončeného kroku. Ověření doplnění: širší sada
+  desktopu a autonomie (63 testů OK, 3 skipped), `python3 -m py_compile`
+  dotčených souborů, `node --check` generovaného JavaScriptu a
+  `python3 -m unittest discover -s tests -v` (805 testů OK, 28 skipped).
+  Fyzicky zbývá po restartu potvrdit pořadí a stabilitu bublin při heartbeat.
 
 ## Akceptace
 

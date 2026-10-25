@@ -1077,7 +1077,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .search-sources li{margin:12px 0}.search-sources strong,.search-sources code,.search-sources small{display:block}.search-sources code{margin:4px 0;color:#245c73;white-space:normal}
 #public-source-preview pre,#public-source-result pre{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
 .public-source-view-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.public-source-view-tabs button{padding:8px 12px}.public-source-structured{max-height:min(58vh,620px);overflow:auto;border:1px solid #dce3e9;border-radius:10px;background:#fff;padding:16px}.public-source-structured h4,.public-source-structured h5,.public-source-structured h6{margin:18px 0 8px;color:#18384a}.public-source-structured>h4:first-child{margin-top:0}.public-source-block{margin:10px 0;overflow-wrap:anywhere}.public-source-block>small{display:block;margin-bottom:4px;color:#657d89}.public-source-block blockquote{margin:8px 0;border-left:3px solid #8db6c8;padding-left:12px}.public-source-block pre{background:#f4f7fa;padding:10px;border-radius:7px}.public-source-list-item{display:grid;grid-template-columns:2rem minmax(0,1fr);gap:4px}.public-source-list-marker{text-align:right;color:#456276}.public-source-table-wrap{overflow:auto;margin:12px 0}.public-source-table{border-collapse:collapse;min-width:min(100%,520px);background:#fff}.public-source-table caption{text-align:left;font-weight:700;margin-bottom:6px}.public-source-table th,.public-source-table td{border:1px solid #bfcdc9;padding:7px 9px;text-align:left;vertical-align:top}.public-source-table th{background:#edf5f3}
-.search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}.search-autonomy-controls{border:1px solid #bfcdc9;border-radius:9px;padding:10px}.search-autonomy-controls label{margin-right:10px}.search-autonomy{width:100%;border:1px solid #bfcdc9;border-left:5px solid #c69224;border-radius:10px;background:#f8fbfc;padding:12px}.search-autonomy[data-state="countdown"]{border-left-color:#2d8a62}.search-autonomy h4{margin:0 0 8px}.search-autonomy-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:8px 0}.search-autonomy-facts dt{font-weight:700}.search-autonomy-facts dd{margin:0;overflow-wrap:anywhere}.search-autonomy progress{width:100%;accent-color:#176b60}.search-autonomy .task-actions input{min-width:min(28rem,100%);flex:1}.search-next-query{width:100%;display:grid;gap:7px}.research-phases{display:grid;gap:6px;padding:0;list-style:none}.research-phase{border-left:4px solid #8aa1ad;background:#fff;border-radius:7px;padding:7px 9px}.research-phase[data-state="completed"]{border-left-color:#2d8a62}.research-phase[data-state="queued"],.research-phase[data-state="countdown"],.research-phase[data-state="awaiting-approval"]{border-left-color:#c69224}.research-phase[data-state="failed"],.research-phase[data-state="unknown"]{border-left-color:#b74435}.research-phase small{display:block;color:#526575;overflow-wrap:anywhere}.research-revision,.research-draft{border:1px solid #d6b36a;border-radius:8px;background:#fffaf0;padding:10px;margin-top:10px}.research-revision code{display:block;overflow-wrap:anywhere}.research-draft pre{max-height:360px;overflow:auto;white-space:pre-wrap;background:#fff;padding:10px;border-radius:7px}
+.search-budget{font-size:12px;color:#456276}.search-round{border-left:3px solid #8db6c8;margin:12px 0;padding:4px 0 4px 12px}.search-round h4{margin:0 0 4px}.search-round>small,.search-evaluation small{display:block;color:#456276;overflow-wrap:anywhere}.search-evaluation{background:#f4f7fa;border-radius:8px;margin-top:8px;padding:10px}.search-evaluation p{margin:6px 0}.search-autonomy-controls{border:1px solid #bfcdc9;border-radius:9px;padding:10px}.search-autonomy-controls label{margin-right:10px}.search-autonomy{width:100%;border:1px solid #bfcdc9;border-left:5px solid #c69224;border-radius:10px;background:#f8fbfc;padding:12px}.search-autonomy[data-state="countdown"]{border-left-color:#2d8a62}.search-autonomy h4{margin:0 0 8px}.search-autonomy-facts{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 10px;margin:8px 0}.search-autonomy-facts dt{font-weight:700}.search-autonomy-facts dd{margin:0;overflow-wrap:anywhere}.search-autonomy progress{width:100%;accent-color:#176b60}.search-autonomy .task-actions input{min-width:min(28rem,100%);flex:1}.search-next-query{width:100%;display:grid;gap:7px}.timeline-record{border-left:5px solid #2d8a62}.timeline-record[data-state="failed"],.timeline-record[data-state="unknown"]{border-left-color:#b74435}.timeline-record>small{display:block;color:#526575;overflow-wrap:anywhere}.timeline-record>pre{max-height:360px;overflow:auto;white-space:pre-wrap;background:#fff;padding:10px;border-radius:7px}.research-revision{border:1px solid #d6b36a;border-radius:8px;background:#fffaf0;padding:10px;margin-top:10px}.research-revision code{display:block;overflow-wrap:anywhere}
 #resource-monitor{flex:none;margin-top:10px;border-top:1px solid #365066;padding-top:9px}
 #resource-monitor-open{display:block;width:100%;padding:8px 9px;border:1px solid #365066;background:#0f2030;color:#dce8f1;text-align:left}
 #resource-monitor-open:hover{background:#1c3549}#resource-monitor-open>*{pointer-events:none}
@@ -3923,9 +3923,20 @@ function fillExternalModels(catalog){
  const list=document.querySelector('#external-models');list.replaceChildren();
  for(const model of catalog?.models || []){const option=document.createElement('option');option.value=model;list.append(option);}
 }
-function buildChatTimeline(thread,projections){
+function autonomyTaskId(workflow){
+ for(const step of workflow?.steps || []){
+  const taskId=step.input?.request?.task_id || step.input?.task_id;
+  if(taskId)return taskId;
+ }
+ return null;
+}
+function projectionSearchRounds(projection){
+ if(projection.search_workflow?.rounds)return projection.search_workflow.rounds;
+ return projection.outcome?.kind==='web-search-answer' ? projection.outcome.rounds || [] : [];
+}
+function buildChatTimeline(thread,projections,workflows=[]){
  const messages=thread?.messages || [],messageIds=new Set(messages.map(item=>item.message_id));
- const tasksByPrompt=new Map(),entries=[];
+ const tasksByPrompt=new Map(),entries=[],projectionIds=new Set(projections.map(item=>item.task_id));
  for(const projection of projections){
   const messageId=projection.prompt?.message_id;
   if(messageIds.has(messageId)){
@@ -3938,14 +3949,52 @@ function buildChatTimeline(thread,projections){
     created_at:source.result?.fetched_at || projection.created_at,
     stable_id:source.run_id,value:{task_id:projection.task_id,source}});
   }
+  const rounds=projectionSearchRounds(projection);
+  for(const round of rounds)entries.push({kind:'search-round',
+   created_at:round.searched_at || projection.created_at,
+   stable_id:round.search_id,value:{projection,round}});
+  if(projection.outcome?.kind==='web-search-answer')entries.push({kind:'search-answer',
+   created_at:rounds.at(-1)?.searched_at || projection.created_at,
+   stable_id:projection.task_id+':answer',value:projection});
+ }
+ for(const workflow of workflows){
+  const taskId=autonomyTaskId(workflow);
+  if(!projectionIds.has(taskId))continue;
+  for(const revision of (workflow.plan_revisions || []).slice(1))entries.push({
+   kind:'research-revision',created_at:revision.applied_at || workflow.created_at,
+   stable_id:`${workflow.workflow_id}:revision:${revision.revision}`,
+   value:{workflow,revision}});
+  for(const revision of workflow.revisions || [])entries.push({
+   kind:'research-edit',created_at:revision.cancelled_at || workflow.created_at,
+   stable_id:`${workflow.workflow_id}:edit:${revision.ordinal}:${revision.revision}`,
+   value:{workflow,revision}});
+  for(const step of workflow.steps || []){
+   if(!['completed','failed','unknown','cancelled'].includes(step.state))continue;
+   const action=step.action?.id;
+   const projection=projections.find(item=>item.task_id===taskId);
+   const representedByRound=action==='search.iterative-query'&&step.state==='completed'&&
+    projectionSearchRounds(projection || {}).some(round=>round.search_id===step.input?.request?.search_id);
+   const representedBySource=action==='source.fetch-public'&&step.state==='completed'&&
+    (projection?.public_sources || []).some(source=>source.run_id===step.result?.run_id);
+   if(representedByRound||representedBySource)continue;
+   entries.push({kind:'research-step',
+    created_at:step.finished_at || step.started_at || workflow.created_at,
+    stable_id:step.step_id,value:{workflow,step}});
+  }
+  entries.push({kind:'research-control',created_at:workflow.updated_at || workflow.created_at,
+   stable_id:`${workflow.workflow_id}:control`,value:{workflow,
+    projection:projections.find(item=>item.task_id===taskId)}});
  }
  for(const [index,item] of messages.entries())entries.push({kind:'message',
   created_at:item.created_at,stable_id:String(index).padStart(12,'0'),value:item,
   tasks:tasksByPrompt.get(item.message_id) || []});
+ const kindOrder={message:0,task:1,'search-round':2,'public-source':3,
+  'research-revision':4,'research-edit':5,'research-step':6,'search-answer':7,
+  'research-control':8};
  entries.sort((left,right)=>{
   const byTime=Date.parse(left.created_at)-Date.parse(right.created_at);
   if(byTime)return byTime;
-  if(left.kind!==right.kind)return left.kind==='message'?-1:1;
+  if(left.kind!==right.kind)return (kindOrder[left.kind] ?? 99)-(kindOrder[right.kind] ?? 99);
   return left.stable_id.localeCompare(right.stable_id);
  });
  return entries;
@@ -3977,9 +4026,15 @@ function renderThreadMessage(item,thread){
 function renderChat(thread){
  activeThread=thread || null;chatMessages.replaceChildren();
  if(responseLanguagePolicy)applyResponseLanguageStatus({response_language_policy:responseLanguagePolicy});
- for(const entry of buildChatTimeline(thread,taskOutcomes)){
+ for(const entry of buildChatTimeline(thread,taskOutcomes,autonomyQueue?.workflows || [])){
   if(entry.kind==='task'){renderTaskOutcome(entry.value,true);continue;}
   if(entry.kind==='public-source'){renderPublicSourceTimelineEntry(entry.value);continue;}
+  if(entry.kind==='search-round'){renderSearchRoundTimelineEntry(entry.value);continue;}
+  if(entry.kind==='search-answer'){renderSearchAnswerTimelineEntry(entry.value);continue;}
+  if(entry.kind==='research-step'){renderResearchStepTimelineEntry(entry.value);continue;}
+  if(entry.kind==='research-revision'){renderResearchRevisionTimelineEntry(entry.value);continue;}
+  if(entry.kind==='research-edit'){renderResearchEditTimelineEntry(entry.value);continue;}
+  if(entry.kind==='research-control'){renderResearchControlTimelineEntry(entry.value);continue;}
   chatMessages.append(renderThreadMessage(entry.value,thread));
   for(const projection of entry.tasks)renderTaskOutcome(projection,false);
  }
@@ -4225,14 +4280,13 @@ function openResearchDraftEditor(draft){
    tags:['research']}},true);
  artifactEditorStatus.textContent='Neuložený návrh. Projekt se změní až po stisknutí Uložit.';
 }
-function renderSearchAutonomy(container,projection,query,parentSearchId){
- const workflow=searchAutonomyWorkflow(projection.task_id);
+function renderSearchAutonomy(container,projection,query,parentSearchId,workflowOverride=null){
+ const workflow=workflowOverride || searchAutonomyWorkflow(projection.task_id);
  if(!workflow){
   renderResearchPreparation(container,projection,query,parentSearchId);return;
  }
  const research=workflow.policy?.research || null;
  const step=currentSearchAutonomyStep(workflow),preview=step?.input?.preview || {};
- const view=autonomyWorkflowView(workflow);
  const panel=document.createElement('section');panel.className='search-autonomy';panel.dataset.state=workflow.state;
  const title=document.createElement('h4');title.textContent=
   `${workflow.mode==='automatic'?'Automatický':'Ruční'} ${research ?
@@ -4244,6 +4298,7 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
  if(research)fact('Profil',`${researchProfileLabels[research.profile_id] || research.profile_id} · ${research.profile_version}`);
  fact('Cíl',preview.binding ? `${preview.binding.endpoint || preview.binding.adapter || 'SearXNG'} · ${preview.binding.target_id || '—'}` : '—');
  fact('Privacy',step?.privacy);fact('Kolo',preview.round_index);
+ fact('Aktuální fáze',step?`${researchPhaseLabels[step.action.id] || step.action.id} · ${step.state}`:'žádná čekající úloha');
  fact('Limit',`${workflow.spent_cost}/${workflow.budget.max_cost_units} cost · nejvýše ${workflow.budget.max_steps} kroků · ${Number(workflow.spent_seconds||0).toFixed(1)}/${workflow.budget.max_seconds} s běhu`);
  fact('Zbývá',`${workflow.remaining_cost} cost · ${workflow.remaining_steps} kroků · ${Number(workflow.remaining_seconds||0).toFixed(1)} s běhu`);
  if(workflow.state==='countdown'&&step?.not_before){const term=document.createElement('dt');term.textContent='Odeslání za';
@@ -4293,22 +4348,6 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
   await autonomyRequest('/v1/autonomy/cancel',{workflow_id:workflow.workflow_id});
   await refreshActiveTaskOutcomes();renderChat(activeThread);
  },true));
- const phases=document.createElement('ol');phases.className='research-phases';
- for(const item of workflow.steps){const row=document.createElement('li');row.className='research-phase';row.dataset.state=item.state;
-  const label=document.createElement('strong');label.textContent=`${researchPhaseLabels[item.action.id] || item.action.id} · ${item.state}`;
-  const detail=document.createElement('small');const result=item.result || {};
-  const provenance=[`privacy ${item.privacy}`,`cost ${item.cost_units}`];
-  if(result.run_id)provenance.push(`run ${result.run_id}`);
-  if(result.final_url)provenance.push(result.final_url);
-  if(result.source_run_id)provenance.push(`source ${result.source_run_id}`);
-  if(result.evidence?.sources)provenance.push(`${result.evidence.sources.length} zdrojů · ${result.evidence.relations.length} vazeb`);
-  if(result.selection?.selected_source_run_ids)provenance.push(`${result.selection.selected_source_run_ids.length} vybraných zdrojů`);
-  if(result.claims)provenance.push(`${result.claims.length} závěrů`);
-  if(result.proposal_sha256)provenance.push(`návrh ${result.proposal_sha256}`);
-  if(result.draft_sha256)provenance.push(`draft ${result.draft_sha256}`);
-  if(result.reason)provenance.push(result.reason);
-  if(item.error)provenance.push(`Chyba: ${item.error}`);
-  detail.textContent=provenance.join(' · ');row.append(label,detail);phases.append(row);}
  const revisionPanels=document.createElement('div');
  for(const pending of (workflow.revision_proposals || []).filter(item=>item.state==='pending')){
   const proposal=pending.proposal,box=document.createElement('section');box.className='research-revision';
@@ -4320,34 +4359,7 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
    await attach();await autonomyRequest('/v1/autonomy/revision/confirm',{workflow_id:workflow.workflow_id,proposal_id:pending.proposal_id,approval_digest:pending.approval_digest});renderChat(activeThread);});
   box.append(heading,reason,impact,exact,approve);revisionPanels.append(box);
  }
- const drafts=document.createElement('div');
- for(const report of workflow.steps.filter(item=>item.action.id==='research.compose-report'&&item.state==='completed')){
-  const box=document.createElement('section');box.className='research-draft';
-  const heading=document.createElement('strong');heading.textContent='Návrh výzkumné zprávy';
-  const note=document.createElement('p');note.textContent='Pouhé zobrazení ani otevření v editoru projekt nemění.';
-  const display=draft=>{
-   let pre=box.querySelector('pre');if(!pre){pre=document.createElement('pre');box.append(pre);}pre.textContent=draft.markdown;
-   let provenance=box.querySelector('small');if(!provenance){provenance=document.createElement('small');box.append(provenance);}provenance.textContent=`run ${draft.run_id} · zdroje ${draft.selected_source_run_ids.join(', ')} · citace ${draft.citations.length}`;
-   if(!box.querySelector('[data-open-research-draft]')){const open=taskButton('Otevřít jako neuložený dokument',()=>openResearchDraftEditor(draft));open.dataset.openResearchDraft='true';box.append(open);}
-  };
-  const show=taskButton('Zobrazit návrh zprávy',async()=>{const draft=await projectRequest('/v1/autonomy/research/draft',{workflow_id:workflow.workflow_id,step_id:report.step_id});
-   view.researchDrafts.set(report.step_id,draft);display(draft);
-  });box.append(heading,note,show);const cached=view.researchDrafts.get(report.step_id);if(cached)display(cached);drafts.append(box);
- }
- panel.append(title,facts,progress,phases,revisionPanels,drafts,actions);
- if((workflow.plan_revisions || []).length>1){const history=document.createElement('details');
-  history.open=view.planReasonsOpen;
-  history.addEventListener('toggle',()=>{view.planReasonsOpen=history.open;});
-  const summary=document.createElement('summary');summary.textContent='Důvody změn plánu';
-  const list=document.createElement('ol');for(const revision of workflow.plan_revisions.slice(1)){
-   const row=document.createElement('li');row.textContent=`r${revision.revision} · ${revision.kind} · ${revision.reason}`;list.append(row);}
-  history.append(summary,list);panel.append(history);}
- if(workflow.revisions?.length){const history=document.createElement('details');
-  const view=autonomyWorkflowView(workflow);history.open=view.searchRevisionsOpen;
-  history.addEventListener('toggle',()=>{view.searchRevisionsOpen=history.open;});
-  const summary=document.createElement('summary');summary.textContent=`Zrušené verze dotazu (${workflow.revisions.length})`;
-  const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.revisions,null,2);
-  history.append(summary,pre);panel.append(history);}
+ panel.append(title,facts,progress,revisionPanels,actions);
  container.append(panel);if(autonomyTerminal.has(workflow.state))renderResearchPreparation(container,projection,query,parentSearchId);updateAutonomyCountdownLabels();
 }
 function taskPlanSummary(plan){
@@ -4357,18 +4369,11 @@ function taskPlanSummary(plan){
  const execution={'local-ollama':'lokální Ollama','external-openai':'externí OpenAI'};
  return `Zdroje: ${plan.source_kinds.map(value=>sources[value] || value).join(', ')} · výstup: ${outputs[plan.output_kind] || plan.output_kind} · provedení: ${execution[plan.execution] || plan.execution}`;
 }
-function renderSearchWorkflow(container,workflow,projection=null){
- if(!workflow)return;
- const budget=document.createElement('p');budget.className='search-budget';
- const used=workflow.budget_used || {},limits=workflow.budget || {};
- budget.textContent=`Rozpočet: kola ${used.rounds_used || 0}/${limits.max_rounds || 0} · dotazy ${used.queries_used || 0}/${limits.max_queries || 0} · výsledky ${used.results_used || 0}/${limits.max_results || 0} · čas ${used.elapsed_seconds || 0}/${limits.max_seconds || 0} s`;
- container.append(budget);
- const rounds=document.createElement('div');rounds.className='search-rounds';
- for(const item of workflow.rounds || []){
-  const round=document.createElement('section');round.className='search-round';
-  const title=document.createElement('h4');title.textContent=`Kolo ${item.round_index}: ${item.query}`;round.append(title);
+function renderSearchRoundContent(container,item,projection=null){
+  const round=document.createElement('div');round.className='search-round';
+  const title=document.createElement('strong');title.textContent=item.query;round.append(title);
   const provenance=document.createElement('small');
-  provenance.textContent=`search ${item.search_id} · run ${item.run_id} · manifest ${item.manifest_id}`;round.append(provenance);
+  provenance.textContent=`search ${item.search_id} · run ${item.run_id} · manifest ${item.manifest_id}${item.searched_at?' · '+item.searched_at:''}`;round.append(provenance);
   const sources=document.createElement('ol');sources.className='search-sources';
   for(const source of item.sources || []){const row=document.createElement('li'),name=document.createElement('strong');
    name.textContent=source.title;const url=document.createElement('code');url.textContent=source.url;
@@ -4393,9 +4398,72 @@ function renderSearchWorkflow(container,workflow,projection=null){
    evaluation.append(assessment,answer,rationale);
    for(const limitation of item.evaluation.limitations || []){const note=document.createElement('small');note.textContent=`Omezení: ${limitation}`;evaluation.append(note);}
    round.append(evaluation);}
-  rounds.append(round);
- }
- container.append(rounds);
+  container.append(round);
+}
+function renderSearchRoundTimelineEntry(value){
+ const card=document.createElement('section');card.className='task-outcome terminal timeline-record';
+ const heading=document.createElement('h3');heading.textContent=`Webové hledání · kolo ${value.round.round_index}`;
+ card.append(heading);renderSearchRoundContent(card,value.round,value.projection);chatMessages.append(card);
+}
+function renderSearchAnswerTimelineEntry(projection){
+ const outcome=projection.outcome,answer=document.createElement('div');answer.className='chat-message assistant timeline-record';
+ answer.textContent=outcome.content;const caveat=document.createElement('small');caveat.textContent=
+  `Řízené hledání · finálnost je hodnocení modelu, nikoli záruka správnosti · důvod ${outcome.completion_reason}`;
+ const detail=document.createElement('small');detail.textContent=
+  `SearXNG · ${outcome.sources?.length || 0} unikátních zdrojů · ${outcome.model}`;
+ answer.append(caveat,detail);chatMessages.append(answer);
+}
+function researchStepDetail(step){
+ const result=step.result || {},values=[`${step.state} · ${step.privacy} · cost ${step.cost_units}`];
+ if(step.elapsed_seconds!==undefined)values.push(`${Number(step.elapsed_seconds).toFixed(3)} s běhu`);
+ if(result.run_id)values.push(`run ${result.run_id}`);
+ if(result.final_url)values.push(result.final_url);
+ if(result.source_run_id)values.push(`source ${result.source_run_id}`);
+ if(result.evidence?.sources)values.push(`${result.evidence.sources.length} zdrojů · ${result.evidence.relations.length} vazeb`);
+ if(result.selection?.selected_source_run_ids)values.push(`${result.selection.selected_source_run_ids.length} vybraných zdrojů`);
+ if(result.claims)values.push(`${result.claims.length} závěrů`);
+ if(result.proposal_sha256)values.push(`návrh ${result.proposal_sha256}`);
+ if(result.draft_sha256)values.push(`draft ${result.draft_sha256}`);
+ if(result.reason)values.push(result.reason);
+ if(step.error)values.push(`Chyba: ${step.error}`);
+ return values.join(' · ');
+}
+function renderResearchDraftControls(card,workflow,step){
+ const view=autonomyWorkflowView(workflow),display=draft=>{
+  let pre=card.querySelector('pre');if(!pre){pre=document.createElement('pre');card.append(pre);}pre.textContent=draft.markdown;
+  let provenance=card.querySelector('[data-research-draft-provenance]');if(!provenance){provenance=document.createElement('small');provenance.dataset.researchDraftProvenance='true';card.append(provenance);}provenance.textContent=`run ${draft.run_id} · zdroje ${draft.selected_source_run_ids.join(', ')} · citace ${draft.citations.length}`;
+  if(!card.querySelector('[data-open-research-draft]')){const open=taskButton('Otevřít jako neuložený dokument',()=>openResearchDraftEditor(draft));open.dataset.openResearchDraft='true';card.append(open);}
+ };
+ const show=taskButton('Zobrazit návrh zprávy',async()=>{const draft=await projectRequest('/v1/autonomy/research/draft',{workflow_id:workflow.workflow_id,step_id:step.step_id});
+  view.researchDrafts.set(step.step_id,draft);display(draft);
+ });card.append(show);const cached=view.researchDrafts.get(step.step_id);if(cached)display(cached);
+}
+function renderResearchStepTimelineEntry(value){
+ const {workflow,step}=value,card=document.createElement('section');
+ card.className='task-outcome terminal timeline-record';card.dataset.stepId=step.step_id;card.dataset.state=step.state;
+ const heading=document.createElement('h3');heading.textContent=researchPhaseLabels[step.action.id] || step.action.id;
+ const detail=document.createElement('small');detail.textContent=researchStepDetail(step);card.append(heading,detail);
+ if(step.action.id==='research.compose-report'&&step.state==='completed')renderResearchDraftControls(card,workflow,step);
+ chatMessages.append(card);
+}
+function renderResearchRevisionTimelineEntry(value){
+ const {revision}=value,card=document.createElement('section');card.className='task-outcome terminal timeline-record';
+ const heading=document.createElement('h3');heading.textContent=`Potvrzená revize plánu r${revision.revision}`;
+ const reason=document.createElement('p');reason.textContent=revision.reason;
+ const detail=document.createElement('small');detail.textContent=`${revision.kind} · ${revision.applied_at} · digest ${revision.plan_digest}`;
+ card.append(heading,reason,detail);chatMessages.append(card);
+}
+function renderResearchEditTimelineEntry(value){
+ const {revision}=value,card=document.createElement('section');card.className='task-outcome terminal timeline-record';
+ const heading=document.createElement('h3');heading.textContent='Nahrazená verze dotazu';
+ const detail=document.createElement('small');detail.textContent=`krok ${revision.ordinal+1} · revize ${revision.revision} · ${revision.cancelled_at}`;
+ const pre=document.createElement('pre');pre.textContent=JSON.stringify(revision.step,null,2);
+ card.append(heading,detail,pre);chatMessages.append(card);
+}
+function renderResearchControlTimelineEntry(value){
+ if(!value.projection)return;
+ const container=document.createElement('section');container.className='timeline-control';
+ renderSearchAutonomy(container,value.projection,null,null,value.workflow);chatMessages.append(container);
 }
 function renderTaskOutcome(projection,showPrompt=true){
   if(showPrompt){const prompt=document.createElement('div');prompt.className='chat-message user';
@@ -4416,8 +4484,7 @@ function renderTaskOutcome(projection,showPrompt=true){
    outcome.kind==='presentation-draft'?'Návrh prezentace':
    outcome.kind==='presentation-link'?'Uložená prezentace':
    outcome.kind==='artifact-link'?'Vytvořený artefakt':
-   outcome.kind==='web-search'?'Návrh webového hledání':
-   outcome.kind==='web-search-answer'?'Odpověď z řízeného hledání':'Externí volání';card.append(heading);
+   ['web-search','web-search-answer'].includes(outcome.kind)?'Návrh webového hledání':'Externí volání';card.append(heading);
   if(projection.task_plan){const plan=document.createElement('small');plan.textContent=taskPlanSummary(projection.task_plan);card.append(plan);}
   if(outcome.kind==='presentation-draft'){
    const approval=projection.presentation_approval;
@@ -4485,38 +4552,28 @@ function renderTaskOutcome(projection,showPrompt=true){
    const actions=document.createElement('div');actions.className='task-actions';
    actions.append(taskButton('Zkontrolovat externí odeslání',()=>prepareTaskExternal(projection)),
                   taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
-  }else if(outcome.kind==='web-search'){
-   const purpose=document.createElement('p');purpose.textContent=outcome.purpose;card.append(purpose);
-   const query=document.createElement('pre');query.textContent=outcome.query;card.append(query);
-   renderSearchWorkflow(card,projection.search_workflow,projection);
+  }else if(['web-search','web-search-answer'].includes(outcome.kind)){
+   const firstRound=projectionSearchRounds(projection).at(0);
+   const purpose=document.createElement('p');purpose.textContent='Řízené webové hledání';card.append(purpose);
+   const query=document.createElement('pre');query.textContent=firstRound?.query || outcome.query || projection.prompt.content;card.append(query);
    const actions=document.createElement('div');actions.className='task-actions';
    const workflow=projection.search_workflow,latest=workflow?.rounds?.at(-1);
-   if(!workflow || !latest?.evaluation){
-    renderSearchAutonomy(actions,projection,null,null);
-   }else{
-   const activeAutomatic=searchAutonomyWorkflow(projection.task_id);
-   if(activeAutomatic){renderSearchAutonomy(actions,projection,
-    activeAutomatic.steps.at(-1)?.input?.preview?.query || null,latest.search_id);}
-   else for(const nextQuery of workflow.next_queries || []){
-     const option=document.createElement('div');option.className='search-next-query';
-     const label=document.createElement('strong');label.textContent=`Navržený další dotaz: ${nextQuery}`;
-     option.append(label);renderSearchAutonomy(option,projection,nextQuery,latest.search_id);
-     actions.append(option);
-    }
-    if(!(workflow.next_queries || []).length){const hint=document.createElement('small');
-     hint.textContent='Výsledek není konečný. Zpřesnění dalšího kola napište do pole dole.';
-     actions.append(hint);}
+   const governed=searchAutonomyWorkflow(projection.task_id);
+   if(!governed&&outcome.kind==='web-search'&&(!workflow || !latest?.evaluation)){
+    renderResearchPreparation(actions,projection,null,null);
+   }else if(!governed&&outcome.kind==='web-search'){
+    for(const nextQuery of workflow.next_queries || []){
+      const option=document.createElement('div');option.className='search-next-query';
+      const label=document.createElement('strong');label.textContent=`Navržený další dotaz: ${nextQuery}`;
+      option.append(label);renderResearchPreparation(option,projection,nextQuery,latest.search_id);
+      actions.append(option);
+     }
+     if(!(workflow.next_queries || []).length){const hint=document.createElement('small');
+      hint.textContent='Výsledek není konečný. Zpřesnění dalšího kola napište do pole dole.';
+      actions.append(hint);}
    }
-   actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));card.append(actions);
-  }else if(outcome.kind==='web-search-answer'){
-   const answer=document.createElement('div');answer.className='chat-message assistant';
-   answer.textContent=outcome.content;card.append(answer);
-   renderSearchWorkflow(card,{rounds:outcome.rounds,budget:outcome.budget,
-    budget_used:outcome.budget_used},projection);
-   const caveat=document.createElement('small');caveat.textContent=
-    `Finálnost je hodnocení modelu, nikoli záruka správnosti · důvod ukončení: ${outcome.completion_reason}`;card.append(caveat);
-   const detail=document.createElement('small');detail.textContent=
-    `SearXNG · ${outcome.sources?.length || 0} unikátních zdrojů · ${outcome.model}`;card.append(detail);
+   if(outcome.kind==='web-search')actions.append(taskButton('Zahodit',()=>cancelTaskProjection(projection.task_id),true));
+   if(actions.childNodes.length)card.append(actions);
   }else if(outcome.kind==='artifact-link'){
    const link=document.createElement('button');link.type='button';link.className='artifact-link';
    link.textContent=`${outcome.title} → ${outcome.artifact_id}`;
@@ -5546,7 +5603,7 @@ const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
 function autonomyWorkflowView(workflow){
  let view=autonomyViewState.get(workflow.workflow_id);
  if(!view){view={planRevision:workflow.plan_revision,detailOpen:false,
-  revisionOpen:false,planReasonsOpen:false,searchRevisionsOpen:false,draft:null,
+  revisionOpen:false,draft:null,
   researchDrafts:new Map()};
   autonomyViewState.set(workflow.workflow_id,view);}
  if(!view.researchDrafts)view.researchDrafts=new Map();

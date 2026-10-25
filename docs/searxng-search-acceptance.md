@@ -40,8 +40,10 @@ explicitní bindingy; dostupnost jedné služby nesmí změnit druhou ani privac
    náhled mimo chat composer; zavření náhledu nesmí formulář zablokovat.
 3. Teprve po novém zaškrtnutí a potvrzení smí odejít právě jeden další search.
    Druhé kolo musí mít jiné search/run/manifest ID a parent odkaz na první.
-4. Opakujte do modelového `final` nebo vyčerpání budgetu. Konečná karta musí
-   zachovat všechna kola a uvést, že finálnost je úsudek modelu, nikoli garance.
+4. Opakujte do modelového `final` nebo vyčerpání budgetu. Hlavní časová osa
+   vlákna musí zachovat každé dokončené kolo jako samostatný chronologický
+   záznam a konečná odpověď musí uvést, že finálnost je úsudek modelu, nikoli
+   garance. Historická kola se nesmí přepisovat uvnitř původní návrhové karty.
 5. Obnovte aplikaci po prvním kole. Mezivýsledek a nabídnutý follow-up musí
    zůstat viditelné; potvrzení pokračuje stejným workflow bez opakování kola.
 
