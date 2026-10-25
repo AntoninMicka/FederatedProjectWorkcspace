@@ -11,10 +11,10 @@ import ssl
 import stat
 import sqlite3
 import subprocess
-from http.server import HTTPServer
 from urllib.parse import urlsplit
 
 from spikes.desktop_ui import DesktopHandler, HTML, CSS, JS
+from spikes.local_api import BoundedHTTPServer
 from spikes.chat_service import ChatService
 from spikes.project_creation import ProjectCreation
 from spikes.project_creation_actions import ProjectCreationActions
@@ -124,7 +124,7 @@ class WebHandler(DesktopHandler):
                                                '/v1/notebooklm/preview', '/v1/notebooklm/plan',
                                                '/v1/notebooklm/confirm'}
 
-    def do_POST(self):
+    def _do_POST(self):
         from spikes.federation_probe import PATH, reply_probe
         if self.path == PATH:
             return reply_probe(self)
@@ -137,14 +137,17 @@ class WebHandler(DesktopHandler):
         from spikes.federation_sync import PATH as SYNC_PATH, reply as reply_sync
         if self.path == SYNC_PATH:
             return reply_sync(self)
-        return super().do_POST()
+        return super()._do_POST()
 
     def authorized(self, auth):
         if hmac.compare_digest(auth.encode(), ('Bearer ' + self.server.token).encode()):
             self.actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
             return True
         try:
-            self.actor = self.server.administration.authenticate(auth)
+            operation = (self.server.administration.authenticate_readonly
+                         if self.path == '/v1/node-telemetry/status'
+                         else self.server.administration.authenticate)
+            self.actor = operation(auth)
             return self.actor is not None
         except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError):
             self.actor = None
@@ -158,15 +161,14 @@ class WebHandler(DesktopHandler):
 
     def setup(self):
         super().setup()
-        # HTTPServer is intentionally single-threaded. Pin authority to the actual
-        # local destination, never to untrusted Host/X-Forwarded-* headers.
+        # Pin authority to this connection, never to shared mutable server state
+        # or untrusted Host/X-Forwarded-* headers.
         ip, port = self.connection.getsockname()[:2]
-        self.server.authority = f'{ip}:{port}'
-        self.server.origin = 'https://' + self.server.authority
+        self.local_authority = f'{ip}:{port}'
 
     def request_authority(self):
         authority = self.single('Host')
-        if authority == self.server.authority:
+        if authority == self.local_authority:
             return authority
         if self.server.hostname and authority == f'{self.server.hostname}:{self.server.server_port}':
             return authority
@@ -521,11 +523,11 @@ class WebHandler(DesktopHandler):
             return self._import_source(request)
         return super().dispatch(request)
 
-    def do_GET(self):
+    def _do_GET(self):
         if self.request_authority() is None:
             return self.send_error(403)
         if urlsplit(self.path).path == '/oauth/google-drive/callback':
-            return super().do_GET()
+            return super()._do_GET()
         if self.path not in ASSETS:
             return self.send_error(404)
         kind, content = ASSETS[self.path]
@@ -542,7 +544,7 @@ class WebHandler(DesktopHandler):
         self.wfile.write(data)
 
 
-class WebServer(HTTPServer):
+class WebServer(BoundedHTTPServer):
     def get_request(self):
         connection, address = super().get_request()
         try:

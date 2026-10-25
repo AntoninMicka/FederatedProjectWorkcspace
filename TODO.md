@@ -26,14 +26,17 @@ bindingu/privacy/autorizace ani paralelní inference.
   recovery (výsledek: designed).** [ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md)
   omezuje souběh na jediný `POST /v1/node-telemetry/status` vedle jediné
   aplikační linky, nejvýše čtyři request workery, dvousekundový backpressure a
-  jednoho vlastníka socketu/odpovědi. Před implementací vyžaduje read-only
-  autentizaci a journal connections po jednovláknovém startup bootstrapu,
+  jednoho vlastníka socketu/odpovědi. Vyžaduje read-only autentizaci a journal
+  connections fyzicky oddělené od bootstrapu a migrace,
   per-request webovou autoritu a bounded shutdown; projektové a node-local
   journally/zámky zůstávají autoritativní a `unknown` se neopakuje.
-- [ ] [planned] **OPS-WEB-CONCURRENCY-01-B — omezená souběžná HTTP obsluha
-  (cílová úroveň: implemented).** Umožnit periodické telemetrii dokončit během
-  dlouhého streamu, aniž by se změnil request ownership, autentizace, RBAC,
-  privacy, binding nebo autorita existujících journalů a zámků.
+- [x] [completed] **OPS-WEB-CONCURRENCY-01-B — omezená souběžná HTTP obsluha
+  (výsledek: implemented).** Desktopový TCP a webový TLS server používají
+  nejvýše čtyři request workery, jednu aplikační a jednu přesně vyhrazenou
+  telemetrickou linku. Read-only autentizace a providerové journal connections
+  nebootstrapují ani nemigrují stav, webová autorita je per-request a jeden
+  worker zůstává jediným vlastníkem socketu a odpovědi. Cílené HTTP/TLS testy
+  doložily telemetrii dokončenou vedle blokované aplikační linky.
 - [ ] [planned] **OPS-WEB-CONCURRENCY-01-C — zápisové a shutdown regrese
   (cílová úroveň: implemented).** Ověřit souběh streamu, read-only telemetrie a
   nezávislé zápisové interakce, bounded backpressure, odpojení klienta, restart
@@ -54,12 +57,12 @@ rozhoduje mezi `succeeded`, `failed` a `unknown`. Shutdown musí přestat přij�
 nové requesty, bounded čekat na vlastněné operace a nesmí uzavřít sdílený stav
 pod aktivním writerem.
 
-Část A potvrdila, že nynější telemetrické čtení může přes běžné SQLite
-`connect()` inicializovat či migrovat schéma a webová autentizace může
-bootstrapovat administrační registry. Část B proto nesmí jen zapnout obecný
-threading: inicializaci dokončí před admission a paralelní monitorovací cestu
-udrží fyzicky read-only podle ADR 0050. Úplné testy ani fyzická akceptace po
-této čistě návrhové změně spuštěny nebyly.
+Část B odstranila DDL-capable čtení z telemetrické cesty a oddělila read-only
+webovou autentizaci od bootstrapu/migrace. Úplná sada po implementaci:
+`python3 -m unittest discover -s tests -v` — 819 testů úspěšných, 28 přeskočeno.
+Předchozí běh odhalil kompatibilitu unit fixture nad obyčejným sekvenčním
+`HTTPServer`; po opravě této cesty proběhl celý uvedený běh znovu bez chyby.
+Fyzická desktop/web akceptace s reálnou dlouhou Ollama odpovědí zůstává v D.
 
 ## Akceptace dávky
 

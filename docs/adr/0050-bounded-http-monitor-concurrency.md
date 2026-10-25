@@ -5,8 +5,9 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0050 — Omezená souběžnost HTTP monitoru
 
-Datum: 2026-10-25. Stav: navrženo v `OPS-WEB-CONCURRENCY-01-A`;
-implementace a fyzická akceptace zůstávají v částech B–D. Rozšiřuje provozní
+Datum: 2026-10-25. Stav: navrženo a implementováno v
+`OPS-WEB-CONCURRENCY-01-A/B`; cílené shutdown regrese a fyzická akceptace
+zůstávají v částech C–D. Rozšiřuje provozní
 hranici telemetrie z [ADR 0049](0049-node-and-ollama-runtime-telemetry.md),
 nemění autority a recovery kontrakty z
 [ADR 0008](0008-context-and-publication-contracts.md).
@@ -14,14 +15,14 @@ nemění autority a recovery kontrakty z
 ## Kontext
 
 Desktopový loopback server v `running_api('http')` i síťový TLS `WebServer`
-dnes používají jednovláknový `HTTPServer`. Streamovaná odpověď proto vlastní
-jediný obslužný tok až do dokončení providerového běhu a periodický dotaz
-`/v1/node-telemetry/status` čeká za ní. Samotné nahrazení serveru neomezeným
-`ThreadingHTTPServer` by však současně zpřístupnilo paralelní zápisy, requesty
-čekající bez limitu a sdílený mutující stav handleru.
+před touto změnou používaly jednovláknový `HTTPServer`. Streamovaná odpověď
+proto vlastnila jediný obslužný tok až do dokončení providerového běhu a
+periodický dotaz `/v1/node-telemetry/status` čekal za ní. Samotné nahrazení
+serveru neomezeným `ThreadingHTTPServer` by však současně zpřístupnilo
+paralelní zápisy, requesty čekající bez limitu a sdílený mutující stav handleru.
 
-Webový handler navíc při každém spojení zapisuje skutečnou lokální autoritu do
-`server.authority` a `server.origin`. To je bezpečné pouze v dosavadním
+Webový handler navíc při každém spojení zapisoval skutečnou lokální autoritu do
+`server.authority` a `server.origin`. To bylo bezpečné pouze v dosavadním
 sekvenčním serveru. Telemetrické čtení také zatím může přes běžné `connect()`
 providerových journalů provést `CREATE TABLE` nebo migraci, zatímco webová
 autentizace může pod výlučným administračním zámkem bootstrapovat registry.
@@ -64,9 +65,11 @@ worker nesmí dopisovat stejnou odpověď ani převzít dokončení streamu.
 
 ### Skutečně read-only monitorovací cesta
 
-Před zahájením přijímání spojení jednovláknový startup dokončí existující
-bootstrap a kompatibilní schema migrace administračního registru a obou
-providerových run journalů. Monitorovací cesta potom:
+Bootstrap a kompatibilní schema migrace administračního registru a
+providerových run journalů smějí proběhnout jen existující zápisovou cestou v
+aplikační lince. Dokud nejsou dokončené, paralelní read-only autentizace nebo
+čtení existujícího nekompatibilního journalu selže uzavřeně; chybějící
+providerový journal se považuje za prázdný. Monitorovací cesta:
 
 - autentizuje proti již inicializovanému stavu read-only; nesmí vytvářet
   administrační adresář, Git registry, credential databázi ani provádět migraci;

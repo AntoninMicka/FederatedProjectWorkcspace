@@ -7126,7 +7126,7 @@ class DesktopHandler(Handler):
             return self.reply(422, {'error': 'Projekt nelze otevřít: ověřte konfiguraci, registraci, '
                                    'práva lokálního stavu a platnost Git dat/indexu.'})
 
-    def do_GET(self):
+    def _do_GET(self):
         authority = self.request_authority()
         if authority is None:
             return self.send_error(403)

@@ -9,9 +9,10 @@ import os
 from pathlib import Path
 import socket
 import tempfile
+import threading
 import unittest
 
-from spikes.local_api import MAX_BODY, private_directory, running_api
+from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
 
 
 class LocalAPITests(unittest.TestCase):
@@ -55,6 +56,42 @@ class LocalAPITests(unittest.TestCase):
         self.assertEqual(server.counter, previous)
         self.assertNotIn(b'Access-Control-Allow-Origin', response)
         self.assertNotIn(server.token.encode(), response)
+
+    def test_exact_telemetry_status_completes_beside_application_request(self):
+        entered = threading.Event()
+        release = threading.Event()
+
+        class LaneHandler(Handler):
+            post_paths = Handler.post_paths | {'/v1/block',
+                                                '/v1/node-telemetry/status'}
+
+            def dispatch(self, request):
+                if self.path == '/v1/block':
+                    entered.set()
+                    if not release.wait(3):
+                        return self.reply(504, {'error': 'test timeout'})
+                    return self.reply(200, {'released': True})
+                if self.path == '/v1/node-telemetry/status':
+                    return self.reply(200, {'monitor': 'available'})
+                return super().dispatch(request)
+
+        with running_api('http', handler=LaneHandler) as server:
+            result = {}
+            blocked = threading.Thread(target=lambda: result.setdefault(
+                'response', self.request(server, path='/v1/block', body=b'{}')))
+            blocked.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                response = self.request(server, path='/v1/node-telemetry/status',
+                                        body=b'{}')
+                head, body = response.split(b'\r\n\r\n', 1)
+                self.assertIn(b' 200 ', head)
+                self.assertEqual({'monitor': 'available'}, json.loads(body))
+            finally:
+                release.set()
+                blocked.join(3)
+            self.assertFalse(blocked.is_alive())
+            self.assertIn(b' 200 ', result['response'].split(b'\r\n', 1)[0])
 
     def test_same_contract_and_bind_permissions(self):
         with self.servers() as servers:

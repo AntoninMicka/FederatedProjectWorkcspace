@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import secrets
 import socket
-from socketserver import UnixStreamServer
+from socketserver import ThreadingMixIn, UnixStreamServer
 import stat
 import struct
 import tempfile
@@ -19,6 +19,42 @@ import threading
 from spikes.metadata import parse_json, ValidationError
 
 MAX_BODY = 4096
+MAX_HTTP_WORKERS = 4
+REQUEST_LANE_TIMEOUT = 2
+
+
+class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Bounded HTTP workers; handlers retain one socket and response owner."""
+    daemon_threads = False
+    block_on_close = True
+
+    def __init__(self, server_address, handler, *, max_workers=MAX_HTTP_WORKERS,
+                 lane_timeout=REQUEST_LANE_TIMEOUT):
+        if type(max_workers) is not int or max_workers < 2:
+            raise ValueError('HTTP server requires at least two bounded workers')
+        if not isinstance(lane_timeout, (int, float)) or lane_timeout <= 0:
+            raise ValueError('Request lane timeout must be positive')
+        self._worker_slots = threading.BoundedSemaphore(max_workers)
+        self.application_lane = threading.Lock()
+        self.telemetry_lane = threading.Lock()
+        self.request_lane_timeout = lane_timeout
+        super().__init__(server_address, handler)
+
+    def process_request(self, request, client_address):
+        if not self._worker_slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._worker_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._worker_slots.release()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -71,7 +107,26 @@ class Handler(BaseHTTPRequestHandler):
         self.server.counter += 1
         self.reply(200, {'value': self.server.counter})
 
+    def _in_request_lane(self, operation, *, telemetry=False):
+        lane = getattr(self.server,
+                       'telemetry_lane' if telemetry else 'application_lane', None)
+        if lane is None:
+            # Small unit fixtures may compose this handler with an already
+            # sequential HTTPServer; only BoundedHTTPServer enables concurrency.
+            return operation()
+        if not lane.acquire(timeout=self.server.request_lane_timeout):
+            return self.reply(503, {'error': 'server busy'})
+        try:
+            return operation()
+        finally:
+            lane.release()
+
     def do_POST(self):
+        return self._in_request_lane(
+            self._do_POST,
+            telemetry=self.path == '/v1/node-telemetry/status')
+
+    def _do_POST(self):
         authority = self.request_authority()
         if authority is None:
             return self.send_error(403)
@@ -107,6 +162,9 @@ class Handler(BaseHTTPRequestHandler):
         self.dispatch(request)
 
     def do_GET(self):
+        return self._in_request_lane(self._do_GET)
+
+    def _do_GET(self):
         self.send_error(405)
 
     do_HEAD = do_GET
@@ -148,8 +206,11 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None):
             raise
         server.allowed_uid = os.getuid()
         server.authority = 'workspace.local'
+        server.application_lane = threading.Lock()
+        server.telemetry_lane = threading.Lock()
+        server.request_lane_timeout = REQUEST_LANE_TIMEOUT
     elif transport == 'http':
-        server = HTTPServer(('127.0.0.1', 0), handler)
+        server = BoundedHTTPServer(('127.0.0.1', 0), handler)
         server.authority = f'127.0.0.1:{server.server_port}'
     else:
         raise ValueError('unknown transport')

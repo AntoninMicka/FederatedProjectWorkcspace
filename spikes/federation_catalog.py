@@ -335,7 +335,7 @@ class CatalogScheduler:
 
 
 def reply(handler):
-    if (handler.single('Host') != handler.server.authority
+    if (handler.single('Host') != handler.local_authority
             or handler.headers.get_all('Origin', [])
             or handler.headers.get_all('Authorization', [])
             or handler.headers.get_all('Transfer-Encoding')

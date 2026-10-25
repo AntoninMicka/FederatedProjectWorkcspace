@@ -82,6 +82,17 @@ class WebTests(unittest.TestCase):
         return self.request(path='/v1/projects/create/confirm', headers=headers,
                             body=json.dumps({'plan': json.loads(data)}))
 
+    def test_telemetry_uses_separate_lane_and_authority_is_request_local(self):
+        self.server.application_lane.acquire()
+        try:
+            code, data, _ = self.request(path='/v1/node-telemetry/status',
+                                         body=json.dumps({'group': 'activity'}))
+        finally:
+            self.server.application_lane.release()
+        self.assertEqual(200, code, data)
+        self.assertEqual('activity', json.loads(data)['system']['group'])
+        self.assertFalse(hasattr(self.server, 'authority'))
+
     def test_admin_project_removal_routes_require_preview_and_restore_from_trash(self):
         code, data, _ = self.create_project('Disposable project')
         self.assertEqual(code, 200, data)

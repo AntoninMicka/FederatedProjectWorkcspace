@@ -85,7 +85,10 @@ def completed_run_usage(run_store, adapter_id, fetched_at=None):
     # A status read must not create an otherwise unused provider journal.
     if not os.path.lexists(run_store.path):
         return summary
-    with run_store.connect() as db:
+    connection = run_store.connect_readonly()
+    if connection is None:
+        return summary
+    with connection as db:
         rows = db.execute("SELECT response FROM runs WHERE state='succeeded'")
         for (encoded,) in rows:
             summary['completed_runs'] += 1
