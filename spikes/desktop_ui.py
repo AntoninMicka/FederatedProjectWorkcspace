@@ -5531,6 +5531,7 @@ const autonomyStatus=document.querySelector('#autonomy-status');
 const autonomyList=document.querySelector('#autonomy-list');
 let autonomyQueue={global_paused:false,workflows:[]},autonomyHeartbeatBusy=false;
 const autonomyTimers=new Map();
+const autonomyNoStepAttempts=new Map();
 const autonomyViewState=new Map();
 const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
 function autonomyWorkflowView(workflow){
@@ -5586,17 +5587,25 @@ function dynamicRevisionDraft(workflow,kind){
 async function autonomyRequest(path,payload={}){
  const result=await projectRequest(path,payload,210000);if(activeProject)await loadAutonomyQueue(false);return result;
 }
+function autonomyNoStepFingerprint(workflow){
+ return JSON.stringify([workflow.plan_revision,workflow.state,
+  workflow.steps.map(item=>[item.step_id,item.state]),
+  (workflow.revision_proposals||[]).map(item=>[item.proposal_id,item.state])]);
+}
 function scheduleAutomaticWorkflow(workflow){
  if(workflow.mode!=='automatic'||autonomyQueue.global_paused||!autonomyWorkflowVisible(workflow))return;
  if(workflow.revision_proposals?.some(item=>item.state==='pending'))return;
  const step=workflow.steps.find(item=>!['completed','failed','unknown','cancelled'].includes(item.state));
  let delay=null;
  const settled=workflow.steps.every(item=>['completed','failed','cancelled'].includes(item.state));
- if(workflow.state==='queued'&&!step&&settled)delay=350;
+ const noStepRecovery=workflow.state==='queued'&&!step&&settled;
+ const noStepFingerprint=noStepRecovery?autonomyNoStepFingerprint(workflow):null;
+ if(noStepFingerprint&&autonomyNoStepAttempts.get(workflow.workflow_id)===noStepFingerprint)return;
+ if(noStepRecovery)delay=350;
  if(workflow.state==='queued'&&step?.state==='queued'&&step.automatable&&step.confirmation==='none')delay=350;
  if(workflow.state==='countdown'&&step?.state==='countdown'&&step.not_before){delay=Math.max(50,new Date(step.not_before).getTime()-Date.now()+50);autonomyStatus.textContent=`${step.action.id}: automatický krok čeká ${Math.max(0,Math.ceil(delay/1000))} s; lze jej pozastavit nebo zrušit.`;}
  if(delay===null)return;
- autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;try{await withChatProgress(researchActivityLabel(step),async()=>{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);});}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
+ autonomyTimers.set(workflow.workflow_id,setTimeout(async()=>{autonomyTimers.delete(workflow.workflow_id);if(!autonomyWorkflowVisible(workflow))return;if(noStepFingerprint)autonomyNoStepAttempts.set(workflow.workflow_id,noStepFingerprint);try{await withChatProgress(step?researchActivityLabel(step):'Doplňuji další krok výzkumu…',async()=>{await projectRequest('/v1/autonomy/attach',{workflow_id:workflow.workflow_id});await autonomyRequest('/v1/autonomy/advance',{workflow_id:workflow.workflow_id});if(isSearchAutonomy(workflow))await refreshActiveTaskOutcomes();renderChat(activeThread);});}catch(error){autonomyStatus.textContent=error.message;chatOperationStatus.textContent=error.message;}},delay));
 }
 function renderAutonomyQueue(){
  if(document.activeElement?.matches('.autonomy-revision-editor textarea'))return;
@@ -5604,6 +5613,7 @@ function renderAutonomyQueue(){
  autonomyList.replaceChildren();const rows=autonomyQueue.workflows||[];
  const visibleIds=new Set(rows.map(item=>item.workflow_id));
  for(const workflowId of autonomyViewState.keys())if(!visibleIds.has(workflowId))autonomyViewState.delete(workflowId);
+ for(const workflowId of autonomyNoStepAttempts.keys())if(!visibleIds.has(workflowId))autonomyNoStepAttempts.delete(workflowId);
  document.querySelector('#autonomy-global-pause').textContent=autonomyQueue.global_paused?'Zrušit globální pauzu':'Pozastavit vše';
  if(!rows.length){const empty=document.createElement('p');empty.textContent='Pro tento projekt není připravená žádná řízená fronta.';autonomyList.append(empty);return;}
  for(const workflow of rows){const card=document.createElement('article');card.className='autonomy-card';card.dataset.state=workflow.state;

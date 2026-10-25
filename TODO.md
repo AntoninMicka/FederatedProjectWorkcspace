@@ -176,7 +176,17 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   `node --check` generovaného JavaScriptu,
   `python3 -m unittest discover -s tests -v` (799 testů OK, 28 skipped) a
   `git diff --check` bez chyb. Fyzicky zbývá potvrdit pokračování přes výběr
-  relevantních zdrojů a zobrazení návrhu závěrečné zprávy.
+  relevantních zdrojů a zobrazení návrhu závěrečné zprávy. Při následné
+  fyzické kontrole se ukázalo, že pokud backend po tomto dorovnání vrátil
+  beze změny stejnou revizi bez materializovaného kroku, každý heartbeat
+  spustil tentýž pokus znovu a krátká stavová zpráva v chatu blikala. Klient
+  nyní pro přesný otisk revize, stavů kroků a revizních návrhů provede nejvýše
+  jeden automatický dorovnávací pokus; znovu pokračuje až po skutečné změně
+  durable stavu a při pokusu zobrazuje konkrétní text `Doplňuji další krok
+  výzkumu…`. Ruční akce zůstává dostupná. Ověření doplnění: dva cílené UI
+  testy OK, `node --check` generovaného JavaScriptu, `python3 -m py_compile
+  spikes/desktop_ui.py`, `python3 -m unittest discover -s tests -v` (799 testů
+  OK, 28 skipped) a `git diff --check` bez chyb.
 
 ## Akceptace
 
