@@ -45,6 +45,13 @@ dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR do
   obecného modelu: volí pevný endpoint a request/response tvar a fail-closed
   určují JSON/streaming capabilities. Refresh neukládá credential ani nemění
   binding; web jej dovolí pouze administrátorovi.
+- [x] [completed] **F-M3-ATLASCLOUD-01-AH-01 — přenositelné ověření limitu
+  HTTP workerů (test validated).** GitHub runner při správném okamžitém
+  odmítnutí pátého spojení vrátil klientovi `ENOTCONN` už při `shutdown`, místo
+  prázdného následného čtení. Regresní test nyní v tomto jediném očekávaném
+  reject scénáři přijímá standardní teardown stavy `ENOTCONN`, `ECONNRESET`
+  nebo `EPIPE`, ale dál vyžaduje čtyři aktivní workery, žádné nové vlákno a
+  žádnou odpověď odmítnutému klientovi.
 
 ### Ověření, recovery a omezení
 
@@ -56,6 +63,7 @@ restart bez druhého dispatch, usage, privacy, RBAC, API a UI. Závěrečná úp
 sada `python3 -m unittest discover -s tests -v` prošla jako **848 testů bez
 selhání, 29 přeskočeno**. Dotčené Python moduly prošly `py_compile`,
 generovaný JavaScript `node --check` a finální diff `git diff --check`.
+CI teardown regrese navíc prošla 30 po sobě jdoucími běhy.
 
 Živý uzel neměl AtlasCloud binding ani credential, proto
 nebyl proveden skutečný placený/providerový smoke. Akceptace jej vyžadovala
