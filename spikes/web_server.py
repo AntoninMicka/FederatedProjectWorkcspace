@@ -287,7 +287,8 @@ class WebHandler(DesktopHandler):
                 return self.send_error(403)
         if self.path in {'/v1/chat/configure', '/v1/chat/test',
                          '/v1/search/configure', '/v1/search/test',
-                         '/v1/model-catalog/import', '/v1/atlascloud/configure',
+                         '/v1/model-catalog/import', '/v1/atlascloud/offers/review',
+                         '/v1/atlascloud/configure',
                          '/v1/atlascloud/remove'} \
                 and not self.server.administration.is_admin(self.actor):
             return self.send_error(403)

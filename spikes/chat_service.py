@@ -562,6 +562,53 @@ class ChatService:
             credentials.delete(previous.credential_ref)
         return self.atlascloud_status()
 
+    def review_atlascloud_offer(self, value):
+        fields = {'expected_revision', 'provider_model_id', 'protocol', 'capabilities'}
+        require(isinstance(value, dict) and set(value) == fields,
+                'AtlasCloud offer review has unknown or missing fields')
+        require(value['protocol'] == 'openai-responses-v1',
+                'Only the reviewed AtlasCloud Responses protocol is supported')
+        capabilities = value['capabilities']
+        require(isinstance(capabilities, list)
+                and capabilities == sorted(set(capabilities))
+                and set(capabilities) <= {
+                    'generate-text', 'json-output', 'streaming', 'text-output'}
+                and {'generate-text', 'text-output'} <= set(capabilities),
+                'Invalid AtlasCloud reviewed capabilities')
+        root = self._root(); store = ModelKnowledgeStore(root)
+        catalog = store.load_or_empty(now())
+        model = value['provider_model_id']
+        require(isinstance(model, str)
+                and bool(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}', model)),
+                'Invalid AtlasCloud model ID')
+        identity = ('atlascloud', model, value['protocol'])
+        current = next((item for item in catalog['offers']
+            if (item['provider_id'], item['provider_model_id'], item['protocol']) == identity),
+            None)
+        offer_id = (current['offer_id'] if current is not None else
+            'atlascloud-responses:' + hashlib.sha256(model.encode()).hexdigest()[:24])
+        revision = 'atlas-review-' + str(uuid4())
+        observed = now()
+        reviewed = {'offer_id': offer_id, 'provider_id': 'atlascloud',
+            'provider_model_id': model, 'protocol': value['protocol'],
+            'canonical_model_id': (current['canonical_model_id']
+                                   if current is not None else None),
+            'capabilities': [{'name': name, 'value': True, 'state': 'reviewed',
+                'source': 'operator:atlascloud-ui', 'revision': revision,
+                'observed_at': observed} for name in capabilities]}
+        offers = [item for item in catalog['offers']
+                  if (item['provider_id'], item['provider_model_id'],
+                      item['protocol']) != identity]
+        offers.append(reviewed)
+        saved = store.save({'schema_version': 1, 'revision': revision,
+            'reviewed_at': observed, 'models': catalog['models'], 'offers': offers},
+            expected_revision=value['expected_revision'])
+        result = self.atlascloud_status()
+        require(result['model_catalog']['knowledge_revision'] == saved['revision'],
+                'Reviewed AtlasCloud offer was not projected')
+        result['reviewed_offer_id'] = offer_id
+        return result
+
     def remove_atlascloud(self, value):
         require(value == {'confirmed': True},
                 'Explicit AtlasCloud removal confirmation is required')

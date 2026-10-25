@@ -602,8 +602,14 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <form id="atlascloud-backend-form">
 <label>Provider <input value="AtlasCloud Responses API" disabled></label>
 <label>Endpoint <input name="endpoint" value="https://api.atlascloud.ai/v1/responses" readonly></label>
-<label>Reviewovaná nabídka <select name="offer_id" required><option value="">Nejprve importujte nabídku do katalogu</option></select></label>
-<label>Model <input name="model" readonly required></label>
+<label>Reviewovaná nabídka <select name="offer_id" required><option value="">Přidat nebo vybrat nabídku</option></select></label>
+<fieldset><legend>Backendový profil nabídky</legend>
+<label>AtlasCloud model ID <input name="model" maxlength="200" placeholder="provider/model" required></label>
+<label><input name="review_json" type="checkbox"> Ověřeno: JSON output</label>
+<label><input name="review_streaming" type="checkbox"> Ověřeno: streaming</label>
+<button id="atlascloud-review-offer" type="button">Přidat nebo aktualizovat nabídku v katalogu</button>
+<small>Text a Responses protokol jsou pro tento adapter povinné. JSON a streaming označte jen podle dokumentace konkrétního modelu. Tato akce neukládá API klíč a nemění aktivní binding.</small>
+</fieldset>
 <label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
 <label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
@@ -4097,7 +4103,7 @@ function fillExternalModels(catalog){
 function atlasCloudSupportedCapabilities(offer){
  return (offer?.capabilities || []).filter(item=>item.supported && ['reviewed','reported'].includes(item.state)).map(item=>item.name).sort();
 }
-function fillAtlasCloudOffers(catalog,binding=null){
+function fillAtlasCloudOffers(catalog,binding=null,preferredOfferId=null){
  atlasCloudCatalog=catalog;const form=document.querySelector('#atlascloud-backend-form');
  const select=form.elements.offer_id,model=form.elements.model;select.replaceChildren();
  const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte reviewovanou Responses nabídku';select.append(empty);
@@ -4107,9 +4113,14 @@ function fillAtlasCloudOffers(catalog,binding=null){
   const option=document.createElement('option');option.value=offer.offer_id;
   option.textContent=`${offer.provider_model_id} · ${caps.join(', ')}`;select.append(option);
  }
- if(binding&&[...select.options].some(option=>option.value===binding.offer_id))select.value=binding.offer_id;
+ const requested=preferredOfferId || binding?.offer_id;
+ if(requested&&[...select.options].some(option=>option.value===requested))select.value=requested;
  const selected=(catalog?.offers || []).find(offer=>offer.offer_id===select.value);
  model.value=selected?.provider_model_id || binding?.model || '';
+ model.readOnly=Boolean(selected);
+ const caps=atlasCloudSupportedCapabilities(selected);
+ form.elements.review_json.checked=caps.includes('json-output');
+ form.elements.review_streaming.checked=caps.includes('streaming');
 }
 function autonomyTaskId(workflow){
  for(const step of workflow?.steps || []){
@@ -5500,8 +5511,29 @@ document.querySelector('#external-load-models').addEventListener('click',async e
  finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#atlascloud-backend-form').elements.offer_id.addEventListener('change',event=>{
+ const form=document.querySelector('#atlascloud-backend-form');
  const offer=(atlasCloudCatalog?.offers || []).find(item=>item.offer_id===event.currentTarget.value);
- document.querySelector('#atlascloud-backend-form').elements.model.value=offer?.provider_model_id || '';
+ form.elements.model.value=offer?.provider_model_id || '';form.elements.model.readOnly=Boolean(offer);
+ const caps=atlasCloudSupportedCapabilities(offer);
+ form.elements.review_json.checked=caps.includes('json-output');
+ form.elements.review_streaming.checked=caps.includes('streaming');
+});
+document.querySelector('#atlascloud-review-offer').addEventListener('click',async event=>{
+ const form=document.querySelector('#atlascloud-backend-form'),fields=form.elements;
+ const model=fields.model.value.trim();
+ if(!model){settingsAtlasCloudStatus.textContent='Zadejte přesné AtlasCloud model ID.';return;}
+ const capabilities=['generate-text','text-output'];
+ if(fields.review_json.checked)capabilities.push('json-output');
+ if(fields.review_streaming.checked)capabilities.push('streaming');capabilities.sort();
+ event.currentTarget.disabled=true;settingsAtlasCloudStatus.textContent='Ukládám reviewovanou nabídku do katalogu…';
+ try{const result=await projectRequest('/v1/atlascloud/offers/review',{
+   expected_revision:atlasCloudCatalog.knowledge_revision,provider_model_id:model,
+   protocol:'openai-responses-v1',capabilities});
+  atlasCloudBinding=result.binding;atlasCloudStreaming=result.capabilities?.streaming===true;
+  fillAtlasCloudOffers(result.model_catalog,result.binding,result.reviewed_offer_id);
+  settingsAtlasCloudStatus.textContent=`Nabídka ${model} je v katalogu. Nyní lze uložit binding a API klíč.`;
+ }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
+ finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#atlascloud-backend-form').addEventListener('submit',async event=>{
  event.preventDefault();const form=event.currentTarget,fields=form.elements;
@@ -6505,7 +6537,8 @@ class DesktopHandler(Handler):
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
-        '/v1/atlascloud/status', '/v1/atlascloud/configure', '/v1/atlascloud/remove',
+        '/v1/atlascloud/status', '/v1/atlascloud/offers/review',
+        '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -6806,6 +6839,8 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_models())
             if self.path == '/v1/atlascloud/status' and request == {}:
                 return self.reply(200, self.server.chat_service.atlascloud_status())
+            if self.path == '/v1/atlascloud/offers/review' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.review_atlascloud_offer(request))
             if self.path == '/v1/atlascloud/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_atlascloud(request))
             if self.path == '/v1/atlascloud/remove' and isinstance(request, dict):

@@ -891,6 +891,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="atlascloud-backend-form"', HTML)
         self.assertIn('href="https://www.atlascloud.ai/dashboard/api-keys"', HTML)
         self.assertIn("projectRequest('/v1/atlascloud/status',{})", JS)
+        self.assertIn('id="atlascloud-review-offer"', HTML)
+        self.assertIn("projectRequest('/v1/atlascloud/offers/review'", JS)
+        self.assertIn("capabilities=['generate-text','text-output']", JS)
         self.assertIn("projectRequest('/v1/atlascloud/configure',binding)", JS)
         self.assertIn("projectRequest('/v1/atlascloud/remove',{confirmed:true})", JS)
         self.assertIn('<option value="atlascloud-responses">AtlasCloud</option>', HTML)
@@ -989,7 +992,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("projectRequest('/v1/chat/delete/confirm'", JS)
         self.assertTrue({'/v1/chat/archive', '/v1/chat/preferences', '/v1/chat/delete/preview',
                          '/v1/chat/delete/confirm', '/v1/sources/import',
-                         '/v1/user-profile'} <= DesktopHandler.post_paths)
+                         '/v1/user-profile', '/v1/atlascloud/offers/review'} <=
+                        DesktopHandler.post_paths)
         self.assertNotIn('id="chat-thread-list"', HTML)
         self.assertIn('id="chats-tab"', HTML)
         self.assertNotIn('id="back-projects"', HTML)

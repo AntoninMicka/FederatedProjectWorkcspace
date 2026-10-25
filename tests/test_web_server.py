@@ -455,6 +455,7 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/configure', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/atlascloud/offers/review', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/atlascloud/remove', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/configure', body='{}', headers=headers)[0], 403)

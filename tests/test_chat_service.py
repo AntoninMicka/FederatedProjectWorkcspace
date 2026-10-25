@@ -1556,6 +1556,57 @@ class ChatServiceTests(unittest.TestCase):
         self.assertIsNone(removed['binding'])
         self.assertIsNone(removed['credential'])
 
+    def test_atlascloud_operator_review_populates_empty_catalog_without_binding_or_secret(self):
+        before = self.service.atlascloud_status()
+        self.assertEqual(before['model_catalog']['offers'], [])
+        request = {'expected_revision': 'empty-v1',
+            'provider_model_id': 'atlas-reviewed/model-v1',
+            'protocol': 'openai-responses-v1',
+            'capabilities': ['generate-text', 'streaming', 'text-output']}
+        result = self.service.review_atlascloud_offer(request)
+        offer = result['model_catalog']['offers'][0]
+        self.assertIsNone(result['binding'])
+        self.assertIsNone(result['credential'])
+        self.assertEqual(offer['offer_id'], result['reviewed_offer_id'])
+        self.assertEqual(offer['provider_model_id'], 'atlas-reviewed/model-v1')
+        caps = {item['name']: item for item in offer['capabilities']}
+        self.assertTrue(caps['generate-text']['supported'])
+        self.assertTrue(caps['streaming']['supported'])
+        self.assertFalse(caps['json-output']['supported'])
+        self.assertEqual(caps['streaming']['reviewed']['source'],
+                         'operator:atlascloud-ui')
+        self.assertFalse((self.chat_state / 'atlascloud-credentials.sqlite').exists())
+
+        updated = dict(request, expected_revision=result['model_catalog']['knowledge_revision'],
+                       capabilities=['generate-text', 'json-output', 'text-output'])
+        second = self.service.review_atlascloud_offer(updated)
+        self.assertEqual(len(second['model_catalog']['offers']), 1)
+        self.assertEqual(second['reviewed_offer_id'], result['reviewed_offer_id'])
+        with self.assertRaisesRegex(ValueError, 'changed before import'):
+            self.service.review_atlascloud_offer(request)
+        invalid = dict(updated, expected_revision=second['model_catalog']['knowledge_revision'],
+                       protocol='openai-chat-completions-v1')
+        with self.assertRaisesRegex(ValueError, 'Responses protocol'):
+            self.service.review_atlascloud_offer(invalid)
+        malformed = dict(updated,
+            expected_revision=second['model_catalog']['knowledge_revision'],
+            provider_model_id={'not': 'text'})
+        with self.assertRaisesRegex(ValueError, 'model ID'):
+            self.service.review_atlascloud_offer(malformed)
+        offer = second['model_catalog']['offers'][0]
+        configured = self.service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-reviewed-binding',
+            'adapter': 'atlascloud-responses', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/responses',
+            'model': offer['provider_model_id'], 'target_id': 'api.atlascloud.ai',
+            'offer_id': offer['offer_id'], 'protocol': offer['protocol'],
+            'knowledge_revision': second['model_catalog']['knowledge_revision'],
+            'capabilities': ['generate-text', 'json-output', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-reviewed-' + 'c' * 24})
+        self.assertEqual(configured['binding']['offer_id'], offer['offer_id'])
+        self.assertTrue(configured['credential']['available'])
+
     def test_atlascloud_rejects_unreviewed_run_model_and_offer(self):
         service, _ = self.atlascloud_service([])
         request = self.external_request(run_choice={'mode': 'brainstorming',
@@ -2109,12 +2160,23 @@ class ChatServiceTests(unittest.TestCase):
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body)['offers'], [])
+            response = driver.request(server, path='/v1/atlascloud/offers/review',
+                body=json.dumps({'expected_revision': 'empty-v1',
+                    'provider_model_id': 'atlas/api-reviewed',
+                    'protocol': 'openai-responses-v1',
+                    'capabilities': ['generate-text', 'text-output']}).encode())
+            head, body = response.split(b'\r\n\r\n', 1)
+            self.assertIn(b' 200 ', head)
+            reviewed = json.loads(body)
+            self.assertEqual(reviewed['model_catalog']['offers'][0]['provider_model_id'],
+                             'atlas/api-reviewed')
             knowledge = {'schema_version': 1, 'revision': 'api-review-v1',
                 'reviewed_at': NOW,
                 'models': [{'model_id': 'canonical:test', 'display_name': 'Test'}],
                 'offers': []}
             response = driver.request(server, path='/v1/model-catalog/import', body=json.dumps(
-                {'expected_revision': 'empty-v1', 'catalog': knowledge}).encode())
+                {'expected_revision': reviewed['model_catalog']['knowledge_revision'],
+                 'catalog': knowledge}).encode())
             head, body = response.split(b'\r\n\r\n', 1)
             self.assertIn(b' 200 ', head)
             self.assertEqual(json.loads(body), knowledge)

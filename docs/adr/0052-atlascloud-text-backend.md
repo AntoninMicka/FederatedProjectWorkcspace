@@ -43,6 +43,15 @@ neprovádí síťové discovery: nabídka vzniká explicitním review/importem v
 společném katalogu. UI to označí jako reviewovanou znalost, nikoli živou
 dostupnost. Až doložené discovery bude samostatné rozšíření.
 
+Protokol a capabilities jsou backendovým profilem konkrétní providerové
+nabídky, nikoli vlastností kanonického modelu. Na čistém uzlu proto AtlasCloud
+nastavení umožní operátorovi zadat přesné providerové model ID a explicitně
+potvrdit volitelné `json-output` a `streaming`; `generate-text`, `text-output`
+a protokol Responses jsou povinnou podmínkou tohoto adapteru. Tento krok přes
+CAS atomicky publikuje pouze reviewovanou nabídku. Nevolá provider, neukládá
+credential a nevytváří ani nemění binding. Teprve samostatné potvrzení vybrané
+nabídky uloží API klíč a binding.
+
 ## Request, response a chyby
 
 Request používá celý autorizovaný Context Manifest payload jako jeden textový
@@ -69,6 +78,9 @@ pravidlo liší od obecného providerového doporučení exponenciálního retry
 - `atlascloud-runs.sqlite` je autoritativní journal providerových účinků.
   `prepared` ještě neznamená odeslání, `dispatching` se po restartu čte jako
   `unknown`, `succeeded` se vrací idempotentně a `failed` vyžaduje nový run.
+- Operátorský review nabídky používá stejnou knowledge autoritu a CAS jako
+  import. Ztracenou odpověď lze vyhodnotit novým načtením katalogu; stale
+  revize se odmítne a nesmí přepsat souběžnou změnu.
 - Projektový Git se mění až samostatnou potvrzenou publikací výstupu. Katalog,
   credential, binding ani provider run nejsou projektové artefakty.
 

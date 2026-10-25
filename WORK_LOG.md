@@ -37,13 +37,22 @@ dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR do
   explicitním task routingu a promítá streaming/usage. Webové mutace jsou jen
   pro administrátora, `local-only` se odmítá před externím preview a UI
   inventář obsahuje nový formulář.
+- [x] [completed] **F-M3-ATLASCLOUD-01-E — bootstrap nabídky na čistém uzlu
+  (implemented/PoC validated).** AtlasCloud nastavení umí před uložením
+  bindingu explicitně přidat nebo aktualizovat reviewovanou Responses nabídku
+  v prázdném společném katalogu. Providerové model ID, protokol a potvrzené
+  JSON/streaming capabilities tvoří backendový profil nabídky, nikoli vlastnost
+  kanonického modelu. Samostatný CAS krok nevolá provider, nezapisuje API klíč
+  ani nemění binding; web jej dovolí pouze administrátorovi.
 
 ### Ověření, recovery a omezení
 
-Cílené testy pokryly přesný binding, capabilities, secret lifecycle,
+Cílené testy pokryly prázdný katalog, vytvoření a aktualizaci nabídky, stale
+CAS, oddělení review od credentialu a bindingu, přesný binding, capabilities,
+secret lifecycle,
 text/JSON/SSE, keep-alive, redirect, provider failure, transportní přerušení,
 restart bez druhého dispatch, usage, privacy, RBAC, API a UI. Závěrečná úplná
-sada `python3 -m unittest discover -s tests -v` prošla jako **845 testů bez
+sada `python3 -m unittest discover -s tests -v` prošla jako **846 testů bez
 selhání, 29 přeskočeno**. Dotčené Python moduly prošly `py_compile`,
 generovaný JavaScript `node --check` a finální diff `git diff --check`.
 
