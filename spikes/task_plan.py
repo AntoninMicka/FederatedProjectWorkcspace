@@ -101,7 +101,7 @@ class ExplicitTaskPlan:
     def validate_execution(self, choice):
         adapter = getattr(choice, 'adapter_id', None)
         expected = {'local-ollama': 'ollama', 'external-openai': 'openai-responses',
-                    'external-atlascloud': 'atlascloud-responses'}[self.execution]
+                    'external-atlascloud': 'atlascloud-text'}[self.execution]
         require(adapter == expected,
                 'Task execution does not match the selected backend')
         return self

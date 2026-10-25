@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 import json
 from pathlib import Path
+import hashlib
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -13,7 +14,6 @@ from spikes.atlascloud_backend import (ATLASCLOUD_ENDPOINT, ATLASCLOUD_PROTOCOL,
     AtlasCloudUnknownRun)
 from spikes.context_builder import DispatchHandoff
 from spikes.metadata import ValidationError
-from spikes.model_catalog import ModelKnowledgeStore
 
 
 NOW = '2026-10-25T18:00:00+00:00'
@@ -23,26 +23,23 @@ class AtlasCloudBackendTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
         self.state = Path(self.temp.name) / 'state'; self.state.mkdir(mode=0o700)
-        self.offer_id = 'atlascloud:deepseek-ai/deepseek-v3.2:responses'
         self.model = 'deepseek-ai/deepseek-v3.2'
-        capabilities = [self.capability(name) for name in
-                        ('generate-text', 'json-output', 'streaming', 'text-output')]
-        ModelKnowledgeStore(self.state).save({
-            'schema_version': 1, 'revision': 'atlas-review-v1', 'reviewed_at': NOW,
-            'models': [{'model_id': 'canonical:deepseek-v3.2',
-                        'display_name': 'DeepSeek V3.2'}],
-            'offers': [{'offer_id': self.offer_id, 'provider_id': 'atlascloud',
-                        'provider_model_id': self.model,
-                        'protocol': ATLASCLOUD_PROTOCOL,
-                        'canonical_model_id': 'canonical:deepseek-v3.2',
-                        'capabilities': capabilities}]}, expected_revision='empty-v1')
+        self.offer_id = 'atlascloud:' + hashlib.sha256(
+            (self.model + '\0' + ATLASCLOUD_PROTOCOL).encode()).hexdigest()[:32]
+        self.catalog = AtlasCloudCatalog(self.state, lambda _secret: {
+            'code': '200', 'data': [{'model': self.model, 'type': 'Text',
+                'display_console': True, 'supported_protocols': [
+                    'openai.chat.completions'],
+                'supported_features': ['json_mode'],
+                'output_modalities': ['text']}]})
+        self.catalog.refresh('apikey-' + 'd' * 32)
         self.value = {'schema_version': 1, 'binding_id': str(uuid4()),
-            'revision': 'atlas-binding-v1', 'adapter': 'atlascloud-responses',
+            'revision': 'atlas-binding-v1', 'adapter': 'atlascloud-text',
             'boundary': 'external-provider', 'endpoint': ATLASCLOUD_ENDPOINT,
             'model': self.model, 'target_id': 'api.atlascloud.ai',
             'credential_ref': 'credential:atlascloud-primary',
             'credential_revision': 1, 'offer_id': self.offer_id,
-            'protocol': ATLASCLOUD_PROTOCOL, 'knowledge_revision': 'atlas-review-v1',
+            'protocol': ATLASCLOUD_PROTOCOL, 'knowledge_revision': 'empty-v1',
             'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
             'max_output_tokens': 2048, 'timeout_seconds': 30}
         self.binding = AtlasCloudBinding.parse(self.value)
@@ -51,34 +48,29 @@ class AtlasCloudBackendTests(unittest.TestCase):
         self.handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'a' * 64,
             self.binding.target(), 'přesný text'.encode())
 
-    @staticmethod
-    def capability(name, value=True):
-        return {'name': name, 'value': value, 'state': 'reviewed',
-                'source': 'review:atlascloud-docs', 'revision': 'docs-2026-10-25',
-                'observed_at': NOW}
-
     def response(self, text='odpověď'):
-        return {'id': 'resp_atlas', 'status': 'completed', 'model': self.model,
-                'output': [{'type': 'message', 'content': [
-                    {'type': 'output_text', 'text': text}]}],
-                'usage': {'input_tokens': 4, 'output_tokens': 6, 'total_tokens': 10}}
+        return {'id': 'chatcmpl_atlas', 'model': self.model,
+                'choices': [{'index': 0, 'message': {
+                    'role': 'assistant', 'content': text}, 'finish_reason': 'stop'}],
+                'usage': {'prompt_tokens': 4, 'completion_tokens': 6,
+                          'total_tokens': 10}}
 
     def test_binding_is_fixed_reviewed_and_persists_without_secret(self):
-        AtlasCloudCatalog(self.state).validate_binding_offer(self.value)
+        self.catalog.validate_binding_offer(self.value)
         store = AtlasCloudBindings(self.state); store.save(self.binding)
         self.assertEqual(store.load(), self.binding)
         self.assertNotIn('apikey-', store.path.read_text())
-        for changes in ({'endpoint': 'https://proxy.example/v1/responses'},
-                        {'protocol': 'openai-chat-completions-v1'},
+        for changes in ({'endpoint': 'https://proxy.example/v1/chat/completions'},
+                        {'protocol': 'openai-responses-v1'},
                         {'target_id': 'other.example'}, {'boundary': 'same-node'},
                         {'capabilities': ['generate-text', 'text-output', 'tools']}):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
                 AtlasCloudBinding.parse(dict(self.value, **changes))
 
-    def test_catalog_requires_exact_reviewed_offer_and_capabilities(self):
-        catalog = AtlasCloudCatalog(self.state)
+    def test_catalog_requires_exact_discovered_offer_and_capabilities(self):
+        catalog = self.catalog
         projection = catalog.load()
-        self.assertEqual(projection['discovery'], 'unavailable')
+        self.assertEqual(projection['discovery'], 'live')
         self.assertEqual([item['offer_id'] for item in projection['offers']],
                          [self.offer_id])
         catalog.validate_binding_offer(self.value)
@@ -88,6 +80,26 @@ class AtlasCloudBackendTests(unittest.TestCase):
                         {'capabilities': self.value['capabilities'] + ['tools']}):
             with self.subTest(changes=changes), self.assertRaises(ValidationError):
                 catalog.validate_binding_offer(dict(self.value, **changes))
+
+    def test_discovery_maps_provider_protocol_profiles_and_filters_non_text(self):
+        payload = {'code': 200, 'data': [
+            {'model': 'dual/model', 'type': 'Text', 'display_console': True,
+             'supported_protocols': ['openai.chat.completions', 'openai.responses'],
+             'supported_features': [], 'output_modalities': ['text']},
+            {'model': 'hidden/model', 'type': 'Text', 'display_console': False,
+             'supported_protocols': ['openai.chat.completions'],
+             'supported_features': [], 'output_modalities': ['text']},
+            {'model': 'media/model', 'type': 'Image',
+             'supported_protocols': None, 'output_modalities': ['image']} ]}
+        isolated_state = Path(self.temp.name) / 'discovery-state'
+        isolated_state.mkdir(mode=0o700)
+        catalog = AtlasCloudCatalog(isolated_state, lambda _secret: payload)
+        result = catalog.refresh('apikey-' + 'e' * 32)
+        self.assertEqual([(item['provider_model_id'], item['protocol'])
+                          for item in result['offers']], [
+            ('dual/model', 'openai-chat-completions-v1'),
+            ('dual/model', 'openai-responses-v1')])
+        self.assertTrue(all(item['freshness'] == 'fresh' for item in result['offers']))
 
     def test_credentials_are_write_only_revisioned_and_deletable(self):
         status = self.credentials.status(self.binding.credential_ref)
@@ -110,14 +122,13 @@ class AtlasCloudBackendTests(unittest.TestCase):
         self.assertEqual(adapter.dispatch(self.handoff, self.binding), result)
         self.assertEqual(len(calls), 1)
         request, secret = calls[0]
-        self.assertEqual((request['model'], request['input']),
-                         (self.model, 'přesný text'))
-        self.assertEqual((request['store'], request['stream'], request['truncation']),
-                         (False, False, 'disabled'))
+        self.assertEqual((request['model'], request['messages']),
+                         (self.model, [{'role': 'user', 'content': 'přesný text'}]))
+        self.assertFalse(request['stream'])
         self.assertNotIn(secret, json.dumps(request))
         self.assertEqual(result['usage']['total_tokens'], 10)
         self.assertEqual(adapter.runs.get(self.handoff.run_id)['adapter_id'],
-                         'atlascloud-responses')
+                         'atlascloud-text')
 
     def test_json_and_stream_require_reviewed_capabilities(self):
         limited = AtlasCloudBinding.parse(dict(self.value,
@@ -130,8 +141,26 @@ class AtlasCloudBackendTests(unittest.TestCase):
             AtlasCloudAdapter._request(limited_handoff, limited, stream=True)
         request, _, execution = AtlasCloudAdapter._request(
             self.handoff, self.binding, output_format='json', stream=True)
-        self.assertEqual(json.loads(request)['text']['format']['type'], 'json_object')
+        self.assertEqual(json.loads(request)['response_format']['type'], 'json_object')
         self.assertEqual(execution.output_format, 'json')
+
+    def test_responses_profile_uses_responses_contract(self):
+        value = dict(self.value, endpoint='https://api.atlascloud.ai/v1/responses',
+                     protocol='openai-responses-v1')
+        binding = AtlasCloudBinding.parse(value)
+        handoff = DispatchHandoff(str(uuid4()), str(uuid4()), 'e' * 64,
+                                  binding.target(), b'responses text')
+        request, _, _ = AtlasCloudAdapter._request(
+            handoff, binding, output_format='json', stream=True)
+        body = json.loads(request)
+        self.assertEqual((body['input'], body['max_output_tokens']),
+                         ('responses text', 2048))
+        self.assertEqual(body['text']['format']['type'], 'json_object')
+        response = {'id': 'resp_atlas', 'status': 'completed', 'model': self.model,
+            'output': [{'type': 'message', 'content': [
+                {'type': 'output_text', 'text': 'responses answer'}]}]}
+        self.assertEqual(AtlasCloudAdapter._response(response, binding)['response'],
+                         'responses answer')
 
     def test_streaming_is_durable_and_interruption_is_unknown_without_retry(self):
         deltas = []; calls = []
@@ -174,14 +203,17 @@ class AtlasCloudBackendTests(unittest.TestCase):
             adapter.dispatch(other, self.binding)
 
     def test_sse_ignores_keepalive_and_rejects_redirect(self):
-        response = self.response()
-        events = [
-            {'type': 'response.output_text.delta', 'sequence_number': 1,
-             'delta': 'odpověď'},
-            {'type': 'response.completed', 'sequence_number': 2,
-             'response': response}]
-        lines = iter([b': keep-alive\n', b'\n'] + [part for event in events for part in
-            [b'data: ' + json.dumps(event, ensure_ascii=False).encode() + b'\n', b'\n']])
+        event = {'id': 'chatcmpl_atlas', 'model': self.model,
+                 'choices': [{'index': 0, 'delta': {'content': 'odpověď'},
+                              'finish_reason': None}],
+                 'usage': {'prompt_tokens': 4, 'completion_tokens': 6,
+                           'total_tokens': 10}}
+        final = {'id': 'chatcmpl_atlas', 'model': self.model,
+                 'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'stop'}]}
+        lines = iter([b': keep-alive\n', b'\n',
+            b'data: ' + json.dumps(event, ensure_ascii=False).encode() + b'\n', b'\n',
+            b'data: ' + json.dumps(final).encode() + b'\n', b'\n',
+            b'data: [DONE]\n', b'\n'])
         class Response:
             status = 200
             def readline(self, _limit): return next(lines, b'')
@@ -194,7 +226,9 @@ class AtlasCloudBackendTests(unittest.TestCase):
         with patch('spikes.atlascloud_backend.http.client.HTTPSConnection', Connection):
             result = AtlasCloudAdapter._http_stream_transport(
                 self.binding, b'{}', 'apikey-secret-value', deltas.append)
-        self.assertEqual((deltas, result), (['odpověď'], response))
+        self.assertEqual(deltas, ['odpověď'])
+        self.assertEqual(AtlasCloudAdapter._response(result, self.binding)['response'],
+                         'odpověď')
 
         class Redirect(Response): status = 302
         class RedirectConnection(Connection):

@@ -1119,10 +1119,11 @@ Gate M3 proto není vydáván za celý uzavřený.
   WORK_LOG; dávka byla doručena PR #92 jako merge commit `2da2628`.
 - [x] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 je na větvi
   `feature/f-m3-atlascloud-01` PoC validated: samostatný external-provider
-  adapter používá pevný Responses endpoint, přesný reviewovaný offer,
+  adapter používá přesný živě objevený offer a jeho deklarovaný Chat
+  Completions/Responses protokol jako backendový modifikátor,
   node-local credential a durable run recovery bez fallbacku či retry
   neurčitého výsledku. Evidence je ve WORK_LOG; PR do `develop` zatím nebyl
-  vytvořen ani sloučen. Media/MCP, jiné wire protokoly a živé discovery
+  vytvořen ani sloučen. Media/MCP, Anthropic/Gemini a automatický fallback
   zůstávají mimo první řez.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.

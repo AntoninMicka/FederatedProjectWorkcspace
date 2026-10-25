@@ -51,7 +51,7 @@ class ExplicitTaskPlanTests(unittest.TestCase):
                 'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'gemma'}))
         atlas = self.plan(execution='external-atlascloud')
         atlas.validate_execution(ChatRunChoice.parse({
-            'mode': 'brainstorming', 'adapter': 'atlascloud-responses',
+            'mode': 'brainstorming', 'adapter': 'atlascloud-text',
             'model': 'deepseek-ai/deepseek-v3.2'}))
         with self.assertRaisesRegex(ValueError, 'selected backend'):
             atlas.validate_execution(ChatRunChoice.parse({

@@ -600,23 +600,19 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <hr><h2>AtlasCloud textový backend</h2>
 <p id="settings-atlascloud-status" role="status" aria-live="polite">Načítám stav AtlasCloud…</p>
 <form id="atlascloud-backend-form">
-<label>Provider <input value="AtlasCloud Responses API" disabled></label>
-<label>Endpoint <input name="endpoint" value="https://api.atlascloud.ai/v1/responses" readonly></label>
-<label>Reviewovaná nabídka <select name="offer_id" required><option value="">Přidat nebo vybrat nabídku</option></select></label>
-<fieldset><legend>Backendový profil nabídky</legend>
-<label>AtlasCloud model ID <input name="model" maxlength="200" placeholder="provider/model" required></label>
-<label><input name="review_json" type="checkbox"> Ověřeno: JSON output</label>
-<label><input name="review_streaming" type="checkbox"> Ověřeno: streaming</label>
-<button id="atlascloud-review-offer" type="button">Přidat nebo aktualizovat nabídku v katalogu</button>
-<small>Text a Responses protokol jsou pro tento adapter povinné. JSON a streaming označte jen podle dokumentace konkrétního modelu. Tato akce neukládá API klíč a nemění aktivní binding.</small>
-</fieldset>
+<label>Provider <input value="AtlasCloud text API" disabled></label>
+<label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
+<button id="atlascloud-load-models" type="button">Připojit a načíst modely</button>
+<label>Dostupná nabídka <select name="offer_id" required><option value="">Nejprve načtěte modely</option></select></label>
+<label>Model <input name="model" readonly required></label>
+<label>Protokol <input name="protocol_label" readonly required></label>
+<label>Endpoint <input name="endpoint" readonly required></label>
 <label>Maximum výstupních tokenů <input name="max_output_tokens" type="number" min="1" max="128000" value="4096" required></label>
 <label>Timeout v sekundách <input name="timeout_seconds" type="number" min="1" max="180" value="180" required></label>
-<label>API klíč <input name="secret" type="password" minlength="20" maxlength="4096" autocomplete="new-password" required></label>
 <p><a class="provider-link" href="https://www.atlascloud.ai/dashboard/api-keys">Vytvořit nebo spravovat klíč u AtlasCloud ↗</a></p>
 <button type="submit">Uložit AtlasCloud backend</button>
 <button id="atlascloud-remove" type="button">Odstranit AtlasCloud binding a klíč</button></form>
-<small>První řez podporuje pouze nabídky explicitně reviewované pro OpenAI Responses. Katalog není živý routing ani fallback; binding se po změně katalogu sám nepřepne.</small>
+<small>Modely, protokol a capabilities se načítají z živého AtlasCloud katalogu. Backendový profil určuje providerová pravidla konkrétní nabídky; uložení stále vyžaduje výslovný výběr a nevytváří fallback.</small>
 <hr><h2>OpenAI Images</h2>
 <p id="settings-openai-image-status" role="status">Obrazový binding zatím nebyl načten.</p>
 <form id="openai-image-form"><label>Model <input name="model" value="gpt-image-1" maxlength="128" required></label>
@@ -1027,7 +1023,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label class="prompt-control prompt-privacy-control" for="chat-privacy"><span>Soukromí</span><select id="chat-privacy"><option value="project">V rámci projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen na tomto počítači</option><option value="public">Veřejné</option></select></label>
 <label class="prompt-control" for="chat-response-language"><span>Jazyk</span><select id="chat-response-language"><option value="">Výchozí · cs-CZ</option><option value="cs-CZ">Čeština · cs-CZ</option><option value="en-US">English · en-US</option><option value="de-DE">Deutsch · de-DE</option><option value="sk-SK">Slovenčina · sk-SK</option></select></label>
 <div class="prompt-execution-controls" aria-label="Cíl běhu">
-<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option><option value="atlascloud-responses">AtlasCloud</option></select></label>
+<label class="prompt-control" for="chat-run-adapter"><span>Backend</span><select id="chat-run-adapter"><option value="ollama">Lokální Ollama</option><option value="openai-responses">OpenAI</option><option value="atlascloud-text">AtlasCloud</option></select></label>
 <label class="prompt-control" for="chat-run-model"><span>Model</span><input id="chat-run-model" maxlength="128" list="external-models"></label>
 </div>
 <button id="chat-submit" type="submit" aria-label="Zpracovat zadání" title="Zpracovat zadání (Enter) · nový řádek (Shift+Enter)" disabled>↑</button>
@@ -4103,24 +4099,24 @@ function fillExternalModels(catalog){
 function atlasCloudSupportedCapabilities(offer){
  return (offer?.capabilities || []).filter(item=>item.supported && ['reviewed','reported'].includes(item.state)).map(item=>item.name).sort();
 }
-function fillAtlasCloudOffers(catalog,binding=null,preferredOfferId=null){
+function fillAtlasCloudOffers(catalog,binding=null){
  atlasCloudCatalog=catalog;const form=document.querySelector('#atlascloud-backend-form');
  const select=form.elements.offer_id,model=form.elements.model;select.replaceChildren();
- const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte reviewovanou Responses nabídku';select.append(empty);
+ const empty=document.createElement('option');empty.value='';empty.textContent='Vyberte načtenou nabídku';select.append(empty);
  for(const offer of catalog?.offers || []){
   const caps=atlasCloudSupportedCapabilities(offer);
-  if(offer.provider_id!=='atlascloud'||offer.protocol!=='openai-responses-v1'||!caps.includes('generate-text')||!caps.includes('text-output'))continue;
+  if(offer.provider_id!=='atlascloud'||offer.availability!=='available'||offer.freshness!=='fresh'||!caps.includes('generate-text')||!caps.includes('text-output'))continue;
   const option=document.createElement('option');option.value=offer.offer_id;
-  option.textContent=`${offer.provider_model_id} · ${caps.join(', ')}`;select.append(option);
+  option.textContent=`${offer.provider_model_id} · ${offer.protocol} · ${caps.join(', ')}`;select.append(option);
  }
- const requested=preferredOfferId || binding?.offer_id;
+ const requested=binding?.offer_id;
  if(requested&&[...select.options].some(option=>option.value===requested))select.value=requested;
  const selected=(catalog?.offers || []).find(offer=>offer.offer_id===select.value);
  model.value=selected?.provider_model_id || binding?.model || '';
- model.readOnly=Boolean(selected);
- const caps=atlasCloudSupportedCapabilities(selected);
- form.elements.review_json.checked=caps.includes('json-output');
- form.elements.review_streaming.checked=caps.includes('streaming');
+ form.elements.protocol_label.value=selected?.protocol || binding?.protocol || '';
+ form.elements.endpoint.value=selected?.protocol==='openai-responses-v1'?
+  'https://api.atlascloud.ai/v1/responses':selected?.protocol==='openai-chat-completions-v1'?
+  'https://api.atlascloud.ai/v1/chat/completions':binding?.endpoint || '';
 }
 function autonomyTaskId(workflow){
  for(const step of workflow?.steps || []){
@@ -5172,7 +5168,7 @@ async function loadBackendBinding(){
   fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
   settingsAtlasCloudStatus.textContent=atlas.binding ?
    `AtlasCloud ${atlas.binding.model} · ${atlas.binding.protocol}; klíč ${atlas.credential?.available?'je uložen':'chybí'}.` :
-   `AtlasCloud zatím není nastaven. Reviewovaných Responses nabídek: ${(atlas.model_catalog?.offers || []).length}.`;
+   `AtlasCloud zatím není nastaven. Načtených nabídek: ${(atlas.model_catalog?.offers || []).length}.`;
   refreshChatModeControls();
   const media=await projectRequest('/v1/media/status',{}),comfy=media.bindings?.comfyui;
   document.querySelector('#settings-comfy-status').textContent=comfy ?
@@ -5266,13 +5262,13 @@ document.querySelector('#backend-metrics-refresh').addEventListener('click',asyn
  finally{event.currentTarget.disabled=false;}
 });
 function configuredRunBinding(adapter){
- return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-responses'?atlasCloudBinding:chatBinding;
+ return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
 }
 function runSupportsStreaming(adapter){
- return adapter==='openai-responses'?externalStreaming:adapter==='atlascloud-responses'?atlasCloudStreaming:ollamaStreaming;
+ return adapter==='openai-responses'?externalStreaming:adapter==='atlascloud-text'?atlasCloudStreaming:ollamaStreaming;
 }
 function runProviderLabel(adapter){
- return adapter==='openai-responses'?'OpenAI':adapter==='atlascloud-responses'?'AtlasCloud':'Ollama';
+ return adapter==='openai-responses'?'OpenAI':adapter==='atlascloud-text'?'AtlasCloud':'Ollama';
 }
 function refreshChatModeControls(){
  const mode=document.querySelector('#chat-mode').value;
@@ -5513,35 +5509,32 @@ document.querySelector('#external-load-models').addEventListener('click',async e
 document.querySelector('#atlascloud-backend-form').elements.offer_id.addEventListener('change',event=>{
  const form=document.querySelector('#atlascloud-backend-form');
  const offer=(atlasCloudCatalog?.offers || []).find(item=>item.offer_id===event.currentTarget.value);
- form.elements.model.value=offer?.provider_model_id || '';form.elements.model.readOnly=Boolean(offer);
- const caps=atlasCloudSupportedCapabilities(offer);
- form.elements.review_json.checked=caps.includes('json-output');
- form.elements.review_streaming.checked=caps.includes('streaming');
+ form.elements.model.value=offer?.provider_model_id || '';
+ form.elements.protocol_label.value=offer?.protocol || '';
+ form.elements.endpoint.value=offer?.protocol==='openai-responses-v1'?
+  'https://api.atlascloud.ai/v1/responses':offer?.protocol==='openai-chat-completions-v1'?
+  'https://api.atlascloud.ai/v1/chat/completions':'';
 });
-document.querySelector('#atlascloud-review-offer').addEventListener('click',async event=>{
+document.querySelector('#atlascloud-load-models').addEventListener('click',async event=>{
  const form=document.querySelector('#atlascloud-backend-form'),fields=form.elements;
- const model=fields.model.value.trim();
- if(!model){settingsAtlasCloudStatus.textContent='Zadejte přesné AtlasCloud model ID.';return;}
- const capabilities=['generate-text','text-output'];
- if(fields.review_json.checked)capabilities.push('json-output');
- if(fields.review_streaming.checked)capabilities.push('streaming');capabilities.sort();
- event.currentTarget.disabled=true;settingsAtlasCloudStatus.textContent='Ukládám reviewovanou nabídku do katalogu…';
- try{const result=await projectRequest('/v1/atlascloud/offers/review',{
-   expected_revision:atlasCloudCatalog.knowledge_revision,provider_model_id:model,
-   protocol:'openai-responses-v1',capabilities});
+ if(!fields.secret.value){settingsAtlasCloudStatus.textContent='Nejprve vložte AtlasCloud API klíč.';return;}
+ event.currentTarget.disabled=true;settingsAtlasCloudStatus.textContent='Připojuji a načítám AtlasCloud modely…';
+ try{const result=await projectRequest('/v1/atlascloud/models',{
+   secret:fields.secret.value});
   atlasCloudBinding=result.binding;atlasCloudStreaming=result.capabilities?.streaming===true;
-  fillAtlasCloudOffers(result.model_catalog,result.binding,result.reviewed_offer_id);
-  settingsAtlasCloudStatus.textContent=`Nabídka ${model} je v katalogu. Nyní lze uložit binding a API klíč.`;
+  fillAtlasCloudOffers(result.model_catalog,result.binding);
+  const available=(result.model_catalog?.offers || []).filter(item=>item.availability==='available'&&item.freshness==='fresh').length;
+  settingsAtlasCloudStatus.textContent=`Načteno ${available} použitelných AtlasCloud nabídek. Vyberte model a uložte backend.`;
  }catch(error){settingsAtlasCloudStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
 document.querySelector('#atlascloud-backend-form').addEventListener('submit',async event=>{
  event.preventDefault();const form=event.currentTarget,fields=form.elements;
  const offer=(atlasCloudCatalog?.offers || []).find(item=>item.offer_id===fields.offer_id.value);
- if(!offer){settingsAtlasCloudStatus.textContent='Vyberte přesnou reviewovanou nabídku.';return;}
+ if(!offer){settingsAtlasCloudStatus.textContent='Nejprve načtěte a vyberte dostupnou nabídku.';return;}
  const capabilities=atlasCloudSupportedCapabilities(offer);
  const binding={schema_version:1,binding_id:crypto.randomUUID(),revision:crypto.randomUUID(),
-  adapter:'atlascloud-responses',boundary:'external-provider',endpoint:fields.endpoint.value,
+  adapter:'atlascloud-text',boundary:'external-provider',endpoint:fields.endpoint.value,
   model:offer.provider_model_id,target_id:'api.atlascloud.ai',offer_id:offer.offer_id,
   protocol:offer.protocol,knowledge_revision:atlasCloudCatalog.knowledge_revision,capabilities,
   max_output_tokens:Number(fields.max_output_tokens.value),
@@ -5710,7 +5703,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  const adapter=document.querySelector('#chat-run-adapter').value;
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
- if(adapter==='atlascloud-responses' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
+ if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
  const model=document.querySelector('#chat-run-model').value.trim();
  if(!model){chatOperationStatus.textContent='Vyberte model běhu.';return;}
  const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
@@ -6537,7 +6530,7 @@ class DesktopHandler(Handler):
         '/v1/presentations/export/preview',
         '/v1/presentation/control', '/v1/presentation/public',
         '/v1/external/status', '/v1/external/configure', '/v1/external/models',
-        '/v1/atlascloud/status', '/v1/atlascloud/offers/review',
+        '/v1/atlascloud/status', '/v1/atlascloud/models',
         '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
@@ -6839,8 +6832,9 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.chat_service.external_models())
             if self.path == '/v1/atlascloud/status' and request == {}:
                 return self.reply(200, self.server.chat_service.atlascloud_status())
-            if self.path == '/v1/atlascloud/offers/review' and isinstance(request, dict):
-                return self.reply(200, self.server.chat_service.review_atlascloud_offer(request))
+            if self.path == '/v1/atlascloud/models' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.refresh_atlascloud_models(request))
             if self.path == '/v1/atlascloud/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_atlascloud(request))
             if self.path == '/v1/atlascloud/remove' and isinstance(request, dict):

@@ -24,7 +24,7 @@ class ChatModePolicyTests(unittest.TestCase):
             credential_revision=1, max_output_tokens=4096, timeout_seconds=180))
         self.atlascloud = AtlasCloudBinding.parse(dict(schema_version=1,
             binding_id=str(uuid4()), revision='atlas-one',
-            adapter='atlascloud-responses', boundary='external-provider',
+            adapter='atlascloud-text', boundary='external-provider',
             endpoint='https://api.atlascloud.ai/v1/responses',
             model='deepseek-ai/deepseek-v3.2', target_id='api.atlascloud.ai',
             credential_ref='credential:atlascloud-primary', credential_revision=1,
@@ -85,11 +85,11 @@ class ChatModePolicyTests(unittest.TestCase):
 
     def test_atlascloud_choice_is_exact_and_does_not_fall_back(self):
         choice = ChatRunChoice.parse({'mode': 'brainstorming',
-            'adapter': 'atlascloud-responses',
+            'adapter': 'atlascloud-text',
             'model': 'deepseek-ai/deepseek-v3.2'})
         selected = choice.resolve(ollama=None, atlascloud=self.atlascloud)
         self.assertEqual((selected.model, selected.adapter_id),
-                         ('deepseek-ai/deepseek-v3.2', 'atlascloud-responses'))
+                         ('deepseek-ai/deepseek-v3.2', 'atlascloud-text'))
         self.assertEqual(selected.offer_id, self.atlascloud.offer_id)
         with self.assertRaisesRegex(ValidationError, 'unavailable'):
             choice.resolve(ollama=None, openai=self.openai)

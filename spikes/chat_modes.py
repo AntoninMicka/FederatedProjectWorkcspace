@@ -11,7 +11,7 @@ from spikes.atlascloud_backend import AtlasCloudBinding
 
 
 MODES = frozenset({'orchestration', 'brainstorming'})
-ADAPTERS = frozenset({'ollama', 'openai-responses', 'atlascloud-responses'})
+ADAPTERS = frozenset({'ollama', 'openai-responses', 'atlascloud-text'})
 
 
 def _model(value):
@@ -76,14 +76,14 @@ class ChatRunChoice:
                         'Selected orchestration binding changed')
             return ollama
         bases = {'ollama': ollama, 'openai-responses': openai,
-                 'atlascloud-responses': atlascloud}
+                 'atlascloud-text': atlascloud}
         expected_types = {'ollama': OllamaBinding, 'openai-responses': OpenAIBinding,
-                          'atlascloud-responses': AtlasCloudBinding}
+                          'atlascloud-text': AtlasCloudBinding}
         base = bases[self.adapter_id]; expected = expected_types[self.adapter_id]
         require(isinstance(base, expected), 'Selected brainstorm backend is unavailable')
-        if self.adapter_id == 'atlascloud-responses':
+        if self.adapter_id == 'atlascloud-text':
             require(self.model == base.model,
-                    'AtlasCloud run must use the exact reviewed offer model')
+                    'AtlasCloud run must use the exact bound offer model')
             return base
         value = base.serialize()
         value['model'] = self.model

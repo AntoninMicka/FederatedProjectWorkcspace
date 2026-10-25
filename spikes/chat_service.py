@@ -341,7 +341,7 @@ class ChatService:
                 'providers': [
                     completed_run_usage(runs, 'ollama'),
                     completed_run_usage(OpenAIRuns(root), 'openai-responses'),
-                    completed_run_usage(AtlasCloudRuns(root), 'atlascloud-responses'),
+                    completed_run_usage(AtlasCloudRuns(root), 'atlascloud-text'),
                 ]}
         return result
 
@@ -562,51 +562,12 @@ class ChatService:
             credentials.delete(previous.credential_ref)
         return self.atlascloud_status()
 
-    def review_atlascloud_offer(self, value):
-        fields = {'expected_revision', 'provider_model_id', 'protocol', 'capabilities'}
-        require(isinstance(value, dict) and set(value) == fields,
-                'AtlasCloud offer review has unknown or missing fields')
-        require(value['protocol'] == 'openai-responses-v1',
-                'Only the reviewed AtlasCloud Responses protocol is supported')
-        capabilities = value['capabilities']
-        require(isinstance(capabilities, list)
-                and capabilities == sorted(set(capabilities))
-                and set(capabilities) <= {
-                    'generate-text', 'json-output', 'streaming', 'text-output'}
-                and {'generate-text', 'text-output'} <= set(capabilities),
-                'Invalid AtlasCloud reviewed capabilities')
-        root = self._root(); store = ModelKnowledgeStore(root)
-        catalog = store.load_or_empty(now())
-        model = value['provider_model_id']
-        require(isinstance(model, str)
-                and bool(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,199}', model)),
-                'Invalid AtlasCloud model ID')
-        identity = ('atlascloud', model, value['protocol'])
-        current = next((item for item in catalog['offers']
-            if (item['provider_id'], item['provider_model_id'], item['protocol']) == identity),
-            None)
-        offer_id = (current['offer_id'] if current is not None else
-            'atlascloud-responses:' + hashlib.sha256(model.encode()).hexdigest()[:24])
-        revision = 'atlas-review-' + str(uuid4())
-        observed = now()
-        reviewed = {'offer_id': offer_id, 'provider_id': 'atlascloud',
-            'provider_model_id': model, 'protocol': value['protocol'],
-            'canonical_model_id': (current['canonical_model_id']
-                                   if current is not None else None),
-            'capabilities': [{'name': name, 'value': True, 'state': 'reviewed',
-                'source': 'operator:atlascloud-ui', 'revision': revision,
-                'observed_at': observed} for name in capabilities]}
-        offers = [item for item in catalog['offers']
-                  if (item['provider_id'], item['provider_model_id'],
-                      item['protocol']) != identity]
-        offers.append(reviewed)
-        saved = store.save({'schema_version': 1, 'revision': revision,
-            'reviewed_at': observed, 'models': catalog['models'], 'offers': offers},
-            expected_revision=value['expected_revision'])
+    def refresh_atlascloud_models(self, value, catalog_factory=AtlasCloudCatalog):
+        require(isinstance(value, dict) and set(value) == {'secret'},
+                'AtlasCloud model refresh requires exactly one credential')
+        catalog = catalog_factory(self._root()).refresh(value['secret'])
         result = self.atlascloud_status()
-        require(result['model_catalog']['knowledge_revision'] == saved['revision'],
-                'Reviewed AtlasCloud offer was not projected')
-        result['reviewed_offer_id'] = offer_id
+        result['model_catalog'] = catalog
         return result
 
     def remove_atlascloud(self, value):
@@ -642,7 +603,7 @@ class ChatService:
             adapter = (factory(runs, credentials) if factory else
                        OpenAIAdapter(runs, credentials))
             return binding, OpenAIAdapter, adapter, runs, 'OpenAI'
-        require(adapter_id == 'atlascloud-responses',
+        require(adapter_id == 'atlascloud-text',
                 'Unsupported external backend adapter')
         base = AtlasCloudBindings(root).load()
         binding = choice.resolve(ollama=None, atlascloud=base)
@@ -865,7 +826,7 @@ class ChatService:
         external_binding = (OpenAIBindings(root).load()
                             if choice.adapter_id == 'openai-responses' else None)
         atlascloud_binding = (AtlasCloudBindings(root).load()
-                              if choice.adapter_id == 'atlascloud-responses' else None)
+                              if choice.adapter_id == 'atlascloud-text' else None)
         binding = choice.resolve(ollama=configured, openai=external_binding,
                                  atlascloud=atlascloud_binding)
         choice.validate_context(
@@ -907,7 +868,7 @@ class ChatService:
                 openai=(OpenAIBindings(root).load()
                 if choice.adapter_id == 'openai-responses' else None),
                 atlascloud=(AtlasCloudBindings(root).load()
-                if choice.adapter_id == 'atlascloud-responses' else None)) == binding,
+                if choice.adapter_id == 'atlascloud-text' else None)) == binding,
                 'Selected task execution binding changed')
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
@@ -917,7 +878,7 @@ class ChatService:
                 'query': plan.search_query,
                 'message_ids': request['selected_message_ids'] + [request['message_id']],
                 'artifact_ids': request['selected_artifact_ids']})
-        elif choice.adapter_id in {'openai-responses', 'atlascloud-responses'}:
+        elif choice.adapter_id in {'openai-responses', 'atlascloud-text'}:
             outcome = AITaskOutcome.parse({'schema_version': 1,
                 'kind': 'external-request',
                 'purpose': 'Generate explicit ' + plan.output_kind + ' output',
@@ -1784,7 +1745,7 @@ class ChatService:
             choice = ChatRunChoice.parse(request['run_choice'])
             task_plan = (ExplicitTaskPlan.parse(request['task_plan'])
                          if 'task_plan' in request else None)
-            require(choice.adapter_id in {'openai-responses', 'atlascloud-responses'}
+            require(choice.adapter_id in {'openai-responses', 'atlascloud-text'}
                     and ((task_plan is None and choice.mode == 'brainstorming')
                          or (task_plan is not None and choice.mode == 'orchestration'
                              and not request['record_chat'])),
@@ -1960,10 +1921,10 @@ class ChatService:
         approval = store.get(request['approval_id'], node_id, user_id)
         error_adapter = approval['request'].get('run_choice', {}).get(
             'adapter', 'openai-responses')
-        unknown_error = (AtlasCloudUnknownRun if error_adapter == 'atlascloud-responses'
+        unknown_error = (AtlasCloudUnknownRun if error_adapter == 'atlascloud-text'
                          else OpenAIUnknownRun)
         response_error = (AtlasCloudResponseError
-                          if error_adapter == 'atlascloud-responses'
+                          if error_adapter == 'atlascloud-text'
                           else OpenAIResponseError)
         if approval['state'] == 'succeeded':
             return approval['result']

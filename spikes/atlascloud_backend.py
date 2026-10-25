@@ -1,8 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Antonín Micka
 # SPDX-License-Identifier: MPL-2.0
-"""Fail-closed AtlasCloud Responses adapter over an exact reviewed offer."""
+"""Fail-closed, protocol-aware AtlasCloud text adapter over an exact offer."""
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import hashlib
 import http.client
 import json
@@ -17,14 +18,19 @@ from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendResponseError, BackendUnknown, ROLES)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
-from spikes.model_catalog import ModelKnowledgeStore, project_catalog
+from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
+                                  project_catalog)
 from spikes.ollama_backend import BACKENDS, BackendRuns, OllamaAdapter
 
 
-ATLASCLOUD_ENDPOINT = 'https://api.atlascloud.ai/v1/responses'
-ATLASCLOUD_PROTOCOL = 'openai-responses-v1'
+ATLASCLOUD_ENDPOINTS = {
+    'openai-chat-completions-v1': 'https://api.atlascloud.ai/v1/chat/completions',
+    'openai-responses-v1': 'https://api.atlascloud.ai/v1/responses'}
+ATLASCLOUD_PROTOCOL = 'openai-chat-completions-v1'
+ATLASCLOUD_ENDPOINT = ATLASCLOUD_ENDPOINTS[ATLASCLOUD_PROTOCOL]
 ATLASCLOUD_TIMEOUT = 180
 MAX_RESPONSE = 16 * 1024 * 1024
+MAX_MODEL_RESPONSE = 2 * 1024 * 1024
 _REFERENCE = re.compile(r'credential:atlascloud-[A-Za-z0-9][A-Za-z0-9._-]{0,127}')
 _MODEL_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._/-]{0,255}')
 _OFFER_ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}')
@@ -55,7 +61,7 @@ class AtlasCloudBinding:
     max_output_tokens: int
     timeout_seconds: int
 
-    adapter_id = 'atlascloud-responses'
+    adapter_id = 'atlascloud-text'
     boundary = 'external-provider'
 
     @classmethod
@@ -71,11 +77,11 @@ class AtlasCloudBinding:
                 and value['boundary'] == cls.boundary,
                 'Unsupported AtlasCloud binding')
         uuid(value['binding_id'])
-        require(value['endpoint'] == ATLASCLOUD_ENDPOINT
-                and value['target_id'] == 'api.atlascloud.ai',
-                'AtlasCloud binding requires the fixed official Responses endpoint')
-        require(value['protocol'] == ATLASCLOUD_PROTOCOL,
+        require(value['protocol'] in ATLASCLOUD_ENDPOINTS,
                 'Unsupported AtlasCloud protocol')
+        require(value['endpoint'] == ATLASCLOUD_ENDPOINTS[value['protocol']]
+                and value['target_id'] == 'api.atlascloud.ai',
+                'AtlasCloud binding requires the official endpoint for its protocol')
         for key in ('revision', 'knowledge_revision'):
             require(isinstance(value[key], str) and value[key].strip() == value[key]
                     and bool(value[key]) and not any(c in value[key] for c in '\0\r\n'),
@@ -118,7 +124,7 @@ class AtlasCloudBinding:
             formats.add('json')
         digest = hashlib.sha256((self.knowledge_revision + '\0' + self.offer_id + '\0'
             + '\0'.join(sorted(self.capability_names))).encode()).hexdigest()[:24]
-        return BackendCapabilities(1, 'atlascloud-reviewed-' + digest,
+        return BackendCapabilities(1, 'atlascloud-profile-' + digest,
                                    frozenset({'generate-text'}),
                                    frozenset(formats)).validate()
 
@@ -217,18 +223,73 @@ class AtlasCloudCredentials:
 
 
 class AtlasCloudCatalog:
-    """Reviewed-only projection until AtlasCloud documents a discovery API."""
-    def __init__(self, state_dir):
+    """AtlasCloud discovery projected through the provider-neutral catalog."""
+    scope_id = 'atlascloud-public-v1'
+    binding_revision = 'atlascloud-catalog-v1'
+
+    def __init__(self, state_dir, transport=None):
         self.root = _safe_root(state_dir)
+        self.transport = transport or self._http_transport
+
+    def refresh(self, secret):
+        require(isinstance(secret, str) and secret.strip() == secret
+                and 20 <= len(secret) <= 4096 and not any(c in secret for c in '\0\r\n'),
+                'Invalid AtlasCloud credential')
+        observed = datetime.now(timezone.utc).isoformat()
+        models = self._parse(self.transport(secret))
+        offers = []
+        for model in models:
+            for provider_protocol in model['supported_protocols']:
+                protocol = {'openai.chat.completions': 'openai-chat-completions-v1',
+                            'openai.responses': 'openai-responses-v1'}.get(
+                                provider_protocol)
+                if protocol is None:
+                    continue
+                names = {'generate-text', 'text-output', 'streaming'}
+                if set(model['supported_features']) & {'json_mode', 'structured_outputs'}:
+                    names.add('json-output')
+                revision = 'atlascloud-catalog-' + hashlib.sha256(
+                    (model['model'] + '\0' + provider_protocol + '\0'
+                     + '\0'.join(sorted(names))).encode()).hexdigest()[:24]
+                capabilities = [{'name': name, 'value': True, 'state': 'reported',
+                    'source': 'atlascloud:protocol-profile', 'revision': revision,
+                    'observed_at': observed} for name in sorted(names)]
+                offers.append({'offer_id': 'atlascloud:' + hashlib.sha256(
+                    (model['model'] + '\0' + protocol).encode()).hexdigest()[:32],
+                    'provider_id': 'atlascloud',
+                    'provider_model_id': model['model'], 'protocol': protocol,
+                    'availability': 'available', 'capabilities': capabilities})
+        store = ModelDiscoveryStore(self.root, 'atlascloud', self.scope_id)
+        snapshot = store.publish({'schema_version': 1, 'provider_id': 'atlascloud',
+            'scope_id': self.scope_id, 'binding_revision': self.binding_revision,
+            'credential_revision': None, 'fetched_at': observed, 'offers': offers})
+        return self._project(dict(snapshot, freshness='fresh', refresh_error=None))
 
     def load(self):
-        knowledge = ModelKnowledgeStore(self.root).load_or_empty(
-            '1970-01-01T00:00:00+00:00')
-        projected = project_catalog(knowledge, [])
+        store = ModelDiscoveryStore(self.root, 'atlascloud', self.scope_id)
+        try:
+            discovery = store.load(self.binding_revision, None)
+        except FileNotFoundError:
+            knowledge = ModelKnowledgeStore(self.root).load_or_empty(
+                '1970-01-01T00:00:00+00:00')
+            projected = project_catalog(knowledge, [])
+            projected['offers'] = [item for item in projected['offers']
+                                   if item['provider_id'] == 'atlascloud']
+            projected.update(provider_id='atlascloud', discovery='not-loaded',
+                             freshness='missing', refresh_error=None,
+                             fetched_at=None)
+            return projected
+        return self._project(discovery)
+
+    def _project(self, discovery):
+        knowledge = ModelKnowledgeStore(self.root).load_or_empty(discovery['fetched_at'])
+        projected = project_catalog(knowledge, [discovery])
         projected['offers'] = [item for item in projected['offers']
                                if item['provider_id'] == 'atlascloud']
-        projected.update(provider_id='atlascloud', discovery='unavailable',
-                         freshness='reviewed', refresh_error=None)
+        projected.update(provider_id='atlascloud', discovery='live',
+                         freshness=discovery['freshness'],
+                         refresh_error=discovery['refresh_error'],
+                         fetched_at=discovery['fetched_at'])
         return projected
 
     def validate_binding_offer(self, candidate):
@@ -238,11 +299,14 @@ class AtlasCloudCatalog:
                 'AtlasCloud model knowledge changed before binding save')
         offers = [item for item in catalog['offers']
                   if item['offer_id'] == candidate.get('offer_id')]
-        require(len(offers) == 1, 'AtlasCloud offer is not reviewed')
+        require(len(offers) == 1, 'AtlasCloud offer is unavailable')
         offer = offers[0]
         require(offer['provider_model_id'] == candidate.get('model')
                 and offer['protocol'] == candidate.get('protocol'),
                 'AtlasCloud offer differs from binding')
+        require(offer['availability'] == 'available'
+                and offer['freshness'] == 'fresh',
+                'AtlasCloud offer is not freshly discovered')
         supported = sorted(item['name'] for item in offer['capabilities']
                            if item['supported'] and item['state'] in {'reviewed', 'reported'})
         require({'generate-text', 'text-output'} <= set(supported),
@@ -251,6 +315,60 @@ class AtlasCloudCatalog:
         require(isinstance(requested, list) and set(requested) <= set(supported),
                 'AtlasCloud binding requests an unsupported capability')
         return offer
+
+    @staticmethod
+    def _parse(value):
+        require(isinstance(value, dict) and value.get('code') in {200, '200'}
+                and isinstance(value.get('data'), list)
+                and len(value['data']) <= 10000,
+                'Invalid AtlasCloud model catalog')
+        models = []
+        for item in value['data']:
+            require(isinstance(item, dict), 'Invalid AtlasCloud model entry')
+            if item.get('type') != 'Text' or item.get('display_console', True) is False:
+                continue
+            model = item.get('model')
+            protocols = item.get('supported_protocols')
+            features = item.get('supported_features', [])
+            modalities = item.get('output_modalities', [])
+            require(isinstance(model, str) and bool(_MODEL_ID.fullmatch(model))
+                    and isinstance(protocols, list)
+                    and all(isinstance(protocol, str) for protocol in protocols)
+                    and isinstance(features, list)
+                    and all(isinstance(feature, str) for feature in features)
+                    and isinstance(modalities, list)
+                    and all(isinstance(modality, str) for modality in modalities),
+                    'Invalid AtlasCloud model entry')
+            if 'text' in modalities:
+                models.append({'model': model,
+                    'supported_protocols': list(dict.fromkeys(protocols)),
+                    'supported_features': list(dict.fromkeys(features))})
+        require(len({item['model'] for item in models}) == len(models),
+                'Duplicate AtlasCloud model entry')
+        return sorted(models, key=lambda item: item['model'])
+
+    @staticmethod
+    def _http_transport(secret):
+        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=ATLASCLOUD_TIMEOUT, context=ssl.create_default_context())
+        try:
+            connection.request('GET', '/api/v1/models',
+                headers={'Authorization': 'Bearer ' + secret,
+                         'Accept': 'application/json'})
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise AtlasCloudResponseError('AtlasCloud model catalog redirect is forbidden')
+            if not 200 <= response.status < 300:
+                raise AtlasCloudResponseError(
+                    'AtlasCloud model catalog was rejected with HTTP ' + str(response.status))
+            raw = response.read(MAX_MODEL_RESPONSE + 1)
+            require(len(raw) <= MAX_MODEL_RESPONSE,
+                    'AtlasCloud model catalog exceeds 2 MiB')
+            return json.loads(raw)
+        except (UnicodeError, ValueError) as exc:
+            raise AtlasCloudResponseError('Invalid AtlasCloud model catalog JSON') from exc
+        finally:
+            connection.close()
 
 
 class AtlasCloudRuns(BackendRuns):
@@ -291,13 +409,22 @@ class AtlasCloudAdapter:
         require(type(stream) is bool, 'Invalid AtlasCloud streaming choice')
         require(not stream or 'streaming' in binding.capability_names,
                 'AtlasCloud offer does not support streaming')
-        body = {'model': binding.model, 'input': OllamaAdapter._prompt(handoff.payload),
-                'store': False, 'stream': stream, 'truncation': 'disabled',
-                'max_output_tokens': binding.max_output_tokens}
+        prompt = OllamaAdapter._prompt(handoff.payload)
+        if binding.protocol == 'openai-responses-v1':
+            body = {'model': binding.model, 'input': prompt, 'store': False,
+                    'stream': stream, 'truncation': 'disabled',
+                    'max_output_tokens': binding.max_output_tokens}
+        else:
+            body = {'model': binding.model,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'stream': stream, 'max_tokens': binding.max_output_tokens}
         if output_format == 'json':
             require('json-output' in binding.capability_names,
                     'AtlasCloud offer does not support JSON output')
-            body['text'] = {'format': {'type': 'json_object'}}
+            if binding.protocol == 'openai-responses-v1':
+                body['text'] = {'format': {'type': 'json_object'}}
+            else:
+                body['response_format'] = {'type': 'json_object'}
         request = json.dumps(body, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':')).encode()
         execution = AtlasCloudAdapter._execution(binding, role, output_format)
@@ -378,6 +505,8 @@ class AtlasCloudAdapter:
 
     @staticmethod
     def _response(value, binding):
+        if binding.protocol == 'openai-chat-completions-v1':
+            return AtlasCloudAdapter._chat_response(value, binding)
         require(isinstance(value, dict) and set(value) >= {'id', 'status', 'model', 'output'},
                 'Invalid AtlasCloud response')
         require(value['status'] == 'completed' and value['model'] == binding.model,
@@ -406,11 +535,38 @@ class AtlasCloudAdapter:
         return result
 
     @staticmethod
+    def _chat_response(value, binding):
+        require(isinstance(value, dict) and set(value) >= {'id', 'model', 'choices'}
+                and value['model'] == binding.model,
+                'Invalid AtlasCloud Chat Completions response')
+        choices = value['choices']
+        require(isinstance(choices, list) and len(choices) == 1
+                and isinstance(choices[0], dict) and choices[0].get('index') == 0
+                and isinstance(choices[0].get('message'), dict)
+                and choices[0]['message'].get('role') == 'assistant'
+                and isinstance(choices[0]['message'].get('content'), str),
+                'AtlasCloud Chat Completions response must contain one text choice')
+        result = {'id': value['id'], 'model': value['model'],
+                  'response': choices[0]['message']['content']}
+        usage = value.get('usage')
+        if isinstance(usage, dict):
+            mapping = {'prompt_tokens': 'input_tokens',
+                       'completion_tokens': 'output_tokens',
+                       'total_tokens': 'total_tokens'}
+            if all(type(usage.get(source)) is int and usage[source] >= 0
+                   for source in mapping):
+                result['usage'] = {target: usage[source]
+                    for source, target in mapping.items()}
+        return result
+
+    @staticmethod
     def _http_transport(binding, request, secret):
         connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
             timeout=binding.timeout_seconds, context=ssl.create_default_context())
         try:
-            connection.request('POST', '/v1/responses', body=request,
+            path = ('/v1/responses' if binding.protocol == 'openai-responses-v1'
+                    else '/v1/chat/completions')
+            connection.request('POST', path, body=request,
                 headers={'Authorization': 'Bearer ' + secret,
                          'Content-Type': 'application/json'})
             response = connection.getresponse()
@@ -429,6 +585,9 @@ class AtlasCloudAdapter:
 
     @staticmethod
     def _http_stream_transport(binding, request, secret, on_delta):
+        if binding.protocol == 'openai-chat-completions-v1':
+            return AtlasCloudAdapter._http_chat_stream_transport(
+                binding, request, secret, on_delta)
         connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
             timeout=binding.timeout_seconds, context=ssl.create_default_context())
         try:
@@ -483,6 +642,78 @@ class AtlasCloudAdapter:
             return completed
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise AtlasCloudResponseError('Invalid AtlasCloud SSE JSON') from exc
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _http_chat_stream_transport(binding, request, secret, on_delta):
+        connection = http.client.HTTPSConnection('api.atlascloud.ai', 443,
+            timeout=binding.timeout_seconds, context=ssl.create_default_context())
+        try:
+            connection.request('POST', '/v1/chat/completions', body=request,
+                headers={'Authorization': 'Bearer ' + secret,
+                         'Content-Type': 'application/json', 'Accept': 'text/event-stream'})
+            response = connection.getresponse()
+            if 300 <= response.status < 400:
+                raise AtlasCloudResponseError('AtlasCloud redirect is forbidden')
+            if not 200 <= response.status < 300:
+                raise AtlasCloudResponseError('AtlasCloud request was rejected with HTTP '
+                                              + str(response.status))
+            total = 0; data = []; deltas = []; response_id = model = None
+            usage = None; finished = choice_finished = False
+            while True:
+                raw = response.readline(MAX_RESPONSE + 1)
+                if not raw:
+                    break
+                total += len(raw)
+                require(total <= MAX_RESPONSE and raw.endswith(b'\n'),
+                        'Invalid AtlasCloud Chat Completions SSE stream')
+                line = raw.rstrip(b'\r\n')
+                if line.startswith(b'data:'):
+                    data.append(line[5:].lstrip())
+                elif line.startswith(b':'):
+                    continue
+                elif not line and data:
+                    payload = b'\n'.join(data); data = []
+                    if payload == b'[DONE]':
+                        finished = True; continue
+                    event = json.loads(payload)
+                    require(isinstance(event, dict)
+                            and isinstance(event.get('id'), str)
+                            and isinstance(event.get('model'), str)
+                            and isinstance(event.get('choices'), list),
+                            'Invalid AtlasCloud Chat Completions SSE event')
+                    response_id = response_id or event['id']; model = model or event['model']
+                    require(event['id'] == response_id and event['model'] == model,
+                            'AtlasCloud Chat Completions stream identity changed')
+                    if isinstance(event.get('usage'), dict):
+                        usage = event['usage']
+                    for choice in event['choices']:
+                        require(isinstance(choice, dict) and choice.get('index') == 0
+                                and isinstance(choice.get('delta'), dict),
+                                'Invalid AtlasCloud Chat Completions stream choice')
+                        finish_reason = choice.get('finish_reason')
+                        require(finish_reason is None or isinstance(finish_reason, str),
+                                'Invalid AtlasCloud Chat Completions finish reason')
+                        if finish_reason is not None:
+                            choice_finished = True
+                        delta = choice['delta'].get('content')
+                        if delta is not None:
+                            require(isinstance(delta, str),
+                                    'Invalid AtlasCloud Chat Completions text delta')
+                            deltas.append(delta); on_delta(delta)
+            if (data or not finished or not choice_finished
+                    or response_id is None or model is None):
+                raise ConnectionError('AtlasCloud Chat Completions stream ended before completion')
+            result = {'id': response_id, 'model': model, 'choices': [{'index': 0,
+                'message': {'role': 'assistant', 'content': ''.join(deltas)},
+                'finish_reason': 'stop'}]}
+            if usage is not None:
+                result['usage'] = usage
+            return result
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise AtlasCloudResponseError(
+                'Invalid AtlasCloud Chat Completions SSE JSON') from exc
         finally:
             connection.close()
 

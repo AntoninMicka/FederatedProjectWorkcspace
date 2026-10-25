@@ -13,55 +13,56 @@ dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR do
 
 - [x] [completed] **F-M3-ATLASCLOUD-01-A — protokol, autority, reuse a
   recovery (designed).** [ADR 0052](docs/adr/0052-atlascloud-text-backend.md)
-  omezuje první řez na pevný HTTPS Responses endpoint a přesnou reviewovanou
-  nabídku. Binding fixuje offer, model, protokol, capability snapshot,
+  omezuje první řez na pevné HTTPS endpointy pro providerem deklarované Chat
+  Completions/Responses a přesnou objevenou nabídku. Binding fixuje offer,
+  model, protokol, capability snapshot,
   credential revizi a limity; redirect, fallback a automatický retry jsou
   zakázané. Popsané crash boundaries oddělují binding, credential, provider
   journal a pozdější projektovou publikaci.
 - [x] [completed] **F-M3-ATLASCLOUD-01-B — credential, binding a katalogová
   projekce (implemented).** Node-local mode-0600 credential store API klíč
   nikdy nevrací. Atomický binding odkazuje jen na credential reference a lze
-  jej výslovně odstranit spolu s klíčem. Nabídka se přijímá pouze z
-  reviewované vrstvy společného katalogu; nedoložené síťové discovery se
-  nepředstírá a změna katalogu nepřepíná existující binding.
+  jej výslovně odstranit spolu s klíčem. Nabídka se přijímá pouze z čerstvého
+  bounded AtlasCloud discovery snapshotu; změna katalogu nepřepíná existující
+  binding.
 - [x] [completed] **F-M3-ATLASCLOUD-01-C — textový adapter a durable běhy
-  (implemented).** `atlascloud-responses` podporuje text, JSON a SSE pouze
+  (implemented).** `atlascloud-text` podporuje text, JSON a SSE pouze
   podle capability přes bounded request/response. Validuje finální model,
   jedinou textovou message, usage, SSE pořadí a shodu delt s finální odpovědí.
   Známé HTTP/provider chyby jsou `failed`; ztracený transport nebo neúplný
   stream je durable `unknown` bez resend a úspěch se po restartu vrací
   idempotentně.
 - [x] [completed] **F-M3-ATLASCLOUD-01-D — sdílené API/UI, regrese a
-  akceptace (PoC validated).** Desktop/web nastavení vybírá přesný reviewovaný
+  akceptace (PoC validated).** Desktop/web nastavení vybírá přesný objevený
   offer, ukládá a odstraňuje klíč, nabízí AtlasCloud v brainstormingu i
   explicitním task routingu a promítá streaming/usage. Webové mutace jsou jen
   pro administrátora, `local-only` se odmítá před externím preview a UI
   inventář obsahuje nový formulář.
-- [x] [completed] **F-M3-ATLASCLOUD-01-E — bootstrap nabídky na čistém uzlu
-  (implemented/PoC validated).** AtlasCloud nastavení umí před uložením
-  bindingu explicitně přidat nebo aktualizovat reviewovanou Responses nabídku
-  v prázdném společném katalogu. Providerové model ID, protokol a potvrzené
-  JSON/streaming capabilities tvoří backendový profil nabídky, nikoli vlastnost
-  kanonického modelu. Samostatný CAS krok nevolá provider, nezapisuje API klíč
-  ani nemění binding; web jej dovolí pouze administrátorovi.
+- [x] [completed] **F-M3-ATLASCLOUD-01-E — discovery-first výběr a backendové
+  modifikátory (implemented/PoC validated).** Nastavení nejprve přijme klíč a
+  načte živý `GET /api/v1/models`; modelové ID se ručně nezadává. Providerem
+  deklarovaný protokol a features se projektují jako backendová pravidla
+  obecného modelu: volí pevný endpoint a request/response tvar a fail-closed
+  určují JSON/streaming capabilities. Refresh neukládá credential ani nemění
+  binding; web jej dovolí pouze administrátorovi.
 
 ### Ověření, recovery a omezení
 
-Cílené testy pokryly prázdný katalog, vytvoření a aktualizaci nabídky, stale
-CAS, oddělení review od credentialu a bindingu, přesný binding, capabilities,
+Cílené testy pokryly prázdný katalog, živé načtení a filtr nabídek, oddělení
+discovery od credentialu a bindingu, přesný binding, capabilities,
 secret lifecycle,
 text/JSON/SSE, keep-alive, redirect, provider failure, transportní přerušení,
 restart bez druhého dispatch, usage, privacy, RBAC, API a UI. Závěrečná úplná
-sada `python3 -m unittest discover -s tests -v` prošla jako **846 testů bez
+sada `python3 -m unittest discover -s tests -v` prošla jako **848 testů bez
 selhání, 29 přeskočeno**. Dotčené Python moduly prošly `py_compile`,
 generovaný JavaScript `node --check` a finální diff `git diff --check`.
 
-Živý uzel neměl AtlasCloud binding, credential ani reviewovanou nabídku, proto
+Živý uzel neměl AtlasCloud binding ani credential, proto
 nebyl proveden skutečný placený/providerový smoke. Akceptace jej vyžadovala
 pouze při dostupném explicitním credentialu; automatické a integrační průchody
-nepředstírají živou dostupnost providera. Media/MCP/CLI, billing, síťové model
-discovery, jiné wire protokoly a automatický výběr či fallback zůstávají mimo
-dávku.
+nepředstírají živou inference dostupnost providera. Živý read-only katalog byl
+ověřen samostatně bez placeného inference volání. Media/MCP/CLI, billing,
+Anthropic/Gemini a automatický výběr či fallback zůstávají mimo dávku.
 
 ## F-M3-MODEL-CATALOG-01 — provider-neutral katalog modelů — 2026-10-25
 

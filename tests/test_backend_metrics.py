@@ -69,7 +69,7 @@ class BackendMetricTests(unittest.TestCase):
                         '{"usage":{"input_tokens":13,"output_tokens":5,'
                         '"total_tokens":18}}'))
             db.commit()
-        report = completed_run_usage(atlas, 'atlascloud-responses',
+        report = completed_run_usage(atlas, 'atlascloud-text',
                                      '2026-09-20T10:00:00Z')
         self.assertEqual((report['input_tokens'], report['output_tokens'],
                           report['total_tokens']), (13, 5, 18))
