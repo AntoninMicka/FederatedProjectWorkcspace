@@ -334,6 +334,32 @@ class BackendRuns:
         db.commit()
         return closing(db)
 
+    def connect_readonly(self):
+        """Open an existing, initialized run journal without DDL or creation."""
+        try:
+            fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW)
+        except FileNotFoundError:
+            return None
+        try:
+            info = os.fstat(fd)
+        finally:
+            os.close(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+                and info.st_nlink == 1 and not info.st_mode & 0o077,
+                'Unsafe Ollama run journal')
+        db = sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True, timeout=2)
+        try:
+            db.execute('PRAGMA query_only=ON')
+            columns = {row[1] for row in db.execute('PRAGMA table_info(runs)')}
+            required = {'run_id', 'request_digest', 'state', 'response', 'error',
+                        'adapter_id', 'binding_id', 'binding_revision',
+                        'runtime_evidence', 'completed_at'}
+            require(required <= columns, 'Run journal requires startup migration')
+        except BaseException:
+            db.close()
+            raise
+        return closing(db)
+
     def get(self, run_id):
         uuid(run_id)
         with self.connect() as db:
@@ -399,7 +425,10 @@ class OllamaRuns(BackendRuns):
         if binding_revision is not None:
             require(binding_id is not None and isinstance(binding_revision, str)
                     and binding_revision, 'Invalid Ollama binding revision')
-        with self.connect() as db:
+        connection = self.connect_readonly()
+        if connection is None:
+            return None
+        with connection as db:
             query = ('SELECT run_id,runtime_evidence,completed_at,binding_revision FROM runs '
                      "WHERE state='succeeded' AND runtime_evidence IS NOT NULL")
             parameters = ()

@@ -72,25 +72,14 @@ WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regr
 25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
 WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
 
-`OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated;
-evidence je ve [WORK_LOG](WORK_LOG.md) a její PR do `develop` zatím nebyl
-vytvořen ani sloučen. Následující plánovací horizont tvoří tři samostatné dávky
-v pořadí `OPS-WEB-CONCURRENCY-01` → `F-M3-MODEL-CATALOG-01` →
-`F-M3-ATLASCLOUD-01`. Nejprve se oddělí souběžná read-only obsluha monitoru od
-dlouhého streamu se zachováním jediného writeru; provider-neutral katalog pak
-předchází AtlasCloud adapteru. Aktivace jedné dávky nemění stav ostatních.
-
-- [ ] [planned] **OPS-WEB-CONCURRENCY-01 — souběžná obsluha streamu a monitoru
-  (cílová úroveň: designed → implemented → PoC validated).** Původ:
-  uživatelské zjištění při `OPS-NODE-MONITOR-01`, že současný jediný obslužný
-  tok během streamované odpovědi nevyřídí monitorovací požadavek. Navrhnout
-  omezenou souběžnost se zachováním serializace projektových a node-local
-  zápisů, vlastnictví requestů, čistého ukončení a fail-closed recovery.
-  Read-only telemetrie nesmí získat druhého writeru ani měnit binding, privacy,
-  autorizaci nebo běžící inference. Akceptace: současný dlouhý stream,
-  periodická read-only telemetrie a nezávislá zápisová interakce; restart a
-  ukončení bez ztraceného durable stavu, dvojí odpovědi či automatického retry
-  `unknown`. Návrh větve: `feature/ops-web-concurrency-01`.
+`OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated a
+doručena PR #90 jako merge commit `57009e2`; evidence je ve
+[WORK_LOG](WORK_LOG.md). `OPS-WEB-CONCURRENCY-01` byla 25. 10. 2026
+akceptována na úrovni PoC validated a její evidence je ve WORK_LOG; na větvi
+`feature/ops-web-concurrency-01` čeká na doručení jednoho PR do `develop`.
+Následující plánovací horizont tvoří dvě doložené samostatné dávky v pořadí
+`F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`. Provider-neutral katalog
+předchází AtlasCloud adapteru. Aktivace jedné dávky nemění stav druhé.
 
 - [ ] [planned] **F-M3-MODEL-CATALOG-01 — dynamické načtení a sdílený
    znalostní katalog modelů (cílová úroveň: designed → implemented → PoC

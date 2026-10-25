@@ -215,6 +215,17 @@ databáze živých metrik, fuzzy shoda modelu, automatický restart, fallback a
 retry `unknown` byly odmítnuty. Rozhodnutí a omezení:
 [ADR 0049](docs/adr/0049-node-and-ollama-runtime-telemetry.md).
 
+OPS-WEB-CONCURRENCY-01 **adaptuje** Python stdlib
+`HTTPServer`/`ThreadingMixIn`, existující HTTP/1.0 vlastnictví jednoho requestu
+na spojení, `NodeTelemetry` lock a autoritativní Workspace/SQLite zámky a
+journally. Souběh je vyhrazen pouze přesnému read-only statusu telemetrie;
+ostatní HTTP operace zůstávají v jediné bounded aplikační lince. Soukromá
+inventura neposkytuje komponentu se shodnou per-route admission, request
+ownership a crash-recovery hranicí, proto se z ní nepřebírá kód ani neveřejné
+detaily. Neomezený `ThreadingHTTPServer`, nový async framework, job server,
+druhý writer a WAL pouze kvůli monitoru byly odmítnuty. Rozhodnutí:
+[ADR 0050](docs/adr/0050-bounded-http-monitor-concurrency.md).
+
 F-M3-MEDIA-01-A **adaptuje protokol, nikoli implementaci ComfyUI**: vedle
 OpenAI Images bude `generate-image` poskytovat samostatný ComfyUI adapter nad
 oficiálním serverovým API. Reuse se omezuje na dokumentované request/history/

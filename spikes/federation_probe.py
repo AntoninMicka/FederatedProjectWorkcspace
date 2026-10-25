@@ -20,9 +20,11 @@ PATH = '/v1/federation/probe'
 
 
 def reply_probe(handler):
-    if handler.single('Host') != handler.server.authority:
+    authority = handler.local_authority
+    origin = 'https://' + authority
+    if handler.single('Host') != authority:
         return handler.send_error(403)
-    if handler.headers.get_all('Origin', []) not in ([], [handler.server.origin]):
+    if handler.headers.get_all('Origin', []) not in ([], [origin]):
         return handler.send_error(403)
     if handler.single('Content-Type') != 'application/json':
         return handler.send_error(415)
@@ -45,7 +47,7 @@ def reply_probe(handler):
             signatures = MappingSignatures(service.root)
             identity = signatures.identity()
             payload = dict(schema_version=1, node_id=node['id'], challenge=request['challenge'],
-                           endpoint=handler.server.origin, capability='connectivity-only')
+                           endpoint=origin, capability='connectivity-only')
             with tempfile.TemporaryDirectory(dir=service.root) as directory:
                 message = Path(directory) / 'probe'
                 message.write_bytes(canonical(payload))

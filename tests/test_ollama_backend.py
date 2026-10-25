@@ -248,6 +248,31 @@ class OllamaAdapterTests(unittest.TestCase):
             restarted.dispatch_stream(self.handoff, self.binding, lambda _delta: None)
         self.assertEqual(calls, ['dispatch'])
 
+    def test_client_disconnect_after_dispatch_is_durable_unknown_after_restart(self):
+        calls = []
+        def disconnected(_binding, _request, on_delta, _on_status):
+            calls.append('dispatch')
+            on_delta('provider already answered')
+            return {'model': self.binding.model, 'response': 'unreachable',
+                    'done': True}
+        adapter = OllamaAdapter(OllamaRuns(self.state), stream_transport=disconnected)
+        def client_disconnected(_delta):
+            raise BrokenPipeError('client closed')
+        with self.assertRaises(UnknownRun):
+            adapter.dispatch_stream(
+                self.handoff, self.binding, client_disconnected)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['response'], row['error_code']),
+                         ('unknown', None, 'transport-unknown'))
+
+        restarted = OllamaAdapter(
+            OllamaRuns(self.state),
+            stream_transport=lambda *_args: self.fail('must not redispatch'))
+        with self.assertRaisesRegex(UnknownRun, 'automatic retry is forbidden'):
+            restarted.dispatch_stream(
+                self.handoff, self.binding, lambda _delta: None)
+        self.assertEqual(calls, ['dispatch'])
+
     def test_http_stream_accepts_fragmented_ndjson_and_normalizes_final_frame(self):
         frames = (b'{"model":"gemma3","created_at":"thinking","response":"",'
                   b'"thinking":"reasoning","done":false}\n'

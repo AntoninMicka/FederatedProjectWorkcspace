@@ -31,6 +31,8 @@ class AdministrationTests(unittest.TestCase):
         key = state['access_key']; user = state['users'][0]
         actor = Administration(self.node).authenticate('Bearer ' + key)
         self.assertEqual(actor['id'], user['id']); self.assertEqual(actor['home_node_id'], state['node_id'])
+        readonly = Administration(self.node).authenticate_readonly('Bearer ' + key)
+        self.assertEqual(readonly['id'], user['id'])
         with self.assertRaises(AccessDenied):
             self.service.request(self.actor, {'action':'create-user', 'expected_commit':before['commit_id'], 'name':'Stale', 'node_role':'member'})
         with self.service.locked() as (git, _, _, _):

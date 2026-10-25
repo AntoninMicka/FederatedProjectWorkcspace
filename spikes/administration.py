@@ -157,6 +157,31 @@ class Administration:
                 commit = self.publish(git, state, commit)
             yield git, state, commit, node
 
+    @contextmanager
+    def read_locked(self):
+        """Read a current registry without bootstrap, migration or file creation."""
+        if self.node != self.node.resolve():
+            raise ValueError('Node path contains symlinks')
+        node = parse_node(read_config(self.node), location=self.node)
+        for project in node['projects']:
+            if any(overlap(self.root, Path(project[key])) for key in ('root', 'state_dir')):
+                raise ValueError('Administration must be outside projects and their state')
+        info = self.root.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise ValueError('Unsafe administration directory')
+        fd = os.open(self.root / 'lock', os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, 'rb') as handle:
+            fcntl.flock(handle, fcntl.LOCK_SH)
+            if not self.repo.is_dir() or self.repo.is_symlink():
+                raise ValueError('Registry is unavailable')
+            git = Git(self.repo)
+            head = git.run('rev-parse', '--verify', 'refs/heads/main').stdout.strip()
+            state = json.loads(git.run('show', head + ':registry.json').stdout)
+            self.validate(state, node['id'])
+            if state['schema_version'] != 6:
+                raise ValueError('Registry requires startup migration')
+            yield state
+
     def validate(self, state, node_id):
         version = state.get('schema_version')
         expected = {'schema_version', 'node_id', 'users', 'peers'}
@@ -739,6 +764,38 @@ class Administration:
                 row = db.execute('SELECT ref, user_id FROM credentials WHERE digest=?', (digest,)).fetchone()
             if row:
                 return next((u for u in state['users'] if u['id'] == row[1] and u['credential_ref'] == row[0] and u['active']), None)
+        return None
+
+    def authenticate_readonly(self, auth):
+        if self.deployment == 'desktop':
+            return None
+        if not auth.startswith('Bearer ') or len(auth) > 256 or not self.node.exists():
+            return None
+        digest = hashlib.sha256(auth[7:].encode()).hexdigest()
+        try:
+            with self.read_locked() as state:
+                path = self.root / 'credentials.sqlite'
+                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    info = os.fstat(fd)
+                finally:
+                    os.close(fd)
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                        or info.st_nlink != 1 or info.st_mode & 0o077):
+                    raise ValueError('Unsafe credentials')
+                with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True,
+                                             timeout=2)) as db:
+                    db.execute('PRAGMA query_only=ON')
+                    row = db.execute(
+                        'SELECT ref, user_id FROM credentials WHERE digest=?',
+                        (digest,)).fetchone()
+                if row:
+                    return next((user for user in state['users']
+                                 if user['id'] == row[1]
+                                 and user['credential_ref'] == row[0]
+                                 and user['active']), None)
+        except FileNotFoundError:
+            return None
         return None
 
     @staticmethod
