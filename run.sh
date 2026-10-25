@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test [TEST...]|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
   deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--web-hostname DNS_NAME] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
@@ -17,7 +17,7 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
   desktop [--node SOUBOR]  Vytvoří nebo otevře projekt v desktopu; konfigurace uzlu je volitelná.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
-  test         Spustí celou unittest sadu.
+  test [TEST...]  Bez selektorů spustí celou sadu; jinak jen zadané unittest cíle.
   check CESTA  Ověří artefakty a registry projektu bez zápisu; neověřuje project.json.
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
   module-check MANIFEST [API_BASE_URL]
@@ -35,8 +35,9 @@ command_name=${1:-demo}
 case "$command_name" in
     help|-h|--help) usage; exit 0 ;;
     deploy-omnia|package-desktop|package-deb) ;;
-    demo|setup|test)
+    demo|setup)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
+    test) ;;
     desktop)
         if (( $# != 1 )) && { (( $# != 3 )) || [[ "$2" != --node ]]; }; then
             usage >&2; exit 2
@@ -97,6 +98,19 @@ fi
 if ! "$python_bin" -c 'import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
     printf 'Chybí požadovaný PyYAML 6.0.3. Spusťte: ./run.sh setup\n' >&2; exit 1
 fi
+if [[ "$command_name" == test ]]; then
+    shift
+    if (( $# == 0 )); then
+        exec "$python_bin" -m unittest discover -s tests -v
+    fi
+    for selector in "$@"; do
+        if [[ ! "$selector" =~ ^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$ ]]; then
+            printf 'Neplatný unittest selektor: %s\n' "$selector" >&2
+            exit 2
+        fi
+    done
+    exec "$python_bin" -m unittest -v "$@"
+fi
 # The desktop can use distro Qt without modifying an existing isolated venv.
 if [[ "$command_name" == desktop ]]; then
     if ! "$python_bin" -c 'from PySide6.QtWebEngineWidgets import QWebEngineView' >/dev/null 2>&1; then
@@ -115,7 +129,6 @@ if [[ "$command_name" == desktop ]]; then
 fi
 case "$command_name" in
     demo) exec "$python_bin" -m spikes.demo ;;
-    test) exec "$python_bin" -m unittest discover -s tests -v ;;
     check) exec "$python_bin" -m spikes.check_project "$project_path" ;;
     config) exec "$python_bin" -m spikes.check_config "$2" "$project_path" ;;
     module-check)

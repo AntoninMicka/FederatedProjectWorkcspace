@@ -219,7 +219,8 @@ Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a závislosti z `requirements.tx
 ```sh
 ./run.sh setup                 # jednorázová příprava .venv a instalace závislostí
 ./run.sh                       # dočasné storage demo (totéž jako ./run.sh demo)
-./run.sh test                  # celá sada testů
+./run.sh test                  # celá sada před předáním PR
+./run.sh test tests.test_local_api  # cílený modul během vývoje
 ./run.sh check "/cesta/k/projektu"
 ./run.sh config project "/cesta/k/projektu/project.json"
 ./run.sh config node "/cesta/k/lokalnimu/node.json"
@@ -262,6 +263,15 @@ python3 -m venv .venv
 ```
 
 Pokud už jsou závislosti z `requirements.txt` dostupné, lze testy spustit přímo `python3 -m unittest discover -s tests -v`.
+
+Během implementace používejte explicitní unittest selektory, například
+`./run.sh test tests.test_local_api.LocalAPITests`. Úplný discovery běh patří
+po poslední relevantní změně k závěrečné kontrole před PR. GitHub Actions jej
+projekčně rozdělí do čtyř izolovaných jobů příkazem
+`python scripts/test_shards.py --shard N --shards 4`. Runner automaticky
+zahrne každý top-level `tests/test_*.py` právě jednou a vyvažuje shardy podle
+velikosti zdrojů; nejde o paralelní běh ve společném Python procesu. Rozdělení
+lze bez spuštění zkontrolovat přepínačem `--list`.
 
 Testy vytvářejí izolované dočasné repozitáře a SQLite databáze a nemění globální Git konfiguraci. Výchozí sada používá dočasné Unix sockety a porty na `127.0.0.1` pro [lokální API PoC](docs/adr/0006-local-api-transport.md); nepotřebuje internet. Sandbox musí povolit lokální bind, jinak jde o selhání testu. Cíleně: `python3 -m unittest tests.test_local_api -v`. Volitelné [srovnání C++/libgit2](spikes/libgit2/README.md) vyžaduje samostatné sestavení; jeho explicitně zapnutý HTTP test používá pouze loopback a smyšlené credentials. Bez sestaveného probe jsou srovnávací testy označené jako skipped.
 

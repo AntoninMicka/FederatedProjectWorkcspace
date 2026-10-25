@@ -5,11 +5,54 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## TEST-EXECUTION-01 — cílené a paralelní spouštění testů — 2026-10-25
+
+Dávka vznikla na větvi `feature/test-execution-01-parallel-ci` z `develop`
+`0405d14` a dosáhla lokální úrovně **PoC validated**. Feature akceptace je
+dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **TEST-EXECUTION-01-A — deterministické shardy
+  (implemented).** `scripts/test_shards.py` automaticky objeví každý současný
+  top-level `tests/test_*.py`, rozdělí moduly právě jednou do 1–32 shardů a
+  odmítne neplatný inventář i souřadnice. Deterministický LPT rozvrh používá
+  velikost zdroje jako stabilní lokální odhad nákladů; nejde o tvrzení přesné
+  predikce runtime.
+- [x] [completed] **TEST-EXECUTION-01-B — izolovaná paralelní CI
+  (implemented, skutečný CI běh čeká na PR).** GitHub Actions používá čtyři
+  matrix joby s `fail-fast: false`, samostatnými checkouty/procesy, pip cache a
+  20minutovým limitem. Souhrnný job zachovává původní required-check jméno
+  `tests` a uspěje pouze po úspěchu všech shardů.
+- [x] [completed] **TEST-EXECUTION-01-C — cílený lokální workflow
+  (implemented).** `./run.sh test` zachovává úplný discovery běh; jeden či více
+  explicitních unittest selektorů spustí jen zadané cíle a volby začínající
+  pomlčkou nebo neplatné názvy se odmítnou. README a AGENTS určují cílené běhy
+  během práce a jedinou úplnou bránu po poslední relevantní změně před PR.
+- [x] [completed] **TEST-EXECUTION-01-D — regrese a časové ověření
+  (PoC validated).** Nové testy ověřují úplnost, disjunktnost, determinismus a
+  přibližné vyvážení shardů, chyby vstupu, listovací CLI, cílený launcher a CI
+  kontrakt. Reuse stávajícího `unittest`/GitHub Actions je zaznamenán bez nové
+  testovací závislosti.
+
+### Ověření a omezení
+
+Cílených 5 testů nové vrstvy prošlo. Čtyři lokálně souběžné procesy po poslední
+změně prošly jako 215 / 199 / 244 / 195 testů, celkem **853 bez selhání a 29
+přeskočených**; jejich časy byly 81,543 / 34,037 / 44,740 / 56,847 s, takže
+lokální wall-time určoval první shard. Kanonický sekvenční discovery běh prošel
+stejných **853 testů, 29 přeskočeno, za 207,997 s**. Souběžná simulace tedy
+zkrátila naměřený lokální wall-time o 60,8 %, ale není měřením GitHub runnerů,
+instalace závislostí ani fronty Actions. Skutečnou CI funkčnost a čas lze
+potvrdit až joby otevřeného PR.
+
+`bash -n run.sh`, `py_compile` nového runneru/testu, parsování CI YAML přes
+PyYAML a `git diff --check` prošly. Shardy jsou izolované v CI; lokální
+souběžná simulace na jednom checkoutu byla pouze dodatečný zátěžový důkaz.
+
 ## F-M3-ATLASCLOUD-01 — AtlasCloud textový backend — 2026-10-25
 
 Dávka vznikla na větvi `feature/f-m3-atlascloud-01` z `develop` `2da2628` a
-dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR do
-`develop` zatím nebyl vytvořen ani sloučen.
+dosáhla úrovně **PoC validated**. Byla doručena PR #93 do `develop` jako merge
+commit `0405d14`.
 
 - [x] [completed] **F-M3-ATLASCLOUD-01-A — protokol, autority, reuse a
   recovery (designed).** [ADR 0052](docs/adr/0052-atlascloud-text-backend.md)

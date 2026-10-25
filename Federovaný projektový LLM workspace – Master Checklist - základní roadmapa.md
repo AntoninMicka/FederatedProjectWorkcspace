@@ -6,8 +6,9 @@ SPDX-License-Identifier: MPL-2.0
 # Federovaný projektový LLM workspace
 ## Master Checklist / základní roadmapa
 
-Feature `F-M3-ATLASCLOUD-01` je na větvi `feature/f-m3-atlascloud-01`
-akceptovaná a čeká na doručení PR; Gate M3 jako celek zůstává otevřený.
+Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Infrastrukturní dávka
+`TEST-EXECUTION-01` je lokálně PoC validated a čeká na doručení vlastního PR;
+Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
