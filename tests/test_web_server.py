@@ -267,6 +267,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("querySelector('#resource-runtime-policy').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#model-catalog-import').hidden=!admin", WEB_JS)
         self.assertIn("querySelector('#model-catalog-knowledge').readOnly=!admin", WEB_JS)
+        self.assertIn("querySelector('#atlascloud-backend-form').hidden=!admin", WEB_JS)
         self.assertIn("'/v1/node-telemetry/status'", WEB_JS)
         self.assertIn("'/v1/node-telemetry/configure'", WEB_JS)
         self.assertIn("'/v1/node-telemetry/run'", WEB_JS)
@@ -453,6 +454,8 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/atlascloud/configure', body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/atlascloud/remove', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/search/configure', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/model-catalog/import', body='{}',

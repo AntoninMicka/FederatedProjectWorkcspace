@@ -12,6 +12,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.artifacts import Artifacts
+from spikes.atlascloud_backend import AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
 from spikes.chat_service import ChatService, parse_search_evaluation
 from spikes.external_dispatch import ExternalDispatches
@@ -231,6 +232,37 @@ class ChatServiceTests(unittest.TestCase):
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'e' * 32))
         return service
+
+    def atlascloud_service(self, calls):
+        capability = lambda name: {'name': name, 'value': True, 'state': 'reviewed',
+            'source': 'atlascloud-docs', 'revision': 'docs-v1', 'observed_at': NOW}
+        catalog = {'schema_version': 1, 'revision': 'atlas-review-v1',
+            'reviewed_at': NOW,
+            'models': [{'model_id': 'canonical:atlas-text',
+                        'display_name': 'Atlas reviewed text model'}],
+            'offers': [{'offer_id': 'atlascloud:reviewed-text-v1',
+                'provider_id': 'atlascloud', 'provider_model_id': 'atlas-text-v1',
+                'protocol': 'openai-responses-v1',
+                'canonical_model_id': 'canonical:atlas-text',
+                'capabilities': [capability(name) for name in
+                    ('generate-text', 'json-output', 'streaming', 'text-output')]}]}
+        service = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        service.import_model_catalog_knowledge(
+            {'expected_revision': 'empty-v1', 'catalog': catalog})
+        status = service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-one',
+            'adapter': 'atlascloud-responses', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/responses',
+            'model': 'atlas-text-v1', 'target_id': 'api.atlascloud.ai',
+            'offer_id': 'atlascloud:reviewed-text-v1',
+            'protocol': 'openai-responses-v1',
+            'knowledge_revision': 'atlas-review-v1',
+            'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'a' * 32})
+        return service, status
 
     @staticmethod
     def proposal_value(message_ids, **changes):
@@ -1486,6 +1518,63 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(self.service.external_status()['binding']['model'],
                          'gpt-5.6-luna')
         self.assertNotIn(secret, json.dumps(self.service.model_catalog_knowledge()))
+
+    def test_atlascloud_configuration_exact_dispatch_and_removal_are_restart_safe(self):
+        calls = []
+        service, status = self.atlascloud_service(calls)
+        encoded = json.dumps(status)
+        self.assertEqual(status['binding']['offer_id'], 'atlascloud:reviewed-text-v1')
+        self.assertEqual(status['binding']['knowledge_revision'], 'atlas-review-v1')
+        self.assertEqual(status['capabilities'], {'streaming': True, 'json': True})
+        self.assertTrue(status['credential']['available'])
+        self.assertNotIn('atlas-test-', encoded)
+        self.assertNotIn('secret', encoded)
+
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-responses', 'model': 'atlas-text-v1'})
+        preview = service.external_preview(request)
+        self.assertEqual(preview['target']['provider'], 'AtlasCloud')
+        self.assertEqual(preview['target']['endpoint'],
+                         'https://api.atlascloud.ai/v1/responses')
+        result = service.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']})
+        self.assertEqual(result['target']['adapter'], 'atlascloud-responses')
+        self.assertEqual(result['thread']['messages'][-1]['content'], 'External answer')
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        self.assertEqual(AtlasCloudRuns(self.chat_state).get(request['run_id'])['state'],
+                         'succeeded')
+
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+            state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
+                FakeExternalAdapter(runs, credentials, calls))
+        self.assertEqual(restarted.external_confirm({'approval_id': preview['approval_id'],
+            'preview_sha256': preview['preview_sha256'], 'approved': True,
+            'privacy': preview['privacy']}), result)
+        self.assertEqual([item[0] for item in calls], ['prepare', 'dispatch'])
+        removed = restarted.remove_atlascloud({'confirmed': True})
+        self.assertIsNone(removed['binding'])
+        self.assertIsNone(removed['credential'])
+
+    def test_atlascloud_rejects_unreviewed_run_model_and_offer(self):
+        service, _ = self.atlascloud_service([])
+        request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-responses', 'model': 'unreviewed-model'})
+        with self.assertRaisesRegex(ValueError, 'exact reviewed offer model'):
+            service.external_preview(request)
+        invalid = {'schema_version': 1, 'binding_id': str(uuid4()),
+            'revision': 'atlas-two', 'adapter': 'atlascloud-responses',
+            'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/responses',
+            'model': 'atlas-text-v1', 'target_id': 'api.atlascloud.ai',
+            'offer_id': 'atlascloud:not-reviewed', 'protocol': 'openai-responses-v1',
+            'knowledge_revision': 'atlas-review-v1',
+            'capabilities': ['generate-text', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'b' * 32}
+        with self.assertRaisesRegex(ValueError, 'offer is not reviewed'):
+            service.configure_atlascloud(invalid)
+        self.assertEqual(service.atlascloud_status()['binding']['revision'], 'atlas-one')
 
     def test_chat_uses_common_unscoped_execution_contract(self):
         calls = []

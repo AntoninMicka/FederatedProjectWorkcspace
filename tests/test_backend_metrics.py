@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from spikes.backend_metrics import (MetricTransportError, OpenAIAccountMetrics,
                                     completed_run_usage, run_usage)
+from spikes.atlascloud_backend import AtlasCloudRuns
 from spikes.ollama_backend import OllamaRuns
 from spikes.openai_backend import OpenAIRuns
 
@@ -59,6 +60,19 @@ class BackendMetricTests(unittest.TestCase):
                                      '2026-09-20T10:00:00Z')
         self.assertEqual((report['input_tokens'], report['output_tokens'],
                           report['total_tokens']), (11, 3, 14))
+
+        atlas = AtlasCloudRuns(self.root)
+        with atlas.connect() as db:
+            db.execute('INSERT INTO runs(run_id,request_digest,state,response) '
+                       'VALUES(?,?,?,?)',
+                       ('00000000-0000-4000-8000-000000000005', 'e', 'succeeded',
+                        '{"usage":{"input_tokens":13,"output_tokens":5,'
+                        '"total_tokens":18}}'))
+            db.commit()
+        report = completed_run_usage(atlas, 'atlascloud-responses',
+                                     '2026-09-20T10:00:00Z')
+        self.assertEqual((report['input_tokens'], report['output_tokens'],
+                          report['total_tokens']), (13, 5, 18))
 
     def test_completed_run_usage_does_not_create_absent_journal(self):
         runs = OpenAIRuns(self.root)

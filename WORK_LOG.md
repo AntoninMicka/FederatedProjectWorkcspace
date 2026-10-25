@@ -5,11 +5,60 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M3-ATLASCLOUD-01 — AtlasCloud textový backend — 2026-10-25
+
+Dávka vznikla na větvi `feature/f-m3-atlascloud-01` z `develop` `2da2628` a
+dosáhla úrovně **PoC validated**. Feature akceptace je dokončená; PR do
+`develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **F-M3-ATLASCLOUD-01-A — protokol, autority, reuse a
+  recovery (designed).** [ADR 0052](docs/adr/0052-atlascloud-text-backend.md)
+  omezuje první řez na pevný HTTPS Responses endpoint a přesnou reviewovanou
+  nabídku. Binding fixuje offer, model, protokol, capability snapshot,
+  credential revizi a limity; redirect, fallback a automatický retry jsou
+  zakázané. Popsané crash boundaries oddělují binding, credential, provider
+  journal a pozdější projektovou publikaci.
+- [x] [completed] **F-M3-ATLASCLOUD-01-B — credential, binding a katalogová
+  projekce (implemented).** Node-local mode-0600 credential store API klíč
+  nikdy nevrací. Atomický binding odkazuje jen na credential reference a lze
+  jej výslovně odstranit spolu s klíčem. Nabídka se přijímá pouze z
+  reviewované vrstvy společného katalogu; nedoložené síťové discovery se
+  nepředstírá a změna katalogu nepřepíná existující binding.
+- [x] [completed] **F-M3-ATLASCLOUD-01-C — textový adapter a durable běhy
+  (implemented).** `atlascloud-responses` podporuje text, JSON a SSE pouze
+  podle capability přes bounded request/response. Validuje finální model,
+  jedinou textovou message, usage, SSE pořadí a shodu delt s finální odpovědí.
+  Známé HTTP/provider chyby jsou `failed`; ztracený transport nebo neúplný
+  stream je durable `unknown` bez resend a úspěch se po restartu vrací
+  idempotentně.
+- [x] [completed] **F-M3-ATLASCLOUD-01-D — sdílené API/UI, regrese a
+  akceptace (PoC validated).** Desktop/web nastavení vybírá přesný reviewovaný
+  offer, ukládá a odstraňuje klíč, nabízí AtlasCloud v brainstormingu i
+  explicitním task routingu a promítá streaming/usage. Webové mutace jsou jen
+  pro administrátora, `local-only` se odmítá před externím preview a UI
+  inventář obsahuje nový formulář.
+
+### Ověření, recovery a omezení
+
+Cílené testy pokryly přesný binding, capabilities, secret lifecycle,
+text/JSON/SSE, keep-alive, redirect, provider failure, transportní přerušení,
+restart bez druhého dispatch, usage, privacy, RBAC, API a UI. Závěrečná úplná
+sada `python3 -m unittest discover -s tests -v` prošla jako **845 testů bez
+selhání, 29 přeskočeno**. Dotčené Python moduly prošly `py_compile`,
+generovaný JavaScript `node --check` a finální diff `git diff --check`.
+
+Živý uzel neměl AtlasCloud binding, credential ani reviewovanou nabídku, proto
+nebyl proveden skutečný placený/providerový smoke. Akceptace jej vyžadovala
+pouze při dostupném explicitním credentialu; automatické a integrační průchody
+nepředstírají živou dostupnost providera. Media/MCP/CLI, billing, síťové model
+discovery, jiné wire protokoly a automatický výběr či fallback zůstávají mimo
+dávku.
+
 ## F-M3-MODEL-CATALOG-01 — provider-neutral katalog modelů — 2026-10-25
 
 Dávka vznikla na větvi `feature/f-m3-model-catalog-01` z `develop`
 `25d065f` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` zatím nebyl vytvořen ani sloučen.
+dávka byla doručena PR #92 do `develop` jako merge commit `2da2628`.
 
 - [x] [completed] **F-M3-MODEL-CATALOG-01-A — autority, identity a recovery
   katalogu (designed).** [ADR 0051](docs/adr/0051-provider-neutral-model-catalog.md)

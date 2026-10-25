@@ -7,10 +7,11 @@ import hashlib
 from spikes.metadata import require, uuid
 from spikes.ollama_backend import OllamaBinding
 from spikes.openai_backend import OpenAIBinding
+from spikes.atlascloud_backend import AtlasCloudBinding
 
 
 MODES = frozenset({'orchestration', 'brainstorming'})
-ADAPTERS = frozenset({'ollama', 'openai-responses'})
+ADAPTERS = frozenset({'ollama', 'openai-responses', 'atlascloud-responses'})
 
 
 def _model(value):
@@ -62,7 +63,7 @@ class ChatRunChoice:
             binding_id = revision = None
         return cls(value['mode'], value['adapter'], value['model'], binding_id, revision)
 
-    def resolve(self, *, ollama, openai=None):
+    def resolve(self, *, ollama, openai=None, atlascloud=None):
         """Return an immutable run binding without changing saved configuration."""
         if self.mode == 'orchestration' and self.adapter_id == 'ollama':
             require(isinstance(ollama, OllamaBinding), 'Configured Ollama binding is required')
@@ -74,9 +75,16 @@ class ChatRunChoice:
                         (ollama.binding_id, ollama.revision),
                         'Selected orchestration binding changed')
             return ollama
-        base = ollama if self.adapter_id == 'ollama' else openai
-        expected = OllamaBinding if self.adapter_id == 'ollama' else OpenAIBinding
+        bases = {'ollama': ollama, 'openai-responses': openai,
+                 'atlascloud-responses': atlascloud}
+        expected_types = {'ollama': OllamaBinding, 'openai-responses': OpenAIBinding,
+                          'atlascloud-responses': AtlasCloudBinding}
+        base = bases[self.adapter_id]; expected = expected_types[self.adapter_id]
         require(isinstance(base, expected), 'Selected brainstorm backend is unavailable')
+        if self.adapter_id == 'atlascloud-responses':
+            require(self.model == base.model,
+                    'AtlasCloud run must use the exact reviewed offer model')
+            return base
         value = base.serialize()
         value['model'] = self.model
         suffix = hashlib.sha256(self.model.encode('utf-8')).hexdigest()[:16]
@@ -88,7 +96,7 @@ class ChatRunChoice:
                 'Chat context selections must be immutable tuples')
         require(all(isinstance(value, str) for value in project_input_ids + text_input_ids),
                 'Invalid chat context selection')
-        if self.mode == 'brainstorming' or self.adapter_id == 'openai-responses':
+        if self.mode == 'brainstorming' or self.adapter_id != 'ollama':
             require(not project_input_ids,
                     'This mode cannot include project artifact inputs')
         require(bool(project_input_ids or text_input_ids),

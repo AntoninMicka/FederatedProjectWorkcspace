@@ -49,6 +49,13 @@ class ExplicitTaskPlanTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'selected backend'):
             plan.validate_execution(ChatRunChoice.parse({
                 'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'gemma'}))
+        atlas = self.plan(execution='external-atlascloud')
+        atlas.validate_execution(ChatRunChoice.parse({
+            'mode': 'brainstorming', 'adapter': 'atlascloud-responses',
+            'model': 'deepseek-ai/deepseek-v3.2'}))
+        with self.assertRaisesRegex(ValueError, 'selected backend'):
+            atlas.validate_execution(ChatRunChoice.parse({
+                'mode': 'brainstorming', 'adapter': 'openai-responses', 'model': 'gpt'}))
 
     def test_sources_are_canonical_and_match_actual_selections(self):
         with self.assertRaisesRegex(ValueError, 'canonical'):

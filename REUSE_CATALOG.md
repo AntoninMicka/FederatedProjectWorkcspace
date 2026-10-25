@@ -188,7 +188,7 @@ capability pouze z názvu. Seznam je pomůcka UI a nemění binding bez potvrzen
 Bez doložené kompatibilní licence se ze soukromého zdroje nekopíruje žádný kód.
 Rozhodnutí: [ADR 0008](docs/adr/0008-context-and-publication-contracts.md#první-externí-provider-a-řízený-návrh-volání).
 
-F-M3-MODEL-CATALOG-01 a F-M3-ATLASCLOUD-01 budou **reuse/adaptovat**
+F-M3-MODEL-CATALOG-01 a F-M3-ATLASCLOUD-01 **reuse/adaptují**
 `OpenAIModelCatalog`, `BackendRegistry`, `BackendCapabilities`, node-local
 credential store, durable backend run store a stávající Context Manifest/
 privacy autorizaci. Soukromá inventura slouží pouze jako srovnání tvaru
@@ -196,10 +196,9 @@ backendových capabilities; její prioritní pool ani kód se nepřebírá, prot
 automatický výběr dostupného backendu by změnil potvrzený Target. Nový katalog
 oddělí znalost o modelu od providerové nabídky a bindingu, takže více nabídek
 může odkazovat na jeden ručně či doloženě sjednocený model bez odhadu podle
-názvu. Oficiální AtlasCloud dokumentace dokládá proměnlivý katalog a různé
-protokoly podle modelu: [model discovery a dynamická schémata](https://www.atlascloud.ai/docs/en/mcp-server),
-[LLM protokoly a endpointy](https://www.atlascloud.ai/docs/faq) a
-[OpenAI-compatible textový vstup](https://www.atlascloud.ai/docs/models/llm).
+názvu. Oficiální AtlasCloud dokumentace dokládá různé protokoly podle modelu:
+[LLM protokoly a endpointy](https://www.atlascloud.ai/docs/llm-protocols) a
+[OpenAI-compatible chat request](https://www.atlascloud.ai/docs/createChatCompletion).
 První AtlasCloud řez proto nepřevezme MCP server ani provider SDK a nebude
 předstírat univerzální OpenAI kompatibilitu; implementuje nový bounded klient
 jen pro explicitně doložený textový protokol. Media, quick-generate,

@@ -3,6 +3,7 @@
 import unittest
 from uuid import uuid4
 
+from spikes.atlascloud_backend import AtlasCloudBinding
 from spikes.chat_modes import ChatRunChoice
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaBinding
@@ -21,6 +22,16 @@ class ChatModePolicyTests(unittest.TestCase):
             endpoint='https://api.openai.com/v1/responses', model='gpt-5.6-luna',
             target_id='api.openai.com', credential_ref='credential:test',
             credential_revision=1, max_output_tokens=4096, timeout_seconds=180))
+        self.atlascloud = AtlasCloudBinding.parse(dict(schema_version=1,
+            binding_id=str(uuid4()), revision='atlas-one',
+            adapter='atlascloud-responses', boundary='external-provider',
+            endpoint='https://api.atlascloud.ai/v1/responses',
+            model='deepseek-ai/deepseek-v3.2', target_id='api.atlascloud.ai',
+            credential_ref='credential:atlascloud-primary', credential_revision=1,
+            offer_id='atlascloud:deepseek-ai/deepseek-v3.2:responses',
+            protocol='openai-responses-v1', knowledge_revision='review-v1',
+            capabilities=['generate-text', 'json-output', 'streaming', 'text-output'],
+            max_output_tokens=4096, timeout_seconds=180))
 
     def test_orchestration_accepts_exact_same_node_or_private_network_binding(self):
         choice = ChatRunChoice.parse(
@@ -71,6 +82,17 @@ class ChatModePolicyTests(unittest.TestCase):
                                     text_input_ids=('prepared-text',))
         with self.assertRaisesRegex(ValidationError, 'explicit context'):
             choice.validate_context(project_input_ids=(), text_input_ids=())
+
+    def test_atlascloud_choice_is_exact_and_does_not_fall_back(self):
+        choice = ChatRunChoice.parse({'mode': 'brainstorming',
+            'adapter': 'atlascloud-responses',
+            'model': 'deepseek-ai/deepseek-v3.2'})
+        selected = choice.resolve(ollama=None, atlascloud=self.atlascloud)
+        self.assertEqual((selected.model, selected.adapter_id),
+                         ('deepseek-ai/deepseek-v3.2', 'atlascloud-responses'))
+        self.assertEqual(selected.offer_id, self.atlascloud.offer_id)
+        with self.assertRaisesRegex(ValidationError, 'unavailable'):
+            choice.resolve(ollama=None, openai=self.openai)
 
 
 if __name__ == '__main__':
