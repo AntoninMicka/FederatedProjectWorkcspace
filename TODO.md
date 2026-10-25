@@ -59,12 +59,12 @@ integrace se neotevírá; je jedním providerem společného katalogu.
   bezpečný reset, samostatný read-only modelový katalog a obecný resource
   kontrakt. Existující AtlasCloud evidence prokazuje tokenovou spotřebu runů,
   nikoli kreditní balance; UI tyto hodnoty nesmí zaměnit.
-- [ ] [planned] **UX-BACKEND-MODEL-01-B — společná nabídka a serverová
+- [ ] [in progress] **UX-BACKEND-MODEL-01-B — společná nabídka a serverová
   revalidace (cíl: implemented).** Sestavit provider-neutral projekce
   backendů/služeb, modelů/nabídek/modifikátorů a resource metrik. Před dispatch
   znovu fail-closed ověřit přesnou čerstvou revizi, RBAC a privacy bez
   providerových hard-code větví ve widgetu; reset nesmí smazat historii runů.
-- [ ] [planned] **UX-BACKEND-MODEL-01-C — sdílený composer a preference
+- [ ] [in progress] **UX-BACKEND-MODEL-01-C — sdílený composer a preference
   i Nastavení (cíl: implemented).** Ve stávajícím `spikes/desktop_ui.py`
   realizovat tabulku backendů s vlastními dialogy Nastavit/Resetovat,
   samostatnou read-only tabulku/detail modelů a provider cards monitoru.
@@ -101,3 +101,15 @@ skutečnému
 sdílenému composeru, existujícímu nastavení/federačnímu vzoru a
 `backend_metrics`. Dokumentační odkazy a finální diff prošly kontrolou
 `git diff --check`; aplikační kód ani testy se v těchto krocích neměnily.
+
+První implementační řez B/C přidal provider-neutral katalog backendů a jejich
+služeb, read-only agregaci modelových nabídek, atomické CAS preference a resource
+schema, které samostatně rozlišuje spotřebu, volné tokeny a předplacené tokeny.
+Sdílené Nastavení obsahuje tabulku backendů a samostatnou tabulku/detail
+modelů; monitor nově zobrazuje AtlasCloud tokeny doložené uloženými runy a
+pravdivý stav chybějícího balance reportu. Cílená sada 150 testů
+`test_backend_catalog`, `test_model_catalog`, `test_chat_service`, `test_desktop`
+a `test_web_server` mimo socketově omezený sandbox prošla, 7 volitelných
+WebEngine testů bylo přeskočeno. Zbývají providerové Nastavit/Resetovat dialogy,
+obousměrný composer, serverové pinning/revalidace a fyzická akceptace; B/C proto
+zůstávají rozpracované.

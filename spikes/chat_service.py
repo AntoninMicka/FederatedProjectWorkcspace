@@ -18,6 +18,7 @@ from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
 from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
+from spikes.backend_catalog import ModelPreferences, backend_catalog
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
@@ -615,6 +616,86 @@ class ChatService:
 
     def model_catalog_knowledge(self):
         return ModelKnowledgeStore(self._root()).load_or_empty(now())
+
+    def backend_catalog_status(self):
+        """Return supported backend services without credentials or routing side effects."""
+        root = self._root(); states = {}
+        loaders = (
+            ('ollama', lambda: OllamaBindings(root).load()),
+            ('openai-responses', lambda: OpenAIBindings(root).load()),
+            ('atlascloud-text', lambda: AtlasCloudBindings(root).load()),
+            ('searxng', lambda: SearXNGBindings(root).load()),
+        )
+        for backend_id, load in loaders:
+            try:
+                binding = load()
+            except FileNotFoundError:
+                continue
+            states[backend_id] = {'configured': True, 'availability': 'unknown',
+                                  'detail': getattr(binding, 'boundary', None)}
+        return backend_catalog(states)
+
+    def model_selection_status(self):
+        """Read-only cross-provider catalog; it never refreshes or selects an offer."""
+        root = self._root(); knowledge = ModelKnowledgeStore(root).load_or_empty(now())
+        models = {item['model_id']: dict(item) for item in knowledge['models']}
+        offers = {}
+        try:
+            openai_binding = OpenAIBindings(root).load()
+        except FileNotFoundError:
+            openai_binding = None
+        if openai_binding is not None:
+            try: projected = OpenAIModelCatalog(root, OpenAICredentials(root)).load(openai_binding)
+            except (FileNotFoundError, ValueError): projected = None
+            if projected:
+                for item in projected['offers']:
+                    offers[('openai-responses', item['offer_id'])] = dict(
+                        item, adapter_id='openai-responses',
+                        binding_id=openai_binding.binding_id,
+                        binding_revision=openai_binding.revision)
+        atlas = AtlasCloudCatalog(root).load()
+        try: atlas_binding = AtlasCloudBindings(root).load()
+        except FileNotFoundError: atlas_binding = None
+        for item in atlas['offers']:
+            offers[('atlascloud-text', item['offer_id'])] = dict(
+                item, adapter_id='atlascloud-text',
+                binding_id=None if atlas_binding is None else atlas_binding.binding_id,
+                binding_revision=None if atlas_binding is None else atlas_binding.revision)
+        try: ollama = OllamaBindings(root).load()
+        except FileNotFoundError: ollama = None
+        if ollama is not None:
+            offer_id = 'ollama-binding:' + ollama.binding_id
+            offers[('ollama', offer_id)] = {'offer_id': offer_id,
+                'adapter_id': 'ollama', 'provider_id': 'ollama',
+                'provider_model_id': ollama.model, 'protocol': 'ollama-generate-v1',
+                'canonical_model_id': None, 'availability': 'available',
+                'freshness': 'fresh', 'fetched_at': None, 'refresh_error': None,
+                'capabilities': [
+                    {'name': name, 'supported': True, 'state': 'reported',
+                     'reported': None, 'reviewed': None}
+                    for name in ('generate-text', 'json-output', 'text-output')],
+                'binding_id': ollama.binding_id, 'binding_revision': ollama.revision}
+        preferences = ModelPreferences(root).load()
+        order = {model_id: index for index, model_id in
+                 enumerate(preferences['preferred_model_ids'])}
+        rows = sorted(offers.values(), key=lambda item: (
+            order.get(item.get('canonical_model_id'), len(order)),
+            item.get('canonical_model_id') or item['provider_model_id'],
+            item['adapter_id'], item['offer_id']))
+        digest = hashlib.sha256(json.dumps({'knowledge': knowledge['revision'],
+            'preferences': preferences['revision'], 'offers': rows}, sort_keys=True,
+            separators=(',', ':')).encode()).hexdigest()[:24]
+        return {'schema_version': 1, 'revision': 'model-selection-' + digest,
+                'knowledge_revision': knowledge['revision'],
+                'models': sorted(models.values(), key=lambda item: item['model_id']),
+                'offers': rows, 'preferences': preferences}
+
+    def configure_model_preferences(self, value):
+        require(isinstance(value, dict)
+                and set(value) == {'expected_revision', 'preferred_model_ids'},
+                'Invalid model preference request')
+        return ModelPreferences(self._root()).save(
+            value['preferred_model_ids'], value['expected_revision'])
 
     def import_model_catalog_knowledge(self, value):
         require(isinstance(value, dict)

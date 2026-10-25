@@ -277,6 +277,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <h2>Nastavení</h2><p>Jednotlivá nastavení tohoto uzlu.</p>
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-models-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-models-tab">Modely</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení modelů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-models-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
@@ -315,6 +316,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
 <article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p><p id="openai-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p></article>
+<article id="atlascloud-resource-provider"><strong>AtlasCloud</strong><p id="resource-atlascloud-balance">Volné ani předplacené tokeny provider zatím nedoložil.</p><p id="atlascloud-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p></article>
 <article><strong>Ollama runtime</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><p id="ollama-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p><p id="ollama-runtime-warning" class="runtime-warning" hidden></p><small>Historická evidence běhu a spotřeba tokenů pocházejí z uložených providerových odpovědí; živé systémové hodnoty níže vždy patří tomuto workspace uzlu.</small></article>
 </div></section>
 <section><h3>Systémové monitory</h3><p class="resource-placeholder-note">Read-only živý vzorek tohoto workspace uzlu; není historickou evidencí inference.</p>
@@ -511,13 +513,17 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <h1>Nastavení</h1><p>Tato nastavení se neukládají do projektu ani nesynchronizují.</p></div>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
+<button id="settings-models-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-models-panel" tabindex="-1">Modely</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
 <button id="settings-users-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-users-panel" tabindex="-1" hidden>Uživatelé</button>
 <button id="settings-federation-tab" type="button" role="tab" aria-selected="false" aria-controls="admin-federation" tabindex="-1" hidden>Federace</button></div>
 <section id="settings-backend-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-backend-tab">
-<h2 id="settings-backend-title">Lokální AI backend</h2>
+<h2 id="settings-backend-title">Podporované backendy</h2>
+<p>Backend může poskytovat modely, obraz, hledání, import úložiště nebo metriky zdrojů.</p>
+<div class="settings-table-wrap"><table id="backend-catalog-table"><thead><tr><th>Backend</th><th>Služby</th><th>Stav</th></tr></thead><tbody></tbody></table></div>
+<hr><h2>Lokální AI backend</h2>
 <p id="settings-backend-status" role="status" aria-live="polite">Načítám stav lokálního backendu…</p>
 <form id="chat-backend-form"><label>Hranice <select name="boundary"><option value="same-node">Stejný počítač</option><option value="private-network">Privátní síť</option></select></label>
 <label>Endpoint <input name="endpoint" value="http://127.0.0.1:11434" required></label>
@@ -626,6 +632,12 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button type="submit">Uložit administrátorský klíč</button>
 <button id="backend-metrics-refresh" type="button">Načíst posledních 30 dní</button></form>
 <pre id="backend-metrics-report" hidden></pre></section>
+</section>
+<section id="settings-models-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-models-tab" hidden>
+<h2>Katalog modelů</h2><p>Read-only přehled kanonických modelů a doložených nabídek napříč backendy.</p>
+<p id="settings-models-status" role="status" aria-live="polite">Načítám modelový katalog…</p>
+<div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backend</th><th>Protokol</th><th>Schopnosti</th><th>Stav</th></tr></thead><tbody></tbody></table></div>
+<dialog id="settings-model-detail" aria-labelledby="settings-model-detail-title"><h2 id="settings-model-detail-title">Detail modelu</h2><pre></pre><button type="button" class="secondary-button">Zavřít</button></dialog>
 </section>
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
 <h2>Publikační CMS</h2>
@@ -1125,6 +1137,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
+.settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{padding:4px 7px;background:transparent;color:#176b60;text-align:left}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
@@ -3379,6 +3392,37 @@ applicationAccessSave.addEventListener('click',async()=>{if(!applicationAccessPl
 });
 let settingsReturn=null;
 const settingsTabs=[...document.querySelectorAll('#settings-tabs [role="tab"]')];
+function renderBackendCatalog(value){
+ const body=document.querySelector('#backend-catalog-table tbody');body.replaceChildren();
+ for(const backend of value.backends||[]){
+  const row=document.createElement('tr');
+  for(const text of [backend.display_name,(backend.services||[]).join(', '),
+   backend.configured?`nastaveno · ${backend.availability}`:'nenastaveno']){
+   const cell=document.createElement('td');cell.textContent=text;row.append(cell);
+  }
+  body.append(row);
+ }
+}
+function renderModelSelection(value){
+ const body=document.querySelector('#settings-models-table tbody');body.replaceChildren();
+ const names=new Map((value.models||[]).map(item=>[item.model_id,item.display_name]));
+ for(const offer of value.offers||[]){
+  const row=document.createElement('tr'),model=document.createElement('td'),button=document.createElement('button');
+  button.type='button';button.textContent=names.get(offer.canonical_model_id)||offer.provider_model_id;
+  button.addEventListener('click',()=>{const dialog=document.querySelector('#settings-model-detail');
+   dialog.querySelector('pre').textContent=JSON.stringify(offer,null,2);dialog.showModal();});
+  model.append(button);row.append(model);
+  const supported=(offer.capabilities||[]).filter(item=>item.supported).map(item=>item.name).join(', ')||'žádné doložené';
+  for(const text of [offer.adapter_id,offer.protocol,supported,
+   `${offer.availability} · ${offer.freshness}`]){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}
+  body.append(row);
+ }
+ document.querySelector('#settings-models-status').textContent=
+  `${(value.models||[]).length} kanonických modelů · ${(value.offers||[]).length} providerových nabídek · ${value.revision}`;
+}
+async function loadBackendCatalog(){try{renderBackendCatalog(await projectRequest('/v1/backend-catalog/status',{}));}catch(error){document.querySelector('#settings-backend-status').textContent=error.message;}}
+async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
+document.querySelector('#settings-model-detail button').addEventListener('click',()=>document.querySelector('#settings-model-detail').close());
 function selectSettingsTab(selected){
  for(const tab of settingsTabs){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
@@ -3388,6 +3432,8 @@ function selectSettingsTab(selected){
  if(selected.id==='settings-cms-tab')loadCmsStatus();
  if(selected.id==='settings-access-tab')loadApplicationAccess();
  if(selected.id==='settings-profile-tab')loadUserProfile();
+ if(selected.id==='settings-backend-tab')loadBackendCatalog();
+ if(selected.id==='settings-models-tab')loadModelSelection();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -3904,10 +3950,11 @@ function tokenUsageText(report){
 }
 function renderTokenUsage(value){
  const providers=new Map((value?.providers||[]).map(item=>[item.adapter_id,item]));
- const ollama=providers.get('ollama'),openai=providers.get('openai-responses');
+ const ollama=providers.get('ollama'),openai=providers.get('openai-responses'),atlas=providers.get('atlascloud-text');
  document.querySelector('#ollama-run-usage').textContent=tokenUsageText(ollama);
  document.querySelector('#openai-run-usage').textContent=tokenUsageText(openai);
- const reports=[ollama,openai].filter(Boolean);
+ document.querySelector('#atlascloud-run-usage').textContent=tokenUsageText(atlas);
+ const reports=[ollama,openai,atlas].filter(Boolean);
  const total=reports.reduce((sum,item)=>sum+item.total_tokens,0);
  const unreported=reports.reduce((sum,item)=>sum+item.unreported_runs,0);
  runTokenIndicator.textContent=`Tokeny běhů · ${total.toLocaleString('cs-CZ')}`+
@@ -6533,6 +6580,8 @@ class DesktopHandler(Handler):
         '/v1/atlascloud/status', '/v1/atlascloud/models',
         '/v1/atlascloud/configure', '/v1/atlascloud/remove',
         '/v1/model-catalog/knowledge', '/v1/model-catalog/import',
+        '/v1/backend-catalog/status', '/v1/model-selection/status',
+        '/v1/model-selection/preferences',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -6844,6 +6893,13 @@ class DesktopHandler(Handler):
             if self.path == '/v1/model-catalog/import' and isinstance(request, dict):
                 return self.reply(200,
                     self.server.chat_service.import_model_catalog_knowledge(request))
+            if self.path == '/v1/backend-catalog/status' and request == {}:
+                return self.reply(200, self.server.chat_service.backend_catalog_status())
+            if self.path == '/v1/model-selection/status' and request == {}:
+                return self.reply(200, self.server.chat_service.model_selection_status())
+            if self.path == '/v1/model-selection/preferences' and isinstance(request, dict):
+                return self.reply(200,
+                    self.server.chat_service.configure_model_preferences(request))
             if self.path == '/v1/external/propose' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.external_propose(request))
             if self.path == '/v1/external/send' and isinstance(request, dict):

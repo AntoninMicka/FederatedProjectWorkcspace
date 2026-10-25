@@ -129,8 +129,9 @@ read-only projekce rozliší:
 - spotřebu uložených runů (`tokens`, requesty, trvání), jejímž zdrojem jsou
   validované providerové odpovědi v run journalu;
 - providerový account usage/cost za vymezené období;
-- aktuální balance/credits a quota/limit, pouze pokud je backend skutečně
-  reportuje doloženým API;
+- aktuální balance/credits, volné tokeny, předplacené tokeny a quota/limit,
+  pouze pokud je backend skutečně reportuje doloženým API; volná a předplacená
+  zásoba zůstávají samostatné resource kinds a neslévají se spotřebou;
 - kapacitní zdroje jako storage, pouze pokud je jejich scope a jednotka
   adapterem jednoznačně definovaná.
 

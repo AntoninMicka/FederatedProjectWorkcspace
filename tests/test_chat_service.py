@@ -1463,6 +1463,25 @@ class ChatServiceTests(unittest.TestCase):
             self.service.configure(dict(self.binding, adapter='unknown'))
         self.assertEqual(self.service.status()['binding'], before)
 
+    def test_backend_and_model_selection_catalogs_are_read_only_and_preferences_use_cas(self):
+        backends = self.service.backend_catalog_status()
+        rows = {item['backend_id']: item for item in backends['backends']}
+        self.assertTrue(rows['ollama']['configured'])
+        self.assertIn('storage-import', rows['google-drive']['services'])
+        selected = self.service.model_selection_status()
+        ollama = [item for item in selected['offers'] if item['adapter_id'] == 'ollama']
+        self.assertEqual(len(ollama), 1)
+        self.assertEqual(ollama[0]['provider_model_id'], self.binding['model'])
+        saved = self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:preferred']})
+        self.assertEqual(saved['revision'], 1)
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        self.assertEqual(restarted.model_selection_status()['preferences'], saved)
+        with self.assertRaisesRegex(ValueError, 'changed before save'):
+            self.service.configure_model_preferences({
+                'expected_revision': 0, 'preferred_model_ids': []})
+
     def test_external_backend_configuration_is_visible_without_returning_secret(self):
         secret = 'sk-test-' + 'q' * 32
         request = dict(schema_version=1, binding_id=str(uuid4()), revision='one',
