@@ -70,7 +70,71 @@ WORK_LOG. `F-M4-DYNAMIC-WORKFLOW-01` byla 24. 10. 2026 akceptována na úrovni
 PoC validated a doručena PR #88 jako merge commit `5d74144`; evidence je ve
 WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regrese
 25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
-WORK_LOG; PR do `develop` nebyl vytvořen ani sloučen.
+WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
+
+`OPS-NODE-MONITOR-01` byla 25. 10. 2026 akceptována na úrovni PoC validated;
+evidence je ve [WORK_LOG](WORK_LOG.md) a její PR do `develop` zatím nebyl
+vytvořen ani sloučen. Následující plánovací horizont tvoří tři samostatné dávky
+v pořadí `OPS-WEB-CONCURRENCY-01` → `F-M3-MODEL-CATALOG-01` →
+`F-M3-ATLASCLOUD-01`. Nejprve se oddělí souběžná read-only obsluha monitoru od
+dlouhého streamu se zachováním jediného writeru; provider-neutral katalog pak
+předchází AtlasCloud adapteru. Aktivace jedné dávky nemění stav ostatních.
+
+- [ ] [planned] **OPS-WEB-CONCURRENCY-01 — souběžná obsluha streamu a monitoru
+  (cílová úroveň: designed → implemented → PoC validated).** Původ:
+  uživatelské zjištění při `OPS-NODE-MONITOR-01`, že současný jediný obslužný
+  tok během streamované odpovědi nevyřídí monitorovací požadavek. Navrhnout
+  omezenou souběžnost se zachováním serializace projektových a node-local
+  zápisů, vlastnictví requestů, čistého ukončení a fail-closed recovery.
+  Read-only telemetrie nesmí získat druhého writeru ani měnit binding, privacy,
+  autorizaci nebo běžící inference. Akceptace: současný dlouhý stream,
+  periodická read-only telemetrie a nezávislá zápisová interakce; restart a
+  ukončení bez ztraceného durable stavu, dvojí odpovědi či automatického retry
+  `unknown`. Návrh větve: `feature/ops-web-concurrency-01`.
+
+- [ ] [planned] **F-M3-MODEL-CATALOG-01 — dynamické načtení a sdílený
+   znalostní katalog modelů (cílová úroveň: designed → implemented → PoC
+   validated).** Zobecnit existující bounded `OpenAIModelCatalog` na
+   provider-neutral read-only discovery cache a oddělit tři identity:
+   kanonický model, konkrétní providerovou nabídku modelu a lokální backendový
+   binding. Jeden znalostní záznam tak může odkazovat na více nabídek téhož
+   modelu přes Ollamu, OpenAI, AtlasCloud nebo další adapter, ale shoda názvu
+   sama modely nikdy nesloučí. Každá capability, limit, podporovaný protokol a
+   modality nese zdroj, revizi/čas zjištění a stav `reported`, `reviewed`,
+   `conflicting` nebo `unknown`. Hybridní vyhodnocení použije ověřený údaj
+   backendu; jen pokud jej backend neposkytuje, smí použít explicitně
+   zkontrolovaný údaj znalostního katalogu. Rozpor se nesjednotí optimistickou
+   unií a bezpečnostně významná neznámá hodnota zůstane nepodporovaná.
+   Providerová dostupnost, cena a účetní údaje zůstávají oddělené od schopností
+   modelu. Discovery cache i uživatelská znalostní vrstva budou node-local mimo
+   projektový Git, atomicky publikované a čitelné i jako stale po neúspěšném
+   refreshi; přesná autorita, editace, import/export a migrace se uzavřou v
+   návrhové části dávky. UI dynamicky načte modely, ukáže zdroj a čerstvost
+   schopností a zachová ruční explicitní model. Změna katalogu nesmí změnit
+   potvrzený binding, rozběhnutý request ani sama zvolit jiný backend.
+   Akceptace: více nabídek jednoho modelu, stejné jméno různých modelů,
+   provider bez capabilities, konflikt provider/katalog, odstraněný model,
+   stránkování/limit/rate-limit, offline a stale cache, restart v každém
+   persistentním přechodu, změna credential/binding revize a explicitní volba
+   nabídky bez fallbacku. Návrh větve: `feature/f-m3-model-catalog-01`.
+- [ ] [planned] **F-M3-ATLASCLOUD-01 — AtlasCloud textový backend (cílová
+   úroveň: designed → implemented → PoC validated).** Po
+   `F-M3-MODEL-CATALOG-01` přidat samostatný `external-provider` adapter a
+   binding pro AtlasCloud nad společným Context Manifestem, privacy/RBAC
+   kontrolou, credential storem, backend run journalem a dynamickým katalogem.
+   První řez podporuje pouze textové LLM přes providerem pro konkrétní nabídku
+   doložený protokol; image/video/audio/3D, MCP a automatické quick-generate
+   zůstávají mimo tuto dávku. Endpoint/host, protokol, modelová nabídka,
+   credential revize, limity a streaming capability musí být přesné součásti
+   bindingu a request digestu; redirect, neznámý protokol, tajný převod mezi
+   protokoly, retry stavu `unknown` a fallback na jinou nabídku jsou zakázané.
+   Akceptace: konfigurace a odstranění API klíče bez jeho úniku, providerové
+   discovery pouze přes doložené rozhraní a jinak zkontrolovaný katalog či
+   ruční model, podporovaný a nepodporovaný protokol, text/JSON a
+   případný stream podle deklarované capability, privacy třídy, timeout/
+   přerušená odpověď/restart, providerem odmítnutý request, změna či zmizení
+   nabídky, usage dostupné v run response a fyzický AtlasCloud smoke s
+   kontrolou durable historie. Návrh větve: `feature/f-m3-atlascloud-01`.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -91,24 +155,6 @@ WORK_LOG; PR do `develop` nebyl vytvořen ani sloučen.
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **OPS-NODE-MONITOR-01 — systémová telemetrie a viditelný
-  runtime Ollamy (cílová úroveň: implemented → PoC validated).** Původ:
-  uživatelské zjištění při `F-M4-RESEARCH-WORKFLOW-01`, že Ollama může po změně
-  prostředí začít tiše provádět inference pouze na CPU. Adaptovat již
-  připravený panel Zdroje a jeho ukazatele CPU, GPU, RAM, VRAM, DISK a NET na
-  omezenou read-only telemetrii skutečného uzlu. U každého Ollama běhu rozlišit
-  očekávaný a doložený režim CPU/GPU, částečný offload a stav `unknown`;
-  samotná konfigurace GPU, dostupné zařízení ani okamžité vytížení se nesmějí
-  vydávat za důkaz GPU inference. Pro lokální i private-network backend
-  definovat podporovaný diagnostický kontrakt a provenance měření; nedostupná
-  vzdálená telemetrie zůstane explicitně neznámá. Při očekávaném GPU a doloženém
-  CPU-only běhu zobrazit výrazné varování v panelu i u běhu, ale nic
-  automaticky nerestartovat, nepřepínat ani neopakovat. Akceptace: fyzicky
-  ověřit GPU běh, CPU-only regresi, částečný offload, nedostupnou/opožděnou
-  telemetrii, restart aplikace a oddělení historického run evidence od živého
-  systémového vzorku; žádná diagnostika nesmí zpřístupnit credentials ani
-  obejít hranici důvěry uzlu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

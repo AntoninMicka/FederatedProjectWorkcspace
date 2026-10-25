@@ -3,6 +3,7 @@
 """Strict node-local Ollama binding contract; transport is added separately."""
 from dataclasses import dataclass
 from contextlib import closing
+from datetime import datetime, timezone
 import base64
 import hashlib
 import http.client
@@ -22,6 +23,8 @@ from spikes.backend_contract import (BackendCapabilities, BackendExecution,
                                      BackendUnknown, ROLES)
 from spikes.context_builder import Target
 from spikes.metadata import require, uuid
+from spikes.node_telemetry import (OllamaRuntimePolicy, observed_at,
+                                   runtime_binding_revision_matches, unknown)
 
 
 OLLAMA_GENERATE_TIMEOUT = 180
@@ -324,7 +327,7 @@ class BackendRuns:
             'adapter_id': 'TEXT', 'binding_id': 'TEXT', 'binding_revision': 'TEXT',
             'capability_revision': 'TEXT', 'operation': 'TEXT', 'output_format': 'TEXT',
             'role_id': 'TEXT', 'role_revision': 'TEXT', 'manifest_sha256': 'TEXT',
-            'error_code': 'TEXT'}
+            'error_code': 'TEXT', 'runtime_evidence': 'TEXT', 'completed_at': 'TEXT'}
         for name, kind in additions.items():
             if name not in columns:
                 db.execute(f'ALTER TABLE runs ADD COLUMN {name} {kind}')
@@ -336,7 +339,8 @@ class BackendRuns:
         with self.connect() as db:
             row = db.execute('SELECT request_digest,state,response,error,adapter_id,binding_id,'
                              'binding_revision,capability_revision,operation,output_format,'
-                             'role_id,role_revision,manifest_sha256,error_code FROM runs WHERE run_id=?',
+                             'role_id,role_revision,manifest_sha256,error_code,runtime_evidence,'
+                             'completed_at FROM runs WHERE run_id=?',
                              (run_id,)).fetchone()
             return None if row is None else dict(request_digest=row[0], state=row[1],
                                                   response=json.loads(row[2]) if row[2] else None,
@@ -344,7 +348,10 @@ class BackendRuns:
                                                   binding_revision=row[6], capability_revision=row[7],
                                                   operation=row[8], output_format=row[9],
                                                   role_id=row[10], role_revision=row[11],
-                                                  manifest_sha256=row[12], error_code=row[13])
+                                                  manifest_sha256=row[12], error_code=row[13],
+                                                  runtime_evidence=(json.loads(row[14])
+                                                                    if row[14] else None),
+                                                  completed_at=row[15])
 
     def prepare(self, run_id, digest, legacy_digest, execution, manifest_sha256):
         execution.validate()
@@ -385,13 +392,41 @@ class OllamaRuns(BackendRuns):
     def __init__(self, state_dir):
         super().__init__(state_dir, 'ollama-runs.sqlite')
 
+    def latest_runtime(self, binding_id=None, binding_revision=None):
+        if binding_id is not None:
+            require(isinstance(binding_id, str) and binding_id,
+                    'Invalid Ollama binding ID')
+        if binding_revision is not None:
+            require(binding_id is not None and isinstance(binding_revision, str)
+                    and binding_revision, 'Invalid Ollama binding revision')
+        with self.connect() as db:
+            query = ('SELECT run_id,runtime_evidence,completed_at,binding_revision FROM runs '
+                     "WHERE state='succeeded' AND runtime_evidence IS NOT NULL")
+            parameters = ()
+            if binding_id is not None:
+                query += ' AND binding_id=?'; parameters = (binding_id,)
+            query += ' ORDER BY completed_at DESC, rowid DESC LIMIT 4096'
+            rows = db.execute(query, parameters).fetchall()
+        row = next((item for item in rows
+                    if binding_revision is None
+                    or runtime_binding_revision_matches(binding_revision, item[3])), None)
+        return None if row is None else {'run_id': row[0],
+            'runtime_evidence': json.loads(row[1]), 'completed_at': row[2]}
+
 
 class OllamaAdapter:
-    def __init__(self, runs, transport=None, stream_transport=None):
+    def __init__(self, runs, transport=None, stream_transport=None, runtime_probe=None):
         require(isinstance(runs, OllamaRuns), 'Ollama run store is required')
         self.runs = runs
+        custom_transport = transport is not None or stream_transport is not None
         self.transport = transport or self._http_transport
         self.stream_transport = stream_transport or self._http_stream_transport
+        require(runtime_probe is None or callable(runtime_probe),
+                'Ollama runtime probe must be callable')
+        self.runtime_probe = (runtime_probe if runtime_probe is not None else
+                              (lambda _binding: unknown(
+                                  'probe-not-configured', source='ollama:/api/ps'))
+                              if custom_transport else self.probe_runtime)
 
     @staticmethod
     def _task_text(raw):
@@ -577,6 +612,7 @@ class OllamaAdapter:
                                       code=row.get('error_code') or 'response-invalid')
         # Revalidate the exact binding again immediately before crossing the transport boundary.
         require(handoff.target == binding.target(), 'Ollama binding changed before dispatch')
+        expectation = OllamaRuntimePolicy(self.runs.root).load(binding)
         with self.runs.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             result = db.execute("UPDATE runs SET state='dispatching' WHERE run_id=? AND state='prepared'",
@@ -610,10 +646,27 @@ class OllamaAdapter:
                            (type(exc).__name__, 'transport-unknown', handoff.run_id))
             raise UnknownRun('Ollama dispatch outcome is unknown',
                              code='transport-unknown') from exc
+        try:
+            runtime_evidence = self.runtime_probe(binding)
+            require(isinstance(runtime_evidence, dict)
+                    and runtime_evidence.get('status') in {'available', 'unknown'},
+                    'Invalid Ollama runtime evidence')
+        except Exception as exc:
+            runtime_evidence = unknown('probe-failed', source='ollama:/api/ps')
+            runtime_evidence['diagnostic'] = type(exc).__name__
+        runtime_evidence = dict(runtime_evidence,
+            expected_processor=expectation['expected_processor'],
+            expectation_revision=expectation['revision'])
         encoded = json.dumps(response, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        encoded_runtime = json.dumps(runtime_evidence, ensure_ascii=False,
+                                     sort_keys=True, separators=(',', ':'))
+        completed_at = datetime.now(timezone.utc).isoformat(
+            timespec='microseconds').replace('+00:00', 'Z')
         with self.runs.connect() as db, db:
-            result = db.execute("UPDATE runs SET state='succeeded',response=? "
-                                "WHERE run_id=? AND state='dispatching'", (encoded, handoff.run_id))
+            result = db.execute("UPDATE runs SET state='succeeded',response=?,"
+                                "runtime_evidence=?,completed_at=? "
+                                "WHERE run_id=? AND state='dispatching'",
+                                (encoded, encoded_runtime, completed_at, handoff.run_id))
             require(result.rowcount == 1, 'Ollama completion state changed')
         return response
 
@@ -860,3 +913,48 @@ class OllamaAdapter:
                 'model_available': binding.model in names, 'model_count': len(names),
                 'boundary': binding.boundary, 'endpoint': binding.endpoint,
                 'target_id': binding.target_id}
+
+    @staticmethod
+    def probe_runtime(binding, *, timeout=10):
+        """Read current model allocation from the exact already-approved endpoint."""
+        require(isinstance(binding, OllamaBinding), 'Validated Ollama binding is required')
+        value = OllamaAdapter._json_transport(
+            binding, 'GET', '/api/ps', timeout=timeout, uncertain_after_send=False)
+        models = value.get('models') if isinstance(value, dict) else None
+        if not (isinstance(models, list) and len(models) <= 4096):
+            raise OllamaResponseError('Invalid Ollama runtime response',
+                                      code='invalid-runtime-envelope')
+        matches = []
+        for item in models:
+            if not isinstance(item, dict):
+                raise OllamaResponseError('Invalid Ollama runtime model',
+                                          code='invalid-runtime-envelope')
+            name, model = item.get('name'), item.get('model')
+            size, size_vram = item.get('size'), item.get('size_vram')
+            if not (isinstance(name, str) and isinstance(model, str)
+                    and type(size) is int and size > 0
+                    and type(size_vram) is int and 0 <= size_vram <= size):
+                raise OllamaResponseError('Invalid Ollama runtime model',
+                                          code='invalid-runtime-envelope')
+            if binding.model in {name, model}:
+                matches.append((item, size, size_vram))
+        if len(matches) != 1:
+            result = unknown('model-not-running' if not matches else 'ambiguous-model',
+                             source='ollama:/api/ps')
+            result.update(observed_at=observed_at(), model=binding.model,
+                          binding_id=binding.binding_id,
+                          binding_revision=binding.revision,
+                          boundary=binding.boundary, target_id=binding.target_id)
+            return result
+        item, size, size_vram = matches[0]
+        processor = ('cpu' if size_vram == 0 else
+                     'gpu' if size_vram == size else 'partial-gpu')
+        return {'status': 'available', 'source': 'ollama:/api/ps',
+                'observed_at': observed_at(), 'model': binding.model,
+                'reported_name': item['name'], 'reported_model': item['model'],
+                'processor': processor, 'model_bytes': size,
+                'vram_bytes': size_vram,
+                'vram_ratio': round(size_vram / size, 6),
+                'binding_id': binding.binding_id,
+                'binding_revision': binding.revision,
+                'boundary': binding.boundary, 'target_id': binding.target_id}

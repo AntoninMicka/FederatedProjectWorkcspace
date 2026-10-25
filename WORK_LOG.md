@@ -5,6 +5,86 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## OPS-NODE-MONITOR-01 — telemetrie uzlu a evidence runtime Ollamy — 2026-10-25
+
+Dávka vznikla na větvi `feature/ops-node-monitor-01` z lokálního `develop`
+`f3faf26` a dosáhla úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **OPS-NODE-MONITOR-01-A — diagnostický kontrakt, provenance
+  a recovery (designed).** [ADR 0049](docs/adr/0049-node-and-ollama-runtime-telemetry.md)
+  odděluje ephemerální systémový vzorek od durable evidence konkrétního běhu,
+  vymezuje bounded zdroje, očekávání CPU/GPU, stavy `unknown`/CPU/partial-GPU/GPU,
+  RBAC/privacy a crash boundaries. Reuse/reject je zachycen v
+  [REUSE_CATALOG](REUSE_CATALOG.md).
+- [x] [completed] **OPS-NODE-MONITOR-01-B — systémová a Ollama runtime
+  telemetrie (implemented).** `spikes/node_telemetry.py` čte CPU, RAM, disk,
+  síť a volitelné GPU/VRAM údaje bez zápisu. Přesný read-only `/api/ps` probe
+  nad ověřeným bindingem ukládá spolu s dokončeným během skutečnou runtime
+  evidence nebo explicitní `unknown`; diagnostika nerestartuje službu,
+  nepřepíná backend ani neopakuje běh.
+- [x] [completed] **OPS-NODE-MONITOR-01-C — API a panel Zdroje
+  (implemented).** Sdílené desktop/web UI zobrazuje zdroj a čas měření,
+  oddělené živé a historické hodnoty, očekávaný a doložený režim a výrazné
+  varování při očekávaném GPU a doloženém CPU-only běhu. Activity metriky se
+  obnovují po 2 s, kapacitní po 15 s a dostupnost Ollamy periodicky po 30 s.
+- [x] [completed] **OPS-NODE-MONITOR-01-D — regrese a fyzická akceptace
+  (PoC validated).** Automatické scénáře a fyzické průchody ověřily GPU,
+  CPU-only, `unknown`, restart, same-node i připnutý private-network běh,
+  oddělení živého vzorku od historické evidence a zákaz fallbacku. Partial-GPU
+  nebylo na hostu se sdílenou CPU/GPU pamětí smysluplně vyvolatelné a zůstává
+  výslovně neověřené, nikoli vydávané za úspěch.
+- [x] [completed] **OPS-NODE-MONITOR-01-E — spotřeba tokenů dokončených běhů
+  (implemented).** Read-only projekce providerových journalů zvlášť sčítá
+  vstupní, výstupní a celkové tokeny Ollamy a OpenAI, vykazuje běhy bez usage a
+  nezaměňuje node-local součet s OpenAI účetními metrikami.
+- [x] [completed] **OPS-NODE-MONITOR-01-F — stabilní editace runtime očekávání
+  (implemented).** Periodický refresh nepřepisuje rozpracovanou neuloženou
+  volbu ani chybu uložení; po úspěšném uložení se formulář vrátí k autoritativní
+  revizi policy.
+- [x] [completed] **OPS-NODE-MONITOR-01-G — viditelné kompaktní runtime
+  varování (implemented).** Mismatch GPU očekávání a CPU-only evidence je
+  kontrastně viditelný i v kompaktním panelu a odstranění bindingu vyčistí
+  starý text i styl. Uživatel zobrazení po nasazení fyzicky potvrdil.
+
+### Ověření, recovery a omezení
+
+Nová cílená sada monitoru, backendů, chat služby a desktop/web rozhraní prošla
+v rozsahu **197 testů, 6 skipped**. Poslední úplná sada po změně kódu
+`python3 -m unittest discover -s tests -v` prošla jako **817 testů,
+28 skipped**; generovaný JavaScript prošel `node --check`. Závěrečných šest
+testů private-network kontraktu znovu ověřilo validaci bindingu, kontrolu
+správného pinu před requestem, odmítnutí nesprávného pinu před requestem,
+přesnou identitu/revizi po restartu, vlastněnou runtime evidence a zákaz
+fallbacku. Následné změny jsou pouze dokumentační.
+
+Qt/WebEngine smoke nad skutečným node configem ověřil vykreslení,
+autentizovaný fetch a čisté ukončení. Same-node běh `qwen3-coder:latest`
+doložil GPU klasifikaci, 100 % VRAM modelu, providerové tokeny a restartovou
+obnovu bez dvojího započtení. Izolovaný CPU-only běh při očekávaném GPU doložil
+varování v dialogu i kompaktním panelu. Nedostupné `nvidia-smi` a neběžící
+model zůstaly pravdivě `unknown`.
+
+Webový Workspace LXC `192.168.100.247:8443` dokončil skutečnou streamovanou
+odpověď přes `Ollama v privátní síti` a model `gemma4:latest`: provider
+reportoval 78 vstupních a 1067 výstupních tokenů, UI přijalo 313 částí a běh
+dokončilo za 58,5 s. Navazující historická evidence runu
+`31a64c74-89cb-4ba8-97f9-339bd8e717fa` v čase
+`2026-10-25T17:03:08.516986Z` doložila CPU, VRAM 0,0 % modelu a vazbu na
+binding revizi `80cecfee-3516-4fa2-b3a2-d76ce90b6d44`; panel současně držel
+živé CPU/RAM/disk/síť hodnoty odděleně. Aktivní UI identifikovalo backend jako
+private-network a automatické testy doložily, že transport kontroluje přesný
+binding ID/revizi, boundary, target ID a TLS pin bez fallbacku.
+
+Živý vzorek se po pádu pouze znovu sestaví. Runtime probe proběhne po
+providerově dokončené odpovědi, ale před atomickým dokončením run journalu;
+pád před durable dokončením ponechá `unknown` bez retry. Očekávání je
+node-local, váže se na přesný binding a běh zachytí jeho revizi při dispatch.
+Tokenové součty jsou obnovitelná read-only projekce durable odpovědí, nikoli
+další účetní autorita. Obecný monitoring, alerting, automatická náprava a
+souběžná obsluha dlouhého streamu zůstávají mimo tuto dávku; poslední mezera je
+předána jako `OPS-WEB-CONCURRENCY-01` do [BACKLOG](BACKLOG.md).
+
 ## F-M4-RESEARCH-WORKFLOW-01 — dynamický výzkumný workflow — 2026-10-25
 
 Dávka vznikla na větvi `feature/f-m4-research-workflow-01` z `develop`
@@ -60,9 +140,9 @@ svých účinků a po restartu z nich UI znovu sestaví historii. Projektový ar
 vzniká až samostatnou potvrzenou publikační operací.
 
 Jde o fyzicky přijatý PoC, nikoli produkční garanci kvality modelových úsudků,
-veřejných zdrojů nebo dostupnosti backendu. Systémová telemetrie CPU/GPU a
-doložení skutečného Ollama offloadu zůstávají v `OPS-NODE-MONITOR-01` v
-[BACKLOG](BACKLOG.md).
+veřejných zdrojů nebo dostupnosti backendu. Navazující systémová telemetrie
+CPU/GPU a evidence skutečného Ollama offloadu byla dokončena v
+`OPS-NODE-MONITOR-01`; evidence je výše v tomto WORK_LOG.
 
 ## F-M4-DYNAMIC-WORKFLOW-01 — katalog činností a dynamický plán — 2026-10-24
 

@@ -18,6 +18,7 @@ from spikes.backend_contract import (BackendCapabilities, BackendRegistry, ROLES
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseError,
                                    OllamaBindings, OllamaRuns, UnknownRun)
+from spikes.node_telemetry import OllamaRuntimePolicy
 
 
 class OllamaBindingTests(unittest.TestCase):
@@ -136,6 +137,69 @@ class OllamaAdapterTests(unittest.TestCase):
         restarted = OllamaAdapter(OllamaRuns(self.state),
                                   lambda binding, request: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
+
+    def test_runtime_evidence_and_expectation_are_atomic_with_success(self):
+        OllamaRuntimePolicy(self.state).save(self.binding, 'gpu')
+        probes = []
+        def runtime_probe(binding):
+            probes.append(binding.binding_id)
+            return {'status': 'available', 'source': 'ollama:/api/ps',
+                    'observed_at': '2026-10-25T12:00:00Z', 'model': binding.model,
+                    'processor': 'cpu', 'model_bytes': 100, 'vram_bytes': 0,
+                    'vram_ratio': 0.0, 'binding_id': binding.binding_id,
+                    'binding_revision': binding.revision,
+                    'boundary': binding.boundary, 'target_id': binding.target_id}
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+            transport=lambda binding, request: {
+                'model': binding.model, 'response': 'answer', 'done': True},
+            runtime_probe=runtime_probe)
+        adapter.dispatch(self.handoff, self.binding)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual((row['state'], row['runtime_evidence']['processor'],
+                          row['runtime_evidence']['expected_processor']),
+                         ('succeeded', 'cpu', 'gpu'))
+        self.assertIsNotNone(row['completed_at'])
+        self.assertEqual(adapter.runs.latest_runtime(self.binding.binding_id)['run_id'],
+                         self.handoff.run_id)
+        self.assertEqual(adapter.runs.latest_runtime(
+            self.binding.binding_id, self.binding.revision)['run_id'],
+            self.handoff.run_id)
+        self.assertIsNone(adapter.runs.latest_runtime(
+            self.binding.binding_id, 'different-revision'))
+        adapter.dispatch(self.handoff, self.binding)
+        self.assertEqual(probes, [self.binding.binding_id])
+
+    def test_runtime_probe_failure_does_not_discard_valid_provider_result(self):
+        def failed(_binding):
+            raise TimeoutError('diagnostic only')
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+            transport=lambda binding, request: {
+                'model': binding.model, 'response': 'answer', 'done': True},
+            runtime_probe=failed)
+        result = adapter.dispatch(self.handoff, self.binding)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(result['response'], 'answer')
+        self.assertEqual((row['state'], row['runtime_evidence']['status'],
+                          row['runtime_evidence']['reason']),
+                         ('succeeded', 'unknown', 'probe-failed'))
+
+    def test_runtime_probe_classifies_cpu_partial_and_gpu_without_guessing(self):
+        for size_vram, expected in ((0, 'cpu'), (40, 'partial-gpu'), (100, 'gpu')):
+            with self.subTest(size_vram=size_vram), patch.object(
+                    OllamaAdapter, '_json_transport', return_value={'models': [{
+                        'name': self.binding.model, 'model': self.binding.model,
+                        'size': 100, 'size_vram': size_vram}]}) as transport:
+                evidence = OllamaAdapter.probe_runtime(self.binding)
+                self.assertEqual(evidence['processor'], expected)
+                self.assertEqual(transport.call_args.args[2], '/api/ps')
+                self.assertFalse(transport.call_args.kwargs['uncertain_after_send'])
+
+    def test_runtime_probe_keeps_missing_model_unknown(self):
+        with patch.object(OllamaAdapter, '_json_transport',
+                          return_value={'models': []}):
+            evidence = OllamaAdapter.probe_runtime(self.binding)
+        self.assertEqual((evidence['status'], evidence['reason']),
+                         ('unknown', 'model-not-running'))
 
     def test_stream_success_is_durable_and_only_final_response_is_authoritative(self):
         calls = []; deltas = []; statuses = []

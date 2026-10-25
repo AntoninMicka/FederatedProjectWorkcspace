@@ -12,7 +12,7 @@ from spikes.project_creation import ProjectCreation
 DESKTOP_BOOTSTRAP = '''document.body.dataset.runtime='desktop';
 for(const id of ['settings-cms-tab','settings-access-tab','settings-profile-tab','settings-federation-tab',
  'backend-metrics','backend-metrics-indicator','openai-resource-provider','presenter-fullscreen',
- 'federation-tab'])document.getElementById(id).hidden=false;
+ 'federation-tab','resource-runtime-policy'])document.getElementById(id).hidden=false;
 document.querySelector('[data-settings-item="settings-profile-tab"]').hidden=false;
 document.querySelector('[data-settings-item="settings-access-tab"]').hidden=false;
 document.getElementById('project-location-controls').hidden=false;

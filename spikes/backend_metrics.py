@@ -72,6 +72,52 @@ def run_usage(adapter_id, binding_id, run_id, response, fetched_at=None):
             'metrics': metrics}
 
 
+def completed_run_usage(run_store, adapter_id, fetched_at=None):
+    """Aggregate exact token counts already stored in one provider run journal."""
+    require(adapter_id in {'ollama', 'openai-responses'},
+            'Unsupported backend usage adapter')
+    observed = fetched_at or _now(); timestamp(observed)
+    summary = {'schema_version': 1, 'kind': 'usage', 'status': 'available',
+               'scope': 'node-local-completed-runs', 'adapter_id': adapter_id,
+               'fetched_at': observed, 'completed_runs': 0, 'measured_runs': 0,
+               'unreported_runs': 0, 'input_tokens': 0, 'output_tokens': 0,
+               'total_tokens': 0}
+    # A status read must not create an otherwise unused provider journal.
+    if not os.path.lexists(run_store.path):
+        return summary
+    with run_store.connect() as db:
+        rows = db.execute("SELECT response FROM runs WHERE state='succeeded'")
+        for (encoded,) in rows:
+            summary['completed_runs'] += 1
+            try:
+                response = json.loads(encoded) if encoded else None
+            except (TypeError, ValueError):
+                response = None
+            if not isinstance(response, dict):
+                summary['unreported_runs'] += 1
+                continue
+            if adapter_id == 'ollama':
+                values = (response.get('prompt_eval_count'),
+                          response.get('eval_count'))
+                valid = all(type(value) is int and value >= 0 for value in values)
+                total = sum(values) if valid else None
+            else:
+                usage = response.get('usage')
+                values = ((usage.get('input_tokens'), usage.get('output_tokens'))
+                          if isinstance(usage, dict) else (None, None))
+                total = usage.get('total_tokens') if isinstance(usage, dict) else None
+                valid = (all(type(value) is int and value >= 0 for value in values)
+                         and type(total) is int and total >= 0)
+            if not valid:
+                summary['unreported_runs'] += 1
+                continue
+            summary['measured_runs'] += 1
+            summary['input_tokens'] += values[0]
+            summary['output_tokens'] += values[1]
+            summary['total_tokens'] += total
+    return summary
+
+
 class MetricTransportError(RuntimeError):
     def __init__(self, message, *, kind='unavailable'):
         require(kind in {'unauthorized', 'forbidden', 'rate-limited', 'unavailable'},

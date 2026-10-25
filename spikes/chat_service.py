@@ -17,7 +17,7 @@ from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
-from spikes.backend_metrics import OpenAIAccountMetrics, run_usage
+from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
@@ -28,6 +28,7 @@ from spikes.artifacts import Artifacts
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
 from spikes.metadata import ValidationError, require, timestamp, uuid
+from spikes.node_telemetry import NodeTelemetry, OllamaRuntimePolicy
 from spikes.ollama_backend import (BACKENDS, OllamaAdapter, OllamaBindings,
                                    OllamaRuns)
 from spikes.openai_backend import (OpenAIAdapter, OpenAIBinding, OpenAIBindings,
@@ -257,6 +258,7 @@ class ChatService:
         self.external_adapter_factory = external_adapter_factory
         self.search_adapter_factory = search_adapter_factory
         self.public_source_adapter_factory = public_source_adapter_factory
+        self.node_telemetry = NodeTelemetry(self.node_path.parent)
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
@@ -292,6 +294,76 @@ class ChatService:
         """Probe a candidate without saving it or sending project content."""
         binding = BACKENDS.parse_binding(value)
         return OllamaAdapter.probe(binding)
+
+    @staticmethod
+    def _runtime_assessment(evidence):
+        if not evidence or evidence.get('status') != 'available':
+            return 'unknown'
+        expected, processor = (evidence.get('expected_processor'),
+                               evidence.get('processor'))
+        if expected == 'gpu' and processor == 'cpu':
+            return 'warning-gpu-expected-cpu-observed'
+        if expected == 'gpu' and processor == 'partial-gpu':
+            return 'partial-gpu'
+        if expected in {'cpu', 'gpu'}:
+            matches = (expected == processor or
+                       expected == 'gpu' and processor == 'partial-gpu')
+            return 'matches' if matches else 'mismatch'
+        return 'observed'
+
+    def telemetry_status(self, group='all'):
+        require(group in {'all', 'activity', 'capacity'},
+                'Unknown node telemetry group')
+        root = self._root(); runs = OllamaRuns(root)
+        try:
+            binding = OllamaBindings(root).load()
+        except FileNotFoundError:
+            binding = None
+        policy = (None if binding is None else
+                  OllamaRuntimePolicy(root).load(binding))
+        latest = (None if binding is None else
+                  runs.latest_runtime(binding.binding_id, binding.revision))
+        if latest is not None:
+            latest['assessment'] = self._runtime_assessment(
+                latest['runtime_evidence'])
+        result = {'system': self.node_telemetry.snapshot(group),
+                  'ollama': {'binding': None if binding is None else binding.serialize(),
+                             'policy': policy, 'latest_run': latest}}
+        if group in {'all', 'capacity'}:
+            result['token_usage'] = {
+                'schema_version': 1,
+                'scope': 'node-local-completed-runs',
+                'providers': [
+                    completed_run_usage(runs, 'ollama'),
+                    completed_run_usage(OpenAIRuns(root), 'openai-responses'),
+                ]}
+        return result
+
+    def configure_runtime_policy(self, value):
+        require(isinstance(value, dict) and set(value) == {'expected_processor'},
+                'Invalid Ollama runtime policy request')
+        root = self._root()
+        binding = OllamaBindings(root).load()
+        OllamaRuntimePolicy(root).save(binding, value['expected_processor'])
+        return self.telemetry_status('all')
+
+    def runtime_evidence(self, run_id):
+        uuid(run_id); node_id, user_id = self._identity(); root = self._root()
+        owned = any(turn.get('run_id') == run_id
+                    for thread in ChatThreads(root).list(node_id, user_id)
+                    for turn in thread.get('turns', []))
+        require(owned, 'Ollama run is not available to this user')
+        row = OllamaRuns(root).get(run_id)
+        require(row is not None and row.get('adapter_id') == 'ollama',
+                'Ollama run evidence is unavailable')
+        evidence = row.get('runtime_evidence') or {
+            'status': 'unknown', 'reason': 'legacy-run-without-runtime-evidence',
+            'source': 'ollama:/api/ps', 'expected_processor': 'unspecified',
+            'expectation_revision': 0}
+        return {'run_id': run_id, 'state': row['state'],
+                'completed_at': row.get('completed_at'),
+                'runtime_evidence': evidence,
+                'assessment': self._runtime_assessment(evidence)}
 
     def configure_preferences(self, value):
         require(isinstance(value, dict) and set(value) == {'streaming'}
@@ -2174,9 +2246,11 @@ class ChatService:
                                      run_id=run_id, message_id=assistant_message_id,
                                      content=response['response'], privacy=output_privacy,
                                      created_at=now())
+        runtime_row = adapter.runs.get(run_id)
         result = {'thread': threads.get(thread_id, node_id, user_id), 'turn': completed,
                   'target': binding.serialize(),
-                  'usage_report': run_usage('ollama', binding.binding_id, run_id, response)}
+                  'usage_report': run_usage('ollama', binding.binding_id, run_id, response),
+                  'runtime_evidence': (runtime_row or {}).get('runtime_evidence')}
         if stream:
             try:
                 on_status('completed')

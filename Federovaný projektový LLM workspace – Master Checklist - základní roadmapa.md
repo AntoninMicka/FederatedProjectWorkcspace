@@ -1102,6 +1102,16 @@ Gate M3 proto není vydáván za celý uzavřený.
 - [x] První externí provider — F-M3-EXTERNAL-01 po PR #36 PoC validated:
   OpenAI Responses adapter, přesné preview, potvrzený dispatch, uzavřený outcome,
   artefaktový kontext a durable dočasné/redukované projekce v jednotném UI.
+- [ ] Dynamické model discovery a sdílený znalostní katalog —
+  F-M3-MODEL-CATALOG-01 oddělí kanonickou identitu modelu, providerovou nabídku
+  a lokální backendový binding. Providerem hlášené schopnosti mají přednost;
+  chybějící údaje může doplnit pouze dohledatelný zkontrolovaný katalog.
+  Konflikt ani neznámý údaj se nesmí proměnit v optimistickou capability a
+  katalog nesmí provést automatický fallback mezi nabídkami.
+- [ ] AtlasCloud textový backend — F-M3-ATLASCLOUD-01 po společném katalogu
+  přidá samostatný external-provider adapter s přesným protokolem konkrétní
+  modelové nabídky, node-local credential a durable run recovery. První řez
+  nezahrnuje media/MCP a nesmí tajně přepnout protokol, model ani backend.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.
@@ -1115,6 +1125,16 @@ Gate M3 proto není vydáván za celý uzavřený.
   feature větvi: bezpečný NDJSON transport, ephemerální delty, finální durable
   zpráva, viditelná uzlová volba, delivery telemetrie a fyzicky akceptované
   UI dlouhé odpovědi. Evidence je ve WORK_LOG; dávka byla doručena PR #63.
+- [x] Telemetrie uzlu a evidence runtime Ollamy — OPS-NODE-MONITOR-01 byla
+  25. 10. 2026 akceptována na úrovni PoC validated. Odděluje ephemerální
+  CPU/RAM/disk/síť/GPU vzorek od durable evidence
+  `cpu`/`partial-gpu`/`gpu` konkrétního dokončeného runu, providerových tokenů
+  a explicitního očekávání. Fyzické same-node i připnuté private-network běhy,
+  restart a CPU-only varování prošly; partial-GPU zůstává na hostu se sdílenou
+  pamětí nevyvolatelné a výslovně neověřené. Diagnostika nic automaticky
+  nerestartuje, nepřepíná ani neopakuje. Evidence je ve WORK_LOG; PR feature
+  větve do `develop` zatím nebyl vytvořen ani sloučen. Souběh monitoru s
+  dlouhým streamem je samostatná dávka `OPS-WEB-CONCURRENCY-01` v BACKLOG.
 - [x] Řízené webové hledání — F-M3-SEARCH-01 PoC validated na feature větvi:
   explicitní SearXNG
   binding a potvrzení dotazu, durable search journal, bounded nedůvěryhodné
