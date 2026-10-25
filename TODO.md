@@ -162,3 +162,22 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   dříve a dokončená historie zůstává append-only.
 - Zpráva se zobrazí jako návrh a do projektu se uloží až samostatným přesným
   potvrzením; cílené testy, úplná sada a realistický fyzický průchod projdou.
+
+## K předání do backlogu
+
+- [ ] [planned] **OPS-NODE-MONITOR-01 — systémová telemetrie a viditelný
+  runtime Ollamy (cílová úroveň: implemented → PoC validated).** Původ:
+  uživatelské zjištění, že Ollama může po změně prostředí začít tiše provádět
+  inference pouze na CPU. Adaptovat již připravený panel Zdroje a jeho ukazatele
+  CPU, GPU, RAM, VRAM, DISK a NET na omezenou read-only telemetrii skutečného
+  uzlu. U každého Ollama běhu rozlišit očekávaný a doložený režim CPU/GPU,
+  částečný offload a stav `unknown`; samotná konfigurace GPU, dostupné zařízení
+  ani okamžité vytížení se nesmějí vydávat za důkaz GPU inference. Pro lokální
+  i private-network backend definovat podporovaný diagnostický kontrakt a
+  provenance měření; nedostupná vzdálená telemetrie zůstane explicitně
+  neznámá. Při očekávaném GPU a doloženém CPU-only běhu zobrazit výrazné
+  varování v panelu i u běhu, ale nic automaticky nerestartovat, nepřepínat ani
+  neopakovat. Akceptace: fyzicky ověřit GPU běh, CPU-only regresi, částečný
+  offload, nedostupnou/opožděnou telemetrii, restart aplikace a oddělení
+  historického run evidence od živého systémového vzorku; žádná diagnostika
+  nesmí zpřístupnit credentials ani obejít hranici důvěry uzlu.
