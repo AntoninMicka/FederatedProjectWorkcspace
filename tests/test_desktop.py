@@ -1188,6 +1188,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("timeoutError.status=408;timeoutError.outcome='unknown'", JS)
         self.assertIn('appendChatOperationNotice(error)', JS)
         self.assertIn("projectRequest(path,payload,210000)", JS)
+        self.assertIn("if(item.error)provenance.push(`Chyba: ${item.error}`)", JS)
         self.assertIn("chatOperationStatus.textContent='Odesílám…'", JS)
         self.assertIn("chatOperationStatus.textContent='Model přemýšlí…'", JS)
         self.assertIn("mainPanelContent.addEventListener('scroll',updateChatAutoFollow", JS)

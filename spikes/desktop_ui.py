@@ -4292,7 +4292,9 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
   if(result.claims)provenance.push(`${result.claims.length} závěrů`);
   if(result.proposal_sha256)provenance.push(`návrh ${result.proposal_sha256}`);
   if(result.draft_sha256)provenance.push(`draft ${result.draft_sha256}`);
-  if(result.reason)provenance.push(result.reason);detail.textContent=provenance.join(' · ');row.append(label,detail);phases.append(row);}
+  if(result.reason)provenance.push(result.reason);
+  if(item.error)provenance.push(`Chyba: ${item.error}`);
+  detail.textContent=provenance.join(' · ');row.append(label,detail);phases.append(row);}
  const revisionPanels=document.createElement('div');
  for(const pending of (workflow.revision_proposals || []).filter(item=>item.state==='pending')){
   const proposal=pending.proposal,box=document.createElement('section');box.className='research-revision';

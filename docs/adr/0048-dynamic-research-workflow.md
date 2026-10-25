@@ -83,13 +83,16 @@ nezvyšuje a profilové maximum nepřekročí.
 
 `research.plan-next` je běžný viditelný krok s vlastním providerovým run ID,
 Context Manifestem, cost a recovery. Dostane pouze cíl výzkumu, profil,
-aktuální revizi, bounded ledger dokončených kroků, dostupné typed výstupy a
-zbývající limit. Jeho uzavřený výstup obsahuje rozhodnutí, důvod, cílovou akci
-a přesný kandidátní vstup nebo důvod ukončení. Neobsahuje oprávnění, privacy,
-execution boundary ani autoritativní změnu budgetu.
+aktuální revizi, bounded ledger dokončených kroků, aplikačně sestavený uzavřený
+seznam přesných typed kandidátů a zbývající limit. Jeho uzavřený výstup obsahuje
+rozhodnutí, důvod, ID jednoho nabídnutého kandidáta nebo důvod ukončení.
+Kandidátní vstup, oprávnění, privacy, execution boundary ani autoritativní změnu
+budgetu model nesestavuje.
 
 Aplikační materializátor znovu načte aktuální projektový HEAD a všechny
-doménové autority. Cizí URL, neexistující source/run ID, změněný preview,
+doménové autority. Zvolený candidate ID nahradí přesným vstupem, který aplikace
+před dispatch připravila z těchto autorit. Cizí URL, neexistující source/run ID,
+změněný preview,
 nepovolenou návaznost nebo stale revizi odmítne. Z validního planner výsledku
 odvodí stabilní proposal ID a přes AutonomyQueue uloží nejvýše jeden návrh
 `append`, `repeat` nebo `finish`. Opakované zpracování stejného planner runu
@@ -106,10 +109,11 @@ workflow dokončil schválený proces, nikoli že jsou závěry pravdivé.
 
 ### Source ledger, analýza a zpráva
 
-Autonomy step results tvoří bounded ledger referencí: search ID, reader run
-ID, source ID, adapter/revizi, URL, raw/text/projection hash, provider run ID a
-hash validovaného hodnocení. Ledger je odvoditelný z doménových autorit a při
-každém následníku se znovu ověří. Nenahrazuje `SearchRuns`,
+Autonomy step results tvoří bounded ledger identit a hashů. Přesné kandidáty
+dalšího kroku aplikace odvozuje ze search ID, reader run ID, source ID,
+adapteru/revize, URL, raw/text/projection hashů, provider run ID a hashů
+validovaných hodnocení v doménových autoritách. Ledger i kandidáti jsou
+odvoditelní a při každém následníku se znovu ověří. Nenahrazují `SearchRuns`,
 `PublicSourceRuns`, `OllamaRuns` ani `TaskOutcomes`.
 
 Relevance, analýza a zpráva používají existující Context Manifest a

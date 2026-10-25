@@ -329,6 +329,8 @@ class AutonomyServiceTests(unittest.TestCase):
     def test_research_profile_prepares_and_cycles_through_visible_planner(self):
         task_id = str(uuid4())
         class ResearchChat(ChatStub):
+            source_id = 'source-' + 'a' * 32
+
             def candidate(inner, request, state):
                 preview = {'schema_version': 2, **request,
                     'query': 'ověřit tvrzení', 'purpose': 'Ověřit tvrzení',
@@ -357,6 +359,41 @@ class AutonomyServiceTests(unittest.TestCase):
                 return {'state': 'completed', 'search_workflow': {
                     'rounds': [{'round_index': 1}], 'next_queries': []}}
 
+            def task_outcomes(inner, *, project_id):
+                return [{'task_id': task_id, 'outcome': {'rounds': [{
+                    'round_index': 1, 'search_id': proposed['steps'][0]['input'][
+                        'request']['search_id'],
+                    'sources': [{'source_id': inner.source_id}]}]}}]
+
+            def task_public_source_autonomy_candidate(inner, request):
+                binding = {'schema_version': 1, 'binding_id': str(uuid4()),
+                    'revision': 'static-html-v1', 'adapter': 'static-html-v1',
+                    'origins': ['https://example.test'], 'user_agent': 'Test/1.0',
+                    'auth': 'none', 'max_wire_bytes': 2 * 1024 * 1024,
+                    'max_decoded_bytes': 2 * 1024 * 1024,
+                    'max_text_chars': 200000, 'max_compression_ratio': 100,
+                    'timeout_seconds': 15}
+                preview = {'schema_version': 1, **request,
+                    'project_id': self.project_id, 'privacy': 'project',
+                    'expected_head': self.git.head(), 'title': 'Evidence',
+                    'url': 'https://example.test/evidence',
+                    'origin': 'https://example.test', 'adapter': 'static-html-v1',
+                    'binding': binding, 'effects': [
+                        {'method': 'GET', 'url': 'https://example.test/robots.txt',
+                         'purpose': 'RFC 9309 preflight'},
+                        {'method': 'GET', 'url': 'https://example.test/evidence',
+                         'purpose': 'selected public document when robots allows'}],
+                    'limits': {'wire_bytes': 2 * 1024 * 1024,
+                        'decoded_bytes': 2 * 1024 * 1024,
+                        'text_chars': 200000, 'compression_ratio': 100,
+                        'seconds': 15, 'redirects': 0},
+                    'warning': 'Untrusted source.', 'search_provenance': {
+                        'search_id': request['search_id'], 'round_index': 1,
+                        'source_id': request['source_id']}}
+                return {'request': request, 'preview': dict(preview,
+                    preview_sha256=digest(preview), state='candidate'),
+                    'project_id': self.project_id, 'expected_head': self.git.head()}
+
             def research_model_action(inner, action_id, value, execution):
                 inner.calls.append((action_id, value, execution))
                 proposal = {'decision': 'finish', 'reason': 'Enough for this test.',
@@ -373,9 +410,9 @@ class AutonomyServiceTests(unittest.TestCase):
             role_workflow_service=self.roles, countdown_seconds=0)
         proposed = service.prepare_research({'workflow_id': self.workflow_id,
             'task_id': task_id, 'mode': 'manual', 'countdown_seconds': 3,
-            'profile_id': 'quick-search-v1', 'profile_version': '1.0'})
+            'profile_id': 'read-and-verify-v1', 'profile_version': '1.0'})
         self.assertEqual(proposed['policy']['research']['profile_id'],
-                         'quick-search-v1')
+                         'read-and-verify-v1')
         self.assertEqual(proposed['policy']['research']['goal'], 'Ověřit tvrzení')
         service.attach(self.workflow_id)
         service.activate(self.workflow_id, proposed['activation_digest'])
@@ -393,6 +430,11 @@ class AutonomyServiceTests(unittest.TestCase):
                          ('completed', 3))
         self.assertEqual([item[0] for item in chat.calls],
                          ['search', 'research.plan-next'])
+        candidate = chat.calls[-1][1]['available_candidates'][0]
+        self.assertEqual(candidate['candidate']['action']['id'],
+                         'source.fetch-public')
+        self.assertEqual(candidate['candidate_id'],
+                         digest(candidate['candidate']))
 
     def test_unknown_domain_effect_is_terminal_and_stale_head_blocks_dispatch(self):
         self.chat.unknown = True
@@ -540,7 +582,9 @@ class AutonomyServiceTests(unittest.TestCase):
             'profile_id': 'quick-search-v1', 'profile_version': '1.0',
             'plan_revision': 1, 'ledger': ledger,
             'ledger_sha256': digest(ledger), 'remaining_budget': {
-                'max_steps': 0, 'max_cost_units': 0, 'max_seconds': 900}}
+                'max_steps': 0, 'max_cost_units': 0, 'max_seconds': 900},
+            'available_candidates': [{
+                'candidate_id': digest(candidate), 'candidate': candidate}]}
         planner = self.step('research.plan-next', planner_input)
         planner['cost_units'] = 2
         dynamic = {'schema_version': 3, 'workflow_id': self.workflow_id,

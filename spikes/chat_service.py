@@ -71,9 +71,13 @@ RESEARCH_INSTRUCTIONS = {
         'Return only JSON with markdown and citations; citations must be source run IDs. Do not '
         'claim that model judgments are verified facts and do not request publication.'),
     'research.plan-next': ('Propose one bounded next research decision from the supplied profile, '
-        'remaining budget, and immutable ledger. Return only JSON with decision append, repeat, '
-        'or finish; reason; target_action; candidate; repeat_step_id; and finish_reason. Never '
-        'change permissions, privacy, execution boundaries, profile, or budget.'),
+        'remaining budget, immutable ledger, and application-built available_candidates. Return '
+        'only JSON with exactly decision, reason, candidate_id, repeat_step_id, and finish_reason. '
+        'For append choose one candidate_id exactly as supplied; for repeat also identify one '
+        'completed repeat_step_id; for finish set candidate_id and repeat_step_id to null and use '
+        'finish_reason completed, insufficient, budget-exhausted, or cancelled-by-user. Never '
+        'invent or copy candidate inputs and never change permissions, privacy, execution '
+        'boundaries, profile, or budget.'),
 }
 
 
@@ -121,12 +125,27 @@ def parse_research_model_response(action_id, raw, value):
                       ensure_ascii=False, sort_keys=True,
                       separators=(',', ':')).encode()).hexdigest()}
     else:
-        fields = {'decision', 'reason', 'target_action', 'candidate',
-                  'repeat_step_id', 'finish_reason'}
+        fields = {'decision', 'reason', 'candidate_id', 'repeat_step_id',
+                  'finish_reason'}
         require(set(parsed) == fields,
                 'Research planner response has unknown or missing fields')
-        output = {**base, 'kind': 'research-next-step', **parsed,
-                  'proposal_sha256': hashlib.sha256(json.dumps(parsed,
+        decision = parsed.get('decision'); candidate_id = parsed.get('candidate_id')
+        candidates = {item['candidate_id']: item['candidate']
+                      for item in value['available_candidates']}
+        if decision == 'finish':
+            require(candidate_id is None, 'Research finish selected a candidate')
+            candidate = None; target_action = None
+        else:
+            require(isinstance(candidate_id, str) and candidate_id in candidates,
+                    'Research planner selected an unavailable candidate')
+            candidate = candidates[candidate_id]
+            target_action = candidate['action']['id']
+        proposal = {'decision': decision, 'reason': parsed.get('reason'),
+            'target_action': target_action, 'candidate': candidate,
+            'repeat_step_id': parsed.get('repeat_step_id'),
+            'finish_reason': parsed.get('finish_reason')}
+        output = {**base, 'kind': 'research-next-step', **proposal,
+                  'proposal_sha256': hashlib.sha256(json.dumps(proposal,
                       ensure_ascii=False, sort_keys=True,
                       separators=(',', ':')).encode()).hexdigest()}
     validate_research_output(action_id, output)

@@ -232,6 +232,113 @@ class AutonomyService:
                 'result_sha256': digest(value) if isinstance(value, dict) else None})
         return result
 
+    def _candidate_option(self, action_id, privacy, value):
+        descriptor = self.registry.resolve(action_id, '1.0')
+        candidate = {'action': {'id': action_id, 'version': '1.0'},
+            'privacy': privacy, 'cost_units': descriptor['max_cost_units'],
+            'input': value}
+        return {'candidate_id': digest(candidate), 'candidate': candidate}
+
+    def _research_candidates(self, workflow, research, planner_run_id):
+        """Build exact next-step options from current domain authorities."""
+        allowed = {item['id'] for item in workflow['policy']['actions']}
+        privacy = workflow['privacy']; candidates = []
+        completed = [item for item in workflow['steps']
+                     if item['state'] == 'completed']
+        domain_steps = [item for item in completed
+                        if item['action']['id'] != 'research.plan-next']
+        last_action = domain_steps[-1]['action']['id'] if domain_steps else None
+        search_steps = [item for item in completed
+                        if item['action']['id'] == 'search.iterative-query']
+        fetch_steps = [item for item in completed
+                       if item['action']['id'] == 'source.fetch-public']
+        fetched_source_ids = {item['result']['source_id'] for item in fetch_steps}
+
+        if ('source.fetch-public' in allowed and search_steps
+                and last_action in {'search.iterative-query', 'source.fetch-public'}):
+            task_id = search_steps[0]['result']['task_id']
+            projection = next((item for item in self.chat_service.task_outcomes(
+                project_id=workflow['project_id']) if item['task_id'] == task_id), None)
+            require(projection is not None,
+                    'Research search result is unavailable for planning')
+            search_display = projection.get('search_workflow') or {}
+            rounds = search_display.get('rounds') or (
+                (projection.get('outcome') or {}).get('rounds') or [])
+            for round_record in rounds:
+                for source in round_record.get('sources', []):
+                    source_id = source.get('source_id')
+                    if not isinstance(source_id, str) or source_id in fetched_source_ids:
+                        continue
+                    request = {'task_id': task_id,
+                        'search_id': round_record['search_id'],
+                        'source_id': source_id,
+                        'run_id': str(uuid5(UUID(planner_run_id),
+                            'fetch:' + round_record['search_id'] + ':' + source_id))}
+                    context = self.chat_service.task_public_source_autonomy_candidate(
+                        request)
+                    preview = dict(context['preview'])
+                    preview_sha256 = preview.pop('preview_sha256')
+                    preview.pop('state', None)
+                    candidates.append(self._candidate_option(
+                        'source.fetch-public', privacy, {'request': request,
+                            'preview': preview,
+                            'preview_sha256': preview_sha256}))
+
+        source_refs = [self.chat_service.public_source_reference(
+            item['result']['run_id']) for item in fetch_steps]
+        if (source_refs and 'research.verify-evidence' in allowed
+                and last_action == 'source.fetch-public'):
+            verification = {'research_id': research['research_id'],
+                'source_refs': source_refs, 'ledger_sha256': digest(source_refs)}
+            candidates.append(self._candidate_option(
+                'research.verify-evidence', privacy, verification))
+
+        evidence_steps = [item for item in completed
+                          if item['action']['id'] == 'research.verify-evidence']
+        if (evidence_steps and 'research.select-relevant' in allowed
+                and last_action == 'research.verify-evidence'):
+            result = evidence_steps[-1]['result']
+            selection = {**research,
+                'run_id': str(uuid5(UUID(planner_run_id), 'selection:run')),
+                'manifest_id': str(uuid5(UUID(planner_run_id), 'selection:manifest')),
+                'evidence': result['evidence'],
+                'evidence_sha256': result['evidence_sha256']}
+            candidates.append(self._candidate_option(
+                'research.select-relevant', privacy, selection))
+
+        selection_steps = [item for item in completed
+                           if item['action']['id'] == 'research.select-relevant']
+        analysis_steps = [item for item in completed
+                          if item['action']['id'] == 'research.analyze']
+        if selection_steps:
+            selected = selection_steps[-1]['result']; selection = selected['selection']
+            if ('research.analyze' in allowed
+                    and last_action == 'research.select-relevant'):
+                analysis = {**research,
+                    'run_id': str(uuid5(UUID(planner_run_id), 'analysis:run')),
+                    'manifest_id': str(uuid5(UUID(planner_run_id), 'analysis:manifest')),
+                    'selection': selection,
+                    'selection_sha256': selected['selection_sha256']}
+                candidates.append(self._candidate_option(
+                    'research.analyze', privacy, analysis))
+            if ('research.compose-report' in allowed
+                    and last_action in {'research.select-relevant',
+                                        'research.analyze'}):
+                analyzed = analysis_steps[-1]['result'] if analysis_steps else None
+                task_id = search_steps[0]['result']['task_id']
+                report = {**research,
+                    'run_id': str(uuid5(UUID(planner_run_id), 'report:run')),
+                    'manifest_id': str(uuid5(UUID(planner_run_id), 'report:manifest')),
+                    'selected_source_run_ids': selection['selected_source_run_ids'],
+                    'selection_sha256': selected['selection_sha256'],
+                    'analysis_run_id': None if analyzed is None else analyzed['run_id'],
+                    'analysis_sha256': (None if analyzed is None else
+                                        analyzed['analysis_sha256']),
+                    'task_id': task_id}
+                candidates.append(self._candidate_option(
+                    'research.compose-report', privacy, report))
+        return candidates
+
     def propose_revision(self, proposal, *, allow_local_only=True):
         proposal = parse_revision_proposal(proposal)
         workflow = self.get(proposal.get('workflow_id'),
@@ -475,6 +582,8 @@ class AutonomyService:
                     0, budget['max_cost_units'] - workflow['spent_cost']
                     - planner_cost),
                 'max_seconds': workflow['remaining_seconds']}}
+        planner_input['available_candidates'] = self._research_candidates(
+            workflow, research, planner_input['run_id'])
         step = {'step_id': str(uuid5(
             UUID(workflow['workflow_id']), marker + ':step')),
             'action': {'id': 'research.plan-next', 'version': '1.0'},
@@ -507,6 +616,11 @@ class AutonomyService:
         kind = result['decision']; step = repeat_of = None
         if kind in {'append', 'repeat'}:
             candidate = result['candidate']
+            require(any(item['candidate_id'] == digest(candidate)
+                        and item['candidate'] == candidate
+                        for item in planner['input'].get(
+                            'available_candidates', [])),
+                    'Research planner selected an unavailable candidate')
             require(candidate['action']['id'] in profile_actions,
                     'Research planner proposed an action outside its profile')
             repeat_of = result['repeat_step_id'] if kind == 'repeat' else None

@@ -108,11 +108,24 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   automatického opakování a upozorněním přímo ve vlákně. Po opravě:
   `python3 -m unittest discover -s tests -v` (797 testů OK, 28 skipped),
   `node --check` generovaného JavaScriptu a `git diff --check` bez chyb.
-- [ ] [planned] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
+- [ ] [in progress] **F-M4-RESEARCH-WORKFLOW-01-E — regrese a realistická
   akceptace (cílová úroveň: PoC validated).** Ověřit předčasné ukončení,
   doplňující hledání, opakované načtení, ověření vztahů, výběr zdrojů,
   vloženou analýzu, prodloužení schváleného limitu, restart, `unknown` bez
   retry a nezměněný projekt před potvrzenou publikací.
+  První fyzický průchod profilem „Načíst a ověřit“ doložil dokončené hledání,
+  ale planner skončil známou chybou. Příčina v implementaci: dostával pouze
+  hashe ledgeru a přitom měl sám sestavit přesný vstup readeru, což bez
+  source/URL/binding dat není možné; jednotkový test tuto mezeru zakryl
+  okamžitým `finish`. Oprava připravuje typed kandidáty z existujících
+  doménových autorit a model volí pouze jejich digest nebo ukončení. Neznámý
+  digest se odmítne fail-closed a chat nově vypíše konkrétní journalovou chybu
+  přímo u selhané fáze. Zbývá nový fyzický průchod přes fetch, ověření, výběr
+  a sestavení zprávy a ostatní scénáře této položky. Ověření opravy:
+  cílené kontraktové, katalogové, materializační a UI testy prošly;
+  `python3 -m py_compile` dotčených modulů, `node --check` generovaného
+  JavaScriptu, `python3 -m unittest discover -s tests -v` (797 testů OK,
+  28 skipped) a `git diff --check` bez chyb.
 
 ## Akceptace
 

@@ -248,10 +248,18 @@ class ActionRegistry:
 
     def validate_input(self, descriptor, value):
         if descriptor['schema_version'] == 2:
-            self._validate_fields(value, descriptor['input_types'], 'input')
-            validate_research_input(descriptor['action_id'], value)
+            checked = value
+            if (descriptor['action_id'] == 'research.plan-next'
+                    and isinstance(value, dict)
+                    and set(value) == set(descriptor['input_types']) - {
+                        'available_candidates'}):
+                # Old journal plans remain inspectable, but their stored descriptor
+                # digest no longer permits dispatch under the changed contract.
+                checked = dict(value, available_candidates=[])
+            self._validate_fields(checked, descriptor['input_types'], 'input')
+            validate_research_input(descriptor['action_id'], checked)
             if descriptor['action_id'] == 'search.iterative-query':
-                _validate_search_input(value)
+                _validate_search_input(checked)
 
     def validate_output(self, descriptor, value):
         if descriptor['schema_version'] == 2:

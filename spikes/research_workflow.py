@@ -181,6 +181,32 @@ def _ledger(value):
         _hash(item['result_sha256'], 'ledger result digest', nullable=True)
 
 
+def _planner_candidates(value):
+    require(isinstance(value, list) and len(value) <= MAX_LIST,
+            'Invalid research planner candidates')
+    seen = set()
+    for item in value:
+        _exact(item, {'candidate_id', 'candidate'}, 'planner candidate option')
+        _hash(item['candidate_id'], 'planner candidate ID')
+        candidate = item['candidate']
+        _exact(candidate, {'action', 'privacy', 'cost_units', 'input'},
+               'planner candidate')
+        _exact(candidate['action'], {'id', 'version'}, 'candidate action')
+        action_id = candidate['action']['id']
+        require(action_id in PROFILE_ACTIONS - {'research.plan-next'}
+                and candidate['action']['version'] == '1.0'
+                and candidate['privacy'] in PRIVACY
+                and type(candidate['cost_units']) is int
+                and 0 <= candidate['cost_units'] <= 1_000_000,
+                'Invalid research planner candidate')
+        INPUT_VALIDATORS[action_id](candidate['input'])
+        require(item['candidate_id'] == _digest(candidate),
+                'Research planner candidate digest differs')
+        require(item['candidate_id'] not in seen,
+                'Duplicate research planner candidate')
+        seen.add(item['candidate_id'])
+
+
 def _budget(value, name, *, allow_zero=True):
     _exact(value, {'max_steps', 'max_cost_units', 'max_seconds'}, name)
     minimum = 0 if allow_zero else 1
@@ -378,7 +404,8 @@ def _compose_output(value):
 
 def _planner_input(value):
     _model_base(value, {'profile_id', 'profile_version', 'plan_revision',
-        'ledger', 'ledger_sha256', 'remaining_budget'}, 'planner input')
+        'ledger', 'ledger_sha256', 'remaining_budget', 'available_candidates'},
+        'planner input')
     require(value['profile_id'] in {
         'quick-search-v1', 'read-and-verify-v1', 'deep-research-v1'},
         'Unsupported research profile ID')
@@ -391,6 +418,7 @@ def _planner_input(value):
     require(value['ledger_sha256'] == _digest(value['ledger']),
             'Research planner ledger digest differs')
     _budget(value['remaining_budget'], 'remaining budget')
+    _planner_candidates(value['available_candidates'])
 
 
 def _planner_output(value):

@@ -204,7 +204,8 @@ class ResearchWorkflowTest(unittest.TestCase):
         planner = {**self.model_base(), 'profile_id': 'deep-research-v1',
             'profile_version': '1.0', 'plan_revision': 2, 'ledger': ledger,
             'ledger_sha256': sha(ledger), 'remaining_budget': {
-                'max_steps': 4, 'max_cost_units': 10, 'max_seconds': 300}}
+                'max_steps': 4, 'max_cost_units': 10, 'max_seconds': 300},
+            'available_candidates': []}
         self.validate('research.plan-next', planner)
         proposal = {'decision': 'finish', 'reason': 'Enough evidence.',
             'target_action': None, 'candidate': None, 'repeat_step_id': None,
@@ -221,11 +222,24 @@ class ResearchWorkflowTest(unittest.TestCase):
             'analysis_sha256': None, 'task_id': self.task_id}
         candidate = {'action': {'id': 'research.compose-report', 'version': '1.0'},
             'privacy': 'project', 'cost_units': 8, 'input': report_input}
+        planner['available_candidates'] = [{
+            'candidate_id': sha(candidate), 'candidate': candidate}]
+        self.validate('research.plan-next', planner)
         append = {'decision': 'append', 'reason': 'Compose the bounded draft.',
             'target_action': 'research.compose-report', 'candidate': candidate,
             'repeat_step_id': None, 'finish_reason': None}
         appended = {**output, **append, 'proposal_sha256': sha(append)}
         self.validate('research.plan-next', appended, output=True)
+        raw = {'decision': 'append', 'reason': 'Compose the bounded draft.',
+            'candidate_id': sha(candidate), 'repeat_step_id': None,
+            'finish_reason': None}
+        parsed = parse_research_model_response(
+            'research.plan-next', json.dumps(raw), planner)
+        self.assertEqual(parsed['candidate'], candidate)
+        unavailable = dict(raw, candidate_id='f' * 64)
+        with self.assertRaisesRegex(ValidationError, 'unavailable candidate'):
+            parse_research_model_response(
+                'research.plan-next', json.dumps(unavailable), planner)
         malformed = deepcopy(appended)
         malformed['candidate']['input']['model_may_publish'] = True
         malformed_proposal = {key: malformed[key] for key in ('decision', 'reason',
@@ -241,6 +255,13 @@ class ResearchWorkflowTest(unittest.TestCase):
         bad = deepcopy(output); bad['target_action'] = 'research.analyze'
         with self.assertRaisesRegex(ValidationError, 'finish proposal'):
             self.validate('research.plan-next', bad, output=True)
+
+        legacy = deepcopy(planner); del legacy['available_candidates']
+        descriptor = self.registry.resolve('research.plan-next', '1.0')
+        self.registry.validate_input(descriptor, legacy)
+        invalid = deepcopy(legacy); invalid['unexpected'] = True
+        with self.assertRaisesRegex(ValidationError, 'fields differ'):
+            self.registry.validate_input(descriptor, invalid)
 
     def test_model_response_parser_fails_closed_and_binds_source_ids(self):
         select = {**self.model_base(), 'evidence': self.evidence,
