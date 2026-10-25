@@ -49,6 +49,13 @@ Ollamy se read-only ověřuje při náběhu, po dokončené aplikační interakc
 debounce a nejpozději po 30 sekundách. Tyto intervaly jsou UI provozní policy,
 nikoli součást historické evidence běhu.
 
+Panel současně odvozuje spotřebu tokenů z providerem reportovaných hodnot již
+uložených v úspěšných Ollama a OpenAI run journalech. Zobrazuje vstupní,
+výstupní a celkový počet tokenů i pokrytí dokončených běhů. Běh bez úplné usage
+evidence se započte do `unreported_runs`, ale jeho tokeny se neodhadují. Jde o
+node-local součet modelových běhů, nikoli OpenAI účetní či billing metriku;
+účetní report zůstává oddělený.
+
 ### Očekávání a vyhodnocení
 
 Správce může pro přesné nakonfigurované binding ID a revizi uložit node-local očekávání
@@ -93,6 +100,12 @@ Atomická změna runtime policy používá dočasný soubor, `fsync`, `rename` a
 `fsync` adresáře. Pád před `rename` zachová předchozí revizi, po `rename` je
 nová revize autoritativní; osiřelý dočasný soubor se nepoužije jako nastavení.
 
+Tokenový přehled se nepersistuje jako další autorita. Při náběhu, po aplikační
+interakci a v kapacitním obnovovacím cyklu projde durable úspěšné řádky obou
+providerových journalů a sestaví novou read-only projekci. Pád nebo restart
+nemůže součty rozdělit či zdvojit; opakovaný výpočet nad jedním `run_id` jej
+započte právě jednou. Neexistující journal se stavovým čtením nevytváří.
+
 ## Reuse a odmítnuté varianty
 
 Reuse/adaptují se `OllamaBinding`, jeho ověření stejného uzlu či TLS pinu,
@@ -100,7 +113,8 @@ stdlib transport, `OllamaRuns`, node-local stavový adresář a existující pan
 Zdroje. Linuxové `/proc`, `statvfs`, bounded `nvidia-smi` a oficiální Ollama
 `/api/ps` postačují bez nové runtime závislosti.
 
-Odmítá se nový monitoring daemon, `psutil`, persistování živých vzorků,
+Odmítá se nový monitoring daemon, `psutil`, persistování živých vzorků nebo
+odvozených tokenových součtů,
 odvozování runtime pouze z okamžitého GPU utilization, fuzzy shoda názvu modelu,
 dotaz na jiný endpoint, automatický restart Ollamy, přepnutí bindingu, fallback
 na jiný backend a retry `unknown` běhu.
@@ -112,3 +126,8 @@ workspace uzlu. U vzdálené Ollamy popisují CPU/RAM/GPU řádky stále lokáln
 workspace uzel; vzdálený runtime dokládá pouze `/api/ps` evidence z přesného
 Ollama endpointu. AMD/Intel GPU, historické grafy, alerting a obecný fleet
 monitoring nejsou součástí tohoto rozhodnutí.
+
+Současný HTTP server obsluhuje stream a monitorovací požadavky sekvenčně, takže
+živý monitor může během dlouhé streamované odpovědi čekat. Omezená souběžnost
+je samostatný navazující úkol `OPS-WEB-CONCURRENCY-01`; toto rozhodnutí ji bez
+samostatného návrhu zápisové serializace nezavádí.

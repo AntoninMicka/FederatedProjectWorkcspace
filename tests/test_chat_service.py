@@ -1513,6 +1513,12 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(status['ollama']['latest_run']['run_id'], request['run_id'])
         self.assertEqual(status['ollama']['latest_run']['assessment'],
                          'warning-gpu-expected-cpu-observed')
+        usage = {item['adapter_id']: item
+                 for item in status['token_usage']['providers']}
+        self.assertEqual(usage['ollama']['completed_runs'], 1)
+        self.assertEqual(usage['ollama']['unreported_runs'], 1)
+        self.assertEqual(usage['openai-responses']['completed_runs'], 0)
+        self.assertNotIn('token_usage', restarted.telemetry_status('activity'))
         with self.assertRaisesRegex(ValueError, 'not available to this user'):
             restarted.runtime_evidence(str(uuid4()))
 

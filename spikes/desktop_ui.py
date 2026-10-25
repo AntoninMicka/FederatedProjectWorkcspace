@@ -301,6 +301,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <span class="resource-monitor-heading">Zdroje <small>detail</small></span>
 <span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
 <span id="local-provider-indicator">Lokální AI · neověřeno</span>
+<span id="run-token-indicator">Tokeny běhů · nenačteno</span>
 <span class="resource-mini-row" data-resource-metric="cpu"><span>CPU</span><span class="resource-progress"><progress max="100" value="0" aria-label="CPU – telemetrie není načtena"></progress><output>—</output></span></span>
 <span class="resource-mini-row" data-resource-metric="gpu"><span>GPU</span><span class="resource-progress"><progress max="100" value="0" aria-label="GPU – telemetrie není načtena"></progress><output>—</output></span></span>
 <span class="resource-mini-row" data-resource-metric="ram"><span>RAM</span><span class="resource-progress"><progress max="100" value="0" aria-label="RAM – telemetrie není načtena"></progress><output>—</output></span></span>
@@ -313,8 +314,8 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <dialog id="resource-monitor-dialog" aria-labelledby="resource-monitor-title">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
-<article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p></article>
-<article><strong>Ollama runtime</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><p id="ollama-runtime-warning" class="runtime-warning" hidden></p><small>Historická evidence běhu pochází z přesného Ollama endpointu; živé systémové hodnoty níže vždy patří tomuto workspace uzlu.</small></article>
+<article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p><p id="openai-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p></article>
+<article><strong>Ollama runtime</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><p id="ollama-run-usage">Tokeny uložených běhů zatím nebyly načteny.</p><p id="ollama-runtime-warning" class="runtime-warning" hidden></p><small>Historická evidence běhu a spotřeba tokenů pocházejí z uložených providerových odpovědí; živé systémové hodnoty níže vždy patří tomuto workspace uzlu.</small></article>
 </div></section>
 <section><h3>Systémové monitory</h3><p class="resource-placeholder-note">Read-only živý vzorek tohoto workspace uzlu; není historickou evidencí inference.</p>
 <div id="system-monitor-detail"></div></section>
@@ -1089,7 +1090,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #sidebar-layout-toggle,#logout{flex:none;width:100%;margin-top:8px;padding:9px}#sidebar-layout-toggle{display:flex;align-items:center;justify-content:center;gap:8px;background:#20384b}#sidebar-layout-toggle:hover{background:#29485f}#sidebar-layout-toggle .sidebar-utility-icon{display:block;width:18px;height:18px}
 #sidebar-project-recover{margin:0 0 8px;padding:8px;font-size:11px;background:#8a642c}
 .resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
-#backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
+#backend-metrics-indicator,#local-provider-indicator,#run-token-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}#run-token-indicator{color:#d8c88f}
 .resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:5px;align-items:center;margin:3px 0;font-size:8px;color:#9eb5c7}.resource-progress{position:relative;display:block;min-width:0;height:13px}.resource-progress progress{position:absolute;inset:0;width:100%;height:13px;accent-color:#79c9ac}.resource-progress output{position:absolute;inset:0 4px 0 auto;display:flex;align-items:center;justify-content:flex-end;max-width:calc(100% - 8px);color:#f4fbf8;font-size:8px;font-weight:700;line-height:13px;text-shadow:0 1px 2px #07131f,0 0 3px #07131f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
 #project-registration-remove-dialog{width:min(560px,calc(100vw - 32px));padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#project-registration-remove-dialog::backdrop{background:#07131fa8}#project-registration-remove-dialog h2{margin-top:0}#project-registration-remove-dialog code{overflow-wrap:anywhere}
@@ -3820,6 +3821,7 @@ const backendMetricsIndicator=document.querySelector('#backend-metrics-indicator
 const resourceOpenAIDetail=document.querySelector('#resource-openai-detail');
 const localProviderAvailability=document.querySelector('#local-provider-availability');
 const localProviderIndicator=document.querySelector('#local-provider-indicator');
+const runTokenIndicator=document.querySelector('#run-token-indicator');
 const resourceMonitorDialog=document.querySelector('#resource-monitor-dialog');
 for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
  const row=document.createElement('div');row.className='resource-detail-row';
@@ -3861,8 +3863,28 @@ function runtimeEvidenceText(evidence){
   'VAROVÁNÍ: očekáváno GPU, doložena CPU-only alokace. ':'';
  return `${warning}Runtime běhu: ${modes[evidence.processor]||evidence.processor}${ratio} · ${evidence.observed_at}.`;
 }
+function tokenUsageText(report){
+ if(!report)return 'Tokeny uložených běhů zatím nebyly načteny.';
+ const counts=`vstup ${report.input_tokens.toLocaleString('cs-CZ')} · výstup ${report.output_tokens.toLocaleString('cs-CZ')} · celkem ${report.total_tokens.toLocaleString('cs-CZ')}`;
+ const coverage=`doloženo ${report.measured_runs}/${report.completed_runs} dokončených běhů`;
+ return `Tokeny uložených běhů: ${counts} · ${coverage}`+
+  (report.unreported_runs?` · bez usage ${report.unreported_runs}`:'')+'.';
+}
+function renderTokenUsage(value){
+ const providers=new Map((value?.providers||[]).map(item=>[item.adapter_id,item]));
+ const ollama=providers.get('ollama'),openai=providers.get('openai-responses');
+ document.querySelector('#ollama-run-usage').textContent=tokenUsageText(ollama);
+ document.querySelector('#openai-run-usage').textContent=tokenUsageText(openai);
+ const reports=[ollama,openai].filter(Boolean);
+ const total=reports.reduce((sum,item)=>sum+item.total_tokens,0);
+ const unreported=reports.reduce((sum,item)=>sum+item.unreported_runs,0);
+ runTokenIndicator.textContent=`Tokeny běhů · ${total.toLocaleString('cs-CZ')}`+
+  (unreported?` · ${unreported} bez usage`:'');
+ runTokenIndicator.title='Přesný součet z providerem reportovaných hodnot uložených dokončených běhů.';
+}
 function renderNodeTelemetry(result){
  for(const [name,metric] of Object.entries(result.system?.metrics||{}))renderMetric(name,metric);
+ if(result.token_usage)renderTokenUsage(result.token_usage);
  const latest=result.ollama?.latest_run,evidence=latest?.runtime_evidence,policy=result.ollama?.policy;
  if(latest!==undefined)latestOllamaRuntime=latest;
  document.querySelector('#ollama-expected-processor').value=policy?.expected_processor||'unspecified';
@@ -3913,7 +3935,8 @@ async function probeBackendAvailability(){
 }
 function scheduleBackendStateRefresh(delay=500){
  clearTimeout(backendRefreshTimer);backendRefreshTimer=setTimeout(()=>{
-  probeBackendAvailability();if(!backendMetricsIndicator.hidden)loadBackendMetrics();
+  probeBackendAvailability();loadNodeTelemetry('capacity');
+  if(!backendMetricsIndicator.hidden)loadBackendMetrics();
  },delay);
 }
 function startResourceMonitoring(){

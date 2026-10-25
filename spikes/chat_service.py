@@ -17,7 +17,7 @@ from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
 from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
-from spikes.backend_metrics import OpenAIAccountMetrics, run_usage
+from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
 from spikes.configuration import parse_node, read_config
 from spikes.context_builder import (AdHocInput, Authority, ContextBuilder,
                                     ConversationSelection, DispatchHandoff,
@@ -326,9 +326,18 @@ class ChatService:
         if latest is not None:
             latest['assessment'] = self._runtime_assessment(
                 latest['runtime_evidence'])
-        return {'system': self.node_telemetry.snapshot(group),
-                'ollama': {'binding': None if binding is None else binding.serialize(),
-                           'policy': policy, 'latest_run': latest}}
+        result = {'system': self.node_telemetry.snapshot(group),
+                  'ollama': {'binding': None if binding is None else binding.serialize(),
+                             'policy': policy, 'latest_run': latest}}
+        if group in {'all', 'capacity'}:
+            result['token_usage'] = {
+                'schema_version': 1,
+                'scope': 'node-local-completed-runs',
+                'providers': [
+                    completed_run_usage(runs, 'ollama'),
+                    completed_run_usage(OpenAIRuns(root), 'openai-responses'),
+                ]}
+        return result
 
     def configure_runtime_policy(self, value):
         require(isinstance(value, dict) and set(value) == {'expected_processor'},

@@ -34,6 +34,11 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   implemented).** Nahradit placeholdery skutečnými hodnotami se zdrojem a časem
   měření, zobrazit očekávaný/doložený režim a výrazné varování při očekávaném GPU
   a doloženém CPU-only běhu. Diagnostika nic automaticky neopravuje.
+- [x] [completed] **OPS-NODE-MONITOR-01-E — spotřeba tokenů dokončených běhů
+  (cílová úroveň: implemented).** Z providerem reportovaných hodnot v durable
+  Ollama a OpenAI run journalech odvodit node-local součty vstupních, výstupních
+  a celkových tokenů. Zvlášť uvést dokončené běhy bez usage, nic neodhadovat a
+  nezaměnit tento přehled s OpenAI účetními metrikami.
 - [ ] [in progress] **OPS-NODE-MONITOR-01-D — regrese a fyzická akceptace (cílová
   úroveň: PoC validated).** Ověřit GPU, CPU-only, částečný offload,
   nedostupnou/opožděnou telemetrii, restart aplikace, private-network pinning a
@@ -57,10 +62,17 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   čísla jsou uvnitř progress barů a dostupnost Ollamy se ověřuje při náběhu,
   po interakci a periodicky po 30 s. Síťový status/policy je admin-only a
   evidence runu ověřuje vlastnictví vlákna.
-- Automatické ověření 25. 10. 2026: cílených 46 testů prošlo, generovaný JS
-  prošel `node --check`, úplná sada `python3 -m unittest discover -s tests -v`
-  po poslední změně prošla v rozsahu **815 testů, 28 skipped** a
-  `git diff --check` byl čistý.
+- E je na úrovni **implemented**: tokenové součty se při
+  náběhu, po interakci a v kapacitním 15s cyklu znovu odvozují z úspěšných řádků
+  existujících providerových journalů. Panel ukazuje zvlášť Ollama/OpenAI detail,
+  společný kompaktní součet a počet dokončených běhů bez úplné usage evidence.
+  Prázdný OpenAI journal se pouhým čtením monitoru nevytváří.
+- Automatické ověření 25. 10. 2026: nová cílená sada monitoru, backendů,
+  chat služby a desktop/web rozhraní prošla v rozsahu **197 testů, 6 skipped**.
+  Generovaný JS prošel `node --check`; úplná sada
+  `python3 -m unittest discover -s tests -v` po poslední změně kódu prošla v
+  rozsahu **817 testů, 28 skipped**. Závěrečný `git diff --check` je uveden po
+  kontrole finálního diffu.
 - Skutečný Qt/WebEngine smoke nad existujícím node configem prošel: vykreslené
   UI, autentizovaný fetch a čisté ukončení backendu; screenshot byl pouze
   dočasný v `/tmp`. Živý read-only vzorek doložil CPU/RAM/disk/síť, ale
@@ -70,11 +82,19 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   Navazující read-only dostupnostní probe nad stejným bindingem doložil
   `available`, nakonfigurovaný model mezi 12 dostupnými modely a žádnou změnu
   Targetu.
-- D zůstává otevřené: je nutný alespoň jeden skutečný dokončený Ollama běh přes
-  nové UI a kontrola historické evidence po restartu. GPU/partial-GPU,
-  záměrný CPU-only varovný scénář a private-network pinning lze uzavřít pouze
-  tam, kde je příslušná infrastruktura skutečně dostupná; aktuální host GPU
-  scénář nedokládá.
+- Následná fyzická kontrola uživatele 25. 10. 2026 doložila, že živý GPU
+  ukazatel skutečně reaguje na inference Ollamy spuštěnou přes Open WebUI. Tím
+  bylo ověřeno čtení aktuálního zatížení GPU uzlu při reálné zátěži.
+- Další fyzický průchod ve Workspace doložil dokončený streamovaný Ollama běh
+  modelu `qwen3-coder:latest`: provider reportoval 68 vstupních a 222 výstupních
+  tokenů, UI přijalo 217 částí a historická evidence běhu v čase
+  `2026-10-25T15:55:46.486560Z` klasifikovala runtime jako `GPU` s VRAM 100 %
+  modelu. Tím je ověřeno propojení skutečné odpovědi, per-run tokenů a přesné
+  `/api/ps` evidence; nový agregovaný řádek tokenů zatím fyzicky ověřen nebyl.
+- D zůstává otevřené pro kontrolu stejné historické evidence a tokenového součtu
+  po restartu. Partial-GPU, záměrný CPU-only varovný scénář a private-network
+  pinning lze uzavřít pouze tam, kde je příslušná infrastruktura skutečně
+  dostupná. Plný GPU Workspace běh je na aktuálním hostu doložen.
 
 ## Crash boundaries
 
@@ -90,6 +110,20 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   pouze pro explicitní brainstormingový model ji zdědí. Běh používá přesnou
   revizi očekávání zachycenou při dispatch a pozdější změna nepřepisuje
   historickou evidence.
+- Tokenové součty jsou obnovitelná read-only projekce durable providerových
+  odpovědí, nikoli další účetní autorita. Pád během výpočtu nic nezapisuje;
+  další načtení provede celý součet znovu. Započítají se jen úspěšné běhy s
+  úplnými nezápornými providerovými počty, ostatní se vedou jako `bez usage`.
+
+## K předání do backlogu
+
+- [ ] [planned] **OPS-WEB-CONCURRENCY-01 — souběžná obsluha streamu a monitoru
+  (cílová úroveň: designed → implemented).** Původ: uživatelské zjištění
+  25. 10. 2026, že současný jediný obslužný tok během streamované odpovědi
+  nevyřídí monitorovací požadavek. Navrhnout omezenou souběžnost se zachováním
+  serializace zápisů, vlastnictví requestů, čistého ukončení a fail-closed
+  recovery; dokončeno až po testu současného streamu, read-only telemetrie a
+  zápisové interakce. Není podmínkou akceptace této dávky.
 
 ## Akceptace dávky
 

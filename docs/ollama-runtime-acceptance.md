@@ -30,10 +30,13 @@ nerestartuje službu, nemění binding a neopakuje neznámý běh.
    změnit binding ani spustit modelovou inference.
 3. Odešli skutečný Ollama dotaz a počkej na finální odpověď. V právě dokončené
    odpovědi i přes tlačítko **Runtime běhu** ověř stejný historický procesor,
-   poměr VRAM a čas. Změna živých ukazatelů nesmí tuto evidence přepsat.
+   poměr VRAM a čas. Změna živých ukazatelů nesmí tuto evidence přepsat. Součet
+   tokenů Ollama běhů se musí zvýšit přesně o providerem reportovaný vstup a
+   výstup; běh bez údajů musí zvýšit pouze počet `bez usage`.
 4. Restartuj aplikaci. Očekávání i historická evidence stejného runu musí být
-   znovu dostupné; živé CPU/NET začnou novým druhým vzorkem. Opětovné zobrazení
-   historického runu nesmí volat model ani vytvářet další odpověď.
+   znovu dostupné a tokenový součet se musí obnovit beze změny; živé CPU/NET
+   začnou novým druhým vzorkem. Opětovné zobrazení historického runu nesmí volat
+   model ani vytvářet další odpověď.
 5. Pokud je dostupná GPU konfigurace, nastav očekávání `gpu` a ověř skutečný
    běh klasifikovaný `gpu` nebo pravdivě `partial-gpu`. Pokud lze bezpečně
    připravit CPU-only konfiguraci mimo Workspace, proveď nový běh: při doloženém

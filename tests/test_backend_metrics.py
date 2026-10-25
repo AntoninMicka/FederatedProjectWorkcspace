@@ -6,7 +6,10 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from spikes.backend_metrics import MetricTransportError, OpenAIAccountMetrics, run_usage
+from spikes.backend_metrics import (MetricTransportError, OpenAIAccountMetrics,
+                                    completed_run_usage, run_usage)
+from spikes.ollama_backend import OllamaRuns
+from spikes.openai_backend import OpenAIRuns
 
 
 class BackendMetricTests(unittest.TestCase):
@@ -25,6 +28,44 @@ class BackendMetricTests(unittest.TestCase):
         missing = run_usage('openai-responses', 'binding', 'run', {},
                             '2026-09-20T10:00:00Z')
         self.assertEqual((missing['status'], missing['metrics']), ('unsupported', []))
+
+    def test_completed_run_usage_is_exact_restart_safe_and_counts_missing(self):
+        ollama = OllamaRuns(self.root)
+        with ollama.connect() as db:
+            db.executemany('INSERT INTO runs(run_id,request_digest,state,response) '
+                           'VALUES(?,?,?,?)', [
+                ('00000000-0000-4000-8000-000000000001', 'a', 'succeeded',
+                 '{"prompt_eval_count":7,"eval_count":5}'),
+                ('00000000-0000-4000-8000-000000000002', 'b', 'succeeded',
+                 '{"response":"legacy without usage"}'),
+                ('00000000-0000-4000-8000-000000000003', 'c', 'failed', None),
+            ]); db.commit()
+        report = completed_run_usage(OllamaRuns(self.root), 'ollama',
+                                     '2026-09-20T10:00:00Z')
+        self.assertEqual((report['completed_runs'], report['measured_runs'],
+                          report['unreported_runs']), (2, 1, 1))
+        self.assertEqual((report['input_tokens'], report['output_tokens'],
+                          report['total_tokens']), (7, 5, 12))
+
+        openai = OpenAIRuns(self.root)
+        with openai.connect() as db:
+            db.execute('INSERT INTO runs(run_id,request_digest,state,response) '
+                       'VALUES(?,?,?,?)',
+                       ('00000000-0000-4000-8000-000000000004', 'd', 'succeeded',
+                        '{"usage":{"input_tokens":11,"output_tokens":3,'
+                        '"total_tokens":14}}'))
+            db.commit()
+        report = completed_run_usage(openai, 'openai-responses',
+                                     '2026-09-20T10:00:00Z')
+        self.assertEqual((report['input_tokens'], report['output_tokens'],
+                          report['total_tokens']), (11, 3, 14))
+
+    def test_completed_run_usage_does_not_create_absent_journal(self):
+        runs = OpenAIRuns(self.root)
+        report = completed_run_usage(runs, 'openai-responses',
+                                     '2026-09-20T10:00:00Z')
+        self.assertEqual((report['completed_runs'], report['total_tokens']), (0, 0))
+        self.assertFalse(runs.path.exists())
 
     def test_account_refresh_aggregates_pages_and_uses_admin_secret(self):
         calls = []
