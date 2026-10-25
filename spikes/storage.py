@@ -268,8 +268,11 @@ class Index:
             for row in db.execute('SELECT ' + ', '.join(self.FIELDS) +
                                   ', path, metadata FROM entities ORDER BY id'):
                 path, canonical = row[-2], json.loads(row[-1])
-                meta = {key: value for key, value in zip(self.FIELDS, row)
-                        if key in canonical}
+                meta = dict(canonical)
+                for key, value in zip(self.FIELDS, row):
+                    require((key in canonical and canonical[key] == value)
+                            or (key not in canonical and value is None),
+                            'Index differs from stored metadata')
                 id_ = meta['id']
                 if 'file' in canonical:
                     meta['file'] = path.rsplit('/', 1)[-1]

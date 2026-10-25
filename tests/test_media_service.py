@@ -139,6 +139,10 @@ class MediaServiceTests(unittest.TestCase):
         self.assertEqual(metadata['generation']['result_sha256'], hashlib.sha256(png()).hexdigest())
         self.assertNotIn('A small red house', json.dumps(metadata))
         self.assertEqual(files[f'artifacts/{publication["artifact_id"]}/image.png'], png())
+        opened = Projects(self.node).open(self.project_id)
+        self.assertEqual(opened['commit_id'], published_head)
+        self.assertIn(publication['artifact_id'],
+                      [item['id'] for item in opened['artifacts']])
 
     def test_confirmation_rejects_changed_privacy_head_and_preview(self):
         request = self.request(privacy='project'); preview = self.service.preview(request)

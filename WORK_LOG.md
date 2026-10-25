@@ -5,6 +5,35 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## FIX-MEDIA-INDEX-01 — otevření projektu s generovaným obrázkem — 2026-10-25
+
+Hotfix vznikl z uživatelského hlášení, že po publikaci vygenerovaného obrázku
+nelze otevřít projekt. Samostatná větev `fix/generated-image-index-open` vznikla
+z `develop` `b19d46a`; dosáhla úrovně **PoC validated**. Feature akceptace je
+dokončená, PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **FIX-MEDIA-INDEX-01-A — zachování validovaných rozšíření
+  metadat (implemented).** SQLite index nadále samostatně porovnává všechna
+  indexovaná pole, cestu, tagy, vztahy a import provenance, ale čtecí projekce
+  již nezahazuje validovaná neindexovaná pole z kanonických metadat. Tím
+  zachová `generation` schema v3 a stejný mechanismus nebude chybně odmítat
+  další validované rozšíření metadat.
+- [x] [completed] **FIX-MEDIA-INDEX-01-B — reprodukce a regrese
+  (PoC validated).** Integrační test nově po odděleně potvrzené publikaci PNG
+  otevře projekt přes běžné `Projects.open()` a ověří publikovaný artefakt.
+  Skutečný projekt „Pokus“ se po opravě otevřel na commitu
+  `b8f5d38f0353078a3a18ce4cbf111b5bea591411` a vrátil dokument i zdroj
+  „Vygenerovaný obrázek“; projektový Git ani data nebyly měněny.
+
+### Ověření a omezení
+
+Cílených 12 testů `test_index_projection` a přesného media publication scénáře
+prošlo. Úplná sekvenční sada po poslední změně prošla: **853 testů bez selhání,
+48 přeskočeno, za 203,401 s**. `py_compile` a `git diff --check` prošly.
+Volitelné testy závislé na WebEngine, PySide6, nativním Git probe nebo QR
+decoderu zůstaly podle prostředí přeskočené. Hotfix nemění projektový Git,
+autoritativní metadata ani indexové schema; opravuje pouze jejich čtení.
+
 ## TEST-EXECUTION-01 — cílené a paralelní spouštění testů — 2026-10-25
 
 Dávka vznikla na větvi `feature/test-execution-01-parallel-ci` z `develop`
