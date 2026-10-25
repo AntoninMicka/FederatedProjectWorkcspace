@@ -21,32 +21,54 @@ from spikes.metadata import parse_json, ValidationError
 MAX_BODY = 4096
 MAX_HTTP_WORKERS = 4
 REQUEST_LANE_TIMEOUT = 2
+SHUTDOWN_GRACE_SECONDS = 225
 
 
 class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
     """Bounded HTTP workers; handlers retain one socket and response owner."""
-    daemon_threads = False
-    block_on_close = True
+    daemon_threads = True
+    block_on_close = False
 
     def __init__(self, server_address, handler, *, max_workers=MAX_HTTP_WORKERS,
-                 lane_timeout=REQUEST_LANE_TIMEOUT):
+                 lane_timeout=REQUEST_LANE_TIMEOUT,
+                 shutdown_timeout=SHUTDOWN_GRACE_SECONDS):
         if type(max_workers) is not int or max_workers < 2:
             raise ValueError('HTTP server requires at least two bounded workers')
         if not isinstance(lane_timeout, (int, float)) or lane_timeout <= 0:
             raise ValueError('Request lane timeout must be positive')
+        if not isinstance(shutdown_timeout, (int, float)) or shutdown_timeout <= 0:
+            raise ValueError('Shutdown timeout must be positive')
         self._worker_slots = threading.BoundedSemaphore(max_workers)
         self.application_lane = threading.Lock()
         self.telemetry_lane = threading.Lock()
         self.request_lane_timeout = lane_timeout
+        self.shutdown_timeout = shutdown_timeout
+        self.shutdown_clean = None
+        self._worker_condition = threading.Condition()
+        self._active_requests = set()
+        self._admission_open = True
         super().__init__(server_address, handler)
 
     def process_request(self, request, client_address):
+        with self._worker_condition:
+            if not self._admission_open:
+                self.shutdown_request(request)
+                return
         if not self._worker_slots.acquire(blocking=False):
             self.shutdown_request(request)
             return
+        with self._worker_condition:
+            if not self._admission_open:
+                self._worker_slots.release()
+                self.shutdown_request(request)
+                return
+            self._active_requests.add(request)
         try:
             super().process_request(request, client_address)
         except BaseException:
+            with self._worker_condition:
+                self._active_requests.discard(request)
+                self._worker_condition.notify_all()
             self._worker_slots.release()
             raise
 
@@ -54,7 +76,39 @@ class BoundedHTTPServer(ThreadingMixIn, HTTPServer):
         try:
             super().process_request_thread(request, client_address)
         finally:
+            with self._worker_condition:
+                self._active_requests.discard(request)
+                self._worker_condition.notify_all()
             self._worker_slots.release()
+
+    def active_worker_count(self):
+        with self._worker_condition:
+            return len(self._active_requests)
+
+    def shutdown(self):
+        with self._worker_condition:
+            self._admission_open = False
+        return super().shutdown()
+
+    def server_close(self):
+        with self._worker_condition:
+            self._admission_open = False
+            clean = self._worker_condition.wait_for(
+                lambda: not self._active_requests,
+                timeout=self.shutdown_timeout)
+            active = tuple(self._active_requests)
+        self.shutdown_clean = clean
+        if not clean:
+            for request in active:
+                try:
+                    request.shutdown(socket.SHUT_RDWR)
+                except OSError:
+                    pass
+                try:
+                    request.close()
+                except OSError:
+                    pass
+        super().server_close()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -191,7 +245,9 @@ def private_directory(path):
 
 
 @contextmanager
-def running_api(transport, runtime=None, *, handler=Handler, projects=None):
+def running_api(transport, runtime=None, *, handler=Handler, projects=None,
+                max_workers=MAX_HTTP_WORKERS, lane_timeout=REQUEST_LANE_TIMEOUT,
+                shutdown_timeout=SHUTDOWN_GRACE_SECONDS):
     """Yield in-process endpoint/token to test driver; no token file or public bootstrap."""
     directory = None
     if transport == 'unix':
@@ -210,7 +266,9 @@ def running_api(transport, runtime=None, *, handler=Handler, projects=None):
         server.telemetry_lane = threading.Lock()
         server.request_lane_timeout = REQUEST_LANE_TIMEOUT
     elif transport == 'http':
-        server = BoundedHTTPServer(('127.0.0.1', 0), handler)
+        server = BoundedHTTPServer(('127.0.0.1', 0), handler,
+            max_workers=max_workers, lane_timeout=lane_timeout,
+            shutdown_timeout=shutdown_timeout)
         server.authority = f'127.0.0.1:{server.server_port}'
     else:
         raise ValueError('unknown transport')

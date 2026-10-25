@@ -10,6 +10,7 @@ from pathlib import Path
 import socket
 import tempfile
 import threading
+import time
 import unittest
 
 from spikes.local_api import Handler, MAX_BODY, private_directory, running_api
@@ -92,6 +93,160 @@ class LocalAPITests(unittest.TestCase):
                 blocked.join(3)
             self.assertFalse(blocked.is_alive())
             self.assertIn(b' 200 ', result['response'].split(b'\r\n', 1)[0])
+
+    def test_concurrent_write_is_rejected_before_dispatch(self):
+        entered = threading.Event()
+        release = threading.Event()
+
+        class BlockingHandler(Handler):
+            post_paths = Handler.post_paths | {'/v1/block'}
+
+            def dispatch(self, request):
+                if self.path == '/v1/block':
+                    entered.set()
+                    if not release.wait(2):
+                        return self.reply(504, {'error': 'test timeout'})
+                    return self.reply(200, {'released': True})
+                return super().dispatch(request)
+
+        with running_api('http', handler=BlockingHandler,
+                         lane_timeout=0.05) as server:
+            blocked = threading.Thread(target=lambda: self.request(
+                server, path='/v1/block', body=b'{}'))
+            blocked.start()
+            try:
+                self.assertTrue(entered.wait(1))
+                response = self.request(server)
+                self.assertIn(b' 503 ', response.split(b'\r\n', 1)[0])
+                self.assertEqual(server.counter, 0)
+            finally:
+                release.set()
+                blocked.join(2)
+            self.assertFalse(blocked.is_alive())
+
+    def test_four_worker_limit_rejects_excess_connection_without_new_thread(self):
+        application_entered = threading.Event()
+        telemetry_entered = threading.Event()
+        release = threading.Event()
+
+        class SaturatingHandler(Handler):
+            post_paths = Handler.post_paths | {
+                '/v1/block', '/v1/node-telemetry/status'}
+
+            def dispatch(self, request):
+                if self.path == '/v1/block':
+                    application_entered.set()
+                    release.wait(3)
+                    return self.reply(200, {'released': True})
+                if self.path == '/v1/node-telemetry/status':
+                    telemetry_entered.set()
+                    release.wait(3)
+                    return self.reply(200, {'released': True})
+                return super().dispatch(request)
+
+        responses = []
+        with running_api('http', handler=SaturatingHandler,
+                         lane_timeout=2) as server:
+            def request(path):
+                try:
+                    responses.append(self.request(server, path=path, body=b'{}'))
+                except OSError:
+                    responses.append(b'')
+
+            clients = [threading.Thread(target=request, args=(path,)) for path in (
+                '/v1/block', '/v1/node-telemetry/status', '/v1/counter',
+                '/v1/counter')]
+            for client in clients[:2]:
+                client.start()
+            self.assertTrue(application_entered.wait(1))
+            self.assertTrue(telemetry_entered.wait(1))
+            for client in clients[2:]:
+                client.start()
+            deadline = time.monotonic() + 1
+            while server.active_worker_count() != 4 and time.monotonic() < deadline:
+                time.sleep(0.005)
+            self.assertEqual(server.active_worker_count(), 4)
+            excess = self.request(server, path='/v1/counter', body=b'{}')
+            self.assertEqual(excess, b'')
+            self.assertEqual(server.active_worker_count(), 4)
+            release.set()
+            for client in clients:
+                client.join(3)
+            self.assertTrue(all(not client.is_alive() for client in clients))
+            self.assertEqual(len(responses), 4)
+
+    def test_clean_shutdown_waits_for_owned_request(self):
+        entered = threading.Event()
+        release = threading.Event()
+
+        class BlockingHandler(Handler):
+            post_paths = Handler.post_paths | {'/v1/block'}
+
+            def dispatch(self, request):
+                entered.set()
+                release.wait(2)
+                return self.reply(200, {'released': True})
+
+        manager = running_api('http', handler=BlockingHandler,
+                              shutdown_timeout=0.5)
+        server = manager.__enter__()
+        client = threading.Thread(target=lambda: self.request(
+            server, path='/v1/block', body=b'{}'))
+        client.start()
+        self.assertTrue(entered.wait(1))
+        releaser = threading.Timer(0.1, release.set)
+        releaser.start()
+        started = time.monotonic()
+        manager.__exit__(None, None, None)
+        elapsed = time.monotonic() - started
+        client.join(1)
+        releaser.join(1)
+        self.assertTrue(server.shutdown_clean)
+        self.assertFalse(client.is_alive())
+        self.assertGreaterEqual(elapsed, 0.08)
+
+    def test_shutdown_deadline_closes_client_and_returns_as_crash_boundary(self):
+        entered = threading.Event()
+        release = threading.Event()
+        client_finished = threading.Event()
+
+        class BlockingHandler(Handler):
+            post_paths = Handler.post_paths | {'/v1/block'}
+
+            def dispatch(self, request):
+                entered.set()
+                release.wait(2)
+                try:
+                    return self.reply(200, {'released': True})
+                except OSError:
+                    return None
+
+        manager = running_api('http', handler=BlockingHandler,
+                              shutdown_timeout=0.05)
+        server = manager.__enter__()
+        def request():
+            try:
+                self.request(server, path='/v1/block', body=b'{}')
+            except OSError:
+                pass
+            finally:
+                client_finished.set()
+        client = threading.Thread(target=request)
+        client.start()
+        self.assertTrue(entered.wait(1))
+        started = time.monotonic()
+        manager.__exit__(None, None, None)
+        elapsed = time.monotonic() - started
+        self.assertFalse(server.shutdown_clean)
+        self.assertLess(elapsed, 0.5)
+        self.assertTrue(client_finished.wait(1))
+        release.set()
+        client.join(1)
+        self.assertFalse(client.is_alive())
+        deadline = time.monotonic() + 1
+        while server.active_worker_count() and time.monotonic() < deadline:
+            time.sleep(0.005)
+        self.assertEqual(server.active_worker_count(), 0)
 
     def test_same_contract_and_bind_permissions(self):
         with self.servers() as servers:

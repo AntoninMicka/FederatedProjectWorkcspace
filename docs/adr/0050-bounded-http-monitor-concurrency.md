@@ -6,8 +6,7 @@ SPDX-License-Identifier: MPL-2.0
 # ADR 0050 — Omezená souběžnost HTTP monitoru
 
 Datum: 2026-10-25. Stav: navrženo a implementováno v
-`OPS-WEB-CONCURRENCY-01-A/B`; cílené shutdown regrese a fyzická akceptace
-zůstávají v částech C–D. Rozšiřuje provozní
+`OPS-WEB-CONCURRENCY-01-A–C`; fyzická akceptace zůstává v části D. Rozšiřuje provozní
 hranici telemetrie z [ADR 0049](0049-node-and-ollama-runtime-telemetry.md),
 nemění autority a recovery kontrakty z
 [ADR 0008](0008-context-and-publication-contracts.md).
@@ -149,9 +148,9 @@ automatický retry `503` nebo `unknown` a přesun streamu do detached background
 
 ## Důsledky a ověření
 
-Implementace musí mít deterministicky zkrácené limity pro testy a doložit:
-telemetrii dokončenou během blokovaného streamu, nejvýše jeden telemetrický
-request, odmítnutý souběžný zápis bez účinku, čtyřworkerový backpressure,
-per-request webovou autoritu, odpojení klienta, čistý shutdown a restart se
-stejným jediným run výsledkem. Úplná sada testů ani fyzický desktop/web průchod
-zatím tímto designed rozhodnutím doloženy nejsou.
+Deterministicky zkrácené limity testů doložily telemetrii dokončenou během
+blokovaného streamu, nejvýše jeden telemetrický request, odmítnutý souběžný
+zápis bez účinku, čtyřworkerový backpressure, per-request webovou autoritu,
+odpojení klienta, čistý i deadline shutdown a restart bez druhého dispatch.
+Úplná sada po části C prošla 824 testy s 28 přeskočenými. Skutečný desktop/web
+průchod s dlouhou Ollama odpovědí zůstává neověřený do části D.
