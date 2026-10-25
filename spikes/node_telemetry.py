@@ -213,11 +213,14 @@ class NodeTelemetry:
         except (OSError, ValueError):
             return unknown('unavailable', source='procfs:/proc/net/dev')
 
-    def _gpu(self):
+    def _gpu(self, include_gpu=True, include_vram=True):
         source = 'nvidia-smi'
+        fields = ([] if not include_gpu else ['utilization.gpu']) + (
+            [] if not include_vram else ['memory.used', 'memory.total'])
+        require(fields, 'At least one NVIDIA metric is required')
         try:
             result = self.runner([
-                'nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total',
+                'nvidia-smi', '--query-gpu=' + ','.join(fields),
                 '--format=csv,noheader,nounits'], capture_output=True, text=True,
                 timeout=2, check=True)
             rows = []
@@ -225,25 +228,43 @@ class NodeTelemetry:
                 if not line.strip():
                     continue
                 values = [float(value.strip()) for value in line.split(',')]
-                require(len(values) == 3 and 0 <= values[0] <= 100
-                        and 0 <= values[1] <= values[2] and values[2] > 0,
-                        'Invalid NVIDIA telemetry')
+                require(len(values) == len(fields), 'Invalid NVIDIA telemetry')
+                if include_gpu:
+                    require(0 <= values[0] <= 100, 'Invalid NVIDIA utilization')
+                if include_vram:
+                    offset = 1 if include_gpu else 0
+                    require(0 <= values[offset] <= values[offset + 1]
+                            and values[offset + 1] > 0, 'Invalid NVIDIA memory')
                 rows.append(values)
             require(rows and len(rows) <= 64, 'No bounded NVIDIA telemetry')
-            used, total = sum(row[1] for row in rows), sum(row[2] for row in rows)
-            return (available(max(row[0] for row in rows), 'percent', source=source),
-                    available(100 * used / total, 'percent', total=total * 1024 * 1024,
-                              source=source))
+            result = {}
+            if include_gpu:
+                result['gpu'] = available(max(row[0] for row in rows), 'percent',
+                                          source=source)
+            if include_vram:
+                offset = 1 if include_gpu else 0
+                used = sum(row[offset] for row in rows)
+                total = sum(row[offset + 1] for row in rows)
+                result['vram'] = available(100 * used / total, 'percent',
+                    total=total * 1024 * 1024, source=source)
+            return result
         except (OSError, ValueError, subprocess.SubprocessError):
-            return (unknown('unavailable', source=source),
-                    unknown('unavailable', source=source))
+            return {name: unknown('unavailable', source=source)
+                    for name, included in (('gpu', include_gpu), ('vram', include_vram))
+                    if included}
 
-    def snapshot(self):
+    def snapshot(self, group='all'):
+        require(group in {'all', 'activity', 'capacity'},
+                'Unknown node telemetry group')
         with self._lock:
             sampled = self.clock()
-            gpu, vram = self._gpu()
+            activity = group in {'all', 'activity'}
+            capacity = group in {'all', 'capacity'}
+            metrics = self._gpu(include_gpu=activity, include_vram=capacity)
+            if activity:
+                metrics.update(cpu=self._cpu(), net=self._network(sampled))
+            if capacity:
+                metrics.update(ram=self._memory(), disk=self._disk())
             return {'schema_version': 1, 'scope': 'workspace-node',
-                    'observed_at': observed_at(),
-                    'metrics': {'cpu': self._cpu(), 'gpu': gpu,
-                                'ram': self._memory(), 'vram': vram,
-                                'disk': self._disk(), 'net': self._network(sampled)}}
+                    'group': group, 'observed_at': observed_at(),
+                    'metrics': metrics}

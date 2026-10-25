@@ -53,17 +53,23 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   per-run modelová revize.
 - C je na úrovni **implemented**: desktopové API a panel Zdroje zobrazují zdroj,
   čas, `unknown`, očekávání i historickou evidence; CPU-only při očekávaném GPU
-  má výrazné varování. Síťový status/policy je admin-only a evidence runu
-  ověřuje vlastnictví vlákna.
-- Automatické ověření 25. 10. 2026: cílených 44 testů prošlo, generovaný JS
+  má výrazné varování. Activity metriky se obnovují po 2 s, kapacitní po 15 s,
+  čísla jsou uvnitř progress barů a dostupnost Ollamy se ověřuje při náběhu,
+  po interakci a periodicky po 30 s. Síťový status/policy je admin-only a
+  evidence runu ověřuje vlastnictví vlákna.
+- Automatické ověření 25. 10. 2026: cílených 46 testů prošlo, generovaný JS
   prošel `node --check`, úplná sada `python3 -m unittest discover -s tests -v`
-  prošla v rozsahu **814 testů, 28 skipped** a `git diff --check` byl čistý.
+  po poslední změně prošla v rozsahu **815 testů, 28 skipped** a
+  `git diff --check` byl čistý.
 - Skutečný Qt/WebEngine smoke nad existujícím node configem prošel: vykreslené
   UI, autentizovaný fetch a čisté ukončení backendu; screenshot byl pouze
   dočasný v `/tmp`. Živý read-only vzorek doložil CPU/RAM/disk/síť, ale
   `nvidia-smi` nedokázalo komunikovat s ovladačem, takže GPU/VRAM správně zůstaly
   `unknown`. Přesný same-node Ollama `/api/ps` odpověděl, ale nakonfigurovaný
   model právě neběžel, proto správně vrátil `unknown: model-not-running`.
+  Navazující read-only dostupnostní probe nad stejným bindingem doložil
+  `available`, nakonfigurovaný model mezi 12 dostupnými modely a žádnou změnu
+  Targetu.
 - D zůstává otevřené: je nutný alespoň jeden skutečný dokončený Ollama běh přes
   nové UI a kontrola historické evidence po restartu. GPU/partial-GPU,
   záměrný CPU-only varovný scénář a private-network pinning lze uzavřít pouze

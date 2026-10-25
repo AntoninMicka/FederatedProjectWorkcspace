@@ -311,7 +311,9 @@ class ChatService:
             return 'matches' if matches else 'mismatch'
         return 'observed'
 
-    def telemetry_status(self):
+    def telemetry_status(self, group='all'):
+        require(group in {'all', 'activity', 'capacity'},
+                'Unknown node telemetry group')
         root = self._root(); runs = OllamaRuns(root)
         try:
             binding = OllamaBindings(root).load()
@@ -324,7 +326,7 @@ class ChatService:
         if latest is not None:
             latest['assessment'] = self._runtime_assessment(
                 latest['runtime_evidence'])
-        return {'system': self.node_telemetry.snapshot(),
+        return {'system': self.node_telemetry.snapshot(group),
                 'ollama': {'binding': None if binding is None else binding.serialize(),
                            'policy': policy, 'latest_run': latest}}
 
@@ -334,7 +336,7 @@ class ChatService:
         root = self._root()
         binding = OllamaBindings(root).load()
         OllamaRuntimePolicy(root).save(binding, value['expected_processor'])
-        return self.telemetry_status()
+        return self.telemetry_status('all')
 
     def runtime_evidence(self, run_id):
         uuid(run_id); node_id, user_id = self._identity(); root = self._root()

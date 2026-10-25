@@ -24,8 +24,15 @@ class NodeTelemetryTests(unittest.TestCase):
         self.times = iter((10.0, 12.0))
 
     @staticmethod
-    def runner(*_args, **_kwargs):
-        return subprocess.CompletedProcess([], 0, '40, 1024, 4096\n20, 512, 2048\n', '')
+    def runner(args, **_kwargs):
+        query = args[1]
+        if query == '--query-gpu=utilization.gpu':
+            output = '40\n20\n'
+        elif query == '--query-gpu=memory.used,memory.total':
+            output = '1024, 4096\n512, 2048\n'
+        else:
+            output = '40, 1024, 4096\n20, 512, 2048\n'
+        return subprocess.CompletedProcess([], 0, output, '')
 
     def test_live_metrics_require_deltas_and_never_turn_unknown_into_zero(self):
         telemetry = NodeTelemetry(self.root, proc_root=self.proc,
@@ -53,6 +60,20 @@ class NodeTelemetryTests(unittest.TestCase):
         self.assertEqual(result['metrics']['gpu'], {
             'status': 'unknown', 'reason': 'unavailable', 'source': 'nvidia-smi'})
         self.assertEqual(result['metrics']['vram']['status'], 'unknown')
+
+    def test_activity_and_capacity_groups_read_only_their_metric_class(self):
+        calls = []
+        def runner(args, **kwargs):
+            calls.append(args[1])
+            return self.runner(args, **kwargs)
+        telemetry = NodeTelemetry(self.root, proc_root=self.proc,
+                                  clock=lambda: 1.0, runner=runner)
+        activity = telemetry.snapshot('activity')
+        capacity = telemetry.snapshot('capacity')
+        self.assertEqual(set(activity['metrics']), {'cpu', 'gpu', 'net'})
+        self.assertEqual(set(capacity['metrics']), {'ram', 'vram', 'disk'})
+        self.assertEqual(calls, ['--query-gpu=utilization.gpu',
+                                 '--query-gpu=memory.used,memory.total'])
 
 
 class OllamaRuntimePolicyTests(unittest.TestCase):

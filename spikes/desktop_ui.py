@@ -301,12 +301,12 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <span class="resource-monitor-heading">Zdroje <small>detail</small></span>
 <span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
 <span id="local-provider-indicator">Lokální AI · neověřeno</span>
-<span class="resource-mini-row" data-resource-metric="cpu"><span>CPU</span><progress max="100" value="0" aria-label="CPU – telemetrie není načtena"></progress><output>—</output></span>
-<span class="resource-mini-row" data-resource-metric="gpu"><span>GPU</span><progress max="100" value="0" aria-label="GPU – telemetrie není načtena"></progress><output>—</output></span>
-<span class="resource-mini-row" data-resource-metric="ram"><span>RAM</span><progress max="100" value="0" aria-label="RAM – telemetrie není načtena"></progress><output>—</output></span>
-<span class="resource-mini-row" data-resource-metric="vram"><span>VRAM</span><progress max="100" value="0" aria-label="VRAM – telemetrie není načtena"></progress><output>—</output></span>
-<span class="resource-mini-row" data-resource-metric="disk"><span>DISK</span><progress max="100" value="0" aria-label="Disk – telemetrie není načtena"></progress><output>—</output></span>
-<span class="resource-mini-row" data-resource-metric="net"><span>NET</span><progress max="100" value="0" aria-label="Síť – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="cpu"><span>CPU</span><span class="resource-progress"><progress max="100" value="0" aria-label="CPU – telemetrie není načtena"></progress><output>—</output></span></span>
+<span class="resource-mini-row" data-resource-metric="gpu"><span>GPU</span><span class="resource-progress"><progress max="100" value="0" aria-label="GPU – telemetrie není načtena"></progress><output>—</output></span></span>
+<span class="resource-mini-row" data-resource-metric="ram"><span>RAM</span><span class="resource-progress"><progress max="100" value="0" aria-label="RAM – telemetrie není načtena"></progress><output>—</output></span></span>
+<span class="resource-mini-row" data-resource-metric="vram"><span>VRAM</span><span class="resource-progress"><progress max="100" value="0" aria-label="VRAM – telemetrie není načtena"></progress><output>—</output></span></span>
+<span class="resource-mini-row" data-resource-metric="disk"><span>DISK</span><span class="resource-progress"><progress max="100" value="0" aria-label="Disk – telemetrie není načtena"></progress><output>—</output></span></span>
+<span class="resource-mini-row" data-resource-metric="net"><span>NET</span><span class="resource-progress"><progress max="100" value="0" aria-label="Síť – telemetrie není načtena"></progress><output>—</output></span></span>
 </button></section>
 <button id="logout" type="button"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg><span>Odhlásit</span></button>
 <button id="sidebar-layout-toggle" type="button" aria-pressed="false" aria-label="Sbalit hlavní panel"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="sidebar-layout-label">Sbalit panel</span></button></aside>
@@ -1090,14 +1090,14 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #sidebar-project-recover{margin:0 0 8px;padding:8px;font-size:11px;background:#8a642c}
 .resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
 #backend-metrics-indicator,#local-provider-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}
-.resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr) 12px;gap:5px;align-items:center;margin:2px 0;font-size:8px;color:#9eb5c7}.resource-mini-row progress{width:100%;height:5px;accent-color:#79c9ac}.resource-mini-row output{text-align:right;color:#7891a3}
+.resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:5px;align-items:center;margin:3px 0;font-size:8px;color:#9eb5c7}.resource-progress{position:relative;display:block;min-width:0;height:13px}.resource-progress progress{position:absolute;inset:0;width:100%;height:13px;accent-color:#79c9ac}.resource-progress output{position:absolute;inset:0 4px 0 auto;display:flex;align-items:center;justify-content:flex-end;max-width:calc(100% - 8px);color:#f4fbf8;font-size:8px;font-weight:700;line-height:13px;text-shadow:0 1px 2px #07131f,0 0 3px #07131f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
 #project-registration-remove-dialog{width:min(560px,calc(100vw - 32px));padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#project-registration-remove-dialog::backdrop{background:#07131fa8}#project-registration-remove-dialog h2{margin-top:0}#project-registration-remove-dialog code{overflow-wrap:anywhere}
 #project-registration-remove-confirm{background:#8b3030}
 #resource-monitor-dialog::backdrop{background:#07131fa8}.resource-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.resource-dialog-heading h2{margin:5px 0 12px}.resource-dialog-heading button{flex:none}
 #resource-monitor-dialog>section{margin-top:16px;padding:15px;border:1px solid #dce5eb;border-radius:12px;background:white}#resource-monitor-dialog h3{margin:0 0 12px}
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
-.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 112px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
+.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
@@ -2115,19 +2115,24 @@ function clearProject(){
  document.querySelector('#project-commit').textContent='';
 }
 async function projectRequest(path,body,timeout=60000){
- let response;
- try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
-  body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
- }catch(error){if(error?.name==='TimeoutError' || error?.name==='AbortError' ||
-    String(error?.message || '').toLowerCase().includes('signal timed out')){
-   const timeoutError=new Error('Čekání na odpověď vypršelo. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
-   timeoutError.status=408;timeoutError.outcome='unknown';throw timeoutError;
-  }throw error;}
- const result=await response.json();
- if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
-  error.status=response.status;error.diagnostic=result.diagnostic;
-  error.outcome=result.outcome;error.retry=result.retry;throw error;}
- return result;
+ const monitorRequest=path.startsWith('/v1/node-telemetry/') || path==='/v1/chat/test' ||
+  path==='/v1/chat/status' || path==='/v1/external/status' || path==='/v1/media/status' ||
+  path==='/v1/google-drive/status' || path.startsWith('/v1/backend-metrics/');
+ try{
+  let response;
+  try{response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+  }catch(error){if(error?.name==='TimeoutError' || error?.name==='AbortError' ||
+     String(error?.message || '').toLowerCase().includes('signal timed out')){
+    const timeoutError=new Error('Čekání na odpověď vypršelo. Operace mohla na backendu doběhnout; obnovte stav a původní běh automaticky neopakujte.');
+    timeoutError.status=408;timeoutError.outcome='unknown';throw timeoutError;
+   }throw error;}
+  const result=await response.json();
+  if(!response.ok){const error=new Error(result.error || 'Požadavek byl odmítnut.');
+   error.status=response.status;error.diagnostic=result.diagnostic;
+   error.outcome=result.outcome;error.retry=result.retry;throw error;}
+  return result;
+ }finally{if(!monitorRequest)scheduleBackendStateRefresh();}
 }
 const sourceImportForm=document.querySelector('#source-import-form');
 const sourceImportStatus=document.querySelector('#source-import-status');
@@ -3823,9 +3828,14 @@ for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
  const progress=document.createElement('progress');progress.max=100;progress.value=0;
  progress.setAttribute('aria-label',`${name} – telemetrie není načtena`);
  const value=document.createElement('output');value.textContent='nenačteno';
- row.append(label,progress,value);document.querySelector('#system-monitor-detail').append(row);
+ const bar=document.createElement('span');bar.className='resource-progress';bar.append(progress,value);
+ row.append(label,bar);document.querySelector('#system-monitor-detail').append(row);
 }
-let resourceMonitorTimer=null;
+const RESOURCE_ACTIVITY_INTERVAL=2000,RESOURCE_CAPACITY_INTERVAL=15000;
+const BACKEND_AVAILABILITY_INTERVAL=30000;
+let resourceActivityTimer=null,resourceCapacityTimer=null,backendAvailabilityTimer=null;
+let backendRefreshTimer=null,backendProbeRunning=false;
+let latestOllamaRuntime=null,ollamaAvailability=null;
 function metricText(metric){
  if(!metric||metric.status!=='available')return 'neznámé';
  if(metric.unit==='percent')return `${metric.value.toFixed(1)} %`;
@@ -3854,37 +3864,65 @@ function runtimeEvidenceText(evidence){
 function renderNodeTelemetry(result){
  for(const [name,metric] of Object.entries(result.system?.metrics||{}))renderMetric(name,metric);
  const latest=result.ollama?.latest_run,evidence=latest?.runtime_evidence,policy=result.ollama?.policy;
+ if(latest!==undefined)latestOllamaRuntime=latest;
  document.querySelector('#ollama-expected-processor').value=policy?.expected_processor||'unspecified';
  document.querySelector('#ollama-runtime-policy-status').textContent=policy?
   `Revize ${policy.revision} · binding ${policy.binding_revision}`:'Ollama backend není nastaven.';
  const warning=document.querySelector('#ollama-runtime-warning');
  warning.hidden=latest?.assessment!=='warning-gpu-expected-cpu-observed';
  warning.textContent=warning.hidden?'':'Varování: očekáváno GPU, ale dokončený běh doložil CPU-only alokaci. Nic nebylo automaticky restartováno ani opakováno.';
- localProviderAvailability.textContent=latest?
-  `${runtimeEvidenceText(evidence)} Run ${latest.run_id}.`:
-  (result.ollama?.binding?'Zatím není uložená runtime evidence dokončeného běhu.':'Ollama backend není nastaven.');
- localProviderIndicator.textContent=latest&&evidence?.status==='available'?
-  `Ollama · ${evidence.processor}`:(result.ollama?.binding?'Ollama · runtime neznámý':'Lokální AI · nenastaveno');
+ renderOllamaProvider();
 }
-async function loadNodeTelemetry(){
- try{renderNodeTelemetry(await projectRequest('/v1/node-telemetry/status',{}));}
+async function loadNodeTelemetry(group='all'){
+ if(document.hidden||document.querySelector('#resource-monitor').hidden)return;
+ try{renderNodeTelemetry(await projectRequest('/v1/node-telemetry/status',{group}));}
  catch(error){localProviderAvailability.textContent=error.message;}
 }
 document.querySelector('#resource-monitor-open').addEventListener('click',()=>{
- resourceMonitorDialog.showModal();loadNodeTelemetry();clearInterval(resourceMonitorTimer);
- resourceMonitorTimer=setInterval(loadNodeTelemetry,2000);
+ resourceMonitorDialog.showModal();loadNodeTelemetry('all');scheduleBackendStateRefresh(0);
 });
 document.querySelector('#resource-monitor-close').addEventListener('click',()=>resourceMonitorDialog.close());
-resourceMonitorDialog.addEventListener('close',()=>{clearInterval(resourceMonitorTimer);resourceMonitorTimer=null;});
 resourceMonitorDialog.addEventListener('click',event=>{
  const bounds=resourceMonitorDialog.getBoundingClientRect();
  if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)resourceMonitorDialog.close();
 });
 function renderLocalProviderAvailability(binding){
- localProviderIndicator.textContent=binding ? `Lokální AI · ${binding.model} · neověřeno` : 'Lokální AI · nenastaveno';
- localProviderAvailability.textContent=binding ?
-  `Nakonfigurováno: ${binding.model}. Dostupnost zatím nebyla ověřena.` :
-  'Lokální provider není nakonfigurován; dostupnost není ověřena.';
+ if(!binding){ollamaAvailability=null;latestOllamaRuntime=null;}
+ renderOllamaProvider();
+}
+function renderOllamaProvider(){
+ if(!chatBinding){localProviderIndicator.textContent='Lokální AI · nenastaveno';
+  localProviderAvailability.textContent='Lokální provider není nakonfigurován; dostupnost není ověřena.';return;}
+ const availability=!ollamaAvailability?'neověřeno':ollamaAvailability.available?
+  (ollamaAvailability.model_available?'dostupná':'model chybí'):'nedostupná';
+ localProviderIndicator.textContent=`Ollama · ${availability}`+
+  (latestOllamaRuntime?.runtime_evidence?.status==='available'?` · ${latestOllamaRuntime.runtime_evidence.processor}`:'');
+ const runtime=latestOllamaRuntime?
+  `${runtimeEvidenceText(latestOllamaRuntime.runtime_evidence)} Run ${latestOllamaRuntime.run_id}.`:
+  'Zatím není uložená runtime evidence dokončeného běhu.';
+ localProviderAvailability.textContent=`Dostupnost: ${availability}. ${runtime}`;
+}
+async function probeBackendAvailability(){
+ if(document.hidden||backendProbeRunning||document.querySelector('#resource-monitor').hidden||!chatBinding)return;
+ backendProbeRunning=true;
+ try{const result=await projectRequest('/v1/chat/test',chatBinding,15000);
+  ollamaAvailability={available:true,model_available:result.model_available,
+   checked_at:new Date().toISOString()};
+ }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};}
+ finally{backendProbeRunning=false;renderOllamaProvider();}
+}
+function scheduleBackendStateRefresh(delay=500){
+ clearTimeout(backendRefreshTimer);backendRefreshTimer=setTimeout(()=>{
+  probeBackendAvailability();if(!backendMetricsIndicator.hidden)loadBackendMetrics();
+ },delay);
+}
+function startResourceMonitoring(){
+ clearInterval(resourceActivityTimer);clearInterval(resourceCapacityTimer);
+ clearInterval(backendAvailabilityTimer);
+ loadNodeTelemetry('all');scheduleBackendStateRefresh(0);
+ resourceActivityTimer=setInterval(()=>loadNodeTelemetry('activity'),RESOURCE_ACTIVITY_INTERVAL);
+ resourceCapacityTimer=setInterval(()=>loadNodeTelemetry('capacity'),RESOURCE_CAPACITY_INTERVAL);
+ backendAvailabilityTimer=setInterval(()=>scheduleBackendStateRefresh(0),BACKEND_AVAILABILITY_INTERVAL);
 }
 document.querySelector('#ollama-runtime-policy-save').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;const status=document.querySelector('#ollama-runtime-policy-status');
@@ -5042,6 +5080,7 @@ async function loadBackendBinding(){
    `OAuth klient je uložen · scope drive.file · konfigurace ${drive.credential_revision} · ${drive.client_id_hint}.` :
    'Google OAuth klient zatím není nastaven.';
   if(!document.querySelector('#backend-metrics').hidden)await loadBackendMetrics();
+  probeBackendAvailability();
   return true;}
  catch(error){settingsBackendStatus.textContent=error.message;return false;}
 }
@@ -5279,6 +5318,8 @@ document.querySelector('#google-drive-config-form').addEventListener('submit',as
 document.querySelector('#chat-backend-test').addEventListener('click',async event=>{
  event.currentTarget.disabled=true;settingsBackendStatus.textContent='Ověřuji endpoint bez odeslání projektových dat…';
  try{const result=await projectRequest('/v1/chat/test',backendCandidate(),15000);
+  ollamaAvailability={available:true,model_available:result.model_available,
+   checked_at:new Date().toISOString()};
   localProviderIndicator.textContent=result.model_available ? 'Lokální AI · dostupná' : 'Lokální AI · dostupná, model chybí';
   localProviderAvailability.textContent=result.model_available ?
    `Dostupný · model ${result.model} je připraven.` :
@@ -5286,7 +5327,7 @@ document.querySelector('#chat-backend-test').addEventListener('click',async even
   settingsBackendStatus.textContent=result.model_available ?
    `Ollama je dostupná a model ${result.model} je připraven.` :
    `Ollama je dostupná, ale model ${result.model} není mezi ${result.model_count} dostupnými modely.`;
- }catch(error){localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
+ }catch(error){ollamaAvailability={available:false,checked_at:new Date().toISOString()};localProviderIndicator.textContent='Lokální AI · nedostupná';localProviderAvailability.textContent='Nedostupný · poslední ověření selhalo.';settingsBackendStatus.textContent=error.message;}
  finally{event.currentTarget.disabled=false;}
 });
 ollamaStreamingToggle.addEventListener('change',async event=>{
@@ -6233,7 +6274,7 @@ document.querySelector('#image-publish').addEventListener('click',async event=>{
  }catch(error){imageStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 refreshImageAdapter();
-if(window.workspaceAutoStart!==false){loadProjects();if(!backendMetricsIndicator.hidden)loadBackendMetrics();}
+if(window.workspaceAutoStart!==false){loadProjects();startResourceMonitoring();}
 """
 JS += ADMIN_JS
 DESKTOP_BOOTSTRAP = """document.body.dataset.runtime='desktop';
@@ -6571,8 +6612,10 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
-            if self.path == '/v1/node-telemetry/status' and request == {}:
-                return self.reply(200, self.server.chat_service.telemetry_status())
+            if self.path == '/v1/node-telemetry/status' and isinstance(request, dict) \
+                    and set(request) <= {'group'}:
+                return self.reply(200, self.server.chat_service.telemetry_status(
+                    request.get('group', 'all')))
             if self.path == '/v1/node-telemetry/configure' and isinstance(request, dict):
                 return self.reply(200, self.server.chat_service.configure_runtime_policy(request))
             if (self.path == '/v1/node-telemetry/run' and isinstance(request, dict)

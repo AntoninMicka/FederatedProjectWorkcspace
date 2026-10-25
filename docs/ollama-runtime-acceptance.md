@@ -22,25 +22,28 @@ nerestartuje službu, nemění binding a neopakuje neznámý běh.
 
 1. Otevři **Zdroje**. Po prvním vzorku smějí CPU a NET hlásit čekání na druhý
    vzorek; do dalšího pollu musí přejít na hodnotu nebo explicitní `unknown`.
-   RAM, disk a dostupná GPU/VRAM mají zdroj a čas měření. Zavření dialogu polling
-   zastaví.
-2. Odešli skutečný Ollama dotaz a počkej na finální odpověď. V právě dokončené
+   RAM, disk a dostupná GPU/VRAM mají zdroj a čas měření. Čísla jsou uvnitř
+   progress barů. Zavření dialogu průběžnou aktualizaci kompaktního panelu
+   nezastaví; activity údaje se mění rychleji než kapacitní.
+2. Po náběhu, po běžné interakci a bez další akce nejpozději do periodického
+   probe ověř změnu dostupnosti Ollamy. Probe nesmí poslat projektový obsah,
+   změnit binding ani spustit modelovou inference.
+3. Odešli skutečný Ollama dotaz a počkej na finální odpověď. V právě dokončené
    odpovědi i přes tlačítko **Runtime běhu** ověř stejný historický procesor,
    poměr VRAM a čas. Změna živých ukazatelů nesmí tuto evidence přepsat.
-3. Restartuj aplikaci. Očekávání i historická evidence stejného runu musí být
+4. Restartuj aplikaci. Očekávání i historická evidence stejného runu musí být
    znovu dostupné; živé CPU/NET začnou novým druhým vzorkem. Opětovné zobrazení
    historického runu nesmí volat model ani vytvářet další odpověď.
-4. Pokud je dostupná GPU konfigurace, nastav očekávání `gpu` a ověř skutečný
+5. Pokud je dostupná GPU konfigurace, nastav očekávání `gpu` a ověř skutečný
    běh klasifikovaný `gpu` nebo pravdivě `partial-gpu`. Pokud lze bezpečně
    připravit CPU-only konfiguraci mimo Workspace, proveď nový běh: při doloženém
    `cpu` musí UI výrazně zobrazit `VAROVÁNÍ`. Workspace konfiguraci sám nemění.
-5. Dočasně nedostupný `nvidia-smi`, chybějící model v `/api/ps` nebo opožděný
+6. Dočasně nedostupný `nvidia-smi`, chybějící model v `/api/ps` nebo opožděný
    druhý vzorek musí být `unknown`, nikoli 0 % a nikoli tvrzení o CPU běhu.
-6. U existujícího `private-network` bindingu ověř, že evidence nese jeho přesné
+7. U existujícího `private-network` bindingu ověř, že evidence nese jeho přesné
    binding ID/revizi, boundary a target ID. Změněný certifikát či endpoint musí
    selhat stávající TLS/Target kontrolou; nesmí následovat fallback.
 
 Scénář se označí jako ověřený jen tam, kde byla příslušná infrastruktura
 skutečně dostupná. Nedostupný CPU-only, GPU nebo LAN scénář se zapíše jako
 neověřený, nikoli jako úspěšný.
-

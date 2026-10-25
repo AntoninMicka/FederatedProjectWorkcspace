@@ -42,6 +42,13 @@ jednom okamžiku navíc sama nedokládá, na jakém procesoru proběhla celá in
 nikoli průběh využití všech zařízení během celé inference. Živá GPU metrika je
 samostatný okamžitý vzorek a historickou run evidence nedoplňuje ani nepřepisuje.
 
+Frontend čte živé metriky průběžně i při zavřeném detailu: activity skupinu
+CPU/GPU/síť po 2 sekundách a kapacitní RAM/VRAM/disk po 15 sekundách. Skrytá
+karta ani neadministrátorský web probe nespouští. Dostupnost nakonfigurované
+Ollamy se read-only ověřuje při náběhu, po dokončené aplikační interakci přes
+debounce a nejpozději po 30 sekundách. Tyto intervaly jsou UI provozní policy,
+nikoli součást historické evidence běhu.
+
 ### Očekávání a vyhodnocení
 
 Správce může pro přesné nakonfigurované binding ID a revizi uložit node-local očekávání
