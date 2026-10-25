@@ -4327,11 +4327,15 @@ function renderSearchAutonomy(container,projection,query,parentSearchId){
  }
  panel.append(title,facts,progress,phases,revisionPanels,drafts,actions);
  if((workflow.plan_revisions || []).length>1){const history=document.createElement('details');
+  const view=autonomyWorkflowView(workflow);history.open=view.planReasonsOpen;
+  history.addEventListener('toggle',()=>{view.planReasonsOpen=history.open;});
   const summary=document.createElement('summary');summary.textContent='Důvody změn plánu';
   const list=document.createElement('ol');for(const revision of workflow.plan_revisions.slice(1)){
    const row=document.createElement('li');row.textContent=`r${revision.revision} · ${revision.kind} · ${revision.reason}`;list.append(row);}
   history.append(summary,list);panel.append(history);}
  if(workflow.revisions?.length){const history=document.createElement('details');
+  const view=autonomyWorkflowView(workflow);history.open=view.searchRevisionsOpen;
+  history.addEventListener('toggle',()=>{view.searchRevisionsOpen=history.open;});
   const summary=document.createElement('summary');summary.textContent=`Zrušené verze dotazu (${workflow.revisions.length})`;
   const pre=document.createElement('pre');pre.textContent=JSON.stringify(workflow.revisions,null,2);
   history.append(summary,pre);panel.append(history);}
@@ -5529,6 +5533,15 @@ let autonomyQueue={global_paused:false,workflows:[]},autonomyHeartbeatBusy=false
 const autonomyTimers=new Map();
 const autonomyViewState=new Map();
 const autonomyTerminal=new Set(['completed','failed','unknown','cancelled']);
+function autonomyWorkflowView(workflow){
+ let view=autonomyViewState.get(workflow.workflow_id);
+ if(!view){view={planRevision:workflow.plan_revision,detailOpen:false,
+  revisionOpen:false,planReasonsOpen:false,searchRevisionsOpen:false,draft:null};
+  autonomyViewState.set(workflow.workflow_id,view);}
+ if(view.planRevision!==workflow.plan_revision)Object.assign(view,{
+  planRevision:workflow.plan_revision,revisionOpen:false,draft:null});
+ return view;
+}
 function isSearchAutonomy(workflow){
  return workflow.steps?.some(step=>step.action?.id==='search.iterative-query');
 }
@@ -5594,9 +5607,7 @@ function renderAutonomyQueue(){
  document.querySelector('#autonomy-global-pause').textContent=autonomyQueue.global_paused?'Zrušit globální pauzu':'Pozastavit vše';
  if(!rows.length){const empty=document.createElement('p');empty.textContent='Pro tento projekt není připravená žádná řízená fronta.';autonomyList.append(empty);return;}
  for(const workflow of rows){const card=document.createElement('article');card.className='autonomy-card';card.dataset.state=workflow.state;
-  const view=autonomyViewState.get(workflow.workflow_id)||{planRevision:workflow.plan_revision,detailOpen:false,revisionOpen:false,draft:null};
-  if(view.planRevision!==workflow.plan_revision)Object.assign(view,{planRevision:workflow.plan_revision,revisionOpen:false,draft:null});
-  autonomyViewState.set(workflow.workflow_id,view);
+  const view=autonomyWorkflowView(workflow);
   const heading=document.createElement('h3');heading.textContent=`${workflow.mode==='automatic'?'Automatická':'Ruční'} fronta · ${workflow.state}`;
   const meta=document.createElement('p');meta.textContent=`${workflow.workflow_id} · revize ${workflow.plan_revision} · náklady ${workflow.spent_cost}/${workflow.budget.max_cost_units} · zbývá ${workflow.remaining_cost} cost / ${workflow.remaining_steps} kroků / ${workflow.remaining_seconds} s`;
   const progress=document.createElement('progress');progress.max=Math.max(1,workflow.budget.max_cost_units);progress.value=workflow.spent_cost;progress.setAttribute('aria-label','Využitý budget');

@@ -159,7 +159,15 @@ artefakt vznikne jen samostatnou přesně potvrzenou publikační operací.
   autonomy, research a readeru OK, restartový test doložil zachování chyby a
   nabídku pouze zbývajícího zdroje, `python3 -m unittest discover -s tests -v`
   (799 testů OK, 28 skipped) a `python3 -m py_compile` dotčených modulů.
-  Reálné pokračování po odmítnutém zdroji zůstává k fyzickému potvrzení.
+  Reálné pokračování po odmítnutém zdroji proběhlo až k ověření evidence;
+  fyzická kontrola přitom odhalila, že pětisekundový heartbeat při překreslení
+  chatu zavíral rozbalené „Důvody změn plánu“. Stav rozbalení historie plánu i
+  zrušených verzí dotazu se nyní drží podle workflow ID stejně jako technické
+  detaily fronty a změna revize jej neruší. Ověření doplnění: dva cílené UI
+  testy OK, `node --check` generovaného JavaScriptu,
+  `python3 -m unittest discover -s tests -v` (799 testů OK, 28 skipped) a
+  `git diff --check` bez chyb. Zbývající fáze realistické akceptace této
+  položky zůstávají otevřené.
 
 ## Akceptace
 
