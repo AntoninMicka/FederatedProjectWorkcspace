@@ -72,12 +72,11 @@ WORK_LOG. Navazující `F-M4-RESEARCH-WORKFLOW-01` byla po opravě fyzické regr
 25. 10. 2026 akceptována na úrovni PoC validated a její evidence je ve
 WORK_LOG; doručena byla PR #89 jako squash commit `ba291f5`.
 
-Plánovací horizont po PR #89 tvoří tři samostatné dávky v pořadí
-`OPS-NODE-MONITOR-01` → `F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`.
-Nejprve se zviditelní skutečný runtime, potom vznikne provider-neutral katalog
-a teprve nad jeho stabilní identitou nabídek se přidá AtlasCloud. Aktivace jedné
-dávky nemění stav dalších dvou. Úplný záznam `OPS-NODE-MONITOR-01` zůstává v
-navazujících mezerách níže; dvě nové dávky jsou připraveny zde:
+`OPS-NODE-MONITOR-01` je aktivní v [TODO](TODO.md) na větvi
+`feature/ops-node-monitor-01`. Následující plánovací horizont tvoří dvě
+samostatné dávky v pořadí `F-M3-MODEL-CATALOG-01` → `F-M3-ATLASCLOUD-01`.
+Nejprve vznikne provider-neutral katalog a teprve nad jeho stabilní identitou
+nabídek se přidá AtlasCloud. Aktivace jedné dávky nemění stav druhé.
 
 - [ ] [planned] **F-M3-MODEL-CATALOG-01 — dynamické načtení a sdílený
    znalostní katalog modelů (cílová úroveň: designed → implemented → PoC
@@ -142,24 +141,6 @@ navazujících mezerách níže; dvě nové dávky jsou připraveny zde:
   přijaté vzory bez konkrétní potřeby. Akceptace zachová mobilní/klávesnicovou
   paritu, RBAC, privacy, potvrzení a recovery a bude zahrnovat fyzický průchod
   právě upravených stránek.
-
-- [ ] [planned] **OPS-NODE-MONITOR-01 — systémová telemetrie a viditelný
-  runtime Ollamy (cílová úroveň: implemented → PoC validated).** Původ:
-  uživatelské zjištění při `F-M4-RESEARCH-WORKFLOW-01`, že Ollama může po změně
-  prostředí začít tiše provádět inference pouze na CPU. Adaptovat již
-  připravený panel Zdroje a jeho ukazatele CPU, GPU, RAM, VRAM, DISK a NET na
-  omezenou read-only telemetrii skutečného uzlu. U každého Ollama běhu rozlišit
-  očekávaný a doložený režim CPU/GPU, částečný offload a stav `unknown`;
-  samotná konfigurace GPU, dostupné zařízení ani okamžité vytížení se nesmějí
-  vydávat za důkaz GPU inference. Pro lokální i private-network backend
-  definovat podporovaný diagnostický kontrakt a provenance měření; nedostupná
-  vzdálená telemetrie zůstane explicitně neznámá. Při očekávaném GPU a doloženém
-  CPU-only běhu zobrazit výrazné varování v panelu i u běhu, ale nic
-  automaticky nerestartovat, nepřepínat ani neopakovat. Akceptace: fyzicky
-  ověřit GPU běh, CPU-only regresi, částečný offload, nedostupnou/opožděnou
-  telemetrii, restart aplikace a oddělení historického run evidence od živého
-  systémového vzorku; žádná diagnostika nesmí zpřístupnit credentials ani
-  obejít hranici důvěry uzlu.
 
 - [ ] **[planned] V-01 — Regresní test pro validátor CLI.** ADR 0002 zaznamenává ruční smoke test exit 0/1; CLI zatím nemá vlastní automatický test. Doplnit platnou projekci, osiřelý sidecar, chybějící cestu a jasně vymezit, že se nekontroluje project.json.
 - [ ] **[planned] V-06 — Produkční ochrany před nasazením.** Statické kontroly cest nejsou ochrana před závodícími FS změnami; současný zámek vyžaduje kooperující procesy. Zvlášť prověřit práva existujícího stavového adresáře, cizí Git konfigurace/filtry, povolené transporty a čtení při pending stavu. Nezaměňovat test pádu procesu za výpadek napájení ani host testy za podporu Windows.

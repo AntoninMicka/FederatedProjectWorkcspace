@@ -205,6 +205,16 @@ předstírat univerzální OpenAI kompatibilitu; implementuje nový bounded klie
 jen pro explicitně doložený textový protokol. Media, quick-generate,
 automatický fallback a odhad capability z názvu se odmítají jako jiný rozsah.
 
+OPS-NODE-MONITOR-01 **reuse/adaptuje** jediný `OllamaBinding`, přesný
+same-node/private-network Target a TLS pinning, stdlib HTTP transport,
+`OllamaRuns`, node-local stavový adresář a existující panel Zdroje. Živý
+lokální vzorek používá pouze bounded Linux `/proc`, `statvfs` a volitelné
+`nvidia-smi`; durable runtime evidence používá oficiální read-only Ollama
+`GET /api/ps` nad týmž bindingem. Nový monitoring daemon, `psutil`, druhá
+databáze živých metrik, fuzzy shoda modelu, automatický restart, fallback a
+retry `unknown` byly odmítnuty. Rozhodnutí a omezení:
+[ADR 0049](docs/adr/0049-node-and-ollama-runtime-telemetry.md).
+
 F-M3-MEDIA-01-A **adaptuje protokol, nikoli implementaci ComfyUI**: vedle
 OpenAI Images bude `generate-image` poskytovat samostatný ComfyUI adapter nad
 oficiálním serverovým API. Reuse se omezuje na dokumentované request/history/

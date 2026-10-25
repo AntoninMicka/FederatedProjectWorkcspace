@@ -166,6 +166,10 @@ Workflow nepoužívá fallback ani automatický retry neurčitého providerovéh
 Ollamu na jiném stroji lze připojit pouze jako explicitní `private-network`
 backend přes HTTPS a připnutý certifikát; přípravu serveru, pin a diagnostiku
 popisuje [návod pro Ollamu v LAN](docs/ollama-lan.md).
+Read-only systémové metriky, očekávaný CPU/GPU režim a historickou evidence
+konkrétního běhu ověřujte podle
+[akceptace runtime telemetrie](docs/ollama-runtime-acceptance.md); živý vzorek
+GPU utilization není náhradou Ollamou reportované evidence daného runu.
 Opakovatelný živý smoke proti same-node Ollamě je opt-in:
 
 ```sh

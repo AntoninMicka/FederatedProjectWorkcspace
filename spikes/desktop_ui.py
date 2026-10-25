@@ -301,12 +301,12 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <span class="resource-monitor-heading">Zdroje <small>detail</small></span>
 <span id="backend-metrics-indicator" hidden>OpenAI · nenačteno</span>
 <span id="local-provider-indicator">Lokální AI · neověřeno</span>
-<span class="resource-mini-row"><span>CPU</span><progress max="100" value="0" aria-label="CPU – placeholder bez telemetrie"></progress><output>—</output></span>
-<span class="resource-mini-row"><span>GPU</span><progress max="100" value="0" aria-label="GPU – placeholder bez telemetrie"></progress><output>—</output></span>
-<span class="resource-mini-row"><span>RAM</span><progress max="100" value="0" aria-label="RAM – placeholder bez telemetrie"></progress><output>—</output></span>
-<span class="resource-mini-row"><span>VRAM</span><progress max="100" value="0" aria-label="VRAM – placeholder bez telemetrie"></progress><output>—</output></span>
-<span class="resource-mini-row"><span>DISK</span><progress max="100" value="0" aria-label="Disk – placeholder bez telemetrie"></progress><output>—</output></span>
-<span class="resource-mini-row"><span>NET</span><progress max="100" value="0" aria-label="Síť – placeholder bez telemetrie"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="cpu"><span>CPU</span><progress max="100" value="0" aria-label="CPU – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="gpu"><span>GPU</span><progress max="100" value="0" aria-label="GPU – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="ram"><span>RAM</span><progress max="100" value="0" aria-label="RAM – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="vram"><span>VRAM</span><progress max="100" value="0" aria-label="VRAM – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="disk"><span>DISK</span><progress max="100" value="0" aria-label="Disk – telemetrie není načtena"></progress><output>—</output></span>
+<span class="resource-mini-row" data-resource-metric="net"><span>NET</span><progress max="100" value="0" aria-label="Síť – telemetrie není načtena"></progress><output>—</output></span>
 </button></section>
 <button id="logout" type="button"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg><span>Odhlásit</span></button>
 <button id="sidebar-layout-toggle" type="button" aria-pressed="false" aria-label="Sbalit hlavní panel"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="sidebar-layout-label">Sbalit panel</span></button></aside>
@@ -314,10 +314,14 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
 <article id="openai-resource-provider" hidden><strong>OpenAI</strong><p id="resource-openai-detail">Účetní přehled zatím nebyl načten.</p></article>
-<article><strong>Lokální AI</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><small>U lokálních providerů se zde sleduje pouze dostupnost, nikoli tokeny ani náklady.</small></article>
+<article><strong>Ollama runtime</strong><p id="local-provider-availability">Dostupnost není ověřena.</p><p id="ollama-runtime-warning" class="runtime-warning" hidden></p><small>Historická evidence běhu pochází z přesného Ollama endpointu; živé systémové hodnoty níže vždy patří tomuto workspace uzlu.</small></article>
 </div></section>
-<section><h3>Systémové monitory</h3><p class="resource-placeholder-note">CPU, GPU, RAM, VRAM, DISK a NET jsou zatím pouze připravená místa. Aplikace dosud systémovou telemetrii nesbírá.</p>
+<section><h3>Systémové monitory</h3><p class="resource-placeholder-note">Read-only živý vzorek tohoto workspace uzlu; není historickou evidencí inference.</p>
 <div id="system-monitor-detail"></div></section>
+<section id="resource-runtime-policy" hidden><h3>Očekávaný runtime Ollamy</h3>
+<label>Očekávání <select id="ollama-expected-processor"><option value="unspecified">Bez očekávání</option><option value="gpu">GPU (včetně částečného offloadu)</option><option value="cpu">CPU</option></select></label>
+<button id="ollama-runtime-policy-save" type="button">Uložit očekávání</button>
+<p id="ollama-runtime-policy-status" role="status">Očekávání zatím nebylo načteno.</p></section>
 </dialog>
 <dialog id="project-registration-remove-dialog" aria-labelledby="project-registration-remove-title">
 <form method="dialog"><h2 id="project-registration-remove-title">Odebrat nedostupnou registraci</h2>
@@ -1093,7 +1097,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #resource-monitor-dialog::backdrop{background:#07131fa8}.resource-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.resource-dialog-heading h2{margin:5px 0 12px}.resource-dialog-heading button{flex:none}
 #resource-monitor-dialog>section{margin-top:16px;padding:15px;border:1px solid #dce5eb;border-radius:12px;background:white}#resource-monitor-dialog h3{margin:0 0 12px}
 #resource-provider-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}#resource-provider-list article{padding:12px;border:1px solid #dce5eb;border-radius:10px}#resource-provider-list p{margin:5px 0;font-size:12px}
-.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 92px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}
+.resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr) 112px;gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row progress{width:100%;accent-color:#79c9ac}.resource-detail-row output{text-align:right;color:#73818e}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
@@ -3814,14 +3818,64 @@ const localProviderIndicator=document.querySelector('#local-provider-indicator')
 const resourceMonitorDialog=document.querySelector('#resource-monitor-dialog');
 for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
  const row=document.createElement('div');row.className='resource-detail-row';
+ row.dataset.resourceMetric=name.toLowerCase();
  const label=document.createElement('strong');label.textContent=name;
  const progress=document.createElement('progress');progress.max=100;progress.value=0;
- progress.setAttribute('aria-label',`${name} – placeholder bez telemetrie`);
- const value=document.createElement('output');value.textContent='bez telemetrie';
+ progress.setAttribute('aria-label',`${name} – telemetrie není načtena`);
+ const value=document.createElement('output');value.textContent='nenačteno';
  row.append(label,progress,value);document.querySelector('#system-monitor-detail').append(row);
 }
-document.querySelector('#resource-monitor-open').addEventListener('click',()=>resourceMonitorDialog.showModal());
+let resourceMonitorTimer=null;
+function metricText(metric){
+ if(!metric||metric.status!=='available')return 'neznámé';
+ if(metric.unit==='percent')return `${metric.value.toFixed(1)} %`;
+ if(metric.unit==='bytes-per-second'){
+  const value=metric.value;return value>=1048576?`${(value/1048576).toFixed(1)} MiB/s`:
+   value>=1024?`${(value/1024).toFixed(1)} KiB/s`:`${value.toFixed(0)} B/s`;}
+ return `${metric.value} ${metric.unit}`;
+}
+function renderMetric(name,metric){
+ for(const row of document.querySelectorAll(`[data-resource-metric="${name}"]`)){
+  const progress=row.querySelector('progress'),output=row.querySelector('output');
+  const percent=metric?.status==='available'&&metric.unit==='percent'?metric.value:0;
+  progress.value=Math.max(0,Math.min(100,percent));progress.dataset.status=metric?.status||'unknown';
+  progress.setAttribute('aria-label',`${name.toUpperCase()} – ${metricText(metric)}`);
+  output.textContent=metricText(metric);output.title=metric?.source||'';
+ }
+}
+function runtimeEvidenceText(evidence){
+ if(!evidence||evidence.status!=='available')return 'Runtime běhu: neznámý.';
+ const modes={cpu:'CPU','partial-gpu':'částečný GPU offload',gpu:'GPU'};
+ const ratio=typeof evidence.vram_ratio==='number'?` · VRAM ${(evidence.vram_ratio*100).toFixed(1)} % modelu`:'';
+ const warning=evidence.expected_processor==='gpu'&&evidence.processor==='cpu'?
+  'VAROVÁNÍ: očekáváno GPU, doložena CPU-only alokace. ':'';
+ return `${warning}Runtime běhu: ${modes[evidence.processor]||evidence.processor}${ratio} · ${evidence.observed_at}.`;
+}
+function renderNodeTelemetry(result){
+ for(const [name,metric] of Object.entries(result.system?.metrics||{}))renderMetric(name,metric);
+ const latest=result.ollama?.latest_run,evidence=latest?.runtime_evidence,policy=result.ollama?.policy;
+ document.querySelector('#ollama-expected-processor').value=policy?.expected_processor||'unspecified';
+ document.querySelector('#ollama-runtime-policy-status').textContent=policy?
+  `Revize ${policy.revision} · binding ${policy.binding_revision}`:'Ollama backend není nastaven.';
+ const warning=document.querySelector('#ollama-runtime-warning');
+ warning.hidden=latest?.assessment!=='warning-gpu-expected-cpu-observed';
+ warning.textContent=warning.hidden?'':'Varování: očekáváno GPU, ale dokončený běh doložil CPU-only alokaci. Nic nebylo automaticky restartováno ani opakováno.';
+ localProviderAvailability.textContent=latest?
+  `${runtimeEvidenceText(evidence)} Run ${latest.run_id}.`:
+  (result.ollama?.binding?'Zatím není uložená runtime evidence dokončeného běhu.':'Ollama backend není nastaven.');
+ localProviderIndicator.textContent=latest&&evidence?.status==='available'?
+  `Ollama · ${evidence.processor}`:(result.ollama?.binding?'Ollama · runtime neznámý':'Lokální AI · nenastaveno');
+}
+async function loadNodeTelemetry(){
+ try{renderNodeTelemetry(await projectRequest('/v1/node-telemetry/status',{}));}
+ catch(error){localProviderAvailability.textContent=error.message;}
+}
+document.querySelector('#resource-monitor-open').addEventListener('click',()=>{
+ resourceMonitorDialog.showModal();loadNodeTelemetry();clearInterval(resourceMonitorTimer);
+ resourceMonitorTimer=setInterval(loadNodeTelemetry,2000);
+});
 document.querySelector('#resource-monitor-close').addEventListener('click',()=>resourceMonitorDialog.close());
+resourceMonitorDialog.addEventListener('close',()=>{clearInterval(resourceMonitorTimer);resourceMonitorTimer=null;});
 resourceMonitorDialog.addEventListener('click',event=>{
  const bounds=resourceMonitorDialog.getBoundingClientRect();
  if(event.clientX<bounds.left||event.clientX>bounds.right||event.clientY<bounds.top||event.clientY>bounds.bottom)resourceMonitorDialog.close();
@@ -3832,6 +3886,13 @@ function renderLocalProviderAvailability(binding){
   `Nakonfigurováno: ${binding.model}. Dostupnost zatím nebyla ověřena.` :
   'Lokální provider není nakonfigurován; dostupnost není ověřena.';
 }
+document.querySelector('#ollama-runtime-policy-save').addEventListener('click',async event=>{
+ event.currentTarget.disabled=true;const status=document.querySelector('#ollama-runtime-policy-status');
+ status.textContent='Ukládám očekávání runtime…';
+ try{renderNodeTelemetry(await projectRequest('/v1/node-telemetry/configure',{
+  expected_processor:document.querySelector('#ollama-expected-processor').value}));}
+ catch(error){status.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');
 const chatForm=document.querySelector('#chat-backend-form');
@@ -4007,7 +4068,7 @@ function renderThreadMessage(item,thread){
    ` · požadovaný jazyk ${turn.response_language} · shoda ${turn.language_compliance==='unverified'?'neověřena':turn.language_compliance}`:'';
   const detail=document.createElement('small');detail.textContent=`${item.role==='user'?'Vy':'Asistent'} · ${item.privacy}${languageDetail}`;
   message.append(detail);
-  if(turn?.external_request_available){
+ if(turn?.external_request_available){
    const requestButton=document.createElement('button');requestButton.type='button';
    requestButton.className='secondary-button';requestButton.textContent='Zobrazit odeslaný request';
    requestButton.addEventListener('click',async()=>{
@@ -4020,6 +4081,19 @@ function renderThreadMessage(item,thread){
     finally{requestButton.disabled=false;}
    });
    message.append(requestButton);
+  }else if(turn?.run_id){
+   const runtimeButton=document.createElement('button');runtimeButton.type='button';
+   runtimeButton.className='secondary-button';runtimeButton.textContent='Runtime běhu';
+   runtimeButton.addEventListener('click',async()=>{
+    runtimeButton.disabled=true;
+    try{const record=await projectRequest('/v1/node-telemetry/run',{run_id:turn.run_id});
+     let output=message.querySelector('.ollama-runtime-record');
+     if(!output){output=document.createElement('small');output.className='ollama-runtime-record';message.append(output);}
+     output.textContent=runtimeEvidenceText(record.runtime_evidence);
+     output.classList.toggle('runtime-warning',record.assessment==='warning-gpu-expected-cpu-observed');
+    }catch(error){chatOperationStatus.textContent=error.message;}
+    finally{runtimeButton.disabled=false;}
+   });message.append(runtimeButton);
   }
  return message;
 }
@@ -5489,8 +5563,9 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    activeThread=result.thread;activeTaskThreadId=result.thread.thread_id;
    renderChat(result.thread);rememberThread(result.thread);renderRunUsage(result.usage_report,
     {enabled:ollamaStreaming,deltas:receivedDeltas,firstDeltaMs,totalMs:performance.now()-streamStarted});pendingChatRequest=null;draft.value='';draft.focus();
-   chatOperationStatus.textContent=ollamaStreaming ?
-    `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí.` : 'Odpověď je připravena.';
+   chatOperationStatus.textContent=(ollamaStreaming ?
+    `Odpověď je připravena · přijato ${receivedDeltas} průběžných částí. ` : 'Odpověď je připravena. ')+
+    runtimeEvidenceText(result.runtime_evidence);
   }catch(error){
    appendChatOperationNotice(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
@@ -6208,6 +6283,8 @@ class DesktopHandler(Handler):
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
         '/v1/chat/status', '/v1/chat/configure',
+        '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
+        '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
         '/v1/search/status', '/v1/search/configure', '/v1/search/test',
         '/v1/chat/send', '/v1/chat/send-stream',
@@ -6494,6 +6571,14 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/node-telemetry/status' and request == {}:
+                return self.reply(200, self.server.chat_service.telemetry_status())
+            if self.path == '/v1/node-telemetry/configure' and isinstance(request, dict):
+                return self.reply(200, self.server.chat_service.configure_runtime_policy(request))
+            if (self.path == '/v1/node-telemetry/run' and isinstance(request, dict)
+                    and set(request) == {'run_id'}):
+                return self.reply(200, self.server.chat_service.runtime_evidence(
+                    request['run_id']))
             if self.path == '/v1/search/status' and request == {}:
                 return self.reply(200, self.server.chat_service.search_status())
             if self.path == '/v1/search/configure' and isinstance(request, dict):
@@ -6925,7 +7010,7 @@ class DesktopHandler(Handler):
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
                     'stejného tlačítka zachová identitu operace.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else

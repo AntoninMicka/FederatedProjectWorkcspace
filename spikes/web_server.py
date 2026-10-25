@@ -78,6 +78,8 @@ document.querySelector('#login-form').addEventListener('submit',async event=>{
   document.querySelector('#backend-metrics').hidden=!admin;
   document.querySelector('#backend-metrics-indicator').hidden=!admin;
   document.querySelector('#openai-resource-provider').hidden=!admin;
+  document.querySelector('#resource-monitor').hidden=!admin;
+  document.querySelector('#resource-runtime-policy').hidden=!admin;
   document.body.classList.add('authenticated');await loadProjects();if(admin)await loadBackendMetrics();
 }catch(error){accessKey='';document.querySelector('#login-status').textContent='Přihlášení se nezdařilo.';}
 });
@@ -229,6 +231,10 @@ class WebHandler(DesktopHandler):
             except (ValueError, OSError, sqlite3.Error) as exc:
                 return self.reply(422, {'error': str(exc)})
             return super().dispatch(request)
+        if (self.path in {'/v1/node-telemetry/status',
+                          '/v1/node-telemetry/configure'}
+                and not self.server.administration.is_admin(self.actor)):
+            return self.send_error(403)
         if self.path == '/v1/application-access':
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
