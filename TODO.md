@@ -90,11 +90,16 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   tokenů, UI přijalo 217 částí a historická evidence běhu v čase
   `2026-10-25T15:55:46.486560Z` klasifikovala runtime jako `GPU` s VRAM 100 %
   modelu. Tím je ověřeno propojení skutečné odpovědi, per-run tokenů a přesné
-  `/api/ps` evidence; nový agregovaný řádek tokenů zatím fyzicky ověřen nebyl.
-- D zůstává otevřené pro kontrolu stejné historické evidence a tokenového součtu
-  po restartu. Partial-GPU, záměrný CPU-only varovný scénář a private-network
-  pinning lze uzavřít pouze tam, kde je příslušná infrastruktura skutečně
-  dostupná. Plný GPU Workspace běh je na aktuálním hostu doložen.
+  `/api/ps` evidence.
+- Fyzická kontrola po restartu aplikace doložila obnovený kompaktní součet
+  `Tokeny běhů · 451 101` a poslední Ollama runtime `gpu`. OpenAI účetní řádek
+  zůstal samostatný, takže node-local součet providerových run journalů není v
+  UI zaměněn s účetním reportem. Screenshot dokládá načtení obou durable
+  projekcí po novém startu; sám o sobě neporovnává součet před a po restartu.
+- D zůstává otevřené pouze pro scénáře, jejichž infrastruktura dosud nebyla
+  fyzicky doložena: partial-GPU, záměrné CPU-only varování a private-network
+  pinning. Plný GPU Workspace běh, jeho historická evidence, tokeny a restartová
+  obnova jsou na aktuálním hostu ověřeny.
 
 ## Crash boundaries
 
