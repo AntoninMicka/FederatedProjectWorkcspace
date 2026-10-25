@@ -1090,7 +1090,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 #sidebar-layout-toggle,#logout{flex:none;width:100%;margin-top:8px;padding:9px}#sidebar-layout-toggle{display:flex;align-items:center;justify-content:center;gap:8px;background:#20384b}#sidebar-layout-toggle:hover{background:#29485f}#sidebar-layout-toggle .sidebar-utility-icon{display:block;width:18px;height:18px}
 #sidebar-project-recover{margin:0 0 8px;padding:8px;font-size:11px;background:#8a642c}
 .resource-monitor-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;font-size:11px;text-transform:uppercase;letter-spacing:.08em}.resource-monitor-heading small{font-size:9px;text-transform:none;letter-spacing:0;color:#8faabc}
-#backend-metrics-indicator,#local-provider-indicator,#run-token-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}#run-token-indicator{color:#d8c88f}
+#backend-metrics-indicator,#local-provider-indicator,#run-token-indicator{display:block;margin-bottom:4px;color:#9fcfc2;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#local-provider-indicator{color:#aabecf}#local-provider-indicator.runtime-warning-compact{padding:3px 5px;border-left:3px solid #ffb64d;background:#6f3b00;color:#ffe2ad;font-weight:700;white-space:normal}#run-token-indicator{color:#d8c88f}
 .resource-mini-row{display:grid;grid-template-columns:32px minmax(0,1fr);gap:5px;align-items:center;margin:3px 0;font-size:8px;color:#9eb5c7}.resource-progress{position:relative;display:block;min-width:0;height:13px}.resource-progress progress{position:absolute;inset:0;width:100%;height:13px;accent-color:#79c9ac}.resource-progress output{position:absolute;inset:0 4px 0 auto;display:flex;align-items:center;justify-content:flex-end;max-width:calc(100% - 8px);color:#f4fbf8;font-size:8px;font-weight:700;line-height:13px;text-shadow:0 1px 2px #07131f,0 0 3px #07131f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
 #resource-monitor-dialog{width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}
 #project-registration-remove-dialog{width:min(560px,calc(100vw - 32px));padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66}#project-registration-remove-dialog::backdrop{background:#07131fa8}#project-registration-remove-dialog h2{margin-top:0}#project-registration-remove-dialog code{overflow-wrap:anywhere}
@@ -3823,6 +3823,12 @@ const localProviderAvailability=document.querySelector('#local-provider-availabi
 const localProviderIndicator=document.querySelector('#local-provider-indicator');
 const runTokenIndicator=document.querySelector('#run-token-indicator');
 const resourceMonitorDialog=document.querySelector('#resource-monitor-dialog');
+const runtimePolicySelect=document.querySelector('#ollama-expected-processor');
+const runtimePolicyStatus=document.querySelector('#ollama-runtime-policy-status');
+let runtimePolicyDirty=false;
+runtimePolicySelect.addEventListener('change',()=>{
+ runtimePolicyDirty=true;runtimePolicyStatus.textContent='Neuložená změna očekávání runtime.';
+});
 for(const name of ['CPU','GPU','RAM','VRAM','DISK','NET']){
  const row=document.createElement('div');row.className='resource-detail-row';
  row.dataset.resourceMetric=name.toLowerCase();
@@ -3887,9 +3893,11 @@ function renderNodeTelemetry(result){
  if(result.token_usage)renderTokenUsage(result.token_usage);
  const latest=result.ollama?.latest_run,evidence=latest?.runtime_evidence,policy=result.ollama?.policy;
  if(latest!==undefined)latestOllamaRuntime=latest;
- document.querySelector('#ollama-expected-processor').value=policy?.expected_processor||'unspecified';
- document.querySelector('#ollama-runtime-policy-status').textContent=policy?
-  `Revize ${policy.revision} · binding ${policy.binding_revision}`:'Ollama backend není nastaven.';
+ if(!runtimePolicyDirty){
+  runtimePolicySelect.value=policy?.expected_processor||'unspecified';
+  runtimePolicyStatus.textContent=policy?
+   `Revize ${policy.revision} · binding ${policy.binding_revision}`:'Ollama backend není nastaven.';
+ }
  const warning=document.querySelector('#ollama-runtime-warning');
  warning.hidden=latest?.assessment!=='warning-gpu-expected-cpu-observed';
  warning.textContent=warning.hidden?'':'Varování: očekáváno GPU, ale dokončený běh doložil CPU-only alokaci. Nic nebylo automaticky restartováno ani opakováno.';
@@ -3913,12 +3921,16 @@ function renderLocalProviderAvailability(binding){
  renderOllamaProvider();
 }
 function renderOllamaProvider(){
- if(!chatBinding){localProviderIndicator.textContent='Lokální AI · nenastaveno';
+ if(!chatBinding){localProviderIndicator.classList.remove('runtime-warning-compact');
+  localProviderIndicator.textContent='Lokální AI · nenastaveno';
   localProviderAvailability.textContent='Lokální provider není nakonfigurován; dostupnost není ověřena.';return;}
  const availability=!ollamaAvailability?'neověřeno':ollamaAvailability.available?
   (ollamaAvailability.model_available?'dostupná':'model chybí'):'nedostupná';
- localProviderIndicator.textContent=`Ollama · ${availability}`+
-  (latestOllamaRuntime?.runtime_evidence?.status==='available'?` · ${latestOllamaRuntime.runtime_evidence.processor}`:'');
+ const runtimeWarning=latestOllamaRuntime?.assessment==='warning-gpu-expected-cpu-observed';
+ localProviderIndicator.classList.toggle('runtime-warning-compact',runtimeWarning);
+ localProviderIndicator.textContent=runtimeWarning?'VAROVÁNÍ · Ollama CPU · očekáváno GPU':
+  `Ollama · ${availability}`+
+   (latestOllamaRuntime?.runtime_evidence?.status==='available'?` · ${latestOllamaRuntime.runtime_evidence.processor}`:'');
  const runtime=latestOllamaRuntime?
   `${runtimeEvidenceText(latestOllamaRuntime.runtime_evidence)} Run ${latestOllamaRuntime.run_id}.`:
   'Zatím není uložená runtime evidence dokončeného běhu.';
@@ -3948,11 +3960,11 @@ function startResourceMonitoring(){
  backendAvailabilityTimer=setInterval(()=>scheduleBackendStateRefresh(0),BACKEND_AVAILABILITY_INTERVAL);
 }
 document.querySelector('#ollama-runtime-policy-save').addEventListener('click',async event=>{
- event.currentTarget.disabled=true;const status=document.querySelector('#ollama-runtime-policy-status');
- status.textContent='Ukládám očekávání runtime…';
- try{renderNodeTelemetry(await projectRequest('/v1/node-telemetry/configure',{
-  expected_processor:document.querySelector('#ollama-expected-processor').value}));}
- catch(error){status.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+ event.currentTarget.disabled=true;runtimePolicyStatus.textContent='Ukládám očekávání runtime…';
+ try{const result=await projectRequest('/v1/node-telemetry/configure',{
+  expected_processor:runtimePolicySelect.value});
+  runtimePolicyDirty=false;renderNodeTelemetry(result);}
+ catch(error){runtimePolicyStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
 });
 const mainPanelContent=document.querySelector('#main-panel-content');
 const chatMessages=document.querySelector('#chat-messages');

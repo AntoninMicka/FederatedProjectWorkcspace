@@ -39,6 +39,15 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   Ollama a OpenAI run journalech odvodit node-local součty vstupních, výstupních
   a celkových tokenů. Zvlášť uvést dokončené běhy bez usage, nic neodhadovat a
   nezaměnit tento přehled s OpenAI účetními metrikami.
+- [x] [completed] **OPS-NODE-MONITOR-01-F — stabilní editace runtime
+  očekávání (cílová úroveň: implemented).** Periodický telemetry refresh nesmí
+  přepsat uživatelem změněnou, dosud neuloženou hodnotu CPU/GPU očekávání ani
+  chybovou zprávu jejího uložení. Po úspěšném uložení se formulář znovu řídí
+  autoritativní uloženou policy.
+- [x] [completed] **OPS-NODE-MONITOR-01-G — viditelné kompaktní runtime
+  varování (cílová úroveň: implemented).** CPU-only běh při očekávaném GPU musí
+  být výrazně označen už v kompaktním panelu Zdroje, nejen v jeho detailním
+  dialogu. Zrušení bindingu nesmí ponechat staré varování.
 - [ ] [in progress] **OPS-NODE-MONITOR-01-D — regrese a fyzická akceptace (cílová
   úroveň: PoC validated).** Ověřit GPU, CPU-only, částečný offload,
   nedostupnou/opožděnou telemetrii, restart aplikace, private-network pinning a
@@ -67,6 +76,15 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   existujících providerových journalů. Panel ukazuje zvlášť Ollama/OpenAI detail,
   společný kompaktní součet a počet dokončených běhů bez úplné usage evidence.
   Prázdný OpenAI journal se pouhým čtením monitoru nevytváří.
+- F je na úrovni **implemented**: změna selectu označí formulář jako
+  rozpracovaný, takže periodický refresh nepřepíše hodnotu ani chybovou zprávu.
+  Po úspěšném uložení se rozpracovaný stav zruší a vykreslí se autoritativní
+  revize policy. Cílený UI test a `node --check` prošly; následná úplná sada je
+  uvedena v souhrnném automatickém ověření níže.
+- G je na úrovni **implemented**: kompaktní řádek Ollamy při doloženém CPU-only
+  běhu a očekávaném GPU zobrazuje kontrastní textové varování; po odstranění
+  bindingu se jeho stav i styl explicitně vyčistí. Fyzické ověření kompaktního
+  varování čeká na nasazení této úpravy.
 - Automatické ověření 25. 10. 2026: nová cílená sada monitoru, backendů,
   chat služby a desktop/web rozhraní prošla v rozsahu **197 testů, 6 skipped**.
   Generovaný JS prošel `node --check`; úplná sada
@@ -100,8 +118,12 @@ automatickou nápravu, obecný monitoring server, alerting ani katalog modelů.
   restartu zůstalo `451 360`. Tím je doložena aktualizace agregátu z dokončeného
   run journalu, restartová obnova i absence dvojího započtení při samotném
   restartu.
-- D zůstává otevřené pouze pro záměrné CPU-only varování a private-network
-  pinning. Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
+- Záměrný CPU-only průchod při očekávaném GPU fyzicky doložil správnou
+  klasifikaci i výrazné varování ve velkém monitorovacím dialogu. Při akceptaci
+  se ukázalo, že kompaktní panel zobrazoval pouze neutrální `cpu`; navazující
+  úprava G přidává varování i tam a čeká na fyzické potvrzení po nasazení.
+- D zůstává otevřené pro toto kompaktní potvrzení a private-network pinning.
+  Partial-GPU nelze na aktuálním hostu smysluplně vyvolat, protože CPU
   a GPU používají sdílenou paměť; tento scénář zůstává explicitně neověřený,
   nikoli neúspěšný. Ollama běží v Dockeru, proto lze CPU-only průchod provést
   izolovanou vedlejší instancí bez GPU na jiném loopback portu, aniž by se
