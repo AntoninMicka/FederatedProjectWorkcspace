@@ -34,6 +34,8 @@ class DebianPackageTests(unittest.TestCase):
             self.assertIn('0.1.0', (tree / f'usr/share/doc/{NAME}/CHANGELOG.md').read_text())
             self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.module.json').exists())
             self.assertTrue((tree / f'usr/lib/{NAME}/modules/publication-experiment-registry.source.json').exists())
+            self.assertTrue((tree / f'usr/lib/{NAME}/docs/roadmap-graph.json').exists())
+            self.assertTrue((tree / f'usr/lib/{NAME}/BACKLOG.md').exists())
             self.assertFalse((tree / 'home').exists())
             self.assertFalse((tree / 'var').exists())
             self.assertTrue((tree / f'usr/bin/{NAME}').stat().st_mode & 0o111)

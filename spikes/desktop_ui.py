@@ -26,6 +26,7 @@ from spikes.public_source import (PublicSourceError, PublicSourceRejected,
                                   PublicSourceUnknown, PublicSourceUnsupported)
 from spikes.projects import Projects
 from spikes.project_creation import ProjectCreation
+from spikes.roadmap_graph import RoadmapGraph
 from spikes.source_import import Sources
 from spikes.google_drive_import import GoogleDriveImport, DriveAccessError, GOOGLE_ISSUER, SCOPE
 from spikes.gamepad_settings import DEFAULT_GAMEPAD_SETTINGS
@@ -278,6 +279,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <ul id="sidebar-settings-list" aria-label="Seznam nastavení">
 <li class="sidebar-list-row" data-settings-item="settings-backend-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-backend-tab">AI backend</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení AI backend">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-backend-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-models-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-models-tab">Modely</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení modelů">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-models-tab">Otevřít</button></div></details></li>
+<li class="sidebar-list-row" data-settings-item="settings-roadmap-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-roadmap-tab">Roadmapa</button><details class="sidebar-item-menu"><summary aria-label="Akce roadmapy">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-roadmap-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-cms-tab"><button class="sidebar-list-main" type="button" data-settings-tab="settings-cms-tab">Weby</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Weby">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-cms-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-access-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-access-tab">Dostupnost aplikace</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení dostupnosti aplikace">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-access-tab">Otevřít</button></div></details></li>
 <li class="sidebar-list-row" data-settings-item="settings-profile-tab" hidden><button class="sidebar-list-main" type="button" data-settings-tab="settings-profile-tab">Profil</button><details class="sidebar-item-menu"><summary aria-label="Akce nastavení Profil">⋮</summary><div class="sidebar-item-menu-items" role="menu"><button type="button" role="menuitem" data-settings-menu-tab="settings-profile-tab">Otevřít</button></div></details></li>
@@ -514,6 +516,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <div id="settings-tabs" role="tablist" aria-label="Sekce nastavení">
 <button id="settings-backend-tab" type="button" role="tab" aria-selected="true" aria-controls="settings-backend-panel">AI backend</button>
 <button id="settings-models-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-models-panel" tabindex="-1">Modely</button>
+<button id="settings-roadmap-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-roadmap-panel" tabindex="-1">Roadmapa</button>
 <button id="settings-cms-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-cms-panel" tabindex="-1" hidden>Weby</button>
 <button id="settings-access-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-access-panel" tabindex="-1" hidden>Dostupnost</button>
 <button id="settings-profile-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-profile-panel" tabindex="-1" hidden>Profil</button>
@@ -648,6 +651,17 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <p id="settings-models-status" role="status" aria-live="polite">Načítám modelový katalog…</p>
 <div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backendy</th><th>Schopnosti</th><th>Dostupnost</th></tr></thead><tbody></tbody></table></div>
 <dialog id="settings-model-detail" aria-labelledby="settings-model-detail-title"><h2 id="settings-model-detail-title">Detail modelu</h2><pre></pre><button type="button" class="secondary-button">Zavřít</button></dialog>
+</section>
+<section id="settings-roadmap-panel" class="settings-card roadmap-card" role="tabpanel" aria-labelledby="settings-roadmap-tab" hidden>
+<div class="roadmap-heading"><div><h2>Roadmapa a závislosti</h2><p>Read-only projekce autoritativní roadmapy, TODO, backlogu a pracovního logu.</p></div>
+<button id="roadmap-export" type="button" disabled>Stáhnout SVG</button></div>
+<div class="roadmap-controls" aria-label="Filtry roadmapy"><label>Milník <select id="roadmap-lane-filter"><option value="">Všechny</option></select></label>
+<label>Stav <select id="roadmap-status-filter"><option value="">Všechny</option><option value="planned">Plánováno</option><option value="in progress">Probíhá</option><option value="completed">Dokončeno</option><option value="blocked">Blokováno</option><option value="deferred">Odloženo</option></select></label>
+<label class="roadmap-check"><input id="roadmap-ready-filter" type="checkbox"> Jen souběžně připravené</label></div>
+<p id="roadmap-status" role="status" aria-live="polite">Graf zatím nebyl načten.</p>
+<div class="roadmap-legend" aria-label="Legenda"><span class="completed">Dokončeno</span><span class="in-progress">Probíhá</span><span class="planned">Plánováno</span><span class="deferred">Odloženo</span><span class="critical">Kritická cesta</span><span class="ready">Souběžně připraveno</span></div>
+<div id="roadmap-graph" class="roadmap-graph" tabindex="0" aria-label="Graf roadmapy"></div>
+<aside id="roadmap-detail" class="roadmap-detail" aria-live="polite"><h3>Detail dávky</h3><p>Vyberte uzel v grafu.</p></aside>
 </section>
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
 <h2>Publikační CMS</h2>
@@ -1148,6 +1162,7 @@ summary{cursor:pointer}code,li,dd,h1,h2,button{overflow-wrap:anywhere}small{font
 .resource-placeholder-note{margin:0;color:#6e7d8a}#system-monitor-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.resource-detail-row{display:grid;grid-template-columns:48px minmax(0,1fr);gap:8px;align-items:center;padding:8px;border-radius:8px;background:#f3f6f8;font-size:12px}.resource-detail-row .resource-progress{height:22px}.resource-detail-row progress{height:22px}.resource-detail-row output{inset:0 8px 0 auto;font-size:11px;line-height:22px}.runtime-warning{padding:9px;border:1px solid #d98b2b;border-radius:8px;background:#fff2dc;color:#743d00;font-weight:700}
 #settings-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:22px 0 8px}#settings-tabs button[aria-selected="false"]{background:#e8eef2;color:#304657}
 .settings-table-wrap{overflow:auto}.settings-table-wrap table{width:100%;border-collapse:collapse}.settings-table-wrap th,.settings-table-wrap td{padding:9px;border-bottom:1px solid #dce3e9;text-align:left;vertical-align:top}.settings-table-wrap th{font-size:12px;color:#456276}.settings-table-wrap td button{margin:0 6px 4px 0;padding:4px 7px;background:transparent;color:#176b60;text-align:left}.settings-table-wrap td button:disabled{color:#81919b}#settings-model-detail{width:min(720px,calc(100vw - 32px))}#settings-model-detail pre{white-space:pre-wrap;overflow-wrap:anywhere}#backend-settings-dialog,#backend-reset-dialog{box-sizing:border-box;width:min(760px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:22px;border:1px solid #9babb7;border-radius:16px;color:#162638;background:#f8fbfd;box-shadow:0 18px 60px #07131f66;overflow:auto}#backend-settings-dialog::backdrop,#backend-reset-dialog::backdrop{background:#07131fa8}#backend-settings-dialog h2,#backend-reset-dialog h2{margin-top:0}#backend-settings-dialog-body form{display:grid;gap:10px}#backend-settings-dialog-body form+form{margin-top:22px;padding-top:18px;border-top:1px solid #dce3e9}
+.roadmap-card{max-width:none}.roadmap-heading,.roadmap-controls,.roadmap-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.roadmap-heading{justify-content:space-between}.roadmap-heading h2{margin-bottom:4px}.roadmap-heading p{margin-top:0}.roadmap-controls{padding:12px 0}.roadmap-controls label:not(.roadmap-check){display:flex;align-items:center;gap:7px}.roadmap-check{display:flex;align-items:center;gap:7px}.roadmap-legend{margin:10px 0;font-size:12px}.roadmap-legend span{padding:4px 8px;border:2px solid #557384;border-radius:999px;background:#fff}.roadmap-legend .completed{background:#e2f3eb;border-color:#26735e}.roadmap-legend .in-progress{background:#fff2c7;border-color:#9a6900}.roadmap-legend .deferred{background:#eef1f3;border-color:#87939a}.roadmap-legend .critical{border-width:4px}.roadmap-legend .ready{border-color:#176b60;border-style:dashed}.roadmap-graph{min-height:360px;max-height:62vh;overflow:auto;border:1px solid #cbd7de;border-radius:12px;background:#f7fafb;overscroll-behavior:contain}.roadmap-graph svg{display:block;min-width:100%}.roadmap-node{cursor:pointer}.roadmap-node:focus rect,.roadmap-node:hover rect{filter:drop-shadow(0 3px 4px #17334255);stroke:#0d6b5d;stroke-width:4}.roadmap-detail{margin-top:12px;padding:12px 14px;border-left:4px solid #176b60;background:#eff8f5}.roadmap-detail h3{margin:0 0 6px}.roadmap-detail dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:0}.roadmap-detail dt{font-weight:700}.roadmap-detail dd{margin:0;overflow-wrap:anywhere}
 .visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 #dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(230px,1fr));gap:16px;min-height:min(640px,calc(100vh - 150px))}
 #project-cards{display:contents}.dashboard-tile,.project-card{min-width:0;min-height:0;border:1px solid #dce5eb;border-radius:16px;padding:20px;background:white;color:#162638;box-shadow:0 5px 20px #18364808;text-align:left;overflow:auto}
@@ -3495,6 +3510,52 @@ function renderModelSelection(value){
 async function loadBackendCatalog(){try{renderBackendCatalog(await projectRequest('/v1/backend-catalog/status',{}));}catch(error){document.querySelector('#settings-backend-status').textContent=error.message;}}
 async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
 document.querySelector('#settings-model-detail button').addEventListener('click',()=>document.querySelector('#settings-model-detail').close());
+const roadmapSvg='http://www.w3.org/2000/svg';let roadmapProjection=null;
+const roadmapStatusLabels={planned:'plánováno','in progress':'probíhá',completed:'dokončeno',blocked:'blokováno',deferred:'odloženo'};
+function roadmapElement(name,attributes={}){const item=document.createElementNS(roadmapSvg,name);for(const [key,value] of Object.entries(attributes))item.setAttribute(key,String(value));return item;}
+function showRoadmapDetail(item){
+ const detail=document.querySelector('#roadmap-detail');detail.replaceChildren();
+ const title=document.createElement('h3');title.textContent=`${item.id} · ${item.title}`;detail.append(title);
+ const list=document.createElement('dl');
+ for(const [name,value] of [['Stav',roadmapStatusLabels[item.status]||item.status],['Milník',item.milestone],['Závisí na',item.depends_on.join(', ')||'bez závislostí'],['Zdroj',item.source],['Vrstva',String(item.depth)],['Kritická cesta',item.critical?'ano':'ne'],['Souběžně připraveno',item.parallel_ready?'ano':'ne']]){
+  const term=document.createElement('dt'),description=document.createElement('dd');term.textContent=name;description.textContent=value;list.append(term,description);
+ }
+ detail.append(list);
+}
+function renderRoadmap(){
+ if(!roadmapProjection)return;
+ const laneFilter=document.querySelector('#roadmap-lane-filter').value,statusFilter=document.querySelector('#roadmap-status-filter').value,readyOnly=document.querySelector('#roadmap-ready-filter').checked;
+ const nodes=roadmapProjection.nodes.filter(item=>(!laneFilter||item.milestone===laneFilter)&&(!statusFilter||item.status===statusFilter)&&(!readyOnly||item.parallel_ready));
+ const visible=new Set(nodes.map(item=>item.id)),lanes=roadmapProjection.lanes.filter(lane=>nodes.some(item=>item.milestone===lane));
+ const graph=document.querySelector('#roadmap-graph');graph.replaceChildren();
+ if(!nodes.length){const empty=document.createElement('p');empty.textContent='Zvolenému filtru neodpovídá žádná dávka.';graph.append(empty);return;}
+ const maxDepth=Math.max(...nodes.map(item=>item.depth)),positions=new Map(),laneTop=new Map();let y=24;
+ for(const lane of lanes){laneTop.set(lane,y);const counts=new Map();for(const item of nodes.filter(node=>node.milestone===lane)){const slot=counts.get(item.depth)||0;counts.set(item.depth,slot+1);positions.set(item.id,{x:170+item.depth*270,y:y+42+slot*82});}y+=Math.max(116,66+Math.max(1,...counts.values())*82);}
+ const width=240+(maxDepth+1)*270,height=y+20,svg=roadmapElement('svg',{viewBox:`0 0 ${width} ${height}`,width,height,role:'img','aria-labelledby':'roadmap-svg-title roadmap-svg-description'});
+ const svgTitle=roadmapElement('title',{id:'roadmap-svg-title'});svgTitle.textContent='Roadmapa a závislosti feature dávek';
+ const description=roadmapElement('desc',{id:'roadmap-svg-description'});description.textContent=`${nodes.length} dávek v ${lanes.length} pruzích. Plná revize ${roadmapProjection.revision}.`;svg.append(svgTitle,description);
+ for(const [index,lane] of lanes.entries()){
+  const top=laneTop.get(lane),bottom=index+1<lanes.length?laneTop.get(lanes[index+1])-8:height-18;
+  svg.append(roadmapElement('rect',{x:8,y:top,width:width-16,height:bottom-top,rx:10,fill:'#f0f5f7'}));
+  const label=roadmapElement('text',{x:20,y:top+25,fill:'#23465b','font-size':14,'font-weight':700});label.textContent=lane;svg.append(label);
+ }
+ for(const item of nodes){const target=positions.get(item.id);for(const parent of item.depends_on){if(!visible.has(parent))continue;const source=positions.get(parent);svg.append(roadmapElement('path',{d:`M ${source.x+218} ${source.y+29} C ${source.x+245} ${source.y+29}, ${target.x-27} ${target.y+29}, ${target.x} ${target.y+29}`,fill:'none',stroke:'#91a5b1','stroke-width':2}));}}
+ const fills={completed:'#e2f3eb','in progress':'#fff2c7',deferred:'#eef1f3',blocked:'#f8dddd',planned:'#fff'};
+ for(const item of nodes){const point=positions.get(item.id),group=roadmapElement('g',{class:'roadmap-node',tabindex:0,role:'button','aria-label':`${item.id}, ${item.title}, ${roadmapStatusLabels[item.status]||item.status}`});
+  const box=roadmapElement('rect',{x:point.x,y:point.y,width:218,height:58,rx:9,fill:fills[item.status]||'#fff',stroke:item.parallel_ready?'#176b60':'#557384','stroke-width':item.critical?4:2});if(item.parallel_ready)box.setAttribute('stroke-dasharray','7 3');group.append(box);
+  const id=roadmapElement('text',{x:point.x+10,y:point.y+22,fill:'#152b38','font-size':12,'font-weight':700});id.textContent=item.id;group.append(id);
+  const subtitle=roadmapElement('text',{x:point.x+10,y:point.y+43,fill:'#4e6674','font-size':11});subtitle.textContent=(item.title.length>31?item.title.slice(0,30)+'…':item.title);group.append(subtitle);
+  const select=()=>showRoadmapDetail(item);group.addEventListener('click',select);group.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}});svg.append(group);
+ }
+ graph.append(svg);document.querySelector('#roadmap-status').textContent=`${nodes.length}/${roadmapProjection.nodes.length} dávek · ${roadmapProjection.parallel_ready.length} souběžně připravených · revize ${roadmapProjection.revision.slice(0,12)}`;
+}
+async function loadRoadmap(){
+ const status=document.querySelector('#roadmap-status');status.textContent='Načítám a validuji roadmapu…';document.querySelector('#roadmap-export').disabled=true;
+ try{roadmapProjection=await projectRequest('/v1/roadmap/graph',{format:'json'});const select=document.querySelector('#roadmap-lane-filter'),selected=select.value;select.replaceChildren();const all=document.createElement('option');all.value='';all.textContent='Všechny';select.append(all);for(const lane of roadmapProjection.lanes){const option=document.createElement('option');option.value=lane;option.textContent=lane;select.append(option);}select.value=roadmapProjection.lanes.includes(selected)?selected:'';renderRoadmap();document.querySelector('#roadmap-export').disabled=false;}
+ catch(error){roadmapProjection=null;document.querySelector('#roadmap-graph').replaceChildren();status.textContent=error.message;}
+}
+for(const control of document.querySelectorAll('#roadmap-lane-filter,#roadmap-status-filter,#roadmap-ready-filter'))control.addEventListener('change',renderRoadmap);
+document.querySelector('#roadmap-export').addEventListener('click',async event=>{if(!roadmapProjection)return;event.currentTarget.disabled=true;try{const result=await projectRequest('/v1/roadmap/graph',{format:'svg',revision:roadmapProjection.revision});const blob=new Blob([result.svg],{type:'image/svg+xml'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`roadmap-${result.revision.slice(0,12)}.svg`;link.click();setTimeout(()=>URL.revokeObjectURL(url),0);}catch(error){document.querySelector('#roadmap-status').textContent=error.message;}finally{event.currentTarget.disabled=false;}});
 function selectSettingsTab(selected){
  for(const tab of settingsTabs){
   const active=tab===selected;tab.setAttribute('aria-selected',String(active));tab.tabIndex=active?0:-1;
@@ -3506,6 +3567,7 @@ function selectSettingsTab(selected){
  if(selected.id==='settings-profile-tab')loadUserProfile();
  if(selected.id==='settings-backend-tab')loadBackendCatalog();
  if(selected.id==='settings-models-tab')loadModelSelection();
+ if(selected.id==='settings-roadmap-tab')loadRoadmap();
 }
 for(const [index,tab] of settingsTabs.entries()){
  tab.addEventListener('click',()=>selectSettingsTab(tab));
@@ -6777,6 +6839,7 @@ class DesktopHandler(Handler):
         '/v1/backend-catalog/status', '/v1/backend-catalog/reset',
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
+        '/v1/roadmap/graph',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -6853,6 +6916,21 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/roadmap/graph' and isinstance(request, dict):
+            try:
+                service = getattr(self.server, 'roadmap_graph', None) or RoadmapGraph()
+                projection = service.project()
+                if request == {'format': 'json'}:
+                    return self.reply(200, projection)
+                if (set(request) == {'format', 'revision'} and request['format'] == 'svg'
+                        and isinstance(request['revision'], str)):
+                    if request['revision'] != projection['revision']:
+                        return self.reply(409, {'error': 'Roadmapa se od načtení změnila. Obnovte graf před exportem.'})
+                    return self.reply(200, {'revision': projection['revision'],
+                                            'svg': service.svg(projection)})
+                return self.send_error(400)
+            except (ValueError, OSError, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/backend-catalog/reset':
             try: return self.reply(200, self.reset_backend(request))
             except (ValueError, OSError, sqlite3.Error) as exc:

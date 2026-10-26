@@ -8,8 +8,9 @@ SPDX-License-Identifier: MPL-2.0
 
 Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
-`UX-BACKEND-MODEL-02` je PoC validated na feature větvi a čeká na doručení
-vlastního PR. Gate M3 jako celek zůstává otevřený.
+`UX-BACKEND-MODEL-02` byl doručen PR #98. `DEV-ROADMAP-GRAPH-01` je PoC
+validated na feature větvi a čeká na vlastní PR. Gate M3 jako celek zůstává
+otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
@@ -764,7 +765,12 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 # 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
 
-**Stav: designed / plánováno, neimplementováno.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+**Stav: read-only graf roadmapy PoC validated; DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+
+- [x] Generovat read-only DAG feature dávek z autoritativních Markdown stavů a
+  explicitní anotace hran; zobrazit milestone swimlanes, kritickou cestu,
+  souběžně připravené dávky a revizně připnutý SVG export —
+  `DEV-ROADMAP-GRAPH-01`, PoC validated, evidence ve WORK_LOG a ADR 0054.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
@@ -1131,9 +1137,9 @@ Gate M3 proto není vydáván za celý uzavřený.
 - [x] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01`
   doručila PR #96 a #97 katalog, nastavení, resource projekce, preference,
   obousměrný composer a opravu načítání historie. Navazující dávka
-  `UX-BACKEND-MODEL-02` je PoC validated na feature větvi: doplnila serverový
+  `UX-BACKEND-MODEL-02` byla doručena PR #98: doplnila serverový
   pinning/revalidaci, per-run AtlasCloud modely, agregaci upstream aliasů a
-  fyzickou akceptaci Ollamy i AtlasCloudu; její PR zatím nebyl vytvořen.
+  fyzickou akceptaci Ollamy i AtlasCloudu.
   Celek odděluje backendové připojení od modelové nabídky pro
   konkrétní run. Backend-first i model-first volba se obousměrně filtrují podle
   dostupných providerových nabídek a požadovaných capabilities; backendový

@@ -313,6 +313,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [Compliance evidence](docs/legal/COMPLIANCE.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [IP, defensive publication a crowdfunding roadmapa](<docs/IP/IP, Defensive Publication & Crowdfunding Roadmap.md>)
+- [Read-only vizualizace roadmapy](docs/roadmap-visualization.md)
 - [Patent Risk Register](docs/IP/PATENT_RISK_REGISTER.md)
 - [Defensive Disclosures](docs/IP/DEFENSIVE_DISCLOSURES.md)
 - [První rozhodnutí a stav M0](docs/adr/0001-m0-baseline.md)

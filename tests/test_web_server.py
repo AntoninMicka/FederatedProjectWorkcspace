@@ -72,6 +72,26 @@ class WebTests(unittest.TestCase):
         conn.close()
         return code, data, response_headers
 
+    def test_roadmap_graph_projection_and_revision_pinned_svg_export(self):
+        code, data, _ = self.request(path='/v1/roadmap/graph',
+                                     body=json.dumps({'format': 'json'}))
+        self.assertEqual(200, code)
+        projection = json.loads(data)
+        self.assertEqual('fpw-roadmap-graph-v1', projection['schema'])
+        self.assertIn('DEV-ROADMAP-GRAPH-01',
+                      {item['id'] for item in projection['nodes']})
+        code, data, _ = self.request(path='/v1/roadmap/graph', body=json.dumps({
+            'format': 'svg', 'revision': projection['revision']}))
+        self.assertEqual(200, code)
+        exported = json.loads(data)
+        self.assertEqual(projection['revision'], exported['revision'])
+        self.assertIn('<svg ', exported['svg'])
+        self.assertIn(projection['revision'], exported['svg'])
+        code, data, _ = self.request(path='/v1/roadmap/graph', body=json.dumps({
+            'format': 'svg', 'revision': '0' * 64}))
+        self.assertEqual(409, code)
+        self.assertIn('změnila', json.loads(data)['error'])
+
     def create_project(self, title, operation_id=None, headers=None):
         operation_id = operation_id or str(uuid4())
         code, data, _ = self.request(path='/v1/projects/create/preview', headers=headers,
@@ -814,6 +834,53 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
         self.assertEqual({item['title'] for item in opened['artifacts']},
                          {'Sdílený dokument', 'Hlavní seznam úkolů'})
         self.assertEqual(opened['main_todo']['items'][0]['title'], 'Ověřit editor')
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_browser_renders_and_filters_roadmap_graph(self):
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();view.resize(1200,800)
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+phase=0;ticks=0;key=os.environ['WORKSPACE_SMOKE_KEY']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0:
+  phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1:
+  phase=2;run("document.querySelector('[data-settings-tab=\"settings-roadmap-tab\"]').click();")
+ elif phase==2:
+  phase=3;run("document.querySelector('.roadmap-node').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));")
+ elif phase==3:
+  phase=4;run("const c=document.querySelector('#roadmap-ready-filter');c.checked=true;c.dispatchEvent(new Event('change',{bubbles:true}));")
+ elif phase==4: finish('roadmap smoke: graph, keyboard detail and ready filter OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>350: finish('roadmap smoke timeout at phase '+str(phase));return
+ checks={
+ 0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
+ 1:"document.body.classList.contains('authenticated')?'ready':'waiting'",
+ 2:"(()=>{if(document.querySelector('#settings-view').hidden)return'waiting';const n=document.querySelectorAll('.roadmap-node').length;if(n<40)return document.querySelector('#roadmap-status').textContent.includes('revize')?'FAIL: too few nodes '+n:'waiting';if(document.querySelector('#roadmap-export').disabled)return'FAIL: export disabled';return'ready'})()",
+ 3:"document.querySelector('#roadmap-detail').textContent.includes('Zdroj')?'ready':'waiting'",
+ 4:"(()=>{const n=document.querySelectorAll('.roadmap-node').length;return n>0&&n<=25?'ready':'FAIL: ready filter count '+n})()"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(
+            os.environ, WORKSPACE_SMOKE_KEY=self.token,
+            WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
+            capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('roadmap smoke: graph, keyboard detail and ready filter OK', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_login_catalog_and_logout(self):

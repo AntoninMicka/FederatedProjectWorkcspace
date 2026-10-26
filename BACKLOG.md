@@ -128,16 +128,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-- [ ] [planned] **DEV-ROADMAP-GRAPH-01 — generovaná vizualizace roadmapy a
-  závislostí (cílová úroveň: PoC validated).** Ze stabilních ID, stavů a
-  explicitních závislostí v autoritativní roadmapě/TODO/BACKLOG/WORK_LOG
-  generovat jeden čitelný DAG s milestone swimlanes, kritickou cestou a
-  zvýrazněním souběžně proveditelných dávek; graf nesmí být druhý ručně
-  udržovaný plán. Nejdřív uzavřít strojově čitelnou anotaci hran a validaci
-  chybějících ID/cyklů, potom dodat interaktivní webový pohled a statický
-  export. Návaznost: formát může později reuseovat `DEV-01`, ale první
-  read-only projekce nesmí měnit stav úkolů ani vytvářet nové závislosti.
-
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.

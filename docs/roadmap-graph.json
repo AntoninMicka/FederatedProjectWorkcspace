@@ -1,0 +1,79 @@
+{
+  "schema": "fpw-roadmap-graph-v1",
+  "nodes": [
+    {"id": "F-M3-MODEL-CATALOG-01", "milestone": "M3", "depends_on": []},
+    {"id": "F-M3-ATLASCLOUD-01", "milestone": "M3", "depends_on": ["F-M3-MODEL-CATALOG-01"]},
+    {"id": "UX-BACKEND-MODEL-01", "milestone": "M3", "depends_on": ["F-M3-MODEL-CATALOG-01", "F-M3-ATLASCLOUD-01"]},
+    {"id": "UX-BACKEND-MODEL-02", "milestone": "M3", "depends_on": ["UX-BACKEND-MODEL-01"]},
+
+    {"id": "V-01", "milestone": "HARDENING", "depends_on": []},
+    {"id": "V-06", "milestone": "HARDENING", "depends_on": []},
+    {"id": "V-07", "milestone": "HARDENING", "depends_on": []},
+    {"id": "V-08-ID", "milestone": "HARDENING", "depends_on": []},
+    {"id": "V-09", "milestone": "HARDENING", "depends_on": ["V-06"]},
+    {"id": "V-10", "milestone": "HARDENING", "depends_on": []},
+    {"id": "R-01", "milestone": "HARDENING", "depends_on": []},
+
+    {"id": "DEV-ROADMAP-GRAPH-01", "milestone": "DEV", "depends_on": []},
+    {"id": "DEV-01", "milestone": "DEV", "depends_on": []},
+    {"id": "DEV-02", "milestone": "DEV", "depends_on": ["DEV-01"]},
+    {"id": "DEV-03", "milestone": "DEV", "depends_on": ["DEV-01", "DEV-02"]},
+    {"id": "DEV-04", "milestone": "DEV", "depends_on": ["DEV-02", "DEV-03"]},
+
+    {"id": "COMP-01", "milestone": "M6-COMPUTE", "depends_on": []},
+    {"id": "COMP-02", "milestone": "M6-COMPUTE", "depends_on": ["COMP-01"]},
+
+    {"id": "ER-00", "milestone": "RELATIONS", "depends_on": []},
+    {"id": "ER-01", "milestone": "RELATIONS", "depends_on": ["ER-00"]},
+    {"id": "ER-02", "milestone": "RELATIONS", "depends_on": ["ER-01"]},
+    {"id": "ER-03", "milestone": "RELATIONS", "depends_on": ["ER-01", "ER-02"]},
+    {"id": "ER-04", "milestone": "RELATIONS", "depends_on": ["ER-02", "ER-03"]},
+    {"id": "ER-05", "milestone": "RELATIONS", "depends_on": ["ER-03"]},
+    {"id": "ER-06", "milestone": "RELATIONS", "depends_on": ["ER-02"]},
+    {"id": "ER-07", "milestone": "RELATIONS", "depends_on": ["ER-03", "F-M5-TRANSFER-01"]},
+    {"id": "ER-08", "milestone": "RELATIONS", "depends_on": ["ER-03"]},
+
+    {"id": "F-M5-TRUST-01", "milestone": "M5", "depends_on": []},
+    {"id": "F-M5-TRANSFER-01", "milestone": "M5", "depends_on": ["F-M5-TRUST-01"]},
+    {"id": "F-M5-CHAT-01", "milestone": "M5", "depends_on": ["F-M5-TRANSFER-01"]},
+    {"id": "F-M5-CHAT-02", "milestone": "M5", "depends_on": ["F-M5-CHAT-01"]},
+    {"id": "F-M5-CHAT-XMPP-01", "milestone": "M5", "depends_on": ["F-M5-CHAT-01"]},
+
+    {"id": "UX-FEDERATION-02-B", "milestone": "M5-IDENTITY", "depends_on": []},
+    {"id": "UX-FEDERATION-02-C", "milestone": "M5-IDENTITY", "depends_on": []},
+    {"id": "UX-FEDERATION-02-D", "milestone": "M5-IDENTITY", "depends_on": ["UX-FEDERATION-02-B", "UX-FEDERATION-02-C"]},
+    {"id": "UX-FEDERATION-02-E", "milestone": "M5-IDENTITY", "depends_on": ["UX-FEDERATION-02-B", "UX-FEDERATION-02-C", "UX-FEDERATION-02-D"]},
+    {"id": "AUTH-CENTRAL-01", "milestone": "M5-IDENTITY", "depends_on": []},
+
+    {"id": "IMP-03", "milestone": "IMPORT", "depends_on": []},
+    {"id": "IMP-04", "milestone": "IMPORT", "depends_on": ["IMP-03"]},
+    {"id": "XREF-01", "milestone": "M6", "depends_on": []},
+
+    {"id": "MON-00", "milestone": "MONITORING", "depends_on": []},
+    {"id": "MON-01", "milestone": "MONITORING", "depends_on": ["MON-00"]},
+    {"id": "MON-02", "milestone": "MONITORING", "depends_on": ["MON-00"]},
+    {"id": "MON-03", "milestone": "MONITORING", "depends_on": ["MON-00", "MON-02"]},
+    {"id": "MON-04", "milestone": "MONITORING", "depends_on": ["MON-01", "MON-02", "MON-03"]},
+    {"id": "MON-05", "milestone": "MONITORING", "depends_on": ["MON-04"]},
+    {"id": "MON-06", "milestone": "MONITORING", "depends_on": ["MON-05"]},
+    {"id": "MON-07", "milestone": "MONITORING", "depends_on": ["MON-04"]},
+
+    {"id": "IP-01", "milestone": "RELEASE", "depends_on": []},
+    {"id": "IP-02", "milestone": "RELEASE", "depends_on": ["IP-01"]},
+    {"id": "IP-03", "milestone": "RELEASE", "depends_on": []},
+
+    {"id": "M1-AH-05", "milestone": "M1-LEGACY", "depends_on": []},
+    {"id": "M1-AH-06", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-05"]},
+    {"id": "M1-AH-07", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-06"]},
+    {"id": "M1-AH-09", "milestone": "M1-LEGACY", "depends_on": []},
+    {"id": "M1-AH-10", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-09"]},
+    {"id": "M1-AH-11", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-10"]},
+    {"id": "M1-AH-12", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-10", "M1-AH-11"]},
+    {"id": "M1-AH-13", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-12"]},
+    {"id": "M1-AH-14", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-13"]},
+    {"id": "M1-AH-15", "milestone": "M1-LEGACY", "depends_on": ["M1-AH-14"]},
+
+    {"id": "UX-FACELIFT-02", "milestone": "UX", "depends_on": []},
+    {"id": "F-M5-EXTERNAL-EXPORT-01", "milestone": "M5", "depends_on": []}
+  ]
+}
