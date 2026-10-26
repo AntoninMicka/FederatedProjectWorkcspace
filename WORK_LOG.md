@@ -8,9 +8,8 @@ SPDX-License-Identifier: MPL-2.0
 ## F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná automatická synchronizace — 2026-10-26
 
 Dávka vznikla na větvi `feature/f-m5-sync-controls-01` z `develop` `8c08be2`
-a dosáhla úrovně **PoC validated**. Implementace je v lokálním commitu
-`a0e7455`; feature akceptace je dokončená, ale commit finální předávací
-evidence, push, PR do `develop` a merge zatím nebyly provedeny.
+a dosáhla úrovně **PoC validated**. Implementace vznikla v commitu `a0e7455`
+a dávka byla doručena PR #102 jako merge commit `64a7dac`.
 
 - [x] [completed] **F-M5-SYNC-CONTROLS-01-A — nastavení a autorizovaný výběr
   scope (implemented).** Revizně vázaný atomický node-local přepínač má
