@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import sys
 import tarfile
 import tempfile
 import threading
@@ -465,6 +466,8 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             self.assertEqual(('ready', False, 'not-verified-by-setup'),
                 (result['status'], result['reused'], result['archive_signature']))
             self.assertEqual('prepare-versioned-computation', result['next']['action'])
+            self.assertEqual([sys.executable, '-m', 'spikes.julia_cli'],
+                             result['next']['command'][:3])
             self.assertIn(str(setup_root / 'binding.json'), result['next']['command'])
             self.assertEqual(0o700, stat.S_IMODE((setup_root / 'state').stat().st_mode))
             self.assertEqual(0o700, stat.S_IMODE((setup_root / 'depot').stat().st_mode))

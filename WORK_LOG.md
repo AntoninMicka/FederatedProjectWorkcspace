@@ -86,6 +86,12 @@ oddělený podpis prošel GPG klíčem s fingerprintem
 `64B779A570972FFF7BFC2B54EAD471E1A1F2C10A`. Runtime zůstal pouze v `/tmp`;
 neproběhla systémová instalace ani změna uzlové konfigurace.
 
+Po doplnění `COMP-02-I` prošel `./run.sh julia-setup` nad stejným oficiálním
+archivem přímo z `~/Downloads`; první běh vytvořil runtime a binding pod
+uživatelským XDG state, druhý vrátil `reused:true`. Navazující fyzický
+`JuliaRuntimeAcceptanceTests` nad tímto instalovaným runtime prošel včetně
+skutečného výpočtu, bubblewrap zákazu sítě a publikace do dočasného projektu.
+
 Git je autoritou definice a vstupů, Julia journal requestu/stavu/receiptů a
 privátní cache jen obnovitelnou projekcí. Pád před durable `dispatching` nic
 nespustil; neurčitý pád po dispatch zůstává `unknown` bez automatického retry.

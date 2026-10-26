@@ -15,5 +15,6 @@ předchozí akceptace je v [WORK_LOG.md](WORK_LOG.md); větev zůstává
   oficiální archiv bez ruční cesty k runtime; recovery a cílené chybové testy
   jsou doplněné.
 - [ ] [in progress] **COMP-02-J — závěrečná regrese a obnovená akceptace
-  (PoC validated).** Zbývá celá unit sada po poslední změně a praktické spuštění
-  příkazu nad skutečným oficiálním archivem.
+  (PoC validated).** Jednokrokový příkaz nad skutečným oficiálním archivem
+  prošel, shodné opakování vrátilo `reused:true` a fyzický izolovaný výpočet s
+  publikací uspěl. Zbývá dokončit celou unit sadu po poslední změně.

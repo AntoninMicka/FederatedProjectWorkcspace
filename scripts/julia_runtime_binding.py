@@ -198,7 +198,7 @@ def _harden_extracted_tree(root):
         os.chmod(path, stat.S_IMODE(info.st_mode) & ~0o022, follow_symlinks=False)
 
 
-def setup_archive(archive, setup_root, bubblewrap='/usr/bin/bwrap'):
+def setup_archive(archive, setup_root, bubblewrap='/usr/bin/bwrap', next_command=None):
     archive, version, platform_name, _ = _archive_profile(archive)
     bwrap = probe_bubblewrap(bubblewrap)
     expected_root = f'julia-{version}'
@@ -241,13 +241,14 @@ def setup_archive(archive, setup_root, bubblewrap='/usr/bin/bwrap'):
         raise
     finally:
         bundle.close()
-    result = setup_runtime(runtime_root, archive, destination, bwrap)
+    result = setup_runtime(runtime_root, archive, destination, bwrap, next_command)
     result['runtime'] = str(runtime_root)
     result['archive'] = str(archive)
     return result
 
 
-def setup_runtime(runtime_root, archive, setup_root, bubblewrap='/usr/bin/bwrap'):
+def setup_runtime(runtime_root, archive, setup_root, bubblewrap='/usr/bin/bwrap',
+                  next_command=None):
     root = Path(runtime_root).resolve(strict=True)
     archive = _regular_file(archive, 'Julia archive')
     version = _runtime_version(root)
@@ -283,7 +284,8 @@ def setup_runtime(runtime_root, archive, setup_root, bubblewrap='/usr/bin/bwrap'
         reused = True
     else:
         write_new_binding(output, binding)
-    next_command = ['federated-workspace-poc-julia', '--project', 'PROJECT_WORKTREE',
+    next_command = list(next_command or ['federated-workspace-poc-julia'])
+    next_command += ['--project', 'PROJECT_WORKTREE',
         '--state', str(state), '--binding', str(output), '--node-id', 'NODE_UUID',
         '--user-id', 'USER_UUID', 'prepare', '--operation-id', 'RUN_UUID',
         '--project-id', 'PROJECT_UUID', '--computation', 'computation.json',

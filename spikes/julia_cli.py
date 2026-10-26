@@ -108,9 +108,17 @@ def run(args):
         state_home = (Path(configured) if configured and Path(configured).is_absolute()
                       else Path.home() / '.local/state')
         setup_root = args.root or state_home / 'federated-workspace/julia' / '1.10.12-linux-aarch64'
+        entrypoint = os.environ.get('FPW_JULIA_ENTRYPOINT', 'module')
+        if entrypoint == 'installed':
+            next_command = ['federated-workspace-poc-julia']
+        elif entrypoint == 'module':
+            next_command = [sys.executable, '-m', 'spikes.julia_cli']
+        else:
+            raise ValueError('Invalid Julia CLI entrypoint environment')
         if args.command == 'setup-archive':
-            return setup_archive(args.archive, setup_root, args.bubblewrap)
-        return setup_runtime(args.runtime, args.archive, setup_root, args.bubblewrap)
+            return setup_archive(args.archive, setup_root, args.bubblewrap, next_command)
+        return setup_runtime(args.runtime, args.archive, setup_root, args.bubblewrap,
+                             next_command)
     executor = _executor(args)
     common = (args.operation_id, args.node_id, args.user_id)
     if args.command == 'prepare':
