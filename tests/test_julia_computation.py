@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import tempfile
 import threading
@@ -13,6 +14,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
+from scripts import julia_runtime_binding
 from scripts.julia_runtime_binding import main as runtime_binding_cli
 from spikes.julia_cli import main as julia_cli
 from spikes.julia_computation import (BubblewrapSandbox, DirectTestSandbox,
@@ -445,6 +447,68 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         wrong = list(arguments); wrong[wrong.index('--archive-sha256') + 1] = '0' * 64
         wrong[wrong.index('--output') + 1] = str(self.base / 'wrong.json')
         self.assertEqual(2, runtime_binding_cli(wrong))
+
+    def test_setup_onboards_supported_runtime_without_project_arguments(self):
+        archive = self.base / 'julia.tar.gz'; archive.write_bytes(b'archive')
+        setup_root = self.base / 'onboarding'
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()):
+                     digest(b'archive')}
+        arguments = ['setup', '--runtime', str(self.runtime), '--archive', str(archive),
+                     '--root', str(setup_root)]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch.object(julia_runtime_binding, 'probe_bubblewrap',
+                             return_value='/usr/bin/bwrap'), \
+                patch('spikes.julia_cli._emit') as emit:
+            self.assertEqual(0, julia_cli(arguments))
+            result = emit.call_args.args[0]
+            self.assertEqual(('ready', False, 'not-verified-by-setup'),
+                (result['status'], result['reused'], result['archive_signature']))
+            self.assertEqual('prepare-versioned-computation', result['next']['action'])
+            self.assertIn(str(setup_root / 'binding.json'), result['next']['command'])
+            self.assertEqual(0o700, stat.S_IMODE((setup_root / 'state').stat().st_mode))
+            self.assertEqual(0o700, stat.S_IMODE((setup_root / 'depot').stat().st_mode))
+            self.assertEqual(0o600, stat.S_IMODE((setup_root / 'binding.json').stat().st_mode))
+            binding = json.loads((setup_root / 'binding.json').read_bytes())
+            self.assertEqual(_distribution_digest(self.runtime),
+                             binding['distribution_sha256'])
+            binding_path = setup_root / 'binding.json'
+            pending = setup_root / '.binding.json.pending'
+            binding_path.rename(pending)
+            self.assertEqual(0, julia_cli(arguments))
+            self.assertFalse(pending.exists())
+            os.link(binding_path, pending)
+            self.assertEqual(0, julia_cli(arguments))
+            self.assertTrue(emit.call_args.args[0]['reused'])
+            self.assertFalse(pending.exists())
+
+    def test_setup_fails_before_writes_for_changed_archive(self):
+        archive = self.base / 'julia.tar.gz'; archive.write_bytes(b'archive')
+        setup_root = self.base / 'onboarding'
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()): '0' * 64}
+        arguments = ['setup', '--runtime', str(self.runtime), '--archive', str(archive),
+                     '--root', str(setup_root)]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch.object(julia_runtime_binding, 'probe_bubblewrap') as probe, \
+                patch('spikes.julia_cli._emit'):
+            self.assertEqual(2, julia_cli(arguments))
+        self.assertFalse(setup_root.exists())
+        probe.assert_not_called()
+
+    def test_setup_never_overwrites_changed_binding(self):
+        archive = self.base / 'julia.tar.gz'; archive.write_bytes(b'archive')
+        setup_root = self.base / 'onboarding'
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()):
+                     digest(b'archive')}
+        arguments = ['setup', '--runtime', str(self.runtime), '--archive', str(archive),
+                     '--root', str(setup_root)]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch.object(julia_runtime_binding, 'probe_bubblewrap',
+                             return_value='/usr/bin/bwrap'), \
+                patch('spikes.julia_cli._emit'):
+            self.assertEqual(0, julia_cli(arguments))
+            binding = setup_root / 'binding.json'; binding.write_text('{}')
+            self.assertEqual(2, julia_cli(arguments))
+            self.assertEqual('{}', binding.read_text())
 
 
 @unittest.skipUnless(os.environ.get('M0_JULIA_RUNTIME_ROOT'),

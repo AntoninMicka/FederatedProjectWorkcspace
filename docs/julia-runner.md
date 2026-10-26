@@ -36,6 +36,36 @@ Archiv a `.asc` stáhněte přímo z odkazů oficiální stránky. Před rozbale
 porovnejte checksum z oficiálního manifestu a ověřte podpis proti fingerprintu
 výše. Samotný import klíče bez porovnání fingerprintu není ověření identity.
 
+### Doporučený onboarding
+
+Pro podporovaný ARM64 profil vytvoří jediný příkaz privátní depot, run state a
+připnutý binding. Nevyžaduje projekt, node ani user UUID:
+
+```sh
+federated-workspace-poc-julia setup \
+  --runtime /opt/julia-1.10.12 \
+  --archive /srv/runtime-sources/julia-1.10.12-linux-aarch64.tar.gz
+```
+
+Při běhu ze zdrojového checkoutu použijte místo instalovaného příkazu
+`python3 -m spikes.julia_cli setup`. Výchozí cíl je
+`$XDG_STATE_HOME/federated-workspace/julia/1.10.12-linux-aarch64`, případně
+`~/.local/state/...`; lze jej změnit argumentem `--root`. Příkaz před zápisem
+ověří podporovanou verzi a platformu, známý oficiální SHA-256 archivu a
+praktickou dostupnost bubblewrap namespaces. Vytvoří pouze owned mode-0700
+adresáře a nový mode-0600 `binding.json`; shodné opakování je idempotentní a
+odlišný existující binding se nikdy nepřepíše.
+
+JSON výsledek obsahuje pole `next.command` s přesným `prepare` příkazem a
+vyplněnými cestami k novému state a bindingu. Zástupné hodnoty projektu a UUID
+se doplní podle registrovaného projektu; definice `computation.json` a její
+artefakty musí být verzované v tomto projektu.
+
+Výsledek záměrně uvádí `archive_signature: not-verified-by-setup`: checksum je
+připnutý v dodané verzi workspace, ale GPG identitu release klíče je stále
+nutné ověřit samostatně podle předchozího odstavce. Úspěšný onboarding také
+neinstaluje balíčky a nevytváří projektovou definici výpočtu.
+
 Připravte privátní node-local depot. Pro projekt bez externích balíčků může být
 prázdný; jinak jej musí samostatná administrativní operace naplnit včetně
 registrů, package trees, artifacts a licenční evidence. Výpočet nikdy nespouští

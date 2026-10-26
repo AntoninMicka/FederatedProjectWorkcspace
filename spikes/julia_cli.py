@@ -12,6 +12,7 @@ from spikes.metadata import MAX_METADATA, ValidationError, parse_json
 from spikes.output_execution import canonical
 from spikes.storage import Git
 from spikes.workspace import Workspace
+from scripts.julia_runtime_binding import setup_runtime
 
 
 def _json(path, maximum=MAX_METADATA):
@@ -23,6 +24,10 @@ def _json(path, maximum=MAX_METADATA):
 
 
 def _executor(args):
+    missing = [name for name in ('project', 'state', 'binding', 'node_id', 'user_id')
+               if getattr(args, name) is None]
+    if missing:
+        raise ValidationError('Missing run arguments: ' + ', '.join(missing))
     return JuliaExecutor(git=Git(args.project.resolve(strict=True)),
                          state_dir=args.state.resolve(strict=True),
                          runtime_binding=_json(args.binding))
@@ -34,15 +39,24 @@ def _emit(value):
 
 def _parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--project', required=True, type=Path,
+    parser.add_argument('--project', type=Path,
                         help='registered project Git worktree')
-    parser.add_argument('--state', required=True, type=Path,
+    parser.add_argument('--state', type=Path,
                         help='private mode-0700 Julia state directory')
-    parser.add_argument('--binding', required=True, type=Path,
+    parser.add_argument('--binding', type=Path,
                         help='pinned fpw-julia-runtime-v1 JSON binding')
-    parser.add_argument('--node-id', required=True)
-    parser.add_argument('--user-id', required=True)
+    parser.add_argument('--node-id')
+    parser.add_argument('--user-id')
     commands = parser.add_subparsers(dest='command', required=True)
+
+    setup = commands.add_parser('setup', help='verify and bind a supported Julia runtime')
+    setup.add_argument('--runtime', required=True, type=Path,
+                       help='root of an extracted official Julia distribution')
+    setup.add_argument('--archive', required=True, type=Path,
+                       help='original official Julia archive')
+    setup.add_argument('--root', type=Path,
+                       help='private setup root; defaults below XDG_STATE_HOME')
+    setup.add_argument('--bubblewrap', default=Path('/usr/bin/bwrap'), type=Path)
 
     prepare = commands.add_parser('prepare', help='validate and durably preview a run')
     prepare.add_argument('--operation-id', required=True)
@@ -81,6 +95,10 @@ def _parser():
 
 
 def run(args):
+    if args.command == 'setup':
+        state_home = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
+        setup_root = args.root or state_home / 'federated-workspace/julia' / '1.10.12-linux-aarch64'
+        return setup_runtime(args.runtime, args.archive, setup_root, args.bubblewrap)
     executor = _executor(args)
     common = (args.operation_id, args.node_id, args.user_id)
     if args.command == 'prepare':
@@ -123,7 +141,7 @@ def main(argv=None):
         args = _parser().parse_args(argv)
         _emit(run(args))
         return 0
-    except (OSError, ValidationError, RuntimeError, TimeoutError,
+    except (OSError, ValueError, RuntimeError, TimeoutError,
             subprocess.SubprocessError,
             InterruptedError) as exc:
         print(f'Julia computation failed: {exc}', file=sys.stderr)
