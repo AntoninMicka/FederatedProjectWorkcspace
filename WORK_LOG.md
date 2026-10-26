@@ -5,6 +5,50 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-CHAT-HISTORY-01 — projektové chaty v obousměrné obsahové synchronizaci — 2026-10-26
+
+Dávka vznikla na větvi `feature/f-m5-chat-history-01` z `develop` `3c0b675`,
+dosáhla úrovně **PoC validated** a byla doručena PR #101 jako merge commit
+`8c08be2`.
+
+- [x] [completed] **F-M5-CHAT-HISTORY-01-A — integrovaný content-sync v2
+  (implemented).** Git i projektové chaty používají jednu podepsanou obousměrnou
+  operaci a její durable journal.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-B — obousměrný RW import
+  (implemented).** Přenositelná projektová vlákna vstupují do běžného
+  `ChatThreads` a lze v nich na obou uzlech pokračovat.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-C — fork konfliktu a recovery
+  (implemented).** Divergence zachová obě odpovědi jako původní vlákno a
+  deterministický RW fork; retry dokončí přerušenou výměnu ze stejných bajtů.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-D — automatické regrese
+  (PoC validated).** Testy pokryly migraci, oba směry, privacy, crash retry,
+  pinned HTTPS, balení a skutečný WebEngine průchod.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
+  chatu (PoC validated).** Správa ukazuje počty sdílených a přijatých chatů;
+  dokončení Sync i otevření záložky obnoví aktuální seznam.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-F — automatická autorita enrollmentu
+  (implemented; ad-hoc).** Klient–server používá autentizovaný
+  `account_binding`; P2P zachovává ruční bilaterální mapování.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-G — webová identita
+  synchronizovaného chatu (implemented; ad-hoc).** Request-local identita se
+  zachovává při zápisu a neuniká mezi souběžnými požadavky.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
+  (PoC validated).** Projektová vlákna jsou společná podle projektového RBAC
+  napříč fyzickými storage ownery; nezařazená vlákna zůstávají soukromá.
+
+### Ověření, recovery a omezení
+
+Před pozdními opravami webové identity prošla úplná sada **896 testy bez
+selhání, 33 přeskočeno**. Následné cílené regrese pokryly enrollment,
+reader/editor RBAC, druhého serverového vlastníka, obousměrné RW, fork,
+idempotentní mazání a obnovu. Uživatel na skutečném desktop–server nasazení
+potvrdil stejnou viditelnou projektovou historii na obou stranách.
+
+Git a SQLite nejsou jedna distribuovaná transakce: durable inbound request je
+recovery autorita a opakování provede roll-forward. `local-only`, rozpracované
+a nezařazené chaty, provider credentials a run journal se nepřenášejí.
+Synchronizované mazání a automatický obsahový merge zůstávají mimo rozsah.
+
 ## PLAN-TASK-GRAPH-01 — obecný plán projektových úkolů a podgrafů — 2026-10-26
 
 Dávka vznikla na větvi `feature/plan-task-graph-01` z `develop` `64e2045` po

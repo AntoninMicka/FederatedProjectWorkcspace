@@ -3,104 +3,65 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO — F-M5-CHAT-HISTORY-01
+# TODO — F-M5-SYNC-CONTROLS-01
 
-Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchronizaci**
+Aktivní feature dávka: **Hromadná ruční a volitelná automatická synchronizace**
 
-- Původ: uživatelská priorita po PR #100; fyzická akceptace byla 2026-10-26
-  znovu otevřena, protože po Sync nebyl přenos ani jeho výsledek viditelný.
+- Původ: uživatelský požadavek po fyzické akceptaci PR #101.
 - Milník: M5 / federace.
 - Cílová úroveň: **PoC validated**.
-- Větev: `feature/f-m5-chat-history-01` z `develop` `3c0b675`.
+- Větev: `feature/f-m5-sync-controls-01` z `develop` `8c08be2`.
 - Cíl PR: `develop`.
-- Rozsah: Git a projektová RW chatová vlákna v jedné obousměrné content-sync
-  operaci, viditelný počet přenesených chatů a obnovení seznamu po Sync.
-- Mimo rozsah: nezařazená vlákna, synchronizované mazání, runtime journal a
-  automatický obsahový merge divergentních odpovědí.
+- Rozsah: jedno ruční spuštění všech oprávněných interních scope,
+  node-local přepínač existujícího background scheduleru, souhrn výsledku,
+  desktopové i webové UI a recovery.
+- Mimo rozsah: automatický merge konfliktů, externí export, samostatný
+  tray/daemon po ukončení desktopové aplikace a globální transakce napříč
+  projekty.
+- Reuse: adaptovat `ContentSyncControl`, `ContentSyncScheduler`,
+  `ManualSyncTasks`, existující project×peer policy a node-local SQLite journal;
+  nezavádět druhý scheduler ani druhou synchronizační autoritu.
+
+## Crash hranice a recovery
+
+- Nastavení automatiky je node-local mimo projektový Git a publikuje se
+  transakčně v existujícím SQLite journalu. Pád před commitem zachová starou
+  hodnotu, po commitu je autoritou nová revize.
+- Hromadná akce není globální transakce. Každá dvojice projekt×peer použije
+  stávající lock, durable journal, cancel a roll-forward; chyba jedné dvojice
+  nevrací zpět již dokončené nebo rozpracované ostatní projekty.
+- Retry smí oznámit `již běží` a nesmí vytvořit druhý worker pro stejný
+  scope. Revokace, `external`, chybějící endpoint a nepovolená same-company
+  matice zůstávají fail-closed.
 
 ## Úkoly dávky
 
-- [x] [completed] **F-M5-CHAT-HISTORY-01-A — integrovaný content-sync v2
-  (implemented).** Git i chat používají jednu podepsanou operaci a journal.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-B — obousměrný RW import
-  (implemented).** Přesné mapování překládá vlastníka na místní účet.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-C — fork konfliktu a recovery
-  (implemented).** Divergence konverguje na původní vlákno a RW fork.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-D — automatické regrese
-  (PoC validated).** Prošly migrace, oba směry, privacy, crash retry, pinned
-  HTTPS, balení a původní WebEngine průchod.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
-  chatu (PoC validated).** Stav rozlišuje počet
-  sdílených/přijatých chatů, nulové aktivní mapování a nulový přenositelný
-  obsah. Dokončení Sync i kliknutí na Chaty obnoví otevřený seznam vláken.
-  Reálná desktop–server reakceptace po opravě potvrdila viditelná projektová
-  vlákna na obou stranách; nezařazená vlákna zůstala oddělená.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-F — automatická autorita enrollmentu
-  (implemented; ad-hoc).** Klient–server sync deterministicky používá
-  `account_binding` vytvořený přihlášením; nevyžaduje druhé ruční mapování.
-  Aktivita serverového účtu a jeho projektové oprávnění se ověřují při každém
-  exportu/importu. P2P kontrakt zůstává ručně bilaterální.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-G — webová identita synchronizovaného
-  chatu (implemented; ad-hoc).** Webové chatové API čte i mění historii pod
-  autentizovaným serverovým účtem; request-local vazba neuniká mezi souběžnými
-  požadavky a desktop dál používá node-local autora.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
-  (PoC validated).** UI odděluje projektová vlákna od
-  nezařazených vláken dostupných pouze vlastníkovi na daném uzlu. Projektová
-  vlákna se na webu zobrazují všem účtům s přístupem k projektu; reader je čte a
-  editor/project-admin je mohou měnit bez ohledu na transportní enrollment účet.
-  Uživatel po nasazení potvrdil stejnou viditelnou projektovou historii na obou
-  uzlech.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-A — nastavení a autorizovaný
+  výběr scope (implemented).** Zavést revizně vázaný atomický přepínač s
+  výchozí hodnotou zapnuto a jediný sdílený výpočet oprávněných scope pro
+  automatiku i hromadnou ruční akci.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-B — hromadná ruční akce
+  (implemented).** Spustit každý oprávněný scope přes existující worker a
+  vrátit souhrn spuštěno / již běží / přeskočeno / chyba.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-C — desktop/web UI (implemented).** Ve
+  Správě federace doplnit tlačítko „Synchronizovat vše“, přepínač automatiky,
+  viditelný stav a bezpečné opakování.
+- [ ] [in progress] **F-M5-SYNC-CONTROLS-01-D — regrese, dokumentace a fyzická
+  akceptace (PoC validated).** Ověřit default/migraci, CAS konflikt, restart,
+  disabled scheduler, filtrování scope, částečný neúspěch, dvojklik, desktop i
+  HTTPS UI a reálný uzel.
 
 ## Aktuální ověření
 
-- Cílených 16 integračních testů prošlo, jeden podmíněný WebEngine test byl
-  přeskočen; tentýž skutečný Qt/WebEngine test samostatně prošel a ověřil obě
-  cesty obnovení seznamu.
-- Samostatný end-to-end test klient–server provedl skutečný TLS enrollment,
-  první projektový sync a následný přenos RW chatu pouze přes automatický
-  `account_binding`; ruční mapping v testu nevznikl.
-- Po opravě webové identity prošlo šest cílených regresí: HTTPS výpis a změna
-  historie autentizovaného účtu, oddělení node-local historie, enrollment sync,
-  stavové UI a obě původní desktopové cesty.
-- Fyzická reakceptace znovu selhala kvůli rozdílným viditelným seznamům.
-  Read-only kontrola lokálních metadat projektu `pokus` ukázala 33 projektových
-  vláken a poslední receipt 33 odeslaných / 33 přijatých se všemi 33 shodnými
-  ID i digesty; vedle nich UI zobrazovalo osm lokálních nezařazených vláken.
-  Nový regresní test navíc ověřuje konvergenci dvou původně disjunktních
-  projektových sad po jedné výměně.
-- Po opravě rozlišení scope prošly čtyři cílené regrese: HTTPS vlastnictví a
-  zařazení vlákna, webová oprávnění, textové rozlišení UI a konvergence sad.
-- Registry evidence ukázala historii fyzicky uloženou pod dvěma serverovými
-  účty. To není hranice projektové viditelnosti: export nyní sbírá všechna
-  vlákna projektu napříč storage ownery a webový seznam je filtruje projektovým
-  RBAC. Transportní identity se ve správě nezveřejňují jako UI vlastníci chatu.
-- Po opravě projektového RBAC prošly cílené regrese: reader/editor
-  oprávnění, idempotentní smazání, automatický enrollment, obousměrné RW,
-  fork konfliktu, disjunktní množiny s druhým serverovým vlastníkem a stav bez
-  úniku transportní identity. Úplná sada neběžela.
-- Úplná sada před opravou webové identity prošla: **896 testů bez selhání,
-  33 přeskočeno, za 219,253 s**. Následná oprava G je kvůli délce lokálního
-  běhu ověřována cíleným víceuživatelským HTTPS testem; celá sada se zopakuje
-  až před finálním PR nebo v CI. Uživatelská reakceptace na reálných uzlech
-  2026-10-26 potvrdila zobrazení projektových vláken na obou stranách. Zbývá
-  finální kontrola a aktuální úplná sada před předáním PR. Bez aktivního
-  bilaterálního mapování se chat záměrně nepřenese a UI to nyní výslovně oznámí
-  místo neurčitého „Obsah aktuální“.
-
-## K předání do backlogu
-
-- [ ] [planned] **F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná
-  automatická synchronizace (cílová úroveň: PoC validated).** Původ: požadavek
-  uživatele po fyzické akceptaci `F-M5-CHAT-HISTORY-01`. Ve Správě federace
-  doplnit tlačítko pro ruční spuštění všech aktuálně oprávněných interních
-  projektů a node-local přepínač automatické synchronizace na pozadí. Výchozí
-  stav zachová dnešní chování scheduleru: automatika zapnutá; `external`,
-  revoked, nepovolené a konfliktně blokované scope se nesmí obejít. Hromadná
-  akce není globální transakce: každá dvojice projekt×peer použije stávající
-  journal, lock, cancel a recovery, UI vrátí souhrn spuštěno / již běží /
-  přeskočeno / chyba a dílčí chyba nevrátí zpět dokončené projekty. Uložení
-  přepínače musí být atomické mimo projektový Git; pád před publikací zachová
-  starou hodnotu a po publikaci scheduler použije novou. Desktop automatika běží
-  jen po dobu běhu uzlu; samostatný tray/daemon po zavření aplikace není součástí
-  této dávky. Závisí na doručení `F-M5-CHAT-HISTORY-01` do `develop`.
+- Cílená federační, desktopová a HTTPS sada prošla: **25 testů úspěšně,
+  1 podmíněný WebEngine test přeskočen**. Pokryla default a migraci bez
+  řádku nastavení, revizní CAS, restart, vypnutý scheduler, sdílený policy
+  výběr, částečný hromadný výsledek, dvojí start, autorizaci endpointů,
+  pinned HTTPS, oba směry, konflikt, cancel a chatovou regresi.
+- Samostatně prošel skutečný Qt/WebEngine smoke a ověřil renderované tlačítko
+  **Synchronizovat vše**, checkbox automatiky i původní RW fork chatu.
+- Změněné Python moduly prošly `py_compile`, generovaný administrační
+  JavaScript konstrukcí `new Function` v Node.js a průběžný diff
+  `git diff --check`.
+- Zbývá fyzická akceptace na reálném desktop–server nasazení a poté finální
+  úplná testovací sada / CI před předáním PR.

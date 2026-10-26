@@ -49,6 +49,13 @@ explicitní Workspace publikace s preview, provenance a zděděnou privacy.
 
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
+Ve Správě federace lze spustit všechny aktuálně oprávněné interní scope
+tlačítkem **Synchronizovat vše** nebo vypnout a znovu zapnout automatický
+scheduler. Nastavení je lokální pro daný uzel a výchozí stav je zapnuto.
+Hromadná akce neobchází project×peer policy ani konflikty a její souhrn
+rozlišuje spuštěné, již běžící, přeskočené a chybné scope. Desktopový
+scheduler běží jen po dobu běhu aplikace; serverový po dobu běhu služby.
+
 ## Projektové chaty v obsahové synchronizaci
 
 Podle [ADR 0056](docs/adr/0056-project-chat-rw-sync.md) přenáší tatáž

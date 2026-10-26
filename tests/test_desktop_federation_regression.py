@@ -20,9 +20,9 @@ class DesktopFederationTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.node=Path(self.temp.name)/'fresh'/'node.json'
 
-    def request(self,server,body):
+    def request(self,server,body,path='/v1/administration'):
         connection=http.client.HTTPConnection(*server.server_address,timeout=10)
-        connection.request('POST','/v1/administration',body=json.dumps(body),headers={
+        connection.request('POST',path,body=json.dumps(body),headers={
             'Content-Type':'application/json','Authorization':'Bearer '+server.token})
         response=connection.getresponse();result=response.status,json.loads(response.read());connection.close()
         return result
@@ -41,6 +41,28 @@ class DesktopFederationTests(unittest.TestCase):
             self.assertEqual(code,200);self.assertEqual(state['peers'][0]['name'],'Peer')
             self.assertEqual(self.request(server,{'action':'list'})[1]['node_id'],node_id)
             self.assertEqual(ProjectCreation(self.node).author_id(),author_id)
+
+    def test_content_sync_bulk_controls_persist_on_desktop(self):
+        with running_api('http',handler=DesktopManagementHandler,
+                         projects=Projects(self.node)) as server:
+            server.administration=Administration(self.node,deployment='desktop')
+            code,state=self.request(server,{'action':'list'})
+            self.assertEqual(code,200)
+            self.assertEqual(state['content_sync_settings'],{
+                'schema_version':1,'revision':0,'automatic_enabled':True})
+            code,result=self.request(server,{
+                'automatic_enabled':False,'expected_revision':0},
+                '/v1/federation/content/settings')
+            self.assertEqual(code,200)
+            self.assertEqual(result['content_sync_settings'],{
+                'schema_version':1,'revision':1,'automatic_enabled':False})
+            code,result=self.request(server,{},'/v1/federation/content/start-all')
+            self.assertEqual(code,200)
+            self.assertEqual({key:result['batch'][key] for key in (
+                'started','already_running','skipped','errors')},{
+                    'started':0,'already_running':0,'skipped':0,'errors':0})
+            self.assertFalse(self.request(server,{'action':'list'})[1]
+                             ['content_sync_settings']['automatic_enabled'])
 
     def test_corrupt_or_lost_previous_identity_is_not_replaced(self):
         with running_api('http',handler=DesktopManagementHandler,projects=Projects(self.node)) as server:
