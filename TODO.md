@@ -29,12 +29,12 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
 - [x] [completed] **F-M5-CHAT-HISTORY-01-D — automatické regrese
   (PoC validated).** Prošly migrace, oba směry, privacy, crash retry, pinned
   HTTPS, balení a původní WebEngine průchod.
-- [ ] [in progress] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
-  chatu (implemented; fyzická reakceptace selhala).** Stav rozlišuje počet
+- [x] [completed] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
+  chatu (PoC validated).** Stav rozlišuje počet
   sdílených/přijatých chatů, nulové aktivní mapování a nulový přenositelný
   obsah. Dokončení Sync i kliknutí na Chaty obnoví otevřený seznam vláken.
-  Reálný seznam směšoval synchronizovaná projektová vlákna s lokálními
-  nezařazenými vlákny, takže výsledek nebyl jednoznačně ověřitelný.
+  Reálná desktop–server reakceptace po opravě potvrdila viditelná projektová
+  vlákna na obou stranách; nezařazená vlákna zůstala oddělená.
 - [x] [completed] **F-M5-CHAT-HISTORY-01-F — automatická autorita enrollmentu
   (implemented; ad-hoc).** Klient–server sync deterministicky používá
   `account_binding` vytvořený přihlášením; nevyžaduje druhé ruční mapování.
@@ -44,12 +44,13 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
   chatu (implemented; ad-hoc).** Webové chatové API čte i mění historii pod
   autentizovaným serverovým účtem; request-local vazba neuniká mezi souběžnými
   požadavky a desktop dál používá node-local autora.
-- [ ] [in progress] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
-  (in progress; fyzická reakceptace selhala).** UI odděluje projektová vlákna od
+- [x] [completed] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
+  (PoC validated).** UI odděluje projektová vlákna od
   nezařazených vláken dostupných pouze vlastníkovi na daném uzlu. Projektová
   vlákna se na webu zobrazují všem účtům s přístupem k projektu; reader je čte a
   editor/project-admin je mohou měnit bez ohledu na transportní enrollment účet.
-  Fyzická reakceptace sjednoceného seznamu po nasazení opravy ještě zbývá.
+  Uživatel po nasazení potvrdil stejnou viditelnou projektovou historii na obou
+  uzlech.
 
 ## Aktuální ověření
 
@@ -81,7 +82,25 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
 - Úplná sada před opravou webové identity prošla: **896 testů bez selhání,
   33 přeskočeno, za 219,253 s**. Následná oprava G je kvůli délce lokálního
   běhu ověřována cíleným víceuživatelským HTTPS testem; celá sada se zopakuje
-  až před finálním PR nebo v CI. Zbývá finální diff a uživatelská reakceptace
-  na reálných uzlech. Bez aktivního
+  až před finálním PR nebo v CI. Uživatelská reakceptace na reálných uzlech
+  2026-10-26 potvrdila zobrazení projektových vláken na obou stranách. Zbývá
+  finální kontrola a aktuální úplná sada před předáním PR. Bez aktivního
   bilaterálního mapování se chat záměrně nepřenese a UI to nyní výslovně oznámí
   místo neurčitého „Obsah aktuální“.
+
+## K předání do backlogu
+
+- [ ] [planned] **F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná
+  automatická synchronizace (cílová úroveň: PoC validated).** Původ: požadavek
+  uživatele po fyzické akceptaci `F-M5-CHAT-HISTORY-01`. Ve Správě federace
+  doplnit tlačítko pro ruční spuštění všech aktuálně oprávněných interních
+  projektů a node-local přepínač automatické synchronizace na pozadí. Výchozí
+  stav zachová dnešní chování scheduleru: automatika zapnutá; `external`,
+  revoked, nepovolené a konfliktně blokované scope se nesmí obejít. Hromadná
+  akce není globální transakce: každá dvojice projekt×peer použije stávající
+  journal, lock, cancel a recovery, UI vrátí souhrn spuštěno / již běží /
+  přeskočeno / chyba a dílčí chyba nevrátí zpět dokončené projekty. Uložení
+  přepínače musí být atomické mimo projektový Git; pád před publikací zachová
+  starou hodnotu a po publikaci scheduler použije novou. Desktop automatika běží
+  jen po dobu běhu uzlu; samostatný tray/daemon po zavření aplikace není součástí
+  této dávky. Závisí na doručení `F-M5-CHAT-HISTORY-01` do `develop`.
