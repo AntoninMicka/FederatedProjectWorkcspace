@@ -38,9 +38,6 @@ class ProbeHandler(WebHandler):
         from spikes.federation_sync import PATH as SYNC_PATH, reply as reply_sync
         if self.path == SYNC_PATH:
             return reply_sync(self)
-        from spikes.chat_history_sync import PATH as CHAT_HISTORY_PATH, reply as reply_chat_history
-        if self.path == CHAT_HISTORY_PATH:
-            return reply_chat_history(self)
         return self.send_error(404)
 
     def do_GET(self):

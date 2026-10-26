@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 from pathlib import Path
+import os
 import ssl
+import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -10,6 +13,7 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
+from spikes.chat_threads import ChatThreads
 from spikes.federation_accounts import MappingSignatures
 from spikes.federation_sync import (
     ContentSyncControl, ContentSyncScheduler, SyncCancelled, SyncReceiver,
@@ -17,6 +21,7 @@ from spikes.federation_sync import (
 )
 from spikes.git_transfer import git_run
 from spikes.project_creation import ProjectCreation
+from spikes.project_chat_sync import chat_root, digest as chat_digest
 from spikes.projects import Projects
 from spikes.storage import Git
 from spikes.network_backend import NetworkBackend, ProbeHandler, trust_ca
@@ -68,13 +73,65 @@ class FederationSyncTests(unittest.TestCase):
 
     def exchange(self, source, target):
         operation = str(uuid4())
-        envelope, payload, _, _ = _prepare(
+        envelope, payload, _, _, _ = _prepare(
             self.services[source], self.node_ids[target], self.project_id,
             operation, [], force_bundle=True)
         response, response_payload = SyncReceiver(
             self.nodes[target], self.services[target]).receive(envelope, payload)
-        _apply(self.nodes[source], response['exchange'], response_payload)
+        _apply(self.nodes[source], response['exchange'], response_payload,
+               service=self.services[source])
         return response
+
+    def map_users(self):
+        # User/project mapping is activated only after both nodes know the project.
+        self.exchange(0, 1)
+        mapped = [self.change(index, action='create-user', name='Chat owner',
+                              node_role='member') for index in range(2)]
+        self.user_ids = [state['users'][-1]['id'] for state in mapped]
+        for index in range(2):
+            self.change(index, action='update-user', user_id=self.user_ids[index],
+                        active=True, node_role='member',
+                        memberships={self.project_id: 'editor'})
+        desktop = self.services
+        def state(index):
+            return desktop[index].request(self.actor, {'action': 'list'})
+        def change(index, **request):
+            return desktop[index].request(
+                self.actor, dict(expected_commit=state(index)['commit_id'], **request))
+        proposed = change(0, action='propose-mapping',
+                          local_user_id=self.user_ids[0],
+                          peer_node_id=self.node_ids[1],
+                          peer_user_id=self.user_ids[1],
+                          project_ids=[self.project_id])
+        mapping_id = proposed['mappings'][0]['spec']['id']
+        confirmed = change(0, action='confirm-mapping', mapping_id=mapping_id)
+        change(1, action='import-mapping', envelope=confirmed['mapping_envelope'])
+        confirmed = change(1, action='confirm-mapping', mapping_id=mapping_id)
+        change(0, action='import-mapping', envelope=confirmed['mapping_envelope'])
+        return mapping_id
+
+    def chat_turn(self, index, thread_id=None, prompt='Question', answer='Answer',
+                  privacy='project'):
+        root = chat_root(self.nodes[index]); root.mkdir(mode=0o700, exist_ok=True)
+        store = ChatThreads(root)
+        if thread_id is None:
+            thread_id = str(uuid4())
+            store.create(thread_id=thread_id, node_id=self.node_ids[index],
+                         user_id=self.user_ids[index],
+                         created_at='2026-10-26T12:00:00Z',
+                         project_id=self.project_id)
+        turn_id, run_id = str(uuid4()), str(uuid4())
+        store.prepare_turn(thread_id=thread_id, node_id=self.node_ids[index],
+                           user_id=self.user_ids[index], turn_id=turn_id,
+                           message_id=str(uuid4()), content=prompt, privacy=privacy,
+                           created_at='2026-10-26T12:00:01Z')
+        store.bind_run(turn_id=turn_id, node_id=self.node_ids[index],
+                       user_id=self.user_ids[index], run_id=run_id)
+        store.complete(turn_id=turn_id, node_id=self.node_ids[index],
+                       user_id=self.user_ids[index], run_id=run_id,
+                       message_id=str(uuid4()), content=answer, privacy=privacy,
+                       created_at='2026-10-26T12:00:02Z')
+        return thread_id
 
     def commit_marker(self, index, name):
         workspace = Projects(self.nodes[index]).workspace(self.project_id)
@@ -98,6 +155,74 @@ class FederationSyncTests(unittest.TestCase):
         self.exchange(0, 1)
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), third)
+
+    def test_project_chat_is_rw_and_continues_in_both_directions(self):
+        self.map_users()
+        thread_id = self.chat_turn(0)
+        self.exchange(0, 1)
+        remote = ChatThreads(chat_root(self.nodes[1])).get(
+            thread_id, self.node_ids[1], self.user_ids[1])
+        self.assertNotIn('read_only', remote)
+        self.assertEqual([item['content'] for item in remote['messages']],
+                         ['Question', 'Answer'])
+        self.chat_turn(1, thread_id, prompt='Follow up', answer='Remote answer')
+        self.exchange(0, 1)
+        local = ChatThreads(chat_root(self.nodes[0])).get(
+            thread_id, self.node_ids[0], self.user_ids[0])
+        self.assertEqual([item['content'] for item in local['messages']],
+                         ['Question', 'Answer', 'Follow up', 'Remote answer'])
+
+    def test_divergent_project_chat_forks_and_converges_without_overwrite(self):
+        self.map_users()
+        thread_id = self.chat_turn(0)
+        self.exchange(0, 1)
+        self.chat_turn(0, thread_id, prompt='Left', answer='Left answer')
+        self.chat_turn(1, thread_id, prompt='Right', answer='Right answer')
+        response = self.exchange(0, 1)
+        self.assertTrue(response['conflict'])
+        snapshots = []
+        for index in range(2):
+            rows = [row for row in ChatThreads(chat_root(self.nodes[index])).list(
+                self.node_ids[index], self.user_ids[index])
+                if row['project_id'] == self.project_id]
+            self.assertEqual(len(rows), 2)
+            self.assertEqual(sum(row['forked_from_thread_id'] == thread_id
+                                 for row in rows), 1)
+            snapshots.append(sorted((row['thread_id'], chat_digest(row))
+                                    for row in rows))
+        self.assertEqual(snapshots[0], snapshots[1])
+        fork_id = next(item[0] for item in snapshots[0] if item[0] != thread_id)
+        self.chat_turn(0, fork_id, prompt='Fork continues', answer='Writable')
+
+    def test_local_only_and_inflight_chats_stay_local_without_blocking_project(self):
+        self.map_users()
+        visible = self.chat_turn(0)
+        hidden = self.chat_turn(0, privacy='local-only')
+        root = chat_root(self.nodes[0]); store = ChatThreads(root)
+        active = str(uuid4())
+        store.create(thread_id=active, node_id=self.node_ids[0],
+                     user_id=self.user_ids[0], created_at='2026-10-26T12:01:00Z',
+                     project_id=self.project_id)
+        store.prepare_turn(thread_id=active, node_id=self.node_ids[0],
+                           user_id=self.user_ids[0], turn_id=str(uuid4()),
+                           message_id=str(uuid4()), content='Pending', privacy='project',
+                           created_at='2026-10-26T12:01:01Z')
+        self.exchange(0, 1)
+        remote = ChatThreads(chat_root(self.nodes[1])).list(
+            self.node_ids[1], self.user_ids[1])
+        self.assertEqual([row['thread_id'] for row in remote], [visible])
+        self.assertNotEqual(hidden, visible)
+
+    def test_changed_user_mapping_rejects_prepared_chat_payload(self):
+        self.map_users(); self.chat_turn(0)
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            str(uuid4()), [], force_bundle=True)
+        self.change(1, action='update-user', user_id=self.user_ids[1],
+                    active=False, node_role='member', memberships={})
+        with self.assertRaises((AccessDenied, ValueError)):
+            SyncReceiver(self.nodes[1], self.services[1]).receive(
+                envelope, payload)
 
     def test_divergence_preserves_both_heads_without_merge(self):
         self.exchange(0, 1)
@@ -173,6 +298,11 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn('/v1/federation/content/cancel',
                       DesktopManagementHandler.post_paths)
         self.assertIn('/v1/federation/content/cancel', WebHandler.post_paths)
+        self.assertNotIn('/v1/federation/chat-history', WebHandler.post_paths)
+        self.assertNotIn('/v1/chat-history/status', WebHandler.post_paths)
+        from spikes.desktop_ui import JS
+        self.assertNotIn('Synchronizované historie', JS)
+        self.assertIn("thread.forked_from_thread_id?' · fork'", JS)
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
         started = threading.Event(); finished = threading.Event()
@@ -225,7 +355,7 @@ class FederationSyncTests(unittest.TestCase):
         self.exchange(0, 1)
         candidate = self.commit_marker(0, 'candidate')
         operation = str(uuid4())
-        envelope, payload, _, _ = _prepare(
+        envelope, payload, _, _, _ = _prepare(
             self.services[0], self.node_ids[1], self.project_id,
             operation, [], force_bundle=True)
 
@@ -243,6 +373,27 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), candidate)
 
+    def test_chat_crash_rolls_forward_from_same_durable_content_exchange(self):
+        self.map_users()
+        thread_id = self.chat_turn(0)
+        operation = str(uuid4())
+        envelope, payload, _, _, _ = _prepare(
+            self.services[0], self.node_ids[1], self.project_id,
+            operation, [], force_bundle=True)
+        receiver = SyncReceiver(self.nodes[1], self.services[1])
+        def crash(stage):
+            if stage == 'chats-applied':
+                raise OSError('simulated chat publication crash')
+        with self.assertRaisesRegex(OSError, 'chat publication crash'):
+            receiver.receive(envelope, payload, crash)
+        response, response_payload = receiver.receive(envelope, payload)
+        repeated, repeated_payload = receiver.receive(envelope, payload)
+        self.assertEqual((repeated, repeated_payload),
+                         (response, response_payload))
+        self.assertEqual(ChatThreads(chat_root(self.nodes[1])).get(
+            thread_id, self.node_ids[1], self.user_ids[1])['messages'][-1]['content'],
+            'Answer')
+
     def test_local_only_history_is_rejected_before_bundle_publication(self):
         workspace = Projects(self.nodes[0]).workspace(self.project_id)
         artifact = str(uuid4())
@@ -255,6 +406,8 @@ class FederationSyncTests(unittest.TestCase):
             _build_bundle(self.nodes[0], self.project_id, {'mode': 'all'})
 
     def test_pinned_https_endpoint_exchanges_native_bundle(self):
+        self.map_users()
+        chat_id = self.chat_turn(0, answer='Sent with project sync')
         server_only = ProjectCreation(self.nodes[1]).create(
             'Server only', self.nodes[1].parent / 'server-only', str(uuid4()))
         tls = NetworkBackend(self.nodes[1]).generate(
@@ -279,6 +432,9 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), Projects(self.nodes[0]).workspace(
                 self.project_id).git.head())
+        self.assertEqual(ChatThreads(chat_root(self.nodes[1])).get(
+            chat_id, self.node_ids[1], self.user_ids[1])['messages'][-1]['content'],
+            'Sent with project sync')
         pulled = synchronize(self.nodes[0], self.node_ids[1], server_only['id'],
                              deployment='web')
         self.assertEqual(pulled['state'], 'idle')
@@ -289,6 +445,40 @@ class FederationSyncTests(unittest.TestCase):
         ContentSyncControl(self.nodes[0], deployment='web').run_automatic()
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), changed_after_restart)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1',
+                         'Requires real Qt/WebEngine')
+    def test_real_webengine_shows_fork_as_normal_writable_chat(self):
+        script = r'''
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+app=QApplication([])
+with running_api('http',handler=DesktopHandler) as server:
+ class Interceptor(QWebEngineUrlRequestInterceptor):
+  def interceptRequest(self,info):
+   policy=request_policy(info.requestUrl().toString(),info.initiator().toString(),bytes(info.requestMethod()).decode(),server.origin)
+   if policy=='block':info.block(True)
+   elif policy=='authenticate':info.setHttpHeader(b'Authorization',('Bearer '+server.token).encode())
+ profile=QWebEngineProfile(app);interceptor=Interceptor(profile);profile.setUrlRequestInterceptor(interceptor);page=QWebEnginePage(profile,app)
+ def received(value):
+  value=json.loads(value)
+  assert value=={'fork':True,'origin':True,'writable':True},value
+  print('project chat fork: WebEngine RW branch verified',flush=True);app.exit(0)
+ def loaded(ok):
+  if not ok:return app.exit(3)
+  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled})""",0,received)
+ page.loadFinished.connect(loaded);page.setUrl(QUrl(server.origin+'/'));QTimer.singleShot(10000,lambda:app.exit(2));raise SystemExit(app.exec())
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+            cwd=Path(__file__).resolve().parents[1], capture_output=True,
+            text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('WebEngine RW branch verified', result.stdout)
 
 
 if __name__ == '__main__':

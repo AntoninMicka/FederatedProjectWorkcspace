@@ -494,11 +494,8 @@ class ChatService:
         rows = [self._with_external_history(row, node_id, user_id)
                 for row in threads.list(node_id, user_id)]
         search = self.search_status()
-        from spikes.chat_history_sync import received
         return {'binding': binding, 'binding_draft': draft,
                 'binding_draft_state': draft_state, 'threads': rows,
-                'synced_histories': received(self.node_path,
-                                             recipient_user_id=user_id),
                 'thread_deletions': recoveries,
                 'preferences': bindings.load_preferences(),
                 'response_language_policy': ResponseLanguagePolicy(root).load(),
@@ -507,10 +504,13 @@ class ChatService:
 
     def _with_external_history(self, thread, node_id, user_id):
         store = ExternalDispatches(self._root())
+        ollama_runs = OllamaRuns(self._root())
         for turn in thread.get('turns', []):
             run_id = turn.get('run_id')
             turn['external_request_available'] = bool(
                 run_id and store.has_run(run_id, node_id, user_id))
+            turn['runtime_evidence_available'] = bool(
+                run_id and ollama_runs.get(run_id))
         return thread
 
     def external_status(self):

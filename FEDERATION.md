@@ -49,16 +49,16 @@ explicitní Workspace publikace s preview, provenance a zděděnou privacy.
 
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
-## Read-only synchronizace historie workspace chatů
+## Projektové chaty v obsahové synchronizaci
 
-První omezený řez je implementovaný podle
-[ADR 0056](docs/adr/0056-read-only-chat-history-sync.md). Jde o explicitní
-jednosměrný přenos vybraných node-local workspace vláken, nikoli federovaný
-lidský chat. Používá pouze schválený interní peer, pinned podpis a aktivní
-bilaterální mapování. Přijaté snapshoty zůstávají mimo `ChatThreads`, jsou jen
-pro čtení a odlišné verze se nepřepisují. Praktický postup je v
-[návodu](docs/chat-history-sync.md). Širší capability profily, background sync
-a `F-M5-CHAT-01` tím nejsou dokončené.
+Podle [ADR 0056](docs/adr/0056-project-chat-rw-sync.md) přenáší tatáž
+obousměrná content-sync operace nativní Git historii i projektová workspace
+vlákna mapovaných uživatelů. Na cíli jsou součástí běžného `ChatThreads` a lze
+v nich pokračovat. Souběžná divergence vytvoří deterministický zapisovatelný
+fork místo přepsání jedné verze. `local-only`, rozpracované a nezařazené chaty
+zůstávají lokální; credentials a run journal se nepřenášejí. Praktický postup
+je v [návodu](docs/project-chat-sync.md). Federovaný lidský chat
+`F-M5-CHAT-01` tím není dokončený.
 
 ## Scénář konfliktu
 

@@ -10,9 +10,11 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
-`F-M5-CHAT-HISTORY-01` dosáhla úrovně PoC validated a čeká na doručení PR;
-je bezpečně omezená na existující bilaterální autority a široký
-`F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
+`F-M5-CHAT-HISTORY-01` po odmítnutí samostatného read-only řezu dosáhla úrovně
+PoC validated: projektové chaty používají tutéž obousměrnou obsahovou
+synchronizaci, jsou RW a při divergenci vytvoří zapisovatelný fork. Dávka čeká
+na doručení PR. Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek
+zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
@@ -1346,13 +1348,17 @@ akceptovaný `F-M5-SHARING-SYNC-01` už poskytují obousměrný katalog i Git sy
 pro `same-team` a `same-company`, bezpečně obnovují přenos po restartu a
 zachovávají divergenci. Fyzicky akceptované `F-M5-CONFLICT-RESOLUTION-01`
 umožňuje ruční validované řešení a následný sync dvourodičového commitu;
-external export, kvalifikované identity a chat zůstávají otevřené, takže Gate
-M5 není uzavřený.
+`F-M5-CHAT-HISTORY-01` na úrovni PoC validated rozšiřuje tutéž obousměrnou
+operaci o RW projektová workspace vlákna s forkem při divergenci. External export,
+kvalifikované identity a federovaný lidský chat zůstávají otevřené, takže
+Gate M5 není uzavřený.
 
 - [ ] Node identity.
 - [ ] Trust.
 - [ ] Úrovně `same-team` / `same-company` / `external` oddělené od topologie, peer trust state a explicitních project/branch oprávnění.
 - [x] Git sync — interní obousměrný přenos PoC validated v `F-M5-SHARING-SYNC-01`.
+- [x] Projektové workspace chaty v témže sync — PoC validated
+  `F-M5-CHAT-HISTORY-01`; doručení PR čeká.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
 - [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné

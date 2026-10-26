@@ -87,11 +87,13 @@ WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
 revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 26. 10. 2026 úrovně PoC validated a byly doručeny PR #98. Vizualizace
 `DEV-ROADMAP-GRAPH-01` byla doručena PR #99 a obecný plánovací graf PR #100.
-`F-M5-CHAT-HISTORY-01` dosáhla na větvi
-`feature/f-m5-chat-history-01` úrovně PoC validated; evidence je ve WORK_LOG a
-doručení PR do `develop` zatím čeká.
+`F-M5-CHAT-HISTORY-01` po odmítnutí samostatného read-only řezu dokončila
+opravenou obousměrnou RW synchronizaci jako součást sdílení celého projektu.
+Akceptovaná evidence je ve WORK_LOG; dávka čeká na doručení svého PR a backlog
+ji nedrží jako druhý stavový záznam.
 
-Po doručení synchronizace historie chatů je uživatelem schválené pořadí priorit:
+Po doručení obousměrné synchronizace projektových chatů je uživatelem
+schválené pořadí priorit:
 `COMP-01`, `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.

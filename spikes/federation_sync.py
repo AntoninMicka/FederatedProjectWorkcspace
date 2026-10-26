@@ -32,14 +32,19 @@ from spikes.metadata import require
 from spikes.network_backend import private_root
 from spikes.project_creation import ProjectCreation
 from spikes.project_replication import _signature, _verify
+from spikes.project_chat_sync import (
+    MAX_CHAT_PAYLOAD, apply_payload as apply_chat_payload,
+    export_project as export_project_chats, inventory as chat_inventory,
+    validate_export_authority, validate_payload as validate_chat_payload,
+)
 from spikes.projects import Projects
 from spikes.storage import Git
 
 
 PATH = '/v1/federation/content-sync'
-CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v1'
+CONTENT_TYPE = 'application/vnd.federated-workspace.content-sync-v2'
 MAX_ENVELOPE = 64 * 1024
-MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE
+MAX_BODY = 4 + MAX_ENVELOPE + MAX_BUNDLE + MAX_CHAT_PAYLOAD
 HASH = re.compile(r'[a-f0-9]{40}|[a-f0-9]{64}')
 MAX_REFS = 64
 PRIVACY = frozenset({'public', 'project', 'confidential'})
@@ -103,6 +108,18 @@ def _database(node):
         db.close()
 
 
+def _sync_state(value):
+    if value is None:
+        return {'refs': [], 'chats': []}
+    parsed = json.loads(value) if isinstance(value, str) else value
+    # Journals written by protocol v1 contained only the ref inventory.
+    if isinstance(parsed, list):
+        return {'refs': _refs(parsed), 'chats': []}
+    require(isinstance(parsed, dict) and set(parsed) == {'refs', 'chats'},
+            'Invalid stored content sync state')
+    return {'refs': _refs(parsed['refs']), 'chats': _chat_inventory(parsed['chats'])}
+
+
 def _ref(value):
     if (not isinstance(value, str) or not value.startswith('refs/heads/')
             or len(value) > 255 or value.endswith(('/', '.'))
@@ -151,9 +168,11 @@ def _scope_allows(scope, ref):
 def validate_exchange(value):
     fields = {'schema_version', 'operation_id', 'project_id', 'source_node_id',
               'recipient_node_id', 'sharing_level', 'scope', 'refs',
-              'known_remote_refs', 'bundle_size', 'bundle_sha256'}
+              'known_remote_refs', 'bundle_size', 'bundle_sha256',
+              'chat_inventory', 'known_remote_chats', 'chat_size',
+              'chat_sha256'}
     require(isinstance(value, dict) and set(value) == fields
-            and value['schema_version'] == 1, 'Invalid content sync exchange')
+            and value['schema_version'] == 2, 'Invalid content sync exchange')
     for field in ('operation_id', 'project_id', 'source_node_id', 'recipient_node_id'):
         identifier(value[field])
     require(value['source_node_id'] != value['recipient_node_id']
@@ -171,12 +190,39 @@ def validate_exchange(value):
             'Invalid content sync bundle digest')
     require((value['bundle_size'] == 0) == (not refs),
             'Empty content sync transfer must have no refs')
+    chats = _chat_inventory(value['chat_inventory'])
+    _chat_inventory(value['known_remote_chats'])
+    require(type(value['chat_size']) is int
+            and 0 <= value['chat_size'] <= MAX_CHAT_PAYLOAD
+            and isinstance(value['chat_sha256'], str)
+            and re.fullmatch(r'[a-f0-9]{64}', value['chat_sha256'])
+            and ((value['chat_size'] == 0) == (not chats)),
+            'Invalid project chat payload metadata')
     return value
+
+
+def _chat_inventory(value):
+    require(isinstance(value, list) and len(value) <= 64,
+            'Invalid project chat inventory')
+    result = []
+    for row in value:
+        require(isinstance(row, dict) and set(row) == {'thread_id', 'digest'},
+                'Invalid project chat inventory item')
+        identifier(row['thread_id'])
+        require(isinstance(row['digest'], str)
+                and re.fullmatch(r'[a-f0-9]{64}', row['digest']),
+                'Invalid project chat digest')
+        result.append(dict(row))
+    require(result == sorted(result, key=lambda row: row['thread_id'])
+            and len({row['thread_id'] for row in result}) == len(result),
+            'Project chat inventory must be sorted and unique')
+    return result
 
 
 def encode_body(envelope, payload):
     raw = canonical(envelope)
-    require(0 < len(raw) <= MAX_ENVELOPE and len(payload) <= MAX_BUNDLE,
+    require(0 < len(raw) <= MAX_ENVELOPE
+            and len(payload) <= MAX_BUNDLE + MAX_CHAT_PAYLOAD,
             'Content sync body exceeds limits')
     return struct.pack('!I', len(raw)) + raw + payload
 
@@ -250,26 +296,44 @@ def _build_bundle(node, project_id, scope):
         return refs, payload
 
 
-def _verify_bundle(node, exchange, payload):
-    require(len(payload) == exchange['bundle_size']
-            and hashlib.sha256(payload).hexdigest() == exchange['bundle_sha256'],
+def _payloads(exchange, payload):
+    expected = exchange['bundle_size'] + exchange['chat_size']
+    require(len(payload) == expected, 'Content sync payload has another size')
+    boundary = exchange['bundle_size']
+    return payload[:boundary], payload[boundary:]
+
+
+def _verify_bundle(node, exchange, payload, service=None):
+    bundle_payload, chat_payload = _payloads(exchange, payload)
+    require(hashlib.sha256(bundle_payload).hexdigest() == exchange['bundle_sha256'],
             'Content sync bundle differs from signed exchange')
-    if not payload:
-        return
-    root = private_root(node)
-    with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
-        directory = Path(directory)
-        bundle = directory / 'project.bundle'; bundle.write_bytes(payload)
-        repo = directory / 'repo.git'; repo.mkdir(mode=0o700)
-        git = Git(repo); git_run(git, 'init', '--bare', '--template=')
-        listed = git_run(git, 'bundle', 'list-heads', str(bundle)).stdout.splitlines()
-        actual = sorted([{'head': line.split()[0], 'ref': line.split()[1]}
-                         for line in listed], key=lambda row: row['ref'])
-        require(actual == exchange['refs'], 'Git bundle refs differ from signed inventory')
-        git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags',
-                str(bundle), *[row['ref'] + ':' + row['ref'] for row in actual])
-        for row in actual:
-            validate_history(git, row['head'], exchange['project_id'], PRIVACY)
+    if bundle_payload:
+        root = private_root(node)
+        with tempfile.TemporaryDirectory(prefix='sharing-verify-', dir=root) as directory:
+            directory = Path(directory)
+            bundle = directory / 'project.bundle'; bundle.write_bytes(bundle_payload)
+            repo = directory / 'repo.git'; repo.mkdir(mode=0o700)
+            git = Git(repo); git_run(git, 'init', '--bare', '--template=')
+            listed = git_run(git, 'bundle', 'list-heads', str(bundle)).stdout.splitlines()
+            actual = sorted([{'head': line.split()[0], 'ref': line.split()[1]}
+                             for line in listed], key=lambda row: row['ref'])
+            require(actual == exchange['refs'], 'Git bundle refs differ from signed inventory')
+            git_run(git, '-c', 'protocol.file.allow=always', 'fetch', '--no-tags',
+                    str(bundle), *[row['ref'] + ':' + row['ref'] for row in actual])
+            for row in actual:
+                validate_history(git, row['head'], exchange['project_id'], PRIVACY)
+    require(hashlib.sha256(chat_payload).hexdigest() == exchange['chat_sha256'],
+            'Project chat payload differs from signed exchange')
+    chats = None
+    if chat_payload:
+        require(service is not None, 'Chat payload validation requires local authority')
+        chats = validate_chat_payload(
+            chat_payload, project_id=exchange['project_id'],
+            source_node_id=exchange['source_node_id'],
+            recipient_node_id=exchange['recipient_node_id'], service=service)
+        require(chat_inventory(chats) == exchange['chat_inventory'],
+                'Project chat payload differs from signed inventory')
+    return bundle_payload, chats
 
 
 def _stage_refs(git, payload, operation_id, refs, directory):
@@ -481,39 +545,66 @@ def _apply_initial(node, exchange, payload, checkpoint, authorize):
 
 
 def _apply(node, exchange, payload, checkpoint=lambda stage: None,
-           authorize=lambda: None):
+           authorize=lambda: None, service=None):
     if not payload:
         return False
-    _verify_bundle(node, exchange, payload)
-    if _binding(node, exchange['project_id']) is None:
-        return _apply_initial(node, exchange, payload, checkpoint, authorize)
-    return _apply_existing(node, exchange, payload, checkpoint, authorize)
+    bundle_payload, chats = _verify_bundle(node, exchange, payload, service)
+    conflict = False
+    if bundle_payload:
+        if _binding(node, exchange['project_id']) is None:
+            conflict = _apply_initial(
+                node, exchange, bundle_payload, checkpoint, authorize)
+        else:
+            conflict = _apply_existing(
+                node, exchange, bundle_payload, checkpoint, authorize)
+    if chats is not None:
+        # The durable inbound request is the cross-store recovery authority.
+        # Retry first makes Git idempotently current, then atomically applies
+        # chats; a crash between those effects rolls forward from the same bytes.
+        authorize()
+        chats = validate_chat_payload(
+            canonical(chats), project_id=exchange['project_id'],
+            source_node_id=exchange['source_node_id'],
+            recipient_node_id=exchange['recipient_node_id'], service=service)
+        conflict = bool(apply_chat_payload(
+            node, chats, checkpoint=checkpoint)) or conflict
+    return conflict
 
 
 def _prepare(service, peer_id, project_id, operation_id, known_remote_refs,
-             *, force_bundle):
+             *, known_remote_chats=None, force_bundle):
     local_id, peer, shares, commit = _authority(service, peer_id)
     scope = _policy(peer, shares, project_id)
-    refs, payload = ([], b'') if scope is None else _build_bundle(
+    refs, bundle_payload = ([], b'') if scope is None else _build_bundle(
         service.node, project_id, scope)
+    chats, chat_payload = ([], b'') if scope is None else export_project_chats(
+        service.node, service, peer_id, project_id)
+    if not chats:
+        chat_payload = b''
     if not force_bundle:
-        payload = b''
+        bundle_payload = b''; chat_payload = b''
     current = _authority(service, peer_id)
     require(current == (local_id, peer, shares, commit),
             'Sharing policy changed during sync preparation')
     exchange = validate_exchange({
-        'schema_version': 1, 'operation_id': operation_id,
+        'schema_version': 2, 'operation_id': operation_id,
         'project_id': project_id, 'source_node_id': local_id,
         'recipient_node_id': peer_id, 'sharing_level': peer['sharing_level'],
         'scope': scope or ({'mode': 'all'} if peer['sharing_level'] == 'same-team'
                            else {'mode': 'selected-only', 'branches': ['refs/heads/main'],
                                  'revision': 1}),
-        'refs': refs if payload else [],
+        'refs': refs if bundle_payload else [],
         'known_remote_refs': _refs(known_remote_refs),
-        'bundle_size': len(payload),
-        'bundle_sha256': hashlib.sha256(payload).hexdigest(),
+        'bundle_size': len(bundle_payload),
+        'bundle_sha256': hashlib.sha256(bundle_payload).hexdigest(),
+        'chat_inventory': chats if chat_payload else [],
+        'known_remote_chats': _chat_inventory(known_remote_chats or []),
+        'chat_size': len(chat_payload),
+        'chat_sha256': hashlib.sha256(chat_payload).hexdigest(),
     })
-    return _signature(service.root, exchange, local_id, 'exchange'), payload, peer, refs
+    payload = bundle_payload + chat_payload
+    return (_signature(service.root, exchange, local_id, 'exchange'), payload,
+            peer, refs, chats)
 
 
 class SyncReceiver:
@@ -531,7 +622,7 @@ class SyncReceiver:
                 and envelope.get('signer_node_id') == peer['id'],
                 'Content sync exchange does not match relationship')
         _verify(envelope, peer['fingerprint'], 'exchange')
-        _verify_bundle(self.node, exchange, payload)
+        _verify_bundle(self.node, exchange, payload, self.service)
         digest = hashlib.sha256(canonical(envelope) + payload).hexdigest()
         encoded = canonical(envelope).decode('ascii')
         with _database(self.node) as db:
@@ -555,29 +646,48 @@ class SyncReceiver:
                     and current_peer['fingerprint'] == peer['fingerprint']
                     and current_peer['sharing_level'] == exchange['sharing_level'],
                     'Content sync authority changed before publication')
-        conflict = _apply(self.node, exchange, payload, checkpoint, authorize)
+        conflict = _apply(self.node, exchange, payload, checkpoint, authorize,
+                          self.service)
         with _database(self.node) as db:
-            if payload:
+            if exchange['bundle_size'] or exchange['chat_size']:
+                previous = db.execute('SELECT refs FROM accepted WHERE peer_id=? '
+                                      'AND project_id=?',
+                                      (peer['id'], exchange['project_id'])).fetchone()
+                accepted_state = _sync_state(previous[0] if previous else None)
+                if exchange['bundle_size']:
+                    accepted_state['refs'] = exchange['refs']
+                if exchange['chat_size']:
+                    accepted_state['chats'] = exchange['chat_inventory']
                 db.execute('INSERT OR REPLACE INTO accepted VALUES (?,?,?)',
                            (peer['id'], exchange['project_id'],
-                            canonical(exchange['refs']).decode('ascii')))
+                            canonical(accepted_state).decode('ascii')))
             accepted = db.execute('SELECT refs FROM accepted WHERE peer_id=? '
                                   'AND project_id=?',
                                   (peer['id'], exchange['project_id'])).fetchone()
         known = exchange['known_remote_refs']
-        response, response_payload, _, local_refs = _prepare(
+        known_chats = exchange['known_remote_chats']
+        response, response_payload, _, local_refs, local_chats = _prepare(
             self.service, peer['id'], exchange['project_id'],
             exchange['operation_id'], exchange['refs'],
-            force_bundle=True)
+            known_remote_chats=exchange['chat_inventory'], force_bundle=True)
         response_exchange = response['exchange']
+        response_bundle, response_chats = _payloads(
+            response_exchange, response_payload)
         if local_refs == known:
             response_exchange = dict(response_exchange, refs=[], bundle_size=0,
                                      bundle_sha256=hashlib.sha256(b'').hexdigest())
+            response_bundle = b''
+        if local_chats == known_chats:
+            response_exchange = dict(response_exchange, chat_inventory=[], chat_size=0,
+                                     chat_sha256=hashlib.sha256(b'').hexdigest())
+            response_chats = b''
+        response_payload = response_bundle + response_chats
+        if local_refs == known or local_chats == known_chats:
             response = _signature(self.service.root, validate_exchange(response_exchange),
                                   local_id, 'exchange')
-            response_payload = b''
-        response = dict(response, accepted_source_refs=(json.loads(accepted[0])
-                        if accepted else []), conflict=conflict)
+        accepted_state = _sync_state(accepted[0] if accepted else None)
+        response = dict(response, accepted_source_refs=accepted_state['refs'],
+                        accepted_source_chats=accepted_state['chats'], conflict=conflict)
         raw_response = canonical(response).decode('ascii')
         with _database(self.node) as db:
             changed = db.execute('UPDATE inbound SET response_envelope=?,response_bundle=? '
@@ -589,9 +699,11 @@ class SyncReceiver:
                 peer['id'], exchange['project_id'],
                 'conflict' if conflict else 'idle',
                 'Divergent history preserved' if conflict else 'Content synchronized',
-                canonical(local_refs).decode('ascii'),
-                canonical(exchange['refs'] if payload else
-                          (json.loads(accepted[0]) if accepted else [])).decode('ascii')))
+                canonical({'refs': local_refs, 'chats': local_chats}).decode('ascii'),
+                canonical({'refs': (exchange['refs'] if exchange['bundle_size'] else
+                                     accepted_state['refs']),
+                           'chats': (exchange['chat_inventory'] if exchange['chat_size'] else
+                                    accepted_state['chats'])}).decode('ascii')))
         return response, response_payload
 
 
@@ -608,20 +720,34 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
         pending = db.execute('SELECT operation_id,envelope,bundle,local_refs '
                              'FROM outbound WHERE peer_id=? AND project_id=?',
                              (peer_id, project_id)).fetchone()
-    last_sent = json.loads(runtime[0]) if runtime else []
-    last_remote = json.loads(runtime[1]) if runtime else []
+    last_sent = _sync_state(runtime[0] if runtime else None)
+    last_remote = _sync_state(runtime[1] if runtime else None)
     if pending:
         operation_id = pending[0]; envelope = json.loads(pending[1])
-        payload = bytes(pending[2]); local_refs = json.loads(pending[3])
+        payload = bytes(pending[2]); local_state = _sync_state(pending[3])
+        local_refs, local_chats = local_state['refs'], local_state['chats']
         local_id, peer, shares, _ = _authority(service, peer_id)
         current_scope = _policy(peer, shares, project_id)
         expected_scope = (current_scope or
                           ({'mode': 'all'} if peer['sharing_level'] == 'same-team'
                            else {'mode': 'selected-only',
                                  'branches': ['refs/heads/main'], 'revision': 1}))
-        if (envelope['exchange']['source_node_id'] != local_id
+        stale_chat_authority = False
+        if envelope.get('exchange', {}).get('schema_version') == 2:
+            _, pending_chats = _payloads(envelope['exchange'], payload)
+            if pending_chats:
+                try:
+                    validate_export_authority(
+                        pending_chats, project_id=project_id,
+                        source_node_id=local_id, recipient_node_id=peer_id,
+                        service=service)
+                except (AccessDenied, ValueError):
+                    stale_chat_authority = True
+        if (envelope.get('exchange', {}).get('schema_version') != 2
+                or envelope['exchange']['source_node_id'] != local_id
                 or envelope['exchange']['sharing_level'] != peer['sharing_level']
-                or envelope['exchange']['scope'] != expected_scope):
+                or envelope['exchange']['scope'] != expected_scope
+                or stale_chat_authority):
             # A narrowed/revoked policy must never resend stale bytes. A peer
             # that already received them cannot be made to forget them.
             with _database(node) as db:
@@ -631,20 +757,30 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                                deployment=deployment, ca=ca, cancelled=cancelled)
     else:
         operation_id = str(uuid4())
-        envelope, payload, peer, local_refs = _prepare(
-            service, peer_id, project_id, operation_id, last_remote,
-            force_bundle=True)
-        if local_refs == last_sent:
+        envelope, payload, peer, local_refs, local_chats = _prepare(
+            service, peer_id, project_id, operation_id, last_remote['refs'],
+            known_remote_chats=last_remote['chats'], force_bundle=True)
+        exchange = envelope['exchange']
+        bundle_payload, chat_payload = _payloads(exchange, payload)
+        changed = False
+        if local_refs == last_sent['refs']:
             exchange = dict(envelope['exchange'], refs=[], bundle_size=0,
                             bundle_sha256=hashlib.sha256(b'').hexdigest())
+            bundle_payload = b''; changed = True
+        if local_chats == last_sent['chats']:
+            exchange = dict(exchange, chat_inventory=[], chat_size=0,
+                            chat_sha256=hashlib.sha256(b'').hexdigest())
+            chat_payload = b''; changed = True
+        if changed:
             envelope = _signature(service.root, validate_exchange(exchange),
                                   exchange['source_node_id'], 'exchange')
-            payload = b''
+            payload = bundle_payload + chat_payload
         with _database(node) as db:
             db.execute('INSERT INTO outbound VALUES (?,?,?,?,?,?)',
                        (peer_id, project_id, operation_id,
                         canonical(envelope).decode('ascii'), payload,
-                        canonical(local_refs).decode('ascii')))
+                        canonical({'refs': local_refs, 'chats': local_chats})
+                        .decode('ascii')))
     if cancelled():
         raise SyncCancelled('Content sync cancelled before transport')
     if not peer.get('endpoint'):
@@ -678,7 +814,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
     if cancelled():
         raise SyncCancelled('Content sync cancelled before local publication')
     require(set(response_envelope) == {'exchange', 'signer_node_id', 'public_key',
-                                       'signature', 'accepted_source_refs', 'conflict'},
+                                       'signature', 'accepted_source_refs',
+                                       'accepted_source_chats', 'conflict'},
             'Invalid content sync response')
     require(type(response_envelope['conflict']) is bool,
             'Invalid content sync conflict state')
@@ -698,10 +835,16 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                 and current_peer['sharing_level'] == returned['sharing_level'],
                 'Content sync authority changed before response publication')
     conflict = _apply(node, returned, response_payload,
-                      authorize=authorize_response)
+                      authorize=authorize_response, service=service)
     accepted = _refs(response_envelope['accepted_source_refs'])
-    sent = local_refs if accepted == local_refs else last_sent
-    remote = returned['refs'] if response_payload else last_remote
+    accepted_chats = _chat_inventory(response_envelope['accepted_source_chats'])
+    sent = {'refs': (local_refs if accepted == local_refs else last_sent['refs']),
+            'chats': (local_chats if accepted_chats == local_chats
+                      else last_sent['chats'])}
+    remote = {'refs': (returned['refs'] if returned['bundle_size']
+                       else last_remote['refs']),
+              'chats': (returned['chat_inventory'] if returned['chat_size']
+                        else last_remote['chats'])}
     state = 'conflict' if conflict or response_envelope['conflict'] else 'idle'
     with _database(node) as db:
         db.execute('BEGIN IMMEDIATE')
@@ -712,7 +855,8 @@ def synchronize(node, peer_id, project_id, *, deployment='desktop', ca=None,
                     canonical(sent).decode('ascii'), canonical(remote).decode('ascii')))
         db.execute('DELETE FROM outbound WHERE peer_id=? AND project_id=?',
                    (peer_id, project_id))
-    return {'state': state, 'local_refs': sent, 'remote_refs': remote}
+    return {'state': state, 'local_refs': sent['refs'], 'remote_refs': remote['refs'],
+            'local_chats': sent['chats'], 'remote_chats': remote['chats']}
 
 
 class ContentSyncControl:

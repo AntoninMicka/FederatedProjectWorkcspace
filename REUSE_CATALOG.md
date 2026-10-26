@@ -59,14 +59,13 @@ validují proti autoritativním Markdown dokumentům. Serverový SVG renderer
 slouží statickému exportu připnutému na tutéž revizi. Rozhodnutí a fail-closed
 hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
-F-M5-CHAT-HISTORY-01 **reuse/adaptuje** `ChatThreads` jako jedinou autoritu
-lokálních vláken, bilaterální mapování a připnuté Ed25519 podpisy z ADR 0021,
-omezený privátní HTTPS transport z obsahové synchronizace a node-private
-SQLite journal. Přijaté snapshoty jsou nový oddělený read model; nereusují
-živé chatové tabulky, protože by tím vznikla falešná možnost replaye a vazba na
-chybějící lokální run journals. Nová message queue, vzdálený login ani externí
-sync framework se nepřidává. Volbu, crash boundaries a omezení drží
-[ADR 0056](docs/adr/0056-read-only-chat-history-sync.md).
+F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
+`federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.
+Projektová historie je druhý bounded payload téže sync operace a po přesném
+překladu vlastníka vstupuje do běžného RW chatu. Divergence používá
+deterministický fork; samostatný endpoint, read-only read model, nový message
+broker ani externí sync framework se odmítají. Crash boundaries a omezení drží
+[ADR 0056](docs/adr/0056-project-chat-rw-sync.md).
 
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 

@@ -62,9 +62,9 @@ class ChatThreads:
                 require(tables in (legacy_tables, current_tables),
                         'Unknown or incomplete chat schema')
                 row = db.execute('SELECT version FROM schema_info').fetchall()
-                require(row in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)]),
+                require(row in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)], [(6,)]),
                         'Unsupported chat schema version')
-                require(row not in ([(4,)], [(5,)]) or tables == current_tables,
+                require(row not in ([(4,)], [(5,)], [(6,)]) or tables == current_tables,
                         'Unknown or incomplete chat schema')
                 self._validate_columns(db, version=row[0][0])
                 if row == [(1,)]:
@@ -105,6 +105,11 @@ class ChatThreads:
                     db.execute('ALTER TABLE turns ADD COLUMN language_compliance TEXT')
                     db.execute('UPDATE schema_info SET version=5')
                     self._validate_columns(db, version=5)
+                if row in ([(1,)], [(2,)], [(3,)], [(4,)], [(5,)]):
+                    db.execute('ALTER TABLE threads ADD COLUMN forked_from_thread_id TEXT')
+                    db.execute('ALTER TABLE threads ADD COLUMN forked_from_digest TEXT')
+                    db.execute('UPDATE schema_info SET version=6')
+                    self._validate_columns(db, version=6)
             db.commit()
             return closing(db)
         except Exception:
@@ -115,7 +120,7 @@ class ChatThreads:
     def _create(db):
         db.executescript('''
             CREATE TABLE schema_info(version INTEGER NOT NULL);
-            INSERT INTO schema_info VALUES(5);
+            INSERT INTO schema_info VALUES(6);
             CREATE TABLE threads(
                 thread_id TEXT PRIMARY KEY, node_id TEXT NOT NULL, user_id TEXT NOT NULL,
                 classification TEXT NOT NULL CHECK(classification IN ('brainstorming','orchestration')),
@@ -123,7 +128,8 @@ class ChatThreads:
                 created_at TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>=0),
                 next_sequence INTEGER NOT NULL CHECK(next_sequence>=0),
                 project_id TEXT, assignment_revision INTEGER NOT NULL CHECK(assignment_revision>=0),
-                response_language TEXT);
+                response_language TEXT, forked_from_thread_id TEXT,
+                forked_from_digest TEXT);
             CREATE TABLE messages(
                 message_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL REFERENCES threads(thread_id),
                 sequence INTEGER NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','assistant')),
@@ -153,7 +159,9 @@ class ChatThreads:
             'threads': ['thread_id', 'node_id', 'user_id', 'classification', 'status',
                         'created_at', 'revision', 'next_sequence'] +
                        (['project_id', 'assignment_revision'] if version >= 2 else []) +
-                       (['response_language'] if version >= 5 else []),
+                       (['response_language'] if version >= 5 else []) +
+                       (['forked_from_thread_id', 'forked_from_digest']
+                        if version >= 6 else []),
             'messages': ['message_id', 'thread_id', 'sequence', 'role', 'content',
                          'content_sha256', 'privacy', 'author_id', 'created_at', 'supersedes_id'],
             'turns': ['turn_id', 'thread_id', 'user_message_id', 'run_id',
@@ -175,7 +183,8 @@ class ChatThreads:
         for value in (thread_id, node_id, user_id):
             uuid(value)
         row = db.execute('SELECT node_id,user_id,status,classification,created_at,revision,'
-                         'next_sequence,project_id,assignment_revision,response_language '
+                         'next_sequence,project_id,assignment_revision,response_language,'
+                         'forked_from_thread_id,forked_from_digest '
                          'FROM threads WHERE thread_id=?',
                          (thread_id,)).fetchone()
         require(row is not None and row[0] == node_id and row[1] == user_id,
@@ -190,6 +199,12 @@ class ChatThreads:
         require(type(row[8]) is int and row[8] >= 0, 'Invalid assignment revision')
         if row[9] is not None:
             require(language_tag(row[9]) == row[9], 'Invalid stored thread language')
+        if row[10] is not None:
+            uuid(row[10])
+            require(isinstance(row[11], str) and len(row[11]) == 64,
+                    'Invalid stored chat fork provenance')
+        else:
+            require(row[11] is None, 'Chat fork digest requires an origin thread')
         deleting = db.execute('SELECT 1 FROM deletions WHERE thread_id=?',
                               (thread_id,)).fetchone()
         require(allow_deleting or deleting is None, 'Chat thread deletion is in progress')
@@ -258,9 +273,10 @@ class ChatThreads:
             if row:
                 require(row == request, 'Thread ID belongs to a different request')
             else:
-                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, classification, 'active',
-                            created_at, 0, 0, project_id, 1 if project_id else 0, None))
+                            created_at, 0, 0, project_id, 1 if project_id else 0,
+                            None, None, None))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
@@ -289,9 +305,10 @@ class ChatThreads:
                 require(blocked is None, 'Brainstorming thread has an active or unknown turn')
                 db.execute("UPDATE threads SET status='archived',revision=revision+1 WHERE thread_id=?",
                            (source_thread_id,))
-                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO threads VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (thread_id, node_id, user_id, 'orchestration', 'active',
-                            created_at, 0, 0, source[7], 1 if source[7] else 0, source[9]))
+                            created_at, 0, 0, source[7], 1 if source[7] else 0,
+                            source[9], None, None))
             db.commit()
         return self.get(thread_id, node_id, user_id)
 
@@ -549,6 +566,7 @@ class ChatThreads:
                         classification=row[3], created_at=row[4], revision=row[5],
                         project_id=row[7], assignment_revision=row[8],
                         response_language=row[9],
+                        forked_from_thread_id=row[10], forked_from_digest=row[11],
                         messages=messages, turns=turns)
 
     def list(self, node_id, user_id):
