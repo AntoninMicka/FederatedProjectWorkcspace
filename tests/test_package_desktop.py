@@ -25,7 +25,7 @@ class PackageTests(unittest.TestCase):
             names = archive.getnames()
             for name in ('docs/project-opening.md', 'docs/ollama-lan.md',
                          'docs/release-0.1.0.md', 'CHANGELOG.md',
-                         'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
+                         'docs/roadmap-graph.json', 'TODO.md', 'BACKLOG.md', 'WORK_LOG.md'):
                 self.assertIn(prefix + '/' + name, names)
             self.assertIn(prefix + '/VERSION', names)
             self.assertIn(prefix + '/modules/publication-experiment-registry.module.json', names)

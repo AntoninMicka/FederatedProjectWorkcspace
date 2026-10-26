@@ -47,6 +47,11 @@ def build(output, version=None):
             write(f'usr/lib/{NAME}/{source.relative_to(ROOT)}', source.read_bytes())
         write(f'usr/lib/{NAME}/requirements.txt', (ROOT / 'requirements.txt').read_bytes())
         write(f'usr/lib/{NAME}/VERSION', packaged_version)
+        for name in ('TODO.md', 'BACKLOG.md', 'WORK_LOG.md',
+                     'Federovaný projektový LLM workspace – Master Checklist - základní roadmapa.md'):
+            write(f'usr/lib/{NAME}/{name}', (ROOT / name).read_bytes())
+        write(f'usr/lib/{NAME}/docs/roadmap-graph.json',
+              (ROOT / 'docs/roadmap-graph.json').read_bytes())
         write(f'usr/share/doc/{NAME}/VERSION', packaged_version)
         write(f'usr/share/doc/{NAME}/CHANGELOG.md', (ROOT / 'CHANGELOG.md').read_bytes())
         for script in ('deploy_omnia.py', 'install_web.py', 'license_files.py'):

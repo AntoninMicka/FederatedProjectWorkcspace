@@ -5,13 +5,54 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DEV-ROADMAP-GRAPH-01 — generovaná vizualizace roadmapy a závislostí — 2026-10-26
+
+Dávka vznikla na větvi `feature/dev-roadmap-graph-01` z `develop` `c9b8044`
+po doručení PR #98. Dosáhla úrovně **PoC validated**. Feature akceptace je
+dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **DEV-ROADMAP-GRAPH-01-A — kontrakt anotací a validovaná
+  projekce (implemented).** `fpw-roadmap-graph-v1` drží pouze stabilní ID,
+  milestone a explicitní hrany. Názvy a stavy se načítají z TODO, BACKLOG,
+  WORK_LOG a master roadmapy. Neznámé či duplicitní ID, chybějící anotace
+  otevřené feature, neznámá hrana, self-edge, cyklus, symlink a nadlimitní
+  zdroj selžou před vydáním projekce.
+- [x] [completed] **DEV-ROADMAP-GRAPH-01-B — read-only API a výpočet grafu
+  (implemented).** Deterministická topologická projekce 64 feature dávek vrací
+  milestone swimlanes, vrstvy, jednu nejdelší kritickou cestu a plánované dávky
+  se všemi dokončenými závislostmi. SHA-256 revize váže anotaci i všechny čtyři
+  autoritativní zdroje; SVG export odmítne stale revizi.
+- [x] [completed] **DEV-ROADMAP-GRAPH-01-C — interaktivní pohled a statický
+  export (implemented).** Sdílené desktop/server Nastavení obsahuje stránku
+  Roadmapa, filtry milestone/stavu/připravenosti, klávesnicově volitelné uzly,
+  bezpečný detail a statický SVG export ze stejné projekce. Vykreslování
+  používá pouze `textContent` a SVG DOM, bez CDN nebo nové knihovny.
+- [x] [completed] **DEV-ROADMAP-GRAPH-01-D — regrese, dokumentace a fyzická
+  akceptace (PoC validated).** ADR 0054, návod a reuse evidence vymezují
+  read-only autoritu, fail-closed chování a nulovou persistentní recovery
+  hranici. Skutečný Qt/WebEngine průchod potvrdil 64 uzlů, klávesnicový detail
+  a filtr souběžně připravených dávek.
+
+### Ověření a omezení
+
+Po opravě rozšířených packaging fixtures prošla finální úplná sada:
+**881 testů bez selhání, 31 přeskočeno, za 210,898 s**. Samostatně prošel
+skutečný Qt/WebEngine test stránky Roadmapa, HTTPS API test JSON/SVG a stale
+revize, `node --check`, cílené testy parseru, balíčků a licenčního allowlistu.
+
+Graf zahrnuje všechny strukturované otevřené feature položky současného
+BACKLOG, aktuální/dokončenou dávku a nezbytnou dokončenou návaznost. Široké
+strategické odstavce bez validního feature ID nejsou automaticky povýšeny na
+uzly a chybějící závislost se neodhaduje z prózy. Graf je projekce, nikoli
+editor nebo obecný projektový datový model `DEV-01`.
+
 ## UX-BACKEND-MODEL-02 — pinning backendu a modelové nabídky — 2026-10-26
 
 Dávka vznikla na větvi `feature/ux-backend-model-02-run-pinning` z `develop`
 `45144a0` jako dokončení serverového kontraktu po PR #96 a #97. Dosáhla úrovně
-**PoC validated**. Feature akceptace je dokončená; PR do `develop` zatím nebyl
-vytvořen ani sloučen. Implementace a fyzická evidence jsou ve feature commitech
-`14305eb`, `2365782` a `862cdb4`.
+**PoC validated**. Feature byla doručena PR #98 jako merge commit `c9b8044`.
+Implementace a fyzická evidence jsou ve feature commitech `14305eb`, `2365782`
+a `862cdb4`.
 
 - [x] [completed] **UX-BACKEND-MODEL-02-A — kontrakt a revalidace
   (implemented).** Klient posílá revizi serverové projekce a přesný `offer_id`;
@@ -56,7 +97,7 @@ samostatnou fyzickou manipulací živého katalogu.
 
 Mimo rozsah zůstává automatický výběr/fallback, pořadí podle ceny či kvality,
 noví provideři a obecný facelift dalších stránek. Stav PR je oddělený od
-feature akceptace: PR nebyl vytvořen ani sloučen.
+feature akceptace; doručení PR #98 je nyní uzavřené.
 
 ## UX-BACKEND-MODEL-01 — katalog, nastavení a výběr v composeru — 2026-10-26
 
