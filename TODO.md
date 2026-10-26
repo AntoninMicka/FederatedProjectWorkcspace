@@ -59,6 +59,13 @@ integrace se neotevírá; je jedním providerem společného katalogu.
   bezpečný reset, samostatný read-only modelový katalog a obecný resource
   kontrakt. Existující AtlasCloud evidence prokazuje tokenovou spotřebu runů,
   nikoli kreditní balance; UI tyto hodnoty nesmí zaměnit.
+- [x] [completed] **UX-BACKEND-MODEL-01-AH-02 — historie chatů nezávislá na
+  pomocných stavech (implemented).** Uživatelské hlášení 26. 10. 2026: po
+  otevření projektu zmizela ze stromu i nezařazená vlákna. Autoritativní
+  `/v1/chat/status` se nyní načte a vykreslí před providerovými stavy,
+  projekcí úloh a frontou automatiky; jejich chyba zobrazí lokální diagnostiku,
+  ale nesmaže seznam chatů. Revize načtení brání opožděné odpovědi přepsat stav
+  po rychlém přepnutí projektu. Data ani přiřazení vláken se nemigrují.
 - [ ] [in progress] **UX-BACKEND-MODEL-01-B — společná nabídka a serverová
   revalidace (cíl: implemented).** Sestavit provider-neutral projekce
   backendů/služeb, modelů/nabídek/modifikátorů a resource metrik. Před dispatch
@@ -141,3 +148,11 @@ B/C proto zůstávají rozpracované. Cílená sada 197 testů
 `test_chat_modes`, `test_chat_service`, `test_desktop` a `test_web_server`
 mimo socketově omezený sandbox prošla; 7 volitelných WebEngine testů bylo
 přeskočeno.
+
+Ad-hoc oprava AH-02 oddělila načtení historie chatů od volitelných providerových,
+task a autonomy projekcí. Regresní test hlídá, že se zařazená i nezařazená
+vlákna vykreslí ještě před `Promise.allSettled` pomocných stavů a že přepnutí
+projektu zneplatní opožděné načtení. Kompletní sada
+`python3 -m unittest discover -s tests -v` mimo socketově omezený sandbox
+prošla: 866 testů, 29 volitelných testů přeskočeno. JavaScript navíc prošel
+`node --check`, Python soubory `py_compile` a finální diff `git diff --check`.

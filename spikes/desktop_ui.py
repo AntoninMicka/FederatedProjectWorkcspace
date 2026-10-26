@@ -2127,7 +2127,7 @@ function syncSidebarProjectAvailability(){
  if(!available && projectSidebarTabs.includes(sidebarTabs.find(tab=>tab.getAttribute('aria-selected')==='true')?.id))selectSidebarTab(document.querySelector('#projects-tab'));
 }
 function clearProject(){
- ++viewRequest;
+ ++viewRequest;++chatLoadRevision;++chatSelectionRevision;
  resetProjectConflicts();
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
@@ -4114,7 +4114,7 @@ const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
 let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
-let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0;
+let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
 function chatScrollOwner(){
@@ -5511,34 +5511,68 @@ document.querySelector('#chat-mode').addEventListener('change',async event=>{
  refreshChatModeControls();
 });
 async function loadChat(){
+ const loadRevision=++chatLoadRevision;
  const selectionRevision=chatSelectionRevision;
  const projectId=activeProject?.id || null;
+ let result;
  try{
-  const [result,external,atlas,tasks]=await Promise.all([
-   projectRequest('/v1/chat/status',{}),projectRequest('/v1/external/status',{}),
-   projectRequest('/v1/atlascloud/status',{}),
-   projectId?projectRequest('/v1/tasks/list',{project_id:projectId}):Promise.resolve({outcomes:[]})]);
+  result=await projectRequest('/v1/chat/status',{});
+ }catch(error){
+  if(loadRevision!==chatLoadRevision || selectionRevision!==chatSelectionRevision)return;
+  if(projectId!==(activeProject?.id || null))return;
+  document.querySelector('#sidebar-chat-status').textContent=`Chaty nelze načíst: ${error.message}`;
+  chatStatus.textContent=`Historii chatů nelze načíst: ${error.message}`;
+  chatOperationStatus.textContent='Seznam chatů nebyl obnoven. Uložená data nebyla změněna.';
+  renderChat(null);return;
+ }
+ if(loadRevision!==chatLoadRevision || selectionRevision!==chatSelectionRevision)return;
+ if(projectId!==(activeProject?.id || null))return;
+ try{
   fillBinding(result.binding,result.binding_draft,result.binding_draft_state);
   fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
-  externalBinding=external.binding;
-  externalStreaming=external.capabilities?.streaming===true;
-  atlasCloudBinding=atlas.binding;atlasCloudStreaming=atlas.capabilities?.streaming===true;
-  fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
-  fillExternalModels(external.model_catalog);
-  if(selectionRevision!==chatSelectionRevision)return;
-  if(projectId!==(activeProject?.id || null))return;
+  applyResponseLanguageStatus(result);
+  if(!Array.isArray(result.threads))throw new Error('Odpověď neobsahuje seznam vláken.');
   const ordered=[...result.threads].reverse();
   const projectThreads=projectId?ordered.filter(thread=>thread.project_id===projectId):[];
   const restored=projectThreads.find(thread=>thread.status==='active') || projectThreads[0] || null;
   activeThread=restored;activeTaskThreadId=restored?.thread_id || null;
-  taskOutcomes=restored?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
+  taskOutcomes=[];
   renderThreadList(ordered);renderTaskPublicSources();renderChat(restored);
   if(restored){document.querySelector('#chat-mode').value=restored.classification;refreshChatModeControls();}
-  const queueLoaded=!projectId || await loadAutonomyQueue(false);
-  if(queueLoaded)chatOperationStatus.textContent=restored?
-   'Obnoveno poslední uložené vlákno projektu. Rozpracovaná automatika po restartu zůstává bezpečně pozastavená.':'';
- }catch(error){if(selectionRevision===chatSelectionRevision){chatStatus.textContent=error.message;renderChat(null);}}
+ }catch(error){
+  document.querySelector('#sidebar-chat-status').textContent=`Chaty mají neplatnou projekci: ${error.message}`;
+  chatOperationStatus.textContent='Historie byla načtena, ale její lokální projekci nelze zobrazit.';return;
+ }
+ const auxiliary=await Promise.allSettled([
+  projectRequest('/v1/external/status',{}),projectRequest('/v1/atlascloud/status',{}),
+  projectId?projectRequest('/v1/tasks/list',{project_id:projectId}):Promise.resolve({outcomes:[]}),
+  loadAutonomyQueue(false,projectId)]);
+ if(loadRevision!==chatLoadRevision)return;
+ if(projectId!==(activeProject?.id || null))return;
+ const warnings=[];
+ const [externalState,atlasState,tasksState,queueState]=auxiliary;
+ if(externalState.status==='fulfilled'){
+  const external=externalState.value;externalBinding=external.binding;
+  externalStreaming=external.capabilities?.streaming===true;fillExternalModels(external.model_catalog);
+ }else{externalBinding=null;externalStreaming=false;fillExternalModels(null);warnings.push('OpenAI stav není dostupný');}
+ if(atlasState.status==='fulfilled'){
+  const atlas=atlasState.value;atlasCloudBinding=atlas.binding;
+  atlasCloudStreaming=atlas.capabilities?.streaming===true;
+  fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
+ }else{atlasCloudBinding=null;atlasCloudStreaming=false;fillAtlasCloudOffers(null,null);warnings.push('AtlasCloud stav není dostupný');}
+ refreshChatModeControls();
+ if(selectionRevision!==chatSelectionRevision)return;
+ if(tasksState.status==='fulfilled'){
+  const tasks=tasksState.value;
+  taskOutcomes=restored&&Array.isArray(tasks.outcomes)?tasks.outcomes.filter(item=>item.thread_id===restored.thread_id):[];
+  if(!Array.isArray(tasks.outcomes))warnings.push('navázané úlohy mají neplatnou projekci');
+ }else{taskOutcomes=[];warnings.push('navázané úlohy nejsou dostupné');}
+ if(queueState.status==='rejected' || queueState.value!==true)warnings.push('fronta automatizace není dostupná');
+ renderTaskPublicSources();renderChat(restored);
+ chatOperationStatus.textContent=warnings.length ?
+  `Chaty byly načteny; ${warnings.join(', ')}.` : restored?
+  'Obnoveno poslední uložené vlákno projektu. Rozpracovaná automatika po restartu zůstává bezpečně pozastavená.':'';
 }
 function backendCandidate(){
  const fields=chatForm.elements;
@@ -6225,11 +6259,13 @@ function renderAutonomyQueue(){
   card.append(heading,meta,progress,steps,revisions,revisionPanels,detail,actions);autonomyList.append(card);scheduleAutomaticWorkflow(workflow);
  }
 }
-async function loadAutonomyQueue(showStatus=true){
- if(!activeProject){autonomyQueue={global_paused:false,workflows:[]};renderAutonomyQueue();return;}
+async function loadAutonomyQueue(showStatus=true,expectedProjectId=activeProject?.id || null){
+ if(!expectedProjectId){autonomyQueue={global_paused:false,workflows:[]};renderAutonomyQueue();return true;}
  if(showStatus)autonomyStatus.textContent='Načítám řízenou frontu…';
- try{autonomyQueue=await projectRequest('/v1/autonomy/status',{project_id:activeProject.id});renderAutonomyQueue();if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')renderChat(activeThread);const incompatible=autonomyQueue.incompatible_workflows?.length || 0;autonomyStatus.textContent=incompatible?`Fronty: ${autonomyQueue.workflows.length}. ${incompatible} starší terminální záznamy nelze zobrazit s aktuálním katalogem; v journalu zůstávají zachované.`:`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;return true;}
- catch(error){autonomyStatus.textContent=error.message;if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')chatOperationStatus.textContent=`Frontu automatizace nelze načíst: ${error.message}`;return false;}
+ try{const loaded=await projectRequest('/v1/autonomy/status',{project_id:expectedProjectId});
+  if(expectedProjectId!==(activeProject?.id || null))return false;
+  autonomyQueue=loaded;renderAutonomyQueue();if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')renderChat(activeThread);const incompatible=autonomyQueue.incompatible_workflows?.length || 0;autonomyStatus.textContent=incompatible?`Fronty: ${autonomyQueue.workflows.length}. ${incompatible} starší terminální záznamy nelze zobrazit s aktuálním katalogem; v journalu zůstávají zachované.`:`Fronty: ${autonomyQueue.workflows.length}. Bez živého UI se další krok nespustí.`;return true;}
+ catch(error){if(expectedProjectId!==(activeProject?.id || null))return false;autonomyStatus.textContent=error.message;if(document.querySelector('#chat-tab').getAttribute('aria-selected')==='true')chatOperationStatus.textContent=`Frontu automatizace nelze načíst: ${error.message}`;return false;}
 }
 async function refreshAutonomyLease(){
  if(autonomyHeartbeatBusy)return;autonomyHeartbeatBusy=true;
