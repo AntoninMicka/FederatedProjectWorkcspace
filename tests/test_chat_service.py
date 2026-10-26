@@ -14,6 +14,7 @@ from uuid import uuid4
 from spikes.artifacts import Artifacts
 from spikes.atlascloud_backend import AtlasCloudCatalog, AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
+from spikes.chat_modes import ChatRunChoice
 from spikes.chat_service import ChatService, parse_search_evaluation
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
@@ -21,7 +22,8 @@ from spikes.configuration import read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
-from spikes.openai_backend import OpenAICredentials, OpenAIUnknownRun
+from spikes.openai_backend import (OpenAIBindings, OpenAICredentials,
+                                   OpenAIModelCatalog, OpenAIUnknownRun)
 from spikes.storage import Git
 from spikes.projects import Projects
 from spikes.presentation_documents import PresentationDocuments, new_deck
@@ -42,17 +44,17 @@ class FakeAdapter:
     def __init__(self, runs, calls, error=None):
         self.runs, self.calls, self.error = runs, calls, error
 
-    def prepare(self, handoff, binding, stream=False):
-        self.calls.append(('prepare', handoff, binding))
+    def prepare(self, handoff, binding, stream=False, run_selection=None):
+        self.calls.append(('prepare', handoff, binding, run_selection))
 
-    def dispatch(self, handoff, binding):
-        self.calls.append(('dispatch', handoff, binding))
+    def dispatch(self, handoff, binding, run_selection=None):
+        self.calls.append(('dispatch', handoff, binding, run_selection))
         if self.error:
             raise self.error
         return {'model': binding.model, 'response': 'Assistant answer'}
 
-    def dispatch_stream(self, handoff, binding, on_delta, on_status):
-        self.calls.append(('dispatch-stream', handoff, binding))
+    def dispatch_stream(self, handoff, binding, on_delta, on_status, run_selection=None):
+        self.calls.append(('dispatch-stream', handoff, binding, run_selection))
         if self.error:
             raise self.error
         on_status('connecting'); on_status('waiting-first-token')
@@ -66,11 +68,13 @@ class FakeExternalAdapter:
         self.runs, self.credentials, self.calls = runs, credentials, calls
         self.error, self.answer = error, answer
 
-    def prepare(self, handoff, binding, role=None, output_format='text', stream=False):
-        self.calls.append(('prepare', handoff, binding))
+    def prepare(self, handoff, binding, role=None, output_format='text', stream=False,
+                run_selection=None):
+        self.calls.append(('prepare', handoff, binding, run_selection))
 
-    def dispatch(self, handoff, binding, role=None, output_format='text'):
-        self.calls.append(('dispatch', handoff, binding))
+    def dispatch(self, handoff, binding, role=None, output_format='text',
+                 run_selection=None):
+        self.calls.append(('dispatch', handoff, binding, run_selection))
         if self.error:
             raise self.error
         answer = self.answer or ('External answer' if output_format == 'text' else json.dumps({
@@ -85,9 +89,9 @@ class FakeExternalAdapter:
             db.commit()
         return response
 
-    def dispatch_stream(self, handoff, binding, on_delta):
+    def dispatch_stream(self, handoff, binding, on_delta, run_selection=None):
         on_delta('External '); on_delta('answer')
-        return self.dispatch(handoff, binding)
+        return self.dispatch(handoff, binding, run_selection=run_selection)
 
 
 class FakeProposalAdapter:
@@ -137,7 +141,26 @@ class ChatServiceTests(unittest.TestCase):
                      assistant_message_id=str(uuid4()), selected_message_ids=[],
                      content='First question', privacy='project', created_at=NOW)
         value.update(changes)
+        choice = value.get('run_choice', {'mode': 'brainstorming',
+                                           'adapter': 'ollama', 'model': 'gemma3'})
+        value['run_choice'] = self.pin_run_choice(choice)
         return value
+
+    def pin_run_choice(self, choice):
+        if {'selection_revision', 'offer_id'} <= set(choice):
+            return choice
+        projection = self.service.model_selection_status()
+        configured_model = self.service.status()['binding']['model']
+        model = configured_model if choice['model'] is None else choice['model']
+        matches = [item for item in projection['offers']
+                   if item['adapter_id'] == choice['adapter']
+                   and item['provider_model_id'] == model
+                   and item['availability'] == 'available'
+                   and item['freshness'] == 'fresh']
+        if len(matches) != 1:
+            return choice
+        return dict(choice, selection_revision=projection['revision'],
+                    offer_id=matches[0]['offer_id'])
 
     def test_candidate_probe_does_not_replace_confirmed_binding(self):
         before = self.service.status()['binding']
@@ -243,7 +266,18 @@ class ChatServiceTests(unittest.TestCase):
         value = self.request()
         value['approval_id'] = str(uuid4())
         value.update(changes)
+        if 'run_choice' not in changes:
+            binding = OpenAIBindings(self.chat_state).load()
+            value['run_choice'] = {'mode': 'brainstorming',
+                'adapter': 'openai-responses', 'model': binding.model}
+        value['run_choice'] = self.pin_run_choice(value['run_choice'])
         return value
+
+    def seed_openai_models(self, service, *models):
+        binding = OpenAIBindings(self.chat_state).load()
+        return OpenAIModelCatalog(self.chat_state, OpenAICredentials(self.chat_state),
+            lambda *_: {'object': 'list', 'data': [
+                {'id': model} for model in models]}).refresh(binding)
 
     def external_service(self, calls, error=None):
         service = ChatService(self.node_path, Projects(self.node_path),
@@ -254,13 +288,17 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'e' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna', 'gpt-5.6-sol')
         return service
 
     def atlascloud_service(self, calls):
         provider_catalog = {'code': '200', 'data': [{'model': 'atlas-text-v1',
             'type': 'Text', 'display_console': True,
             'supported_protocols': ['openai.chat.completions'],
-            'supported_features': ['json_mode'], 'output_modalities': ['text']}]}
+            'supported_features': ['json_mode'], 'output_modalities': ['text']},
+            {'model': 'atlas-text-v2', 'type': 'Text', 'display_console': True,
+             'supported_protocols': ['openai.chat.completions'],
+             'supported_features': [], 'output_modalities': ['text']}]}
         service = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
                 FakeExternalAdapter(runs, credentials, calls))
@@ -308,6 +346,8 @@ class ChatServiceTests(unittest.TestCase):
                  'privacy', 'created_at')}
         value.update(task_id=str(uuid4()), selected_artifact_ids=[])
         value.update(changes)
+        value['run_choice'] = self.pin_run_choice(value.get('run_choice', {
+            'mode': 'orchestration', 'adapter': 'ollama', 'model': None}))
         if 'task_plan' not in value:
             sources = ['conversation']
             if value['selected_artifact_ids']:
@@ -1379,6 +1419,8 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'x' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna')
+        request['run_choice'] = self.pin_run_choice(request['run_choice'])
         service.task_route(request)
         preview_request = {'task_id': request['task_id'], 'approval_id': str(uuid4()),
                            'turn_id': str(uuid4()), 'run_id': str(uuid4()),
@@ -1440,6 +1482,8 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'd' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna')
+        request['run_choice'] = self.pin_run_choice(request['run_choice'])
         routed = service.task_route(request)
         self.assertEqual(routed['outcome']['kind'], 'external-request')
         preview = service.task_external_preview({'task_id': request['task_id'],
@@ -1465,6 +1509,8 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'z' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna')
+        request['run_choice'] = self.pin_run_choice(request['run_choice'])
         service.task_route(request)
         preview = service.task_external_preview({
             'task_id': request['task_id'], 'approval_id': str(uuid4()),
@@ -1504,6 +1550,115 @@ class ChatServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'changed before save'):
             self.service.configure_model_preferences({
                 'expected_revision': 0, 'preferred_model_ids': []})
+
+    def test_openai_and_atlas_prefix_share_ui_identity_but_keep_wire_model_ids(self):
+        model = 'gpt-6.1-sol-codex'
+        self.service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='openai-aggregate', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model=model, target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'o' * 32))
+        self.seed_openai_models(self.service, model)
+        atlas_model = 'openai/' + model
+        catalog = AtlasCloudCatalog(self.chat_state, lambda _secret: {
+            'code': '200', 'data': [{'model': atlas_model, 'type': 'Text',
+                'display_console': True,
+                'supported_protocols': ['openai.chat.completions'],
+                'supported_features': ['json_mode'], 'output_modalities': ['text']}]})
+        atlas_offer = catalog.refresh('atlas-test-' + 'p' * 32)['offers'][0]
+        self.service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-aggregate',
+            'adapter': 'atlascloud-text', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/chat/completions',
+            'model': atlas_model, 'target_id': 'api.atlascloud.ai',
+            'offer_id': atlas_offer['offer_id'], 'protocol': atlas_offer['protocol'],
+            'knowledge_revision': 'empty-v1',
+            'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'q' * 32})
+        self.service.import_model_catalog_knowledge({'expected_revision': 'empty-v1',
+            'catalog': {'schema_version': 1, 'revision': 'openai-reviewed-v1',
+                'reviewed_at': NOW,
+                'models': [{'model_id': 'canonical:gpt-sol-codex',
+                            'display_name': 'GPT Sol Codex'}],
+                'offers': [{'offer_id': 'openai-responses:' + model,
+                    'provider_id': 'openai', 'provider_model_id': model,
+                    'protocol': 'openai-responses-v1',
+                    'canonical_model_id': 'canonical:gpt-sol-codex',
+                    'capabilities': []}]}})
+
+        offers = [item for item in self.service.model_selection_status()['offers']
+                  if item['adapter_id'] in {'openai-responses', 'atlascloud-text'}]
+        self.assertEqual({item['aggregation_model_id'] for item in offers},
+                         {'openai/' + model})
+        self.assertEqual(len({item['model_group_id'] for item in offers}), 1)
+        self.assertEqual({item['display_model_id'] for item in offers}, {model})
+        self.assertEqual({item['model_group_id'] for item in offers},
+                         {'model:canonical:gpt-sol-codex'})
+        self.assertEqual({item['model_group_canonical_id'] for item in offers},
+                         {'canonical:gpt-sol-codex'})
+        self.assertIsNone(next(item for item in offers
+                               if item['adapter_id'] == 'atlascloud-text')[
+                                   'canonical_model_id'])
+        self.assertEqual({item['provider_model_id'] for item in offers},
+                         {model, atlas_model})
+        atlas_request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': atlas_model})
+        preview = self.service.external_preview(atlas_request)
+        self.assertEqual(preview['provider_request']['model'], atlas_model)
+        self.assertEqual(preview['run_selection']['provider_model_id'], atlas_model)
+
+    def test_chat_pins_exact_offer_and_rejects_stale_selection_before_prepare(self):
+        projection = self.service.model_selection_status()
+        offer = next(item for item in projection['offers']
+                     if item['adapter_id'] == 'ollama')
+        run_choice = {'mode': 'brainstorming', 'adapter': 'ollama',
+                      'model': offer['provider_model_id'],
+                      'selection_revision': projection['revision'],
+                      'offer_id': offer['offer_id']}
+        self.service.send(**self.request(run_choice=run_choice))
+        prepared, dispatched = self.calls[-2:]
+        self.assertEqual((prepared[0], dispatched[0]), ('prepare', 'dispatch'))
+        self.assertEqual(prepared[3], dispatched[3])
+        self.assertEqual(prepared[3].offer_id, offer['offer_id'])
+        self.assertEqual(prepared[3].selection_revision, projection['revision'])
+
+        self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:preferred']})
+        calls_before = len(self.calls)
+        with self.assertRaisesRegex(ValueError, 'model offer is stale'):
+            self.service.send(**self.request(run_choice=run_choice))
+        self.assertEqual(len(self.calls), calls_before)
+
+        current = self.service.model_selection_status()
+        invalid = dict(run_choice, selection_revision=current['revision'],
+                       offer_id='ollama:missing')
+        with self.assertRaisesRegex(ValueError, 'unavailable or ambiguous'):
+            self.service.send(**self.request(run_choice=invalid))
+        self.assertEqual(len(self.calls), calls_before)
+
+    def test_prepared_run_recovers_stored_selection_after_projection_changes(self):
+        projection = self.service.model_selection_status()
+        offer = next(item for item in projection['offers']
+                     if item['adapter_id'] == 'ollama')
+        choice = ChatRunChoice.parse({'mode': 'brainstorming', 'adapter': 'ollama',
+            'model': offer['provider_model_id'],
+            'selection_revision': projection['revision'], 'offer_id': offer['offer_id']})
+        binding = choice.resolve(ollama=self.service._stores()[1].load())
+        runs = OllamaRuns(self.chat_state); run_id = str(uuid4())
+        selection = self.service._run_selection(choice, binding)
+        execution = OllamaAdapter._execution(binding, run_selection=selection)
+        runs.prepare(run_id, '1' * 64, '1' * 64, execution, '2' * 64, selection)
+
+        self.service.configure_model_preferences({
+            'expected_revision': 0, 'preferred_model_ids': ['canonical:changed']})
+        self.assertEqual(self.service._run_selection(
+            choice, binding, runs=runs, run_id=run_id), selection)
+        other = ChatRunChoice.parse({'mode': choice.mode, 'adapter': choice.adapter_id,
+            'model': choice.model, 'selection_revision': choice.selection_revision,
+            'offer_id': 'ollama:other'})
+        with self.assertRaisesRegex(ValueError, 'different model selection'):
+            self.service._run_selection(other, binding, runs=runs, run_id=run_id)
 
     def test_backend_reset_disables_profile_before_erasing_credential_and_preserves_preferences(self):
         saved = self.service.configure_model_preferences({
@@ -1586,6 +1741,21 @@ class ChatServiceTests(unittest.TestCase):
         self.assertNotIn('atlas-test-', encoded)
         self.assertNotIn('secret', encoded)
 
+        projection = service.model_selection_status()
+        atlas_offers = [item for item in projection['offers']
+                        if item['adapter_id'] == 'atlascloud-text']
+        self.assertEqual([item['provider_model_id'] for item in atlas_offers],
+                         ['atlas-text-v1', 'atlas-text-v2'])
+        self.assertTrue(all(item['binding_id'] == status['binding']['binding_id']
+                            for item in atlas_offers))
+        alternate = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': 'atlas-text-v2'})
+        alternate_preview = service.external_preview(alternate)
+        self.assertEqual(alternate_preview['provider_request']['model'], 'atlas-text-v2')
+        self.assertEqual(alternate_preview['run_selection']['provider_model_id'],
+                         'atlas-text-v2')
+        service.external_cancel({'approval_id': alternate_preview['approval_id']})
+
         request = self.external_request(run_choice={'mode': 'brainstorming',
             'adapter': 'atlascloud-text', 'model': 'atlas-text-v1'})
         preview = service.external_preview(request)
@@ -1653,7 +1823,7 @@ class ChatServiceTests(unittest.TestCase):
         service, _ = self.atlascloud_service([])
         request = self.external_request(run_choice={'mode': 'brainstorming',
             'adapter': 'atlascloud-text', 'model': 'unreviewed-model'})
-        with self.assertRaisesRegex(ValueError, 'exact bound offer model'):
+        with self.assertRaisesRegex(ValueError, 'exact selected offer'):
             service.external_preview(request)
         invalid = {'schema_version': 1, 'binding_id': str(uuid4()),
             'revision': 'atlas-two', 'adapter': 'atlascloud-text',
@@ -1808,6 +1978,7 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-luna', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'c' * 32))
+        self.seed_openai_models(service, 'gpt-5.6-luna')
         proposal = service.external_propose(proposal_request)
         self.assertEqual(proposal['proposal']['message_ids'],
                          [proposal_request['message_id']])
@@ -1818,6 +1989,8 @@ class ChatServiceTests(unittest.TestCase):
             manifest_id=str(uuid4()), assistant_message_id=str(uuid4()),
             selected_message_ids=[], content=proposal_request['content'],
             privacy=proposal_request['privacy'], created_at=proposal_request['created_at'])
+        external['run_choice'] = self.pin_run_choice({'mode': 'brainstorming',
+            'adapter': 'openai-responses', 'model': 'gpt-5.6-luna'})
         preview = service.external_preview(external)
         result = service.external_confirm({'approval_id': preview['approval_id'],
             'preview_sha256': preview['preview_sha256'], 'approved': True,
@@ -1887,7 +2060,7 @@ class ChatServiceTests(unittest.TestCase):
             boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
             model='gpt-5.6-terra', target_id='api.openai.com', max_output_tokens=4096,
             timeout_seconds=180, secret='sk-test-' + 'n' * 32))
-        with self.assertRaisesRegex(ValueError, 'binding or credential changed'):
+        with self.assertRaisesRegex(ValueError, 'model offer is stale'):
             service.external_confirm({'approval_id': changed['approval_id'],
                 'preview_sha256': changed['preview_sha256'], 'approved': True,
                 'privacy': changed['privacy']})
@@ -1990,6 +2163,9 @@ class ChatServiceTests(unittest.TestCase):
                          ['de-DE', 'sk-SK'])
 
     def test_explicit_modes_bind_thread_and_per_run_local_model(self):
+        with patch.object(OllamaAdapter, 'discover_models',
+                          return_value=['gemma3', 'qwen3']):
+            self.service.refresh_ollama_models(self.binding)
         brainstorming = self.request(run_choice={
             'mode': 'brainstorming', 'adapter': 'ollama', 'model': 'qwen3'})
         result = self.service.send(**brainstorming)
@@ -2263,6 +2439,7 @@ class ChatServiceTests(unittest.TestCase):
                 model='gpt-5.6-luna', target_id='api.openai.com',
                 max_output_tokens=4096, timeout_seconds=180,
                 secret='sk-test-' + 'a' * 32))
+            self.seed_openai_models(self.service, 'gpt-5.6-luna')
             external = self.external_request(expected_head=self.git.head())
             response = driver.request(server, path='/v1/external/preview',
                                       body=json.dumps(external).encode())

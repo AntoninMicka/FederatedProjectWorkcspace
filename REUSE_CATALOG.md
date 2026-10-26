@@ -39,7 +39,8 @@ význam ani testovací runtime. Nový framework nebo `pytest-xdist` se nepřidá
 protože souběh uvnitř společného procesu/worktree by oslabil izolaci socketů,
 globálního stavu, Qt a recovery scénářů a přidal by zbytečnou závislost.
 
-UX-BACKEND-MODEL-01 **adaptuje** provider-neutral `ModelKnowledgeStore` a
+UX-BACKEND-MODEL-01 a navazující pinning `UX-BACKEND-MODEL-02` **adaptují**
+provider-neutral `ModelKnowledgeStore` a
 `ModelDiscoveryStore`, `BackendRegistry`/`BackendCapabilities`, stávající
 binding stores, `ChatRunChoice`, jediné provider run journals a sdílený
 `spikes/desktop_ui.py`, existující tabulkové/dialogové vzory federace a

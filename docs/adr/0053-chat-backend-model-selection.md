@@ -7,6 +7,7 @@ SPDX-License-Identifier: MPL-2.0
 
 - Stav: přijaté pro implementaci
 - Datum: 2026-10-25
+- Doplnění: 2026-10-26 — explicitní upstream namespace aliasy
 - Dávka: `UX-BACKEND-MODEL-01`
 
 ## Kontext
@@ -49,17 +50,32 @@ poskytovat více nesouvisejících služeb. Neznámá služba ani capability se
 nepředstírá jako podporovaná.
 
 Nastavení spojení je providerově specifický `BackendProfile` (endpoint,
-credential reference, hranice, timeouty a další pravidla adapteru), nikoli
-volba modelu. Dosavadní bindingy s modelem se migrují beze ztráty jako legacy
-profil plus doložená nabídka; dokud migrace neumí oddělení prokázat, zůstane
-profil čitelný, ale nový obecný dispatch se z něj nepovolí optimisticky.
+credential reference, hranice, timeouty, podporovaný protokol a další pravidla
+adapteru), nikoli omezení na jediný model. Model uložený ve starším bindingu je
+výchozí hodnota a recovery evidence, nikoli jediná povolená nabídka. Čerstvá
+discovery nabídka se stejným profilem a kompatibilním protokolem smí pro jeden
+běh vytvořit neměnný odvozený binding; uložený profil ani credential přitom
+nemění. Bez přesné čerstvé nabídky, capabilities a revizí se obecný dispatch
+nepovolí optimisticky.
 
-Stejný providerový název nikdy automaticky neslučuje modely. Nabídka bez
-explicitní kanonické vazby je samostatná scoped volba; může být vybrána po
-backendu, ale nepoužije se pro křížový model-first filtr ani pro kanonické
-preference. Nakonfigurovaný přesný binding se smí promítnout jako spustitelná
-nabídka, jen pokud server dokáže doložit jeho identitu, revizi a capabilities;
-stale, removed, conflicting nebo unknown požadavek dispatch neopravňuje.
+Stejný podobně vypadající providerový název nikdy automaticky neslučuje modely.
+Výjimkou je explicitní strukturální upstream namespace deklarovaný adapterem:
+OpenAI nabídka `gpt-x` a AtlasCloud nabídka `openai/gpt-x` smějí dostat společný
+neautoritativní `aggregation_model_id` a zobrazovaný název `gpt-x`. AtlasCloud
+tím výslovně označuje upstream provider, nejde tedy o fuzzy porovnání řetězců.
+Přesný `provider_model_id` obou nabídek zůstává odlišný a pouze ten se ukládá do
+`RunSelection`, per-run bindingu a providerového requestu. Agregační klíč
+slouží katalogu a obousměrnému filtru UI, není canonical knowledge, preferencí
+ani oprávněním k dispatch. Má-li skupina právě jednu explicitní kanonickou
+vazbu, převezmou její skupinové ID i dosud nezmapované nabídky se stejným
+adapterem deklarovaným upstream namespace. Více různých kanonických vazeb se
+nesloučí a nezmapovaná nabídka zůstane samostatná.
+
+Jiná nabídka bez explicitní kanonické vazby nebo podporovaného namespace hintu
+je samostatná scoped volba. Nabídka se smí promítnout jako spustitelná, jen
+pokud server dokáže doložit identitu a revizi kompatibilního profilu spojení,
+přesný model/protokol a capabilities; stale, removed, conflicting nebo unknown
+požadavek dispatch neopravňuje.
 
 ### Obousměrný filtr a explicitní volba
 
@@ -80,6 +96,8 @@ jinak jej viditelně vymaže. Prázdný, offline nebo stale stav je konkrétní
 diagnostika, ne prázdná aktivní nabídka. Sdílený `spikes/desktop_ui.py` je
 jediný desktop/web widget; providerové větve smí být pouze v serverových
 adaptérech a projekci, ne v pravidlech formuláře.
+Projekce voleb se načítá při každém otevření nebo obnovení chatu; návštěva
+Nastavení nesmí být skrytým předpokladem pro zobrazení backendů a modelů.
 
 ### Preference
 

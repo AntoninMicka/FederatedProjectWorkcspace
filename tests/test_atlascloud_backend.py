@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
+from spikes.backend_contract import RunSelection
 from spikes.atlascloud_backend import (ATLASCLOUD_ENDPOINT, ATLASCLOUD_PROTOCOL,
     AtlasCloudAdapter, AtlasCloudBinding, AtlasCloudBindings, AtlasCloudCatalog,
     AtlasCloudCredentials, AtlasCloudResponseError, AtlasCloudRuns,
@@ -129,6 +130,19 @@ class AtlasCloudBackendTests(unittest.TestCase):
         self.assertEqual(result['usage']['total_tokens'], 10)
         self.assertEqual(adapter.runs.get(self.handoff.run_id)['adapter_id'],
                          'atlascloud-text')
+
+    def test_dispatch_persists_exact_run_selection(self):
+        selection = RunSelection(1, 'selection-atlas-one', 'atlascloud-text',
+            self.binding.binding_id, self.binding.revision, self.offer_id, self.model,
+            ATLASCLOUD_PROTOCOL, 'capabilities-atlas-one',
+            ('generate-text', 'json-output', 'streaming', 'text-output'),
+            'empty-v1', self.binding.credential_revision)
+        adapter = AtlasCloudAdapter(AtlasCloudRuns(self.state), self.credentials,
+                                    lambda *args: self.response())
+        adapter.dispatch(self.handoff, self.binding, run_selection=selection)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(row['run_selection'], selection.serialize())
+        self.assertEqual(row['selection_sha256'], selection.digest())
 
     def test_json_and_stream_require_reviewed_capabilities(self):
         limited = AtlasCloudBinding.parse(dict(self.value,

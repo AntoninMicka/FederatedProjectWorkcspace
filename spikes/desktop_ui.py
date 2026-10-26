@@ -646,7 +646,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <section id="settings-models-panel" class="settings-card" role="tabpanel" aria-labelledby="settings-models-tab" hidden>
 <h2>Katalog modelů</h2><p>Read-only přehled kanonických modelů a doložených nabídek napříč backendy.</p>
 <p id="settings-models-status" role="status" aria-live="polite">Načítám modelový katalog…</p>
-<div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backend</th><th>Protokol</th><th>Schopnosti</th><th>Stav</th></tr></thead><tbody></tbody></table></div>
+<div class="settings-table-wrap"><table id="settings-models-table"><thead><tr><th>Model</th><th>Backendy</th><th>Schopnosti</th><th>Dostupnost</th></tr></thead><tbody></tbody></table></div>
 <dialog id="settings-model-detail" aria-labelledby="settings-model-detail-title"><h2 id="settings-model-detail-title">Detail modelu</h2><pre></pre><button type="button" class="secondary-button">Zavřít</button></dialog>
 </section>
 <section id="settings-cms-panel" class="settings-card cms-card" role="tabpanel" aria-labelledby="settings-cms-tab" hidden>
@@ -3467,19 +3467,30 @@ function renderModelSelection(value){
  modelSelectionProjection=value;renderChatRunSelectors();
  const body=document.querySelector('#settings-models-table tbody');body.replaceChildren();
  const names=new Map((value.models||[]).map(item=>[item.model_id,item.display_name]));
- for(const offer of value.offers||[]){
+ const groups=new Map();
+ for(const offer of value.offers||[]){const key=offer.model_group_id;
+  if(!groups.has(key))groups.set(key,{key,canonical_model_id:offer.model_group_canonical_id,
+   label:names.get(offer.model_group_canonical_id)||offer.display_model_id,offers:[]});
+  groups.get(key).offers.push(offer);
+ }
+ for(const group of [...groups.values()].sort((a,b)=>a.label.localeCompare(b.label))){
   const row=document.createElement('tr'),model=document.createElement('td'),button=document.createElement('button');
-  button.type='button';button.textContent=names.get(offer.canonical_model_id)||offer.provider_model_id;
+  button.type='button';button.textContent=group.label;
   button.addEventListener('click',()=>{const dialog=document.querySelector('#settings-model-detail');
-   dialog.querySelector('pre').textContent=JSON.stringify(offer,null,2);dialog.showModal();});
+   dialog.querySelector('pre').textContent=JSON.stringify({model_key:group.key,
+    canonical_model_id:group.canonical_model_id,display_name:group.label,
+    backend_offers:group.offers},null,2);dialog.showModal();});
   model.append(button);row.append(model);
-  const supported=(offer.capabilities||[]).filter(item=>item.supported).map(item=>item.name).join(', ')||'žádné doložené';
-  for(const text of [offer.adapter_id,offer.protocol,supported,
-   `${offer.availability} · ${offer.freshness}`]){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}
+  const backends=[...new Set(group.offers.map(offer=>runBackendNames[offer.adapter_id]||offer.adapter_id))];
+  const supported=[...new Set(group.offers.flatMap(offer=>(offer.capabilities||[])
+   .filter(item=>item.supported).map(item=>item.name)))].sort();
+  const available=group.offers.filter(offer=>offer.availability==='available'&&offer.freshness==='fresh').length;
+  for(const text of [backends.join(', '),supported.join(', ')||'žádné doložené',
+   `${available}/${group.offers.length} čerstvých nabídek`]){const cell=document.createElement('td');cell.textContent=text;row.append(cell);}
   body.append(row);
  }
  document.querySelector('#settings-models-status').textContent=
-  `${(value.models||[]).length} kanonických modelů · ${(value.offers||[]).length} providerových nabídek · ${value.revision}`;
+  `${groups.size} agregovaných modelů · ${(value.offers||[]).length} backendových nabídek · ${value.revision}`;
 }
 async function loadBackendCatalog(){try{renderBackendCatalog(await projectRequest('/v1/backend-catalog/status',{}));}catch(error){document.querySelector('#settings-backend-status').textContent=error.message;}}
 async function loadModelSelection(){try{renderModelSelection(await projectRequest('/v1/model-selection/status',{}));}catch(error){document.querySelector('#settings-models-status').textContent=error.message;}}
@@ -5372,8 +5383,10 @@ document.querySelector('#backend-metrics-refresh').addEventListener('click',asyn
 });
 const runBackendNames={'ollama':'Ollama','openai-responses':'OpenAI','atlascloud-text':'AtlasCloud'};
 let chatRunFilter={backend:'',model:''};
-function runOfferModelKey(offer){return offer.canonical_model_id?
- `model:${offer.canonical_model_id}`:`offer:${offer.adapter_id}:${offer.offer_id}`;}
+function runOfferModelKey(offer){return offer.model_group_id;}
+function runChoiceForOffer(mode,offer){return {mode,adapter:offer.adapter_id,
+ model:mode==='orchestration'&&offer.adapter_id==='ollama'?null:offer.provider_model_id,
+ selection_revision:modelSelectionProjection.revision,offer_id:offer.offer_id};}
 function runnableModelOffers(){const mode=document.querySelector('#chat-mode')?.value;return (modelSelectionProjection?.offers||[]).filter(offer=>
  offer.binding_id&&offer.binding_revision&&offer.availability==='available'&&offer.freshness==='fresh'&&
  (offer.capabilities||[]).some(item=>item.name==='generate-text'&&item.supported)&&
@@ -5392,9 +5405,9 @@ function renderChatRunSelectors(){
  let modelOffers=chatRunFilter.backend?offers.filter(item=>item.adapter_id===chatRunFilter.backend):offers;
  const choices=new Map();
  for(const offer of modelOffers){const key=runOfferModelKey(offer),known=choices.get(key);
-  if(!known)choices.set(key,{key,label:offer.canonical_model_id?
-   (models.get(offer.canonical_model_id)||offer.provider_model_id):offer.provider_model_id,
-   canonical_model_id:offer.canonical_model_id});}
+  if(!known)choices.set(key,{key,label:offer.model_group_canonical_id?
+   (models.get(offer.model_group_canonical_id)||offer.display_model_id):offer.display_model_id,
+   canonical_model_id:offer.model_group_canonical_id});}
  if(chatRunFilter.model&&!choices.has(chatRunFilter.model))chatRunFilter.model='';
  model.replaceChildren(new Option('Vyberte model',''));
  const preferred=new Set(modelSelectionProjection?.preferences?.preferred_model_ids||[]);
@@ -5410,6 +5423,12 @@ function selectedRunOffer(){
  const matches=runnableModelOffers().filter(offer=>(!chatRunFilter.backend||offer.adapter_id===chatRunFilter.backend)
   &&(!chatRunFilter.model||runOfferModelKey(offer)===chatRunFilter.model));
  return chatRunFilter.backend&&chatRunFilter.model&&matches.length===1?matches[0]:null;
+}
+async function refreshStaleRunSelection(error){
+ const stale=error?.status===422&&String(error.message||'').includes('model offer');
+ if(!stale)return false;
+ chatRunFilter={backend:'',model:''};pendingChatRequest=null;
+ await loadModelSelection();renderChatRunSelectors();return true;
 }
 function configuredRunBinding(adapter){
  return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
@@ -5514,6 +5533,12 @@ async function loadChat(){
  const loadRevision=++chatLoadRevision;
  const selectionRevision=chatSelectionRevision;
  const projectId=activeProject?.id || null;
+ const [modelSelectionState]=await Promise.allSettled([
+  projectRequest('/v1/model-selection/status',{})]);
+ if(loadRevision!==chatLoadRevision || selectionRevision!==chatSelectionRevision)return;
+ if(projectId!==(activeProject?.id || null))return;
+ if(modelSelectionState.status==='fulfilled')renderModelSelection(modelSelectionState.value);
+ else{modelSelectionProjection=null;renderChatRunSelectors();}
  let result;
  try{
   result=await projectRequest('/v1/chat/status',{});
@@ -5561,6 +5586,7 @@ async function loadChat(){
   atlasCloudStreaming=atlas.capabilities?.streaming===true;
   fillAtlasCloudOffers(atlas.model_catalog,atlas.binding);
  }else{atlasCloudBinding=null;atlasCloudStreaming=false;fillAtlasCloudOffers(null,null);warnings.push('AtlasCloud stav není dostupný');}
+ if(modelSelectionState.status==='rejected')warnings.push('nabídky backendů a modelů nejsou dostupné');
  refreshChatModeControls();
  if(selectionRevision!==chatSelectionRevision)return;
  if(tasksState.status==='fulfilled'){
@@ -5811,8 +5837,7 @@ document.querySelector('#external-preview-button').addEventListener('click',asyn
   selected_message_ids:(activeThread?.messages || []).map(item=>item.message_id),
   content:draft.value,privacy:document.querySelector('#chat-privacy').value,
  created_at:new Date().toISOString()};
- if(selectedAdapter!=='ollama')request.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:selectedOffer.provider_model_id};
+ if(selectedAdapter!=='ollama')request.run_choice=runChoiceForOffer('brainstorming',selectedOffer);
  event.currentTarget.disabled=true;await showExternalPreview(request);
  event.currentTarget.disabled=!activeProject || !draft.value.trim();
 });
@@ -5855,8 +5880,7 @@ document.querySelector('#external-proposal-use').addEventListener('click',async(
   created_at:request.created_at};
  const selectedOffer=selectedRunOffer();if(!selectedOffer){chatOperationStatus.textContent='Vyberte backend a model.';return;}
  const selectedAdapter=selectedOffer.adapter_id;
- if(selectedAdapter!=='ollama')external.run_choice={mode:'brainstorming',adapter:selectedAdapter,
-  model:selectedOffer.provider_model_id};
+ if(selectedAdapter!=='ollama')external.run_choice=runChoiceForOffer('brainstorming',selectedOffer);
  document.querySelector('#external-proposal').hidden=true;await showExternalPreview(external);
 });
 document.querySelector('#external-proposal-cancel').addEventListener('click',()=>{
@@ -5915,8 +5939,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(adapter==='ollama' && !chatBinding){chatOperationStatus.textContent='Nejprve uložte nastavení Ollama backendu.';return;}
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
  if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
- const model=offer.provider_model_id;
- const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
+ const runChoice=runChoiceForOffer(mode,offer);
  const responseLanguage=document.querySelector('#chat-response-language').value || null;
  if(mode==='orchestration'){
   if(adapter==='ollama'){
@@ -5970,8 +5993,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    appendChatOperationNotice(error);
+   const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
-   chatOperationStatus.textContent=error.message;
+   chatOperationStatus.textContent=error.message+(staleSelection?
+    ' Nabídka byla obnovena; backend a model vyberte znovu.':'');
   }finally{liveProgress.stop();chatStream.hidden=true;
    finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
   return;
@@ -6012,10 +6037,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     runtimeEvidenceText(result.runtime_evidence);
   }catch(error){
    appendChatOperationNotice(error);
+   const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
-    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
+    (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
+    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
   }finally{clearTimeout(thinking);liveProgress.stop();
    submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
    finishChatAutoFollow();}
@@ -6070,6 +6097,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
   appendChatOperationNotice(error);
+  const staleSelection=await refreshStaleRunSelection(error);
   const failed=pendingChatRequest;
   try{
    const recovered=await projectRequest('/v1/tasks/list',{
@@ -6079,7 +6107,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   }catch(_recoveryError){}
   if([409,422,502].includes(error.status))pendingChatRequest=null;
   chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
-   ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
+   (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
+   ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
  finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
   finishChatAutoFollow();}

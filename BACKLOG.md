@@ -82,8 +82,11 @@ akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
 doručena PR #93 jako merge commit `0405d14`; evidence je ve WORK_LOG.
 Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla doručena PR #94 jako
 commit `b19d46a`; všechny čtyři CI shardy i souhrnný check uspěly a evidence je ve
-WORK_LOG. `UX-BACKEND-MODEL-01` byla přesunuta jako jediná aktivní dávka do
-[TODO](TODO.md); backlog ji již nedrží jako druhý stavový záznam.
+WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
+#97 a jeho skutečný stav je ve WORK_LOG. Navazující serverový pinning,
+revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
+26. 10. 2026 úrovně PoC validated; evidence je ve WORK_LOG a feature čeká na
+doručení jediného PR do `develop`. Backlog ji nedrží jako druhý stavový záznam.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -99,9 +102,9 @@ WORK_LOG. `UX-BACKEND-MODEL-01` byla přesunuta jako jediná aktivní dávka do
 - [ ] [planned] **UX-FACELIFT-02 — budoucí doladění zbývajících stránek
   (cílová úroveň: designed → implemented → PoC validated).** Uživatel po
   akceptaci UX-FACELIFT-01 výslovně odložil obecné další kolo faceliftu.
-  Konkrétní první navazující řez backendů/modelů je nyní samostatná nejbližší
-  dávka `UX-BACKEND-MODEL-01`; tato položka drží pouze zbytek dosud nevybraných
-  stránek. Před jejich aktivací znovu vygenerovat A4 inventuru ze skutečného
+  Konkrétní řez backendů/modelů byl dokončen dávkami `UX-BACKEND-MODEL-01/02`;
+  tato položka drží pouze zbytek dosud nevybraných stránek. Před jejich
+  aktivací znovu vygenerovat A4 inventuru ze skutečného
   sdíleného UI, uživatelsky vybrat jeden ucelený reviewovatelný řez a neměnit
   již přijaté vzory bez konkrétní potřeby. Akceptace zachová
   mobilní/klávesnicovou paritu, RBAC, privacy, potvrzení a recovery a bude

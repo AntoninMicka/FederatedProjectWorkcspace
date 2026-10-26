@@ -83,14 +83,23 @@ class ChatModePolicyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, 'explicit context'):
             choice.validate_context(project_input_ids=(), text_input_ids=())
 
-    def test_atlascloud_choice_is_exact_and_does_not_fall_back(self):
+    def test_atlascloud_choice_derives_exact_offer_without_mutating_profile(self):
         choice = ChatRunChoice.parse({'mode': 'brainstorming',
             'adapter': 'atlascloud-text',
-            'model': 'deepseek-ai/deepseek-v3.2'})
+            'model': 'openai/gpt-6.1-sol-codex',
+            'selection_revision': 'selection-one',
+            'offer_id': 'atlascloud:openai/gpt-6.1-sol-codex:responses'})
         selected = choice.resolve(ollama=None, atlascloud=self.atlascloud)
         self.assertEqual((selected.model, selected.adapter_id),
-                         ('deepseek-ai/deepseek-v3.2', 'atlascloud-text'))
-        self.assertEqual(selected.offer_id, self.atlascloud.offer_id)
+                         ('openai/gpt-6.1-sol-codex', 'atlascloud-text'))
+        self.assertEqual(selected.offer_id, choice.offer_id)
+        self.assertNotEqual(selected.revision, self.atlascloud.revision)
+        self.assertEqual(selected.credential_ref, self.atlascloud.credential_ref)
+        self.assertEqual(self.atlascloud.model, 'deepseek-ai/deepseek-v3.2')
+        missing_offer = ChatRunChoice.parse({'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': 'openai/gpt-6.1-sol-codex'})
+        with self.assertRaisesRegex(ValidationError, 'exact selected offer'):
+            missing_offer.resolve(ollama=None, atlascloud=self.atlascloud)
         with self.assertRaisesRegex(ValidationError, 'unavailable'):
             choice.resolve(ollama=None, openai=self.openai)
 
