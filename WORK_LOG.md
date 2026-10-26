@@ -5,6 +5,59 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-BACKEND-MODEL-02 — pinning backendu a modelové nabídky — 2026-10-26
+
+Dávka vznikla na větvi `feature/ux-backend-model-02-run-pinning` z `develop`
+`45144a0` jako dokončení serverového kontraktu po PR #96 a #97. Dosáhla úrovně
+**PoC validated**. Feature akceptace je dokončená; PR do `develop` zatím nebyl
+vytvořen ani sloučen. Implementace a fyzická evidence jsou ve feature commitech
+`14305eb`, `2365782` a `862cdb4`.
+
+- [x] [completed] **UX-BACKEND-MODEL-02-A — kontrakt a revalidace
+  (implemented).** Klient posílá revizi serverové projekce a přesný `offer_id`;
+  server před přípravou znovu ověří binding, model, protokol, capabilities a
+  rozhodné revize a bez automatického fallbacku vytvoří `RunSelection`.
+- [x] [completed] **UX-BACKEND-MODEL-02-B — jediný durable run journal
+  (implemented).** Kanonický výběr a jeho digest jsou součástí stávajících
+  providerových journalů a `BackendExecution`; legacy běhy zůstávají čitelné a
+  recovery po `prepared` používá pouze uložený výběr.
+- [x] [completed] **UX-BACKEND-MODEL-02-C — sdílený klientský kontrakt
+  (implemented).** Composer pinne přesnou nabídku, při stale odpovědi zachová
+  zadání, obnoví projekci a vyžádá novou vědomou volbu.
+- [x] [completed] **UX-BACKEND-MODEL-02-D — regrese a akceptace
+  (PoC validated).** Testy pokrývají všechny tři textové adaptéry, změny
+  bindingu/credentialu/discovery/knowledge/capabilities, restart, legacy běhy,
+  RBAC/privacy a zákaz fallbacku. Uživatel fyzicky potvrdil zrušení obou filtrů
+  a návrat plné kompatibilní sady.
+- [x] [completed] **UX-BACKEND-MODEL-02-E — obnova nabídek a upstream alias
+  (implemented; ad-hoc).** Binding je profil spojení a konkrétní model se
+  odvodí až pro běh. Obecný katalog agreguje providerové varianty; AtlasCloud
+  prefix se odstraňuje pouze ze zobrazovaného/skupinového ID a přesný
+  `provider_model_id` zůstává v per-run bindingu, journalu i wire requestu.
+
+### Ověření a omezení
+
+Cílených 159 testů prošlo, stejně jako samostatný skutečný Qt/WebEngine smoke
+agregovaných řádků, naplněných dropdownů a model-first filtru. Úplná sada po
+poslední změně prošla: **873 testů bez selhání, 30 přeskočeno, za 205,836 s**.
+Prošly také Python syntaxe, `node --check` a `git diff --check`. Read-only
+projekce nad reálným stavem uzlu vrátila 159 čerstvých běžitelných nabídek přes
+Ollamu, OpenAI a AtlasCloud.
+
+Fyzická akceptace vytvořila dvě nové odpovědi. Ollama běh
+`cfadd428-b812-40d1-a0f5-2a62c2c4e764` s `qwen3-coder:latest` a AtlasCloud běh
+`10da0fa6-ad27-4b93-bbf7-ba56f26a844b` s `google/gemini-4-argon` skončily
+`succeeded`; oba journaly obsahují přesný offer a `selection_sha256`.
+Schválený AtlasCloud provider request zachoval přesné prefixované ID
+`google/gemini-4-argon`. Uživatel následně ověřil, že zrušení modelového nebo
+backendového filtru znovu zpřístupní plnou kompatibilní nabídku. Stale/CAS
+změna revize katalogu je pokryta automatickými fail-closed testy, nikoli
+samostatnou fyzickou manipulací živého katalogu.
+
+Mimo rozsah zůstává automatický výběr/fallback, pořadí podle ceny či kvality,
+noví provideři a obecný facelift dalších stránek. Stav PR je oddělený od
+feature akceptace: PR nebyl vytvořen ani sloučen.
+
 ## UX-BACKEND-MODEL-01 — katalog, nastavení a výběr v composeru — 2026-10-26
 
 Dávka vznikla na větvi `feature/ux-backend-model-01-chat-selector` z `develop`
@@ -12,9 +65,8 @@ Dávka vznikla na větvi `feature/ux-backend-model-01-chat-selector` z `develop`
 oprava nezávislého načítání historie chatů byla doručena PR #97 jako merge
 commit `45144a0`. Původně plánovaná jediná dávka tak byla fakticky rozdělena a
 sloučena před serverovým pinningem a fyzickou akceptací celku. Doručenou část
-archivujeme zde; zbývající pinning/revalidace pokračuje jako samostatná dávka
-`UX-BACKEND-MODEL-02`, aby další změny nevznikaly přímo na `develop` ani se
-nevydávaly za dokončenou akceptaci původního rozsahu.
+archivujeme zde; zbývající pinning/revalidace proto pokračovaly jako samostatná
+dávka `UX-BACKEND-MODEL-02`, jejíž dokončená evidence je nyní archivována výše.
 
 - [x] [completed] **UX-BACKEND-MODEL-01-A/AH-01 — kontrakt, katalog služeb a
   zdrojů (designed).** ADR 0053 oddělila binding, modelovou nabídku, preference,
@@ -29,9 +81,10 @@ nevydávaly za dokončenou akceptaci původního rozsahu.
   pomocných stavech (implemented/validated).** Vlákna se vykreslí z
   `/v1/chat/status` před volitelnými provider/task/autonomy projekcemi a pozdní
   odpověď po přepnutí projektu je zneplatněna.
-- [ ] [planned] **Předáno do UX-BACKEND-MODEL-02:** serverový `RunSelection`,
+- **Historické předání do UX-BACKEND-MODEL-02:** serverový `RunSelection`,
   revalidace, uložení přesného výběru v jediném run journalu a cílená fyzická
-  akceptace nebyly součástí doručeného aplikačního stavu.
+  akceptace nebyly součástí PR #96 ani #97; dokončeny byly až navazující dávkou
+  archivovanou výše.
 
 ### Ověření a omezení
 
