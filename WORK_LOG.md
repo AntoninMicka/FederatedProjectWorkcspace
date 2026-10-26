@@ -37,15 +37,25 @@ PR do `develop` dosud nebyl vytvořen ani sloučen.
   binding nástroj i provozní návod, ale nepřibaluje Julia runtime. Podporovaný
   profil je Julia 1.10.12 na Linux glibc aarch64; x86-64 zůstává neověřený
   kandidát a tato dávka jej za podporovaný neprohlašuje.
+- [x] [completed] **COMP-02-F — bezpečný onboarding runtime (PoC validated;
+  doplněno po znovuotevření akceptace).** Jediný `setup` příkaz bez projektových
+  UUID ověří podporovanou verzi/platformu a připnutý checksum, prakticky
+  prověří bubblewrap namespaces a vytvoří owned mode-0700 depot/state i
+  immutable mode-0600 binding. Shodný retry a oba pády kolem atomického
+  zveřejnění bindingu se reconciliují; odlišný binding se nepřepíše. Výsledek
+  přiznává samostatnou GPG hranici a vrací konkrétní navazující `prepare`
+  příkaz s vyplněnými lokálními cestami.
 
 ### Ověření, recovery a omezení
 
-Finální úplná sada prošla mimo omezený sandbox: **924 testů bez selhání,
-35 přeskočeno, za 223,584 s**. Cílená Julia sada před ní prošla s 19 testy a
-2 podmíněně přeskočenými; balení, metadata a právní registr byly zahrnuté také
-v úplné sadě. Závěrečný fyzický běh nad posledním kódem provedl dva testy:
-skutečný výpočet a publikaci s oficiálním Julia 1.10.12 ARM64 runtime a
-samostatný bubblewrap pokus o síť, který byl odmítnut.
+Finální úplná sada po onboardingu prošla mimo omezený sandbox: **927 testů bez
+selhání, 35 přeskočeno, za 229,964 s**. Cílená Julia sada prošla s 22 testy a
+2 podmíněně přeskočenými; kombinovaná Julia/balení/licence sada měla 38 testů
+a 3 přeskočené. Skutečný `setup` nad oficiálním runtime ověřil nový binding,
+depot/state a bubblewrap namespace a opakování vrátilo `reused: true`.
+Závěrečný fyzický běh nad posledním kódem provedl další dva testy: skutečný
+výpočet a publikaci s oficiálním Julia 1.10.12 ARM64 runtime a samostatný
+bubblewrap pokus o síť, který byl odmítnut.
 
 Archiv `julia-1.10.12-linux-aarch64.tar.gz` odpovídal zveřejněnému SHA-256
 `cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2` a jeho
@@ -58,8 +68,11 @@ privátní cache jen obnovitelnou projekcí. Pád před durable `dispatching` ni
 nespustil; neurčitý pád po dispatch zůstává `unknown` bez automatického retry.
 Po atomickém rename se převezme jen exact generace, jinak je výsledek stale.
 Publikace má vlastní Workspace journal a její recovery nemění terminální stav
-výpočtu. Automatická instalace/aktualizace Julia, x86-64 akceptace, notebookové
-UI, síťové/GPU/distribuované výpočty a externí publikace zůstávají mimo rozsah.
+výpočtu. Setup zapisuje až po kontrole runtime, archivu a namespaces; pád před
+hardlink zveřejněním ponechá přesný pending binding, pád po něm dvě jména
+stejného inode a retry oba stavy bezpečně dokončí. Automatická
+instalace/aktualizace Julia, x86-64 akceptace, notebookové UI,
+síťové/GPU/distribuované výpočty a externí publikace zůstávají mimo rozsah.
 
 ## COMP-01 — Julia výpočetní kontrakt a prostředí — 2026-10-26
 

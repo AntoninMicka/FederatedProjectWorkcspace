@@ -96,7 +96,9 @@ def _parser():
 
 def run(args):
     if args.command == 'setup':
-        state_home = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
+        configured = os.environ.get('XDG_STATE_HOME')
+        state_home = (Path(configured) if configured and Path(configured).is_absolute()
+                      else Path.home() / '.local/state')
         setup_root = args.root or state_home / 'federated-workspace/julia' / '1.10.12-linux-aarch64'
         return setup_runtime(args.runtime, args.archive, setup_root, args.bubblewrap)
     executor = _executor(args)
