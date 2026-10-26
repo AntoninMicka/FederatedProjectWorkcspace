@@ -24,6 +24,8 @@ from tests import test_projects
 from tests.fixtures import markdown, metadata, ENTITY
 from spikes.source_import import Sources, request_from_bytes
 from spikes.configuration import parse_node, read_config
+from spikes.chat_threads import ChatThreads
+from spikes.project_creation import ProjectCreation
 from tests.test_notebooklm_import import valid_members
 
 
@@ -566,6 +568,47 @@ class WebTests(unittest.TestCase):
                            'active':False, 'node_role':'member', 'memberships':{project:'reader'}})
         self.assertEqual(code,200)
         self.assertEqual(self.request(headers=headers)[0],401)
+
+    def test_chat_history_and_mutation_use_authenticated_web_account(self):
+        def admin(request):
+            return self.request(path='/v1/administration', body=json.dumps(request))
+
+        code, data, _ = self.create_project('Chat identity seed')
+        self.assertEqual(200, code, data)
+        code, data, _ = admin({'action': 'list'})
+        self.assertEqual(200, code, data)
+        state = json.loads(data)
+        code, data, _ = admin({
+            'action': 'create-user', 'expected_commit': state['commit_id'],
+            'name': 'Chat owner', 'node_role': 'member'})
+        self.assertEqual(200, code, data)
+        state = json.loads(data)
+        user = state['users'][0]
+        headers = {'Authorization': 'Bearer ' + state['access_key']}
+
+        node_path = self.root / 'node.json'
+        node_id = parse_node(read_config(node_path), location=node_path)['id']
+        store = ChatThreads(self.server.chat_service._root())
+        owned_thread, node_thread = str(uuid4()), str(uuid4())
+        created_at = '2026-10-26T10:00:00.000000Z'
+        store.create(thread_id=owned_thread, node_id=node_id,
+                     user_id=user['id'], created_at=created_at)
+        store.create(thread_id=node_thread, node_id=node_id,
+                     user_id=ProjectCreation(self.root / 'node.json').author_id(),
+                     created_at=created_at)
+
+        code, data, _ = self.request(path='/v1/chat/status', headers=headers)
+        self.assertEqual(200, code, data)
+        status = json.loads(data)
+        self.assertEqual([owned_thread],
+                         [row['thread_id'] for row in status['threads']])
+        code, data, _ = self.request(path='/v1/chat/archive', headers=headers,
+            body=json.dumps({'thread_id': owned_thread, 'expected_revision': 0}))
+        self.assertEqual(200, code, data)
+        self.assertEqual('archived', json.loads(data)['status'])
+        self.assertEqual('active', store.get(
+            node_thread, node_id,
+            ProjectCreation(self.root / 'node.json').author_id())['status'])
 
     def test_shared_history_routes_list_and_compare_committed_document(self):
         _, data, _ = self.create_project('History')

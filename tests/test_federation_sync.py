@@ -306,7 +306,7 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn("#chats-tab').addEventListener('click',()=>loadChat())", JS)
         self.assertIn("contentsynccompleted", JS)
         self.assertIn('function contentSyncSummary', ADMIN_JS)
-        self.assertIn('chybí aktivní bilaterální mapování účtů', ADMIN_JS)
+        self.assertIn('chybí aktivní vazba účtů z přihlášení', ADMIN_JS)
         self.assertIn('Chaty: sdíleno', ADMIN_JS)
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):

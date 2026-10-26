@@ -16,6 +16,7 @@ from spikes.metadata import require, timestamp, uuid
 MAX_CHAT_PAYLOAD = 16 * 1024 * 1024
 MAX_PROJECT_THREADS = 64
 TRANSFERABLE_PRIVACY = {'public', 'project', 'confidential'}
+ACCOUNT_BINDING_NAMESPACE = UUID('4cdd32a6-79e8-49d1-aa3e-293fd5b7f98b')
 
 
 def chat_root(node):
@@ -41,6 +42,31 @@ def _mapping_rows(service, peer_id, project_id):
                 rows.append({'mapping_id': spec['id'],
                              'local_user_id': local['user_id'],
                              'remote_user_id': remote['user_id']})
+        peer = next((item for item in state['peers']
+                     if item['id'] == peer_id), None)
+        if (peer and peer['trust'] == 'approved'
+                and peer['relationship_type'] == 'client-server'
+                and peer['sharing_level'] == 'same-team'
+                and peer.get('account_binding')):
+            binding = peer['account_binding']
+            account = service.local_account(state, binding['local_user_id'])
+            permitted = bool(account) and (service.deployment == 'desktop'
+                or project_id in account['memberships'])
+            if permitted:
+                participants = sorted((
+                    (local_node_id, binding['local_user_id']),
+                    (peer_id, binding['remote_user_id'])))
+                identity = '|'.join((project_id, *(value
+                    for participant in participants for value in participant)))
+                automatic = {
+                    'mapping_id': str(uuid5(ACCOUNT_BINDING_NAMESPACE, identity)),
+                    'local_user_id': binding['local_user_id'],
+                    'remote_user_id': binding['remote_user_id'],
+                }
+                if not any((row['local_user_id'], row['remote_user_id']) ==
+                           (automatic['local_user_id'], automatic['remote_user_id'])
+                           for row in rows):
+                    rows.append(automatic)
         rows.sort(key=lambda row: (row['local_user_id'], row['remote_user_id'],
                                   row['mapping_id']))
         return local_node_id, rows

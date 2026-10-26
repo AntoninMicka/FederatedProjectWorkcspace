@@ -1,6 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Antonín Mička
 # SPDX-License-Identifier: MPL-2.0
 """Desktop chat orchestration through Context Builder and an exact Ollama binding."""
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import base64
 import hashlib
@@ -269,10 +271,26 @@ class ChatService:
         self.public_source_adapter_factory = public_source_adapter_factory
         self.node_telemetry = NodeTelemetry(self.node_path.parent)
         self.backend_configuration_lock = threading.RLock()
+        self._request_user_id = ContextVar(
+            f'chat-user-{id(self)}', default=None)
+
+    @contextmanager
+    def as_user(self, user_id):
+        """Bind one authenticated web request without sharing identity across threads."""
+        require(user_id is None or isinstance(user_id, str),
+                'Invalid chat request identity')
+        if user_id is not None:
+            uuid(user_id)
+        token = self._request_user_id.set(user_id)
+        try:
+            yield
+        finally:
+            self._request_user_id.reset(token)
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
-        return node['id'], ProjectCreation(self.node_path).author_id()
+        return (node['id'], self._request_user_id.get()
+                or ProjectCreation(self.node_path).author_id())
 
     def _root(self):
         if not os.path.lexists(self.state_dir):

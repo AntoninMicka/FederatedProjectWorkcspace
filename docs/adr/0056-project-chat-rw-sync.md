@@ -18,11 +18,15 @@ response jako ostatní data sdíleného projektu podle ADR 0042. Protokol
 payload a inventuru digestů. Jeden iniciátor tak vymění Git i chaty v obou
 směrech; samostatný chatový endpoint, tlačítko ani druhý outbox nevznikají.
 
-Přenášejí se pouze vlákna přiřazená přesně synchronizovanému projektu a
-vlastněná uživatelem s aktivním bilaterálním mapováním pro tentýž projekt.
-Na cíli se vlastník přeloží na přesný místní účet. Přijaté vlákno vstupuje do
-běžného `ChatThreads`, je read-write a místní mapovaný uživatel v něm může
-pokračovat. Nezařazená vlákna se s projektem nepřenášejí.
+Přenášejí se pouze vlákna přiřazená přesně synchronizovanému projektu. U P2P
+vztahu musí mít vlastník aktivní ručně potvrzené bilaterální mapování pro tento
+projekt. U schváleného klient–server vztahu se žádné druhé mapování nezakládá:
+autorita se deterministicky odvodí z `account_binding`, který na obou uzlech
+vznikl autentizovaným enrollmentem podle ADR 0039. Serverový účet musí zůstat
+aktivní a mít přístup k projektu. Na cíli se vlastník přeloží na tento přesný
+místní účet. Přijaté vlákno vstupuje do běžného `ChatThreads`, je read-write a
+místní mapovaný uživatel v něm může pokračovat. Nezařazená vlákna se s
+projektem nepřenášejí.
 
 Payload nepřenáší credentials, provider session, Context Manifest payload ani
 node-local run journal. Historické message/turn/run ID se při nekonfliktním

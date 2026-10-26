@@ -528,7 +528,10 @@ class WebHandler(DesktopHandler):
             return super().dispatch(request)
         if self.path == '/v1/sources/import':
             return self._import_source(request)
-        return super().dispatch(request)
+        # Desktop calls retain the node-local author. Network requests bind the
+        # authenticated account only for this request, including streamed chat.
+        with self.server.chat_service.as_user(self.actor.get('id')):
+            return super().dispatch(request)
 
     def _do_GET(self):
         if self.request_authority() is None:
