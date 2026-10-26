@@ -5,6 +5,41 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## UX-BACKEND-MODEL-01 — katalog, nastavení a výběr v composeru — 2026-10-26
+
+Dávka vznikla na větvi `feature/ux-backend-model-01-chat-selector` z `develop`
+`b19d46a`. Implementovaný rozsah byl doručen PR #96 jako `d7af48b`; navazující
+oprava nezávislého načítání historie chatů byla doručena PR #97 jako merge
+commit `45144a0`. Původně plánovaná jediná dávka tak byla fakticky rozdělena a
+sloučena před serverovým pinningem a fyzickou akceptací celku. Doručenou část
+archivujeme zde; zbývající pinning/revalidace pokračuje jako samostatná dávka
+`UX-BACKEND-MODEL-02`, aby další změny nevznikaly přímo na `develop` ani se
+nevydávaly za dokončenou akceptaci původního rozsahu.
+
+- [x] [completed] **UX-BACKEND-MODEL-01-A/AH-01 — kontrakt, katalog služeb a
+  zdrojů (designed).** ADR 0053 oddělila binding, modelovou nabídku, preference,
+  resource metriky a run journal a popsala cílový pinning a recovery.
+- [x] [completed] **UX-BACKEND-MODEL-01-B/C — provider-neutral katalog,
+  nastavení a composer (implemented).** Šest backendů má tabulku a vlastní
+  Nastavit/Resetovat tok, modely samostatný read-only katalog/detail, monitor
+  odlišuje spotřebu a dostupné balance. Ollama discovery a společný composer
+  podporují backend-first i model-first filtr a preferované modely bez
+  automatické volby.
+- [x] [completed] **UX-BACKEND-MODEL-01-AH-02 — historie chatů nezávislá na
+  pomocných stavech (implemented/validated).** Vlákna se vykreslí z
+  `/v1/chat/status` před volitelnými provider/task/autonomy projekcemi a pozdní
+  odpověď po přepnutí projektu je zneplatněna.
+- [ ] [planned] **Předáno do UX-BACKEND-MODEL-02:** serverový `RunSelection`,
+  revalidace, uložení přesného výběru v jediném run journalu a cílená fyzická
+  akceptace nebyly součástí doručeného aplikačního stavu.
+
+### Ověření a omezení
+
+Poslední oprava před PR #97 prošla úplnou sadou 866 testů, 29 volitelných bylo
+přeskočeno; prošly také `node --check`, `py_compile` a `git diff --check`.
+Předchozí řezy mají cílené evidence v historii původního TODO. Doručení obou PR
+není důkaz dokončení pinningu ani fyzické akceptace celé původní feature.
+
 ## FIX-MEDIA-INDEX-01 — otevření projektu s generovaným obrázkem — 2026-10-25
 
 Hotfix vznikl z uživatelského hlášení, že po publikaci vygenerovaného obrázku

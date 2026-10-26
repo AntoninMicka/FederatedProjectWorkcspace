@@ -17,7 +17,8 @@ from uuid import UUID, uuid4, uuid5
 from spikes.chat_threads import ChatThreads
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_records import ChatRecords
-from spikes.backend_contract import BackendResponseError, BackendUnknown, ROLES
+from spikes.backend_contract import (BackendResponseError, BackendUnknown,
+                                     RunSelection, ROLES)
 from spikes.backend_metrics import OpenAIAccountMetrics, completed_run_usage, run_usage
 from spikes.backend_catalog import (BackendResetJournal, ModelPreferences,
                                     backend_catalog, durable_unlink)
@@ -791,6 +792,62 @@ class ChatService:
                 'models': sorted(models.values(), key=lambda item: item['model_id']),
                 'offers': rows, 'preferences': preferences}
 
+    def _run_selection(self, choice, binding, output_format='text', *, runs=None,
+                       run_id=None):
+        """Rebuild and pin one exact current offer; never refresh or fall back."""
+        require(isinstance(choice, ChatRunChoice), 'Validated chat run choice is required')
+        require(output_format in {'text', 'json'}, 'Unsupported run selection output format')
+        require(choice.selection_revision is not None and choice.offer_id is not None,
+                'Exact model offer selection is required; choose backend and model again')
+        if runs is not None:
+            require(isinstance(run_id, str), 'Run ID is required for stored selection recovery')
+            stored = runs.get(run_id) if runs.path.exists() else None
+            if stored is not None and stored['run_selection'] is not None:
+                selection = RunSelection.parse(stored['run_selection'])
+                require((choice.selection_revision, choice.offer_id) ==
+                        (selection.selection_revision, selection.offer_id),
+                        'Run ID belongs to a different model selection')
+                require((selection.adapter_id, selection.binding_id,
+                         selection.binding_revision, selection.provider_model_id) ==
+                        (choice.adapter_id, binding.binding_id,
+                         binding.revision, binding.model),
+                        'Stored model selection differs from current binding')
+                return selection
+        projection = self.model_selection_status()
+        require(choice.selection_revision == projection['revision'],
+                'Selected model offer is stale; choose it again')
+        base_revision = {
+            'ollama': lambda: OllamaBindings(self._root()).load().revision,
+            'openai-responses': lambda: OpenAIBindings(self._root()).load().revision,
+            'atlascloud-text': lambda: AtlasCloudBindings(self._root()).load().revision,
+        }[choice.adapter_id]()
+        candidates = [item for item in projection['offers']
+                      if item['adapter_id'] == choice.adapter_id
+                      and item.get('binding_id') == binding.binding_id
+                      and item.get('binding_revision') == base_revision
+                      and item['provider_model_id'] == binding.model
+                      and item['availability'] == 'available'
+                      and item['freshness'] == 'fresh']
+        candidates = [item for item in candidates
+                      if item['offer_id'] == choice.offer_id]
+        require(len(candidates) == 1,
+                'Selected model offer is unavailable or ambiguous; choose it again')
+        offer = candidates[0]
+        supported = tuple(sorted(item['name'] for item in offer['capabilities']
+                                 if item.get('supported') is True))
+        required = {'generate-text', 'text-output' if output_format == 'text'
+                    else 'json-output'}
+        require(required <= set(supported),
+                'Selected model offer no longer supports the required capability')
+        capability_revision = 'offer-capabilities-' + hashlib.sha256(json.dumps(
+            offer['capabilities'], sort_keys=True, separators=(',', ':')).encode()
+            ).hexdigest()[:24]
+        return RunSelection(1, projection['revision'], choice.adapter_id,
+            binding.binding_id, binding.revision, offer['offer_id'], binding.model,
+            offer['protocol'], capability_revision, supported,
+            projection['knowledge_revision'], getattr(binding, 'credential_revision', None)
+            ).validate()
+
     def configure_model_preferences(self, value):
         require(isinstance(value, dict)
                 and set(value) == {'expected_revision', 'preferred_model_ids'},
@@ -1013,6 +1070,8 @@ class ChatService:
                               if choice.adapter_id == 'atlascloud-text' else None)
         binding = choice.resolve(ollama=configured, openai=external_binding,
                                  atlascloud=atlascloud_binding)
+        run_selection = self._run_selection(choice, binding, output_format='json',
+            runs=adapter.runs, run_id=request['run_id'])
         choice.validate_context(
             project_input_ids=tuple(request['selected_artifact_ids']),
             text_input_ids=tuple(request['selected_message_ids']) + (request['message_id'],))
@@ -1073,8 +1132,10 @@ class ChatService:
             handoff = builder.authorize_for_dispatch(prepared, authority=authority,
                                                      target=binding.target())
             role = ROLES.resolve('task-output', role_revision)
-            adapter.prepare(handoff, binding, role, 'json')
-            response = adapter.dispatch(handoff, binding, role, 'json')
+            adapter.prepare(handoff, binding, role, 'json',
+                            run_selection=run_selection)
+            response = adapter.dispatch(handoff, binding, role, 'json',
+                                        run_selection=run_selection)
             try:
                 value = json.loads(response['response'])
             except (KeyError, TypeError, ValueError) as exc:
@@ -1098,7 +1159,9 @@ class ChatService:
                 'privacy': strongest, 'project_commit': prepared.manifest['project_commit'],
                 'run_id': request['run_id'], 'manifest_id': request['manifest_id'],
                 'model': binding.model, 'boundary': binding.boundary,
-                'task_plan_sha256': plan.digest()}
+                'task_plan_sha256': plan.digest(),
+                'run_selection': run_selection.public_serialize(),
+                'run_selection_sha256': run_selection.digest()}
         durable = TaskOutcomes(root).prepare(node_id=node_id, user_id=user_id,
                                              request=request, routed=routed)
         if outcome.kind == 'direct-answer' and durable['state'] == 'prepared':
@@ -1998,6 +2061,11 @@ class ChatService:
         plan = (ExplicitTaskPlan.parse(request['task_plan'])
                 if 'task_plan' in request else None)
         role_revision = plan.role_revision if plan is not None else 'external-chat-v1'
+        run_selection = self._run_selection(
+            ChatRunChoice.parse(request.get('run_choice', {
+                'mode': 'brainstorming', 'adapter': 'openai-responses',
+                'model': binding.model})), binding,
+            output_format='json' if plan is not None else 'text')
         authority = Authority('external-approval:' + request['approval_id'], user_id, node_id,
                               role_revision, frozenset(request['selected_artifact_ids']))
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode(), item['privacy'])
@@ -2025,7 +2093,8 @@ class ChatService:
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
         provider_request, _, _ = adapter_type._request(
-            handoff, binding, role, output_format, stream=request['stream'])
+            handoff, binding, role, output_format, stream=request['stream'],
+            run_selection=run_selection)
         strongest = max((item['privacy'] for item in prepared.manifest['inputs']),
                         key=PRIVACY_ORDER.__getitem__)
         require(strongest != 'local-only',
@@ -2034,7 +2103,8 @@ class ChatService:
                                    separators=(',', ':')).encode()
         binding_sha256 = hashlib.sha256(binding_bytes).hexdigest()
         preview_sha256 = hashlib.sha256(prepared.manifest_bytes + b'\0' + prepared.payload
-            + b'\0' + provider_request + b'\0' + binding_bytes).hexdigest()
+            + b'\0' + provider_request + b'\0' + binding_bytes + b'\0'
+            + run_selection.canonical()).hexdigest()
         ExternalDispatches(root).prepare(approval_id=request['approval_id'], node_id=node_id,
             user_id=user_id, request=request, manifest=prepared.manifest_bytes,
             payload=prepared.payload, provider_request=provider_request,
@@ -2048,6 +2118,8 @@ class ChatService:
                            'boundary': binding.boundary, 'model': binding.model},
                 'privacy': strongest, 'payload_size': len(prepared.payload),
                 'response_language': prepared.manifest['response_language'],
+                'run_selection': run_selection.public_serialize(),
+                'run_selection_sha256': run_selection.digest(),
                 'inputs': [{'input_id': part['input_id'],
                             'source': prepared.manifest['inputs'][index]['source'],
                             'content': base64.b64decode(part['content_b64']).decode('utf-8'),
@@ -2126,6 +2198,12 @@ class ChatService:
         workspace = self.projects.workspace(original['project_id'], blocking=False)
         binding, adapter_type, adapter, runs, _provider_name = \
             self._external_runtime(original)
+        run_selection = self._run_selection(
+            ChatRunChoice.parse(original.get('run_choice', {
+                'mode': 'brainstorming', 'adapter': 'openai-responses',
+                'model': binding.model})), binding,
+            output_format='json' if 'task_plan' in original else 'text',
+            runs=runs, run_id=original['run_id'])
         current_binding_sha256 = hashlib.sha256(json.dumps(binding.serialize(),
             sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         require(current_binding_sha256 == approval['binding_sha256'],
@@ -2145,13 +2223,16 @@ class ChatService:
         role = ROLES.resolve('task-output', role_revision) if plan is not None else None
         output_format = 'json' if plan is not None else 'text'
         current_request, _, _ = adapter_type._request(
-            handoff, binding, role, output_format, stream=original['stream'])
+            handoff, binding, role, output_format, stream=original['stream'],
+            run_selection=run_selection)
         require(current_request == approval['provider_request'],
                 'Provider request changed after preview')
         if not original['record_chat']:
             try:
-                adapter.prepare(handoff, binding, role, output_format)
-                response = adapter.dispatch(handoff, binding, role, output_format)
+                adapter.prepare(handoff, binding, role, output_format,
+                                run_selection=run_selection)
+                response = adapter.dispatch(handoff, binding, role, output_format,
+                                            run_selection=run_selection)
             except BackendUnknown as exc:
                 store.finish(original['approval_id'], node_id, user_id,
                              'unknown', error=str(exc))
@@ -2229,10 +2310,13 @@ class ChatService:
         threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
-            adapter.prepare(handoff, binding, stream=original['stream'])
+            adapter.prepare(handoff, binding, stream=original['stream'],
+                            run_selection=run_selection)
             response = (adapter.dispatch_stream(handoff, binding,
-                                                on_delta or (lambda _delta: None))
-                        if original['stream'] else adapter.dispatch(handoff, binding))
+                                                on_delta or (lambda _delta: None),
+                                                run_selection=run_selection)
+                        if original['stream'] else adapter.dispatch(
+                            handoff, binding, run_selection=run_selection))
             completed = threads.complete(turn_id=original['turn_id'], node_id=node_id,
                 user_id=user_id, run_id=original['run_id'],
                 message_id=original['assistant_message_id'], content=response['response'],
@@ -2477,6 +2561,8 @@ class ChatService:
         require(not stream or choice.mode == 'brainstorming',
                 'Ollama streaming is available only for direct brainstorming')
         binding = choice.resolve(ollama=configured)
+        run_selection = self._run_selection(choice, binding, output_format='text',
+                                             runs=adapter.runs, run_id=run_id)
         owned = {row['thread_id'] for row in threads.list(node_id, user_id)}
         if thread_id not in owned:
             threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
@@ -2528,9 +2614,12 @@ class ChatService:
         threads.bind_run(turn_id=turn_id, node_id=node_id, user_id=user_id, run_id=run_id,
                          manifest_id=manifest_id)
         try:
-            adapter.prepare(handoff, binding, stream=stream)
-            response = (adapter.dispatch_stream(handoff, binding, on_delta, on_status)
-                        if stream else adapter.dispatch(handoff, binding))
+            adapter.prepare(handoff, binding, stream=stream,
+                            run_selection=run_selection)
+            response = (adapter.dispatch_stream(handoff, binding, on_delta, on_status,
+                                                run_selection=run_selection)
+                        if stream else adapter.dispatch(
+                            handoff, binding, run_selection=run_selection))
         except BackendUnknown as exc:
             threads.finish(turn_id=turn_id, node_id=node_id, user_id=user_id,
                            run_id=run_id, state='unknown', error=str(exc))

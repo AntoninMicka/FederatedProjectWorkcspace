@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import patch
 from uuid import uuid4
 
+from spikes.backend_contract import RunSelection
 from spikes.context_builder import DispatchHandoff
 from spikes.metadata import ValidationError
 from spikes.openai_backend import (OPENAI_ENDPOINT, OpenAIAdapter, OpenAIBinding,
@@ -87,7 +88,7 @@ class OpenAIBackendTests(unittest.TestCase):
                          {'reported'})
         other = value['offers'][1]
         self.assertEqual({item['state'] for item in other['capabilities']},
-                         {'unknown'})
+                         {'reported'})
         self.assertEqual(catalog.load(self.binding), value)
         self.assertEqual(calls[0][0], self.binding.model)
         paths = list(self.state.glob('model-discovery-*.json'))
@@ -158,6 +159,20 @@ class OpenAIBackendTests(unittest.TestCase):
         restarted = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
                                   lambda *args: self.fail('must not resend'))
         self.assertEqual(restarted.dispatch(self.handoff, self.binding), first)
+
+    def test_dispatch_persists_exact_run_selection(self):
+        selection = RunSelection(1, 'selection-openai-one', 'openai-responses',
+            self.binding.binding_id, self.binding.revision,
+            'openai-responses:' + self.binding.model, self.binding.model,
+            'openai-responses-v1', 'capabilities-openai-one',
+            ('generate-text', 'json-output', 'streaming', 'text-output'),
+            'knowledge-one', self.binding.credential_revision)
+        adapter = OpenAIAdapter(OpenAIRuns(self.state), self.credentials,
+                                lambda *args: self.response())
+        adapter.dispatch(self.handoff, self.binding, run_selection=selection)
+        row = adapter.runs.get(self.handoff.run_id)
+        self.assertEqual(row['run_selection'], selection.serialize())
+        self.assertEqual(row['selection_sha256'], selection.digest())
 
     def test_reasoning_items_and_split_output_text_are_accepted_without_exposure(self):
         response = self.response()

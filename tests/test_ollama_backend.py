@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from spikes.context_builder import DispatchHandoff
 from spikes.backend_contract import (BackendCapabilities, BackendRegistry, ROLES,
-                                     RoleDefinition)
+                                     RoleDefinition, RunSelection)
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import (OllamaAdapter, OllamaBinding, OllamaResponseError,
                                    OllamaBindings, OllamaRuns, UnknownRun)
@@ -370,6 +370,27 @@ class OllamaAdapterTests(unittest.TestCase):
                          ('extractor', 'extractor-v1'))
         self.assertEqual(row['manifest_sha256'], self.handoff.manifest_sha256)
 
+    def test_run_selection_is_canonical_durable_and_part_of_run_identity(self):
+        selection = RunSelection(1, 'model-selection-one', 'ollama',
+            self.binding.binding_id, self.binding.revision,
+            'ollama:' + self.binding.model, self.binding.model,
+            'ollama-generate-v1', 'offer-capabilities-one',
+            ('generate-text', 'json-output', 'text-output'), 'knowledge-one')
+        adapter = OllamaAdapter(OllamaRuns(self.state),
+            lambda binding, request: {'model': binding.model, 'response': 'answer'})
+        adapter.prepare(self.handoff, self.binding, run_selection=selection)
+        row = OllamaRuns(self.state).get(self.handoff.run_id)
+        self.assertEqual(row['run_selection'], selection.serialize())
+        self.assertEqual(row['selection_sha256'], selection.digest())
+
+        changed = RunSelection(1, 'model-selection-two', 'ollama',
+            self.binding.binding_id, self.binding.revision,
+            'ollama:' + self.binding.model, self.binding.model,
+            'ollama-generate-v1', 'offer-capabilities-one',
+            ('generate-text', 'json-output', 'text-output'), 'knowledge-one')
+        with self.assertRaisesRegex(ValidationError, 'different backend execution'):
+            adapter.dispatch(self.handoff, self.binding, run_selection=changed)
+
     def test_task_router_uses_closed_schema_with_required_slide_layout(self):
         captured = []
         role = ROLES.resolve('task-router', 'task-router-v1')
@@ -433,6 +454,8 @@ class OllamaAdapterTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         row = adapter.runs.get(self.handoff.run_id)
         self.assertEqual((row['state'], row['adapter_id']), ('succeeded', 'ollama'))
+        self.assertIsNone(row['run_selection'])
+        self.assertIsNone(row['selection_sha256'])
         self.assertNotEqual(row['request_digest'], legacy_digest)
 
     def test_legacy_unknown_run_is_not_migrated_or_retried(self):

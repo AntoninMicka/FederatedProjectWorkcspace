@@ -1127,8 +1127,11 @@ Gate M3 proto není vydáván za celý uzavřený.
   neurčitého výsledku. Evidence je ve WORK_LOG. Media/MCP, Anthropic/Gemini a
   automatický fallback
   zůstávají mimo první řez.
-- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01` je
-  aktivní dávka v TODO a oddělí backendové připojení od modelové nabídky pro
+- [ ] Společný výběr backendu a modelu v chatu — `UX-BACKEND-MODEL-01`
+  doručila PR #96 a #97 katalog, nastavení, resource projekce, preference,
+  obousměrný composer a opravu načítání historie. Aktivní navazující dávka
+  `UX-BACKEND-MODEL-02` v TODO doplní chybějící serverový pinning a revalidaci.
+  Celek odděluje backendové připojení od modelové nabídky pro
   konkrétní run. Backend-first i model-first volba se obousměrně filtrují podle
   dostupných providerových nabídek a požadovaných capabilities; backendový
   modifikátor přidá protokol, endpoint a providerová pravidla bez změny obecné
@@ -1139,7 +1142,8 @@ Gate M3 proto není vydáván za celý uzavřený.
   s providerovými dialogy Nastavit/Resetovat, samostatný read-only katalog
   modelů a provider-neutral resource monitor. Spotřeba uložených runů, account
   usage/cost, kreditní zůstatek a quota zůstanou pravdivě oddělené; chybějící
-  providerová data se neodhadují. Podrobný rozsah a akceptace jsou v TODO.
+  providerová data se neodhadují. Podrobný aktivní rozsah a akceptace jsou v
+  TODO; capability zůstává otevřená do ověření pinningu a fyzického průchodu.
 - [x] Volitelný usage & billing přehled podle sekce 7C pro backendy, které poskytují příslušné údaje — M3-UB-01 lokálně PoC validated; živý OpenAI Admin API refresh zůstává neověřený.
 - [x] Role — F-M3-BACKEND-01: provider/model-neutral registr task rolí `summarizer`, `extractor` a `metadata-advisor`; `brainstorming` zůstává klasifikací vlákna a role sama neuděluje oprávnění ani nemění execution boundary.
 - [x] Context preview — F-M3-EXTERNAL-01-C: durable přesný náhled vstupů, targetu a provider requestu před ručně potvrzeným externím dispatch.

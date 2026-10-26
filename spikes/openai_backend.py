@@ -15,7 +15,8 @@ import ssl
 import stat
 
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
-                                     BackendResponseError, BackendUnknown, ROLES)
+                                     BackendResponseError, BackendUnknown,
+                                     pin_execution, ROLES)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
 from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
@@ -275,14 +276,15 @@ class OpenAIModelCatalog:
 
     @staticmethod
     def _offer(model, binding, observed_at):
-        capabilities = []
-        if model == binding.model:
-            revision = binding.capabilities().revision
-            source = 'binding:' + binding.binding_id
-            capabilities = [
-                {'name': name, 'value': True, 'state': 'reported',
-                 'source': source, 'revision': revision, 'observed_at': observed_at}
-                for name in ('generate-text', 'json-output', 'streaming', 'text-output')]
+        # The discovery endpoint is already filtered to text models accepted by
+        # the Responses adapter.  These are adapter/protocol capabilities, not
+        # properties of only the model currently stored as the binding default.
+        revision = binding.capabilities().revision
+        source = 'adapter:openai-responses'
+        capabilities = [
+            {'name': name, 'value': True, 'state': 'reported',
+             'source': source, 'revision': revision, 'observed_at': observed_at}
+            for name in ('generate-text', 'json-output', 'streaming', 'text-output')]
         return {'offer_id': 'openai-responses:' + model,
                 'provider_id': 'openai', 'provider_model_id': model,
                 'protocol': 'openai-responses-v1', 'availability': 'available',
@@ -366,7 +368,7 @@ class OpenAIAdapter:
         self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
-    def _execution(binding, role=None, output_format='text'):
+    def _execution(binding, role=None, output_format='text', run_selection=None):
         capabilities = binding.capabilities()
         if role is None:
             operation = 'generate-text'; role_id = role_revision = ''
@@ -377,12 +379,14 @@ class OpenAIAdapter:
             operation = role.operation
             role_id, role_revision = role.role_id, role.revision
         capabilities.require(operation, output_format)
-        return BackendExecution(binding.adapter_id, binding.binding_id, binding.revision,
-                                capabilities.revision, operation, output_format,
-                                role_id, role_revision)
+        execution = BackendExecution(binding.adapter_id, binding.binding_id, binding.revision,
+                                     capabilities.revision, operation, output_format,
+                                     role_id, role_revision)
+        return pin_execution(execution, run_selection, binding.model)
 
     @staticmethod
-    def _request(handoff, binding, role=None, output_format='text', stream=False):
+    def _request(handoff, binding, role=None, output_format='text', stream=False,
+                 run_selection=None):
         require(isinstance(handoff, DispatchHandoff) and isinstance(binding, OpenAIBinding),
                 'Authorized handoff and OpenAI binding are required')
         require(handoff.target == binding.target(),
@@ -395,34 +399,42 @@ class OpenAIAdapter:
             body['text'] = {'format': {'type': 'json_object'}}
         request = json.dumps(body, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':')).encode()
-        execution = OpenAIAdapter._execution(binding, role, output_format)
+        execution = OpenAIAdapter._execution(binding, role, output_format, run_selection)
         digest = hashlib.sha256(handoff.manifest_sha256.encode() + b'\0' + request
                                 + b'\0' + execution.canonical() + b'\0'
                                 + binding.credential_ref.encode() + b'\0'
                                 + str(binding.credential_revision).encode()).hexdigest()
         return request, digest, execution
 
-    def prepare(self, handoff, binding, role=None, output_format='text', stream=False):
+    def prepare(self, handoff, binding, role=None, output_format='text', stream=False,
+                run_selection=None):
         _, credential_revision = self.credentials.resolve(binding.credential_ref)
         require(credential_revision == binding.credential_revision,
                 'OpenAI credential revision differs from binding')
         _, digest, execution = self._request(
-            handoff, binding, role, output_format, stream=stream)
+            handoff, binding, role, output_format, stream=stream,
+            run_selection=run_selection)
         return self.runs.prepare(handoff.run_id, digest, digest, execution,
-                                 handoff.manifest_sha256)
+                                 handoff.manifest_sha256, run_selection)
 
-    def dispatch(self, handoff, binding, role=None, output_format='text'):
-        return self._dispatch(handoff, binding, role, output_format, False, None)
+    def dispatch(self, handoff, binding, role=None, output_format='text', *,
+                 run_selection=None):
+        return self._dispatch(handoff, binding, role, output_format, False, None,
+                              run_selection)
 
-    def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text'):
+    def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text', *,
+                        run_selection=None):
         require(callable(on_delta), 'OpenAI stream delta callback is required')
-        return self._dispatch(handoff, binding, role, output_format, True, on_delta)
+        return self._dispatch(handoff, binding, role, output_format, True, on_delta,
+                              run_selection)
 
-    def _dispatch(self, handoff, binding, role, output_format, stream, on_delta):
+    def _dispatch(self, handoff, binding, role, output_format, stream, on_delta,
+                  run_selection=None):
         request, digest, execution = self._request(
-            handoff, binding, role, output_format, stream=stream)
+            handoff, binding, role, output_format, stream=stream,
+            run_selection=run_selection)
         row = self.runs.prepare(handoff.run_id, digest, digest, execution,
-                                handoff.manifest_sha256)
+                                handoff.manifest_sha256, run_selection)
         if row['state'] == 'succeeded':
             return row['response']
         if row['state'] in {'dispatching', 'unknown'}:

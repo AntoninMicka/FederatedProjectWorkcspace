@@ -29,13 +29,18 @@ class ChatRunChoice:
     model: str | None
     binding_id: str | None = None
     binding_revision: str | None = None
+    selection_revision: str | None = None
+    offer_id: str | None = None
 
     @classmethod
     def parse(cls, value):
         core = {'mode', 'adapter', 'model'}
-        selected = core | {'binding_id', 'binding_revision'}
-        require(isinstance(value, dict) and frozenset(value) in {frozenset(core),
-                                                                 frozenset(selected)},
+        binding_selected = {'binding_id', 'binding_revision'}
+        offer_selected = {'selection_revision', 'offer_id'}
+        accepted = {frozenset(core), frozenset(core | offer_selected),
+                    frozenset(core | binding_selected),
+                    frozenset(core | binding_selected | offer_selected)}
+        require(isinstance(value, dict) and frozenset(value) in accepted,
                 'Unknown or missing chat run choice field')
         require(value['mode'] in MODES and value['adapter'] in ADAPTERS,
                 'Unsupported chat mode or adapter')
@@ -44,10 +49,10 @@ class ChatRunChoice:
                 require(value['model'] is None,
                         'Local task execution fixes the configured Ollama model')
             else:
-                require(set(value) == core,
+                require(not binding_selected & set(value),
                         'External task execution cannot select an Ollama binding')
                 _model(value['model'])
-            if set(value) == selected and value['adapter'] == 'ollama':
+            if binding_selected <= set(value) and value['adapter'] == 'ollama':
                 binding_id = value['binding_id']
                 revision = value['binding_revision']
                 uuid(binding_id)
@@ -57,11 +62,23 @@ class ChatRunChoice:
             else:
                 binding_id = revision = None
         else:
-            require(set(value) == core,
+            require(not binding_selected & set(value),
                     'Brainstorming cannot select an orchestration binding')
             _model(value['model'])
             binding_id = revision = None
-        return cls(value['mode'], value['adapter'], value['model'], binding_id, revision)
+        if offer_selected <= set(value):
+            selection_revision, offer_id = value['selection_revision'], value['offer_id']
+            for selected_value, label in ((selection_revision, 'selection revision'),
+                                          (offer_id, 'offer ID')):
+                require(isinstance(selected_value, str)
+                        and selected_value.strip() == selected_value and bool(selected_value)
+                        and len(selected_value.encode('utf-8')) <= 256
+                        and not any(char in selected_value for char in '\0\r\n'),
+                        'Invalid chat run ' + label)
+        else:
+            selection_revision = offer_id = None
+        return cls(value['mode'], value['adapter'], value['model'], binding_id, revision,
+                   selection_revision, offer_id)
 
     def resolve(self, *, ollama, openai=None, atlascloud=None):
         """Return an immutable run binding without changing saved configuration."""

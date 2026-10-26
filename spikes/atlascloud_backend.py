@@ -15,7 +15,8 @@ import ssl
 import stat
 
 from spikes.backend_contract import (BackendCapabilities, BackendExecution,
-                                     BackendResponseError, BackendUnknown, ROLES)
+                                     BackendResponseError, BackendUnknown,
+                                     pin_execution, ROLES)
 from spikes.context_builder import DispatchHandoff, Target
 from spikes.metadata import require, uuid
 from spikes.model_catalog import (ModelDiscoveryStore, ModelKnowledgeStore,
@@ -386,7 +387,7 @@ class AtlasCloudAdapter:
         self.stream_transport = stream_transport or self._http_stream_transport
 
     @staticmethod
-    def _execution(binding, role=None, output_format='text'):
+    def _execution(binding, role=None, output_format='text', run_selection=None):
         capabilities = binding.capabilities()
         if role is None:
             operation = 'generate-text'; role_id = role_revision = ''
@@ -396,11 +397,13 @@ class AtlasCloudAdapter:
                     'Role output format differs from backend request')
             operation = role.operation; role_id = role.role_id; role_revision = role.revision
         capabilities.require(operation, output_format)
-        return BackendExecution(binding.adapter_id, binding.binding_id, binding.revision,
+        execution = BackendExecution(binding.adapter_id, binding.binding_id, binding.revision,
             capabilities.revision, operation, output_format, role_id, role_revision)
+        return pin_execution(execution, run_selection, binding.model)
 
     @staticmethod
-    def _request(handoff, binding, role=None, output_format='text', stream=False):
+    def _request(handoff, binding, role=None, output_format='text', stream=False,
+                 run_selection=None):
         require(isinstance(handoff, DispatchHandoff)
                 and isinstance(binding, AtlasCloudBinding),
                 'Authorized handoff and AtlasCloud binding are required')
@@ -427,31 +430,39 @@ class AtlasCloudAdapter:
                 body['response_format'] = {'type': 'json_object'}
         request = json.dumps(body, ensure_ascii=False, sort_keys=True,
                              separators=(',', ':')).encode()
-        execution = AtlasCloudAdapter._execution(binding, role, output_format)
+        execution = AtlasCloudAdapter._execution(binding, role, output_format, run_selection)
         digest = hashlib.sha256(handoff.manifest_sha256.encode() + b'\0' + request
             + b'\0' + execution.canonical() + b'\0' + binding.credential_ref.encode()
             + b'\0' + str(binding.credential_revision).encode()).hexdigest()
         return request, digest, execution
 
-    def prepare(self, handoff, binding, role=None, output_format='text', stream=False):
+    def prepare(self, handoff, binding, role=None, output_format='text', stream=False,
+                run_selection=None):
         _, revision = self.credentials.resolve(binding.credential_ref)
         require(revision == binding.credential_revision,
                 'AtlasCloud credential revision differs from binding')
-        _, digest, execution = self._request(handoff, binding, role, output_format, stream)
+        _, digest, execution = self._request(handoff, binding, role, output_format, stream,
+                                             run_selection)
         return self.runs.prepare(handoff.run_id, digest, digest, execution,
-                                 handoff.manifest_sha256)
+                                 handoff.manifest_sha256, run_selection)
 
-    def dispatch(self, handoff, binding, role=None, output_format='text'):
-        return self._dispatch(handoff, binding, role, output_format, False, None)
+    def dispatch(self, handoff, binding, role=None, output_format='text', *,
+                 run_selection=None):
+        return self._dispatch(handoff, binding, role, output_format, False, None,
+                              run_selection)
 
-    def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text'):
+    def dispatch_stream(self, handoff, binding, on_delta, role=None, output_format='text', *,
+                        run_selection=None):
         require(callable(on_delta), 'AtlasCloud stream delta callback is required')
-        return self._dispatch(handoff, binding, role, output_format, True, on_delta)
+        return self._dispatch(handoff, binding, role, output_format, True, on_delta,
+                              run_selection)
 
-    def _dispatch(self, handoff, binding, role, output_format, stream, on_delta):
-        request, digest, execution = self._request(handoff, binding, role, output_format, stream)
+    def _dispatch(self, handoff, binding, role, output_format, stream, on_delta,
+                  run_selection=None):
+        request, digest, execution = self._request(handoff, binding, role, output_format, stream,
+                                                   run_selection)
         row = self.runs.prepare(handoff.run_id, digest, digest, execution,
-                                handoff.manifest_sha256)
+                                handoff.manifest_sha256, run_selection)
         if row['state'] == 'succeeded':
             return row['response']
         if row['state'] in {'dispatching', 'unknown'}:

@@ -5411,6 +5411,12 @@ function selectedRunOffer(){
   &&(!chatRunFilter.model||runOfferModelKey(offer)===chatRunFilter.model));
  return chatRunFilter.backend&&chatRunFilter.model&&matches.length===1?matches[0]:null;
 }
+async function refreshStaleRunSelection(error){
+ const stale=error?.status===422&&String(error.message||'').includes('model offer');
+ if(!stale)return false;
+ chatRunFilter={backend:'',model:''};pendingChatRequest=null;
+ await loadModelSelection();renderChatRunSelectors();return true;
+}
 function configuredRunBinding(adapter){
  return adapter==='openai-responses'?externalBinding:adapter==='atlascloud-text'?atlasCloudBinding:chatBinding;
 }
@@ -5916,7 +5922,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
  if(adapter==='openai-responses' && !externalBinding){chatOperationStatus.textContent='Nejprve uložte nastavení OpenAI backendu.';return;}
  if(adapter==='atlascloud-text' && !atlasCloudBinding){chatOperationStatus.textContent='Nejprve uložte nastavení AtlasCloud backendu.';return;}
  const model=offer.provider_model_id;
- const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model};
+ const runChoice={mode,adapter,model:mode==='orchestration' && adapter==='ollama'?null:model,
+  selection_revision:modelSelectionProjection.revision,offer_id:offer.offer_id};
  const responseLanguage=document.querySelector('#chat-response-language').value || null;
  if(mode==='orchestration'){
   if(adapter==='ollama'){
@@ -5970,8 +5977,10 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     `Externí odpověď byla přijata průběžně (${receivedDeltas} částí).` : 'Externí odpověď byla přijata.';
   }catch(error){
    appendChatOperationNotice(error);
+   const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
-   chatOperationStatus.textContent=error.message;
+   chatOperationStatus.textContent=error.message+(staleSelection?
+    ' Nabídka byla obnovena; backend a model vyberte znovu.':'');
   }finally{liveProgress.stop();chatStream.hidden=true;
    finishChatAutoFollow();submit.disabled=!activeProject || !draft.value.trim();}
   return;
@@ -6012,10 +6021,12 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
     runtimeEvidenceText(result.runtime_evidence);
   }catch(error){
    appendChatOperationNotice(error);
+   const staleSelection=await refreshStaleRunSelection(error);
    if([409,422,502].includes(error.status))pendingChatRequest=null;
    chatStream.textContent='';
    chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
-    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
+    (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
+    ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
   }finally{clearTimeout(thinking);liveProgress.stop();
    submit.disabled=!activeProject || !draft.value.trim();chatStream.hidden=true;
    finishChatAutoFollow();}
@@ -6070,6 +6081,7 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
    'Návrh je připraven ke kontrole.' : 'Odpověď je připravena.';
  }catch(error){
   appendChatOperationNotice(error);
+  const staleSelection=await refreshStaleRunSelection(error);
   const failed=pendingChatRequest;
   try{
    const recovered=await projectRequest('/v1/tasks/list',{
@@ -6079,7 +6091,8 @@ document.querySelector('#chat-composer').addEventListener('submit',async event=>
   }catch(_recoveryError){}
   if([409,422,502].includes(error.status))pendingChatRequest=null;
   chatOperationStatus.textContent=error.message+([409,422,502].includes(error.status) ?
-   ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.' : '');
+   (staleSelection?' Zadání zůstalo zachováno; backend a model vyberte znovu.':
+   ' Zadání a výběr zůstaly zachovány; tlačítkem Zpracovat spustíte vědomě nový běh.') : '');
  }
  finally{clearTimeout(thinking);liveProgress.stop();submit.disabled=!activeProject || !draft.value.trim();
   finishChatAutoFollow();}

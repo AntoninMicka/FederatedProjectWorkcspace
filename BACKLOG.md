@@ -82,8 +82,11 @@ akceptována na úrovni PoC validated a doručena PR #91 jako merge commit
 doručena PR #93 jako merge commit `0405d14`; evidence je ve WORK_LOG.
 Nezávislá infrastrukturní dávka `TEST-EXECUTION-01` byla doručena PR #94 jako
 commit `b19d46a`; všechny čtyři CI shardy i souhrnný check uspěly a evidence je ve
-WORK_LOG. `UX-BACKEND-MODEL-01` byla přesunuta jako jediná aktivní dávka do
-[TODO](TODO.md); backlog ji již nedrží jako druhý stavový záznam.
+WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
+#97 a jeho skutečný stav je ve WORK_LOG. Zbývající serverový pinning a
+revalidace byly po předčasném rozdělení původní dávky aktivovány jako jediná
+navazující dávka `UX-BACKEND-MODEL-02` v [TODO](TODO.md); backlog ji nedrží
+jako druhý stavový záznam.
 
 ## Zjištěné mezery a navazující ověření
 
