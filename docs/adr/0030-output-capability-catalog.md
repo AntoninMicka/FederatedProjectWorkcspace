@@ -150,7 +150,9 @@ náhledu jej pouze escapuje do `pre`; zdrojový HTML/script nikdy nespouští.
 Výsledkem je bounded JSON static-site bundle a lokální materializace, nikoli
 publikace. Julia runner, externí provider, project write a nasazení vyžadují
 vlastní reviewovaný adaptér, run journal a podle účinku další samostatné
-potvrzení/recovery kontrakt.
+potvrzení/recovery kontrakt. Návrhový kontrakt Julia adaptéru uzavírá
+[ADR 0057](0057-julia-computation-contract.md); implementace zůstává v
+`COMP-02`.
 
 ## Reuse
 

@@ -5,6 +5,46 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## COMP-01 — Julia výpočetní kontrakt a prostředí — 2026-10-26
+
+Dávka vznikla na větvi `feature/comp-01-julia-contract` z `develop` `64a7dac`
+a dosáhla cílové úrovně **designed**. Aktivace dávky je v lokálním commitu
+`b68d9b9`; commit finální návrhové evidence, push, PR do `develop` a merge
+zatím nebyly provedeny.
+
+- [x] [completed] **COMP-01-A — reuse, licence a runtime/platform review
+  (designed).** Aktuální primární podklady Julia vymezily support tiers,
+  Project/Manifest, depot/offline režim, CLI, MIT/third-party hranici a
+  časově citlivý výchozí profil Julia 1.10.12 LTS pro Linux glibc x86-64 a
+  ARMv8. Runtime zůstává node-managed a jeho redistribuce neschválená.
+- [x] [completed] **COMP-01-B — verzovaný výpočetní kontrakt (designed).** ADR
+  0057 uzavírá `fpw-julia-computation-v1`: připnutý entrypoint, exact Git
+  vstupy, bounded typované parametry, Project/Manifest hashe, přesnou runtime
+  identitu a fail-closed execution policy bez credentials a host startupu.
+- [x] [completed] **COMP-01-C — run, materializace a publikace (designed).**
+  `fpw-julia-run-v1` má vlastní node-local journal, durable stavy včetně
+  `unknown`, platform fingerprint a bounded output receipt. Výsledek se
+  atomicky zveřejní jen do lokální cache; projektový artefakt vzniká samostatnou
+  explicitní Workspace operací.
+- [x] [completed] **COMP-01-D — scénáře selhání a konzistence dokumentace
+  (designed).** Rozhodnutí pokrývá stale HEAD/prostředí, chybějící depot,
+  síťový pokus, timeout/cancel/pád, neúplný nebo nadlimitní výstup, revokaci,
+  numerickou odchylku mezi platformami a crash hranice před/po atomické
+  materializaci i při publikaci.
+
+### Ověření a omezení
+
+Konzistenci ADR 0008/0018/0030, roadmapy a reuse katalogu ověřila dokumentační
+kontrola; roadmapová projekce prošla cílenými testy a `git diff --check` bez
+chyb. Oficiální zdroje byly živě ověřeny 26. 10. 2026. Plná unit sada nebyla po
+čistě dokumentační změně opakována.
+
+Nebyl stažen ani spuštěn Julia runtime a návrh není důkaz sandboxu, runtime
+kompatibility nebo redistribuční připravenosti. `COMP-02` musí doložit přesný
+archiv/signature/checksum, kompletní licence, OS-level zákaz sítě a limity,
+atomické fsync/rename, recovery a fyzický výpočet na každé podporované
+platformě. `Pkg.offline` je pouze defense in depth, nikoli síťová izolace.
+
 ## F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná automatická synchronizace — 2026-10-26
 
 Dávka vznikla na větvi `feature/f-m5-sync-controls-01` z `develop` `8c08be2`

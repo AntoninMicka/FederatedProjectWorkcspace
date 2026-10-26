@@ -11,8 +11,9 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
-`F-M5-SYNC-CONTROLS-01` PR #102. Aktivní návrhová dávka `COMP-01` uzavírá
-výpočetní kontrakt a prostředí Julia; runner zůstává samostatným `COMP-02`.
+`F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` uzavřela výpočetní
+kontrakt a prostředí Julia a čeká na doručení PR; runner zůstává samostatným
+`COMP-02`.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
@@ -290,7 +291,7 @@ První implementační rozsah je sdílení mezi dvěma lokálně registrovanými
 
 ## 2G. Modelování a výpočty v Julii
 
-**Stav: Julia zvolena jako preferovaný výpočetní backend; integrace je designed / plánována, neimplementována.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace.
+**Stav: Julia zvolena jako preferovaný výpočetní backend; kontrakt a prostředí jsou designed v [ADR 0057](docs/adr/0057-julia-computation-contract.md), runner zůstává plánovaný a neimplementovaný.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace.
 
 - [ ] Verzovat zdrojový model jako běžné projektové artefakty (`.jl` a související dokumentace), jeho deklarované vstupy a reprodukovatelné Julia prostředí. Minimální kontrakt prostředí zahrne `Project.toml` a odpovídající `Manifest.toml`; credentials, registry cache, stažené balíčky, compiled cache a uživatelský startup do projektového Gitu nepatří.
 - [ ] První rozsah realizovat jako lokální CLI runner pro explicitně zvolený entry point, parametry a zmrazené revize vstupů. Notebookové UI (např. Pluto/Jupyter) ani interaktivní MATLAB-like desktop nejsou podmínkou prvního PoC a vyžadují samostatné capability, bezpečnostní a distribuční posouzení.

@@ -90,11 +90,12 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 `F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
-evidence je ve WORK_LOG. `COMP-01` je aktivní v TODO a backlog ji nedrží jako
-druhý stavový záznam.
+evidence je ve WORK_LOG. `COMP-01` dosáhla úrovně designed, její evidence je ve
+WORK_LOG a větev čeká na doručení PR; backlog ji nedrží jako druhý stavový
+záznam.
 
-Po dokončení synchronizačních ovladačů je podle uživatelem schváleného pořadí
-aktivní `COMP-01`; následují `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
+Po doručení `COMP-01` následují podle uživatelem schváleného pořadí `COMP-02`,
+`DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
 
