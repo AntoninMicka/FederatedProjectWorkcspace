@@ -5,11 +5,49 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## PLAN-TASK-GRAPH-01 — obecný plán projektových úkolů a podgrafů — 2026-10-26
+
+Dávka vznikla na větvi `feature/plan-task-graph-01` z `develop` `64e2045` po
+doručení PR #99. Dosáhla úrovně **PoC validated**. Feature akceptace je
+dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+
+- [x] [completed] **PLAN-TASK-GRAPH-01-A — verzovaný kontrakt úkolů a vztahů
+  (implemented).** Omezená Markdown syntaxe váže každý checkbox na stabilní
+  ID. Kanonizuje dependency, symetrické vztahy, nahrazení i hierarchii a
+  odvozuje inverzní popisky bez druhé deklarace stejné hrany.
+- [x] [completed] **PLAN-TASK-GRAPH-01-B — validovaná projektová projekce
+  (implemented).** Hlavní TODO určuje název, stav a vztahy; dokumenty s tagem
+  `plan-subgraph` pouze vybírají ID. Deterministická projekce počítá kritickou
+  cestu, připravené a blokované úkoly i revizně vázané SVG. Neznámé či
+  duplicitní ID/vztahy, self-edge a dependency cyklus selžou bez částečného
+  grafu.
+- [x] [completed] **PLAN-TASK-GRAPH-01-C — hlavní UI Plán (implemented).**
+  Sdílené desktop/HTTPS UI má položku Plán bezprostředně za Úkoly, hlavní graf,
+  seznam podgrafů, stavové filtry, detail, SVG export a klávesnicovou volbu.
+  Projektový text se vkládá přes `textContent` a programově vytvořené SVG DOM.
+- [x] [completed] **PLAN-TASK-GRAPH-01-D — regrese, balení a fyzická akceptace
+  (PoC validated).** Dokumentace, ADR 0055 a reuse evidence vymezují read-only
+  autoritu a nulovou novou persistentní hranici. Integrační projekt se třemi
+  úkoly a dvěma podgrafy prošel HTTPS API i skutečným Qt/WebEngine průchodem,
+  včetně otevření podgrafu a klávesnicového detailu.
+
+### Ověření a omezení
+
+Finální úplná sada prošla: **888 testů bez selhání, 32 přeskočeno, za
+208,854 s**. Samostatně prošel skutečný Qt/WebEngine test, cílené parserové,
+roadmapové a balíčkové testy i `git diff --check`.
+
+Plán je v tomto řezu pouze projekcí validovaného Git snapshotu a nepřidává
+writer, journal ani databázi. Starší hlavní TODO bez stabilních ID zůstane
+čitelné a editovatelné, ale panel Plán oznámí neplatný plánovací formát. Export
+je statický hlavní graf stejné revize; editace vztahů, bounded filtrové
+podgrafy a převod interní roadmapy na projektová data zůstávají mimo rozsah.
+
 ## DEV-ROADMAP-GRAPH-01 — generovaná vizualizace roadmapy a závislostí — 2026-10-26
 
 Dávka vznikla na větvi `feature/dev-roadmap-graph-01` z `develop` `c9b8044`
 po doručení PR #98. Dosáhla úrovně **PoC validated**. Feature akceptace je
-dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+dokončená a byla doručena PR #99 jako squash commit `64e2045`.
 
 - [x] [completed] **DEV-ROADMAP-GRAPH-01-A — kontrakt anotací a validovaná
   projekce (implemented).** `fpw-roadmap-graph-v1` drží pouze stabilní ID,

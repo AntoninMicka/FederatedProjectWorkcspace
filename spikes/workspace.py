@@ -11,6 +11,7 @@ import uuid
 
 from spikes.configuration import committed_project
 from spikes.markdown_documents import main_todo_id, main_todo_view
+from spikes.task_graph import project_task_graph
 from spikes.journal import Journal, RecoveryConflict, snapshot
 from spikes.metadata import MAX_METADATA, require, validate_snapshot, validate_transition
 from spikes.storage import Git, Index, StaleIndex, projection
@@ -227,6 +228,7 @@ class Workspace:
                 return dict(id=artifact_id, commit_id=commit, metadata=metadata,
                             path=path, raw=entries[path], sidecar=sidecar)
             todo = main_todo_view(files, entities, project_id)
+            plan = project_task_graph(files, entities, project_id, commit)
             revisions = self.git.run('rev-list', '--topo-order',
                                      f'--max-count={MAX_PROJECT_HISTORY + 1}', commit).stdout.splitlines()
             history = []
@@ -243,7 +245,7 @@ class Workspace:
             artifact_ids = {path.split('/')[1] for path in files if path.startswith('artifacts/')}
             return dict(id=project_id, title=meta['title'],
                         description=meta.get('description', ''), commit_id=commit,
-                        main_todo_id=main_todo_id(project_id), main_todo=todo,
+                        main_todo_id=main_todo_id(project_id), main_todo=todo, plan=plan,
                         history=dict(entries=history, truncated=len(revisions) > MAX_PROJECT_HISTORY),
                         artifacts=[dict(id=id_, title=title, kind=kind)
                                    for id_, title, kind in rows if id_ in artifact_ids])

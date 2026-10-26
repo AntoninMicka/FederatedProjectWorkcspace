@@ -85,8 +85,14 @@ commit `b19d46a`; všechny čtyři CI shardy i souhrnný check uspěly a evidenc
 WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
 #97 a jeho skutečný stav je ve WORK_LOG. Navazující serverový pinning,
 revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
-26. 10. 2026 úrovně PoC validated; evidence je ve WORK_LOG a feature čeká na
-doručení jediného PR do `develop`. Backlog ji nedrží jako druhý stavový záznam.
+26. 10. 2026 úrovně PoC validated a byly doručeny PR #98. Vizualizace
+`DEV-ROADMAP-GRAPH-01` byla doručena PR #99; aktivní navazující dávku drží
+TODO a backlog ji nedrží jako druhý stavový záznam.
+
+Po aktivní plánovací dávce je uživatelem schválené pořadí priorit:
+`F-M5-CHAT-HISTORY-01`, `COMP-01`, `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
+Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
+zůstává samostatnou feature dávkou a vlastním PR.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -128,7 +134,7 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
 
-- [ ] [planned] **PLAN-TASK-GRAPH-01 — obecný plán projektových úkolů a podgrafů (cílová úroveň: PoC validated).** Zobecnit ověřený roadmapový DAG na read-only plánovací pohled libovolného projektu. Hlavní seznam úkolů je autoritou názvu, stavu, priority a popisu; každý úkol má stabilní projektové ID a kanonické vztahy `depends_on`, `duplicates`, `supersedes`, `relates_to` a volitelnou hierarchii. Inverzní označení jako „blokuje/blokován“ se odvozují z jediné hrany a symetrické vztahy se nesmějí duplikovat. Vedlejší TODO seznamy definují verzované podgrafy explicitními ID nebo bounded filtrem, ale nedrží druhou kopii stavu úkolu. Akceptace: nová hlavní položka **Plán** za **Úkoly**, záložky Hlavní graf/Podgrafy, seznam podgrafů, detail a filtry, kritická cesta, blokované a paralelně připravené úkoly, deterministický export, klávesnicové ovládání a fail-closed validace neznámých ID, neplatných vztahů a cyklů. První řez nezapisuje změny z grafu; editace vztahů je samostatná navazující dávka s Workspace/Git recovery.
+- [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium jako zdroj TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE, které zpřístupní explicitně vybraný workspace TODO zdroj a jeho revizi. První řez je read-only zdroj/importní preview bez spouštění coding agenta a bez zápisu mimo standardní Workspace lifecycle; plný handoff zůstává v DEV-02 a DEV-03.
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
@@ -260,6 +266,8 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   přihlášení a `local-only` jsou vždy odmítnuty.
 
 - [ ] [planned] **F-M5-TRANSFER-01 — Privacy-aware přenos celé historie (cílová úroveň: PoC validated).** Nahradit public-only omezení prvního bundle přenosu autorizací všech objektů dosažitelných z vybraného refu podle F-M5-TRUST-01 a portable ACL ADR 0021. Jde o přímou návaznost na odmítnutí `project` entity v historickém commitu oznámené 2026-09-17. Akceptace: `project` data projdou pouze s oboustranně platným branch/project grantem a mapováním; confidential vyžaduje explicitní policy; local-only, nepokrytý předek, skrytý další ref, změněný HEAD, revokace a neúplný manifest se odmítnou před odesláním; příjem znovu ověří stejný obsah a práva.
+
+- [ ] [planned] **F-M5-CHAT-HISTORY-01 — synchronizace historie workspace chatů mezi uzly (cílová úroveň: PoC validated).** Po důvěře F-M5-TRUST-01 navrhnout a ověřit přenos existujících projektových i nezařazených workspace vláken bez záměny za federovaný lidský chat F-M5-CHAT-01. Zachovat thread/message/run ID, autora, pořadí, přiřazení, privacy, Context Manifest a stavy `unknown`; node-local credentials ani provider session se nepřenášejí. Akceptace: explicitní rozsah a cílový peer, idempotentní import/deduplikace, obousměrná divergence bez přepisu, offline/restart/revokace, local-only odmítnutí a žádné automatické zopakování historického modelového běhu.
 
 - [ ] [planned] **F-M5-CHAT-01 — Federovaná lidská vlákna a durable delivery (cílová úroveň: PoC validated).** Přímý chat a explicitně založené skupinové vlákno mezi mapovanými uživateli schválených peerů; výchozí klasifikace `brainstorming`. Stabilní message/thread ID, kvalifikovaný autor, podpis/provenance, durable outbox/inbox, deduplikace a pending/sent/delivered/failed/unknown bez globálního pořadí odvozeného pouze z hodin. Profil `partner` nesmí chat využít k background synchronizaci ani procházení projektu; mimo samotné zprávy projde jen obsah explicitně přiložený nebo nasdílený uživatelem. Akceptace: offline obě strany, retry/lost response, duplicita, změněný mapping, downgrade profilu, revokace, restart na každé persistentní hranici a oddělení vláken/projektů; chat funguje bez LLM.
 

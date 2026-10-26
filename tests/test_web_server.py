@@ -92,6 +92,32 @@ class WebTests(unittest.TestCase):
         self.assertEqual(409, code)
         self.assertIn('změnila', json.loads(data)['error'])
 
+    def create_planned_project(self):
+        _, data, _ = self.create_project('Plánovaný projekt'); project = json.loads(data)['id']
+        artifacts = Artifacts(self.root/'node.json'); head = Projects(self.root/'node.json').open(project)['commit_id']
+        head = artifacts.save(dict(project_id=project, artifact_id=main_todo_id(project),
+            base_head=head, title='Hlavní TODO', body='''# TODO
+- [x] [CORE-01] Základ
+- [ ] [UI-01] Rozhraní
+  - závisí na: CORE-01
+- [ ] [DOC-01] Návod
+  - souvisí s: UI-01
+''', new=True), str(uuid4()))['commit_id']
+        for title, body in [('Rozhraní', '- [ ] [UI-01]\n- [ ] [DOC-01]\n'),
+                            ('Jádro', '- [x] [CORE-01]\n')]:
+            head = artifacts.save(dict(project_id=project, artifact_id=str(uuid4()),
+                base_head=head, title=title, body=body, new=True,
+                metadata={'tags':['plan-subgraph']}), str(uuid4()))['commit_id']
+        return project
+
+    def test_project_open_projects_canonical_task_plan_and_two_subgraphs(self):
+        project = self.create_planned_project()
+        code, data, _ = self.request(path='/v1/projects/open', body=json.dumps({'project_id':project}))
+        self.assertEqual(200, code); plan = json.loads(data)['plan']
+        self.assertEqual('ready', plan['status']); self.assertEqual(3, len(plan['nodes']))
+        self.assertEqual(['CORE-01', 'UI-01'], plan['critical_path'])
+        self.assertEqual(2, len(plan['subgraphs'])); self.assertIn('<svg ', plan['svg'])
+
     def create_project(self, title, operation_id=None, headers=None):
         operation_id = operation_id or str(uuid4())
         code, data, _ = self.request(path='/v1/projects/create/preview', headers=headers,
@@ -790,7 +816,7 @@ app=QApplication([]);view=QWebEngineView();phase=0;ticks=0
 view.page().certificateError.connect(lambda error:error.acceptCertificate())
 key=os.environ['WORKSPACE_SMOKE_KEY']
 def run(script): view.page().runJavaScript(script)
-def finish(message,code=1): print(message);app.exit(code)
+def finish(message,code=1): print(message,flush=True);app.exit(code)
 def result(value):
  global phase
  if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
@@ -881,6 +907,45 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('roadmap smoke: graph, keyboard detail and ready filter OK', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_browser_opens_project_plan_and_subgraph(self):
+        project = self.create_planned_project()
+        import sys
+        code = r"""
+import json, os, sys
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineWidgets import QWebEngineView
+app=QApplication([]);view=QWebEngineView();view.resize(1200,800)
+view.page().certificateError.connect(lambda error:error.acceptCertificate())
+phase=0;ticks=0;key=os.environ['WORKSPACE_SMOKE_KEY'];project=os.environ['WORKSPACE_PROJECT']
+def run(script): view.page().runJavaScript(script)
+def finish(message,code=1): print(message,flush=True);app.exit(code)
+def result(value):
+ global phase
+ if isinstance(value,str) and value.startswith('FAIL:'): finish(value);return
+ if value!='ready': return
+ if phase==0: phase=1;run("document.querySelector('#access-key').value="+json.dumps(key)+";document.querySelector('#login-form').requestSubmit();")
+ elif phase==1: phase=2;run("[...document.querySelectorAll('#sidebar-project-list button')].find(b=>b.dataset.id==="+json.dumps(project)+").click();")
+ elif phase==2: phase=3;run("document.querySelector('#plan-tab').click();")
+ elif phase==3: phase=4;run("document.querySelector('#sidebar-plan-list button').click();")
+ elif phase==4: phase=5;run("document.querySelector('.roadmap-node').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));")
+ elif phase==5: finish('project plan smoke: main graph, subgraph and keyboard detail OK',0)
+def poll():
+ global ticks
+ ticks+=1
+ if ticks>350: finish('project plan timeout at '+str(phase));return
+ checks={0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",1:"document.body.classList.contains('authenticated')&&document.querySelector('#sidebar-project-list button')?'ready':'waiting'",2:"document.querySelector('#project-title').textContent==='Plánovaný projekt'&&!document.querySelector('#project-view').hidden?'ready':'waiting'",3:"!document.querySelector('#plan-panel').hidden&&document.querySelectorAll('.roadmap-node').length===3?'ready':'waiting'",4:"document.querySelectorAll('.roadmap-node').length===2?'ready':'waiting'",5:"document.querySelector('#plan-detail h3').textContent.includes('UI-01')||document.querySelector('#plan-detail h3').textContent.includes('DOC-01')?'ready':'waiting'"}
+ view.page().runJavaScript(checks[phase],result)
+timer=QTimer();timer.timeout.connect(poll);timer.start(100)
+view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
+"""
+        result = subprocess.run([sys.executable, '-c', code], env=dict(os.environ,
+            WORKSPACE_SMOKE_KEY=self.token, WORKSPACE_SMOKE_URL='https://'+self.authority+'/',
+            WORKSPACE_PROJECT=project), capture_output=True, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('project plan smoke: main graph, subgraph and keyboard detail OK', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_login_catalog_and_logout(self):
