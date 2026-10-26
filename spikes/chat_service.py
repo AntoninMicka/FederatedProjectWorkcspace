@@ -732,7 +732,12 @@ class ChatService:
         try: atlas_binding = AtlasCloudBindings(root).load()
         except FileNotFoundError: atlas_binding = None
         for item in atlas['offers']:
-            bound = atlas_binding is not None and item['offer_id'] == atlas_binding.offer_id
+            # The saved binding owns the connection and credential.  The exact
+            # model offer is selected and pinned per run.  Until protocol
+            # switching is represented in the run choice, expose only offers
+            # compatible with the configured AtlasCloud protocol.
+            bound = (atlas_binding is not None
+                     and item['protocol'] == atlas_binding.protocol)
             offers[('atlascloud-text', item['offer_id'])] = dict(
                 item, adapter_id='atlascloud-text',
                 binding_id=atlas_binding.binding_id if bound else None,
@@ -780,9 +785,27 @@ class ChatService:
         preferences = ModelPreferences(root).load()
         order = {model_id: index for index, model_id in
                  enumerate(preferences['preferred_model_ids'])}
-        rows = sorted(offers.values(), key=lambda item: (
+        rows = [self._with_model_aggregation(item) for item in offers.values()]
+        canonical_by_aggregation = {}
+        for item in rows:
+            if item.get('canonical_model_id'):
+                canonical_by_aggregation.setdefault(item['aggregation_model_id'], set()).add(
+                    item['canonical_model_id'])
+        grouped = []
+        for item in rows:
+            canonical = canonical_by_aggregation.get(item['aggregation_model_id'], set())
+            value = dict(item)
+            group_canonical = (next(iter(canonical)) if len(canonical) == 1
+                               else item.get('canonical_model_id'))
+            value['model_group_canonical_id'] = group_canonical
+            value['model_group_id'] = ('model:' + group_canonical
+                if len(canonical) == 1 else
+                'model:' + item['canonical_model_id'] if item.get('canonical_model_id') else
+                'aggregate:' + item['aggregation_model_id'])
+            grouped.append(value)
+        rows = sorted(grouped, key=lambda item: (
             order.get(item.get('canonical_model_id'), len(order)),
-            item.get('canonical_model_id') or item['provider_model_id'],
+            item['model_group_id'],
             item['adapter_id'], item['offer_id']))
         digest = hashlib.sha256(json.dumps({'knowledge': knowledge['revision'],
             'preferences': preferences['revision'], 'offers': rows}, sort_keys=True,
@@ -791,6 +814,28 @@ class ChatService:
                 'knowledge_revision': knowledge['revision'],
                 'models': sorted(models.values(), key=lambda item: item['model_id']),
                 'offers': rows, 'preferences': preferences}
+
+    @staticmethod
+    def _with_model_aggregation(offer):
+        """Add an explicit UI grouping hint without changing provider identity."""
+        value = dict(offer); provider_model_id = value['provider_model_id']
+        if value['adapter_id'] == 'openai-responses':
+            upstream_provider_id = 'openai'; upstream_model_id = provider_model_id
+            source = 'openai-native-model-id'
+        elif (value['adapter_id'] == 'atlascloud-text'
+              and '/' in provider_model_id
+              and not provider_model_id.startswith('/')
+              and not provider_model_id.endswith('/')):
+            upstream_provider_id, upstream_model_id = provider_model_id.split('/', 1)
+            source = 'atlascloud-upstream-prefix'
+        else:
+            upstream_provider_id = value['provider_id']
+            upstream_model_id = provider_model_id
+            source = 'provider-scoped-model-id'
+        value.update(aggregation_model_id=(upstream_provider_id + '/' + upstream_model_id),
+                     display_model_id=upstream_model_id,
+                     aggregation_source=source)
+        return value
 
     def _run_selection(self, choice, binding, output_format='text', *, runs=None,
                        run_id=None):

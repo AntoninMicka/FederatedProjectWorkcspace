@@ -98,14 +98,14 @@ class ChatRunChoice:
                           'atlascloud-text': AtlasCloudBinding}
         base = bases[self.adapter_id]; expected = expected_types[self.adapter_id]
         require(isinstance(base, expected), 'Selected brainstorm backend is unavailable')
-        if self.adapter_id == 'atlascloud-text':
-            require(self.model == base.model,
-                    'AtlasCloud run must use the exact bound offer model')
-            return base
         value = base.serialize()
         value['model'] = self.model
         suffix = hashlib.sha256(self.model.encode('utf-8')).hexdigest()[:16]
         value['revision'] = base.revision + '.run-model-' + suffix
+        if self.adapter_id == 'atlascloud-text':
+            require(self.offer_id is not None,
+                    'AtlasCloud run requires an exact selected offer')
+            value['offer_id'] = self.offer_id
         return expected.parse(value)
 
     def validate_context(self, *, project_input_ids, text_input_ids):

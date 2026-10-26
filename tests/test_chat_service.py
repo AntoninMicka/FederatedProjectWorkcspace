@@ -295,7 +295,10 @@ class ChatServiceTests(unittest.TestCase):
         provider_catalog = {'code': '200', 'data': [{'model': 'atlas-text-v1',
             'type': 'Text', 'display_console': True,
             'supported_protocols': ['openai.chat.completions'],
-            'supported_features': ['json_mode'], 'output_modalities': ['text']}]}
+            'supported_features': ['json_mode'], 'output_modalities': ['text']},
+            {'model': 'atlas-text-v2', 'type': 'Text', 'display_console': True,
+             'supported_protocols': ['openai.chat.completions'],
+             'supported_features': [], 'output_modalities': ['text']}]}
         service = ChatService(self.node_path, Projects(self.node_path),
             state_dir=self.chat_state, atlascloud_adapter_factory=lambda runs, credentials:
                 FakeExternalAdapter(runs, credentials, calls))
@@ -1548,6 +1551,63 @@ class ChatServiceTests(unittest.TestCase):
             self.service.configure_model_preferences({
                 'expected_revision': 0, 'preferred_model_ids': []})
 
+    def test_openai_and_atlas_prefix_share_ui_identity_but_keep_wire_model_ids(self):
+        model = 'gpt-6.1-sol-codex'
+        self.service.configure_external(dict(schema_version=1, binding_id=str(uuid4()),
+            revision='openai-aggregate', adapter='openai-responses',
+            boundary='external-provider', endpoint='https://api.openai.com/v1/responses',
+            model=model, target_id='api.openai.com', max_output_tokens=4096,
+            timeout_seconds=180, secret='sk-test-' + 'o' * 32))
+        self.seed_openai_models(self.service, model)
+        atlas_model = 'openai/' + model
+        catalog = AtlasCloudCatalog(self.chat_state, lambda _secret: {
+            'code': '200', 'data': [{'model': atlas_model, 'type': 'Text',
+                'display_console': True,
+                'supported_protocols': ['openai.chat.completions'],
+                'supported_features': ['json_mode'], 'output_modalities': ['text']}]})
+        atlas_offer = catalog.refresh('atlas-test-' + 'p' * 32)['offers'][0]
+        self.service.configure_atlascloud({'schema_version': 1,
+            'binding_id': str(uuid4()), 'revision': 'atlas-aggregate',
+            'adapter': 'atlascloud-text', 'boundary': 'external-provider',
+            'endpoint': 'https://api.atlascloud.ai/v1/chat/completions',
+            'model': atlas_model, 'target_id': 'api.atlascloud.ai',
+            'offer_id': atlas_offer['offer_id'], 'protocol': atlas_offer['protocol'],
+            'knowledge_revision': 'empty-v1',
+            'capabilities': ['generate-text', 'json-output', 'streaming', 'text-output'],
+            'max_output_tokens': 4096, 'timeout_seconds': 180,
+            'secret': 'atlas-test-' + 'q' * 32})
+        self.service.import_model_catalog_knowledge({'expected_revision': 'empty-v1',
+            'catalog': {'schema_version': 1, 'revision': 'openai-reviewed-v1',
+                'reviewed_at': NOW,
+                'models': [{'model_id': 'canonical:gpt-sol-codex',
+                            'display_name': 'GPT Sol Codex'}],
+                'offers': [{'offer_id': 'openai-responses:' + model,
+                    'provider_id': 'openai', 'provider_model_id': model,
+                    'protocol': 'openai-responses-v1',
+                    'canonical_model_id': 'canonical:gpt-sol-codex',
+                    'capabilities': []}]}})
+
+        offers = [item for item in self.service.model_selection_status()['offers']
+                  if item['adapter_id'] in {'openai-responses', 'atlascloud-text'}]
+        self.assertEqual({item['aggregation_model_id'] for item in offers},
+                         {'openai/' + model})
+        self.assertEqual(len({item['model_group_id'] for item in offers}), 1)
+        self.assertEqual({item['display_model_id'] for item in offers}, {model})
+        self.assertEqual({item['model_group_id'] for item in offers},
+                         {'model:canonical:gpt-sol-codex'})
+        self.assertEqual({item['model_group_canonical_id'] for item in offers},
+                         {'canonical:gpt-sol-codex'})
+        self.assertIsNone(next(item for item in offers
+                               if item['adapter_id'] == 'atlascloud-text')[
+                                   'canonical_model_id'])
+        self.assertEqual({item['provider_model_id'] for item in offers},
+                         {model, atlas_model})
+        atlas_request = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': atlas_model})
+        preview = self.service.external_preview(atlas_request)
+        self.assertEqual(preview['provider_request']['model'], atlas_model)
+        self.assertEqual(preview['run_selection']['provider_model_id'], atlas_model)
+
     def test_chat_pins_exact_offer_and_rejects_stale_selection_before_prepare(self):
         projection = self.service.model_selection_status()
         offer = next(item for item in projection['offers']
@@ -1681,6 +1741,21 @@ class ChatServiceTests(unittest.TestCase):
         self.assertNotIn('atlas-test-', encoded)
         self.assertNotIn('secret', encoded)
 
+        projection = service.model_selection_status()
+        atlas_offers = [item for item in projection['offers']
+                        if item['adapter_id'] == 'atlascloud-text']
+        self.assertEqual([item['provider_model_id'] for item in atlas_offers],
+                         ['atlas-text-v1', 'atlas-text-v2'])
+        self.assertTrue(all(item['binding_id'] == status['binding']['binding_id']
+                            for item in atlas_offers))
+        alternate = self.external_request(run_choice={'mode': 'brainstorming',
+            'adapter': 'atlascloud-text', 'model': 'atlas-text-v2'})
+        alternate_preview = service.external_preview(alternate)
+        self.assertEqual(alternate_preview['provider_request']['model'], 'atlas-text-v2')
+        self.assertEqual(alternate_preview['run_selection']['provider_model_id'],
+                         'atlas-text-v2')
+        service.external_cancel({'approval_id': alternate_preview['approval_id']})
+
         request = self.external_request(run_choice={'mode': 'brainstorming',
             'adapter': 'atlascloud-text', 'model': 'atlas-text-v1'})
         preview = service.external_preview(request)
@@ -1748,7 +1823,7 @@ class ChatServiceTests(unittest.TestCase):
         service, _ = self.atlascloud_service([])
         request = self.external_request(run_choice={'mode': 'brainstorming',
             'adapter': 'atlascloud-text', 'model': 'unreviewed-model'})
-        with self.assertRaisesRegex(ValueError, 'exact bound offer model'):
+        with self.assertRaisesRegex(ValueError, 'exact selected offer'):
             service.external_preview(request)
         invalid = {'schema_version': 1, 'binding_id': str(uuid4()),
             'revision': 'atlas-two', 'adapter': 'atlascloud-text',

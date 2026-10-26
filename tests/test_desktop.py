@@ -962,7 +962,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('Ollama vytvořila návrh prezentace, ale ten nesplnil povinný formát',
                       Path('spikes/desktop_ui.py').read_text())
         self.assertIn("projectRequest('/v1/external/preview',request)", JS)
-        self.assertIn("request.run_choice={mode:'brainstorming',adapter:selectedAdapter", JS)
+        self.assertIn("request.run_choice=runChoiceForOffer('brainstorming',selectedOffer)", JS)
         self.assertIn('`Odesílám potvrzený požadavek do ${preview.target.provider}…`', JS)
         self.assertIn("projectRequest('/v1/external/confirm'", JS)
         self.assertIn("projectRequest('/v1/external/cancel'", JS)
@@ -1252,6 +1252,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("value==='local-only'", JS)
         self.assertIn('selected_artifact_ids:[]', JS)
         self.assertIn('run_choice:runChoice', JS)
+        self.assertIn('return offer.model_group_id', JS)
+        self.assertIn('offer.display_model_id', JS)
+        self.assertIn('runChoiceForOffer', JS)
 
     def test_chat_progress_stays_with_prompt(self):
         from spikes.desktop_ui import HTML
@@ -1286,6 +1289,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         load_chat = JS.split('async function loadChat(){', 1)[1].split('\n}', 1)[0]
         self.assertIn("projectRequest('/v1/chat/status',{})", load_chat)
         self.assertIn("projectRequest('/v1/external/status',{})", load_chat)
+        self.assertIn("projectRequest('/v1/model-selection/status',{})", load_chat)
+        self.assertIn('renderModelSelection(modelSelectionState.value)', load_chat)
         self.assertIn('applyOllamaStreamingStatus(result)', load_chat)
         self.assertIn('externalStreaming=external.capabilities?.streaming===true', load_chat)
         self.assertLess(load_chat.index('if(loadRevision!==chatLoadRevision'),
@@ -1715,6 +1720,72 @@ with running_api('http', handler=DesktopHandler) as server:
                                 text=True, timeout=20)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('capability provenance verified', result.stdout)
+
+    @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
+    def test_real_webengine_aggregates_models_and_populates_chat_selectors(self):
+        script = r'''
+import json
+from PySide6.QtCore import QTimer, QUrl
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+from spikes.desktop import request_policy
+from spikes.desktop_ui import DesktopHandler
+from spikes.local_api import running_api
+app = QApplication([])
+with running_api('http', handler=DesktopHandler) as server:
+    class Interceptor(QWebEngineUrlRequestInterceptor):
+        def interceptRequest(self, info):
+            policy = request_policy(info.requestUrl().toString(), info.initiator().toString(),
+                                    bytes(info.requestMethod()).decode(), server.origin)
+            if policy == 'block': info.block(True)
+            elif policy == 'authenticate':
+                info.setHttpHeader(b'Authorization', ('Bearer ' + server.token).encode())
+    profile = QWebEngineProfile(app); interceptor = Interceptor(profile)
+    profile.setUrlRequestInterceptor(interceptor); page = QWebEnginePage(profile, app)
+    caps = [{'name':'generate-text','supported':True,'state':'reported'},
+            {'name':'text-output','supported':True,'state':'reported'}]
+    projection = {'revision':'selection-smoke','models':[],'preferences':{'preferred_model_ids':[]},
+      'offers':[
+       {'offer_id':'openai:gpt','adapter_id':'openai-responses','provider_model_id':'gpt-shared',
+        'canonical_model_id':None,'aggregation_model_id':'openai/gpt-shared','model_group_id':'aggregate:openai/gpt-shared','model_group_canonical_id':None,'display_model_id':'gpt-shared',
+        'protocol':'openai-responses-v1','availability':'available','freshness':'fresh',
+        'binding_id':'11111111-1111-4111-8111-111111111111','binding_revision':'one','capabilities':caps},
+       {'offer_id':'atlas:gpt','adapter_id':'atlascloud-text','provider_model_id':'openai/gpt-shared',
+        'canonical_model_id':None,'aggregation_model_id':'openai/gpt-shared','model_group_id':'aggregate:openai/gpt-shared','model_group_canonical_id':None,'display_model_id':'gpt-shared',
+        'protocol':'openai-chat-completions-v1','availability':'available','freshness':'fresh',
+        'binding_id':'22222222-2222-4222-8222-222222222222','binding_revision':'two','capabilities':caps},
+       {'offer_id':'ollama:qwen','adapter_id':'ollama','provider_model_id':'qwen-local',
+        'canonical_model_id':None,'aggregation_model_id':'ollama/qwen-local','model_group_id':'aggregate:ollama/qwen-local','model_group_canonical_id':None,'display_model_id':'qwen-local',
+        'protocol':'ollama-generate-v1','availability':'available','freshness':'fresh',
+        'binding_id':'33333333-3333-4333-8333-333333333333','binding_revision':'three','capabilities':caps}]}
+    def received(value):
+        if not value: return
+        result = json.loads(value)
+        assert result['backendLabels'] == ['Vyberte backend', 'AtlasCloud', 'Ollama', 'OpenAI'], result
+        assert result['modelLabels'] == ['Vyberte model', 'gpt-shared', 'qwen-local'], result
+        assert result['rows'] == 2, result
+        assert result['filteredBackends'] == ['Vyberte backend', 'AtlasCloud', 'OpenAI'], result
+        print('model selection: aggregated rows and bidirectional chat filters verified', flush=True)
+        app.exit(0)
+    def loaded(ok):
+        if not ok: return app.exit(3)
+        payload = json.dumps(projection, ensure_ascii=False)
+        javascript = """document.querySelector('#chat-mode').value='brainstorming';renderModelSelection(%s);
+const backend=document.querySelector('#chat-run-adapter'),model=document.querySelector('#chat-run-model');
+const backendLabels=[...backend.options].map(x=>x.textContent);
+const modelLabels=[...model.options].map(x=>x.textContent);
+const rows=document.querySelectorAll('#settings-models-table tbody tr').length;
+model.value='aggregate:openai/gpt-shared';model.dispatchEvent(new Event('change'));
+JSON.stringify({backendLabels,modelLabels,rows,filteredBackends:[...backend.options].map(x=>x.textContent)});""" % payload
+        page.runJavaScript(javascript, 0, received)
+    page.loadFinished.connect(loaded); page.setUrl(QUrl(server.origin + '/'))
+    QTimer.singleShot(10000, lambda: app.exit(2)); raise SystemExit(app.exec())
+'''
+        result = subprocess.run([sys.executable, '-c', script],
+                                cwd=Path(__file__).resolve().parents[1], capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('bidirectional chat filters verified', result.stdout)
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_webengine_audience_renders_approved_slide(self):

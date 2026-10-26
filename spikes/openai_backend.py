@@ -264,6 +264,17 @@ class OpenAIModelCatalog:
         return dict(snapshot, freshness='stale', refresh_error=None)
 
     def _project(self, binding, discovery):
+        # Older fresh snapshots recorded adapter capabilities only for the
+        # configured default.  Capability support belongs to the reviewed
+        # Responses adapter/protocol, so project it for every discovered offer
+        # without rewriting the durable discovery evidence.
+        discovery = dict(discovery)
+        if discovery['freshness'] == 'fresh':
+            discovery['offers'] = [
+                dict(item, capabilities=(item['capabilities'] or self._offer(
+                    item['provider_model_id'], binding,
+                    discovery['fetched_at'])['capabilities']))
+                for item in discovery['offers']]
         knowledge = ModelKnowledgeStore(self.root).load_or_empty(discovery['fetched_at'])
         value = project_catalog(knowledge, [discovery])
         value.update(provider_id='openai', scope_id=binding.binding_id,

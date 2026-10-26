@@ -25,7 +25,9 @@ ve WORK_LOG a zbývající serverový pinning je explicitně oddělen sem. Cílo
   `prepared` se používá pouze uložený výběr. `dispatching` zůstává při nejasném
   přerušení `unknown` bez retry či fallbacku.
 - **Mimo rozsah:** automatický výběr/fallback, hodnocení ceny či kvality,
-  nové providery, redesign katalogu a fyzická akceptace celého faceliftu.
+  nové providery a fyzická akceptace celého faceliftu. Původně odložené
+  seskupení katalogu bylo do dávky doplněno ad-hoc opravou E, protože bez něj
+  nešlo fyzicky ověřit dohodnutý model-first výběr.
 
 ## Úkoly dávky
 
@@ -47,6 +49,13 @@ ve WORK_LOG a zbývající serverový pinning je explicitně oddělen sem. Cílo
   restart na persistentních hranicích, legacy běh, RBAC/privacy a zákaz
   fallbacku. Fyzicky potvrdit nejméně Ollamu a jeden externí backend v desktopu
   nebo sdíleném webu včetně uložené identity výběru.
+- [x] [completed] **UX-BACKEND-MODEL-02-E — obnova nabídek a upstream alias
+  (cíl: implemented; ad-hoc požadavek uživatele 26. 10. 2026).** Načíst
+  projekci backendů/modelů při každém otevření projektu a chatu, nikoli až přes
+  Nastavení. Binding chápat jako profil spojení a nabídku modelu připnout až k
+  běhu. OpenAI `gpt-x` a AtlasCloud `openai/gpt-x` zobrazit jako jeden model s
+  backendovými variantami, ale v per-run bindingu, `RunSelection` a requestu
+  zachovat přesné providerové ID včetně AtlasCloud prefixu.
 
 ## Akceptace
 
@@ -80,12 +89,26 @@ zachová rozepsané zadání, vymaže pouze neplatnou volbu backend/model, obnov
 katalog a vyžádá novou vědomou volbu. Veřejná odpověď ukazuje kontrolovatelnou
 identitu a digest výběru, ale necredential metadata.
 
+Ad-hoc oprava E oddělila profil spojení od jeho dosavadního výchozího modelu:
+čerstvé capability-kompatibilní nabídky stejného adapteru/protokolu dostanou
+identitu bindingu a přesný model se z nich vytvoří pouze pro konkrétní běh.
+Starší čerstvé OpenAI discovery snapshoty získají při read-only projekci
+capabilities doložené Responses adapterem; durable evidence se nepřepisuje.
+AtlasCloud upstream prefix se odstraňuje pouze z agregačního a zobrazovaného
+ID. Obecný katalog má jeden řádek na `model_group_id`; dialog zachovává všechny
+backendové nabídky a jejich capability provenance.
+
 Automatické ověření po poslední změně:
 
-- cíleně `190` testů ve všech třech textových adaptérech, chat službě a UI —
-  `OK`, `4` přeskočené volitelné Qt/WebEngine testy;
-- plná sada `python3 -m unittest discover -s tests -v` — `871` testů za
-  `207.630 s`, `OK`, `29` přeskočených volitelných testů;
+- cíleně `159` testů kontraktu režimů, všech tří textových adaptérů, chat
+  služby, modelového katalogu a UI — `OK`, `5` přeskočených volitelných
+  Qt/WebEngine testů;
+- samostatný skutečný Qt/WebEngine smoke test agregovaných řádků, naplněných
+  dropdownů a model-first filtru — `1` test, `OK`;
+- read-only projekce nad reálným stavem uzlu — `159` čerstvých běžitelných
+  nabídek a backendy Ollama, OpenAI i AtlasCloud;
+- plná sada `python3 -m unittest discover -s tests -q` — `873` testů za
+  `205.836 s`, `OK`, `30` přeskočených volitelných testů;
 - Python syntaxe, JavaScript `node --check` a `git diff --check` byly průběžně
   čisté; po tomto čistě dokumentačním zápisu stačí finální kontrola diffu.
 
