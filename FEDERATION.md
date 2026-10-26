@@ -49,6 +49,17 @@ explicitní Workspace publikace s preview, provenance a zděděnou privacy.
 
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
+## Read-only synchronizace historie workspace chatů
+
+První omezený řez je implementovaný podle
+[ADR 0056](docs/adr/0056-read-only-chat-history-sync.md). Jde o explicitní
+jednosměrný přenos vybraných node-local workspace vláken, nikoli federovaný
+lidský chat. Používá pouze schválený interní peer, pinned podpis a aktivní
+bilaterální mapování. Přijaté snapshoty zůstávají mimo `ChatThreads`, jsou jen
+pro čtení a odlišné verze se nepřepisují. Praktický postup je v
+[návodu](docs/chat-history-sync.md). Širší capability profily, background sync
+a `F-M5-CHAT-01` tím nejsou dokončené.
+
 ## Scénář konfliktu
 
 1. Desktop i server mají společný commit a tutéž entitu.

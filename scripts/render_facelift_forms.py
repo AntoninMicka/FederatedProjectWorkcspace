@@ -95,6 +95,8 @@ SHEETS = [
           ("chat-composer",), scale=.68),
     sheet("chat-confirm", "Chat — odstranění a externí předání",
           ("#chat-delete-preview", "#external-proposal", "#external-preview"), scale=.68),
+    sheet("chat-history-sync", "Chat — synchronizace historie",
+          ("#chat-history-sync-dialog",), ("chat-history-sync-form",), scale=.78),
     sheet("public-source", "Veřejný internet — hledání a načtení zdroje",
           ("#search-preview", "#public-source-preview"), scale=.72),
     sheet("summary", "Lokální souhrn", ("#summary-panel",), scale=.68),

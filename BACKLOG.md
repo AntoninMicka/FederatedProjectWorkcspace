@@ -86,11 +86,13 @@ WORK_LOG. Implementovaný rozsah `UX-BACKEND-MODEL-01` byl doručen PR #96 a
 #97 a jeho skutečný stav je ve WORK_LOG. Navazující serverový pinning,
 revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 26. 10. 2026 úrovně PoC validated a byly doručeny PR #98. Vizualizace
-`DEV-ROADMAP-GRAPH-01` byla doručena PR #99; aktivní navazující dávku drží
-TODO a backlog ji nedrží jako druhý stavový záznam.
+`DEV-ROADMAP-GRAPH-01` byla doručena PR #99 a obecný plánovací graf PR #100.
+`F-M5-CHAT-HISTORY-01` dosáhla na větvi
+`feature/f-m5-chat-history-01` úrovně PoC validated; evidence je ve WORK_LOG a
+doručení PR do `develop` zatím čeká.
 
-Po aktivní plánovací dávce je uživatelem schválené pořadí priorit:
-`F-M5-CHAT-HISTORY-01`, `COMP-01`, `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
+Po doručení synchronizace historie chatů je uživatelem schválené pořadí priorit:
+`COMP-01`, `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
 
@@ -266,8 +268,6 @@ Rozsah a gates rozšíření drží sekce 22 master roadmapy. Jde o plánovanou 
   přihlášení a `local-only` jsou vždy odmítnuty.
 
 - [ ] [planned] **F-M5-TRANSFER-01 — Privacy-aware přenos celé historie (cílová úroveň: PoC validated).** Nahradit public-only omezení prvního bundle přenosu autorizací všech objektů dosažitelných z vybraného refu podle F-M5-TRUST-01 a portable ACL ADR 0021. Jde o přímou návaznost na odmítnutí `project` entity v historickém commitu oznámené 2026-09-17. Akceptace: `project` data projdou pouze s oboustranně platným branch/project grantem a mapováním; confidential vyžaduje explicitní policy; local-only, nepokrytý předek, skrytý další ref, změněný HEAD, revokace a neúplný manifest se odmítnou před odesláním; příjem znovu ověří stejný obsah a práva.
-
-- [ ] [planned] **F-M5-CHAT-HISTORY-01 — synchronizace historie workspace chatů mezi uzly (cílová úroveň: PoC validated).** Po důvěře F-M5-TRUST-01 navrhnout a ověřit přenos existujících projektových i nezařazených workspace vláken bez záměny za federovaný lidský chat F-M5-CHAT-01. Zachovat thread/message/run ID, autora, pořadí, přiřazení, privacy, Context Manifest a stavy `unknown`; node-local credentials ani provider session se nepřenášejí. Akceptace: explicitní rozsah a cílový peer, idempotentní import/deduplikace, obousměrná divergence bez přepisu, offline/restart/revokace, local-only odmítnutí a žádné automatické zopakování historického modelového běhu.
 
 - [ ] [planned] **F-M5-CHAT-01 — Federovaná lidská vlákna a durable delivery (cílová úroveň: PoC validated).** Přímý chat a explicitně založené skupinové vlákno mezi mapovanými uživateli schválených peerů; výchozí klasifikace `brainstorming`. Stabilní message/thread ID, kvalifikovaný autor, podpis/provenance, durable outbox/inbox, deduplikace a pending/sent/delivered/failed/unknown bez globálního pořadí odvozeného pouze z hodin. Profil `partner` nesmí chat využít k background synchronizaci ani procházení projektu; mimo samotné zprávy projde jen obsah explicitně přiložený nebo nasdílený uživatelem. Akceptace: offline obě strany, retry/lost response, duplicita, změněný mapping, downgrade profilu, revokace, restart na každé persistentní hranici a oddělení vláken/projektů; chat funguje bez LLM.
 

@@ -59,6 +59,15 @@ validují proti autoritativním Markdown dokumentům. Serverový SVG renderer
 slouží statickému exportu připnutému na tutéž revizi. Rozhodnutí a fail-closed
 hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
+F-M5-CHAT-HISTORY-01 **reuse/adaptuje** `ChatThreads` jako jedinou autoritu
+lokálních vláken, bilaterální mapování a připnuté Ed25519 podpisy z ADR 0021,
+omezený privátní HTTPS transport z obsahové synchronizace a node-private
+SQLite journal. Přijaté snapshoty jsou nový oddělený read model; nereusují
+živé chatové tabulky, protože by tím vznikla falešná možnost replaye a vazba na
+chybějící lokální run journals. Nová message queue, vzdálený login ani externí
+sync framework se nepřidává. Volbu, crash boundaries a omezení drží
+[ADR 0056](docs/adr/0056-read-only-chat-history-sync.md).
+
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 
 M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).

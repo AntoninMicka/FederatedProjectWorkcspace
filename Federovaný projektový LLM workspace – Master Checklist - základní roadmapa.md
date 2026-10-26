@@ -9,8 +9,10 @@ SPDX-License-Identifier: MPL-2.0
 Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
-Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` je PoC validated na
-feature větvi a čeká na vlastní PR. Gate M3 jako celek zůstává otevřený.
+Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
+`F-M5-CHAT-HISTORY-01` dosáhla úrovně PoC validated a čeká na doručení PR;
+je bezpečně omezená na existující bilaterální autority a široký
+`F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna

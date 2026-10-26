@@ -257,7 +257,7 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 <p id="sidebar-project-status" role="status">Načítám projekty…</p><button id="sidebar-project-recover" type="button" hidden>Dokončit přerušenou operaci</button><ul id="sidebar-project-list"></ul></div>
 <div id="sidebar-chats" role="tabpanel" aria-labelledby="chats-tab" tabindex="0" hidden>
 <h2>Chaty</h2><p id="sidebar-chat-status" role="status">Načítám uložená vlákna…</p>
-<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button" disabled>Nové vlákno</button></div>
+<div class="sidebar-chat-primary-actions"><button id="chat-new-thread" type="button" disabled>Nové vlákno</button><button id="chat-history-sync-open" type="button" class="secondary-button">Synchronizovat</button></div>
 <ul id="sidebar-chat-tree" role="tree" aria-label="Uložené chaty"></ul></div>
 <div id="todo-widget" role="tabpanel" aria-labelledby="todo-tab" tabindex="0" hidden><h2>Hlavní seznam úkolů</h2>
 <p id="todo-status" role="status">Otevřete projekt.</p><div id="todo-title"></div>
@@ -319,6 +319,15 @@ HTML = '''<!doctype html><html lang="cs"><meta charset="utf-8">
 </button></section>
 <button id="logout" type="button"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg><span>Odhlásit</span></button>
 <button id="sidebar-layout-toggle" type="button" aria-pressed="false" aria-label="Sbalit hlavní panel"><svg class="sidebar-utility-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg><span class="sidebar-layout-label">Sbalit panel</span></button></aside>
+<dialog id="chat-history-sync-dialog" aria-labelledby="chat-history-sync-title"><form id="chat-history-sync-form" method="dialog">
+<h2 id="chat-history-sync-title">Synchronizovat historie chatů</h2>
+<p>Vybraná stabilní vlákna budou jednorázově odeslána schválenému internímu peeru. Na cíli zůstanou jen pro čtení.</p>
+<label>Cílový účet <select name="target" required></select></label>
+<fieldset><legend>Vlákna</legend><div id="chat-history-sync-threads"></div></fieldset>
+<div id="chat-history-sync-recovery"></div>
+<p id="chat-history-sync-status" role="status"></p>
+<div class="form-actions"><button id="chat-history-sync-run" type="button">Odeslat vybrané snapshoty</button><button id="chat-history-sync-close" type="button" class="secondary-button">Zrušit</button></div>
+</form></dialog>
 <dialog id="resource-monitor-dialog" aria-labelledby="resource-monitor-title">
 <div class="resource-dialog-heading"><div><div class="eyebrow">TELEMETRIE UZLU</div><h2 id="resource-monitor-title">Spotřeba a dostupnost zdrojů</h2></div><button id="resource-monitor-close" type="button" class="secondary-button" aria-label="Zavřít přehled zdrojů">Zavřít</button></div>
 <section><h3>Poskytovatelé</h3><div id="resource-provider-list">
@@ -2166,7 +2175,7 @@ function clearProject(){
  hideSearchRecovery();
  pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
  pendingExternalPreview=null;document.querySelector('#external-preview').hidden=true;
- knownThreads=[];pendingThreadDeletion=null;renderThreadList([]);
+ knownThreads=[];syncedHistories=[];pendingThreadDeletion=null;renderThreadList([]);
  document.querySelector('#chat-delete-preview').hidden=true;
  document.querySelector('#chat-submit').disabled=true;document.querySelector('#chat-messages').replaceChildren();
  document.querySelector('#chat-backend-status').textContent='Otevřete projekt.';
@@ -4232,7 +4241,7 @@ const chatRunUsage=document.querySelector('#chat-run-usage');
 const ollamaStreamingToggle=document.querySelector('#ollama-streaming-enabled');
 const ollamaStreamingState=document.querySelector('#ollama-streaming-state');
 const responseLanguageState=document.querySelector('#response-language-state');
-let activeThread=null,knownThreads=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
+let activeThread=null,knownThreads=[],syncedHistories=[],chatHistoryPeers=[],pendingThreadDeletion=null,chatBinding=null,searchBinding=null,externalBinding=null,atlasCloudBinding=null,atlasCloudCatalog=null,ollamaStreaming=false,ollamaStreamingSupported=false,externalStreaming=false,atlasCloudStreaming=false,pendingChatRequest=null,pendingExternalPreview=null,pendingExternalProposal=null,pendingSearchPreview=null,pendingPublicSourcePreview=null,searchRecoveryBinding=null;
 let activeTaskThreadId=null,taskOutcomes=[],chatSelectionRevision=0,chatLoadRevision=0;
 const presentationApprovalAttempts=new Map();
 let streamScrollPending=false,streamAutoFollow=false,chatProgressSequence=0,chatProgressActive=false;
@@ -4285,7 +4294,7 @@ async function withChatProgress(initialState,action){
 function waitForVisiblePaint(){
  return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
 }
-function threadWritable(){return !activeThread || (activeThread.status==='active' &&
+function threadWritable(){return !activeThread || (!activeThread.read_only && activeThread.status==='active' &&
  (activeThread.project_id===null || activeThread.project_id===activeProject?.id));}
 async function streamRequest(path,request,onDelta,onStatus=()=>{}){
  const response=await fetch(path,{method:'POST',
@@ -4442,7 +4451,7 @@ function renderThreadMessage(item,thread){
     finally{requestButton.disabled=false;}
    });
    message.append(requestButton);
-  }else if(turn?.run_id){
+ }else if(turn?.run_id && !thread?.read_only){
    const runtimeButton=document.createElement('button');runtimeButton.type='button';
    runtimeButton.className='secondary-button';runtimeButton.textContent='Runtime běhu';
    runtimeButton.addEventListener('click',async()=>{
@@ -4527,9 +4536,22 @@ function renderThreadList(threads){
   }
  }
  branch('Zařazené',assigned);branch('Nezařazené',unassigned);
+ if(syncedHistories.length){
+  const root=document.createElement('li');root.className='sidebar-chat-branch';root.setAttribute('role','treeitem');root.setAttribute('aria-expanded','true');
+  const toggle=document.createElement('button');toggle.type='button';toggle.className='sidebar-chat-branch-toggle';toggle.textContent=`Synchronizované historie (${syncedHistories.length})`;
+  const group=document.createElement('ul');group.setAttribute('role','group');
+  toggle.addEventListener('click',()=>{const expanded=root.getAttribute('aria-expanded')==='true';root.setAttribute('aria-expanded',String(!expanded));});root.append(toggle,group);tree.append(root);
+  for(const thread of syncedHistories){
+   const row=document.createElement('li'),button=document.createElement('button');row.setAttribute('role','treeitem');row.className='sidebar-list-row sidebar-chat-row';button.type='button';button.className='sidebar-list-main sidebar-chat-open';
+   button.dataset.snapshotId=thread.snapshot_id;button.setAttribute('aria-current',String(activeThread?.snapshot_id===thread.snapshot_id));
+   button.textContent=`${thread.classification} · jen pro čtení`;
+   const meta=document.createElement('small');meta.className='sidebar-chat-meta';meta.textContent=`${thread.messages.length} zpráv · uzel ${thread.source_node_id.slice(0,8)}${thread.divergent?' · odlišná verze':''}`;
+   button.append(meta);button.addEventListener('click',()=>openSyncedHistory(thread.snapshot_id));row.append(button);group.append(row);
+  }
+ }
  const assignedCount=assigned.length,unassignedCount=unassigned.length;
- document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount?
-  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:
+ document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount||syncedHistories.length?
+  `${assignedCount} zařazených · ${unassignedCount} nezařazených · ${syncedHistories.length} synchronizovaných`:
   (activeProject?'Tento projekt nemá žádná přiřazená ani dostupná nezařazená vlákna.':'Zatím tu nejsou žádná nezařazená vlákna.');
 }
 function rememberThread(thread){
@@ -5278,6 +5300,45 @@ async function openStoredThread(threadId){
   chatOperationStatus.textContent=`Navázáno na ${thread.status==='archived'?'archivované':'aktivní'} uložené vlákno.`;
  }catch(error){chatOperationStatus.textContent=error.message;}
 }
+async function openSyncedHistory(snapshotId){
+ if(!activeProject){document.querySelector('#sidebar-chat-status').textContent='Pro zobrazení historie nejprve vyberte projekt.';return;}
+ ++chatSelectionRevision;pendingChatRequest=null;pendingThreadDeletion=null;
+ document.querySelector('#chat-delete-preview').hidden=true;
+ const thread=syncedHistories.find(item=>item.snapshot_id===snapshotId);
+ if(!thread){chatOperationStatus.textContent='Synchronizovaný snapshot už není dostupný.';return;}
+ activeTaskThreadId=null;taskOutcomes=[];activeThread=thread;
+ selectMainTab(document.querySelector('#chat-tab'));renderTaskPublicSources();renderThreadList(knownThreads);renderChat(thread);
+ chatOperationStatus.textContent=`Historie z uzlu ${thread.source_node_id} je pouze pro čtení${thread.divergent?' a má více zachovaných verzí.':'.'}`;
+}
+const chatHistorySyncDialog=document.querySelector('#chat-history-sync-dialog');
+document.querySelector('#chat-history-sync-open').addEventListener('click',async()=>{
+ const statusElement=document.querySelector('#chat-history-sync-status');statusElement.textContent='Načítám schválené cíle…';
+ try{
+  const state=await projectRequest('/v1/chat-history/status',{});chatHistoryPeers=state.peers || [];
+  const select=document.querySelector('#chat-history-sync-form').elements.target;select.replaceChildren();
+  for(const peer of chatHistoryPeers){const option=document.createElement('option');option.value=`${peer.peer_id}:${peer.mapping_id}`;option.textContent=`${peer.name} · ${peer.sharing_level}`;select.append(option);}
+  const list=document.querySelector('#chat-history-sync-threads');list.replaceChildren();
+  for(const thread of knownThreads){const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.name='thread_id';input.value=thread.thread_id;
+   label.append(input,document.createTextNode(` ${thread.classification} · ${thread.messages.length} zpráv${thread.project_id?' · projekt':' · nezařazené'}`));list.append(label);}
+  const recovery=document.querySelector('#chat-history-sync-recovery');recovery.replaceChildren();
+  for(const operation of (state.operations || []).filter(item=>['prepared','unknown'].includes(item.state))){const row=document.createElement('p'),button=document.createElement('button');button.type='button';button.className='secondary-button';button.textContent='Ověřit stejnou operaci';
+   const label=document.createElement('span');label.textContent=` ${operation.operation_id.slice(0,8)} · ${operation.state}`;
+   button.addEventListener('click',async()=>{button.disabled=true;statusElement.textContent='Odesílám beze změny dříve uložený podepsaný balík…';try{await projectRequest('/v1/chat-history/reconcile',{operation_id:operation.operation_id},70000);statusElement.textContent='Podepsané potvrzení bylo ověřeno.';row.remove();}catch(error){statusElement.textContent=`Výsledek stále není potvrzen: ${error.message}`;}finally{button.disabled=false;}});row.append(button,label);recovery.append(row);}
+  statusElement.textContent=!chatHistoryPeers.length?'Není dostupné aktivní mapování ke schválenému internímu peeru.':(!knownThreads.length?'Nejsou dostupná lokální vlákna.':'Vyberte přesný cíl a vlákna.');
+  document.querySelector('#chat-history-sync-run').disabled=!chatHistoryPeers.length||!knownThreads.length;chatHistorySyncDialog.showModal();
+ }catch(error){statusElement.textContent=error.message;chatHistorySyncDialog.showModal();}
+});
+document.querySelector('#chat-history-sync-close').addEventListener('click',()=>chatHistorySyncDialog.close());
+document.querySelector('#chat-history-sync-run').addEventListener('click',async event=>{
+ const form=document.querySelector('#chat-history-sync-form'),selected=[...form.querySelectorAll('input[name="thread_id"]:checked')].map(input=>input.value);
+ const [peerId,mappingId]=form.elements.target.value.split(':');const statusElement=document.querySelector('#chat-history-sync-status');
+ if(!selected.length){statusElement.textContent='Vyberte alespoň jedno vlákno.';return;}
+ event.currentTarget.disabled=true;statusElement.textContent='Ukládám podepsaný balík a odesílám…';
+ try{const state=await projectRequest('/v1/chat-history/synchronize',{operation_id:crypto.randomUUID(),peer_id:peerId,mapping_id:mappingId,thread_ids:selected},70000);
+  statusElement.textContent='Podepsané potvrzení cílového uzlu bylo ověřeno.';chatHistorySyncDialog.close();
+ }catch(error){statusElement.textContent=`Přenos nebyl potvrzen: ${error.message}. Stav prepared nebo unknown lze bezpečně ověřit stejnou operací.`;}
+ finally{event.currentTarget.disabled=false;}
+});
 async function archiveActiveThread(button){
  if(!activeThread)return;if(button)button.disabled=true;
  try{const archived=await projectRequest('/v1/chat/archive',{
@@ -5665,7 +5726,8 @@ async function loadChat(){
   fillSearchBinding(result.search_binding);
   applyOllamaStreamingStatus(result);
   applyResponseLanguageStatus(result);
-  if(!Array.isArray(result.threads))throw new Error('Odpověď neobsahuje seznam vláken.');
+  if(!Array.isArray(result.threads)||!Array.isArray(result.synced_histories))throw new Error('Odpověď neobsahuje seznam vláken.');
+  syncedHistories=result.synced_histories;
   const ordered=[...result.threads].reverse();
   const projectThreads=projectId?ordered.filter(thread=>thread.project_id===projectId):[];
   const restored=projectThreads.find(thread=>thread.status==='active') || projectThreads[0] || null;
@@ -6866,6 +6928,8 @@ class DesktopHandler(Handler):
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
         '/v1/google-drive/confirm', '/v1/google-drive/recover',
         '/v1/chat/status', '/v1/chat/configure', '/v1/chat/models',
+        '/v1/chat-history/status', '/v1/chat-history/synchronize',
+        '/v1/chat-history/reconcile',
         '/v1/node-telemetry/status', '/v1/node-telemetry/configure',
         '/v1/node-telemetry/run',
         '/v1/chat/preferences', '/v1/chat/response-language', '/v1/chat/test',
@@ -7218,6 +7282,17 @@ class DesktopHandler(Handler):
                 return self.reply(200, self.server.summary_service.publish(request))
             if self.path == '/v1/chat/status' and request == {}:
                 return self.reply(200, self.server.chat_service.status())
+            if self.path == '/v1/chat-history/status' and request == {}:
+                from spikes.chat_history_sync import status
+                return self.reply(200, status(self.server.chat_service.node_path))
+            if self.path == '/v1/chat-history/synchronize' and isinstance(request, dict):
+                from spikes.chat_history_sync import synchronize
+                return self.reply(200, synchronize(
+                    self.server.chat_service.node_path, request))
+            if self.path == '/v1/chat-history/reconcile' and isinstance(request, dict):
+                from spikes.chat_history_sync import reconcile
+                return self.reply(200, reconcile(
+                    self.server.chat_service.node_path, request))
             if self.path == '/v1/node-telemetry/status' and isinstance(request, dict) \
                     and set(request) <= {'group'}:
                 return self.reply(200, self.server.chat_service.telemetry_status(
@@ -7689,7 +7764,7 @@ class DesktopHandler(Handler):
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
                     'stejného tlačítka zachová identitu operace.'})
-            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
+            if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/chat-history/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
                            'modulu, konfiguraci a lokální recovery stav.' if self.path.startswith('/v1/publication-cms/') else
