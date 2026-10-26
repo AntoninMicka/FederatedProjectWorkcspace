@@ -89,13 +89,13 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 `DEV-ROADMAP-GRAPH-01` byla doručena PR #99 a obecný plánovací graf PR #100.
 `F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
-`F-M5-SYNC-CONTROLS-01` dosáhla úrovně PoC validated, její evidence je ve
+`F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
+evidence je ve WORK_LOG. `COMP-01` dosáhla úrovně designed, její evidence je ve
 WORK_LOG a větev čeká na doručení PR; backlog ji nedrží jako druhý stavový
 záznam.
 
-Po dokončení synchronizačních ovladačů je uživatelem schválené pořadí
-priorit:
-`COMP-01`, `COMP-02`, `DEV-IDE-TODO-01` a `DEV-01`.
+Po doručení `COMP-01` následují podle uživatelem schváleného pořadí `COMP-02`,
+`DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
 
@@ -147,7 +147,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 
 ## Modelování a výpočty v Julii — navazuje na M6
 
-- [ ] [planned] **COMP-01 — Julia výpočetní kontrakt a prostředí (cílová úroveň: designed).** Navázat na ADR 0018 a uzavřít schéma modelu, vstupů, parametrů, `Project.toml`/`Manifest.toml`, run recordu, lokální generace výstupů a explicitní publikace. Rozhodnout podporovaný Julia runtime/platformy, systémovou versus přibalenou instalaci, offline depot, aktualizace, limity a execution boundary. Akceptace: návrhové scénáře stale HEAD/prostředí, chybějící balíček, síťový pokus, timeout/pád, neúplný výstup, privacy odvozeniny, platformní numerická odchylka a oddělení Julia run recordu od LLM běhu. Před distribucí provést reuse, licenční a runtime review.
 - [ ] [planned] **COMP-02 — Lokální Julia runner a publikace výsledků (cílová úroveň: PoC validated).** Po COMP-01 implementovat explicitní CLI běh nad zmrazenými vstupy a prostředím, atomickou lokální cache dle ADR 0018 a vědomé uložení vybrané tabulky/grafu/reportu/datasetu jako projektového artefaktu s provenance. Akceptace: úspěšný výpočet a opakování, změna modelu/vstupu/parametru/prostředí, concurrent run, restart na každém persistentním přechodu, timeout/cancel, limit výstupu, odmítnutá síť a neautorizovaný vstup, zobrazení stale posledního výsledku a publikace přes standardní Workspace recovery. Notebookové UI zůstává mimo první dávku.
 
 ## Externí vztahy a disclosure — navazující strategický backlog

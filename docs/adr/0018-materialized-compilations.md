@@ -5,7 +5,7 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0018 — Materializované kompiláty jako lokální cache
 
-Datum: 2026-09-10. Stav: **designed**, přijatý návrh na požadavek uživatele (M1-AH-01). Implementace, datový kontrakt a UI zatím neexistují. Navazuje na [architekturu](../../ARCHITECTURE.md), [datový model](../../DATA_MODEL.md) a [Context Manifest / execution boundaries](0008-context-and-publication-contracts.md).
+Datum: 2026-09-10. Stav: **designed**, přijatý návrh na požadavek uživatele (M1-AH-01). Obecná implementace a UI zatím neexistují; první runtime `renderer.web-static` používá užší kontrakt ADR 0030 a Julia výpočty mají navazující návrh v [ADR 0057](0057-julia-computation-contract.md). Navazuje na [architekturu](../../ARCHITECTURE.md), [datový model](../../DATA_MODEL.md) a [Context Manifest / execution boundaries](0008-context-and-publication-contracts.md).
 
 ## Účel a autorita
 

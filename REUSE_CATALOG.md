@@ -753,3 +753,18 @@ projektový plán od vývojové roadmapy tohoto repozitáře. Autoritou zůstáv
 existující hlavní TODO v Git snapshotu a podgrafy pouze vybírají stabilní ID;
 nevzniká další databáze, writer ani závislost na externí grafové knihovně.
 Rozhodnutí: [ADR 0055](docs/adr/0055-project-task-plan.md).
+
+COMP-01 **reuse/adaptuje** validovaný Git snapshot a artifact hash kontroly,
+Context Manifest/approval/`unknown` hranice z ADR 0008, atomické materializace
+z ADR 0018, typed output receipts z ADR 0030 a jediný Workspace writer. Julia
+run vyžaduje samostatný node-local journal, protože LLM run ani Workspace
+journal nemají stejný lokální procesní účinek. Oficiální Julia runtime je
+**evaluate**, nikoli nová závislost této návrhové dávky: první implementační
+kandidát je připnutá node-managed Julia 1.10.12 LTS na Linux glibc x86-64 a
+ARMv8, s exact Project/Manifest a předpřipraveným offline depotem. Julia má MIT
+licenci, ale runtime, balíčky a artifacts vyžadují samostatný third-party
+inventář před distribucí. Distro balík, pohyblivý Juliaup channel, shell command,
+uživatelský depot/startup, `Pkg.instantiate` během runu, obecný job server a
+cache v projektovém Gitu jsou **reject**. Soukromá inventura neobsahuje shodný
+Julia/recovery kontrakt a nepřebírá se z ní kód ani neveřejné detaily.
+Rozhodnutí a primární zdroje: [ADR 0057](docs/adr/0057-julia-computation-contract.md).
