@@ -30,9 +30,11 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
   (PoC validated).** Prošly migrace, oba směry, privacy, crash retry, pinned
   HTTPS, balení a původní WebEngine průchod.
 - [ ] [in progress] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
-  chatu (implemented; fyzická reakceptace čeká).** Stav rozlišuje počet
+  chatu (implemented; fyzická reakceptace selhala).** Stav rozlišuje počet
   sdílených/přijatých chatů, nulové aktivní mapování a nulový přenositelný
   obsah. Dokončení Sync i kliknutí na Chaty obnoví otevřený seznam vláken.
+  Reálný seznam směšoval synchronizovaná projektová vlákna s lokálními
+  nezařazenými vlákny, takže výsledek nebyl jednoznačně ověřitelný.
 - [x] [completed] **F-M5-CHAT-HISTORY-01-F — automatická autorita enrollmentu
   (implemented; ad-hoc).** Klient–server sync deterministicky používá
   `account_binding` vytvořený přihlášením; nevyžaduje druhé ruční mapování.
@@ -43,6 +45,13 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
   autentizovaným serverovým účtem, na který enrollment import mapuje vlákna;
   request-local vazba neuniká mezi souběžnými požadavky a desktop dál používá
   node-local autora.
+- [ ] [in progress] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
+  (in progress; fyzická reakceptace selhala).** UI odděluje projektová vlákna od
+  nezařazených vláken dostupných pouze na daném uzlu. Webová identita se nově
+  zachovává také při zařazení vlákna a publikaci projektového záznamu. Reálný
+  registr navíc ukázal rozdělení historie mezi starý serverový účet a nový účet
+  z enrollmentu; webová správa proto musí odlišit úspěch transportu od
+  viditelnosti výsledku v aktuální přihlášené relaci.
 
 ## Aktuální ověření
 
@@ -55,6 +64,22 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
 - Po opravě webové identity prošlo šest cílených regresí: HTTPS výpis a změna
   historie autentizovaného účtu, oddělení node-local historie, enrollment sync,
   stavové UI a obě původní desktopové cesty.
+- Fyzická reakceptace znovu selhala kvůli rozdílným viditelným seznamům.
+  Read-only kontrola lokálních metadat projektu `pokus` ukázala 33 projektových
+  vláken a poslední receipt 33 odeslaných / 33 přijatých se všemi 33 shodnými
+  ID i digesty; vedle nich UI zobrazovalo osm lokálních nezařazených vláken.
+  Nový regresní test navíc ověřuje konvergenci dvou původně disjunktních
+  projektových sad po jedné výměně.
+- Po opravě rozlišení scope prošly čtyři cílené regrese: HTTPS vlastnictví a
+  zařazení vlákna, webová oprávnění, textové rozlišení UI a konvergence sad.
+- Registry evidence ukázala, že současný enrollment cílí na serverový účet
+  `07a55f22…`, zatímco starší odvolané mapování stejného desktopového vlastníka
+  používalo serverový účet `fa2e7150…`. Sync proto správně neslučuje jejich
+  oddělené historie bez explicitního rebindu nebo migrace vlastníka. Nová
+  fail-closed diagnostika porovnává webovou relaci s vlastníkem aktivního
+  mapování a při rozdílu nehlásí chatový výsledek jako viditelný.
+- Po doplnění diagnostiky identity prošlo šest cílených regresí včetně pinned
+  HTTPS obousměrné výměny a disjunktních vstupních množin; úplná sada neběžela.
 - Úplná sada před opravou webové identity prošla: **896 testů bez selhání,
   33 přeskočeno, za 219,253 s**. Následná oprava G je kvůli délce lokálního
   běhu ověřována cíleným víceuživatelským HTTPS testem; celá sada se zopakuje

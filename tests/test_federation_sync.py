@@ -172,6 +172,23 @@ class FederationSyncTests(unittest.TestCase):
         self.assertEqual([item['content'] for item in local['messages']],
                          ['Question', 'Answer', 'Follow up', 'Remote answer'])
 
+    def test_one_exchange_converges_disjoint_project_thread_sets(self):
+        self.map_users()
+        left = self.chat_turn(0, prompt='Left only', answer='Left answer')
+        right = self.chat_turn(1, prompt='Right only', answer='Right answer')
+
+        self.exchange(0, 1)
+
+        snapshots = []
+        for index in range(2):
+            rows = ChatThreads(chat_root(self.nodes[index])).list(
+                self.node_ids[index], self.user_ids[index])
+            snapshots.append(sorted(
+                row['thread_id'] for row in rows
+                if row['project_id'] == self.project_id))
+        self.assertEqual(sorted([left, right]), snapshots[0])
+        self.assertEqual(snapshots[0], snapshots[1])
+
     def test_divergent_project_chat_forks_and_converges_without_overwrite(self):
         self.map_users()
         thread_id = self.chat_turn(0)
@@ -307,6 +324,7 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn("contentsynccompleted", JS)
         self.assertIn('function contentSyncSummary', ADMIN_JS)
         self.assertIn('chybí aktivní vazba účtů z přihlášení', ADMIN_JS)
+        self.assertIn('aktuální webová relace používá jiný účet', ADMIN_JS)
         self.assertIn('Chaty: sdíleno', ADMIN_JS)
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
@@ -437,7 +455,8 @@ class FederationSyncTests(unittest.TestCase):
         status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
             self.node_ids[1] + ':' + self.project_id]
         self.assertEqual(status['chat_summary'], {
-            'shared': 1, 'received': 1, 'active_mappings': 1})
+            'shared': 1, 'received': 1, 'active_mappings': 1,
+            'local_user_ids': [self.user_ids[0]]})
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), Projects(self.nodes[0]).workspace(
                 self.project_id).git.head())

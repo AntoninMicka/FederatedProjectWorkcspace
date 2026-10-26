@@ -17,12 +17,23 @@ Ruční bilaterální mapování vlastníka je potřeba jen pro P2P vztah. Na dr
 uzlu se chat objeví v běžném seznamu přiřazených chatů a mapovaný místní
 uživatel v něm může pokračovat.
 
+Postranní seznam zobrazuje zvlášť **Projektová vlákna** a **Nezařazená · pouze
+tento uzel**. Shodu po synchronizaci lze očekávat pouze u přenositelných vláken
+přiřazených danému projektu. Nezařazená vlákna nemají projektovou autoritu pro
+sdílení a nesmí se svévolně připojit k právě otevřenému projektu.
+
 Po dokončení ukazuje buňka projektu počet chatů sdílených a přijatých tímto
 uzlem. Chybějící enrollment vazba nebo P2P mapování jsou hlášeny výslovně; Git
 synchronizace sama není důkaz přenosu chatů. Otevřený panel Chaty se po místním
 dokončení obnoví automaticky a kliknutí na záložku Chaty vždy načte současný
 stav z uzlu, takže lze výsledek obnovit i na protistraně, která synchronizaci
 nespustila.
+
+Na webovém uzlu musí být relace přihlášena stejným místním účtem, který je v
+enrollment vazbě. Počet přenesených vláken není důkaz jejich viditelnosti pod
+jiným serverovým účtem. Správa proto při rozdílu identity zobrazí varování
+místo hlášení běžného chatového úspěchu; účty ani jejich historie se neslučují
+automaticky.
 
 Při souběžném pokračování stejného vlákna se zachovají obě verze. Jedna zůstane
 pod původním ID a druhá se objeví jako označený zapisovatelný fork. Další sync

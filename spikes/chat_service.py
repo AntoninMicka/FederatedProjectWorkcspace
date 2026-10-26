@@ -308,6 +308,11 @@ class ChatService:
         adapter = self.adapter_factory(runs) if self.adapter_factory else OllamaAdapter(runs)
         return threads, OllamaBindings(root), adapter
 
+    def _records(self):
+        _, user_id = self._identity()
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root(),
+                           owner_id=user_id)
+
     def _require_backend_reset_complete(self, backend_id):
         require(BackendResetJournal(self._root(), backend_id).load() is None,
                 'Backend reset is pending; retry reset before configuration or dispatch')
@@ -2527,7 +2532,7 @@ class ChatService:
         return self._task_projection(projection)
 
     def assign(self, **request):
-        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).assign(**request)
+        return self._records().assign(**request)
 
     def archive_thread(self, *, thread_id, expected_revision):
         uuid(thread_id)
@@ -2563,12 +2568,10 @@ class ChatService:
             thread_id=thread_id, node_id=node_id, user_id=user_id, created_at=created_at)
 
     def publish_snapshot(self, request, operation_id):
-        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish(
-            request, operation_id)
+        return self._records().publish(request, operation_id)
 
     def publish_output(self, request, operation_id):
-        return ChatRecords(self.node_path, self.projects, state_dir=self._root()).publish_output(
-            request, operation_id)
+        return self._records().publish_output(request, operation_id)
 
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,

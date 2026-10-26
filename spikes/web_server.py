@@ -321,6 +321,11 @@ class WebHandler(DesktopHandler):
                 from spikes.federation_sync import ContentSyncControl
                 result['content_sync_statuses'] = ContentSyncControl(
                     self.server.node, deployment='web').statuses()
+                for status in result['content_sync_statuses'].values():
+                    chats = status.get('chat_summary')
+                    if chats and chats.get('local_user_ids'):
+                        chats['visible_to_current_user'] = (
+                            self.actor.get('id') in chats['local_user_ids'])
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
@@ -495,6 +500,9 @@ class WebHandler(DesktopHandler):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
         if self.path in {'/v1/chat/send', '/v1/chat/send-stream'}:
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
+        if self.path in {'/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output'}:
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
         if self.path.startswith('/v1/publication-cms/'):

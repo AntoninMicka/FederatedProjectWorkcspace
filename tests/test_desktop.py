@@ -1085,7 +1085,9 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertLess(sidebar_chats.index('id="chat-new-thread"'),
                         sidebar_chats.index('id="sidebar-chat-tree"'))
         self.assertNotIn('id="chat-open-settings"', sidebar_chats)
-        self.assertIn("branch('Zařazené',assigned);branch('Nezařazené',unassigned)", JS)
+        self.assertIn("branch('Projektová vlákna',assigned)", JS)
+        self.assertIn("branch('Nezařazená · pouze tento uzel',unassigned)", JS)
+        self.assertIn('lokálních nezařazených', JS)
         self.assertIn("const assigned=activeProject ? threads.filter(thread=>thread.project_id===activeProject.id) : []", JS)
         self.assertIn("const unassigned=threads.filter(thread=>thread.project_id===null)", JS)
         self.assertNotIn("const assigned=threads.filter(thread=>thread.project_id!==null)", JS)

@@ -33,7 +33,8 @@ from spikes.network_backend import private_root
 from spikes.project_creation import ProjectCreation
 from spikes.project_replication import _signature, _verify
 from spikes.project_chat_sync import (
-    MAX_CHAT_PAYLOAD, active_mapping_count, apply_payload as apply_chat_payload,
+    MAX_CHAT_PAYLOAD, active_local_users, active_mapping_count,
+    apply_payload as apply_chat_payload,
     export_project as export_project_chats, inventory as chat_inventory,
     validate_export_authority, validate_payload as validate_chat_payload,
 )
@@ -893,6 +894,8 @@ class ContentSyncControl:
                     'shared': len(sent_state['chats']),
                     'received': len(remote_state['chats']),
                     'active_mappings': active_mapping_count(
+                        self.service, peer, project),
+                    'local_user_ids': active_local_users(
                         self.service, peer, project),
                 },
             }

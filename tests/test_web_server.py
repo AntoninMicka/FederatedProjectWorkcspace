@@ -575,6 +575,7 @@ class WebTests(unittest.TestCase):
 
         code, data, _ = self.create_project('Chat identity seed')
         self.assertEqual(200, code, data)
+        project_id = json.loads(data)['id']
         code, data, _ = admin({'action': 'list'})
         self.assertEqual(200, code, data)
         state = json.loads(data)
@@ -584,6 +585,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(200, code, data)
         state = json.loads(data)
         user = state['users'][0]
+        code, data, _ = admin({
+            'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': user['id'], 'active': True, 'node_role': 'member',
+            'memberships': {project_id: 'editor'}})
+        self.assertEqual(200, code, data)
         headers = {'Authorization': 'Bearer ' + state['access_key']}
 
         node_path = self.root / 'node.json'
@@ -597,18 +603,43 @@ class WebTests(unittest.TestCase):
                      user_id=ProjectCreation(self.root / 'node.json').author_id(),
                      created_at=created_at)
 
+        code, data, _ = self.request(path='/v1/chat/assign', headers=headers,
+            body=json.dumps({'project_id': project_id, 'thread_id': owned_thread,
+                             'expected_revision': 0}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(project_id, json.loads(data)['project_id'])
+
         code, data, _ = self.request(path='/v1/chat/status', headers=headers)
         self.assertEqual(200, code, data)
         status = json.loads(data)
         self.assertEqual([owned_thread],
                          [row['thread_id'] for row in status['threads']])
         code, data, _ = self.request(path='/v1/chat/archive', headers=headers,
-            body=json.dumps({'thread_id': owned_thread, 'expected_revision': 0}))
+            body=json.dumps({'thread_id': owned_thread, 'expected_revision': 1}))
         self.assertEqual(200, code, data)
         self.assertEqual('archived', json.loads(data)['status'])
         self.assertEqual('active', store.get(
             node_thread, node_id,
             ProjectCreation(self.root / 'node.json').author_id())['status'])
+
+    def test_admin_sync_status_warns_when_chat_owner_differs_from_session(self):
+        code, data, _ = self.create_project('Chat owner diagnostic')
+        self.assertEqual(200, code, data)
+        project_id = json.loads(data)['id']
+        owner_id = str(uuid4())
+        statuses = {'peer:' + project_id: {
+            'state': 'idle', 'detail': 'Content synchronized',
+            'chat_summary': {'shared': 2, 'received': 2, 'active_mappings': 1,
+                             'local_user_ids': [owner_id]}}}
+        with patch('spikes.federation_sync.ContentSyncControl.statuses',
+                   return_value=statuses):
+            code, data, _ = self.request(
+                path='/v1/administration', body='{"action":"list"}')
+        self.assertEqual(200, code, data)
+        chats = next(iter(json.loads(data)['content_sync_statuses'].values()))[
+            'chat_summary']
+        self.assertFalse(chats['visible_to_current_user'])
+        self.assertEqual([owner_id], chats['local_user_ids'])
 
     def test_shared_history_routes_list_and_compare_committed_document(self):
         _, data, _ = self.create_project('History')

@@ -4529,10 +4529,11 @@ function renderThreadList(threads){
   menu.append(trigger,items);row.append(button,menu);group.append(row);
   }
  }
- branch('Zařazené',assigned);branch('Nezařazené',unassigned);
+ branch('Projektová vlákna',assigned);
+ branch('Nezařazená · pouze tento uzel',unassigned);
  const assignedCount=assigned.length,unassignedCount=unassigned.length;
  document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount?
-  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:
+  `${assignedCount} projektových · ${unassignedCount} lokálních nezařazených`:
   (activeProject?'Tento projekt nemá žádná přiřazená ani dostupná nezařazená vlákna.':'Zatím tu nejsou žádná nezařazená vlákna.');
 }
 function rememberThread(thread){
