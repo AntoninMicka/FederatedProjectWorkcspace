@@ -5,6 +5,47 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná automatická synchronizace — 2026-10-26
+
+Dávka vznikla na větvi `feature/f-m5-sync-controls-01` z `develop` `8c08be2`
+a dosáhla úrovně **PoC validated**. Implementace je v lokálním commitu
+`a0e7455`; feature akceptace je dokončená, ale commit finální předávací
+evidence, push, PR do `develop` a merge zatím nebyly provedeny.
+
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-A — nastavení a autorizovaný výběr
+  scope (implemented).** Revizně vázaný atomický node-local přepínač má
+  výchozí hodnotu zapnuto a automatika i hromadná ruční akce používají jediný
+  sdílený policy výběr oprávněných projekt×peer scope.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-B — hromadná ruční akce
+  (implemented).** Každý oprávněný scope se spouští přes existující worker;
+  výsledek rozlišuje spuštěno, již běží, přeskočeno a chybu bez druhé
+  synchronizační autority.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-C — desktop/web UI
+  (implemented).** Správa federace obsahuje tlačítko „Synchronizovat vše“,
+  přepínač automatiky, viditelný souhrn i bezpečné opakování.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-D — regrese, dokumentace a fyzická
+  akceptace (PoC validated).** Pokrytí zahrnuje default/migraci, CAS konflikt,
+  restart, vypnutý scheduler, policy filtrování, částečný neúspěch, dvojí
+  start, desktop, HTTPS i skutečný Qt/WebEngine průchod. Uživatel na reálném
+  nasazení potvrdil funkci ovladačů.
+
+### Ověření, recovery a omezení
+
+Finální úplná sada prošla: **905 testů bez selhání, 33 přeskočeno, za
+222,697 s**. Cílená federační, desktopová a HTTPS sada předtím prošla s 25
+úspěšnými a jedním podmíněně přeskočeným testem; samostatný skutečný
+Qt/WebEngine smoke ověřil renderované ovladače. Změněné Python moduly prošly
+`py_compile`, administrační JavaScript parsováním přes `new Function` a
+roadmapová projekce cílenými testy.
+
+Nastavení je transakčně uložené v node-local SQLite journalu: pád před
+commitem zachová starou hodnotu, po commitu novou revizi. Hromadná akce není
+globální transakce; každý scope zachovává existující lock, durable journal a
+roll-forward a chyba jednoho scope nevrací ostatní. Automatika běží jen po dobu
+života desktopové aplikace/služby; samostatný tray/daemon po jejím ukončení,
+automatický merge konfliktů, externí export a globální transakce napříč
+projekty zůstávají mimo rozsah.
+
 ## F-M5-CHAT-HISTORY-01 — projektové chaty v obousměrné obsahové synchronizaci — 2026-10-26
 
 Dávka vznikla na větvi `feature/f-m5-chat-history-01` z `develop` `3c0b675`,

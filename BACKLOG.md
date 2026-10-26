@@ -89,8 +89,9 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 `DEV-ROADMAP-GRAPH-01` byla doručena PR #99 a obecný plánovací graf PR #100.
 `F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
-`F-M5-SYNC-CONTROLS-01` je aktivní v TODO a backlog ji nedrží jako druhý
-stavový záznam.
+`F-M5-SYNC-CONTROLS-01` dosáhla úrovně PoC validated, její evidence je ve
+WORK_LOG a větev čeká na doručení PR; backlog ji nedrží jako druhý stavový
+záznam.
 
 Po dokončení synchronizačních ovladačů je uživatelem schválené pořadí
 priorit:

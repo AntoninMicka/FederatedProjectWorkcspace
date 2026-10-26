@@ -37,6 +37,7 @@
 
     {"id": "F-M5-TRUST-01", "milestone": "M5", "depends_on": []},
     {"id": "F-M5-CHAT-HISTORY-01", "milestone": "M5", "depends_on": ["F-M5-TRUST-01"]},
+    {"id": "F-M5-SYNC-CONTROLS-01", "milestone": "M5", "depends_on": ["F-M5-CHAT-HISTORY-01"]},
     {"id": "F-M5-TRANSFER-01", "milestone": "M5", "depends_on": ["F-M5-TRUST-01"]},
     {"id": "F-M5-CHAT-01", "milestone": "M5", "depends_on": ["F-M5-TRANSFER-01"]},
     {"id": "F-M5-CHAT-02", "milestone": "M5", "depends_on": ["F-M5-CHAT-01"]},
