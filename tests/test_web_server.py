@@ -500,6 +500,11 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request(path='/v1/outputs/definitions', body=json.dumps({
             'project_id':project, 'expected_head':'0'*40}), headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/administration', body='{"action":"list"}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/federation/content/start-all',
+                                      body='{}', headers=headers)[0], 403)
+        self.assertEqual(self.request(path='/v1/federation/content/settings',
+            body='{"automatic_enabled":false,"expected_revision":0}',
+            headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/test', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/models', body='{}', headers=headers)[0], 403)
         self.assertEqual(self.request(path='/v1/chat/configure', body='{}', headers=headers)[0], 403)
@@ -668,6 +673,29 @@ class WebTests(unittest.TestCase):
         chats = next(iter(json.loads(data)['content_sync_statuses'].values()))[
             'chat_summary']
         self.assertEqual({'shared': 2, 'received': 2, 'active_mappings': 1}, chats)
+
+    def test_admin_can_configure_and_start_all_content_sync(self):
+        code, data, _ = self.create_project('Sync controls seed')
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/administration',
+                                     body='{"action":"list"}')
+        self.assertEqual(200, code, data)
+        self.assertEqual({'schema_version': 1, 'revision': 0,
+                          'automatic_enabled': True},
+                         json.loads(data)['content_sync_settings'])
+        code, data, _ = self.request(path='/v1/federation/content/settings',
+            body='{"automatic_enabled":false,"expected_revision":0}')
+        self.assertEqual(200, code, data)
+        self.assertEqual(False, json.loads(data)['content_sync_settings'][
+            'automatic_enabled'])
+        code, data, _ = self.request(path='/v1/federation/content/start-all',
+                                     body='{}')
+        self.assertEqual(200, code, data)
+        batch = json.loads(data)['batch']
+        self.assertEqual({'started': 0, 'already_running': 0,
+                          'skipped': 0, 'errors': 0},
+                         {key: batch[key] for key in (
+                             'started', 'already_running', 'skipped', 'errors')})
 
     def test_shared_history_routes_list_and_compare_committed_document(self):
         _, data, _ = self.create_project('History')

@@ -119,6 +119,8 @@ class WebHandler(DesktopHandler):
                                                '/v1/federation/catalog/reconcile',
                                                '/v1/federation/content/reconcile',
                                                '/v1/federation/content/cancel',
+                                               '/v1/federation/content/start-all',
+                                               '/v1/federation/content/settings',
                                                '/v1/replications/status', '/v1/replications/sync',
                                                '/v1/outputs/definitions',
                                                '/v1/application-access',
@@ -321,6 +323,8 @@ class WebHandler(DesktopHandler):
                 from spikes.federation_sync import ContentSyncControl
                 result['content_sync_statuses'] = ContentSyncControl(
                     self.server.node, deployment='web').statuses()
+                result['content_sync_settings'] = ContentSyncControl(
+                    self.server.node, deployment='web').settings()
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
@@ -341,15 +345,31 @@ class WebHandler(DesktopHandler):
             except Exception:
                 return self.reply(409, {'error': 'Katalog projektů se nepodařilo přenést; bezpečný stav je uložen pro opakování.'})
         if self.path in {'/v1/federation/content/reconcile',
-                         '/v1/federation/content/cancel'}:
+                         '/v1/federation/content/cancel',
+                         '/v1/federation/content/start-all',
+                         '/v1/federation/content/settings'}:
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
-            if (not isinstance(request, dict)
-                    or set(request) != {'peer_id', 'project_id'}):
-                return self.send_error(400)
             try:
                 from spikes.federation_sync import ContentSyncControl
                 control = ContentSyncControl(self.server.node, deployment='web')
+                if self.path.endswith('/start-all'):
+                    if request != {}: return self.send_error(400)
+                    return self.reply(200, {
+                        'batch': control.start_all(),
+                        'content_sync_settings': control.settings(),
+                        'content_sync_statuses': control.statuses()})
+                if self.path.endswith('/settings'):
+                    if (not isinstance(request, dict) or set(request) != {
+                            'automatic_enabled', 'expected_revision'}):
+                        return self.send_error(400)
+                    settings = control.configure(**request)
+                    return self.reply(200, {
+                        'content_sync_settings': settings,
+                        'content_sync_statuses': control.statuses()})
+                if (not isinstance(request, dict)
+                        or set(request) != {'peer_id', 'project_id'}):
+                    return self.send_error(400)
                 changed = (control.cancel(request['peer_id'], request['project_id'])
                            if self.path.endswith('/cancel') else
                            control.start(request['peer_id'], request['project_id']))

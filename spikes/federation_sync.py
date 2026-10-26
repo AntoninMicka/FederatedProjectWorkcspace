@@ -98,6 +98,10 @@ def _database(node):
                 peer_id TEXT NOT NULL, project_id TEXT NOT NULL, state TEXT NOT NULL,
                 detail TEXT NOT NULL, last_sent TEXT NOT NULL, last_remote TEXT NOT NULL,
                 PRIMARY KEY(peer_id, project_id));
+            CREATE TABLE IF NOT EXISTS settings (
+                singleton INTEGER PRIMARY KEY CHECK(singleton=1),
+                revision INTEGER NOT NULL CHECK(revision>=0),
+                automatic_enabled INTEGER NOT NULL CHECK(automatic_enabled IN (0,1)));
         ''')
         try:
             yield db
@@ -899,6 +903,70 @@ class ContentSyncControl:
             }
         return result
 
+    def settings(self):
+        with _database(self.node) as db:
+            row = db.execute(
+                'SELECT revision,automatic_enabled FROM settings WHERE singleton=1'
+            ).fetchone()
+        if row is None:
+            return {'schema_version': 1, 'revision': 0,
+                    'automatic_enabled': True}
+        require(type(row[0]) is int and row[0] >= 0 and row[1] in {0, 1},
+                'Invalid content sync settings')
+        return {'schema_version': 1, 'revision': row[0],
+                'automatic_enabled': bool(row[1])}
+
+    def configure(self, *, automatic_enabled, expected_revision):
+        require(type(automatic_enabled) is bool
+                and type(expected_revision) is int and expected_revision >= 0,
+                'Invalid content sync settings request')
+        with _database(self.node) as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute(
+                'SELECT revision,automatic_enabled FROM settings WHERE singleton=1'
+            ).fetchone()
+            current_revision = 0 if row is None else row[0]
+            require(current_revision == expected_revision,
+                    'Content sync settings changed; reload administration')
+            revision = current_revision + 1
+            db.execute('INSERT OR REPLACE INTO settings VALUES(1,?,?)',
+                       (revision, int(automatic_enabled)))
+        return {'schema_version': 1, 'revision': revision,
+                'automatic_enabled': automatic_enabled}
+
+    def candidates(self):
+        """Return one policy projection used by automatic and manual-all sync."""
+        actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
+        state = self.service.request(actor, {'action': 'list'})
+        from spikes.federation_catalog import CatalogStore
+        remote = CatalogStore(self.node).projections()
+        local = {row['id'] for row in Projects(self.node).catalog()
+                 if row['available']}
+        runtime = self.statuses()
+        rows = []
+        for peer in state['peers']:
+            projects = set(local)
+            projects.update(row['project_id'] for row in remote
+                            if row['peer_id'] == peer['id'])
+            local_selected = {row['project_id'] for row in state['project_shares']
+                              if row['peer_id'] == peer['id']}
+            remote_selected = {row['project_id'] for row in remote
+                               if row['peer_id'] == peer['id']}
+            for project_id in sorted(projects):
+                reason = None
+                if peer['trust'] != 'approved': reason = 'peer-not-approved'
+                elif peer['sharing_level'] not in {'same-team', 'same-company'}:
+                    reason = 'not-internal-sharing'
+                elif not peer.get('endpoint'): reason = 'endpoint-unavailable'
+                elif (peer['sharing_level'] == 'same-company'
+                      and project_id not in local_selected | remote_selected):
+                    reason = 'project-not-selected'
+                elif runtime.get(peer['id'] + ':' + project_id, {}).get('state') == 'conflict':
+                    reason = 'conflict-requires-decision'
+                rows.append({'peer_id': peer['id'], 'project_id': project_id,
+                             'eligible': reason is None, 'reason': reason})
+        return rows
+
     def synchronize(self, peer_id, project_id, *, cancelled=None):
         try:
             root = private_root(self.node)
@@ -932,34 +1000,40 @@ class ContentSyncControl:
         return _MANUAL_SYNCS.start(self.node, self.deployment,
                                    peer_id, project_id)
 
+    def start_all(self):
+        result = {'started': 0, 'already_running': 0,
+                  'skipped': 0, 'errors': 0, 'targets': []}
+        for candidate in self.candidates():
+            row = dict(candidate)
+            if not candidate['eligible']:
+                result['skipped'] += 1; row['state'] = 'skipped'
+            else:
+                try:
+                    changed = self.start(candidate['peer_id'], candidate['project_id'])
+                except Exception as exc:
+                    result['errors'] += 1; row['state'] = 'error'
+                    row['reason'] = type(exc).__name__
+                else:
+                    key = 'started' if changed else 'already_running'
+                    result[key] += 1; row['state'] = key.replace('_', '-')
+            result['targets'].append(row)
+        return result
+
     def cancel(self, peer_id, project_id):
         return _MANUAL_SYNCS.cancel(self.node, peer_id, project_id)
 
     def run_automatic(self):
-        actor = {'id': None, 'node_role': 'federation-admin', 'memberships': {}}
-        state = self.service.request(actor, {'action': 'list'})
-        from spikes.federation_catalog import CatalogStore
-        remote = CatalogStore(self.node).projections()
-        local = {row['id'] for row in Projects(self.node).catalog() if row['available']}
-        for peer in state['peers']:
-            if (peer['trust'] != 'approved'
-                    or peer['sharing_level'] not in {'same-team', 'same-company'}
-                    or not peer.get('endpoint')):
-                continue
-            projects = set(local)
-            projects.update(row['project_id'] for row in remote
-                            if row['peer_id'] == peer['id'])
-            if peer['sharing_level'] == 'same-company':
-                local_selected = {row['project_id'] for row in state['project_shares']
-                                  if row['peer_id'] == peer['id']}
-                remote_selected = {row['project_id'] for row in remote
-                                   if row['peer_id'] == peer['id']}
-                projects &= local_selected | remote_selected
-            for project_id in sorted(projects):
-                try:
-                    self.synchronize(peer['id'], project_id)
-                except Exception:
-                    pass
+        if not self.settings()['automatic_enabled']:
+            return {'enabled': False, 'attempted': 0}
+        attempted = 0
+        for candidate in self.candidates():
+            if not candidate['eligible']: continue
+            attempted += 1
+            try:
+                self.synchronize(candidate['peer_id'], candidate['project_id'])
+            except Exception:
+                pass
+        return {'enabled': True, 'attempted': attempted}
 
 
 class ManualSyncTasks:

@@ -5,6 +5,91 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## F-M5-SYNC-CONTROLS-01 — hromadná ruční a volitelná automatická synchronizace — 2026-10-26
+
+Dávka vznikla na větvi `feature/f-m5-sync-controls-01` z `develop` `8c08be2`
+a dosáhla úrovně **PoC validated**. Implementace je v lokálním commitu
+`a0e7455`; feature akceptace je dokončená, ale commit finální předávací
+evidence, push, PR do `develop` a merge zatím nebyly provedeny.
+
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-A — nastavení a autorizovaný výběr
+  scope (implemented).** Revizně vázaný atomický node-local přepínač má
+  výchozí hodnotu zapnuto a automatika i hromadná ruční akce používají jediný
+  sdílený policy výběr oprávněných projekt×peer scope.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-B — hromadná ruční akce
+  (implemented).** Každý oprávněný scope se spouští přes existující worker;
+  výsledek rozlišuje spuštěno, již běží, přeskočeno a chybu bez druhé
+  synchronizační autority.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-C — desktop/web UI
+  (implemented).** Správa federace obsahuje tlačítko „Synchronizovat vše“,
+  přepínač automatiky, viditelný souhrn i bezpečné opakování.
+- [x] [completed] **F-M5-SYNC-CONTROLS-01-D — regrese, dokumentace a fyzická
+  akceptace (PoC validated).** Pokrytí zahrnuje default/migraci, CAS konflikt,
+  restart, vypnutý scheduler, policy filtrování, částečný neúspěch, dvojí
+  start, desktop, HTTPS i skutečný Qt/WebEngine průchod. Uživatel na reálném
+  nasazení potvrdil funkci ovladačů.
+
+### Ověření, recovery a omezení
+
+Finální úplná sada prošla: **905 testů bez selhání, 33 přeskočeno, za
+222,697 s**. Cílená federační, desktopová a HTTPS sada předtím prošla s 25
+úspěšnými a jedním podmíněně přeskočeným testem; samostatný skutečný
+Qt/WebEngine smoke ověřil renderované ovladače. Změněné Python moduly prošly
+`py_compile`, administrační JavaScript parsováním přes `new Function` a
+roadmapová projekce cílenými testy.
+
+Nastavení je transakčně uložené v node-local SQLite journalu: pád před
+commitem zachová starou hodnotu, po commitu novou revizi. Hromadná akce není
+globální transakce; každý scope zachovává existující lock, durable journal a
+roll-forward a chyba jednoho scope nevrací ostatní. Automatika běží jen po dobu
+života desktopové aplikace/služby; samostatný tray/daemon po jejím ukončení,
+automatický merge konfliktů, externí export a globální transakce napříč
+projekty zůstávají mimo rozsah.
+
+## F-M5-CHAT-HISTORY-01 — projektové chaty v obousměrné obsahové synchronizaci — 2026-10-26
+
+Dávka vznikla na větvi `feature/f-m5-chat-history-01` z `develop` `3c0b675`,
+dosáhla úrovně **PoC validated** a byla doručena PR #101 jako merge commit
+`8c08be2`.
+
+- [x] [completed] **F-M5-CHAT-HISTORY-01-A — integrovaný content-sync v2
+  (implemented).** Git i projektové chaty používají jednu podepsanou obousměrnou
+  operaci a její durable journal.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-B — obousměrný RW import
+  (implemented).** Přenositelná projektová vlákna vstupují do běžného
+  `ChatThreads` a lze v nich na obou uzlech pokračovat.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-C — fork konfliktu a recovery
+  (implemented).** Divergence zachová obě odpovědi jako původní vlákno a
+  deterministický RW fork; retry dokončí přerušenou výměnu ze stejných bajtů.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-D — automatické regrese
+  (PoC validated).** Testy pokryly migraci, oba směry, privacy, crash retry,
+  pinned HTTPS, balení a skutečný WebEngine průchod.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-E — viditelný výsledek a obnovení
+  chatu (PoC validated).** Správa ukazuje počty sdílených a přijatých chatů;
+  dokončení Sync i otevření záložky obnoví aktuální seznam.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-F — automatická autorita enrollmentu
+  (implemented; ad-hoc).** Klient–server používá autentizovaný
+  `account_binding`; P2P zachovává ruční bilaterální mapování.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-G — webová identita
+  synchronizovaného chatu (implemented; ad-hoc).** Request-local identita se
+  zachovává při zápisu a neuniká mezi souběžnými požadavky.
+- [x] [completed] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
+  (PoC validated).** Projektová vlákna jsou společná podle projektového RBAC
+  napříč fyzickými storage ownery; nezařazená vlákna zůstávají soukromá.
+
+### Ověření, recovery a omezení
+
+Před pozdními opravami webové identity prošla úplná sada **896 testy bez
+selhání, 33 přeskočeno**. Následné cílené regrese pokryly enrollment,
+reader/editor RBAC, druhého serverového vlastníka, obousměrné RW, fork,
+idempotentní mazání a obnovu. Uživatel na skutečném desktop–server nasazení
+potvrdil stejnou viditelnou projektovou historii na obou stranách.
+
+Git a SQLite nejsou jedna distribuovaná transakce: durable inbound request je
+recovery autorita a opakování provede roll-forward. `local-only`, rozpracované
+a nezařazené chaty, provider credentials a run journal se nepřenášejí.
+Synchronizované mazání a automatický obsahový merge zůstávají mimo rozsah.
+
 ## PLAN-TASK-GRAPH-01 — obecný plán projektových úkolů a podgrafů — 2026-10-26
 
 Dávka vznikla na větvi `feature/plan-task-graph-01` z `develop` `64e2045` po

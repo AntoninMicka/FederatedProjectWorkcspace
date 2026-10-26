@@ -13,6 +13,10 @@ Doplnění 2026-10-26: ADR 0056 rozšiřuje tutéž obousměrnou operaci a její
 durable journal o projektová RW chatová vlákna. Git pravidla níže se nemění;
 chatový payload má vlastní fast-forward/fork strategii.
 
+Doplnění `F-M5-SYNC-CONTROLS-01` přidává nad stejný controller hromadné
+ruční spuštění a node-local vypínač automatiky. Nemění protokol, policy ani
+projektové crash hranice.
+
 ## Kontext a rozsah
 
 Katalog z ADR 0041 oznamuje jen UUID a název projektu. ADR 0040 požaduje pro
@@ -102,6 +106,15 @@ Automatický scheduler nesmí po přechodné chybě prvního průchodu skončit.
 registru nebo katalogu po startu zachytí na hranici celého průchodu, nejvýše za
 pět sekund pokus zopakuje a po úspěchu se vrátí k běžnému intervalu. Jednotlivé
 projektové chyby nadále izoluje uvnitř průchodu.
+
+Výchozí automatika zůstává zapnutá kvůli kompatibilitě. Její revizně vázané
+nastavení je jediný node-local řádek ve stejném SQLite journalu: commit je
+atomická hranice a stale UI zápis se odmítne. Vypnutí zastaví budoucí
+automatické průchody, nikoli již rozpracovanou operaci; ruční akce zůstávají
+dostupné. Hromadné spuštění není globální transakce a pouze založí stávající
+per-project workery. Sdílená policy projekce předem vyřadí `external`,
+neschválený peer, chybějící endpoint, nepovolený same-company scope a
+nevyřešený konflikt; dvojí spuštění stejného scope nevytvoří druhý worker.
 
 ## Omezení
 

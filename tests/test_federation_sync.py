@@ -322,6 +322,16 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn('/v1/federation/content/cancel',
                       DesktopManagementHandler.post_paths)
         self.assertIn('/v1/federation/content/cancel', WebHandler.post_paths)
+        self.assertIn('/v1/federation/content/start-all',
+                      DesktopManagementHandler.post_paths)
+        self.assertIn('/v1/federation/content/start-all', WebHandler.post_paths)
+        self.assertIn('/v1/federation/content/settings',
+                      DesktopManagementHandler.post_paths)
+        self.assertIn('/v1/federation/content/settings', WebHandler.post_paths)
+        self.assertIn('Synchronizovat vše', ADMIN_SHARING_HTML)
+        self.assertIn('admin-sync-automatic', ADMIN_SHARING_HTML)
+        self.assertIn('syncAllProjectContent', ADMIN_JS)
+        self.assertIn('configureAutomaticContentSync', ADMIN_JS)
         self.assertNotIn('/v1/federation/chat-history', WebHandler.post_paths)
         self.assertNotIn('/v1/chat-history/status', WebHandler.post_paths)
         from spikes.desktop_ui import JS
@@ -333,6 +343,60 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn('chybí aktivní vazba účtů z přihlášení', ADMIN_JS)
         self.assertNotIn('aktuální webová relace používá jiný účet', ADMIN_JS)
         self.assertIn('Chaty: sdíleno', ADMIN_JS)
+
+    def test_sync_settings_are_revisioned_persistent_and_disable_scheduler(self):
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        self.assertEqual(control.settings(), {
+            'schema_version': 1, 'revision': 0, 'automatic_enabled': True})
+        self.assertEqual(control.configure(
+            automatic_enabled=False, expected_revision=0), {
+                'schema_version': 1, 'revision': 1,
+                'automatic_enabled': False})
+        restarted = ContentSyncControl(self.nodes[0], deployment='web')
+        self.assertFalse(restarted.settings()['automatic_enabled'])
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            restarted.configure(automatic_enabled=True, expected_revision=0)
+        with patch.object(restarted, 'candidates') as candidates:
+            self.assertEqual(restarted.run_automatic(), {
+                'enabled': False, 'attempted': 0})
+            candidates.assert_not_called()
+        restarted.configure(automatic_enabled=True, expected_revision=1)
+        candidate = {'peer_id': self.node_ids[1],
+                     'project_id': self.project_id,
+                     'eligible': True, 'reason': None}
+        with patch.object(restarted, 'candidates', return_value=[candidate]), \
+                patch.object(restarted, 'synchronize', side_effect=OSError):
+            self.assertEqual(restarted.run_automatic(), {
+                'enabled': True, 'attempted': 1})
+
+    def test_sync_all_uses_shared_policy_and_reports_partial_results(self):
+        control = ContentSyncControl(self.nodes[0], deployment='web')
+        candidates = control.candidates()
+        self.assertEqual(candidates, [{
+            'peer_id': self.node_ids[1], 'project_id': self.project_id,
+            'eligible': True, 'reason': None}])
+        synthetic = [candidates[0],
+            {'peer_id': str(uuid4()), 'project_id': str(uuid4()),
+             'eligible': True, 'reason': None},
+            {'peer_id': str(uuid4()), 'project_id': str(uuid4()),
+             'eligible': True, 'reason': None},
+            {'peer_id': str(uuid4()), 'project_id': str(uuid4()),
+             'eligible': False, 'reason': 'not-internal-sharing'}]
+        with patch.object(control, 'candidates', return_value=synthetic), \
+                patch.object(control, 'start', side_effect=[True, False, OSError]):
+            result = control.start_all()
+        self.assertEqual({key: result[key] for key in (
+            'started', 'already_running', 'skipped', 'errors')}, {
+                'started': 1, 'already_running': 1,
+                'skipped': 1, 'errors': 1})
+        self.assertEqual(['started', 'already-running', 'error', 'skipped'],
+                         [row['state'] for row in result['targets']])
+
+        self.change(0, action='update-peer', node_id=self.node_ids[1], name='Peer',
+                    endpoint='https://127.0.0.1:8443', trust='approved',
+                    sharing_level='external')
+        self.assertEqual(control.candidates()[0]['reason'],
+                         'not-internal-sharing')
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
         started = threading.Event(); finished = threading.Event()
@@ -501,11 +565,11 @@ with running_api('http',handler=DesktopHandler) as server:
  profile=QWebEngineProfile(app);interceptor=Interceptor(profile);profile.setUrlRequestInterceptor(interceptor);page=QWebEnginePage(profile,app)
  def received(value):
   value=json.loads(value)
-  assert value=={'fork':True,'origin':True,'writable':True,'refreshes':True},value
+  assert value=={'fork':True,'origin':True,'writable':True,'refreshes':True,'syncControls':True},value
   print('project chat fork: WebEngine RW branch verified',flush=True);app.exit(0)
  def loaded(ok):
   if not ok:return app.exit(3)
-  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);let refreshes=0;loadChat=async()=>{refreshes++};document.querySelector('#chats-tab').click();document.dispatchEvent(new CustomEvent('contentsynccompleted',{detail:{projectId:activeProject.id}}));JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled,refreshes:refreshes===2})""",0,received)
+  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);let refreshes=0;loadChat=async()=>{refreshes++};document.querySelector('#chats-tab').click();document.dispatchEvent(new CustomEvent('contentsynccompleted',{detail:{projectId:activeProject.id}}));JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled,refreshes:refreshes===2,syncControls:document.querySelector('#admin-sync-all').textContent==='Synchronizovat vše'&&document.querySelector('#admin-sync-automatic').type==='checkbox'})""",0,received)
  page.loadFinished.connect(loaded);page.setUrl(QUrl(server.origin+'/'));QTimer.singleShot(10000,lambda:app.exit(2));raise SystemExit(app.exec())
 '''
         result = subprocess.run([sys.executable, '-c', script],
