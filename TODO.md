@@ -112,6 +112,21 @@ Automatické ověření po poslední změně:
 - Python syntaxe, JavaScript `node --check` a `git diff --check` byly průběžně
   čisté; po tomto čistě dokumentačním zápisu stačí finální kontrola diffu.
 
-Zbývá fyzická akceptace: v reálném desktopu nebo sdíleném webu spustit jednu
-Ollamu a jeden externí backend z viditelně vybrané nabídky, ověřit stale obnovu
-po změně katalogu a doložit uloženou identitu výběru v příslušném run journalu.
+Fyzická akceptace uživatelem 26. 10. 2026 potvrdila vytvoření dvou nových
+odpovědí z vědomě vybraných nabídek. Read-only kontrola persistentních journalů
+doložila bez přístupu k credentialům:
+
+- Ollama `qwen3-coder:latest`, run
+  `cfadd428-b812-40d1-a0f5-2a62c2c4e764`, stav `succeeded`, offer
+  `ollama-binding:0adb02b8-d26b-479b-8958-9ff541590cf1` a neprázdný
+  `selection_sha256`;
+- AtlasCloud `google/gemini-4-argon`, run
+  `10da0fa6-ad27-4b93-bbf7-ba56f26a844b`, stav `succeeded`, offer
+  `atlascloud:51b093e9fad4f9e8e5eae6d00ff2ece2` a neprázdný
+  `selection_sha256`; uložený schválený provider request zachoval přesné
+  prefixované ID `google/gemini-4-argon`.
+
+Zbývá fyzicky ověřit stale obnovu po změně katalogu: rozepsané zadání musí
+zůstat zachováno, neplatná volba se vymaže a nový dispatch musí vyžadovat novou
+vědomou volbu. Úspěšné lokální i externí běhy a jejich uložená identita jsou už
+doložené.
