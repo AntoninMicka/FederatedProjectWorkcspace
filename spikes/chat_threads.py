@@ -314,8 +314,11 @@ class ChatThreads:
 
     def prepare_turn(self, *, thread_id, node_id, user_id, turn_id, message_id,
                      content, privacy, created_at, response_language=None,
-                     language_source=None, checkpoint=lambda stage: None):
+                     language_source=None, author_id=None,
+                     checkpoint=lambda stage: None):
         uuid(turn_id); uuid(message_id); timestamp(created_at)
+        author_id = author_id or user_id
+        uuid(author_id)
         require(privacy in PRIVACY, 'Unknown message privacy')
         raw, digest = _content(content)
         if response_language is not None:
@@ -335,7 +338,7 @@ class ChatThreads:
                                      'WHERE message_id=?', (message_id,)).fetchone()
                 require(existing[:2] == (thread_id, message_id)
                         and existing[3:] == (response_language, language_source)
-                        and message == (raw, privacy, user_id, created_at),
+                        and message == (raw, privacy, author_id, created_at),
                         'Turn ID belongs to a different request')
             else:
                 require(db.execute('SELECT 1 FROM messages WHERE message_id=?',
@@ -344,7 +347,7 @@ class ChatThreads:
                 sequence = thread[6] + 1
                 db.execute('INSERT INTO messages VALUES(?,?,?,?,?,?,?,?,?,NULL)',
                            (message_id, thread_id, sequence, 'user', raw, digest,
-                            privacy, user_id, created_at))
+                            privacy, author_id, created_at))
                 db.execute('INSERT INTO turns VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                            (turn_id, thread_id, message_id, None, None, 'prepared', None, None,
                             response_language, language_source,
@@ -582,3 +585,31 @@ class ChatThreads:
                     and thread['status'] == status, 'Chat thread changed during listing')
             result.append(thread)
         return result
+
+    def list_project(self, node_id, project_id):
+        uuid(node_id); uuid(project_id)
+        with self.connect() as db:
+            rows = db.execute(
+                'SELECT thread_id,user_id FROM threads '
+                'WHERE node_id=? AND project_id=? ORDER BY created_at,thread_id',
+                (node_id, project_id)).fetchall()
+        return [self.get(thread_id, node_id, user_id)
+                for thread_id, user_id in rows]
+
+    def list_visible(self, node_id, user_id, project_ids):
+        uuid(node_id); uuid(user_id)
+        projects = sorted(set(project_ids))
+        for project_id in projects:
+            uuid(project_id)
+        with self.connect() as db:
+            clauses = ['(user_id=? AND project_id IS NULL)']
+            parameters = [node_id, user_id]
+            if projects:
+                clauses.append('project_id IN (' + ','.join('?' for _ in projects) + ')')
+                parameters.extend(projects)
+            rows = db.execute(
+                'SELECT thread_id,user_id FROM threads WHERE node_id=? AND ('
+                + ' OR '.join(clauses) + ') ORDER BY created_at,thread_id',
+                parameters).fetchall()
+        return [self.get(thread_id, node_id, owner_id)
+                for thread_id, owner_id in rows]

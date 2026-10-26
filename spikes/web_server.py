@@ -321,11 +321,6 @@ class WebHandler(DesktopHandler):
                 from spikes.federation_sync import ContentSyncControl
                 result['content_sync_statuses'] = ContentSyncControl(
                     self.server.node, deployment='web').statuses()
-                for status in result['content_sync_statuses'].values():
-                    chats = status.get('chat_summary')
-                    if chats and chats.get('local_user_ids'):
-                        chats['visible_to_current_user'] = (
-                            self.actor.get('id') in chats['local_user_ids'])
                 return self.reply(200, result)
             except AccessDenied:
                 return self.reply(403, {'error': 'Nedostatečné oprávnění nebo změněný registr. Načtěte správu znovu.'})
@@ -538,7 +533,16 @@ class WebHandler(DesktopHandler):
             return self._import_source(request)
         # Desktop calls retain the node-local author. Network requests bind the
         # authenticated account only for this request, including streamed chat.
-        with self.server.chat_service.as_user(self.actor.get('id')):
+        project_ids = ({item['id'] for item in self.server.projects.catalog()}
+                       if self.server.administration.is_admin(self.actor) else
+                       set(self.actor.get('memberships', {})))
+        writable_project_ids = (project_ids if self.server.administration.is_admin(self.actor)
+            else {project_id for project_id, role in
+                  self.actor.get('memberships', {}).items()
+                  if role in {'editor', 'project-admin'}})
+        with self.server.chat_service.as_user(
+                self.actor.get('id'), project_ids=project_ids,
+                writable_project_ids=writable_project_ids):
             return super().dispatch(request)
 
     def _do_GET(self):

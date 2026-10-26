@@ -193,8 +193,7 @@ class FederationEnrollmentTests(unittest.TestCase):
             self.client_node, deployment='desktop').statuses()[
                 self.server_id + ':' + self.client_project_id]
         self.assertEqual(status['chat_summary'], {
-            'shared': 1, 'received': 1, 'active_mappings': 1,
-            'local_user_ids': [client_user]})
+            'shared': 1, 'received': 1, 'active_mappings': 1})
 
 
 if __name__ == '__main__':

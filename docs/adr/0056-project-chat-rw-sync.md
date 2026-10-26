@@ -24,9 +24,13 @@ projekt. U schváleného klient–server vztahu se žádné druhé mapování ne
 autorita se deterministicky odvodí z `account_binding`, který na obou uzlech
 vznikl autentizovaným enrollmentem podle ADR 0039. Serverový účet musí zůstat
 aktivní a mít přístup k projektu. Na cíli se vlastník přeloží na tento přesný
-místní účet. Přijaté vlákno vstupuje do běžného `ChatThreads`, je read-write a
-místní mapovaný uživatel v něm může pokračovat. Nezařazená vlákna se s
-projektem nepřenášejí.
+místní účet pouze jako transportního příjemce a fyzického vlastníka řádku.
+Tato vazba není autoritou viditelnosti. Přijaté vlákno vstupuje do běžného
+`ChatThreads`; všechny aktivní místní účty s oprávněním k projektu vidí stejnou
+množinu jeho vláken. Role `reader` ji smí číst, role `editor` a `project-admin`
+v ní smějí pokračovat a provádět změny. Autor nové zprávy se eviduje odděleně
+od fyzického vlastníka vlákna. Nezařazená vlákna zůstávají soukromá danému
+místnímu účtu a s projektem se nepřenášejí.
 
 Payload nepřenáší credentials, provider session, Context Manifest payload ani
 node-local run journal. Historické message/turn/run ID se při nekonfliktním
@@ -65,6 +69,12 @@ Migrace `ChatThreads` v6 pouze přidává nullable fork provenance. Rozpracovan�
 lokální operace smazání blokuje nahrazení stejného vlákna. Mazání vláken a
 tombstones se v tomto řezu nesynchronizují; chybějící položka ve vzdálené
 inventuře proto nemaže místní kopii.
+
+Změna projektové viditelnosti nemění persistentní schéma ani crash hranice.
+Existující storage owner se při importu shodného thread ID zachová; autorizace
+čtení a zápisu se před operací znovu odvozuje z aktuálního projektového RBAC.
+Dokončené smazání se při retry autorizuje z durable deletion plánu, protože
+samotný thread řádek už neexistuje.
 
 ## Reuse a hranice
 

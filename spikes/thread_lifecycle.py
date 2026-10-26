@@ -211,17 +211,31 @@ class ThreadLifecycle:
             db.executemany(f'DELETE FROM {table} WHERE {column}=?', [(v,) for v in values])
             db.commit()
 
-    def recover_pending(self, *, node_id, user_id):
+    def recover_pending(self, *, node_id, user_id, writable_project_ids=None):
         uuid(node_id); uuid(user_id)
         with self.connect() as db:
-            rows = db.execute('SELECT operation_id,thread_id,preview_sha256,plan_json,stage '
-                'FROM operations WHERE node_id=? AND user_id=? AND stage<>? ORDER BY rowid',
-                (node_id, user_id, 'completed')).fetchall()
+            if writable_project_ids is None:
+                rows = db.execute(
+                    'SELECT operation_id,thread_id,user_id,preview_sha256,plan_json,stage '
+                    'FROM operations WHERE node_id=? AND user_id=? AND stage<>? ORDER BY rowid',
+                    (node_id, user_id, 'completed')).fetchall()
+            else:
+                projects = set(writable_project_ids)
+                for project_id in projects: uuid(project_id)
+                rows = db.execute(
+                    'SELECT operation_id,thread_id,user_id,preview_sha256,plan_json,stage '
+                    'FROM operations WHERE node_id=? AND stage<>? ORDER BY rowid',
+                    (node_id, 'completed')).fetchall()
         result = []
-        for operation_id, thread_id, digest, raw, stage in rows:
+        for operation_id, thread_id, owner_id, digest, raw, stage in rows:
             plan = json.loads(raw)
+            if (writable_project_ids is not None
+                    and not (plan['project_id'] in projects
+                             or (plan['project_id'] is None and owner_id == user_id))):
+                continue
             try:
-                receipt = self.confirm(thread_id=thread_id, node_id=node_id, user_id=user_id,
+                receipt = self.confirm(thread_id=thread_id, node_id=node_id,
+                    user_id=owner_id,
                     operation_id=operation_id, expected_revision=plan['expected_revision'],
                     preview_sha256=digest)
             except (ValueError, OSError, sqlite3.Error) as exc:

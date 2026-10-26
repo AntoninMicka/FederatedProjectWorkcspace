@@ -77,12 +77,6 @@ def active_mapping_count(service, peer_id, project_id):
     return len(_mapping_rows(service, peer_id, project_id)[1])
 
 
-def active_local_users(service, peer_id, project_id):
-    """Return owners for the node-local administration projection."""
-    return sorted({row['local_user_id']
-                   for row in _mapping_rows(service, peer_id, project_id)[1]})
-
-
 def _validate_thread(thread, project_id, *, source_node_id, source_user_id):
     fields = {'thread_id', 'node_id', 'user_id', 'status', 'classification',
               'created_at', 'revision', 'project_id', 'assignment_revision',
@@ -136,8 +130,7 @@ def _validate_thread(thread, project_id, *, source_node_id, source_user_id):
             require(message['supersedes_id'] in message_ids,
                     'Synchronized chat supersedes an unavailable message')
         if message['role'] == 'user':
-            require(message['author_id'] == source_user_id,
-                    'Synchronized user message has another author')
+            uuid(message['author_id'])
         else:
             require(isinstance(message['author_id'], str)
                     and message['author_id'].startswith('backend:'),
@@ -205,22 +198,20 @@ def export_project(node, service, peer_id, project_id):
                  'recipient_node_id': peer_id, 'threads': []}
         return [], canonical(value)
     store = ChatThreads(root); rows = []
-    for mapping in mappings:
-        for thread in store.list(local_node_id, mapping['local_user_id']):
-            if thread['project_id'] != project_id:
-                continue
-            # A local-only or in-flight thread remains entirely node-local.
-            if (any(message['privacy'] == 'local-only'
-                    for message in thread['messages'])
-                    or any(turn['state'] not in ({'completed'} | TERMINAL)
-                           for turn in thread['turns'])):
-                continue
-            _validate_thread(thread, project_id, source_node_id=local_node_id,
-                             source_user_id=mapping['local_user_id'])
-            rows.append({'mapping_id': mapping['mapping_id'],
-                         'source_user_id': mapping['local_user_id'],
-                         'recipient_user_id': mapping['remote_user_id'],
-                         'thread': thread})
+    mapping = mappings[0]
+    for thread in store.list_project(local_node_id, project_id):
+        # A local-only or in-flight thread remains entirely node-local.
+        if (any(message['privacy'] == 'local-only'
+                for message in thread['messages'])
+                or any(turn['state'] not in ({'completed'} | TERMINAL)
+                       for turn in thread['turns'])):
+            continue
+        _validate_thread(thread, project_id, source_node_id=local_node_id,
+                         source_user_id=thread['user_id'])
+        rows.append({'mapping_id': mapping['mapping_id'],
+                     'source_user_id': thread['user_id'],
+                     'recipient_user_id': mapping['remote_user_id'],
+                     'thread': thread})
     require(len(rows) <= MAX_PROJECT_THREADS,
             'Shared project has more than 64 transferable chat threads')
     rows.sort(key=lambda row: row['thread']['thread_id'])
@@ -255,16 +246,16 @@ def validate_payload(raw, *, project_id, source_node_id, recipient_node_id,
     local_node_id, mappings = _mapping_rows(service, source_node_id, project_id)
     require(local_node_id == recipient_node_id,
             'Project chat payload targets another node')
-    allowed = {(row['mapping_id'], row['remote_user_id'], row['local_user_id'])
+    allowed = {(row['mapping_id'], row['local_user_id'])
                for row in mappings}
     seen = set()
     for row in value['threads']:
         require(isinstance(row, dict) and set(row) == {
             'mapping_id', 'source_user_id', 'recipient_user_id', 'thread'},
             'Invalid project chat mapping envelope')
-        require((row['mapping_id'], row['source_user_id'],
-                 row['recipient_user_id']) in allowed,
-                'Project chat lacks an active exact user mapping')
+        uuid(row['source_user_id'])
+        require((row['mapping_id'], row['recipient_user_id']) in allowed,
+                'Project chat lacks an active project recipient')
         _validate_thread(row['thread'], project_id,
                          source_node_id=source_node_id,
                          source_user_id=row['source_user_id'])
@@ -291,12 +282,12 @@ def validate_export_authority(raw, *, project_id, source_node_id,
     local_node_id, mappings = _mapping_rows(service, recipient_node_id, project_id)
     require(local_node_id == source_node_id,
             'Outbound project chat source identity changed')
-    allowed = {(row['mapping_id'], row['local_user_id'], row['remote_user_id'])
+    allowed = {(row['mapping_id'], row['remote_user_id'])
                for row in mappings}
-    require(all((row.get('mapping_id'), row.get('source_user_id'),
-                 row.get('recipient_user_id')) in allowed
+    require(all((row.get('mapping_id'), row.get('recipient_user_id')) in allowed
+                and isinstance(row.get('source_user_id'), str)
                 for row in value.get('threads', [])),
-            'Outbound project chat mapping changed before transport')
+            'Outbound project chat recipient changed before transport')
     return value
 
 
@@ -332,9 +323,6 @@ def _read(db, thread_id):
 
 def _localize(thread, node_id, user_id):
     value = copy.deepcopy(thread); value['node_id'] = node_id; value['user_id'] = user_id
-    for message in value['messages']:
-        if message['role'] == 'user':
-            message['author_id'] = user_id
     return value
 
 
@@ -429,9 +417,11 @@ def apply_payload(node, value, *, checkpoint=lambda stage: None):
             if local is None:
                 _insert(db, incoming); continue
             require(local['node_id'] == value['recipient_node_id']
-                    and local['user_id'] == row['recipient_user_id']
                     and local['project_id'] == value['project_id'],
-                    'Synchronized thread ID belongs to another local owner')
+                    'Synchronized thread ID belongs to another project')
+            # Project RBAC, not the account that first materialized the row,
+            # controls visibility. Preserve the existing local storage owner.
+            incoming['user_id'] = local['user_id']
             local_digest, incoming_digest = digest(local), digest(incoming)
             if local_digest == incoming_digest:
                 continue

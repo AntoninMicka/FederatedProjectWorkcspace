@@ -111,24 +111,25 @@ class FederationSyncTests(unittest.TestCase):
         return mapping_id
 
     def chat_turn(self, index, thread_id=None, prompt='Question', answer='Answer',
-                  privacy='project'):
+                  privacy='project', owner_id=None):
         root = chat_root(self.nodes[index]); root.mkdir(mode=0o700, exist_ok=True)
         store = ChatThreads(root)
+        owner_id = owner_id or self.user_ids[index]
         if thread_id is None:
             thread_id = str(uuid4())
             store.create(thread_id=thread_id, node_id=self.node_ids[index],
-                         user_id=self.user_ids[index],
+                         user_id=owner_id,
                          created_at='2026-10-26T12:00:00Z',
                          project_id=self.project_id)
         turn_id, run_id = str(uuid4()), str(uuid4())
         store.prepare_turn(thread_id=thread_id, node_id=self.node_ids[index],
-                           user_id=self.user_ids[index], turn_id=turn_id,
+                           user_id=owner_id, turn_id=turn_id,
                            message_id=str(uuid4()), content=prompt, privacy=privacy,
                            created_at='2026-10-26T12:00:01Z')
         store.bind_run(turn_id=turn_id, node_id=self.node_ids[index],
-                       user_id=self.user_ids[index], run_id=run_id)
+                       user_id=owner_id, run_id=run_id)
         store.complete(turn_id=turn_id, node_id=self.node_ids[index],
-                       user_id=self.user_ids[index], run_id=run_id,
+                       user_id=owner_id, run_id=run_id,
                        message_id=str(uuid4()), content=answer, privacy=privacy,
                        created_at='2026-10-26T12:00:02Z')
         return thread_id
@@ -175,17 +176,23 @@ class FederationSyncTests(unittest.TestCase):
     def test_one_exchange_converges_disjoint_project_thread_sets(self):
         self.map_users()
         left = self.chat_turn(0, prompt='Left only', answer='Left answer')
-        right = self.chat_turn(1, prompt='Right only', answer='Right answer')
+        state = self.change(1, action='create-user', name='Second project member',
+                            node_role='member')
+        second_owner = state['users'][-1]['id']
+        self.change(1, action='update-user', user_id=second_owner,
+                    active=True, node_role='member',
+                    memberships={self.project_id: 'editor'})
+        right = self.chat_turn(1, prompt='Right only', answer='Right answer',
+                               owner_id=second_owner)
 
         self.exchange(0, 1)
 
         snapshots = []
         for index in range(2):
-            rows = ChatThreads(chat_root(self.nodes[index])).list(
-                self.node_ids[index], self.user_ids[index])
+            rows = ChatThreads(chat_root(self.nodes[index])).list_project(
+                self.node_ids[index], self.project_id)
             snapshots.append(sorted(
-                row['thread_id'] for row in rows
-                if row['project_id'] == self.project_id))
+                row['thread_id'] for row in rows))
         self.assertEqual(sorted([left, right]), snapshots[0])
         self.assertEqual(snapshots[0], snapshots[1])
 
@@ -324,7 +331,7 @@ class FederationSyncTests(unittest.TestCase):
         self.assertIn("contentsynccompleted", JS)
         self.assertIn('function contentSyncSummary', ADMIN_JS)
         self.assertIn('chybí aktivní vazba účtů z přihlášení', ADMIN_JS)
-        self.assertIn('aktuální webová relace používá jiný účet', ADMIN_JS)
+        self.assertNotIn('aktuální webová relace používá jiný účet', ADMIN_JS)
         self.assertIn('Chaty: sdíleno', ADMIN_JS)
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
@@ -455,8 +462,7 @@ class FederationSyncTests(unittest.TestCase):
         status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
             self.node_ids[1] + ':' + self.project_id]
         self.assertEqual(status['chat_summary'], {
-            'shared': 1, 'received': 1, 'active_mappings': 1,
-            'local_user_ids': [self.user_ids[0]]})
+            'shared': 1, 'received': 1, 'active_mappings': 1})
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), Projects(self.nodes[0]).workspace(
                 self.project_id).git.head())

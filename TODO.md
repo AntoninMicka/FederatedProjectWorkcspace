@@ -42,16 +42,14 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
   exportu/importu. P2P kontrakt zůstává ručně bilaterální.
 - [x] [completed] **F-M5-CHAT-HISTORY-01-G — webová identita synchronizovaného
   chatu (implemented; ad-hoc).** Webové chatové API čte i mění historii pod
-  autentizovaným serverovým účtem, na který enrollment import mapuje vlákna;
-  request-local vazba neuniká mezi souběžnými požadavky a desktop dál používá
-  node-local autora.
+  autentizovaným serverovým účtem; request-local vazba neuniká mezi souběžnými
+  požadavky a desktop dál používá node-local autora.
 - [ ] [in progress] **F-M5-CHAT-HISTORY-01-H — konvergence viditelné množiny
   (in progress; fyzická reakceptace selhala).** UI odděluje projektová vlákna od
-  nezařazených vláken dostupných pouze na daném uzlu. Webová identita se nově
-  zachovává také při zařazení vlákna a publikaci projektového záznamu. Reálný
-  registr navíc ukázal rozdělení historie mezi starý serverový účet a nový účet
-  z enrollmentu; webová správa proto musí odlišit úspěch transportu od
-  viditelnosti výsledku v aktuální přihlášené relaci.
+  nezařazených vláken dostupných pouze vlastníkovi na daném uzlu. Projektová
+  vlákna se na webu zobrazují všem účtům s přístupem k projektu; reader je čte a
+  editor/project-admin je mohou měnit bez ohledu na transportní enrollment účet.
+  Fyzická reakceptace sjednoceného seznamu po nasazení opravy ještě zbývá.
 
 ## Aktuální ověření
 
@@ -72,14 +70,14 @@ Aktivní feature dávka: **Projektové chaty v obousměrné obsahové synchroniz
   projektových sad po jedné výměně.
 - Po opravě rozlišení scope prošly čtyři cílené regrese: HTTPS vlastnictví a
   zařazení vlákna, webová oprávnění, textové rozlišení UI a konvergence sad.
-- Registry evidence ukázala, že současný enrollment cílí na serverový účet
-  `07a55f22…`, zatímco starší odvolané mapování stejného desktopového vlastníka
-  používalo serverový účet `fa2e7150…`. Sync proto správně neslučuje jejich
-  oddělené historie bez explicitního rebindu nebo migrace vlastníka. Nová
-  fail-closed diagnostika porovnává webovou relaci s vlastníkem aktivního
-  mapování a při rozdílu nehlásí chatový výsledek jako viditelný.
-- Po doplnění diagnostiky identity prošlo šest cílených regresí včetně pinned
-  HTTPS obousměrné výměny a disjunktních vstupních množin; úplná sada neběžela.
+- Registry evidence ukázala historii fyzicky uloženou pod dvěma serverovými
+  účty. To není hranice projektové viditelnosti: export nyní sbírá všechna
+  vlákna projektu napříč storage ownery a webový seznam je filtruje projektovým
+  RBAC. Transportní identity se ve správě nezveřejňují jako UI vlastníci chatu.
+- Po opravě projektového RBAC prošly cílené regrese: reader/editor
+  oprávnění, idempotentní smazání, automatický enrollment, obousměrné RW,
+  fork konfliktu, disjunktní množiny s druhým serverovým vlastníkem a stav bez
+  úniku transportní identity. Úplná sada neběžela.
 - Úplná sada před opravou webové identity prošla: **896 testů bez selhání,
   33 přeskočeno, za 219,253 s**. Následná oprava G je kvůli délce lokálního
   běhu ověřována cíleným víceuživatelským HTTPS testem; celá sada se zopakuje

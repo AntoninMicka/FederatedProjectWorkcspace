@@ -14,8 +14,8 @@ Podmínkou je schválený interní peer a povolené sdílení projektu. U
 klient–server vztahu se účet mapuje automaticky z vazby vytvořené přihlášením
 desktopu k serveru; serverový účet musí být aktivní a mít přístup k projektu.
 Ruční bilaterální mapování vlastníka je potřeba jen pro P2P vztah. Na druhém
-uzlu se chat objeví v běžném seznamu přiřazených chatů a mapovaný místní
-uživatel v něm může pokračovat.
+uzlu se chat objeví v běžném seznamu přiřazených chatů. Enrollment vazba
+určuje transportního příjemce, nikoli jediného čtenáře historie.
 
 Postranní seznam zobrazuje zvlášť **Projektová vlákna** a **Nezařazená · pouze
 tento uzel**. Shodu po synchronizaci lze očekávat pouze u přenositelných vláken
@@ -29,11 +29,11 @@ dokončení obnoví automaticky a kliknutí na záložku Chaty vždy načte sou�
 stav z uzlu, takže lze výsledek obnovit i na protistraně, která synchronizaci
 nespustila.
 
-Na webovém uzlu musí být relace přihlášena stejným místním účtem, který je v
-enrollment vazbě. Počet přenesených vláken není důkaz jejich viditelnosti pod
-jiným serverovým účtem. Správa proto při rozdílu identity zobrazí varování
-místo hlášení běžného chatového úspěchu; účty ani jejich historie se neslučují
-automaticky.
+Na webovém uzlu vidí všechny aktivní účty s přístupem k projektu stejnou
+množinu jeho vláken bez ohledu na účet použitý při enrollmentu. `reader` má
+read-only pohled, `editor` a `project-admin` mohou v projektových vláknech
+pokračovat a měnit je. Nezařazená vlákna jsou nadále viditelná jen svému
+místnímu vlastníkovi.
 
 Při souběžném pokračování stejného vlákna se zachovají obě verze. Jedna zůstane
 pod původním ID a druhá se objeví jako označený zapisovatelný fork. Další sync

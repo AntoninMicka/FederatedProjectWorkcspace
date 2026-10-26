@@ -53,8 +53,9 @@ Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno
 
 Podle [ADR 0056](docs/adr/0056-project-chat-rw-sync.md) přenáší tatáž
 obousměrná content-sync operace nativní Git historii i projektová workspace
-vlákna mapovaných uživatelů. Na cíli jsou součástí běžného `ChatThreads` a lze
-v nich pokračovat. Souběžná divergence vytvoří deterministický zapisovatelný
+vlákna přes autorizovanou vazbu účtů. Na cíli jsou součástí běžného
+`ChatThreads` a jejich viditelnost i zápis se řídí projektovým RBAC, ne účtem
+použitým pro transport. Souběžná divergence vytvoří deterministický zapisovatelný
 fork místo přepsání jedné verze. `local-only`, rozpracované a nezařazené chaty
 zůstávají lokální; credentials a run journal se nepřenášejí. Praktický postup
 je v [návodu](docs/project-chat-sync.md). Federovaný lidský chat

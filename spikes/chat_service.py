@@ -273,19 +273,37 @@ class ChatService:
         self.backend_configuration_lock = threading.RLock()
         self._request_user_id = ContextVar(
             f'chat-user-{id(self)}', default=None)
+        self._request_project_ids = ContextVar(
+            f'chat-projects-{id(self)}', default=None)
+        self._request_writable_project_ids = ContextVar(
+            f'chat-writable-projects-{id(self)}', default=None)
 
     @contextmanager
-    def as_user(self, user_id):
+    def as_user(self, user_id, project_ids=None, writable_project_ids=None):
         """Bind one authenticated web request without sharing identity across threads."""
         require(user_id is None or isinstance(user_id, str),
                 'Invalid chat request identity')
         if user_id is not None:
             uuid(user_id)
-        token = self._request_user_id.set(user_id)
+        if project_ids is not None:
+            project_ids = tuple(sorted(set(project_ids)))
+            for project_id in project_ids:
+                uuid(project_id)
+        if writable_project_ids is not None:
+            writable_project_ids = tuple(sorted(set(writable_project_ids)))
+            require(project_ids is not None
+                    and set(writable_project_ids) <= set(project_ids),
+                    'Writable chat projects must be visible')
+        user_token = self._request_user_id.set(user_id)
+        projects_token = self._request_project_ids.set(project_ids)
+        writable_token = self._request_writable_project_ids.set(
+            writable_project_ids)
         try:
             yield
         finally:
-            self._request_user_id.reset(token)
+            self._request_writable_project_ids.reset(writable_token)
+            self._request_project_ids.reset(projects_token)
+            self._request_user_id.reset(user_token)
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
@@ -312,6 +330,27 @@ class ChatService:
         _, user_id = self._identity()
         return ChatRecords(self.node_path, self.projects, state_dir=self._root(),
                            owner_id=user_id)
+
+    def _storage_user(self, thread_id, *, write=False, missing_ok=False):
+        uuid(thread_id)
+        node_id, actor_id = self._identity()
+        with ChatThreads(self._root()).connect() as db:
+            row = db.execute(
+                'SELECT node_id,user_id,project_id FROM threads WHERE thread_id=?',
+                (thread_id,)).fetchone()
+        if row is None and missing_ok:
+            return None
+        require(row is not None and row[0] == node_id,
+                'Chat thread is unavailable')
+        if row[2] is None:
+            require(row[1] == actor_id,
+                    'Unassigned chat is unavailable to this user')
+        else:
+            allowed = (self._request_writable_project_ids.get() if write else
+                       self._request_project_ids.get())
+            require(allowed is None or row[2] in allowed,
+                    'Project chat is unavailable to this user')
+        return row[1]
 
     def _require_backend_reset_complete(self, backend_id):
         require(BackendResetJournal(self._root(), backend_id).load() is None,
@@ -495,8 +534,10 @@ class ChatService:
 
     def status(self):
         node_id, user_id = self._identity(); root = self._root()
+        writable_projects = self._request_writable_project_ids.get()
         recoveries = ThreadLifecycle(root, self.projects).recover_pending(
-            node_id=node_id, user_id=user_id)
+            node_id=node_id, user_id=user_id,
+            writable_project_ids=writable_projects)
         threads, bindings, _ = self._stores()
         try:
             binding = bindings.load().serialize()
@@ -514,8 +555,11 @@ class ChatService:
                 draft_state = 'invalid'
             else:
                 draft_state = 'confirmed' if normalized_draft == binding else 'valid-unconfirmed'
+        project_ids = self._request_project_ids.get()
+        visible = (threads.list(node_id, user_id) if project_ids is None else
+                   threads.list_visible(node_id, user_id, project_ids))
         rows = [self._with_external_history(row, node_id, user_id)
-                for row in threads.list(node_id, user_id)]
+                for row in visible]
         search = self.search_status()
         return {'binding': binding, 'binding_draft': draft,
                 'binding_draft_state': draft_state, 'threads': rows,
@@ -982,8 +1026,10 @@ class ChatService:
                 'Project changed before external proposal')
         root = self._root(); node_id, user_id = self._identity()
         threads, bindings, adapter = self._stores()
-        rows = {row['thread_id']: row for row in threads.list(node_id, user_id)}
-        thread = rows.get(request['thread_id'])
+        thread_user = self._storage_user(
+            request['thread_id'], write=True, missing_ok=True)
+        thread = (None if thread_user is None else
+                  threads.get(request['thread_id'], node_id, thread_user))
         require(thread is not None or not request['selected_message_ids'],
                 'Selected chat thread is unavailable')
         messages = {item['message_id']: item for item in (thread or {}).get('messages', [])}
@@ -2107,8 +2153,10 @@ class ChatService:
                 'Project changed before external preview')
         root = self._root(); node_id, user_id = self._identity()
         threads = ChatThreads(root)
-        rows = {row['thread_id']: row for row in threads.list(node_id, user_id)}
-        thread = rows.get(request['thread_id'])
+        thread_user = self._storage_user(
+            request['thread_id'], write=True, missing_ok=True)
+        thread = (None if thread_user is None else
+                  threads.get(request['thread_id'], node_id, thread_user))
         require(thread is not None or not request['selected_message_ids'],
                 'Selected chat thread is unavailable')
         messages = {item['message_id']: item for item in (thread or {}).get('messages', [])}
@@ -2323,8 +2371,12 @@ class ChatService:
                          'succeeded', result=result)
             return result
         threads = ChatThreads(root)
-        rows = {row['thread_id']: row for row in threads.list(node_id, user_id)}
-        thread = rows.get(original['thread_id'])
+        thread_user = self._storage_user(
+            original['thread_id'], write=True, missing_ok=True)
+        thread = (None if thread_user is None else
+                  threads.get(original['thread_id'], node_id, thread_user))
+        if thread_user is None:
+            thread_user = user_id
         expected_revision = manifest['conversation']['thread_revision']
         if thread is not None and thread['revision'] != expected_revision:
             matching_turns = [item for item in thread['turns']
@@ -2347,7 +2399,7 @@ class ChatService:
                 response = runs.get(original['run_id'])['response']
                 require(isinstance(response, dict), 'Completed external response is unavailable')
                 result = {'thread': thread, 'turn': threads.get_turn(
-                              original['turn_id'], node_id, user_id),
+                              original['turn_id'], node_id, thread_user),
                           'target': binding.serialize(),
                           'provider_response_id': response.get('id'),
                           'usage': response.get('usage'),
@@ -2369,16 +2421,19 @@ class ChatService:
             require((0 if thread is None else thread['revision']) == expected_revision,
                     'Chat thread changed after external preview')
         if thread is None:
-            threads.create(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
+            threads.create(thread_id=original['thread_id'], node_id=node_id,
+                           user_id=thread_user,
                            created_at=original['created_at'], project_id=original['project_id'])
         if thread is None or thread['revision'] == expected_revision:
-            threads.prepare_turn(thread_id=original['thread_id'], node_id=node_id, user_id=user_id,
+            threads.prepare_turn(thread_id=original['thread_id'], node_id=node_id,
+                user_id=thread_user,
                 turn_id=original['turn_id'], message_id=original['message_id'],
                 content=original['content'], privacy=original['privacy'],
                 created_at=original['created_at'],
                 response_language=(approved_language or {}).get('tag'),
-                language_source=(approved_language or {}).get('source'))
-        threads.bind_run(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
+                language_source=(approved_language or {}).get('source'), author_id=user_id)
+        threads.bind_run(turn_id=original['turn_id'], node_id=node_id,
+                         user_id=thread_user,
                          run_id=original['run_id'], manifest_id=original['manifest_id'])
         try:
             adapter.prepare(handoff, binding, stream=original['stream'],
@@ -2389,20 +2444,22 @@ class ChatService:
                         if original['stream'] else adapter.dispatch(
                             handoff, binding, run_selection=run_selection))
             completed = threads.complete(turn_id=original['turn_id'], node_id=node_id,
-                user_id=user_id, run_id=original['run_id'],
+                user_id=thread_user, run_id=original['run_id'],
                 message_id=original['assistant_message_id'], content=response['response'],
                 privacy=approval['privacy'], created_at=now())
         except BackendUnknown as exc:
-            threads.finish(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
+            threads.finish(turn_id=original['turn_id'], node_id=node_id,
+                           user_id=thread_user,
                            run_id=original['run_id'], state='unknown', error=str(exc))
             store.finish(original['approval_id'], node_id, user_id, 'unknown', error=str(exc))
             raise
         except (BackendResponseError, ValidationError) as exc:
-            threads.finish(turn_id=original['turn_id'], node_id=node_id, user_id=user_id,
+            threads.finish(turn_id=original['turn_id'], node_id=node_id,
+                           user_id=thread_user,
                            run_id=original['run_id'], state='failed', error=str(exc))
             store.finish(original['approval_id'], node_id, user_id, 'failed', error=str(exc))
             raise
-        result = {'thread': threads.get(original['thread_id'], node_id, user_id),
+        result = {'thread': threads.get(original['thread_id'], node_id, thread_user),
                   'turn': completed, 'target': binding.serialize(),
                   'provider_response_id': response.get('id'), 'usage': response.get('usage'),
                   'usage_report': run_usage(binding.adapter_id, binding.binding_id,
@@ -2538,40 +2595,64 @@ class ChatService:
         uuid(thread_id)
         require(type(expected_revision) is int and expected_revision >= 0,
                 'Invalid expected thread revision')
-        node_id, user_id = self._identity(); threads = ChatThreads(self._root())
+        node_id, _ = self._identity(); user_id = self._storage_user(thread_id, write=True)
+        threads = ChatThreads(self._root())
         current = threads.get(thread_id, node_id, user_id)
         require(current['revision'] == expected_revision,
                 'Chat thread changed before archival')
         return threads.archive(thread_id, node_id, user_id)
 
     def delete_thread_preview(self, *, thread_id):
-        uuid(thread_id); node_id, user_id = self._identity()
+        uuid(thread_id); node_id, _ = self._identity()
+        user_id = self._storage_user(thread_id, write=True)
         return ThreadLifecycle(self._root(), self.projects).preview(
             thread_id=thread_id, node_id=node_id, user_id=user_id)
 
     def delete_thread(self, *, thread_id, operation_id, expected_revision,
                       preview_sha256, checkpoint=lambda stage: None):
-        node_id, user_id = self._identity()
-        return ThreadLifecycle(self._root(), self.projects).confirm(
+        node_id, actor_id = self._identity()
+        lifecycle = ThreadLifecycle(self._root(), self.projects)
+        user_id = self._storage_user(thread_id, write=True, missing_ok=True)
+        if user_id is None:
+            # A completed deletion has no thread row from which to recover the
+            # storage owner. Re-authorize the durable operation plan instead;
+            # this preserves idempotent retries without widening project RBAC.
+            current = lifecycle._operation(operation_id)
+            require(current is not None and current['thread_id'] == thread_id
+                    and current['node_id'] == node_id,
+                    'Chat thread deletion operation is unavailable')
+            project_id = current['plan']['project_id']
+            allowed = self._request_writable_project_ids.get()
+            require((project_id is None and current['user_id'] == actor_id)
+                    or (project_id is not None
+                        and (allowed is None or project_id in allowed)),
+                    'Chat thread deletion operation is unavailable')
+            user_id = current['user_id']
+        return lifecycle.confirm(
             thread_id=thread_id, node_id=node_id, user_id=user_id,
             operation_id=operation_id, expected_revision=expected_revision,
             preview_sha256=preview_sha256, checkpoint=checkpoint)
 
     def start_orchestration(self, *, source_thread_id, thread_id, created_at):
         uuid(thread_id); timestamp(created_at)
-        node_id, user_id = self._identity(); threads = ChatThreads(self._root())
+        node_id, actor_id = self._identity(); threads = ChatThreads(self._root())
         if source_thread_id is None:
-            return threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
+            return threads.create(thread_id=thread_id, node_id=node_id, user_id=actor_id,
                                   created_at=created_at, classification='orchestration')
         uuid(source_thread_id)
+        user_id = self._storage_user(source_thread_id, write=True)
         return threads.start_orchestration(source_thread_id=source_thread_id,
             thread_id=thread_id, node_id=node_id, user_id=user_id, created_at=created_at)
 
     def publish_snapshot(self, request, operation_id):
-        return self._records().publish(request, operation_id)
+        owner = self._storage_user(request.get('thread_id'), write=True)
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root(),
+                           owner_id=owner).publish(request, operation_id)
 
     def publish_output(self, request, operation_id):
-        return self._records().publish_output(request, operation_id)
+        owner = self._storage_user(request.get('thread_id'), write=True)
+        return ChatRecords(self.node_path, self.projects, state_dir=self._root(),
+                           owner_id=owner).publish_output(request, operation_id)
 
     def send(self, *, project_id, expected_head, thread_id, turn_id, message_id,
              run_id, manifest_id, assistant_message_id, selected_message_ids,
@@ -2619,7 +2700,7 @@ class ChatService:
         self._require_backend_reset_complete('ollama')
         workspace = self.projects.workspace(project_id, blocking=False)
         require(workspace.git.head() == expected_head, 'Project changed before chat dispatch')
-        node_id, user_id = self._identity()
+        node_id, actor_id = self._identity()
         threads, bindings, adapter = self._stores()
         configured = bindings.load()
         choice = (ChatRunChoice.parse(run_choice) if run_choice is not None else
@@ -2632,8 +2713,9 @@ class ChatService:
         binding = choice.resolve(ollama=configured)
         run_selection = self._run_selection(choice, binding, output_format='text',
                                              runs=adapter.runs, run_id=run_id)
-        owned = {row['thread_id'] for row in threads.list(node_id, user_id)}
-        if thread_id not in owned:
+        user_id = self._storage_user(thread_id, write=True, missing_ok=True)
+        if user_id is None:
+            user_id = actor_id
             threads.create(thread_id=thread_id, node_id=node_id, user_id=user_id,
                            created_at=created_at, classification=choice.mode,
                            project_id=project_id)
@@ -2647,7 +2729,7 @@ class ChatService:
                              turn_id=turn_id, message_id=message_id, content=content,
                              privacy=privacy, created_at=created_at,
                              response_language=language['tag'],
-                             language_source=language['source'])
+                             language_source=language['source'], author_id=actor_id)
         thread = threads.get(thread_id, node_id, user_id)
         messages = {item['message_id']: item for item in thread['messages']}
         require(all(value in messages for value in selected_message_ids),
@@ -2658,7 +2740,8 @@ class ChatService:
         selected = [messages[value] for value in selected_message_ids] + [messages[message_id]]
         choice.validate_context(project_input_ids=(),
                                 text_input_ids=tuple(item['message_id'] for item in selected))
-        authority = Authority(self.session_id, user_id, node_id, 'desktop-chat-v1', frozenset())
+        authority = Authority(self.session_id, actor_id, node_id,
+                              'desktop-chat-v1', frozenset())
         inputs = tuple(AdHocInput(item['message_id'], item['content'].encode('utf-8'),
                                   item['privacy']) for item in selected)
         builder = ContextBuilder(workspace, project_id)
