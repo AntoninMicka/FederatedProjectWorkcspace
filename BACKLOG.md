@@ -91,10 +91,11 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
-`b104843`; evidence je ve WORK_LOG. `COMP-02` je aktivní v TODO a backlog ji
+`b104843`; evidence je ve WORK_LOG. `COMP-02` je akceptována na úrovni PoC
+validated, čeká na doručení PR a její evidence je ve WORK_LOG; backlog ji
 nedrží jako druhý stavový záznam.
 
-Po aktivní `COMP-02` následují podle uživatelem schváleného pořadí
+Po doručení `COMP-02` následují podle uživatelem schváleného pořadí
 `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
@@ -144,8 +145,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
 - [ ] [planned] **DEV-04 — Codex adaptér pro implementaci (cílová úroveň: PoC validated).** Nad DEV-02/DEV-03 ověřit v době implementace podporované oficiální rozhraní Codexu a připojit je jako vyměnitelný coding-agent adaptér, nikoli jako hostitele pluginu. Akceptace: export jednoho schváleného úkolu z IDE, implementace v izolované feature větvi, návrat diffu, změněných souborů a skutečných testů, vazba na původní task/revizi, odmítnutí nepovoleného kontextu/akce a lidské rozhodnutí před aktualizací autoritativního plánu. První end-to-end kandidát může být vlastní repozitář workspace, ale bez jakékoli privilegované výjimky.
-
-## Modelování a výpočty v Julii — navazuje na M6
 
 ## Externí vztahy a disclosure — navazující strategický backlog
 

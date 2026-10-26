@@ -9,6 +9,10 @@ Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a
 
 Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu; společný webový frontend zobrazuje historii/diffy uložených dokumentů ve webu i desktopovém obalu.
 
+Připnuté lokální Julia výpočty, jejich Linux izolaci, CLI a explicitní
+publikaci popisuje [návod k Julia runneru](docs/julia-runner.md). Runtime se
+neinstaluje automaticky ani nepřibaluje do `.deb`.
+
 ## Desktop
 
 ```sh

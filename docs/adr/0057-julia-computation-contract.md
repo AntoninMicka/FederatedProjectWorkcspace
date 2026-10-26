@@ -9,6 +9,13 @@ SPDX-License-Identifier: MPL-2.0
 - Datum: 2026-10-26
 - Dávka: `COMP-01`
 
+Implementace `COMP-02` z 2026-10-26 naplňuje tento kontrakt jako PoC pro
+oficiální Julia 1.10.12 LTS na Linux glibc aarch64. Používá bubblewrap
+user/PID/mount/network namespaces, vlastní SQLite run journal, atomickou cache
+a explicitní Workspace publikaci; postup a přesná fyzická evidence jsou v
+[návodu k runneru](../julia-runner.md). Linux x86-64 zůstává neověřený kandidát,
+nikoli podporovaný profil této implementace.
+
 ## Kontext a hranice rozhodnutí
 
 Julia je preferovaný výpočetní backend pro numerické modely, simulace,
@@ -156,7 +163,11 @@ sítě musí vynutit OS izolace a při její nedostupnosti se run odmítne.
 Runner nepřebírá uživatelský `HOME`, depot, startup ani history. Julia se
 spouští bez shellu s přesným executable a minimálně s `--project=<snapshot>`,
 `--startup-file=no`, `--history-file=no`, pevným `--threads=N`, oddělovačem
-`--` a připnutým entrypointem. V1 zakazuje `-p`, `--machine-file`, libovolný
+`--` a připnutým entrypointem. Protože Project a Manifest jsou samostatně
+verzované artefakty, runner jejich přesné bajty normalizuje do read-only
+operation-scoped `/environment` a používá `--project=/environment`; model a
+vstupy zůstávají v odděleném read-only snapshotu. V1 zakazuje `-p`,
+`--machine-file`, libovolný
 `--sysimage` a uživatelské CLI přepínače. Pracovní adresář, temp, HOME-like
 runtime adresář, overlay depot i staging jsou privátní a operation-scoped.
 

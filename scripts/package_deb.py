@@ -52,9 +52,14 @@ def build(output, version=None):
             write(f'usr/lib/{NAME}/{name}', (ROOT / name).read_bytes())
         write(f'usr/lib/{NAME}/docs/roadmap-graph.json',
               (ROOT / 'docs/roadmap-graph.json').read_bytes())
+        write(f'usr/lib/{NAME}/docs/julia-runner.md',
+              (ROOT / 'docs/julia-runner.md').read_bytes())
+        write(f'usr/share/doc/{NAME}/julia-runner.md',
+              (ROOT / 'docs/julia-runner.md').read_bytes())
         write(f'usr/share/doc/{NAME}/VERSION', packaged_version)
         write(f'usr/share/doc/{NAME}/CHANGELOG.md', (ROOT / 'CHANGELOG.md').read_bytes())
-        for script in ('deploy_omnia.py', 'install_web.py', 'license_files.py'):
+        for script in ('deploy_omnia.py', 'install_web.py', 'license_files.py',
+                       'julia_runtime_binding.py'):
             source = ROOT / 'scripts' / script
             if source.is_symlink() or not source.is_file():
                 raise ValueError('Expected regular deployment source')
@@ -67,13 +72,14 @@ def build(output, version=None):
         ).encode() + (ROOT / 'LICENSE').read_bytes())
         write(f'usr/share/doc/{NAME}/README', b'Desktop PoC: create local projects and read committed artifacts. Close before upgrading.\nRuntime dependencies are supplied by the OS, not bundled.\nSee THIRD_PARTY_NOTICES.md and docs/legal/RELINKING.md for licenses and library replacement.\n')
         write(f'usr/bin/{NAME}', b'#!/bin/sh\n# SPDX-FileCopyrightText: 2026 Anton\xc3\xadn Mi\xc4\x8dka\n# SPDX-License-Identifier: MPL-2.0\nset -eu\ncd -- "$(dirname -- "$(readlink -f -- "$0")")/../lib/federated-workspace-poc"\nexec /usr/bin/python3 -I -c \'import sys; sys.path.insert(0, "."); from spikes.desktop import main; raise SystemExit(main())\' "$@"\n', 0o755)
+        write(f'usr/bin/{NAME}-julia', b'#!/bin/sh\n# SPDX-FileCopyrightText: 2026 Anton\xc3\xadn Mi\xc4\x8dka\n# SPDX-License-Identifier: MPL-2.0\nset -eu\ncd -- "$(dirname -- "$(readlink -f -- "$0")")/../lib/federated-workspace-poc"\nexec /usr/bin/python3 -I -c \'import sys; sys.path.insert(0, "."); from spikes.julia_cli import main; raise SystemExit(main())\' "$@"\n', 0o755)
         write(f'usr/share/applications/{NAME}.desktop', f'# SPDX-FileCopyrightText: 2026 Antonín Mička\n# SPDX-License-Identifier: MPL-2.0\n[Desktop Entry]\nType=Application\nName=Projektový workspace PoC\nExec={NAME}\nTerminal=false\nCategories=Office;\n'.encode())
         write('DEBIAN/control', (
             f'Package: {NAME}\n'
             f'Version: {version}\n'
             f'Architecture: all\n'
             f'Maintainer: {maintainer}\n'
-            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), python3-segno (>= 1.6.6), git, coreutils, poppler-utils, openssh-client, openssl\n'
+            'Depends: python3 (>= 3.11), python3-pyside6.qtwebenginewidgets, python3-yaml (>= 6.0.3), python3-yaml (<< 6.0.4), python3-segno (>= 1.6.6), git, coreutils, poppler-utils, openssh-client, openssl, bubblewrap\n'
             'Section: utils\n'
             'Priority: optional\n'
             'Homepage: https://github.com/AntoninMicka/FederatedProjectWorkcspace\n'

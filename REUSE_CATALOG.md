@@ -768,3 +768,12 @@ uživatelský depot/startup, `Pkg.instantiate` během runu, obecný job server a
 cache v projektovém Gitu jsou **reject**. Soukromá inventura neobsahuje shodný
 Julia/recovery kontrakt a nepřebírá se z ní kód ani neveřejné detaily.
 Rozhodnutí a primární zdroje: [ADR 0057](docs/adr/0057-julia-computation-contract.md).
+
+COMP-02 toto rozhodnutí implementuje bez převzetí cizího kódu. **Reuse** tvoří
+existující `MaterializationCache`, validace Git snapshotu a jediný Workspace
+writer; **adapt** je samostatný Julia SQLite journal a schema-v4 computation
+provenance. Pro OS hranici se používá externí systémový `bubblewrap`; runtime
+je externí node-managed oficiální Julia 1.10.12, nikoli distribuovaný obsah.
+Fyzicky ověřen je pouze Linux glibc aarch64 profil. Obecný job server,
+automatické runtime aktualizace, runtime/depot v Gitu a LLM run store zůstávají
+**reject**. Provozní evidence: [Julia runner](docs/julia-runner.md).
