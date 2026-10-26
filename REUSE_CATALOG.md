@@ -738,3 +738,10 @@ inventura neposkytla shodnou preview/privacy/SSRF/recovery/provenance
 komponentu; žádný kód ani neveřejné detaily se nepřenášejí. Rozhodnutí:
 [ADR 0033](docs/adr/0033-public-source-retrieval.md), podklady:
 [průzkum zdrojů](docs/public-sources-research.md).
+
+PLAN-TASK-GRAPH-01 **reuse/adaptuje** validovaný read-only DAG, deterministické
+SVG a bezpečné DOM vykreslení z `DEV-ROADMAP-GRAPH-01`, ale odděluje obecný
+projektový plán od vývojové roadmapy tohoto repozitáře. Autoritou zůstává
+existující hlavní TODO v Git snapshotu a podgrafy pouze vybírají stabilní ID;
+nevzniká další databáze, writer ani závislost na externí grafové knihovně.
+Rozhodnutí: [ADR 0055](docs/adr/0055-project-task-plan.md).

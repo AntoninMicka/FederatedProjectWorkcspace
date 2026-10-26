@@ -1000,7 +1000,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('id="chats-tab"', HTML)
         self.assertNotIn('id="back-projects"', HTML)
         sidebar_tabs = HTML.split('id="sidebar-tabs"', 1)[1].split('</div>', 1)[0]
-        labels = ['Projekty', 'Chaty', 'Úkoly', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení', 'Federace']
+        labels = ['Projekty', 'Chaty', 'Úkoly', 'Plán', 'Podklady', 'Nástroje', 'Výstupy', 'Nastavení', 'Federace']
         self.assertEqual([label for _, label in sorted(
             (sidebar_tabs.index(f'aria-label="{label}"'), label) for label in labels)], labels)
         self.assertEqual(sidebar_tabs.count('class="sidebar-tab-icon"'), len(labels))
@@ -1011,7 +1011,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertNotIn('disabled', sidebar_tabs.split('id="settings-sidebar-tab"', 1)[1].split('</button>', 1)[0])
         self.assertIn('hidden', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
         self.assertNotIn('disabled', sidebar_tabs.split('id="federation-tab"', 1)[1].split('</button>', 1)[0])
-        for tab in ('todo-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab'):
+        for tab in ('todo-tab', 'plan-tab', 'artifacts-tab', 'tools-tab', 'presentations-tab'):
             self.assertIn('disabled', sidebar_tabs.split(f'id="{tab}"', 1)[1].split('</button>', 1)[0])
         self.assertIn('id="sidebar-layout-toggle" type="button" aria-pressed="false"', HTML)
         self.assertIn('aria-label="Sbalit hlavní panel"', HTML)
@@ -1108,7 +1108,7 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn("function rememberThread(thread)", JS)
         self.assertIn("renderChat(assigned);rememberThread(assigned)", JS)
         self.assertIn("const visible=sidebarTabs.filter(item=>!item.hidden&&!item.disabled)", JS)
-        self.assertIn("const projectSidebarTabs=['todo-tab','artifacts-tab','tools-tab','presentations-tab']", JS)
+        self.assertIn("const projectSidebarTabs=['todo-tab','plan-tab','artifacts-tab','tools-tab','presentations-tab']", JS)
         self.assertIn("async function openSettings(settingsTabId='settings-backend-tab'){\n if(!canLeaveWorkspaceEditors())return;", JS)
         self.assertIn("document.querySelector('#chat-new-thread').disabled=!writable", JS)
         self.assertIn("End:visible.length-1", JS)

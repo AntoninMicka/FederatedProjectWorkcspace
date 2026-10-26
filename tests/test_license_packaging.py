@@ -27,7 +27,7 @@ def fixture(root):
         'VERSION', 'CHANGELOG.md', 'run.sh', 'requirements.txt', 'README.md', 'docs/project-opening.md', 'docs/lxc-web.md',
         'docs/ollama-lan.md', 'docs/searxng-search-acceptance.md',
         'docs/public-source-reader-acceptance.md', 'docs/public-sources-research.md',
-        'docs/release-0.1.0.md', 'docs/roadmap-visualization.md',
+        'docs/release-0.1.0.md', 'docs/roadmap-visualization.md', 'docs/task-planning.md',
         'docs/roadmap-graph.json',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
