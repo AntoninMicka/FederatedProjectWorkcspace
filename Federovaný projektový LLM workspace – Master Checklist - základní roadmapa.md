@@ -11,9 +11,9 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
-`F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` uzavřela výpočetní
-kontrakt a prostředí Julia a čeká na doručení PR; runner zůstává samostatným
-`COMP-02`.
+`F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
+#103 a aktivní `COMP-02` implementuje lokální Julia runner a explicitní
+publikaci výsledků.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve

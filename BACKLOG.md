@@ -90,11 +90,11 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 `F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
-evidence je ve WORK_LOG. `COMP-01` dosáhla úrovně designed, její evidence je ve
-WORK_LOG a větev čeká na doručení PR; backlog ji nedrží jako druhý stavový
-záznam.
+evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
+`b104843`; evidence je ve WORK_LOG. `COMP-02` je aktivní v TODO a backlog ji
+nedrží jako druhý stavový záznam.
 
-Po doručení `COMP-01` následují podle uživatelem schváleného pořadí `COMP-02`,
+Po aktivní `COMP-02` následují podle uživatelem schváleného pořadí
 `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
@@ -146,8 +146,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] [planned] **DEV-04 — Codex adaptér pro implementaci (cílová úroveň: PoC validated).** Nad DEV-02/DEV-03 ověřit v době implementace podporované oficiální rozhraní Codexu a připojit je jako vyměnitelný coding-agent adaptér, nikoli jako hostitele pluginu. Akceptace: export jednoho schváleného úkolu z IDE, implementace v izolované feature větvi, návrat diffu, změněných souborů a skutečných testů, vazba na původní task/revizi, odmítnutí nepovoleného kontextu/akce a lidské rozhodnutí před aktualizací autoritativního plánu. První end-to-end kandidát může být vlastní repozitář workspace, ale bez jakékoli privilegované výjimky.
 
 ## Modelování a výpočty v Julii — navazuje na M6
-
-- [ ] [planned] **COMP-02 — Lokální Julia runner a publikace výsledků (cílová úroveň: PoC validated).** Po COMP-01 implementovat explicitní CLI běh nad zmrazenými vstupy a prostředím, atomickou lokální cache dle ADR 0018 a vědomé uložení vybrané tabulky/grafu/reportu/datasetu jako projektového artefaktu s provenance. Akceptace: úspěšný výpočet a opakování, změna modelu/vstupu/parametru/prostředí, concurrent run, restart na každém persistentním přechodu, timeout/cancel, limit výstupu, odmítnutá síť a neautorizovaný vstup, zobrazení stale posledního výsledku a publikace přes standardní Workspace recovery. Notebookové UI zůstává mimo první dávku.
 
 ## Externí vztahy a disclosure — navazující strategický backlog
 

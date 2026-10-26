@@ -8,9 +8,8 @@ SPDX-License-Identifier: MPL-2.0
 ## COMP-01 — Julia výpočetní kontrakt a prostředí — 2026-10-26
 
 Dávka vznikla na větvi `feature/comp-01-julia-contract` z `develop` `64a7dac`
-a dosáhla cílové úrovně **designed**. Aktivace dávky je v lokálním commitu
-`b68d9b9`; commit finální návrhové evidence, push, PR do `develop` a merge
-zatím nebyly provedeny.
+a dosáhla cílové úrovně **designed**. Aktivace dávky vznikla v commitu
+`b68d9b9` a dávka byla doručena PR #103 jako merge commit `b104843`.
 
 - [x] [completed] **COMP-01-A — reuse, licence a runtime/platform review
   (designed).** Aktuální primární podklady Julia vymezily support tiers,
