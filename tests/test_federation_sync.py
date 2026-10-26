@@ -303,6 +303,11 @@ class FederationSyncTests(unittest.TestCase):
         from spikes.desktop_ui import JS
         self.assertNotIn('Synchronizované historie', JS)
         self.assertIn("thread.forked_from_thread_id?' · fork'", JS)
+        self.assertIn("#chats-tab').addEventListener('click',()=>loadChat())", JS)
+        self.assertIn("contentsynccompleted", JS)
+        self.assertIn('function contentSyncSummary', ADMIN_JS)
+        self.assertIn('chybí aktivní bilaterální mapování účtů', ADMIN_JS)
+        self.assertIn('Chaty: sdíleno', ADMIN_JS)
 
     def test_manual_sync_reports_progress_and_cancels_at_safe_boundary(self):
         started = threading.Event(); finished = threading.Event()
@@ -429,6 +434,10 @@ class FederationSyncTests(unittest.TestCase):
         result = synchronize(self.nodes[0], self.node_ids[1], self.project_id,
                              deployment='web')
         self.assertEqual(result['state'], 'idle')
+        status = ContentSyncControl(self.nodes[0], deployment='web').statuses()[
+            self.node_ids[1] + ':' + self.project_id]
+        self.assertEqual(status['chat_summary'], {
+            'shared': 1, 'received': 1, 'active_mappings': 1})
         self.assertEqual(Projects(self.nodes[1]).workspace(
             self.project_id).git.head(), Projects(self.nodes[0]).workspace(
                 self.project_id).git.head())
@@ -467,11 +476,11 @@ with running_api('http',handler=DesktopHandler) as server:
  profile=QWebEngineProfile(app);interceptor=Interceptor(profile);profile.setUrlRequestInterceptor(interceptor);page=QWebEnginePage(profile,app)
  def received(value):
   value=json.loads(value)
-  assert value=={'fork':True,'origin':True,'writable':True},value
+  assert value=={'fork':True,'origin':True,'writable':True,'refreshes':True},value
   print('project chat fork: WebEngine RW branch verified',flush=True);app.exit(0)
  def loaded(ok):
   if not ok:return app.exit(3)
-  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled})""",0,received)
+  page.runJavaScript("""activeProject={id:'99999999-9999-4999-8999-999999999999',title:'P'};const t={thread_id:'11111111-1111-4111-8111-111111111111',node_id:'22222222-2222-4222-8222-222222222222',user_id:'33333333-3333-4333-8333-333333333333',status:'active',classification:'brainstorming',created_at:'2026-10-26T12:00:00Z',revision:2,project_id:activeProject.id,assignment_revision:1,response_language:null,forked_from_thread_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',forked_from_digest:'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',messages:[],turns:[]};knownThreads=[t];activeThread=t;taskOutcomes=[];document.querySelector('#chat-draft').value='continue';renderThreadList(knownThreads);renderChat(t);let refreshes=0;loadChat=async()=>{refreshes++};document.querySelector('#chats-tab').click();document.dispatchEvent(new CustomEvent('contentsynccompleted',{detail:{projectId:activeProject.id}}));JSON.stringify({fork:document.querySelector('#sidebar-chat-tree').textContent.includes('fork'),origin:document.querySelector('#sidebar-chat-tree').textContent.includes('konflikt aaaaaaaa'),writable:!document.querySelector('#chat-submit').disabled,refreshes:refreshes===2})""",0,received)
  page.loadFinished.connect(loaded);page.setUrl(QUrl(server.origin+'/'));QTimer.singleShot(10000,lambda:app.exit(2));raise SystemExit(app.exec())
 '''
         result = subprocess.run([sys.executable, '-c', script],

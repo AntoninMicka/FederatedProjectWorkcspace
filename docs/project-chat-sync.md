@@ -15,6 +15,12 @@ bilaterální mapování vlastníka chatu pro tento projekt. Na druhém uzlu se 
 objeví v běžném seznamu přiřazených chatů a mapovaný místní uživatel v něm může
 pokračovat.
 
+Po dokončení ukazuje buňka projektu počet chatů sdílených a přijatých tímto
+uzlem. Nulové aktivní mapování je hlášeno výslovně; Git synchronizace sama není
+důkaz přenosu chatů. Otevřený panel Chaty se po místním dokončení obnoví
+automaticky a kliknutí na záložku Chaty vždy načte současný stav z uzlu, takže
+lze výsledek obnovit i na protistraně, která synchronizaci nespustila.
+
 Při souběžném pokračování stejného vlákna se zachovají obě verze. Jedna zůstane
 pod původním ID a druhá se objeví jako označený zapisovatelný fork. Další sync
 stejnou dvojici sjednotí na obou uzlech bez přepsání odpovědí.

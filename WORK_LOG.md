@@ -5,47 +5,6 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
-## F-M5-CHAT-HISTORY-01 — projektové chaty v obousměrné obsahové synchronizaci — 2026-10-26
-
-Dávka vznikla na větvi `feature/f-m5-chat-history-01` z `develop` `3c0b675`.
-Původní samostatný read-only řez byl uživatelem odmítnut; opravená feature
-dosáhla úrovně **PoC validated** jako součást stejné Push/Pull/Sync operace,
-scheduleru a PR jako ostatní sdílená projektová data. Feature akceptace je
-dokončená, PR do `develop` ale dosud nebyl vytvořen ani sloučen.
-
-- [x] [completed] **F-M5-CHAT-HISTORY-01-A — integrovaný kontrakt a reuse
-  (implemented).** `content-sync` v2 podepisuje nativní Git bundle, chatovou
-  inventuru a omezený kanonický payload v jedné operaci. Samostatný chatový
-  endpoint, tlačítko, outbox a read-only store byly odstraněny.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-B — obousměrný RW import
-  (implemented).** Aktivní bilaterální mapování překládá vlastníka na přesný
-  místní účet. Přijaté projektové vlákno vstupuje do běžného `ChatThreads` a
-  lze v něm pokračovat z obou uzlů; nezařazené chaty se nepřenášejí.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-C — fork konfliktu a recovery
-  (implemented).** Prefix historie se fast-forwarduje. Skutečná divergence
-  konverguje na původní vlákno a deterministický zapisovatelný fork s
-  provenance; žádná odpověď se nepřepisuje. Durable inbound content request je
-  recovery autorita pro roll-forward přes oddělený Git a SQLite účinek.
-- [x] [completed] **F-M5-CHAT-HISTORY-01-D — regrese, balení a fyzická
-  akceptace (PoC validated).** Migrace `ChatThreads` v6, revokace/změna
-  mapování, local-only a rozpracované turny, crash retry, ztracená odpověď,
-  společný pinned HTTPS přenos, balení a sdílené UI jsou pokryté testy.
-  Samostatný skutečný Qt/WebEngine průchod potvrdil běžný strom, označení
-  původu konfliktu a zapisovatelný composer forku.
-
-### Ověření a omezení
-
-Finální úplná sada prošla: **895 testů bez selhání, 33 přeskočeno, za
-209,992 s**. Cílená sada 114 testů prošla s jedním podmíněně přeskočeným
-WebEngine testem; tentýž skutečný Qt/WebEngine test následně samostatně prošel.
-Prošly také `py_compile`, `node --check` a `git diff --check`.
-
-Přenášejí se pouze projektová vlákna přes aktivní přesné mapování. Celé vlákno
-s `local-only` zprávou nebo rozpracovaným turnem zůstává lokální a neblokuje
-Git synchronizaci. Credentials, provider session, Context Manifest payload,
-runtime journal, synchronizované mazání/tombstones, federovaný lidský chat a
-automatický obsahový merge divergentních odpovědí zůstávají mimo rozsah.
-
 ## PLAN-TASK-GRAPH-01 — obecný plán projektových úkolů a podgrafů — 2026-10-26
 
 Dávka vznikla na větvi `feature/plan-task-graph-01` z `develop` `64e2045` po

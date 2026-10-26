@@ -33,7 +33,7 @@ from spikes.network_backend import private_root
 from spikes.project_creation import ProjectCreation
 from spikes.project_replication import _signature, _verify
 from spikes.project_chat_sync import (
-    MAX_CHAT_PAYLOAD, apply_payload as apply_chat_payload,
+    MAX_CHAT_PAYLOAD, active_mapping_count, apply_payload as apply_chat_payload,
     export_project as export_project_chats, inventory as chat_inventory,
     validate_export_authority, validate_payload as validate_chat_payload,
 )
@@ -866,8 +866,9 @@ class ContentSyncControl:
 
     def statuses(self):
         with _database(self.node) as db:
-            rows = db.execute('SELECT peer_id,project_id,state,detail FROM runtime').fetchall()
-        stale = [(peer, project) for peer, project, state, _ in rows
+            rows = db.execute('SELECT peer_id,project_id,state,detail,last_sent,'
+                              'last_remote FROM runtime').fetchall()
+        stale = [(peer, project) for peer, project, state, _, _, _ in rows
                  if state in {'running', 'cancelling'}
                  and not _MANUAL_SYNCS.active(self.node, peer, project)]
         if stale:
@@ -881,9 +882,21 @@ class ContentSyncControl:
                          peer, project))
             with _database(self.node) as db:
                 rows = db.execute(
-                    'SELECT peer_id,project_id,state,detail FROM runtime').fetchall()
-        return {peer + ':' + project: {'state': state, 'detail': detail}
-                for peer, project, state, detail in rows}
+                    'SELECT peer_id,project_id,state,detail,last_sent,last_remote '
+                    'FROM runtime').fetchall()
+        result = {}
+        for peer, project, state, detail, sent, remote in rows:
+            sent_state, remote_state = _sync_state(sent), _sync_state(remote)
+            result[peer + ':' + project] = {
+                'state': state, 'detail': detail,
+                'chat_summary': {
+                    'shared': len(sent_state['chats']),
+                    'received': len(remote_state['chats']),
+                    'active_mappings': active_mapping_count(
+                        self.service, peer, project),
+                },
+            }
+        return result
 
     def synchronize(self, peer_id, project_id, *, cancelled=None):
         try:

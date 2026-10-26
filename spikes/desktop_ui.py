@@ -2741,7 +2741,10 @@ async function loadProjects(selectedId=null){
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
-document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
+document.querySelector('#chats-tab').addEventListener('click',()=>loadChat());
+document.addEventListener('contentsynccompleted',event=>{
+ if(activeProject?.id===event.detail?.projectId)loadChat();
+});
 document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
  document.querySelector('#sidebar-project-import-options').hidden=true;
  document.querySelector('#sidebar-import-project').setAttribute('aria-expanded','false');

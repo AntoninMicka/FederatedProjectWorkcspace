@@ -46,6 +46,11 @@ def _mapping_rows(service, peer_id, project_id):
         return local_node_id, rows
 
 
+def active_mapping_count(service, peer_id, project_id):
+    """Return exact active mappings for a project without exposing identities."""
+    return len(_mapping_rows(service, peer_id, project_id)[1])
+
+
 def _validate_thread(thread, project_id, *, source_node_id, source_user_id):
     fields = {'thread_id', 'node_id', 'user_id', 'status', 'classification',
               'created_at', 'revision', 'project_id', 'assignment_revision',
