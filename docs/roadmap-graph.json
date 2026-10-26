@@ -15,7 +15,8 @@
     {"id": "R-01", "milestone": "HARDENING", "depends_on": []},
 
     {"id": "DEV-ROADMAP-GRAPH-01", "milestone": "DEV", "depends_on": []},
-    {"id": "DEV-01", "milestone": "DEV", "depends_on": []},
+    {"id": "PLAN-TASK-GRAPH-01", "milestone": "DEV", "depends_on": ["DEV-ROADMAP-GRAPH-01"]},
+    {"id": "DEV-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01"]},
     {"id": "DEV-02", "milestone": "DEV", "depends_on": ["DEV-01"]},
     {"id": "DEV-03", "milestone": "DEV", "depends_on": ["DEV-01", "DEV-02"]},
     {"id": "DEV-04", "milestone": "DEV", "depends_on": ["DEV-02", "DEV-03"]},

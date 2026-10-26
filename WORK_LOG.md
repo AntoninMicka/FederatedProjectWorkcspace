@@ -18,7 +18,7 @@ dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
   otevřené feature, neznámá hrana, self-edge, cyklus, symlink a nadlimitní
   zdroj selžou před vydáním projekce.
 - [x] [completed] **DEV-ROADMAP-GRAPH-01-B — read-only API a výpočet grafu
-  (implemented).** Deterministická topologická projekce 63 feature dávek vrací
+  (implemented).** Deterministická topologická projekce 64 feature dávek vrací
   milestone swimlanes, vrstvy, jednu nejdelší kritickou cestu a plánované dávky
   se všemi dokončenými závislostmi. SHA-256 revize váže anotaci i všechny čtyři
   autoritativní zdroje; SVG export odmítne stale revizi.
@@ -30,13 +30,13 @@ dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
 - [x] [completed] **DEV-ROADMAP-GRAPH-01-D — regrese, dokumentace a fyzická
   akceptace (PoC validated).** ADR 0054, návod a reuse evidence vymezují
   read-only autoritu, fail-closed chování a nulovou persistentní recovery
-  hranici. Skutečný Qt/WebEngine průchod potvrdil 63 uzlů, klávesnicový detail
+  hranici. Skutečný Qt/WebEngine průchod potvrdil 64 uzlů, klávesnicový detail
   a filtr souběžně připravených dávek.
 
 ### Ověření a omezení
 
 Po opravě rozšířených packaging fixtures prošla finální úplná sada:
-**881 testů bez selhání, 31 přeskočeno, za 208,983 s**. Samostatně prošel
+**881 testů bez selhání, 31 přeskočeno, za 210,898 s**. Samostatně prošel
 skutečný Qt/WebEngine test stránky Roadmapa, HTTPS API test JSON/SVG a stale
 revize, `node --check`, cílené testy parseru, balíčků a licenčního allowlistu.
 

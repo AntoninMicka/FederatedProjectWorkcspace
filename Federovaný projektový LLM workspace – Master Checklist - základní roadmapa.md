@@ -772,6 +772,12 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   souběžně připravené dávky a revizně připnutý SVG export —
   `DEV-ROADMAP-GRAPH-01`, PoC validated, evidence ve WORK_LOG a ADR 0054.
 
+- [ ] Zobecnit roadmapový DAG na projektovou plánovací feature nad hlavním
+  seznamem úkolů se stabilními ID a kanonickými vztahy; inverzní označení
+  odvozovat z jedné hrany a vedlejší TODO seznamy použít jen jako definice
+  podgrafů bez druhé kopie stavu. V hlavní liště za Úkoly zobrazit Plán se
+  záložkami Hlavní graf a Podgrafy — `PLAN-TASK-GRAPH-01`, planned.
+
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.
 - [ ] Definovat provider-neutral handoff kontrakt pro coding agenty: repozitář, výchozí commit/větev, povolené operace, Context Manifest, vybrané podklady, požadované kontroly a hranice pro commit, push, PR, externí síť a destruktivní akce. Integrace nesmí coding agentovi odvodit širší oprávnění z pouhého přidělení úkolu.
@@ -782,7 +788,7 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 - [ ] Workspace označí úkol za dokončený až po validaci deklarovaných důkazů a lidském nebo explicitně schváleném policy rozhodnutí. Text reportu agenta, úspěšný exit code ani existence commitu samy nejsou důkazem splnění akceptace.
 - [ ] Ošetřit stale vstupní commit, souběžnou změnu roadmapy/úkolu, opakované předání, restart, duplicitní výsledek a částečně provedené externí akce. Každý export i import výsledku musí mít stabilní operation/run ID a idempotentní receipt.
 
-Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG DEV-01 až DEV-04.
+Vlastní repozitář produktu nemá privilegovanou cestu: podléhá stejnému RBAC, privacy, Git/Workspace recovery, branch/PR pravidlům a lidskému schválení jako jiný projekt. Operativní rozpad drží BACKLOG `PLAN-TASK-GRAPH-01` a DEV-01 až DEV-04.
 
 ---
 
