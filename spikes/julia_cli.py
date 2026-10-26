@@ -12,7 +12,7 @@ from spikes.metadata import MAX_METADATA, ValidationError, parse_json
 from spikes.output_execution import canonical
 from spikes.storage import Git
 from spikes.workspace import Workspace
-from scripts.julia_runtime_binding import setup_runtime
+from scripts.julia_runtime_binding import setup_archive, setup_runtime
 
 
 def _json(path, maximum=MAX_METADATA):
@@ -58,6 +58,14 @@ def _parser():
                        help='private setup root; defaults below XDG_STATE_HOME')
     setup.add_argument('--bubblewrap', default=Path('/usr/bin/bwrap'), type=Path)
 
+    setup_archive_command = commands.add_parser('setup-archive',
+        help='verify, extract and bind a supported official Julia archive')
+    setup_archive_command.add_argument('--archive', required=True, type=Path,
+                                       help='original official Julia tar.gz archive')
+    setup_archive_command.add_argument('--root', type=Path,
+                                       help='private setup root; defaults below XDG_STATE_HOME')
+    setup_archive_command.add_argument('--bubblewrap', default=Path('/usr/bin/bwrap'), type=Path)
+
     prepare = commands.add_parser('prepare', help='validate and durably preview a run')
     prepare.add_argument('--operation-id', required=True)
     prepare.add_argument('--project-id', required=True)
@@ -95,11 +103,13 @@ def _parser():
 
 
 def run(args):
-    if args.command == 'setup':
+    if args.command in ('setup', 'setup-archive'):
         configured = os.environ.get('XDG_STATE_HOME')
         state_home = (Path(configured) if configured and Path(configured).is_absolute()
                       else Path.home() / '.local/state')
         setup_root = args.root or state_home / 'federated-workspace/julia' / '1.10.12-linux-aarch64'
+        if args.command == 'setup-archive':
+            return setup_archive(args.archive, setup_root, args.bubblewrap)
         return setup_runtime(args.runtime, args.archive, setup_root, args.bubblewrap)
     executor = _executor(args)
     common = (args.operation_id, args.node_id, args.user_id)

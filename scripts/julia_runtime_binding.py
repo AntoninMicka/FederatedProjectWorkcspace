@@ -5,9 +5,13 @@ import argparse
 import hashlib
 import os
 from pathlib import Path
+from pathlib import PurePosixPath
+import posixpath
+import shutil
 import stat
 import subprocess
 import sys
+import tarfile
 from uuid import NAMESPACE_URL, uuid5
 
 from spikes.julia_computation import (RUNTIME_SCHEMA, _distribution_digest, _tree_digest,
@@ -19,6 +23,9 @@ SUPPORTED_ARCHIVES = {
     ('1.10.12', 'linux-aarch64'):
         'cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2',
 }
+
+MAX_ARCHIVE_MEMBERS = 100_000
+MAX_EXTRACTED_SIZE = 4 * 1024 ** 3
 
 
 def _regular_file(path, label):
@@ -127,6 +134,117 @@ def probe_bubblewrap(executable):
     subprocess.run(command, check=True, capture_output=True, timeout=15,
                    env={'HOME': '/nonexistent', 'LC_ALL': 'C'})
     return str(executable)
+
+
+def _archive_profile(archive):
+    archive = _regular_file(archive, 'Julia archive')
+    actual = _file_digest(archive)
+    platform_name = 'linux-' + os.uname().machine.lower()
+    matches = [(version, expected) for (version, platform), expected
+               in SUPPORTED_ARCHIVES.items()
+               if platform == platform_name and expected == actual]
+    if len(matches) != 1:
+        supported = ', '.join(f'Julia {version} ({expected})'
+                              for (version, platform), expected in SUPPORTED_ARCHIVES.items()
+                              if platform == platform_name) or 'none'
+        raise ValueError(f'Archive SHA-256 {actual} does not match supported profiles for '
+                         f'{platform_name}: {supported}')
+    return archive, matches[0][0], platform_name, actual
+
+
+def _validated_archive_members(archive, expected_root):
+    bundle = tarfile.open(archive, mode='r:gz')
+    try:
+        members = bundle.getmembers()
+        if not members or len(members) > MAX_ARCHIVE_MEMBERS:
+            raise ValueError('Julia archive has an invalid member count')
+        expanded = 0
+        for member in members:
+            name = PurePosixPath(member.name)
+            if (name.is_absolute() or not name.parts or '..' in name.parts
+                    or name.parts[0] != expected_root):
+                raise ValueError('Julia archive contains a path outside its expected root')
+            if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+                raise ValueError('Julia archive contains an unsupported special file')
+            expanded += member.size
+            if expanded > MAX_EXTRACTED_SIZE:
+                raise ValueError('Julia archive exceeds the extracted size limit')
+            if member.issym() or member.islnk():
+                link = member.linkname
+                if not link or PurePosixPath(link).is_absolute():
+                    raise ValueError('Julia archive contains an unsafe link')
+                if member.issym():
+                    target = posixpath.normpath(posixpath.join(posixpath.dirname(member.name), link))
+                else:
+                    target = posixpath.normpath(link)
+                target_path = PurePosixPath(target)
+                if ('..' in target_path.parts or not target_path.parts
+                        or target_path.parts[0] != expected_root):
+                    raise ValueError('Julia archive link escapes its expected root')
+        return bundle, members
+    except Exception:
+        bundle.close()
+        raise
+
+
+def _harden_extracted_tree(root):
+    root = Path(root)
+    for path in [root, *root.rglob('*')]:
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            continue
+        if info.st_uid != os.getuid():
+            raise ValueError('Extracted Julia runtime contains a foreign-owned path')
+        os.chmod(path, stat.S_IMODE(info.st_mode) & ~0o022, follow_symlinks=False)
+
+
+def setup_archive(archive, setup_root, bubblewrap='/usr/bin/bwrap'):
+    archive, version, platform_name, _ = _archive_profile(archive)
+    bwrap = probe_bubblewrap(bubblewrap)
+    expected_root = f'julia-{version}'
+    bundle, members = _validated_archive_members(archive, expected_root)
+    try:
+        destination = _private_directory(setup_root)
+        runtime_parent = _private_directory(destination / 'runtime')
+        runtime_root = runtime_parent / expected_root
+        pending = destination / '.runtime-extract.pending'
+        if runtime_root.exists():
+            if (not runtime_root.is_dir() or runtime_root.is_symlink()
+                    or runtime_root.stat().st_uid != os.getuid()):
+                raise ValueError('Existing Julia runtime is not an owned directory')
+        else:
+            if pending.exists():
+                info = pending.lstat()
+                if (not stat.S_ISDIR(info.st_mode) or pending.is_symlink()
+                        or info.st_uid != os.getuid()):
+                    raise ValueError('Unsafe pending Julia extraction requires manual recovery')
+                shutil.rmtree(pending)
+            pending.mkdir(mode=0o700)
+            bundle.extractall(pending, members=members, filter='data')
+            extracted = pending / expected_root
+            if not extracted.is_dir() or extracted.is_symlink():
+                raise ValueError('Julia archive did not contain its expected runtime root')
+            _harden_extracted_tree(extracted)
+            if _runtime_version(extracted) != version:
+                raise ValueError('Extracted Julia executable version differs from archive profile')
+            extracted.rename(runtime_root)
+            pending.rmdir()
+            directory = os.open(runtime_parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    except Exception:
+        if ('pending' in locals() and pending.exists() and pending.is_dir()
+                and not pending.is_symlink()):
+            shutil.rmtree(pending)
+        raise
+    finally:
+        bundle.close()
+    result = setup_runtime(runtime_root, archive, destination, bwrap)
+    result['runtime'] = str(runtime_root)
+    result['archive'] = str(archive)
+    return result
 
 
 def setup_runtime(runtime_root, archive, setup_root, bubblewrap='/usr/bin/bwrap'):

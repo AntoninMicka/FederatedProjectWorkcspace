@@ -45,6 +45,26 @@ PR do `develop` dosud nebyl vytvořen ani sloučen.
   zveřejnění bindingu se reconciliují; odlišný binding se nepřepíše. Výsledek
   přiznává samostatnou GPG hranici a vrací konkrétní navazující `prepare`
   příkaz s vyplněnými lokálními cestami.
+- [x] [completed] **COMP-02-G — proveditelný onboarding runbook
+  (implemented; ad-hoc oprava).** Původní návod začínal až u neexistujících
+  `/opt` a `/srv` cest a míchal doporučený setup s nízkoúrovňovým generátorem.
+  Opravený jediný ARM64 průchod obsahuje kontrolu platformy a nástrojů,
+  konkrétní oficiální URL, checksum, fingerprint a oddělený GPG keyring,
+  uživatelské rozbalení, checkout i `.deb` variantu setupu, očekávaný výsledek,
+  hranici vůči UI a diagnostiku běžných chyb.
+- [x] [completed] **COMP-02-H — Omnia dostupnost runneru (implemented; ad-hoc
+  oprava).** Deployment bundle původně přenesl CLI bez jeho
+  `scripts.julia_runtime_binding` dependency a neinstaloval bubblewrap, takže
+  návod na LXC odkazoval na neúplný release. Plný deploy nyní přenáší oba
+  explicitně allowlistované moduly a instaluje bubblewrap/curl/GnuPG; runbook
+  začíná kontrolou skutečně dostupného `.deb`, LXC nebo checkout entrypointu a
+  u starého release bezpečně zastaví místo odkazu na neexistující skript.
+- [x] [completed] **COMP-02-I — onboarding přímo z archivu (implemented;
+  ad-hoc UX oprava).** `./run.sh julia-setup ARCHIV.tar.gz` nyní přijme jedinou
+  cestu, ověří připnutý profil, bounded obsah i bezpečné cesty/linky, rozbalí
+  runtime přes privátní pending adresář a atomický rename a vytvoří původní
+  immutable binding. Shodné opakování je idempotentní; pád před rename obnoví
+  extrakci a pád po rename dokončí binding bez přepsání odlišného stavu.
 
 ### Ověření, recovery a omezení
 
@@ -56,6 +76,9 @@ depot/state a bubblewrap namespace a opakování vrátilo `reused: true`.
 Závěrečný fyzický běh nad posledním kódem provedl další dva testy: skutečný
 výpočet a publikaci s oficiálním Julia 1.10.12 ARM64 runtime a samostatný
 bubblewrap pokus o síť, který byl odmítnut.
+Příkazy opraveného runbooku byly ověřeny proti skutečnému checksum manifestu,
+release fingerprintu, obsahu archivu a CLI `--help`; checksum vrátil `OK` a
+archiv obsahuje popsané `bin/julia` i `lib/julia/sys.so`.
 
 Archiv `julia-1.10.12-linux-aarch64.tar.gz` odpovídal zveřejněnému SHA-256
 `cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2` a jeho

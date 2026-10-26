@@ -6,6 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 import subprocess
+import sys
 import tarfile
 import unittest
 from types import SimpleNamespace
@@ -20,9 +21,18 @@ class DeployTests(unittest.TestCase):
             self.assertEqual(archive.getnames(), names)
             self.assertTrue(all(m.isfile() for m in archive))
         self.assertIn('spikes/workspace.py', names)
+        self.assertIn('spikes/julia_cli.py', names)
+        self.assertIn('scripts/julia_runtime_binding.py', names)
         self.assertIn('modules/publication-experiment-registry.module.json', names)
         self.assertIn('modules/publication-experiment-registry.source.json', names)
         self.assertFalse(any('private' in n or '.venv' in n or n.startswith('/') for n in names))
+        with tempfile.TemporaryDirectory() as tmp:
+            with tarfile.open(fileobj=io.BytesIO(data), mode='r:gz') as archive:
+                archive.extractall(tmp, filter='data')
+            result = subprocess.run([sys.executable, '-I', '-c',
+                'import sys; sys.path.insert(0, "."); import spikes.julia_cli'],
+                cwd=tmp, capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stderr)
 
     def test_dry_run_and_input_rejection_do_not_connect(self):
         with patch('sys.argv', ['deploy', 'root@example.invalid', '--dry-run']), patch('subprocess.run') as run, patch('builtins.print'):
@@ -34,6 +44,7 @@ class DeployTests(unittest.TestCase):
 
     def test_remote_shell_syntax_and_failure_propagation(self):
         script = deploy_omnia.remote_script('workspace-m0', 'a'*32)
+        self.assertIn('bubblewrap curl gnupg', script)
         subprocess.run(['sh', '-n'], input=script.encode(), check=True)
         subprocess.run(['sh', '-n'], input=deploy_omnia.install_script('a'*32).encode(), check=True)
         with patch('sys.argv', ['deploy', 'root@example.invalid']), patch('subprocess.run') as run:

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import tarfile
 import tempfile
 import threading
 import time
@@ -509,6 +510,70 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             binding = setup_root / 'binding.json'; binding.write_text('{}')
             self.assertEqual(2, julia_cli(arguments))
             self.assertEqual('{}', binding.read_text())
+
+    def test_setup_archive_extracts_and_binds_with_one_argument(self):
+        archive = self.base / 'julia.tar.gz'
+        with tarfile.open(archive, 'w:gz') as bundle:
+            bundle.add(self.runtime, arcname='julia-1.10.12')
+        setup_root = self.base / 'onboarding'
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()):
+                     digest(archive.read_bytes())}
+        arguments = ['setup-archive', '--archive', str(archive), '--root', str(setup_root)]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch.object(julia_runtime_binding, 'probe_bubblewrap',
+                             return_value='/usr/bin/bwrap'), \
+                patch('spikes.julia_cli._emit') as emit:
+            self.assertEqual(0, julia_cli(arguments))
+            result = emit.call_args.args[0]
+            runtime = setup_root / 'runtime' / 'julia-1.10.12'
+            self.assertEqual(runtime, Path(result['runtime']))
+            self.assertEqual(archive, Path(result['archive']))
+            self.assertTrue((runtime / 'bin' / 'julia').is_file())
+            self.assertTrue((setup_root / 'binding.json').is_file())
+            self.assertEqual(0, julia_cli(arguments))
+            self.assertTrue(emit.call_args.args[0]['reused'])
+            self.assertFalse((setup_root / '.runtime-extract.pending').exists())
+
+    def test_setup_archive_rejects_escape_before_writing(self):
+        archive = self.base / 'escape.tar.gz'
+        payload = self.base / 'payload'; payload.write_bytes(b'escape')
+        with tarfile.open(archive, 'w:gz') as bundle:
+            bundle.add(payload, arcname='../escape')
+        setup_root = self.base / 'onboarding'
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()):
+                     digest(archive.read_bytes())}
+        arguments = ['setup-archive', '--archive', str(archive), '--root', str(setup_root)]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch.object(julia_runtime_binding, 'probe_bubblewrap',
+                             return_value='/usr/bin/bwrap'), \
+                patch('spikes.julia_cli._emit'):
+            self.assertEqual(2, julia_cli(arguments))
+        self.assertFalse(setup_root.exists())
+
+    def test_setup_archive_reports_actual_and_supported_digests(self):
+        archive = self.base / 'other-version.tar.gz'; archive.write_bytes(b'other version')
+        actual = digest(archive.read_bytes())
+        expected = 'a' * 64
+        supported = {(self.VERSION, 'linux-' + os.uname().machine.lower()): expected}
+        arguments = ['setup-archive', '--archive', str(archive),
+                     '--root', str(self.base / 'onboarding')]
+        with patch.object(julia_runtime_binding, 'SUPPORTED_ARCHIVES', supported), \
+                patch('spikes.julia_cli._emit'), \
+                patch('sys.stderr') as stderr:
+            self.assertEqual(2, julia_cli(arguments))
+        message = ''.join(call.args[0] for call in stderr.write.call_args_list if call.args)
+        self.assertIn(actual, message)
+        self.assertIn(f'Julia {self.VERSION} ({expected})', message)
+
+    def test_run_wrapper_exposes_single_archive_setup(self):
+        launcher = Path(__file__).resolve().parents[1] / 'run.sh'
+        help_result = subprocess.run([str(launcher), 'help'], capture_output=True,
+                                     text=True, timeout=15)
+        self.assertEqual(0, help_result.returncode)
+        self.assertIn('julia-setup ARCHIV.tar.gz', help_result.stdout)
+        missing = subprocess.run([str(launcher), 'julia-setup'], capture_output=True,
+                                 text=True, timeout=15)
+        self.assertEqual(2, missing.returncode)
 
 
 @unittest.skipUnless(os.environ.get('M0_JULIA_RUNTIME_ROOT'),

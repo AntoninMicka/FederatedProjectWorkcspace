@@ -223,6 +223,7 @@ Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a závislosti z `requirements.tx
 
 ```sh
 ./run.sh setup                 # jednorázová příprava .venv a instalace závislostí
+./run.sh julia-setup /cesta/julia-1.10.12-linux-aarch64.tar.gz
 ./run.sh                       # dočasné storage demo (totéž jako ./run.sh demo)
 ./run.sh test                  # celá sada před předáním PR
 ./run.sh test tests.test_local_api  # cílený modul během vývoje
