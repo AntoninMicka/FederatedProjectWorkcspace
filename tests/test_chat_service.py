@@ -16,9 +16,10 @@ from spikes.atlascloud_backend import AtlasCloudCatalog, AtlasCloudRuns
 from spikes.autonomy_service import AutonomyService
 from spikes.chat_modes import ChatRunChoice
 from spikes.chat_service import ChatService, parse_search_evaluation
+from spikes.chat_threads import ChatThreads
 from spikes.external_dispatch import ExternalDispatches
 from spikes.external_proposal import ExternalCallProposal
-from spikes.configuration import read_config
+from spikes.configuration import parse_node, read_config
 from spikes.context_builder import ContextBuilder
 from spikes.metadata import ValidationError
 from spikes.ollama_backend import OllamaAdapter, OllamaRuns, UnknownRun
@@ -2309,6 +2310,35 @@ class ChatServiceTests(unittest.TestCase):
         self.assertEqual(status['thread_deletions'][0]['state'], 'completed')
         self.assertFalse(status['threads'])
 
+    def test_project_editor_recovers_delete_owned_by_another_account(self):
+        node_id = parse_node(read_config(self.node_path),
+                             location=self.node_path)['id']
+        storage_owner, editor = str(uuid4()), str(uuid4())
+        thread_id = str(uuid4())
+        ChatThreads(self.chat_state).create(
+            thread_id=thread_id, node_id=node_id, user_id=storage_owner,
+            created_at=NOW, project_id=ENTITY)
+        operation_id = str(uuid4())
+        with self.service.as_user(editor, project_ids=[ENTITY],
+                                  writable_project_ids=[ENTITY]):
+            preview = self.service.delete_thread_preview(thread_id=thread_id)
+            def crash(stage):
+                if stage == 'approvals': raise RuntimeError(stage)
+            with self.assertRaisesRegex(RuntimeError, 'approvals'):
+                self.service.delete_thread(
+                    thread_id=thread_id, operation_id=operation_id,
+                    expected_revision=preview['expected_revision'],
+                    preview_sha256=preview['preview_sha256'], checkpoint=crash)
+        restarted = ChatService(self.node_path, Projects(self.node_path),
+                                state_dir=self.chat_state)
+        with restarted.as_user(editor, project_ids=[ENTITY],
+                               writable_project_ids=[ENTITY]):
+            status = restarted.status()
+        self.assertEqual(operation_id,
+                         status['thread_deletions'][0]['operation_id'])
+        self.assertEqual('completed', status['thread_deletions'][0]['state'])
+        self.assertFalse(status['threads'])
+
     def test_followup_requires_explicit_ordered_selection(self):
         first = self.request(); result = self.service.send(**first)
         ids = [item['message_id'] for item in result['thread']['messages']]
@@ -2325,6 +2355,20 @@ class ChatServiceTests(unittest.TestCase):
                            selected_message_ids=list(reversed(ids)))
         with self.assertRaisesRegex(ValueError, 'thread order'):
             self.service.send(**bad)
+
+    def test_project_editor_continues_thread_owned_by_another_account(self):
+        node_id = parse_node(read_config(self.node_path),
+                             location=self.node_path)['id']
+        storage_owner, editor = str(uuid4()), str(uuid4())
+        request = self.request()
+        ChatThreads(self.chat_state).create(
+            thread_id=request['thread_id'], node_id=node_id,
+            user_id=storage_owner, created_at=NOW, project_id=ENTITY)
+        with self.service.as_user(editor, project_ids=[ENTITY],
+                                  writable_project_ids=[ENTITY]):
+            result = self.service.send(**request)
+        self.assertEqual(storage_owner, result['thread']['user_id'])
+        self.assertEqual(editor, result['thread']['messages'][0]['author_id'])
 
     def test_unknown_dispatch_is_durable_and_not_an_assistant_message(self):
         self.error = UnknownRun('lost response')

@@ -153,15 +153,19 @@ def parse_snapshot(raw):
 
 
 class ChatRecords:
-    def __init__(self, node_path, projects, *, state_dir=None):
+    def __init__(self, node_path, projects, *, state_dir=None, owner_id=None):
         self.node_path = Path(node_path).absolute()
         self.projects = projects
         self.state_dir = (Path(state_dir).absolute() if state_dir else
                           self.node_path.parent / ('.' + self.node_path.name + '.chat'))
+        if owner_id is not None:
+            uuid(owner_id)
+        self.owner_id = owner_id
 
     def _identity(self):
         node = parse_node(read_config(self.node_path), location=self.node_path)
-        return node['id'], ProjectCreation(self.node_path).author_id()
+        return (node['id'], self.owner_id
+                or ProjectCreation(self.node_path).author_id())
 
     def _threads(self):
         info = self.state_dir.stat()

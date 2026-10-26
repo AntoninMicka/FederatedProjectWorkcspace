@@ -9,8 +9,12 @@ SPDX-License-Identifier: MPL-2.0
 Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
-Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` je PoC validated na
-feature větvi a čeká na vlastní PR. Gate M3 jako celek zůstává otevřený.
+Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
+`F-M5-CHAT-HISTORY-01` je po neúspěšné fyzické kontrole znovu aktivní:
+projektové chaty používají tutéž obousměrnou obsahovou synchronizaci, jsou RW
+a při divergenci vytvoří zapisovatelný fork, ale výsledek musí být v UI jasně
+viditelný. Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává
+otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
 [WORK_LOG.md](WORK_LOG.md); pravidla vývoje v [AGENTS.md](AGENTS.md). Jedna
@@ -1344,13 +1348,17 @@ akceptovaný `F-M5-SHARING-SYNC-01` už poskytují obousměrný katalog i Git sy
 pro `same-team` a `same-company`, bezpečně obnovují přenos po restartu a
 zachovávají divergenci. Fyzicky akceptované `F-M5-CONFLICT-RESOLUTION-01`
 umožňuje ruční validované řešení a následný sync dvourodičového commitu;
-external export, kvalifikované identity a chat zůstávají otevřené, takže Gate
-M5 není uzavřený.
+aktivní `F-M5-CHAT-HISTORY-01` rozšiřuje tutéž obousměrnou operaci o RW
+projektová workspace vlákna s forkem při divergenci. External export,
+kvalifikované identity a federovaný lidský chat zůstávají otevřené, takže
+Gate M5 není uzavřený.
 
 - [ ] Node identity.
 - [ ] Trust.
 - [ ] Úrovně `same-team` / `same-company` / `external` oddělené od topologie, peer trust state a explicitních project/branch oprávnění.
 - [x] Git sync — interní obousměrný přenos PoC validated v `F-M5-SHARING-SYNC-01`.
+- [ ] Projektové workspace chaty v témže sync — aktivní
+  `F-M5-CHAT-HISTORY-01`, čeká fyzická reakceptace viditelného výsledku.
 - [ ] Shared users.
 - [ ] Federovaný uživatelský chat s offline doručením.
 - [ ] Volitelný interní XMPP adaptér pro federovaný chat povolit pouze pro přesné

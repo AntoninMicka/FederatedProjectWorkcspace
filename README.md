@@ -308,6 +308,7 @@ Vyžaduje kontrolovaný repozitář s existujícím commitem na běžné větvi,
 - [Architektura](ARCHITECTURE.md)
 - [Datový model](DATA_MODEL.md)
 - [Federace a konfliktové UI](FEDERATION.md)
+- [Synchronizace projektových chatů](docs/project-chat-sync.md)
 - [Bezpečnost](SECURITY.md)
 - [Katalog reuse](REUSE_CATALOG.md)
 - [Compliance evidence](docs/legal/COMPLIANCE.md)

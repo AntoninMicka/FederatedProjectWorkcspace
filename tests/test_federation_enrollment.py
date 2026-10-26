@@ -12,10 +12,14 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from spikes.administration import Administration, AccessDenied
+from spikes.chat_threads import ChatThreads
 from spikes.federation_accounts import MappingSignatures
 from spikes.federation_enrollment import enroll
+from spikes.federation_sync import ContentSyncControl, synchronize
 from spikes.network_backend import private_root
 from spikes.project_creation import ProjectCreation
+from spikes.project_chat_sync import chat_root
+from spikes.projects import Projects
 from spikes.web_server import make_server
 
 
@@ -27,8 +31,9 @@ class FederationEnrollmentTests(unittest.TestCase):
         self.client_node = self.root / 'client-node.json'
         ProjectCreation(self.server_node).create(
             'Server seed', self.root / 'server-project', str(uuid4()))
-        ProjectCreation(self.client_node).create(
+        client = ProjectCreation(self.client_node).create(
             'Client seed', self.root / 'client-project', str(uuid4()))
+        self.client_project_id = client['id']
         self.server_admin = Administration(self.server_node)
         self.client_admin = Administration(self.client_node, deployment='desktop')
         self.system_actor = {'id': None, 'node_role': 'federation-admin',
@@ -142,6 +147,53 @@ class FederationEnrollmentTests(unittest.TestCase):
         self.assertEqual(len(result['peers']), 1)
         self.assertEqual(result['peers'][0]['trust'], 'approved')
         self.assertEqual(len(self.state(self.server_admin)['peers']), 1)
+
+    def test_enrollment_binding_automatically_maps_project_chat(self):
+        enroll(self.client_node, self.server_id, self.access_key,
+               operation_id=str(uuid4()), ca=self.cert)
+        synchronize(self.client_node, self.server_id, self.client_project_id,
+                    deployment='desktop', ca=self.cert)
+        self.assertIn(self.client_project_id,
+                      {item['id'] for item in Projects(self.server_node).catalog()})
+        state = self.state(self.server_admin)
+        self.server_admin.request(self.system_actor, {
+            'action': 'update-user', 'expected_commit': state['commit_id'],
+            'user_id': self.server_user, 'active': True, 'node_role': 'member',
+            'memberships': {self.client_project_id: 'editor'},
+        })
+        client_state = self.state(self.client_admin)
+        client_user = ProjectCreation(self.client_node).author_id()
+        thread_id, turn_id, run_id = (str(uuid4()) for _ in range(3))
+        chat_state = chat_root(self.client_node)
+        chat_state.mkdir(mode=0o700, exist_ok=True)
+        chats = ChatThreads(chat_state)
+        chats.create(thread_id=thread_id, node_id=client_state['node_id'],
+                     user_id=client_user, created_at='2026-10-26T14:00:00Z',
+                     project_id=self.client_project_id)
+        chats.prepare_turn(
+            thread_id=thread_id, node_id=client_state['node_id'],
+            user_id=client_user, turn_id=turn_id, message_id=str(uuid4()),
+            content='Enrollment mapping', privacy='project',
+            created_at='2026-10-26T14:00:01Z')
+        chats.bind_run(turn_id=turn_id, node_id=client_state['node_id'],
+                       user_id=client_user, run_id=run_id)
+        chats.complete(
+            turn_id=turn_id, node_id=client_state['node_id'],
+            user_id=client_user, run_id=run_id, message_id=str(uuid4()),
+            content='Automatically synchronized', privacy='project',
+            created_at='2026-10-26T14:00:02Z')
+        synchronize(self.client_node, self.server_id, self.client_project_id,
+                    deployment='desktop', ca=self.cert)
+        server_state = self.state(self.server_admin)
+        received = ChatThreads(chat_root(self.server_node)).get(
+            thread_id, server_state['node_id'], self.server_user)
+        self.assertEqual(received['messages'][-1]['content'],
+                         'Automatically synchronized')
+        status = ContentSyncControl(
+            self.client_node, deployment='desktop').statuses()[
+                self.server_id + ':' + self.client_project_id]
+        self.assertEqual(status['chat_summary'], {
+            'shared': 1, 'received': 1, 'active_mappings': 1})
 
 
 if __name__ == '__main__':

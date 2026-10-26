@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/plan-task-graph-01` z `develop` `64e2045` po
 doručení PR #99. Dosáhla úrovně **PoC validated**. Feature akceptace je
-dokončená; PR do `develop` zatím nebyl vytvořen ani sloučen.
+dokončená a byla doručena PR #100 jako squash commit `3c0b675`.
 
 - [x] [completed] **PLAN-TASK-GRAPH-01-A — verzovaný kontrakt úkolů a vztahů
   (implemented).** Omezená Markdown syntaxe váže každý checkbox na stabilní

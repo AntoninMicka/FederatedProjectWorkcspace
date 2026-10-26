@@ -173,7 +173,7 @@ class ChatThreadTests(unittest.TestCase):
             ChatThreads(self.state).connect()
         self.store.path.chmod(0o600)
         with sqlite3.connect(self.store.path) as db:
-            db.execute('UPDATE schema_info SET version=6')
+            db.execute('UPDATE schema_info SET version=7')
         with self.assertRaisesRegex(ValidationError, 'version'):
             ChatThreads(self.state).connect()
 
@@ -224,6 +224,8 @@ class ChatThreadTests(unittest.TestCase):
             db.execute('ALTER TABLE threads DROP COLUMN assignment_revision')
             db.execute('ALTER TABLE threads DROP COLUMN project_id')
             db.execute('ALTER TABLE threads DROP COLUMN response_language')
+            db.execute('ALTER TABLE threads DROP COLUMN forked_from_digest')
+            db.execute('ALTER TABLE threads DROP COLUMN forked_from_thread_id')
             db.execute('ALTER TABLE turns DROP COLUMN manifest_id')
             db.execute('ALTER TABLE turns DROP COLUMN response_language')
             db.execute('ALTER TABLE turns DROP COLUMN language_source')
@@ -237,7 +239,7 @@ class ChatThreadTests(unittest.TestCase):
                                  manifest_id=manifest_id)
         self.assertEqual(turn['manifest_id'], manifest_id)
         with sqlite3.connect(self.store.path) as db:
-            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (5,))
+            self.assertEqual(db.execute('SELECT version FROM schema_info').fetchone(), (6,))
 
     def test_thread_and_turn_language_provenance_survive_restart(self):
         thread = self.store.set_response_language(
@@ -256,6 +258,19 @@ class ChatThreadTests(unittest.TestCase):
             restarted.set_response_language(
                 thread_id=self.thread_id, node_id=self.node_id, user_id=self.user_id,
                 language='en-US', expected_revision=0)
+
+    def test_v5_store_migrates_nullable_fork_provenance(self):
+        with sqlite3.connect(self.store.path) as db:
+            db.execute('UPDATE schema_info SET version=5')
+            db.execute('ALTER TABLE threads DROP COLUMN forked_from_digest')
+            db.execute('ALTER TABLE threads DROP COLUMN forked_from_thread_id')
+        migrated = ChatThreads(self.state).get(
+            self.thread_id, self.node_id, self.user_id)
+        self.assertIsNone(migrated['forked_from_thread_id'])
+        self.assertIsNone(migrated['forked_from_digest'])
+        with sqlite3.connect(self.store.path) as db:
+            self.assertEqual(db.execute(
+                'SELECT version FROM schema_info').fetchone(), (6,))
 
 
 if __name__ == '__main__':

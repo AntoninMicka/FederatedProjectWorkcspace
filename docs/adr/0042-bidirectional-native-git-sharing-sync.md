@@ -9,6 +9,10 @@ Datum: 2026-10-23. Stav: přijato a implementováno v
 `F-M5-SHARING-SYNC-01`; automatické ověření prošlo, fyzická desktop ↔ LXC
 akceptace obou směrů, návratu po restartu a zachování divergence prošla.
 
+Doplnění 2026-10-26: ADR 0056 rozšiřuje tutéž obousměrnou operaci a její
+durable journal o projektová RW chatová vlákna. Git pravidla níže se nemění;
+chatový payload má vlastní fast-forward/fork strategii.
+
 ## Kontext a rozsah
 
 Katalog z ADR 0041 oznamuje jen UUID a název projektu. ADR 0040 požaduje pro

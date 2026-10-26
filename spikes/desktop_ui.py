@@ -2741,7 +2741,10 @@ async function loadProjects(selectedId=null){
  }catch(error){if(request===catalogRequest){projectStatus.textContent=error.message;document.querySelector('#sidebar-project-status').textContent='Seznam není dostupný.';}}
 }
 document.querySelector('#projects-tab').addEventListener('click',()=>loadProjects());
-document.querySelector('#chats-tab').addEventListener('click',()=>{if(!activeProject)loadChat();});
+document.querySelector('#chats-tab').addEventListener('click',()=>loadChat());
+document.addEventListener('contentsynccompleted',event=>{
+ if(activeProject?.id===event.detail?.projectId)loadChat();
+});
 document.querySelector('#sidebar-register-project').addEventListener('click',()=>{
  document.querySelector('#sidebar-project-import-options').hidden=true;
  document.querySelector('#sidebar-import-project').setAttribute('aria-expanded','false');
@@ -4442,7 +4445,7 @@ function renderThreadMessage(item,thread){
     finally{requestButton.disabled=false;}
    });
    message.append(requestButton);
-  }else if(turn?.run_id){
+ }else if(turn?.run_id && turn.runtime_evidence_available!==false){
    const runtimeButton=document.createElement('button');runtimeButton.type='button';
    runtimeButton.className='secondary-button';runtimeButton.textContent='Runtime běhu';
    runtimeButton.addEventListener('click',async()=>{
@@ -4498,10 +4501,10 @@ function renderThreadList(threads){
   row.className='sidebar-list-row sidebar-chat-row';button.className='sidebar-list-main sidebar-chat-open';
   button.dataset.threadId=thread.thread_id;
   button.setAttribute('aria-current',String(activeThread?.thread_id===thread.thread_id));
-  button.textContent=`${thread.classification} · ${thread.status}`;
+  button.textContent=`${thread.classification} · ${thread.status}${thread.forked_from_thread_id?' · fork':''}`;
   const meta=document.createElement('small');meta.className='sidebar-chat-meta';
   const project=thread.project_id===activeProject?.id?'tento projekt':'jiný projekt';
-  meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}`;
+  meta.textContent=`${thread.messages.length} zpráv${thread.project_id===null?'':` · ${project}`}${thread.forked_from_thread_id?` · konflikt ${thread.forked_from_thread_id.slice(0,8)}`:''}`;
   button.append(meta);button.addEventListener('click',()=>openStoredThread(thread.thread_id));
   const menu=document.createElement('details');menu.className='sidebar-item-menu sidebar-chat-menu';
   const trigger=document.createElement('summary');trigger.setAttribute('aria-label',`Akce chatu ${thread.classification}`);trigger.textContent='⋮';
@@ -4526,10 +4529,11 @@ function renderThreadList(threads){
   menu.append(trigger,items);row.append(button,menu);group.append(row);
   }
  }
- branch('Zařazené',assigned);branch('Nezařazené',unassigned);
+ branch('Projektová vlákna',assigned);
+ branch('Nezařazená · pouze tento uzel',unassigned);
  const assignedCount=assigned.length,unassignedCount=unassigned.length;
  document.querySelector('#sidebar-chat-status').textContent=assignedCount||unassignedCount?
-  `${assignedCount} zařazených · ${unassignedCount} nezařazených`:
+  `${assignedCount} projektových · ${unassignedCount} lokálních nezařazených`:
   (activeProject?'Tento projekt nemá žádná přiřazená ani dostupná nezařazená vlákna.':'Zatím tu nejsou žádná nezařazená vlákna.');
 }
 function rememberThread(thread){

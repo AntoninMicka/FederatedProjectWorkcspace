@@ -59,6 +59,14 @@ validují proti autoritativním Markdown dokumentům. Serverový SVG renderer
 slouží statickému exportu připnutému na tutéž revizi. Rozhodnutí a fail-closed
 hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
+F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
+`federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.
+Projektová historie je druhý bounded payload téže sync operace a po přesném
+překladu vlastníka vstupuje do běžného RW chatu. Divergence používá
+deterministický fork; samostatný endpoint, read-only read model, nový message
+broker ani externí sync framework se odmítají. Crash boundaries a omezení drží
+[ADR 0056](docs/adr/0056-project-chat-rw-sync.md).
+
 M0-02 adaptuje omezený JSON parser a UUID/timestamp validaci z `spikes/metadata.py`; schéma konfigurace přidává v `spikes/configuration.py`. Sdílené primitivy omezují rozcházení pravidel s artefakty; další parser ani závislost nejsou potřeba.
 
 M0-03 adaptuje existující storage/index testovací scénáře; C++ probe je nová minimální testovací vazba přímo na libgit2, nikoli kopie cizího adapteru. Důvod zachování Git CLI a náklady případného přenosu koordinace jsou v [ADR 0005](docs/adr/0005-git-adapter-comparison.md).

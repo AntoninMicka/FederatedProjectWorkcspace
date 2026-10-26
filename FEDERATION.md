@@ -49,6 +49,18 @@ explicitní Workspace publikace s preview, provenance a zděděnou privacy.
 
 Stavy UI: offline, připraveno, přenos, vyžaduje rozhodnutí, synchronizováno, odmítnuto. Zobrazit poslední úspěšnou synchronizaci a čekající lokální změny.
 
+## Projektové chaty v obsahové synchronizaci
+
+Podle [ADR 0056](docs/adr/0056-project-chat-rw-sync.md) přenáší tatáž
+obousměrná content-sync operace nativní Git historii i projektová workspace
+vlákna přes autorizovanou vazbu účtů. Na cíli jsou součástí běžného
+`ChatThreads` a jejich viditelnost i zápis se řídí projektovým RBAC, ne účtem
+použitým pro transport. Souběžná divergence vytvoří deterministický zapisovatelný
+fork místo přepsání jedné verze. `local-only`, rozpracované a nezařazené chaty
+zůstávají lokální; credentials a run journal se nepřenášejí. Praktický postup
+je v [návodu](docs/project-chat-sync.md). Federovaný lidský chat
+`F-M5-CHAT-01` tím není dokončený.
+
 ## Scénář konfliktu
 
 1. Desktop i server mají společný commit a tutéž entitu.

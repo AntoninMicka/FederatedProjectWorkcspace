@@ -497,6 +497,9 @@ class WebHandler(DesktopHandler):
         if self.path in {'/v1/chat/send', '/v1/chat/send-stream'}:
             if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
                 return self.send_error(403)
+        if self.path in {'/v1/chat/assign', '/v1/chat/snapshot', '/v1/chat/output'}:
+            if not isinstance(request, dict) or not self._can_write(request.get('project_id')):
+                return self.send_error(403)
         if self.path.startswith('/v1/publication-cms/'):
             if not self.server.administration.is_admin(self.actor):
                 return self.send_error(403)
@@ -528,7 +531,19 @@ class WebHandler(DesktopHandler):
             return super().dispatch(request)
         if self.path == '/v1/sources/import':
             return self._import_source(request)
-        return super().dispatch(request)
+        # Desktop calls retain the node-local author. Network requests bind the
+        # authenticated account only for this request, including streamed chat.
+        project_ids = ({item['id'] for item in self.server.projects.catalog()}
+                       if self.server.administration.is_admin(self.actor) else
+                       set(self.actor.get('memberships', {})))
+        writable_project_ids = (project_ids if self.server.administration.is_admin(self.actor)
+            else {project_id for project_id, role in
+                  self.actor.get('memberships', {}).items()
+                  if role in {'editor', 'project-admin'}})
+        with self.server.chat_service.as_user(
+                self.actor.get('id'), project_ids=project_ids,
+                writable_project_ids=writable_project_ids):
+            return super().dispatch(request)
 
     def _do_GET(self):
         if self.request_authority() is None:
