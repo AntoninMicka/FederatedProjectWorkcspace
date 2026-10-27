@@ -91,14 +91,16 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
-`b104843`; evidence je ve WORK_LOG. `COMP-02` je akceptována na úrovni PoC
-validated, čeká na doručení PR a její evidence je ve WORK_LOG; backlog ji
-nedrží jako druhý stavový záznam.
+`b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako
+commit `507c232`; evidence je ve WORK_LOG a backlog ji nedrží jako druhý
+stavový záznam.
 
-Po doručení `COMP-02` následují podle uživatelem aktualizovaného pořadí
-`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
-Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
-zůstává samostatnou feature dávkou a vlastním PR.
+`COMP-03` probíhá na samostatné větvi. Po jeho doručení lze paralelně
+realizovat `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`;
+`PLAN-TASK-EDITOR-01` závisí na obou. Teprve poté následují podle uživatelem
+aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává
+samostatnou feature dávkou a vlastním PR; paralelní realizace neznamená
+společnou větev ani stacked PR bez dalšího výslovného rozhodnutí.
 
 - [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
   PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
@@ -113,8 +115,44 @@ zůstává samostatnou feature dávkou a vlastním PR.
   `Workspace` operaci s provenance. Otevření projektu, status ani změna
   parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
   publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
-  podporovaném ARM64 runtime, nikoli editor Julia kódu, Pluto/Jupyter,
-  automatický scheduler, síťové/GPU výpočty ani instalaci balíčků.
+  podporovaném ARM64 runtime. Uživatelské rozšíření na téže větvi přidává
+  editor Julia modelu pod Nástroje; pozdější migraci jeho textových ploch na
+  společný raw widget drží `DOC-PATTERN-CATALOG-01`. Mimo rozsah zůstává
+  Pluto/Jupyter, automatický scheduler, síťové/GPU výpočty a instalace balíčků.
+
+- [ ] [planned] **DOC-PATTERN-CATALOG-01 — katalog textových vzorů a sdílený
+  raw editor (cílová úroveň: implemented; větev
+  `feature/doc-pattern-catalog-raw-editor`).** Závisí na doručení `COMP-03`
+  kvůli migraci Julia authoringu. Implementovat jeden storage-agnostic raw
+  widget, uzavřený registr typových adaptérů a vestavěný katalog pro obecný
+  Markdown, úkol/plán, prezentaci a Julia. Typ filtruje vzory; komentářové
+  výplně se použijí jen v syntaxích, které komentář podporují. Vložení nic
+  neukládá ani nespouští. Adaptér zachová existující Workspace/journal
+  operaci, expected HEAD, privacy, read-only a retry/receipt. Akceptace zahrne
+  dirty guard, validaci, bezpečné zobrazení, klávesnici/mobil, raw režim
+  prezentace a nahrazení textových ploch Julia editoru bez přesunu z Nástrojů.
+
+- [ ] [planned] **PLAN-FILE-HIERARCHY-01 — profilovaný souborový plán
+  (cílová úroveň: implemented; větev
+  `feature/plan-file-hierarchy`).** Lze realizovat paralelně s
+  `DOC-PATTERN-CATALOG-01`. Rozšířit ADR 0055 o explicitní include bundle
+  Markdown document artefaktů, jedinou kanonickou definici každého ID a
+  uzavřené profily. Softwarový profil v1 vynutí `milestone → batch → task`;
+  batch je jedna větev/PR, task leaf jednotka normálně pro jeden commit.
+  Podgraf zůstává selektorem ID. Akceptace pokryje stejný i externí soubor,
+  duplicate/unknown/include/rekurzi, hierarchický a dependency cyklus, stale
+  HEAD, privacy/read-only a deterministickou projekci bez DB autority.
+
+- [ ] [planned] **PLAN-TASK-EDITOR-01 — lossless editor úkolů z widgetů
+  (cílová úroveň: implemented; větev
+  `feature/plan-task-editor`).** Závisí na dokončení
+  `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`. Materializovat známé
+  bloky do „lego“ widgetů pro typ, ID, stav, popis, hierarchii a kanonické
+  vztahy. Nové bloky vkládat z katalogu. Raw text zůstává fallback a editor
+  smí měnit pouze vlastněné spany; neznámý obsah, komentáře, pořadí a
+  whitespace se nesmějí ztratit. První verze edituje jeden soubor bundle a
+  odmítne nebezpečný round-trip; nový task store ani implicitní přesun mezi
+  soubory nevznikne.
 
 ## Zjištěné mezery a navazující ověření
 
