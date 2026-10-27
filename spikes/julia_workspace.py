@@ -2,22 +2,54 @@
 # SPDX-License-Identifier: MPL-2.0
 """Shared Workspace projection and explicit control for the existing Julia runner."""
 import base64
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import stat
 import subprocess
 import threading
+import tomllib
+from uuid import uuid4
 
 from spikes.configuration import parse_node, read_config
 from spikes.julia_computation import JuliaExecutor, validate_computation
-from spikes.metadata import (MAX_METADATA, parse_json, require, safe_path, uuid,
+from spikes.metadata import (MAX_FILE, MAX_METADATA, parse_json, require, safe_path, uuid,
                              validate_snapshot)
-from spikes.output_execution import digest
+from spikes.output_execution import canonical, digest
 from spikes.project_creation import ProjectCreation
 
 
 PREVIEW_BYTES = 512 * 1024
+EDITOR_BYTES = 1024 * 1024
+JULIA_TEMPLATE = '''using SHA
+
+function argument(name)
+    index = findfirst(==(name), ARGS)
+    index === nothing && error("Chybi argument " * name)
+    return ARGS[index + 1]
+end
+
+output = argument("--fpw-output")
+raw = "Vypocet Julia probehl.\\n"
+write(joinpath(output, "result.txt"), raw)
+sha = bytes2hex(SHA.sha256(raw))
+manifest = "{\\\"outputs\\\":[{\\\"kind\\\":\\\"report\\\",\\\"media_type\\\":\\\"text/plain\\\",\\\"name\\\":\\\"result\\\",\\\"path\\\":\\\"result.txt\\\",\\\"sha256\\\":\\\"$(sha)\\\",\\\"size\\\":$(ncodeunits(raw))}],\\\"schema\\\":\\\"fpw-julia-result-v1\\\"}"
+write(joinpath(output, "fpw-julia-result-v1.json"), manifest)
+'''
+PROJECT_TEMPLATE = '[deps]\n'
+MANIFEST_TEMPLATE = '''# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.10.12"
+manifest_format = "2.0"
+project_hash = "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+
+[deps]
+'''
+POLICY_TEMPLATE = {'network': 'deny', 'timeout_ms': 30_000, 'cpu_threads': 1,
+                   'max_processes': 16, 'memory_bytes': 2 * 1024 * 1024 * 1024,
+                   'output_bytes': 1024 * 1024, 'output_files': 8,
+                   'stdout_bytes': 64 * 1024, 'stderr_bytes': 64 * 1024}
 
 
 def default_runtime_root():
@@ -116,11 +148,169 @@ class JuliaWorkspaceService:
                 continue
             if not self.projects.network or self._network_safe(
                     computation, reference, entities):
-                result.append({'definition': reference, 'computation': computation})
+                ids = {reference['artifact_id'], computation['entrypoint']['artifact_id'],
+                       safe_path(computation['environment']['project_path'])[1],
+                       safe_path(computation['environment']['manifest_path'])[1]}
+                editable = all(entities.get(value, {}).get('kind') == 'document'
+                               and entities[value].get('provenance') == 'user'
+                               for value in ids)
+                result.append({'definition': reference, 'computation': computation,
+                               'editable': editable})
         require(git.head() == expected_head,
                 'Project changed during Julia projection')
         return {'schema': 'fpw-julia-workspace-v1', 'project_id': project_id,
                 'project_commit': expected_head, 'definitions': result}
+
+    @staticmethod
+    def _editor_text(value, label, maximum=EDITOR_BYTES):
+        require(isinstance(value, str) and '\0' not in value
+                and len(value.encode()) <= maximum, f'Invalid {label}')
+        return value
+
+    @staticmethod
+    def _artifact(files, entities, artifact_id, filename=None):
+        uuid(artifact_id); item = entities.get(artifact_id)
+        require(item is not None and item['kind'] == 'document'
+                and item['provenance'] == 'user', 'Julia editor artifact is not editable')
+        name = filename or item.get('file')
+        path = f'artifacts/{artifact_id}/{name}'
+        require(item.get('file') == name and path in files,
+                'Julia editor artifact content is missing')
+        return item, path, files[path]
+
+    def editor_open(self, project_id, expected_head, definition_path=None):
+        uuid(project_id); git = self.projects.repository(project_id)
+        require(git.head() == expected_head, 'Project changed before Julia editor open')
+        if definition_path is None:
+            ids = {name: str(uuid4()) for name in ('model', 'project', 'manifest', 'definition')}
+            return {'schema': 'fpw-julia-editor-v1', 'project_id': project_id,
+                    'base_head': expected_head, 'new': True, 'artifact_ids': ids,
+                    'title': 'Nový Julia výpočet', 'privacy': 'project',
+                    'julia_code': JULIA_TEMPLATE, 'project_toml': PROJECT_TEMPLATE,
+                    'manifest_toml': MANIFEST_TEMPLATE, 'parameters': [],
+                    'outputs': [{'name': 'result', 'kind': 'report',
+                        'media_type': 'text/plain', 'required': True,
+                        'max_bytes': 64 * 1024}],
+                    'execution_policy': dict(POLICY_TEMPLATE)}
+        computation, reference, entities = self._definition(git, expected_head, definition_path)
+        files = git.snapshot(expected_head)
+        definition, _, _ = self._artifact(files, entities, reference['artifact_id'], 'computation.json')
+        model, _, code = self._artifact(files, entities, computation['entrypoint']['artifact_id'], 'model.jl')
+        project_id_ = safe_path(computation['environment']['project_path'])[1]
+        manifest_id = safe_path(computation['environment']['manifest_path'])[1]
+        project, _, project_raw = self._artifact(files, entities, project_id_, 'Project.toml')
+        manifest, _, manifest_raw = self._artifact(files, entities, manifest_id, 'Manifest.toml')
+        require(len({definition['privacy'], model['privacy'], project['privacy'], manifest['privacy']}) == 1,
+                'Julia editor bundle has mixed privacy')
+        require(not self.projects.network or definition['privacy'] != 'local-only',
+                'Local-only Julia computation is unavailable over the network')
+        return {'schema': 'fpw-julia-editor-v1', 'project_id': project_id,
+                'base_head': expected_head, 'new': False,
+                'definition_path': definition_path,
+                'artifact_ids': {'model': model['id'], 'project': project['id'],
+                    'manifest': manifest['id'], 'definition': definition['id']},
+                'title': computation['title'], 'privacy': definition['privacy'],
+                'julia_code': code.decode(), 'project_toml': project_raw.decode(),
+                'manifest_toml': manifest_raw.decode(),
+                'parameters': computation['parameters'], 'outputs': computation['outputs'],
+                'execution_policy': computation['execution_policy']}
+
+    def editor_save(self, request, *, user_id=None):
+        required = {'operation_id', 'project_id', 'base_head', 'new', 'artifact_ids',
+                    'title', 'privacy', 'julia_code', 'project_toml', 'manifest_toml',
+                    'parameters', 'outputs', 'execution_policy'}
+        require(isinstance(request, dict) and set(request) == required,
+                'Invalid Julia editor request')
+        uuid(request['operation_id']); uuid(request['project_id'])
+        require(type(request['new']) is bool and isinstance(request['base_head'], str),
+                'Invalid Julia editor revision')
+        ids = request['artifact_ids']
+        require(isinstance(ids, dict) and set(ids) == {'model', 'project', 'manifest', 'definition'},
+                'Invalid Julia editor artifact IDs')
+        for value in ids.values(): uuid(value)
+        require(len(set(ids.values())) == 4, 'Julia editor artifact IDs must differ')
+        title = self._editor_text(request['title'], 'Julia title', 200).strip()
+        require(title and '\n' not in title and '\r' not in title, 'Invalid Julia title')
+        require(request['privacy'] in {'public', 'project', 'confidential', 'local-only'},
+                'Invalid Julia privacy')
+        code = self._editor_text(request['julia_code'], 'Julia code').encode()
+        project_raw = self._editor_text(request['project_toml'], 'Julia Project.toml').encode()
+        manifest_raw = self._editor_text(request['manifest_toml'], 'Julia Manifest.toml').encode()
+        require(code and len(code) <= MAX_FILE, 'Julia code is empty or oversized')
+        try:
+            project_value = tomllib.loads(project_raw.decode())
+            manifest_value = tomllib.loads(manifest_raw.decode())
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+            raise ValueError('Project.toml or Manifest.toml is invalid') from exc
+        require(isinstance(project_value, dict) and isinstance(manifest_value, dict)
+                and manifest_value.get('julia_version') == '1.10.12'
+                and isinstance(manifest_value.get('manifest_format'), str)
+                and isinstance(manifest_value.get('project_hash'), str),
+                'Manifest must be generated for Julia 1.10.12')
+        model_path = f'artifacts/{ids["model"]}/model.jl'
+        project_path = f'artifacts/{ids["project"]}/Project.toml'
+        manifest_path = f'artifacts/{ids["manifest"]}/Manifest.toml'
+        definition_path = f'artifacts/{ids["definition"]}/computation.json'
+        workspace = self.projects.workspace(request['project_id'])
+        actor = user_id or ProjectCreation(self.node_path).author_id(); uuid(actor)
+
+        def prepare(ws):
+            head = ws.git.head()
+            require(head == request['base_head'],
+                    'Project changed; preserve the Julia draft and reopen the editor')
+            files = ws.git.snapshot(head); entities = validate_snapshot(files)
+            if request['new']:
+                require(not set(ids.values()) & set(entities), 'Julia artifact ID already exists')
+            else:
+                current, reference, _ = self._definition(ws.git, head, definition_path)
+                require(reference['artifact_id'] == ids['definition']
+                        and current['entrypoint']['artifact_id'] == ids['model']
+                        and safe_path(current['environment']['project_path'])[1] == ids['project']
+                        and safe_path(current['environment']['manifest_path'])[1] == ids['manifest'],
+                        'Julia editor bundle changed')
+                for key, filename in (('model', 'model.jl'), ('project', 'Project.toml'),
+                                      ('manifest', 'Manifest.toml'),
+                                      ('definition', 'computation.json')):
+                    self._artifact(files, entities, ids[key], filename)
+            model_oid = ws.git.run('hash-object', '--stdin', binary=True, input=code).stdout.decode().strip()
+            computation = {'schema': 'fpw-julia-computation-v1',
+                'computation_id': ids['definition'], 'title': title,
+                'entrypoint': {'artifact_id': ids['model'], 'path': model_path,
+                    'git_blob': model_oid, 'sha256': digest(code)},
+                'environment': {'project_path': project_path,
+                    'project_sha256': digest(project_raw), 'manifest_path': manifest_path,
+                    'manifest_sha256': digest(manifest_raw), 'julia_compat': '1.10.12'},
+                'inputs': [], 'parameters': request['parameters'],
+                'outputs': request['outputs'], 'execution_policy': request['execution_policy']}
+            computation = validate_computation(computation)
+            now = datetime.now(timezone.utc).isoformat(timespec='microseconds').replace('+00:00', 'Z')
+            changes = {model_path: code, project_path: project_raw,
+                       manifest_path: manifest_raw, definition_path: canonical(computation)}
+            labels = {'model': title + ' – Julia kód', 'project': title + ' – Project.toml',
+                      'manifest': title + ' – Manifest.toml', 'definition': title}
+            for key, filename in (('model', 'model.jl'), ('project', 'Project.toml'),
+                                  ('manifest', 'Manifest.toml'),
+                                  ('definition', 'computation.json')):
+                meta_path = f'artifacts/{ids[key]}/metadata.json'
+                created = entities.get(ids[key], {}).get('created_at', now)
+                metadata = {'schema_version': 1, 'id': ids[key], 'title': labels[key],
+                    'kind': 'document', 'created_at': created, 'author_id': actor,
+                    'privacy': request['privacy'], 'provenance': 'user', 'file': filename,
+                    'tags': ['julia-model-v1', 'julia-' + key]}
+                if not request['new']:
+                    previous = entities[ids[key]]
+                    metadata['author_id'] = previous['author_id']
+                changes[meta_path] = (json.dumps(metadata, ensure_ascii=False,
+                    sort_keys=True, indent=2) + '\n').encode()
+            candidate = dict(files); candidate.update(changes); validate_snapshot(candidate)
+            return changes, 'Workspace Julia editor', actor + '@local.invalid', (
+                'Create Julia computation' if request['new'] else 'Update Julia computation')
+
+        receipt = workspace.transact(request['operation_id'], request, prepare,
+                                     expected_head=request['base_head'])
+        return {'schema': 'fpw-julia-editor-result-v1', 'project_id': request['project_id'],
+                'definition_path': definition_path,
+                'commit_id': receipt.get('commit_id') or receipt.get('result', {}).get('commit_id')}
 
     def prepare(self, request, *, user_id=None):
         require(isinstance(request, dict) and set(request) == {

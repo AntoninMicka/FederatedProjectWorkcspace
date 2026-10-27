@@ -309,7 +309,9 @@ evidenčně smíchat s LLM run records.
 Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
 výběr verzované definice, typované parametry, přesný preview a samostatné
 potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
-spouštění, notebookové prostředí ani editor Julia zdrojů.
+spouštění ani notebookové prostředí. Na uživatelské doplnění rozsahu zahrnuje
+také bounded editor projektově spravovaného Julia modelu a šablon; importované
+immutable zdroje nepřepisuje a uložení kód nespouští.
 
 ---
 

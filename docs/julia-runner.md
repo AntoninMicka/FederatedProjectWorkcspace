@@ -192,12 +192,22 @@ GPG krok výše. Příkaz také nestahuje balíčky, nespouští projektový kó
 nevytváří `computation.json`.
 
 Tím je připravený **runtime**. Otevřený projekt poté nabídne v záložce
-**Výpočty** každou validní definici `fpw-julia-computation-v1`, která je
-uložena jako JSON soubor verzovaného source artefaktu. UI nevytváří ani
-neupravuje Julia model: entrypoint, `Project.toml`, manifest, vstupy a definice
-musí již být připnuté v aktuálním Git commitu. Změna parametru ani příprava
-preview kód nespustí; běh vyžaduje samostatné potvrzení exact preview a
-publikace jednoho výsledku další potvrzení.
+**Výpočty** každou validní definici `fpw-julia-computation-v1`. Tlačítko
+**Nový Julia model** otevře specializovaný editor s minimální bez-závislostní
+šablonou. Jedno potvrzené uložení zapíše Julia entrypoint, `Project.toml`,
+`Manifest.toml` a definici jako čtyři projektově spravované `document`
+artefakty v jediné Workspace transakci; importované immutable `source`
+artefakty editor měnit nesmí. Uložením se kód nespouští.
+
+Běžná část editoru obsahuje kód a JSON kontrakty parametrů a výstupů. Přesné
+prostředí a execution policy jsou v pokročilé části. Výchozí manifest odpovídá
+prázdnému projektu pro Julia 1.10.12; jakmile přidáte balíčky, vytvořte nový
+manifest pomocí Julia Pkg v kontrolovaném přípravném prostředí a vložte jeho
+úplné bajty. Editor balíčky nestahuje, `Pkg.resolve` ani `Pkg.instantiate`
+nespouští a ručně sestavený manifest nevydává za reprodukovatelný.
+
+Změna parametru ani příprava preview kód nespustí; běh vyžaduje samostatné
+potvrzení exact preview a publikace jednoho výsledku další potvrzení.
 
 Desktop použije lokálního autora projektu. Web používá přihlášený účet a
 vyžaduje zápisové oprávnění pro preview, dispatch, cancel/reconcile i

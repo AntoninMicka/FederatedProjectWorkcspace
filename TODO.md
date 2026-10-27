@@ -15,12 +15,13 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
 - **Závislosti:** doručené `COMP-01` a `COMP-02`; používá jejich validovaný
   kontrakt, node-local runtime binding, Julia journal, materializaci a
   explicitní Workspace publikaci bez druhého runneru nebo zápisové cesty.
-- **Rozsah:** shared desktop/web UI otevřeného projektu načte pouze validované
+- **Rozsah:** shared desktop/web UI otevřeného projektu umí z bezpečné šablony
+  atomicky vytvořit nebo upravit projektově spravovaný Julia model a načte pouze validované
   `fpw-julia-computation-v1` definice z přesného Git HEAD, nabídne typované
   parametry, přesný preview, explicitně potvrzený běh, bezpečný
   cancel/reconcile, stav po restartu, náhled deklarovaných výstupů a odděleně
   potvrzenou publikaci jednoho výstupu s provenance.
-- **Mimo rozsah:** editor Julia kódu, Pluto/Jupyter, automatický scheduler,
+- **Mimo rozsah:** obecné IDE, Pluto/Jupyter, automatický scheduler,
   síťové/GPU/distribuované výpočty, instalace runtime či balíčků a automatická
   publikace.
 - **Crash boundaries a recovery:** preview je read-only. Potvrzený běh používá
@@ -29,7 +30,10 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   automatického retry a exact materializace se pouze reconciliuje. Publikace
   používá samostatnou serializovanou Workspace operaci; po commitu se index
   obnoví z HEAD a retry nesmí vytvořit druhý artefakt. UI drží jen projekci
-  těchto stavů.
+  těchto stavů. Rozepsaný editor je pouze klientský draft. Save před durable
+  journalem nemá projektový účinek; čtyři soubory a metadata se validují a
+  commitují jednou Workspace transakcí, po commitu recovery obnoví index a
+  opakování stejného operation ID nevytvoří druhý balíček.
 
 - [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
   (cílová úroveň: implemented).** Prověřit reuse stávajícího runner API a
@@ -49,6 +53,12 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   implemented).** Zpřístupnit celý tok v otevřeném projektu se stejným
   bezpečným DOM a klávesnicovou/mobilní dostupností; otevření projektu, změna
   parametru ani čtení statusu nesmí nic spustit nebo publikovat.
+- [x] [completed] **COMP-03-F — editor Julia modelu a šablony (cílová úroveň:
+  implemented).** Na explicitní doplnění uživatele vytvořit ve shared UI
+  specializovaný editor, který v jedné Workspace transakci uloží `.jl`,
+  `Project.toml`, Pkg manifest a hashovanou definici. Nabídnout spustitelnou
+  bez-závislostní šablonu, kontrakty parametrů/výstupů a pokročilé limity;
+  importované immutable zdroje nepřepisovat a uložením nic nespouštět.
 - [ ] [in progress] **COMP-03-E — regrese, dokumentace a fyzická akceptace
   (cílová úroveň: PoC validated).** Pokrýt validní i fail-closed cesty,
   concurrency/restart/stale/cancel/unknown/publikaci, shared web wiring a
@@ -73,6 +83,16 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   Linux glibc aarch64 runtime prošla: Git definice, exact preview, potvrzený
   bubblewrap běh, odmítnutá síť, výstup `real-julia=42;network=denied` a
   explicitní Workspace publikace.
+- Editorová šablona byla navíc fyzicky vytvořena přes shared službu a prošla
+  skutečným Julia 1.10.12 bubblewrap během; cílený test ověřuje i update téhož
+  čtyřartefaktového balíčku bez duplicitní definice. Manifest zůstává přesný
+  projektový vstup a editor jej automaticky negeneruje ani neinstaluje balíčky.
+- Po rozšíření editoru prošla celá cílená Julia sada včetně fyzické akceptace:
+  **30 testů, OK, 1 podmíněně přeskočen**. Shared editor API/UI, roadmap graf,
+  JavaScript syntax a Python compile prošly. Plná sada doběhla všech **937
+  testů** se 3 chybami pouze kvůli novému formuláři chybějícímu v tiskovém
+  inventáři; inventář byl doplněn a všech 3 původně chybných testů i navazující
+  UI/graf kontroly následně prošlo (**5 testů, OK**).
 - Plná sada před závěrečným oddělením read-only Git projekce: **936 testů,
   OK, 35 podmíněně přeskočeno, 233,044 s**. Po této úzké opravě znovu prošla
   celá Julia sada a projektový side-effect test: **30 testů, OK, 2 podmíněně
@@ -84,6 +104,18 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   projektů našla 0 validních Julia definic, takže akceptace potřebuje oddělený
   demonstrační projekt nebo uživatelem vybraný existující projekt. Bez této
   kontroly dávku nearchivovat ani nedoporučovat PR.
+
+### K předání do backlogu
+
+- [ ] [planned] **PLAN-TASK-EDITOR-01 — specializovaný editor hlavního TODO
+  (cílová úroveň: implemented).** Původ: uživatelský požadavek z 2026-10-27.
+  Navázat na existující Markdown editor a validovaný plánovací graf; nabídnout
+  vložení šablon stabilního ID, přesného stavu, popisu a kanonických vztahů
+  (`depends_on`, `blocks`, `duplicates`, `supersedes`, `related_to`) s
+  nápovědou a kontrolou před uložením. Autoritou zůstává hlavní TODO v Gitu,
+  nevznikne druhý task store. Hotovo po shared desktop/web UI, fail-closed
+  validaci, mobilní/klávesnicové kontrole a testech; samostatná feature větev a
+  PR po doručení `COMP-03`.
 
 ### Podmínky akceptace
 

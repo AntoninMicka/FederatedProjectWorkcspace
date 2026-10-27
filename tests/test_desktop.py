@@ -366,10 +366,14 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="julia-tab"', HTML)
         self.assertIn('id="julia-panel"', HTML)
         self.assertIn('id="julia-parameters"', HTML)
+        self.assertIn('id="julia-editor"', HTML)
+        self.assertIn('id="julia-template-minimal"', HTML)
+        self.assertIn('name="project_toml"', HTML)
+        self.assertIn('name="manifest_toml"', HTML)
         self.assertIn('id="julia-run-confirm"', HTML)
         self.assertIn('id="julia-publish-confirm"', HTML)
         for path in ('definitions', 'preview', 'execute', 'status', 'cancel',
-                     'reconcile', 'output', 'publish'):
+                     'reconcile', 'output', 'publish', 'editor/open', 'editor/save'):
             self.assertIn(f"projectRequest('/v1/julia/{path}'", JS)
             self.assertIn(f'/v1/julia/{path}', DesktopHandler.post_paths)
         self.assertIn('textContent=JSON.stringify(shown,null,2)', JS)

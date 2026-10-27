@@ -213,11 +213,12 @@ class WebHandler(DesktopHandler):
         if self.path.startswith('/v1/julia/'):
             if not isinstance(request, dict):
                 return self.send_error(400)
-            if self.path == '/v1/julia/publish' and request.get('privacy') == 'local-only':
-                return self.reply(422, {'error': 'Webová publikace nepovoluje local-only obsah.'})
+            if self.path in {'/v1/julia/publish', '/v1/julia/editor/save'} \
+                    and request.get('privacy') == 'local-only':
+                return self.reply(422, {'error': 'Webová operace nepovoluje local-only obsah.'})
             project_id = request.get('project_id')
             read_only = {'/v1/julia/definitions', '/v1/julia/status',
-                         '/v1/julia/output'}
+                         '/v1/julia/output', '/v1/julia/editor/open'}
             allowed = (self.server.administration.allowed(self.actor, project_id)
                        if self.path in read_only else self._can_write(project_id))
             if not allowed:

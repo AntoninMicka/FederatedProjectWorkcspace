@@ -111,6 +111,13 @@ class WebTests(unittest.TestCase):
                 inner.calls.append(('execute', request, user_id))
                 return {'operation_id': request['operation_id'], 'accepted': True,
                         'state': 'dispatching'}
+            def editor_open(inner, project, head, definition_path=None):
+                inner.calls.append(('editor-open', project, head, definition_path))
+                return {'schema': 'fpw-julia-editor-v1', 'new': definition_path is None}
+            def editor_save(inner, request, *, user_id=None):
+                inner.calls.append(('editor-save', request, user_id))
+                return {'schema': 'fpw-julia-editor-result-v1',
+                        'project_id': request['project_id']}
 
         service = Service(); self.server.julia_workspace = service
         head = Projects(self.root/'node.json').open(project_id)['commit_id']
@@ -127,7 +134,13 @@ class WebTests(unittest.TestCase):
             'operation_id': operation_id, 'project_id': project_id,
             'approval_digest': 'a' * 64}))
         self.assertEqual(200, code, data)
-        self.assertEqual(['definitions', 'preview', 'execute'],
+        code, data, _ = self.request(path='/v1/julia/editor/open', body=json.dumps({
+            'project_id': project_id, 'expected_head': head}))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/editor/save', body=json.dumps({
+            'operation_id': operation_id, 'project_id': project_id, 'privacy': 'project'}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(['definitions', 'preview', 'execute', 'editor-open', 'editor-save'],
                          [item[0] for item in service.calls])
 
     def create_planned_project(self):

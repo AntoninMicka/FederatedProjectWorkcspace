@@ -782,6 +782,10 @@ COMP-03 **reuse** používá `JuliaExecutor`, jeho SQLite journal,
 `MaterializationCache` a jediný Workspace writer beze změny autority. **Adapt**
 je pouze shared projektová projekce validních definic, request-local identita a
 RBAC/privacy kontrola, background dispatch mimo omezené HTTP workery a bezpečné
-DOM UI se dvěma oddělenými potvrzeními. Druhý runner, nový job store, kopie
+DOM UI se dvěma oddělenými potvrzeními. Doplněný editor **adaptuje** existující
+Workspace transakci, validátory snapshotu a bezpečné textové editory: atomicky
+spravuje čtyři `document` artefakty, zatímco imported immutable `source`
+artefakty záměrně odmítá. Externí IDE/editor framework ani syntax-highlighting
+knihovna nejsou pro bounded šablony potřeba. Druhý runner, nový job store, kopie
 recovery logiky, automatický retry po restartu a přímý zápis výsledku do Gitu
 jsou **reject**.

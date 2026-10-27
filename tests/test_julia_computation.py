@@ -186,6 +186,47 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             with self.subTest(candidate=candidate), self.assertRaises(ValidationError):
                 validate_computation(candidate)
 
+    def test_workspace_editor_creates_and_updates_one_pinned_bundle(self):
+        service = JuliaWorkspaceService(self.node, Projects(self.node),
+            runtime_root=self.base / 'unused-runtime',
+            executor_factory=lambda git: JuliaExecutor(
+                git=git, state_dir=self.state, runtime_binding=self.binding,
+                sandbox=DirectTestSandbox()))
+        template = service.editor_open(self.project_id, self.git.head())
+        self.assertTrue(template['new'])
+        self.assertIn('fpw-julia-result-v1.json', template['julia_code'])
+        request = {key: template[key] for key in ('project_id', 'base_head', 'new',
+            'artifact_ids', 'title', 'privacy', 'julia_code', 'project_toml',
+            'manifest_toml', 'parameters', 'outputs', 'execution_policy')}
+        request['operation_id'] = str(uuid4())
+        saved = service.editor_save(request, user_id=self.author)
+        self.assertEqual(self.git.head(), saved['commit_id'])
+        catalog = service.definitions(self.project_id, self.git.head())
+        self.assertEqual([saved['definition_path']],
+                         [item['definition']['path'] for item in catalog['definitions']])
+        self.assertTrue(catalog['definitions'][0]['editable'])
+        opened = service.editor_open(self.project_id, self.git.head(),
+                                     saved['definition_path'])
+        self.assertFalse(opened['new'])
+        self.assertEqual(template['artifact_ids'], opened['artifact_ids'])
+        old_blob = catalog['definitions'][0]['computation']['entrypoint']['git_blob']
+
+        opened['title'] = 'Upravený výpočet'
+        opened['julia_code'] += '\n# edited\n'
+        update = {key: opened[key] for key in ('project_id', 'base_head', 'new',
+            'artifact_ids', 'title', 'privacy', 'julia_code', 'project_toml',
+            'manifest_toml', 'parameters', 'outputs', 'execution_policy')}
+        update['operation_id'] = str(uuid4())
+        service.editor_save(update, user_id=self.author)
+        catalog = service.definitions(self.project_id, self.git.head())
+        self.assertEqual(1, len(catalog['definitions']))
+        self.assertEqual('Upravený výpočet', catalog['definitions'][0]['computation']['title'])
+        self.assertNotEqual(old_blob,
+                            catalog['definitions'][0]['computation']['entrypoint']['git_blob'])
+        entities = validate_snapshot(self.git.snapshot(self.git.head()))
+        self.assertTrue(all(entities[value]['kind'] == 'document'
+                            for value in template['artifact_ids'].values()))
+
     def test_open_prepare_and_status_never_dispatch(self):
         executor, prepared = self.prepare()
         self.assertEqual('prepared', executor.status(
@@ -203,6 +244,9 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         head = self.git.head(); catalog = service.definitions(self.project_id, head)
         self.assertEqual([path], [item['definition']['path']
                                   for item in catalog['definitions']])
+        self.assertFalse(catalog['definitions'][0]['editable'])
+        with self.assertRaisesRegex(ValidationError, 'not editable'):
+            service.editor_open(self.project_id, head, path)
         operation_id = str(uuid4())
         prepared = service.prepare({'operation_id': operation_id,
             'project_id': self.project_id, 'expected_head': head,
@@ -834,6 +878,28 @@ write(joinpath(output, "fpw-julia-result-v1.json"), manifest)
         self.assertNotEqual(head, receipt['commit_id'])
         self.assertEqual(content,
             git.snapshot(git.head())[f'artifacts/{artifact_id}/result.txt'])
+
+        template = service.editor_open(project_id, git.head())
+        editor_request = {key: template[key] for key in ('project_id', 'base_head',
+            'new', 'artifact_ids', 'title', 'privacy', 'julia_code', 'project_toml',
+            'manifest_toml', 'parameters', 'outputs', 'execution_policy')}
+        editor_request['operation_id'] = str(uuid4())
+        saved = service.editor_save(editor_request, user_id=author)
+        operation_id = str(uuid4()); head = git.head()
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': project_id, 'expected_head': head,
+            'definition_path': saved['definition_path'], 'parameters': {}}, user_id=author)
+        service.execute({'operation_id': operation_id, 'project_id': project_id,
+                         'approval_digest': prepared['approval_digest']}, user_id=author)
+        deadline = time.monotonic() + 35
+        while time.monotonic() < deadline:
+            completed = service.status(project_id, operation_id, user_id=author)
+            if completed['state'] not in {'prepared', 'dispatching'}: break
+            time.sleep(.05)
+        self.assertEqual('succeeded', completed['state'])
+        result = service.output(project_id, operation_id, 'result', user_id=author)
+        self.assertEqual('Vypocet Julia probehl.\n',
+                         base64.b64decode(result['content_b64']).decode())
 
 
 if __name__ == '__main__':
