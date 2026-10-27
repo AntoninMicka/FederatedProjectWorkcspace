@@ -28,7 +28,7 @@ def fixture(root):
         'docs/ollama-lan.md', 'docs/searxng-search-acceptance.md',
         'docs/public-source-reader-acceptance.md', 'docs/public-sources-research.md',
         'docs/release-0.1.0.md', 'docs/roadmap-visualization.md', 'docs/task-planning.md',
-        'docs/project-chat-sync.md',
+        'docs/project-chat-sync.md', 'docs/julia-runner.md',
         'docs/roadmap-graph.json',
         'spikes/__init__.py', 'spikes/artifact_preview.py',
         'spikes/libgit2/probe.cpp', 'spikes/libgit2/README.md',
@@ -47,7 +47,7 @@ def fixture(root):
     (root / 'VERSION').write_text('0.1.0\n', encoding='ascii')
     (root / 'CHANGELOG.md').write_text('# Changelog\n\n## 0.1.0\n', encoding='utf-8')
     for name in ('package_deb.py', 'package_desktop.py', 'license_files.py', 'release_version.py',
-                 'deploy_omnia.py', 'install_web.py'):
+                 'deploy_omnia.py', 'install_web.py', 'julia_runtime_binding.py'):
         path = root / 'scripts' / name
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(SOURCE_ROOT / 'scripts' / name, path)

@@ -11,9 +11,10 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
-`F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` uzavřela výpočetní
-kontrakt a prostředí Julia a čeká na doručení PR; runner zůstává samostatným
-`COMP-02`.
+`F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
+#103 a `COMP-02` akceptovaná na úrovni PoC validated čeká na doručení PR s
+lokálním Julia runnerem a explicitní publikací výsledků. Navazující `COMP-03`
+je plánovaný první řízený Julia výpočet ze shared workspace UI.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
@@ -291,17 +292,24 @@ První implementační rozsah je sdílení mezi dvěma lokálně registrovanými
 
 ## 2G. Modelování a výpočty v Julii
 
-**Stav: Julia zvolena jako preferovaný výpočetní backend; kontrakt a prostředí jsou designed v [ADR 0057](docs/adr/0057-julia-computation-contract.md), runner zůstává plánovaný a neimplementovaný.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace.
+**Stav: Julia zvolena jako preferovaný výpočetní backend; kontrakt je designed v [ADR 0057](docs/adr/0057-julia-computation-contract.md) a lokální runner je PoC validated dávkou `COMP-02` pro Julia 1.10.12 na Linux glibc aarch64.** Cílem je workflow pro numerické modely, simulace, optimalizace, statistiku, tabulkové výpočty a grafické výstupy obdobné použití MATLABu, nikoli implementace jeho kompatibility nebo závislosti na něm. Julia navazuje na materializované kompiláty z 2E a používá stejné hranice autoritativních zdrojů, lokální cache a explicitní publikace. Provozní hranice a fyzická evidence jsou v [návodu k runneru](docs/julia-runner.md); x86-64 zůstává neověřený kandidát.
 
-- [ ] Verzovat zdrojový model jako běžné projektové artefakty (`.jl` a související dokumentace), jeho deklarované vstupy a reprodukovatelné Julia prostředí. Minimální kontrakt prostředí zahrne `Project.toml` a odpovídající `Manifest.toml`; credentials, registry cache, stažené balíčky, compiled cache a uživatelský startup do projektového Gitu nepatří.
-- [ ] První rozsah realizovat jako lokální CLI runner pro explicitně zvolený entry point, parametry a zmrazené revize vstupů. Notebookové UI (např. Pluto/Jupyter) ani interaktivní MATLAB-like desktop nejsou podmínkou prvního PoC a vyžadují samostatné capability, bezpečnostní a distribuční posouzení.
-- [ ] Run record uchová project/operation/run ID, commit modelu, artifact ID a hash každého vstupu, entry point a parametry, verzi Julia/runtime a platformu, hash prostředí, volitelný seed, časy, stav/exit code, stdout/stderr a hashe výstupů. Shodné vstupy ani seed samy negarantují bitově shodný numerický výsledek napříč verzemi, platformami a knihovnami.
-- [ ] Výstupy nejprve publikovat jako atomickou lokální generaci materializovaného kompilátu mimo projektový Git. Tabulku, graf, report, dataset nebo jiný výsledek uložit jako verzovaný projektový artefakt pouze explicitní akcí s provenance na run record, model, prostředí a přesné vstupy.
-- [ ] Julia kód považovat za spustitelný a potenciálně nedůvěryhodný. Import ani otevření projektu jej nesmí spustit; běh vyžaduje explicitní potvrzení, execution policy, limity času/procesů/paměti/výstupu, izolovaný pracovní adresář a výchozí zákaz sítě. Izolaci nevydávat za bezpečný sandbox bez samostatného ověření cílového OS.
-- [ ] Privacy a oprávnění vstupů znovu ověřit před během i před publikací; výstup nesmí automaticky dostat slabší privacy než nejpřísnější vstup. Nedostupný runtime/balíček, změna HEAD, timeout, pád, neúplný výstup a přerušený běh musí mít rozlišitelné stavy a bezpečný retry bez vydávání staré cache za aktuální.
-- [ ] Způsob instalace Julia runtime a balíčků, podporované verze/platformy, offline depot, aktualizace, licence a distribuční velikost rozhodnout a ověřit před přidáním do `.deb`; vývojová instalace na jednom stroji není důkazem podporované distribuce.
+- [x] Verzovat zdrojový model jako běžné projektové artefakty (`.jl` a související dokumentace), jeho deklarované vstupy a reprodukovatelné Julia prostředí. Minimální kontrakt prostředí zahrne `Project.toml` a odpovídající `Manifest.toml`; credentials, registry cache, stažené balíčky, compiled cache a uživatelský startup do projektového Gitu nepatří.
+- [x] První rozsah realizovat jako lokální CLI runner pro explicitně zvolený entry point, parametry a zmrazené revize vstupů. Notebookové UI (např. Pluto/Jupyter) ani interaktivní MATLAB-like desktop nejsou podmínkou prvního PoC a vyžadují samostatné capability, bezpečnostní a distribuční posouzení.
+- [x] Run record uchová project/operation/run ID, commit modelu, artifact ID a hash každého vstupu, entry point a parametry, verzi Julia/runtime a platformu, hash prostředí, volitelný seed, časy, stav/exit code, stdout/stderr a hashe výstupů. Shodné vstupy ani seed samy negarantují bitově shodný numerický výsledek napříč verzemi, platformami a knihovnami.
+- [x] Výstupy nejprve publikovat jako atomickou lokální generaci materializovaného kompilátu mimo projektový Git. Tabulku, graf, report, dataset nebo jiný výsledek uložit jako verzovaný projektový artefakt pouze explicitní akcí s provenance na run record, model, prostředí a přesné vstupy.
+- [x] Julia kód považovat za spustitelný a potenciálně nedůvěryhodný. Import ani otevření projektu jej nesmí spustit; běh vyžaduje explicitní potvrzení, execution policy, limity času/procesů/paměti/výstupu, izolovaný pracovní adresář a výchozí zákaz sítě. Izolaci nevydávat za bezpečný sandbox bez samostatného ověření cílového OS.
+- [x] Privacy a oprávnění vstupů znovu ověřit před během i před publikací; výstup nesmí automaticky dostat slabší privacy než nejpřísnější vstup. Nedostupný runtime/balíček, změna HEAD, timeout, pád, neúplný výstup a přerušený běh musí mít rozlišitelné stavy a bezpečný retry bez vydávání staré cache za aktuální.
+- [x] Způsob instalace Julia runtime a balíčků, podporované verze/platformy, offline depot, aktualizace, licence a distribuční velikost rozhodnout a ověřit před přidáním do `.deb`; runtime zůstává node-managed a nepřibaluje se, fyzicky ověřený je pouze Linux glibc aarch64 profil.
 
-Operativní rozpad drží BACKLOG COMP-01 a COMP-02. Julia runner není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí evidenčně smíchat s LLM run records.
+Dokončený operativní rozpad `COMP-01` a `COMP-02` drží WORK_LOG. Julia runner
+není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí
+evidenčně smíchat s LLM run records.
+
+Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
+výběr verzované definice, typované parametry, přesný preview a samostatné
+potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
+spouštění, notebookové prostředí ani editor Julia zdrojů.
 
 ---
 

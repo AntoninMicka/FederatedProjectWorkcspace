@@ -5,12 +5,111 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## COMP-02 — Lokální Julia runner a publikace výsledků — 2026-10-26
+
+Dávka vznikla na větvi `feature/comp-02-julia-runner` z `develop` `b104843`
+a dosáhla cílové úrovně **PoC validated**. Feature akceptace je dokončená;
+PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **COMP-02-A — kontrakt, runtime inventory a preflight
+  (implemented).** Striktní `fpw-julia-computation-v1` váže exact Git HEAD,
+  blob/hash/privacy, Project/Manifest, platformu a kompletní strom připnutého
+  node-local runtime. Neaktuální oprávnění, neúplný depot, změněný runtime a
+  nebezpečný soubor či symlink selžou před dispatch.
+- [x] [completed] **COMP-02-B — durable izolovaný runner a materializace
+  (implemented).** Explicitní CLI používá samostatný SQLite journal,
+  subprocess bez shellu, bubblewrap user/PID/mount/network namespaces,
+  resource limity, ukončení celé procesní skupiny a bounded stdout/stderr i
+  deklarované výstupy. Generace se zveřejňuje atomicky a restart převezme jen
+  přesně odpovídající kompletní materializaci.
+- [x] [completed] **COMP-02-C — aktuálnost a explicitní publikace
+  (implemented).** Stav rozlišuje missing/current/stale/running/failed/
+  cancelled/unknown; čtení znovu ověřuje HEAD, runtime i privacy. Vybraný
+  výstup se publikuje idempotentní Workspace operací se schema v4 provenance
+  a nejpřísnější privacy, nikoli přímým zápisem cache do Gitu.
+- [x] [completed] **COMP-02-D — bezpečnostní a crash regrese
+  (PoC validated).** Automatické scénáře pokrývají idempotenci a concurrency,
+  crash/restart hranice, timeout/cancel/process failure, změnu HEAD/runtime,
+  síť, limity, nepovolené vstupy, symlink/special/extra/oversized výstupy,
+  stale čtení a retry publikace bez duplicitního artefaktu.
+- [x] [completed] **COMP-02-E — runtime, balení, dokumentace a fyzická
+  akceptace (PoC validated).** `.deb` závisí na bubblewrap a přidává CLI,
+  binding nástroj i provozní návod, ale nepřibaluje Julia runtime. Podporovaný
+  profil je Julia 1.10.12 na Linux glibc aarch64; x86-64 zůstává neověřený
+  kandidát a tato dávka jej za podporovaný neprohlašuje.
+- [x] [completed] **COMP-02-F — bezpečný onboarding runtime (PoC validated;
+  doplněno po znovuotevření akceptace).** Jediný `setup` příkaz bez projektových
+  UUID ověří podporovanou verzi/platformu a připnutý checksum, prakticky
+  prověří bubblewrap namespaces a vytvoří owned mode-0700 depot/state i
+  immutable mode-0600 binding. Shodný retry a oba pády kolem atomického
+  zveřejnění bindingu se reconciliují; odlišný binding se nepřepíše. Výsledek
+  přiznává samostatnou GPG hranici a vrací konkrétní navazující `prepare`
+  příkaz s vyplněnými lokálními cestami.
+- [x] [completed] **COMP-02-G — proveditelný onboarding runbook
+  (implemented; ad-hoc oprava).** Původní návod začínal až u neexistujících
+  `/opt` a `/srv` cest a míchal doporučený setup s nízkoúrovňovým generátorem.
+  Opravený jediný ARM64 průchod obsahuje kontrolu platformy a nástrojů,
+  konkrétní oficiální URL, checksum, fingerprint a oddělený GPG keyring,
+  uživatelské rozbalení, checkout i `.deb` variantu setupu, očekávaný výsledek,
+  hranici vůči UI a diagnostiku běžných chyb.
+- [x] [completed] **COMP-02-H — Omnia dostupnost runneru (implemented; ad-hoc
+  oprava).** Deployment bundle původně přenesl CLI bez jeho
+  `scripts.julia_runtime_binding` dependency a neinstaloval bubblewrap, takže
+  návod na LXC odkazoval na neúplný release. Plný deploy nyní přenáší oba
+  explicitně allowlistované moduly a instaluje bubblewrap/curl/GnuPG; runbook
+  začíná kontrolou skutečně dostupného `.deb`, LXC nebo checkout entrypointu a
+  u starého release bezpečně zastaví místo odkazu na neexistující skript.
+- [x] [completed] **COMP-02-I — onboarding přímo z archivu (implemented;
+  ad-hoc UX oprava).** `./run.sh julia-setup ARCHIV.tar.gz` nyní přijme jedinou
+  cestu, ověří připnutý profil, bounded obsah i bezpečné cesty/linky, rozbalí
+  runtime přes privátní pending adresář a atomický rename a vytvoří původní
+  immutable binding. Shodné opakování je idempotentní; pád před rename obnoví
+  extrakci a pád po rename dokončí binding bez přepsání odlišného stavu.
+
+### Ověření, recovery a omezení
+
+Finální úplná sada po jednokrokovém onboardingu a opravě navazujícího
+entrypointu prošla mimo omezený sandbox: **931 testů bez selhání, 35
+přeskočeno, za 228,044 s**. Cílená Julia sada prošla s 22 testy a
+2 podmíněně přeskočenými; kombinovaná Julia/balení/licence sada měla 38 testů
+a 3 přeskočené. Skutečný `setup` nad oficiálním runtime ověřil nový binding,
+depot/state a bubblewrap namespace a opakování vrátilo `reused: true`.
+Závěrečný fyzický běh nad posledním kódem provedl další dva testy: skutečný
+výpočet a publikaci s oficiálním Julia 1.10.12 ARM64 runtime a samostatný
+bubblewrap pokus o síť, který byl odmítnut.
+Příkazy opraveného runbooku byly ověřeny proti skutečnému checksum manifestu,
+release fingerprintu, obsahu archivu a CLI `--help`; checksum vrátil `OK` a
+archiv obsahuje popsané `bin/julia` i `lib/julia/sys.so`.
+
+Archiv `julia-1.10.12-linux-aarch64.tar.gz` odpovídal zveřejněnému SHA-256
+`cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2` a jeho
+oddělený podpis prošel GPG klíčem s fingerprintem
+`64B779A570972FFF7BFC2B54EAD471E1A1F2C10A`. První akceptační runtime byl jen
+v `/tmp`; finální onboarding vytvořil uživatelský runtime pod XDG state.
+Neproběhla systémová instalace ani změna uzlové konfigurace.
+
+Po doplnění `COMP-02-I` prošel `./run.sh julia-setup` nad stejným oficiálním
+archivem přímo z `~/Downloads`; první běh vytvořil runtime a binding pod
+uživatelským XDG state, druhý vrátil `reused:true`. Navazující fyzický
+`JuliaRuntimeAcceptanceTests` nad tímto instalovaným runtime prošel včetně
+skutečného výpočtu, bubblewrap zákazu sítě a publikace do dočasného projektu.
+
+Git je autoritou definice a vstupů, Julia journal requestu/stavu/receiptů a
+privátní cache jen obnovitelnou projekcí. Pád před durable `dispatching` nic
+nespustil; neurčitý pád po dispatch zůstává `unknown` bez automatického retry.
+Po atomickém rename se převezme jen exact generace, jinak je výsledek stale.
+Publikace má vlastní Workspace journal a její recovery nemění terminální stav
+výpočtu. Setup zapisuje až po kontrole runtime, archivu a namespaces; pád před
+hardlink zveřejněním ponechá přesný pending binding, pád po něm dvě jména
+stejného inode a retry oba stavy bezpečně dokončí. Automatická
+instalace/aktualizace Julia, x86-64 akceptace, notebookové UI,
+síťové/GPU/distribuované výpočty a externí publikace zůstávají mimo rozsah.
+
 ## COMP-01 — Julia výpočetní kontrakt a prostředí — 2026-10-26
 
 Dávka vznikla na větvi `feature/comp-01-julia-contract` z `develop` `64a7dac`
-a dosáhla cílové úrovně **designed**. Aktivace dávky je v lokálním commitu
-`b68d9b9`; commit finální návrhové evidence, push, PR do `develop` a merge
-zatím nebyly provedeny.
+a dosáhla cílové úrovně **designed**. Aktivace dávky vznikla v commitu
+`b68d9b9` a dávka byla doručena PR #103 jako merge commit `b104843`.
 
 - [x] [completed] **COMP-01-A — reuse, licence a runtime/platform review
   (designed).** Aktuální primární podklady Julia vymezily support tiers,

@@ -34,7 +34,7 @@ def sources(root):
              'docs/public-source-reader-acceptance.md',
              'docs/public-sources-research.md', 'docs/release-0.1.0.md',
              'docs/roadmap-visualization.md', 'docs/task-planning.md',
-             'docs/project-chat-sync.md')]
+             'docs/project-chat-sync.md', 'docs/julia-runner.md')]
     paths.append(root / 'docs/roadmap-graph.json')
     for directory, pattern in [('spikes', '*.py'), ('scripts', '*.py'), ('tests', '*.py'), ('docs/adr', '*.md')]:
         paths.extend(sorted((root / directory).glob(pattern)))

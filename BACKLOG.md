@@ -90,14 +90,31 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 `F-M5-CHAT-HISTORY-01` byla po fyzické akceptaci doručena PR #101 jako merge
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
-evidence je ve WORK_LOG. `COMP-01` dosáhla úrovně designed, její evidence je ve
-WORK_LOG a větev čeká na doručení PR; backlog ji nedrží jako druhý stavový
-záznam.
+evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
+`b104843`; evidence je ve WORK_LOG. `COMP-02` je akceptována na úrovni PoC
+validated, čeká na doručení PR a její evidence je ve WORK_LOG; backlog ji
+nedrží jako druhý stavový záznam.
 
-Po doručení `COMP-01` následují podle uživatelem schváleného pořadí `COMP-02`,
-`DEV-IDE-TODO-01` a `DEV-01`.
+Po doručení `COMP-02` následují podle uživatelem aktualizovaného pořadí
+`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
+
+- [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
+  PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
+  `COMP-02` zpřístupnit v otevřeném projektu první řízený výpočet bez druhého
+  runneru nebo zápisové cesty. Workspace načte pouze validovanou verzovanou
+  `fpw-julia-computation-v1` definici z aktuálního Git commitu, vykreslí její
+  typované parametry a přesný preview s revizí, vstupy, privacy, runtime a
+  limity. Samostatné potvrzení spustí existující Julia journal; UI po restartu
+  zobrazí `prepared/running/current/stale/failed/cancelled/unknown`, dovolí
+  bezpečný cancel/reconcile a náhled deklarovaných výstupů. Teprve další
+  explicitní potvrzení publikuje jeden vybraný výstup přes existující
+  `Workspace` operaci s provenance. Otevření projektu, status ani změna
+  parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
+  publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
+  podporovaném ARM64 runtime, nikoli editor Julia kódu, Pluto/Jupyter,
+  automatický scheduler, síťové/GPU výpočty ani instalaci balíčků.
 
 ## Zjištěné mezery a navazující ověření
 
@@ -144,10 +161,6 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] [planned] **DEV-02 — Handoff kontrakt pro coding agenty (cílová úroveň: PoC validated).** Definovat provider-neutral request, run record a result receipt pro implementačního agenta. Akceptace: task ID, repozitář/výchozí commit/větev, explicitní Context Manifest a povolené operace, testovací kontrakt, oddělení reportu od ověření, `unknown` přerušený běh, stale HEAD, retry bez duplicitní externí akce a žádný automatický commit/push/PR nebo dokončení úkolu bez příslušného oprávnění a akceptace.
 - [ ] [planned] **DEV-03 — Rozšíření pro Microsoft Visual Studio Code a VSCodium (cílová úroveň: PoC validated).** Nad DEV-01/DEV-02 vytvořit IDE rozšíření používající jejich společný podporovaný Extension API průnik a autorizované lokální workspace API. Akceptace: otevření odpovídajícího workspace projektu/repozitáře, zobrazení roadmapových entit a úkolů, export vybraného task balíčku, spuštění nakonfigurovaného agent adaptéru, náhled/import výsledku a jasné stavy stale/unknown/unauthorized. Rozšíření nesmí zapisovat projektová data mimo Workspace lifecycle. Ověřit instalaci v obou IDE, podporované distribuční kanály a offline balíček bez tvrzení o univerzální kompatibilitě všech VS Code rozšíření.
 - [ ] [planned] **DEV-04 — Codex adaptér pro implementaci (cílová úroveň: PoC validated).** Nad DEV-02/DEV-03 ověřit v době implementace podporované oficiální rozhraní Codexu a připojit je jako vyměnitelný coding-agent adaptér, nikoli jako hostitele pluginu. Akceptace: export jednoho schváleného úkolu z IDE, implementace v izolované feature větvi, návrat diffu, změněných souborů a skutečných testů, vazba na původní task/revizi, odmítnutí nepovoleného kontextu/akce a lidské rozhodnutí před aktualizací autoritativního plánu. První end-to-end kandidát může být vlastní repozitář workspace, ale bez jakékoli privilegované výjimky.
-
-## Modelování a výpočty v Julii — navazuje na M6
-
-- [ ] [planned] **COMP-02 — Lokální Julia runner a publikace výsledků (cílová úroveň: PoC validated).** Po COMP-01 implementovat explicitní CLI běh nad zmrazenými vstupy a prostředím, atomickou lokální cache dle ADR 0018 a vědomé uložení vybrané tabulky/grafu/reportu/datasetu jako projektového artefaktu s provenance. Akceptace: úspěšný výpočet a opakování, změna modelu/vstupu/parametru/prostředí, concurrent run, restart na každém persistentním přechodu, timeout/cancel, limit výstupu, odmítnutá síť a neautorizovaný vstup, zobrazení stale posledního výsledku a publikace přes standardní Workspace recovery. Notebookové UI zůstává mimo první dávku.
 
 ## Externí vztahy a disclosure — navazující strategický backlog
 

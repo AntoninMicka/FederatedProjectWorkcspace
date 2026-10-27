@@ -9,6 +9,11 @@ Self-hosted workspace s projektovými soubory v Gitu, lokálními LLM backendy a
 
 Projekt vstupuje do **M1 — Single-node project workspace** po splnění Gate M0. Obsahuje návrh, storage experiment a spustitelné desktopové PoC; desktop vytváří a registruje projekty a zobrazuje artefakty z Gitu. Nativní Markdown editor podporuje checklisty a hlavní TODO projektu; společný webový frontend zobrazuje historii/diffy uložených dokumentů ve webu i desktopovém obalu.
 
+Připnuté lokální Julia výpočty, jednopříkazový onboarding, jejich Linux
+izolaci, CLI a explicitní publikaci popisuje
+[návod k Julia runneru](docs/julia-runner.md). Runtime se neinstaluje
+automaticky ani nepřibaluje do `.deb`.
+
 ## Desktop
 
 ```sh
@@ -218,6 +223,7 @@ Vyžaduje Linux, Bash, Python 3.11+, Git v PATH a závislosti z `requirements.tx
 
 ```sh
 ./run.sh setup                 # jednorázová příprava .venv a instalace závislostí
+./run.sh julia-setup /cesta/julia-1.10.12-linux-aarch64.tar.gz
 ./run.sh                       # dočasné storage demo (totéž jako ./run.sh demo)
 ./run.sh test                  # celá sada před předáním PR
 ./run.sh test tests.test_local_api  # cílený modul během vývoje

@@ -185,6 +185,7 @@ def sync_ca_to_router(host, container):
 def bundle(root):
     files = [root / 'requirements.txt', *license_files(root)]
     files += sorted((root / 'spikes').glob('*.py'))
+    files += [root / 'scripts' / 'julia_runtime_binding.py']
     files += sorted((root / 'modules').rglob('*.json'))
     # Fixed source allowlist: no .git, credentials, private catalog or user data.
     stream = io.BytesIO()
@@ -229,7 +230,7 @@ mkdir "$release"
 tar -xzf - -C "$release" --no-same-owner --no-same-permissions
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates
+apt-get install -y --no-install-recommends python3 python3-venv git ca-certificates bubblewrap curl gnupg
 python3 -c 'import sys; assert sys.version_info >= (3,11)'
 python3 -m venv "$release/.venv"
 "$release/.venv/bin/python" -m pip install -r "$release/requirements.txt"

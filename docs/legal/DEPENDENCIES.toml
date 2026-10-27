@@ -185,6 +185,30 @@ sources = ["scripts/package_deb.py", "spikes/libgit2/README.md"]
 bundled_by_current_desktop_builders = false
 
 [[components]]
+id = "bubblewrap"
+name = "bubblewrap Linux namespace launcher"
+version = "reference package 0.11.1-1ubuntu0.3"
+integration = "external_system_executable_required_by_julia_runner"
+license_summary = "LGPL-2.0-or-later; verify selected OS package notice"
+license_evidence = "reference_os_package_and_upstream_copying"
+release_status = "reviewed_reference_profile_unbundled_required_runtime"
+sources = ["https://github.com/containers/bubblewrap", "spikes/julia_computation.py"]
+bundled_by_current_desktop_builders = false
+
+[[components]]
+id = "julia"
+name = "Julia language runtime"
+version = "official 1.10.12 LTS Linux glibc aarch64 physical PoC profile"
+integration = "node_managed_external_runtime_not_a_deb_dependency_or_bundled_payload"
+license_summary = "MIT for Julia; official distribution and packages include separate third-party licenses"
+license_evidence = "official_signed_archive_checksum_and_runtime_license_directory"
+release_status = "physically_validated_not_distributed_runtime_inventory_incomplete_for_redistribution"
+sources = ["https://julialang.org/downloads/manual-downloads/", "docs/julia-runner.md"]
+distribution_sha256 = "cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2"
+signing_fingerprint = "64B779A570972FFF7BFC2B54EAD471E1A1F2C10A"
+bundled_by_current_desktop_builders = false
+
+[[components]]
 id = "segno"
 name = "Segno"
 version = "1.6.6 pip; system python3-segno >=1.6.6"

@@ -134,6 +134,71 @@ def validate_generation(value):
     return value
 
 
+def validate_computation(value):
+    required = {'schema', 'operation_id', 'computation_id', 'project_commit',
+                'request_sha256', 'parameters_sha256', 'runtime', 'environment',
+                'output', 'inputs'}
+    require(isinstance(value, dict) and set(value) == required
+            and value['schema'] == 'fpw-julia-run-v1',
+            'Invalid computation provenance')
+    for key in ('operation_id', 'computation_id'):
+        uuid(value[key])
+    require(isinstance(value['project_commit'], str)
+            and bool(re.fullmatch(r'[0-9a-f]{40}|[0-9a-f]{64}', value['project_commit'])),
+            'Invalid computation commit')
+    for key in ('request_sha256', 'parameters_sha256'):
+        require(isinstance(value[key], str) and bool(re.fullmatch(r'[0-9a-f]{64}', value[key])),
+                f'Invalid computation {key}')
+    runtime = value['runtime']
+    require(isinstance(runtime, dict)
+            and {'schema', 'binding_id', 'revision', 'version', 'platform',
+                 'executable_sha256', 'distribution_sha256', 'sysimage_sha256',
+                 'depot_sha256'} == set(runtime)
+            and runtime['schema'] == 'fpw-julia-runtime-v1',
+            'Invalid computation runtime')
+    uuid(runtime['binding_id'])
+    require(isinstance(runtime['revision'], str) and bool(runtime['revision'])
+            and len(runtime['revision'].encode()) <= 256
+            and isinstance(runtime['version'], str)
+            and bool(re.fullmatch(r'\d+\.\d+\.\d+', runtime['version']))
+            and isinstance(runtime['platform'], str) and bool(runtime['platform'])
+            and len(runtime['platform'].encode()) <= 256,
+            'Invalid computation runtime identity')
+    for key in ('executable_sha256', 'distribution_sha256', 'sysimage_sha256',
+                'depot_sha256'):
+        require(isinstance(runtime[key], str) and bool(re.fullmatch(r'[0-9a-f]{64}', runtime[key])),
+                'Invalid computation runtime hash')
+    environment = value['environment']
+    require(isinstance(environment, dict)
+            and set(environment) == {'project_sha256', 'manifest_sha256'},
+            'Invalid computation environment')
+    for item in environment.values():
+        require(isinstance(item, str) and bool(re.fullmatch(r'[0-9a-f]{64}', item)),
+                'Invalid computation environment hash')
+    output = value['output']
+    require(isinstance(output, dict) and set(output) == {
+        'name', 'sha256', 'media_type', 'kind'}
+        and isinstance(output['name'], str) and bool(output['name'])
+        and isinstance(output['media_type'], str) and bool(output['media_type'])
+        and output['kind'] in {'table', 'chart', 'report', 'dataset', 'file'}
+        and isinstance(output['sha256'], str)
+        and bool(re.fullmatch(r'[0-9a-f]{64}', output['sha256'])),
+        'Invalid computation output provenance')
+    require(isinstance(value['inputs'], list) and len(value['inputs']) <= 68,
+            'Invalid computation inputs')
+    paths = set()
+    for item in value['inputs']:
+        require(isinstance(item, dict) and set(item) == {'path', 'sha256', 'size'}
+                and isinstance(item['path'], str) and bool(safe_path(item['path']))
+                and item['path'] not in paths
+                and isinstance(item['sha256'], str)
+                and bool(re.fullmatch(r'[0-9a-f]{64}', item['sha256']))
+                and type(item['size']) is int and 0 <= item['size'] <= MAX_FILE,
+                'Invalid computation input provenance')
+        paths.add(item['path'])
+    return value
+
+
 def safe_path(value):
     require(isinstance(value, str) and bool(value), 'Expected relative path')
     parts = value.split('/')
@@ -234,10 +299,11 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     require(isinstance(meta, dict), 'Metadata must be an object')
     extra = {'file'} if sidecar else ({'status', 'body'} if registry else set())
     require(REQUIRED | extra <= meta.keys(), 'Missing required metadata')
-    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2, 3}, 'Unknown schema version')
+    require(type(meta['schema_version']) is int and meta['schema_version'] in {1, 2, 3, 4}, 'Unknown schema version')
     allowed = REQUIRED | OPTIONAL | extra
     if meta['schema_version'] == 2: allowed |= {'import'}
     if meta['schema_version'] == 3: allowed |= {'generation'}
+    if meta['schema_version'] == 4: allowed |= {'computation'}
     require(meta.keys() <= allowed, 'Unknown metadata field')
     uuid(meta['id'])
     uuid(meta['author_id'])
@@ -262,6 +328,14 @@ def validate_metadata(meta, *, sidecar=False, registry=None):
     else:
         require('generation' not in meta,
                 'Generation provenance is only valid for generated image metadata')
+    if meta['schema_version'] == 4:
+        require(sidecar and meta['kind'] == 'snapshot' and meta['provenance'] == 'snapshot'
+                and 'computation' in meta,
+                'Computed snapshot metadata requires sidecar snapshot provenance')
+        validate_computation(meta['computation'])
+    else:
+        require('computation' not in meta,
+                'Computation provenance is only valid for computed snapshot metadata')
     for key in ('description', 'source_url'):
         if key in meta:
             require(isinstance(meta[key], str), f'Invalid {key}')
@@ -343,7 +417,7 @@ def validate_transition(base_files, candidate_files, *, allow_privacy_relaxation
     candidate = validate_snapshot(candidate_files)
     privacy = {'public': 0, 'project': 1, 'confidential': 2, 'local-only': 3}
     immutable = ('id', 'kind', 'created_at', 'author_id', 'provenance', 'file',
-                 'generation')
+                 'generation', 'computation')
 
     def content(files, meta):
         prefix = f"artifacts/{meta['id']}/"

@@ -8,7 +8,7 @@ set -euo pipefail
 
 usage() {
     cat <<'HELP'
-Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|test [TEST...]|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
+Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-desktop [--output SOUBOR] [--version VERZE]|deploy-omnia USER@HOST [--container NAME] [--dry-run]|desktop [--node SOUBOR]|demo|setup|julia-setup ARCHIV.tar.gz|test [TEST...]|check CESTA|config project|node CESTA|module-check MANIFEST [API_BASE_URL]|help]
 
   deploy-omnia USER@HOST [--container NAME] [--retries COUNT] [--dry-run] [--web-lan SUBNET] [--web-hostname DNS_NAME] [--regen-tls] [--reset]
                Ruční instalace headless PoC do běžícího Debian LXC na SSD.
@@ -17,6 +17,8 @@ Použití: ./run.sh [package-deb [--output SOUBOR] [--version VERZE]|package-des
   desktop [--node SOUBOR]  Vytvoří nebo otevře projekt v desktopu; konfigurace uzlu je volitelná.
   demo         Ukázka Workspace v dočasném projektu (výchozí příkaz).
   setup        Vytvoří .venv a nainstaluje requirements.txt (vyžaduje pip/venv a síť).
+  julia-setup ARCHIV.tar.gz
+               Ověří, bezpečně rozbalí a připne podporovaný oficiální Julia archiv.
   test [TEST...]  Bez selektorů spustí celou sadu; jinak jen zadané unittest cíle.
   check CESTA  Ověří artefakty a registry projektu bez zápisu; neověřuje project.json.
   config TYP CESTA  Ověří konfiguraci typu project nebo node bez zápisu.
@@ -37,6 +39,8 @@ case "$command_name" in
     deploy-omnia|package-desktop|package-deb) ;;
     demo|setup)
         if (( $# > 1 )); then usage >&2; exit 2; fi ;;
+    julia-setup)
+        if (( $# != 2 )); then usage >&2; exit 2; fi ;;
     test) ;;
     desktop)
         if (( $# != 1 )) && { (( $# != 3 )) || [[ "$2" != --node ]]; }; then
@@ -63,6 +67,10 @@ fi
 if [[ "$command_name" == check || "$command_name" == config || "$command_name" == module-check ]]; then
     if [[ "$command_name" == config ]]; then project_path=$3; else project_path=$2; fi
     if [[ "$project_path" != /* ]]; then project_path="$PWD/$project_path"; fi
+fi
+if [[ "$command_name" == julia-setup ]]; then
+    julia_archive=$2
+    if [[ "$julia_archive" != /* ]]; then julia_archive="$PWD/$julia_archive"; fi
 fi
 if [[ "$command_name" == package-deb || "$command_name" == package-desktop ]]; then
     shift
@@ -97,6 +105,9 @@ if [[ "$command_name" == setup ]]; then
 fi
 if ! "$python_bin" -c 'import yaml; assert yaml.__version__ == "6.0.3"' >/dev/null 2>&1; then
     printf 'Chybí požadovaný PyYAML 6.0.3. Spusťte: ./run.sh setup\n' >&2; exit 1
+fi
+if [[ "$command_name" == julia-setup ]]; then
+    exec "$python_bin" -m spikes.julia_cli setup-archive --archive "$julia_archive"
 fi
 if [[ "$command_name" == test ]]; then
     shift
