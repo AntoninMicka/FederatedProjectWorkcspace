@@ -15,13 +15,15 @@ rozšířen o pravý kontextový panel:
 výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
 podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou
 pracovní šířku editoru, přesunula panel do volného prostoru napravo a doplnila
-formátovou i vzorovou nápovědu o konkrétní příklad použití.
+formátovou i vzorovou nápovědu o konkrétní příklad použití. Druhé upřesnění
+vyžádalo skutečně vyplněný text místo slovního popisu a volitelnou pozici
+vložení v raw i kostkovém editoru.
 
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-A — coverage a katalogový kontrakt
   (implemented).** Read-only katalog nyní zveřejňuje uzavřenou `coverage` mapu
   pro obecný Markdown, prezentaci a Julia a adapter-level `format_help` pro
-  každý podporovaný formát. Každý formát i vzor nese samostatný příklad
-  použití. Modulová kontrola odmítne duplicitu, chybějící vzor nebo nápovědu
+  každý podporovaný formát. Každý formát i vzor nese samostatnou vyplněnou
+  textovou ukázku bez `DOPLNIT`. Modulová kontrola odmítne duplicitu, chybějící vzor nebo nápovědu
   bez příkladu i nesoulad adaptéru, formátu a insertion mode; deterministická
   revize zahrnuje i tato metadata.
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-B — praktické vzory
@@ -36,7 +38,9 @@ formátovou i vzorovou nápovědu o konkrétní příklad použití.
   nápovědu a příklad k celému souboru a po výběru název, detail a příklad
   vzoru; textarea se změní až explicitním vložením. Na širokém desktopu
   zůstává editoru jeho dosavadní pracovní šířka 820 px a panel využívá volné
-  místo napravo; při viewportu do 1250 px se skládá pod editor.
+  místo napravo; při viewportu do 1250 px se skládá pod editor. Raw editor
+  vkládá fragment/blok na kurzor nebo konec a kostkový editor na konec nebo
+  před kterýkoli rozpoznaný uzel.
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-D — regrese, dokumentace a předání
   (implemented).** Coverage dokument, uživatelský návod, ADR 0058, roadmapa,
   reuse evidence a pracovní evidence popisují stejný rozsah a hranice. Task
@@ -46,14 +50,15 @@ formátovou i vzorovou nápovědu o konkrétní příklad použití.
 ### Ověření, recovery a omezení
 
 Po poslední změně kódu, CSS a testů prošla celá sada
-`python3 -m unittest discover -s tests -v`: **945 testů, 910 prošlo a 35
-volitelných bylo přeskočeno, bez chyb**, 232,310 s. Cílená sada katalogu,
+`python3 -m unittest discover -s tests -v`: **946 testů, 911 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 228,374 s. Cílená sada katalogu,
 prezentačních dokumentů, task grafu, HTTP API a mobilního kontraktu prošla;
 Python kompilace, SPDX, roadmap graf a `git diff --check` byly bez chyby.
 Samostatný skutečný Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel výchozí
 nápovědou a příkladem k souboru, přepnutím na detail a příklad vybraného
-vzoru, explicitním vložením, validací, uložením dokumentu a TODO i dirty
-guardem. Při ukončení preview server zalogoval známý neblokující
+vzoru, vložením raw fragmentu na pozici kurzoru i kostky mezi dva existující
+uzly, validací, uložením dokumentu a TODO i dirty guardem. Při ukončení
+preview server zalogoval známý neblokující
 `BrokenPipe`/`SSL BAD_LENGTH`; test a
 následná kontrola uložených dat skončily úspěšně.
 

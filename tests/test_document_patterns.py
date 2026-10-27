@@ -31,6 +31,13 @@ class DocumentPatternTests(unittest.TestCase):
                                 for value in adapter['format_examples'].values()))
         self.assertTrue(all(item['example'].strip()
                             for item in self.catalog['patterns']))
+        self.assertTrue(all('\n' in item['example']
+                            and 'DOPLNIT' not in item['example']
+                            and not item['example'].startswith('Příklad:')
+                            for item in self.catalog['patterns']))
+        self.assertTrue(all('\n' in value and 'DOPLNIT' not in value
+                            for adapter in self.catalog['adapters']
+                            for value in adapter['format_examples'].values()))
         changed = copy.deepcopy(self.catalog)
         changed['patterns'][0]['text'] = 'changed'
         self.assertNotEqual(changed['patterns'][0]['text'],
@@ -148,6 +155,8 @@ class DocumentPatternTests(unittest.TestCase):
                       widget)
         self.assertIn('helpExample.textContent=pattern?.example||adapter?.format_examples?.[format]',
                       widget)
+        self.assertIn("insertionPosition.value==='end'", widget)
+        self.assertEqual(2, HTML.count('data-raw-insertion-position'))
         self.assertIn("patterns.length?'Vyberte vzor…'", widget)
         self.assertEqual(2, HTML.count('class="raw-editor-help-panel"'))
         self.assertEqual(2, HTML.count('data-raw-help-title'))
@@ -166,6 +175,14 @@ class DocumentPatternTests(unittest.TestCase):
         self.assertIn('.raw-editor-widget textarea{font-size:16px}', CSS)
         self.assertIn('/v1/document-patterns', DesktopHandler.post_paths)
         self.assertNotIn('/v1/document-patterns/save', DesktopHandler.post_paths)
+
+    def test_task_editor_can_insert_before_any_recognized_item(self):
+        self.assertIn('id="task-plan-insert-position"', HTML)
+        self.assertIn("new Option(`Před ${task.parts[4]} · ${task.parts[6]}`",
+                      JS)
+        self.assertIn("parsed.tasks.find(item=>item.parts[4]===target)", JS)
+        self.assertIn("parsed.lines.slice(0,task.line).join('\\n').length",
+                      JS)
 
 
 if __name__ == '__main__':

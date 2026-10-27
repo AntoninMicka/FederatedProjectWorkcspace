@@ -33,9 +33,16 @@ vložit celý dokument, blok nebo fragment na kurzor. Vložení nic neukládá.
 Po otevření editoru není předvybraný první vzor. Pravý panel proto nejprve
 stručně vysvětluje celý aktivní soubor, jeho formát a typické použití.
 Výběr konkrétního vzoru nápovědu nahradí jeho podrobným popisem a vlastním
-příkladem, ale textarea změní až explicitní tlačítko **Vložit vzor**. Na
+příkladem: skutečným vyplněným textem, nikoli slovním popisem použití.
+Textarea se změní až explicitním tlačítkem **Vložit vzor**. Na
 širokém desktopu panel využívá volné místo napravo a nezužuje dosavadní
 820px pracovní plochu editoru; při užším viewportu se přesune pod editor.
+
+U fragmentů a bloků raw editor nabízí vložení na aktuální pozici
+kurzoru/výběru nebo na konec textu. V kostkovém task editoru lze zvolit konec
+souboru nebo pozici před kterýkoli rozpoznaný uzel. Tím lze novou položku vložit
+mezi existující položky bez jejich přeskládání; profilová hierarchie a stabilní
+ID se nadále validují před uložením.
 
 Markdownový vzor může vypadat například takto:
 

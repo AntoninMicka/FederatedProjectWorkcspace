@@ -108,6 +108,8 @@ Task editor je specializovaný pohled nad raw textem a profilem, nikoli nový
 store. Známé bloky materializuje jako samostatné widgety („lego kostky“) pro
 typ, stabilní ID, stav, název, popis, hierarchii a vztahy. Vložení nové kostky
 použije vzor z katalogu ADR 0058 filtrovaný pro aktivní profil a typ dokumentu.
+Uživatel volí konec souboru nebo pozici před libovolným rozpoznaným uzlem;
+editor převede volbu na přesnou pozici v raw bufferu a nemění okolní text.
 
 Task coverage je součástí stejné feature dávky: každý materializovaný typ bloku
 a každá insert operace nabízená UI má stabilní validovaný vzor. Obecné

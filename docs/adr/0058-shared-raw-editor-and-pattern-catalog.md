@@ -38,7 +38,8 @@ Konkrétní použití dodá **typový adaptér**, který uzavřeně deklaruje:
 
 **Katalog vzorů** je oddělený read-only registr. Každý vzor má stabilní ID,
 verzi, název, cílové typy/formáty, režim vložení, text, stručnou nápovědu
-a samostatný příklad použití.
+a samostatný příklad použití. Příklad je vyplněný text v cílovém formátu,
+nikoli slovní instrukce ani text vzoru se zástupnými hodnotami.
 První implementace dodá pouze verzované, reviewované vestavěné vzory pro
 obecný Markdown, úkol/plán, prezentaci a Julia. Projektové, uživatelské nebo
 síťově získané katalogy jsou samostatný budoucí rozsah a nesmějí se tiše
@@ -51,6 +52,10 @@ příkladem zvoleného vzoru. Select nemá implicitně aktivní první vzor a sa
 výběr nemění buffer. Na širokém desktopu si editor zachová dosavadní pracovní
 šířku a panel využije volné místo napravo; při užším viewportu se skládá
 pod textarea.
+
+Pro `cursor` a `block` insertion mode widget dovoluje zvolit aktuální pozici
+kurzoru/výběru nebo konec textu. Režim `document` nadále nahrazuje celý draft po
+potvrzení a volbu pozice nepoužívá.
 
 Vzor je textový příklad, nikoli makro ani spustitelný plugin. U syntaxí s
 komentáři označuje místa k doplnění platný komentář daného formátu, například

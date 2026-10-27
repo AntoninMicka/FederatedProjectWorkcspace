@@ -1196,6 +1196,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('function parseTaskPlanDraft(body)', JS)
         self.assertIn("projectRequest('/v1/artifacts/editor/validate-plan'", JS)
         self.assertIn('data-task-pattern="task-plan.batch-file"', HTML)
+        self.assertIn('id="task-plan-insert-position"', HTML)
+        self.assertIn('data-raw-insertion-position', HTML)
         self.assertIn('/v1/artifacts/editor/validate-plan', DesktopHandler.post_paths)
         self.assertIn("projectRequest('/v1/artifacts/editor/save',{operation_id:artifactEditorAttempt.operation_id,document:artifactEditorAttempt.document}", JS)
         self.assertIn('new:Boolean(artifactEditorItem.new)', JS)

@@ -22,7 +22,7 @@ FORMATS = {
 INSERTION_MODES = {'document', 'block', 'cursor'}
 
 
-def _presentation_pattern(scenario='single'):
+def _presentation_pattern(scenario='single', *, filled=False):
     templates = layout_presets()
     def slide(index, title, bullets, *, layout='content', kind='main', next_=None,
               backups=None, notes=''):
@@ -34,34 +34,44 @@ def _presentation_pattern(scenario='single'):
             'reveal': 'all', 'layout': layout, 'column_break': 0,
         }
     if scenario == 'single':
-        title = 'DOPLNIT: název prezentace'
-        slides = [slide(1, 'DOPLNIT: nadpis', ['DOPLNIT: hlavní sdělení'])]
+        title = 'Stav projektu' if filled else 'DOPLNIT: název prezentace'
+        slides = [slide(1, 'Stav projektu' if filled else 'DOPLNIT: nadpis',
+                        ['Integrace je připravena k akceptaci'] if filled
+                        else ['DOPLNIT: hlavní sdělení'])]
     elif scenario == 'briefing':
-        title = 'DOPLNIT: stručný briefing'
+        title = 'Briefing vydání 1.4' if filled else 'DOPLNIT: stručný briefing'
         slides = [
-            slide(11, 'DOPLNIT: téma briefingu', ['DOPLNIT: účel a publikum'],
+            slide(11, 'Vydání 1.4' if filled else 'DOPLNIT: téma briefingu',
+                  ['Rozhodnout o nasazení ve středu'] if filled else ['DOPLNIT: účel a publikum'],
                   layout='title', next_='00000000-0000-4000-8000-000000000012'),
-            slide(12, 'DOPLNIT: současný stav',
-                  ['DOPLNIT: klíčový fakt', 'DOPLNIT: dopad nebo riziko'],
+            slide(12, 'Současný stav' if filled else 'DOPLNIT: současný stav',
+                  ['Regresní sada prošla', 'Riziko: chybí mobilní smoke'] if filled
+                  else ['DOPLNIT: klíčový fakt', 'DOPLNIT: dopad nebo riziko'],
                   next_='00000000-0000-4000-8000-000000000013'),
-            slide(13, 'DOPLNIT: další krok', ['DOPLNIT: vlastník a termín'],
+            slide(13, 'Další krok' if filled else 'DOPLNIT: další krok',
+                  ['Eva provede mobilní smoke do úterý 15:00'] if filled
+                  else ['DOPLNIT: vlastník a termín'],
                   layout='closing'),
         ]
     elif scenario == 'decision':
-        title = 'DOPLNIT: rozhodovací prezentace'
+        title = 'Volba databáze indexu' if filled else 'DOPLNIT: rozhodovací prezentace'
         slides = [
-            slide(21, 'DOPLNIT: rozhodovací otázka',
-                  ['DOPLNIT: proč je rozhodnutí potřeba'], layout='title',
+            slide(21, 'Který lokální index použít?' if filled else 'DOPLNIT: rozhodovací otázka',
+                  ['Potřebujeme obnovitelnou projekci Git commitu'] if filled
+                  else ['DOPLNIT: proč je rozhodnutí potřeba'], layout='title',
                   next_='00000000-0000-4000-8000-000000000022',
                   backups=['00000000-0000-4000-8000-000000000024']),
-            slide(22, 'DOPLNIT: varianty',
-                  ['DOPLNIT: varianta A', 'DOPLNIT: varianta B'],
+            slide(22, 'Varianty' if filled else 'DOPLNIT: varianty',
+                  ['SQLite: transakční a lokální', 'JSON: jednodušší, ale bez dotazů'] if filled
+                  else ['DOPLNIT: varianta A', 'DOPLNIT: varianta B'],
                   layout='two-column', next_='00000000-0000-4000-8000-000000000023'),
-            slide(23, 'DOPLNIT: doporučení',
-                  ['DOPLNIT: volba', 'DOPLNIT: podmínky a další krok'],
+            slide(23, 'Doporučení' if filled else 'DOPLNIT: doporučení',
+                  ['Použít SQLite', 'Index vždy svázat s ID commitu'] if filled
+                  else ['DOPLNIT: volba', 'DOPLNIT: podmínky a další krok'],
                   layout='closing'),
-            slide(24, 'DOPLNIT: podpůrný důkaz',
-                  ['DOPLNIT: zdroj, omezení a interpretace'], kind='backup'),
+            slide(24, 'Výsledek PoC' if filled else 'DOPLNIT: podpůrný důkaz',
+                  ['Obnova 10 000 položek trvala 1,8 s na testovacím stroji'] if filled
+                  else ['DOPLNIT: zdroj, omezení a interpretace'], kind='backup'),
         ]
     else:
         raise ValueError('Unknown presentation pattern scenario')
@@ -101,6 +111,25 @@ def _julia_computation_pattern():
             'stdout_bytes': 65536, 'stderr_bytes': 65536,
         },
     }
+    validate_computation(value)
+    return json.dumps(value, ensure_ascii=False, indent=2) + '\n'
+
+
+def _julia_computation_example():
+    value = json.loads(_julia_computation_pattern())
+    value['computation_id'] = '75c26e73-ef24-4f1f-a3d1-3cf36f598a04'
+    value['title'] = 'Součet denních odběrů'
+    value['entrypoint'].update({
+        'artifact_id': '81ff754d-a384-4120-a89a-bab27d1c96fc',
+        'path': 'artifacts/81ff754d-a384-4120-a89a-bab27d1c96fc/model.jl',
+        'git_blob': '1' * 40, 'sha256': '2' * 64,
+    })
+    value['environment'].update({
+        'project_path': 'artifacts/23e9c177-d44c-460b-8d56-98b627c26470/Project.toml',
+        'project_sha256': '3' * 64,
+        'manifest_path': 'artifacts/416f6121-036f-47cb-9bf9-c40774ff93bb/Manifest-v1.10.toml',
+        'manifest_sha256': '4' * 64,
+    })
     validate_computation(value)
     return json.dumps(value, ensure_ascii=False, indent=2) + '\n'
 
@@ -164,18 +193,18 @@ ADAPTERS = (
 
 _FORMAT_EXAMPLES = {
     'markdown': {
-        'text/markdown': 'Příklad: začněte zápisem ze schůzky, doplňte závěry a checklist dalších kroků a teprve potom dokument explicitně uložte.',
+        'text/markdown': '# Zápis z technické porady\n\n## Závěry\n\n- Pilotní nasazení proběhne ve středu.\n\n## Další kroky\n\n- [ ] Eva ověří mobilní zobrazení do úterý.\n',
     },
     'task-plan': {
-        'text/markdown': 'Příklad: milestone obsahuje feature batch a ten inline tasky nebo odkaz na jejich samostatný verzovaný soubor.',
+        'text/markdown': '<!-- fpw-plan-profile: software-development/v1 -->\n\n# TODO\n\n- [ ] [MILESTONE-EDITOR] Editory\n  - type: milestone\n  - [ ] [BATCH-HELP] Kontextová nápověda\n    - type: batch\n    - [x] [TASK-EXAMPLE] Doplnit vyplněné ukázky\n      - type: task\n',
     },
     'presentation': {
-        'application/x-fpw-presentation-markdown': 'Příklad: vložte briefing, vraťte se do vizuálního režimu a upravte titulní slide, stav a závěrečný další krok.',
+        'application/x-fpw-presentation-markdown': _presentation_pattern('single', filled=True),
     },
     'julia': {
-        'text/x-julia': 'Příklad: model.jl načte připravený request, provede výpočet a zapíše pouze výstupy deklarované v computation kontraktu.',
-        'application/toml': 'Příklad: Project.toml připne Julia 1.10.12 a deklarované balíčky; odpovídající Manifest zůstane samostatným verzovaným artefaktem.',
-        'application/json': 'Příklad: computation JSON připne model.jl, Project.toml, Manifest, vstupy, parametry, výstupy a fail-closed limity ke stejnému commitu.',
+        'text/x-julia': 'function total(values::Vector{Float64})\n    return sum(values)\nend\n\nprintln(total([12.5, 7.0, 3.5]))\n',
+        'application/toml': 'name = "DailyTotals"\nuuid = "c4607280-4db7-4a55-9ba7-b83f0345cf96"\nversion = "0.1.0"\n\n[compat]\njulia = "=1.10.12"\n',
+        'application/json': _julia_computation_example(),
     },
 }
 ADAPTERS = tuple({**adapter, 'version': adapter['version'] + 1,
@@ -341,27 +370,27 @@ PATTERNS = (
 )
 
 _PATTERN_EXAMPLES = {
-    'markdown.document': 'Příklad: nový technický návod s jedním názvem a krátkým vymezením účelu.',
-    'markdown.section': 'Příklad: do existujícího návodu přidejte sekci „Omezení“ na pozici kurzoru.',
-    'markdown.checklist': 'Příklad: před předáním doplňte body „Testy prošly“ a „Odkazy jsou platné“.',
-    'markdown.decision': 'Příklad: zaznamenejte volbu úložiště, její kontext, zvolenou variantu a provozní důsledky.',
-    'markdown.meeting-notes': 'Příklad: oddělte potvrzené závěry porady od úkolů s vlastníkem a otevřených otázek.',
-    'task-plan.document': 'Příklad: založte hlavní TODO pro profil software-development/v1 a vložte první milestone.',
-    'task-plan.external-document': 'Příklad: držte leaf tasky jedné feature dávky v samostatném document artefaktu.',
-    'task-plan.milestone': 'Příklad: milestone „Editory“ seskupí několik samostatně dodávaných feature dávek.',
-    'task-plan.batch-inline': 'Příklad: malá feature dávka obsahuje dva inline tasky ve stejném TODO souboru.',
-    'task-plan.batch-file': 'Příklad: rozsáhlejší dávka odkazuje na verzovaný soubor se svými leaf tasky.',
-    'task-plan.task': 'Příklad: task „Doplnit validaci“ je nejmenší ověřitelná změna uvnitř jedné dávky.',
-    'task-plan.dependency': 'Příklad: implementační task závisí na dokončení návrhového tasku ve stejné projekci.',
-    'presentation.document': 'Příklad: jedním slidem představte hlavní sdělení a poté deck rozšiřte vizuálním editorem.',
-    'presentation.briefing': 'Příklad: na krátké poradě ukažte téma, současný stav s rizikem a konkrétní další krok.',
-    'presentation.decision-review': 'Příklad: porovnejte dvě varianty, doporučte jednu a podpůrný důkaz ponechte v backup slidu.',
-    'julia.script': 'Příklad: ověřte malý numerický vztah a vypište diagnostickou hodnotu na stdout.',
-    'julia.function': 'Příklad: přidejte čistou funkci model(value), kterou později zavolá runner entrypoint.',
-    'julia.module': 'Příklad: seskupte veřejnou funkci model do modulu DoplnitModel bez implicitních závislostí.',
-    'julia.runner-entrypoint': 'Příklad: vytvořte result.txt, spočítejte jeho SHA-256 a zapište odpovídající result manifest.',
-    'julia.project-toml': 'Příklad: založte prostředí modelu s přesnou kompatibilitou Julia a následně doplňte deklarované závislosti.',
-    'julia.computation-json': 'Příklad: nahraďte neutrální UUID, cesty a hashe referencemi artefaktů z aktuálního committed snapshotu.',
+    'markdown.document': '# Provozní návod\n\nTento dokument popisuje bezpečné spuštění a zastavení služby.\n',
+    'markdown.section': '## Omezení\n\nPostup je ověřený pouze na Linuxu s Pythonem 3.11+.\n',
+    'markdown.checklist': '## Kontrola před předáním\n\n- [x] Cílené testy prošly\n- [ ] Odkazy byly ručně ověřeny\n',
+    'markdown.decision': '# Volba lokálního indexu\n\n- Stav: schváleno\n- Datum: 2026-10-28\n\n## Kontext\n\nIndex musí být obnovitelný z Git commitu.\n\n## Rozhodnutí\n\nPoužijeme SQLite projekci svázanou s ID commitu.\n\n## Důsledky\n\nPři nesouladu s HEAD se index znovu sestaví.\n',
+    'markdown.meeting-notes': '# Porada k vydání 1.4\n\n- Datum: 2026-10-28\n- Účastníci: Eva, Jan\n- Cíl: rozhodnout o pilotním nasazení\n\n## Závěry\n\n- Pilot proběhne ve středu.\n\n## Úkoly\n\n- [ ] Eva ověří mobilní zobrazení do úterý.\n\n## Otevřené otázky\n\n- Kdo bude držet pohotovost?\n',
+    'task-plan.document': '<!-- fpw-plan-profile: software-development/v1 -->\n\n# TODO\n\n- [ ] [MILESTONE-EDITOR] Editory\n  - type: milestone\n',
+    'task-plan.external-document': '<!-- fpw-plan-document: definitions/v1 -->\n\n# Úkoly dávky\n\n- [ ] [TASK-VALIDATE] Doplnit validaci katalogu\n  - type: task\n',
+    'task-plan.milestone': '- [ ] [MILESTONE-EDITOR] Editory dokumentů\n  - type: milestone\n',
+    'task-plan.batch-inline': '  - [ ] [BATCH-HELP] Kontextová nápověda\n    - type: batch\n    - [ ] [TASK-EXAMPLE] Doplnit vyplněné ukázky\n      - type: task\n',
+    'task-plan.batch-file': '  - [ ] [BATCH-CATALOG] [Katalog vzorů](artifacts/793cce75-eb41-40ca-aa70-55c52a6221f2/content.md)\n    - type: batch\n',
+    'task-plan.task': '    - [ ] [TASK-VALIDATE] Doplnit validaci katalogu\n      - type: task\n',
+    'task-plan.dependency': '      - depends_on: TASK-DESIGN\n',
+    'presentation.document': _presentation_pattern('single', filled=True),
+    'presentation.briefing': _presentation_pattern('briefing', filled=True),
+    'presentation.decision-review': _presentation_pattern('decision', filled=True),
+    'julia.script': 'values = [12.5, 7.0, 3.5]\ntotal = sum(values)\nprintln(total)\n',
+    'julia.function': 'function total(values::Vector{Float64})\n    return sum(values)\nend\n',
+    'julia.module': 'module DailyTotals\n\nexport total\n\n"""Sečte denní hodnoty."""\ntotal(values::Vector{Float64}) = sum(values)\n\nend # module DailyTotals\n',
+    'julia.runner-entrypoint': 'using SHA\n\noutput_dir = ARGS[findfirst(==("--fpw-output"), ARGS) + 1]\nraw = Vector{UInt8}("23.0\\n")\nwrite(joinpath(output_dir, "result.txt"), raw)\nprintln(bytes2hex(sha256(raw)))\n',
+    'julia.project-toml': 'name = "DailyTotals"\nuuid = "c4607280-4db7-4a55-9ba7-b83f0345cf96"\nversion = "0.1.0"\n\n[compat]\njulia = "=1.10.12"\n',
+    'julia.computation-json': _julia_computation_example(),
 }
 PATTERNS = tuple({**pattern, 'version': pattern['version'] + 1,
                   'example': _PATTERN_EXAMPLES[pattern['id']]}

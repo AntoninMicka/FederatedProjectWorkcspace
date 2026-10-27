@@ -58,12 +58,18 @@ do `COMP-03`.
 
 ## Kontextová nápověda
 
-Každý adaptér nese krátkou nápovědu a příklad použití pro každý svůj
-formát; každý vzor má vlastní detail a příklad. Po otevření raw editoru není
+Každý adaptér nese krátkou nápovědu a vyplněnou textovou ukázku pro každý
+svůj formát; každý vzor má vlastní detail a vyplněný příklad bez zástupných
+hodnot `DOPLNIT`. Po otevření raw editoru není
 předvybraný žádný vzor a pravý panel popisuje celý aktivní soubor včetně
-krátkého typického použití. Po explicitním výběru položky panel nahradí tento
-obsah názvem, podrobným popisem a příkladem zvoleného vzoru. Vše se vykresluje
-jako bezpečný text. Pouhá změna výběru nemění textarea.
+ukázky skutečného souboru. Po explicitním výběru položky panel nahradí tento
+obsah názvem, podrobným popisem a vyplněným textem zvoleného vzoru. Vše se
+vykresluje jako bezpečný text. Pouhá změna výběru nemění textarea.
+
+Raw editor umožňuje u fragmentu nebo bloku zvolit aktuální pozici
+kurzoru/výběru, nebo konec textu. Kostkový task editor nabízí konec souboru a
+pozici před každým rozpoznaným uzlem; vložení stále mění jen lokální draft a
+pořadí ostatního textu zachovává.
 
 Na širokém desktopu panel neukrajuje prostor z dosavadní 820px pracovní šířky
 editoru, ale využívá prázdné místo napravo od formuláře. Při viewportu do
