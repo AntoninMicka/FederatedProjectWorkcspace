@@ -58,7 +58,10 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   specializovaný editor, který v jedné Workspace transakci uloží `.jl`,
   `Project.toml`, Pkg manifest a hashovanou definici. Nabídnout spustitelnou
   bez-závislostní šablonu, kontrakty parametrů/výstupů a pokročilé limity;
-  importované immutable zdroje nepřepisovat a uložením nic nespouštět.
+  importované immutable zdroje nepřepisovat a uložením nic nespouštět. Po
+  uživatelské korekci umístit vstup do editoru výhradně pod **Nástroje →
+  Julia** v hlavním panelu; záložka **Výpočty** zůstává pro preview, běh a
+  publikaci, nikoli pro authoring.
 - [ ] [in progress] **COMP-03-E — regrese, dokumentace a fyzická akceptace
   (cílová úroveň: PoC validated).** Pokrýt validní i fail-closed cesty,
   concurrency/restart/stale/cancel/unknown/publikaci, shared web wiring a
@@ -98,24 +101,44 @@ Aktivní feature dávka: **Workspace řízení Julia výpočtu**
   celá Julia sada a projektový side-effect test: **30 testů, OK, 2 podmíněně
   přeskočeny**. JavaScript navíc prošel `node --check`; finální plnou sadu
   zopakovat po viditelné akceptaci a poslední případné opravě.
-- Zbývá viditelná uživatelská akceptace záložky **Výpočty** ve skutečném
-  desktopovém nebo webovém Workspace. Real Qt/WebEngine scénáře jsou v běžné
-  sadě podmíněně přeskočené. Read-only inventura sedmi aktuálně registrovaných
-  projektů našla 0 validních Julia definic, takže akceptace potřebuje oddělený
-  demonstrační projekt nebo uživatelem vybraný existující projekt. Bez této
-  kontroly dávku nearchivovat ani nedoporučovat PR.
+- Po přesunu authoringu do hlavní záložky **Nástroje** prošly Python compile,
+  `node --check`, 5 cílených UI/form testů a plná sada mimo socketově omezený
+  sandbox: **937 testů, OK, 35 podmíněně přeskočeno, 236,049 s**. Test hlídá,
+  že editor není v panelu **Výpočty** a že levé **Nástroje → Julia editor**
+  otevřou hlavní panel **Nástroje**.
+- Zbývá viditelná uživatelská akceptace záložek **Nástroje** a **Výpočty** ve
+  skutečném desktopovém nebo webovém Workspace. Real Qt/WebEngine scénáře jsou
+  v běžné sadě podmíněně přeskočené. Read-only inventura sedmi aktuálně
+  registrovaných projektů našla 0 validních Julia definic, takže akceptace
+  potřebuje oddělený demonstrační projekt nebo uživatelem vybraný existující
+  projekt. Bez této kontroly dávku nearchivovat ani nedoporučovat PR.
 
 ### K předání do backlogu
 
+- [ ] [planned] **DOC-PATTERN-CATALOG-01 — katalog textových vzorů a sdílený
+  raw editor (cílová úroveň: implemented).** Původ: upřesněný uživatelský
+  požadavek z 2026-10-27. Typ dokumentu/format adaptér zpřístupní jen relevantní
+  vzory; vzor je validní textový fragment a místa k doplnění používají komentář
+  jen u syntaxí, které jej podporují. Sdílený widget poskytne raw text, vložení
+  vzoru, ochranu rozepsané práce a validaci, ale persistence zůstane v
+  konkrétním Workspace adaptéru. První sada: úkoly, obecný Markdown,
+  prezentace a Julia. Samostatná feature větev a PR.
+- [ ] [planned] **PLAN-FILE-HIERARCHY-01 — souborový kontrakt roadmapy a
+  podgrafů (cílová úroveň: designed).** Popsat profilovatelné typy uzlů a
+  agregaci bez nové databáze. Softwarový profil používá `milestone → batch →
+  task`, kde batch je jedna feature větev/PR a task nejmenší koherentní změna
+  cílená na jeden commit. Podúkoly lze deklarovat ve stejném souboru nebo
+  explicitním odkazem na verzovaný dokument; podgraf pouze vybírá kanonická ID
+  a nepřebírá autoritu nad jejich stavem. Jiné roadmapové profily mohou mít
+  jiné úrovně, ale musí je uzavřeně deklarovat. První dávka je pouze popis a
+  příklady nad soubory, bez DB nebo speciálního editoru.
 - [ ] [planned] **PLAN-TASK-EDITOR-01 — specializovaný editor hlavního TODO
   (cílová úroveň: implemented).** Původ: uživatelský požadavek z 2026-10-27.
-  Navázat na existující Markdown editor a validovaný plánovací graf; nabídnout
-  vložení šablon stabilního ID, přesného stavu, popisu a kanonických vztahů
-  (`depends_on`, `blocks`, `duplicates`, `supersedes`, `related_to`) s
-  nápovědou a kontrolou před uložením. Autoritou zůstává hlavní TODO v Gitu,
-  nevznikne druhý task store. Hotovo po shared desktop/web UI, fail-closed
-  validaci, mobilní/klávesnicové kontrole a testech; samostatná feature větev a
-  PR po doručení `COMP-03`.
+  Až nad `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` materializovat
+  známé bloky do widgetů typu „lego“: typ, stabilní ID, stav, popis a kanonické
+  vztahy (`depends_on`, `blocks`, `duplicates`, `supersedes`, `relates_to`,
+  `parent_of`). Autoritou zůstává textový TODO v Gitu a raw režim; neznámý
+  obsah se nesmí při round-trip ztratit. Samostatná feature větev a PR.
 
 ### Podmínky akceptace
 

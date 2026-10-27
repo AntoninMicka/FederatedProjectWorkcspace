@@ -365,6 +365,17 @@ class DesktopTests(unittest.TestCase):
     def test_julia_workspace_ui_separates_preview_run_and_publication(self):
         self.assertIn('id="julia-tab"', HTML)
         self.assertIn('id="julia-panel"', HTML)
+        self.assertIn('id="tools-main-tab"', HTML)
+        self.assertIn('id="tools-panel"', HTML)
+        self.assertIn('id="open-julia-tool"', HTML)
+        self.assertLess(HTML.index('id="tools-panel"'), HTML.index('id="julia-panel"'))
+        tools_panel = HTML.split('<div id="tools-panel"', 1)[1].split(
+            '<div id="julia-panel"', 1)[0]
+        julia_panel = HTML.split('<div id="julia-panel"', 1)[1].split(
+            '<div id="outputs-overview-panel"', 1)[0]
+        self.assertIn('id="julia-editor"', tools_panel)
+        self.assertNotIn('id="julia-editor"', julia_panel)
+        self.assertIn('id="julia-definition"', julia_panel)
         self.assertIn('id="julia-parameters"', HTML)
         self.assertIn('id="julia-editor"', HTML)
         self.assertIn('id="julia-template-minimal"', HTML)
@@ -377,6 +388,7 @@ class DesktopTests(unittest.TestCase):
             self.assertIn(f"projectRequest('/v1/julia/{path}'", JS)
             self.assertIn(f'/v1/julia/{path}', DesktopHandler.post_paths)
         self.assertIn('textContent=JSON.stringify(shown,null,2)', JS)
+        self.assertIn("selectMainTab(document.querySelector('#tools-main-tab'))", JS)
         self.assertNotIn('julia-output-value.innerHTML', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
@@ -1064,7 +1076,8 @@ renderPresenterBackups();assert.equal(linked.children.length,0);assert.equal(pre
         self.assertIn('.sidebar-project-primary-actions button:focus-visible .project-action-label', CSS)
         self.assertIn('id="open-notebooklm-import"', projects)
         self.assertIn('id="sidebar-tools"', HTML)
-        self.assertIn('Katalog nástrojů je zatím prázdný', HTML)
+        self.assertIn('id="sidebar-tool-list"', HTML)
+        self.assertIn('id="open-julia-tool"', HTML)
         self.assertIn('id="sidebar-federation"', HTML)
         self.assertIn('id="open-federation-sharing"', HTML)
         self.assertIn('id="open-federation-network"', HTML)

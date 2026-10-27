@@ -192,9 +192,11 @@ GPG krok výše. Příkaz také nestahuje balíčky, nespouští projektový kó
 nevytváří `computation.json`.
 
 Tím je připravený **runtime**. Otevřený projekt poté nabídne v záložce
-**Výpočty** každou validní definici `fpw-julia-computation-v1`. Tlačítko
-**Nový Julia model** otevře specializovaný editor s minimální bez-závislostní
-šablonou. Jedno potvrzené uložení zapíše Julia entrypoint, `Project.toml`,
+**Výpočty** každou validní definici `fpw-julia-computation-v1`. Editor se
+otevírá z levého panelu přes **Nástroje → Julia editor** a zobrazí se v hlavní
+záložce **Nástroje**; záložka **Výpočty** slouží pouze k preview, běhu a
+publikaci. Tlačítko **Nový Julia model** vloží minimální bez-závislostní
+šablonu. Jedno potvrzené uložení zapíše Julia entrypoint, `Project.toml`,
 `Manifest.toml` a definici jako čtyři projektově spravované `document`
 artefakty v jediné Workspace transakci; importované immutable `source`
 artefakty editor měnit nesmí. Uložením se kód nespouští.
