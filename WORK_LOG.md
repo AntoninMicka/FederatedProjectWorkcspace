@@ -5,11 +5,68 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## PLAN-TASK-EDITOR-01 — Profilovaný souborový plán a lossless task editor — 2026-10-27
+
+Dávka vznikla na větvi `feature/plan-task-editor` z `develop` `ac4281a` a
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
+čeká na commit, push a doručení jediným PR do `develop`. Rozsah na výslovný
+požadavek uživatele zahrnul původní `PLAN-FILE-HIERARCHY-01` a úplnou task
+coverage katalogu; obecné rozšíření ostatních adaptérů zůstává v
+`DOC-PATTERN-LIBRARY-01`.
+
+- [x] [completed] **PLAN-TASK-EDITOR-01-A — souborový profil a materializace
+  (implemented).** Profil `software-development/v1` vynucuje
+  `milestone → batch → task`. Batch může mít potomky jako inline pododrážky,
+  nebo přesný odkaz na jeden označený Markdown document artefakt. Obě
+  reprezentace vytvářejí stejný `parent_id`, typ, hierarchickou hloubku a graf;
+  graf je deterministický materializovaný pohled souborů jednoho commitu.
+- [x] [completed] **PLAN-TASK-EDITOR-01-B — task coverage katalogu
+  (implemented).** Katalog má stabilní vzory pro kořen plánu, externí task
+  dokument, milestone, inline batch, file batch, task a dependency. Všechny
+  operace nabízené task editorem mají odpovídající validovaný vzor a vložení
+  pouze mění lokální draft.
+- [x] [completed] **PLAN-TASK-EDITOR-01-C — lossless editor Kostky / Raw text
+  (implemented).** Shared desktop/web editor materializuje stav, typ, ID,
+  název/odkaz, rodiče a vztahy. Editace přepisuje pouze přesně rozpoznaný
+  checkbox řádek nebo `type` řádek; neznámý obsah, komentáře, pořadí a
+  whitespace zůstávají nedotčené. Nejednoznačný dokument zamkne strukturovaný
+  režim a zachová raw zápisovou cestu.
+- [x] [completed] **PLAN-TASK-EDITOR-01-D — revizně připnutá validace a
+  recovery (implemented).** Read-only endpoint dosadí draft jediného souboru
+  do přesného committed snapshotu a před save materializuje celý bundle.
+  Neznámý soubor, duplicita, smíšená inline/file reprezentace, neplatný profil,
+  hierarchy/dependency cyklus, pending operace a stale HEAD selžou bez zápisu.
+  Vlastní save dál používá jedinou existující Workspace/journal/Git/index
+  operaci.
+- [x] [completed] **PLAN-TASK-EDITOR-01-E — dokumentace a ověření
+  (implemented).** ADR 0059, uživatelský návod, task-planning dokument,
+  roadmapa, backlog a strojový graf používají stejný kontrakt batch odkazu a
+  stejné dependency hrany.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **943 testů, 908 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 227,167 s. Cílené testy parseru,
+katalogu, ArtifactActions, HTTP a statického UI prošlo; Python kompilace i
+`node --check` browserového JavaScriptu byly bez chyby. Samostatný skutečný
+Qt/WebEngine shared desktop/web smoke s `M0_DESKTOP_TEST=1` prošel vložením
+vzoru, uložením dokumentu, vykreslením profilovaného TODO jako kostky, uložením
+a dirty guardem. Při ukončení náhledu server zalogoval neblokující
+`BrokenPipe`, test i následná kontrola uložených dat skončily úspěšně.
+
+Čtení bundle nic nezapisuje. Editace jednoho souboru zachovává stávající crash
+hranice: před commitem je autoritou journal, po commitu lze index obnovit z
+HEAD. První verze nevytváří externí task dokument a jeho batch odkaz atomicky,
+nepřesouvá uzly mezi soubory a nenabízí nový task store. Fyzický mobilní
+viewport nebyl samostatně akceptován; responzivní pravidla a nativní prvky jsou
+pokryté staticky. Stav doručení PR zůstává otevřený.
+
 ## DOC-PATTERN-CATALOG-01 — Katalog textových vzorů a sdílený raw editor — 2026-10-27
 
 Dávka vznikla na větvi `feature/doc-pattern-catalog-raw-editor` z `develop`
 `8854082` a dosáhla cílové úrovně **implemented**. Feature akceptace je
-dokončená; PR do `develop` dosud nebyl vytvořen ani sloučen.
+dokončená; do `develop` byla doručena PR #107 jako squash commit `ac4281a`.
 
 - [x] [completed] **DOC-PATTERN-CATALOG-01-A — validovaný katalog a typové
   adaptéry (implemented).** Nový uzavřený registr má stabilní ID/verze,
@@ -55,14 +112,17 @@ neuložený draft. Persistenční a recovery hranice dokumentu a prezentace se
 nezměnily a nevznikl druhý store ani journal. Fyzický mobilní viewport nebyl
 samostatně přijat uživatelem; responzivní pravidla a nativní ovládací prvky
 jsou ověřené staticky. Julia UI a ARM64 runtime akceptace zůstávají v
-`COMP-03`; její obnovení čeká na doručení této feature do `develop`.
+`COMP-03`; po doručení této feature do `develop` ji lze obnovit. První
+vestavěný katalog je záměrně minimální. Rozšíření praktických vzorů je
+samostatná plánovaná dávka `DOC-PATTERN-LIBRARY-01`, aby neměnilo akceptovaný
+rozsah tohoto PR.
 
 ## DOC-DEPENDENCY-FIX-01 — Oprava závislostí editorů a COMP-03 — 2026-10-27
 
 Dávka na větvi `feature/comp-03-dependency-fix` z `develop` `e4cf4c6`
 opravila obrácenou závislost zavedenou při návrhu editorů. Dosáhla úrovně
-**designed**; feature akceptace dokumentace je dokončená, PR do `develop`
-dosud nebyl vytvořen ani sloučen.
+**designed**; feature akceptace dokumentace je dokončená a do `develop` byla
+doručena PR #106 jako squash commit `8854082`.
 
 - [x] [completed] **DOC-DEPENDENCY-FIX-01-A — skutečné pořadí dávek
   (designed).** `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` jsou
@@ -78,8 +138,8 @@ dosud nebyl vytvořen ani sloučen.
 
 Jde pouze o opravu evidence a návrhového grafu. Neimplementuje raw editor,
 souborovou hierarchii ani Julia integraci a nemění dosavadní kód na
-`feature/comp-03-julia-workspace`. Doručení opravy zůstává otevřené do
-samostatného PR a merge.
+`feature/comp-03-julia-workspace`. V době feature akceptace zůstávalo doručení
+otevřené do samostatného PR a merge; tento krok následně dokončila PR #106.
 
 ## DOC-EDITOR-CONTRACTS-01 — Kontrakty vzorů, raw editoru a souborového plánu — 2026-10-27
 

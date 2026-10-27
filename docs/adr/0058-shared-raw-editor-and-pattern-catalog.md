@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 - Datum: 2026-10-27
 - Dávka: `DOC-EDITOR-CONTRACTS-01`
 - Implementace: `DOC-PATTERN-CATALOG-01` na větvi
-  `feature/doc-pattern-catalog-raw-editor`; doručení PR zůstává samostatný stav
+  `feature/doc-pattern-catalog-raw-editor`; doručeno PR #107 jako `ac4281a`
 
 ## Kontext
 
@@ -103,6 +103,11 @@ spuštění kódu, víceartefaktové uložení a fyzická ARM64 akceptace zůst�
 `COMP-03`. Obecný Markdown v této dávce používá bounded textovou validaci;
 specializovaný task parser vznikne až nad souborovým kontraktem v
 `PLAN-TASK-EDITOR-01`.
+
+První katalog ověřuje kontrakt a integraci, nikoli konečnou obsahovou šíři.
+Reviewovanou coverage mapu a praktické vzory pro realizované scénáře doplní
+samostatná dávka `DOC-PATTERN-LIBRARY-01`. Tím se obsahové rozšíření nemíchá do
+akceptovaného implementačního PR ani do samotného specializovaného editoru.
 
 ## Reuse rozhodnutí
 

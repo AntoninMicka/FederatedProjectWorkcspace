@@ -8,8 +8,8 @@ SPDX-License-Identifier: MPL-2.0
 - Stav: přijatý návrh
 - Datum: 2026-10-27
 - Dávka: `DOC-EDITOR-CONTRACTS-01`
-- Implementace: plánovaná jako `PLAN-FILE-HIERARCHY-01` a
-  `PLAN-TASK-EDITOR-01`
+- Implementace: `PLAN-TASK-EDITOR-01` (zahrnuje původní souborový rozsah
+  `PLAN-FILE-HIERARCHY-01` a task coverage katalogu)
 
 ## Kontext
 
@@ -21,35 +21,48 @@ vlastní databázi ani při uložení přepsat neznámý Markdown.
 
 ## Rozhodnutí: autoritativní souborový bundle
 
-Hlavní TODO zůstává kořenem plánu. Může explicitně zahrnout další verzované
-Markdown document artefakty stejného projektu. Souborový bundle je uzavřený
-seznam z aktuálního validovaného Git snapshotu; globální hledání všech `.md`
-souborů ani implicitní sledování odkazů se nepoužije.
-
-Plánovaný hlavičkový kontrakt vypadá například takto:
+Hlavní TODO zůstává kořenem plánu a deklaruje profil:
 
 ```markdown
 <!-- fpw-plan-profile: software-development/v1 -->
-<!-- fpw-plan-include: artifacts/UUID/content.md -->
 ```
 
-Zahrnutý soubor deklaruje svůj účel, ale nemůže dále rekurzivně rozšiřovat
-bundle v první verzi:
+Batch reprezentuje své task potomky právě jedním ze dvou způsobů. Buď jsou
+checkbox odrážky fyzicky vnořené pod batch, nebo je titul batch přesným
+Markdown odkazem na verzovaný document artefakt:
+
+```markdown
+  - [ ] [BATCH-01] Dávka s inline úkoly
+    - type: batch
+    - [ ] [TASK-01] První úkol
+      - type: task
+
+  - [ ] [BATCH-02] [Dávka v souboru](artifacts/UUID/content.md)
+    - type: batch
+```
+
+Odkazovaný soubor deklaruje svůj účel a v první verzi obsahuje pouze kořenové
+leaf tasky daného batch:
 
 ```markdown
 <!-- fpw-plan-document: definitions/v1 -->
 ```
 
+Souborový bundle je uzavřen přes odkazy rozpoznaných batch uzlů z jednoho
+aktuálního validovaného Git snapshotu; globální hledání všech `.md` souborů ani
+sledování jiných Markdown odkazů se nepoužije. Batch nesmí současně mít inline
+potomky i souborový odkaz a externí soubor nesmí odkazovat na další soubor.
+
 Každé stabilní ID má právě jednu kanonickou definici v celém bundle. Její text,
 typ a stav jsou autoritativní v souboru, ve kterém je definována. Duplicita,
-neznámý include, source artefakt, cesta mimo projekt, cyklus/rekurze, nepovolená
+neznámý odkaz, source artefakt, cesta mimo projekt, cyklus/rekurze, nepovolená
 privacy nebo změna HEAD odmítne celou projekci plánu, nikoli projekt či raw
-editor. Include odkazuje na verzovanou artifact cestu obsahující stabilní UUID;
-přejmenování souboru se řeší explicitní změnou kořenového dokumentu.
+editor. Odkaz míří na verzovanou artifact cestu obsahující stabilní UUID;
+přejmenování souboru se řeší explicitní změnou batch odrážky.
 
 Podgraf z ADR 0055 zůstává pouze dokumentem s tagem `plan-subgraph`, který
 vybírá kanonická ID z již sestaveného bundle. Nikdy nedefinuje stav, typ,
-hierarchii ani include a není druhou autoritou.
+hierarchii ani souborový odkaz a není druhou autoritou.
 
 ## Profily a hierarchie
 
@@ -71,24 +84,21 @@ sourozeneckých tasků v dávce s explicitními dependency hranami. Opravný com
 nebo administrativní výjimka musí být popsány; nemění pravidlo, že batch je
 jediný PR.
 
-Příklad definic:
+Příklad definic používá vnoření jako kanonickou hierarchii:
 
 ```markdown
 - [ ] [M-EDITOR] Editory dokumentů
   - type: milestone
-  - parent_of: B-PATTERNS
-- [ ] [B-PATTERNS] Katalog vzorů a raw editor
-  - type: batch
-  - parent: M-EDITOR
-  - parent_of: T-CATALOG
-- [ ] [T-CATALOG] Zavést validovaný registr vzorů
-  - type: task
-  - parent: B-PATTERNS
-  - depends_on: T-ADAPTERS
+  - [ ] [B-PATTERNS] Katalog vzorů a raw editor
+    - type: batch
+    - [ ] [T-CATALOG] Zavést validovaný registr vzorů
+      - type: task
+      - depends_on: T-ADAPTERS
 ```
 
-`parent: X` je pouze čitelný inverzní zápis kanonické hrany `X parent_of Y`;
-projekce uloží jediný směr. Stávající `depends_on`, `blocks`, `duplicates`,
+`parent_of` je volitelná kontrolní deklarace a musí přesně odpovídat fyzickému
+vnoření nebo rodiči odkazovaného souboru. Projekce uloží jediný směr
+`parent_id`. Stávající `depends_on`, `blocks`, `duplicates`,
 `supersedes` a `relates_to` zůstávají ortogonální k hierarchii. Dependency
 cyklus je zakázaný; hierarchie musí být acyklická a odpovídat profilu.
 
@@ -99,6 +109,11 @@ store. Známé bloky materializuje jako samostatné widgety („lego kostky“) 
 typ, stabilní ID, stav, název, popis, hierarchii a vztahy. Vložení nové kostky
 použije vzor z katalogu ADR 0058 filtrovaný pro aktivní profil a typ dokumentu.
 
+Task coverage je součástí stejné feature dávky: každý materializovaný typ bloku
+a každá insert operace nabízená UI má stabilní validovaný vzor. Obecné
+rozšíření katalogu pro jiné adaptéry zůstává oddělené v
+`DOC-PATTERN-LIBRARY-01`.
+
 Round-trip musí být lossless pro obsah, který editor nevlastní. Implementace
 smí měnit pouze přesně rozpoznané span bloky; zachová pořadí, komentáře,
 neznámé odstavce, whitespace a ostatní metadata. Pokud parser neumí určit
@@ -108,14 +123,14 @@ musí před uložením vidět validační chyby a může se kdykoli vrátit k ra
 
 První task editor pracuje s jedním vybraným souborem bundle. Přesun uzlu mezi
 soubory je víceartefaktová operace a není součástí první implementace. Přidání
-existujícího externího souboru do bundle upravuje pouze kořenový include a
+existujícího externího souboru do bundle upravuje pouze odkaz v batch odrážce a
 podléhá běžnému expected-HEAD, journal, Git CAS a index recovery kontraktu.
 
 ## Crash boundaries a důsledky
 
 Čtení a sestavení bundle jsou read-only projekce jednoho commitu. Editace
 jednoho souboru používá stávající document Workspace operaci. Pád před jejím
-commitem obnoví journal, po commitu lze obnovit index z HEAD. Include a nově
+commitem obnoví journal, po commitu lze obnovit index z HEAD. Odkaz a nově
 vytvořený externí dokument nesmějí v první verzi vznikat dvěma nezávislými
 commity vydávanými za atomický výsledek; buď použijí jednu koordinovanou
 vícesouborovou Workspace operaci, nebo uživatel nejprve uloží dokument a až

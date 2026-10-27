@@ -15,6 +15,9 @@ TASK_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
 TASK = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
 RELATION = re.compile(r'^(\s*)[-+*]\s+([^:]{1,32}):\s*(.+?)\s*$')
 REFERENCE = re.compile(r'^\s*[-+*]\s+\[[ xX]\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
+PROFILE = re.compile(r'^\s*<!--\s*fpw-plan-profile:\s*([^\s]+)\s*-->\s*$')
+PLAN_DOCUMENT = re.compile(r'^\s*<!--\s*fpw-plan-document:\s*definitions/v1\s*-->\s*$')
+DOCUMENT_LINK = re.compile(r'^\[([^\]]+)\]\((artifacts/([0-9a-f-]{36})/[^)]+\.md)\)$')
 ALIASES = {
     'depends_on': 'depends_on', 'závisí na': 'depends_on', 'blocked_by': 'depends_on',
     'blokován': 'depends_on', 'blocks': 'blocks', 'blokuje': 'blocks',
@@ -24,6 +27,8 @@ ALIASES = {
     'parent_of': 'parent_of', 'rodič': 'parent_of',
 }
 MAX_TASKS, MAX_RELATIONS, MAX_SUBGRAPHS = 1000, 4000, 100
+SOFTWARE_PROFILE = 'software-development/v1'
+CHILD_TYPES = {'milestone': {'batch'}, 'batch': {'task'}, 'task': set()}
 
 
 def _visible_lines(body):
@@ -41,6 +46,11 @@ def _visible_lines(body):
             yield raw
 
 
+def _document_source(files, entities, artifact_id):
+    doc = document(files, entities, artifact_id)
+    return doc, {'artifact_id': artifact_id, 'path': doc['path']}
+
+
 def _targets(value):
     values = [item.strip() for item in value.split(',')]
     require(values and all(TASK_ID.fullmatch(item) for item in values),
@@ -49,9 +59,17 @@ def _targets(value):
     return values
 
 
-def parse_main_todo(body):
+def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile=False):
     tasks, pending, relation_count = {}, None, 0
-    for line in _visible_lines(body):
+    profile = None
+    ancestors = []
+    visible = list(_visible_lines(body))
+    for line_number, line in enumerate(visible, 1):
+        profile_match = PROFILE.match(line)
+        if profile_match:
+            require(profile is None, 'Plán smí deklarovat profil právě jednou.')
+            profile = profile_match.group(1)
+            continue
         checkbox = re.match(r'^\s*[-+*]\s+\[[ xX]\]\s+', line)
         match = TASK.match(line)
         if checkbox and not match:
@@ -61,9 +79,20 @@ def parse_main_todo(body):
             require(task_id not in tasks, f'Duplicitní ID úkolu: {task_id}')
             require(0 < len(title) <= 500 and '\0' not in title, 'Neplatný název úkolu.')
             require(len(tasks) < MAX_TASKS, 'Hlavní TODO přesahuje limit 1000 úkolů.')
+            indent_value = len(indent.expandtabs(4))
+            while ancestors and ancestors[-1][0] >= indent_value:
+                ancestors.pop()
+            parent_id = ancestors[-1][1] if ancestors else inherited_parent
+            link = DOCUMENT_LINK.fullmatch(title)
             pending = {'id': task_id, 'title': title, 'checked': checked.lower() == 'x',
-                       'indent': len(indent.expandtabs(4)), 'relations': defaultdict(list)}
+                       'indent': indent_value, 'relations': defaultdict(list),
+                       'type': None, 'parent_id': parent_id,
+                       'document_link': link.group(2) if link else None,
+                       'source': source, 'line': line_number}
+            if link:
+                pending['title'] = link.group(1)
             tasks[task_id] = pending
+            ancestors.append((indent_value, task_id))
             continue
         relation = RELATION.match(line)
         if relation and pending and len(relation.group(1).expandtabs(4)) > pending['indent']:
@@ -72,8 +101,88 @@ def parse_main_todo(body):
                 values = _targets(relation.group(3)); relation_count += len(values)
                 require(relation_count <= MAX_RELATIONS, 'TODO přesahuje limit 4000 vztahů.')
                 pending['relations'][key].extend(values)
+            elif relation.group(2).strip().lower() in {'type', 'typ'}:
+                value = relation.group(3).strip().lower()
+                require(value in CHILD_TYPES, f'Neznámý typ uzlu: {value}')
+                require(pending['type'] is None, f'Uzel {pending["id"]} deklaruje typ vícekrát.')
+                pending['type'] = value
     require(tasks, 'Hlavní TODO neobsahuje žádný strukturovaný úkol.')
-    return tasks
+    if require_profile:
+        require(profile is None, 'Externí soubor nesmí měnit profil plánu.')
+    return tasks, profile
+
+
+def _profiled_tasks(files, entities, project_id):
+    todo_id = main_todo_id(project_id)
+    root, source = _document_source(files, entities, todo_id)
+    tasks, profile = parse_main_todo(root['body'], source=source)
+    if profile is None:
+        return tasks, None
+    require(profile == SOFTWARE_PROFILE, f'Neznámý profil plánu: {profile}')
+    paths = {}
+    for artifact_id, metadata in entities.items():
+        if metadata.get('kind') != 'document' or 'plan-subgraph' in metadata.get('tags', []):
+            continue
+        try:
+            candidate, candidate_source = _document_source(files, entities, artifact_id)
+        except (ValidationError, UnicodeError):
+            continue
+        paths[candidate_source['path']] = (candidate, candidate_source)
+    linked = []
+    for task in list(tasks.values()):
+        if task['document_link']:
+            require(task['type'] == 'batch', 'Odkaz na soubor může nést pouze batch.')
+            linked.append(task)
+    for batch in linked:
+        inline = [item['id'] for item in tasks.values() if item['parent_id'] == batch['id']]
+        require(not inline, f'Batch {batch["id"]} nesmí současně obsahovat pododrážky a odkaz na soubor.')
+        require(batch['document_link'] in paths,
+                f'Batch {batch["id"]} odkazuje na neznámý soubor: {batch["document_link"]}')
+        external, external_source = paths[batch['document_link']]
+        require(any(PLAN_DOCUMENT.match(line) for line in external['body'].splitlines()),
+                f'Externí soubor batch {batch["id"]} nemá značku fpw-plan-document.')
+        children, child_profile = parse_main_todo(
+            external['body'], source=external_source, inherited_parent=batch['id'],
+            require_profile=True)
+        require(child_profile is None, 'Externí soubor nesmí deklarovat profil.')
+        require(all(item['parent_id'] == batch['id'] for item in children.values()),
+                f'Externí soubor batch {batch["id"]} smí obsahovat pouze kořenové task odrážky.')
+        require(not any(item['document_link'] for item in children.values()),
+                f'Externí soubor batch {batch["id"]} nesmí obsahovat další souborový odkaz.')
+        duplicates = sorted(set(tasks) & set(children))
+        require(not duplicates, 'Duplicitní ID úkolu v bundle: ' + ', '.join(duplicates))
+        tasks.update(children)
+        require(len(tasks) <= MAX_TASKS, 'Plánovací bundle přesahuje limit 1000 úkolů.')
+        relation_count = sum(len(targets) for item in tasks.values()
+                             for targets in item['relations'].values())
+        require(relation_count <= MAX_RELATIONS,
+                'Plánovací bundle přesahuje limit 4000 vztahů.')
+    _validate_hierarchy(tasks)
+    return tasks, profile
+
+
+def _validate_hierarchy(tasks):
+    for task in tasks.values():
+        require(task['type'] in CHILD_TYPES, f'Uzel {task["id"]} nemá platný type.')
+        parent_id = task['parent_id']
+        if parent_id is None:
+            require(task['type'] == 'milestone',
+                    f'Kořenový uzel {task["id"]} musí být milestone.')
+            continue
+        require(parent_id in tasks, f'Uzel {task["id"]} má neznámého rodiče {parent_id}.')
+        parent = tasks[parent_id]
+        require(task['type'] in CHILD_TYPES[parent['type']],
+                f'Hierarchie {parent["type"]} → {task["type"]} není v profilu povolená.')
+    for parent in tasks.values():
+        for child_id in parent['relations'].get('parent_of', []):
+            require(child_id in tasks, f'Uzel {parent["id"]} má neznámé dítě {child_id}.')
+            require(tasks[child_id]['parent_id'] == parent['id'],
+                    f'Deklarovaný parent_of {parent["id"]} → {child_id} neodpovídá souborové hierarchii.')
+    for task in tasks.values():
+        seen, current = set(), task
+        while current['parent_id'] is not None:
+            require(current['id'] not in seen, 'Hierarchie plánu obsahuje cyklus.')
+            seen.add(current['id']); current = tasks[current['parent_id']]
 
 
 def _topology(tasks):
@@ -142,7 +251,7 @@ def project_task_graph(files, entities, project_id, commit_id):
         return {'schema': SCHEMA, 'status': 'missing', 'revision': commit_id, 'nodes': [],
                 'critical_path': [], 'ready': [], 'blocked': [], 'subgraphs': []}
     try:
-        tasks = parse_main_todo(document(files, entities, todo_id)['body'])
+        tasks, profile = _profiled_tasks(files, entities, project_id)
         order, dependencies, derived, depths, critical = _topology(tasks)
         subgraphs = _subgraphs(files, entities, tasks)
         nodes = []
@@ -152,12 +261,19 @@ def project_task_graph(files, entities, project_id, commit_id):
                          if key != 'depends_on' and values}
             nodes.append({'id': task_id, 'title': task['title'], 'checked': task['checked'],
                           'depends_on': parents, 'relations': relations, 'depth': depths[task_id],
+                          'type': task['type'], 'parent_id': task['parent_id'],
+                          'hierarchy_depth': _hierarchy_depth(tasks, task_id),
+                          'source': task['source'], 'line': task['line'],
                           'critical': task_id in critical,
                           'ready': not task['checked'] and all(tasks[parent]['checked'] for parent in parents),
                           'blocked': not task['checked'] and any(not tasks[parent]['checked'] for parent in parents)})
+        if profile:
+            for node in nodes:
+                node['depth'] = node['hierarchy_depth']
         digest = sha256(json.dumps({'commit': commit_id, 'nodes': nodes, 'subgraphs': subgraphs},
                                    sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-        value = {'schema': SCHEMA, 'status': 'ready', 'revision': digest, 'nodes': nodes,
+        value = {'schema': SCHEMA, 'status': 'ready', 'revision': digest, 'profile': profile,
+                 'nodes': nodes,
                  'critical_path': critical, 'ready': [n['id'] for n in nodes if n['ready']],
                  'blocked': [n['id'] for n in nodes if n['blocked']], 'subgraphs': subgraphs}
         value['svg'] = task_graph_svg(value)
@@ -165,6 +281,13 @@ def project_task_graph(files, entities, project_id, commit_id):
     except (ValidationError, UnicodeError, ValueError) as exc:
         return {'schema': SCHEMA, 'status': 'invalid', 'revision': commit_id, 'error': str(exc),
                 'nodes': [], 'critical_path': [], 'ready': [], 'blocked': [], 'subgraphs': []}
+
+
+def _hierarchy_depth(tasks, task_id):
+    depth, current = 0, tasks[task_id]
+    while current['parent_id'] is not None:
+        depth += 1; current = tasks[current['parent_id']]
+    return depth
 
 
 def task_graph_svg(value, selected=None):
@@ -181,6 +304,10 @@ def task_graph_svg(value, selected=None):
              '<style>text{font-family:system-ui}.e{stroke:#91a5b1;fill:none}.n{fill:#fff;stroke:#557384;stroke-width:2}.r{stroke:#176b60;stroke-dasharray:6 3}.b{fill:#f8dddd}.c{stroke-width:4}</style>']
     for item in nodes:
         x2, y2 = positions[item['id']]
+        parent = item.get('parent_id')
+        if parent in positions:
+            x1, y1 = positions[parent]
+            parts.append(f'<path class="e" d="M{x1+220} {y1+25} L{x2} {y2+25}"/>')
         for parent in item['depends_on']:
             if parent in positions:
                 x1, y1 = positions[parent]; parts.append(f'<path class="e" d="M{x1+220} {y1+25} C{x1+240} {y1+25} {x2-20} {y2+25} {x2} {y2+25}"/>')
