@@ -320,28 +320,34 @@ nikoli roadmapa.
 
 ## 2H. Vzory dokumentů a společné editory
 
-**Stav: designed v [ADR 0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md)
-a [ADR 0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md); runtime
-implementace neexistuje.** Cílem je jeden raw textový widget napříč typy
-dokumentů, filtrovaný katalog textových vzorů a bezpečné specializované
-editory bez druhé autority dat nebo univerzálního save endpointu.
+**Stav: katalog, sdílený raw widget a Markdown/TODO/prezentační adaptéry jsou
+implemented v `DOC-PATTERN-CATALOG-01`; souborový plán a speciální task editor
+zůstávají designed v [ADR
+0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
+0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).** Cílem je jeden
+raw textový widget napříč typy dokumentů, filtrovaný katalog textových vzorů a
+bezpečné specializované editory bez druhé autority dat nebo univerzálního save
+endpointu.
 
-- [ ] Implementovat typové adaptéry, které raw widgetu dodají formát,
+- [x] Implementovat typové adaptéry, které raw widgetu dodají formát,
   komentářovou syntaxi, validaci, relevantní vzory, limity a existující
   doménovou operaci uložení. Widget sám nesmí znát Git cesty ani journal.
-- [ ] Vestavěný katalog filtrovat podle typu dokumentu; první sada zahrne
+- [x] Vestavěný katalog filtrovat podle typu dokumentu; první sada zahrne
   obecný Markdown, úkol/plán, prezentaci a Julia. Místa k doplnění budou
   komentářem pouze tam, kde je takový komentář platnou syntaxí.
-- [ ] Zachovat raw text jako fallback. Specializovaný editor smí
+- [x] Zachovat raw text jako fallback. Specializovaný editor smí
   materializovat známé bloky do widgetů jen při lossless round-trip;
   neznámý obsah nesmí tiše odstranit ani přeformátovat.
 - [ ] Reuse prezentačního a Julia editoru provést přes společný widget a
   adaptéry, nikoli jejich sloučení do jedného datového formátu nebo
-  transakce. Julia authoring zůstane v Nástrojích, výpočet ve Výpočtech.
+  transakce. Prezentační raw režim je implementovaný; Julia adaptér je
+  připravený, ale jeho authoring zapojí až `COMP-03`. Julia authoring zůstane
+  v Nástrojích, výpočet ve Výpočtech.
 
-Implementační rozpad drží BACKLOG `DOC-PATTERN-CATALOG-01`,
-`PLAN-FILE-HIERARCHY-01` a `PLAN-TASK-EDITOR-01`. Uživatelský kontrakt a
-příklady jsou v [návodu](docs/document-patterns-and-task-authoring.md).
+Akceptovanou implementační evidenci drží WORK_LOG
+`DOC-PATTERN-CATALOG-01`; navazující rozpad drží BACKLOG
+`PLAN-FILE-HIERARCHY-01` a `PLAN-TASK-EDITOR-01`. Uživatelský kontrakt a příklady jsou v
+[návodu](docs/document-patterns-and-task-authoring.md).
 
 ---
 

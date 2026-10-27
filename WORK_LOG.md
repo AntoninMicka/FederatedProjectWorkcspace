@@ -5,6 +5,58 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DOC-PATTERN-CATALOG-01 — Katalog textových vzorů a sdílený raw editor — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-catalog-raw-editor` z `develop`
+`8854082` a dosáhla cílové úrovně **implemented**. Feature akceptace je
+dokončená; PR do `develop` dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **DOC-PATTERN-CATALOG-01-A — validovaný katalog a typové
+  adaptéry (implemented).** Nový uzavřený registr má stabilní ID/verze,
+  revizi, formáty, insertion mode a platné vestavěné vzory pro Markdown,
+  task/plán, prezentaci a Julia/TOML/JSON. Neznámý typ nebo formát, NUL,
+  obsah nad 1 MiB a neplatný strukturovaný formát selžou bezpečně.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-B — sdílený raw widget
+  (implemented).** Jedna storage-agnostic komponenta spravuje lokální buffer,
+  dirty stav, filtrování, document/block/cursor vložení, explicitní validaci,
+  read-only stav a nativní keyboard/mobile ovládání. Bezpečný DOM používá
+  `textContent`, `Option` a `replaceChildren`; widget nemá save ani execution
+  endpoint.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-C — document/task adaptér
+  (implemented).** Obecný dokument a hlavní TODO používají tentýž widget, ale
+  ukládají dál přes existující `ArtifactActions` operaci s jejím journalem,
+  expected HEAD, operation ID a receiptem.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-D — raw režim prezentace
+  (implemented).** Vizuální editor serializuje skutečný verzovaný deck do raw
+  režimu. Neplatný nebo nekanonický obsah se lossless nepředá zpět ani
+  neuloží; platný obsah dál používá původní prezentační operaci.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-E — Julia adaptér a předání
+  (implemented).** Neexekuční kontrakt a validní Julia, `Project.toml` a JSON
+  vzory jsou připravené pro obnovení `COMP-03`. Tato dávka Julia kód
+  nespouští ani nezapisuje její víceartefaktový model.
+- [x] [completed] **DOC-PATTERN-CATALOG-01-F — regrese a dokumentace
+  (implemented).** Testy pokryly uzavřenost katalogu, kopie/revizi, platné i
+  chybové validace, prezentační round-trip, absenci save/execution callbacku,
+  bezpečné DOM, dvě UI integrace a read-only HTTPS API. ADR, návod, roadmapa,
+  reuse katalog a dependency evidence byly sjednocené.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **938 testů, 903 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 225,076 s. Samostatný skutečný
+Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel načtením filtrovaného katalogu,
+vložením a validací vzoru, uložením dokumentu a TODO i dirty guardem; spolu s
+HTTPS API testem šlo o 2 úspěšné testy. Osm cílených unit/static testů a
+Python/JavaScript syntaxe rovněž prošly.
+
+Vložení, validace a přepnutí režimu jsou ephemerální; pád může ztratit pouze
+neuložený draft. Persistenční a recovery hranice dokumentu a prezentace se
+nezměnily a nevznikl druhý store ani journal. Fyzický mobilní viewport nebyl
+samostatně přijat uživatelem; responzivní pravidla a nativní ovládací prvky
+jsou ověřené staticky. Julia UI a ARM64 runtime akceptace zůstávají v
+`COMP-03`; její obnovení čeká na doručení této feature do `develop`.
+
 ## DOC-DEPENDENCY-FIX-01 — Oprava závislostí editorů a COMP-03 — 2026-10-27
 
 Dávka na větvi `feature/comp-03-dependency-fix` z `develop` `e4cf4c6`

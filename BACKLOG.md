@@ -96,14 +96,15 @@ commit `507c232`; evidence je ve WORK_LOG a backlog ji nedrží jako druhý
 stavový záznam.
 
 Práce na `COMP-03` byla rozhodnutím uživatele 27. 10. 2026 přerušena:
-Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou,
-ale až nad implementovaným sdíleným raw editorem. Nyní lze paralelně
-realizovat `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`. Doručení první
-z nich odblokuje obnovení `COMP-03`; dokončení obou odblokuje
-`PLAN-TASK-EDITOR-01`. Teprve poté následují podle uživatelem aktualizovaného
-pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává samostatnou
-feature dávkou a vlastním PR; paralelní realizace neznamená společnou
-větev ani stacked PR bez dalšího výslovného rozhodnutí.
+Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
+`DOC-PATTERN-CATALOG-01` už implementovala sdílený raw editor a Julia adaptér
+na své feature větvi; její akceptovaná evidence je ve WORK_LOG a doručení PR
+do `develop` zůstává otevřené. Teprve toto doručení odblokuje obnovení
+`COMP-03`. `PLAN-FILE-HIERARCHY-01` lze zahájit nezávisle; doručení obou
+kontraktů odblokuje `PLAN-TASK-EDITOR-01`. Poté následují podle uživatelem
+aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává
+samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani stacked
+PR bez dalšího výslovného rozhodnutí.
 
 - [ ] [blocked] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
   PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
@@ -125,24 +126,10 @@ větev ani stacked PR bez dalšího výslovného rozhodnutí.
   bez paralelní jednorázové textové plochy. Mimo rozsah zůstává Pluto/Jupyter,
   automatický scheduler, síťové/GPU výpočty a instalace balíčků.
 
-- [ ] [planned] **DOC-PATTERN-CATALOG-01 — katalog textových vzorů a sdílený
-  raw editor (cílová úroveň: implemented; větev
-  `feature/doc-pattern-catalog-raw-editor`).** Implementovat jeden
-  storage-agnostic raw widget, uzavřený registr typových adaptérů a
-  vestavěný katalog pro obecný Markdown, úkol/plán, prezentaci a Julia. Typ
-  filtruje vzory; komentářové
-  výplně se použijí jen v syntaxích, které komentář podporují. Vložení nic
-  neukládá ani nespouští. Adaptér zachová existující Workspace/journal
-  operaci, expected HEAD, privacy, read-only a retry/receipt. Akceptace zahrne
-  dirty guard, validaci, bezpečné zobrazení, klávesnici/mobil a raw režim
-  prezentace. Dávka dodá i Julia adaptér/kontrakt; jeho zapojení do
-  rozpracovaného Julia editoru a odstranění jednorázové textové plochy dokončí
-  po odblokování `COMP-03`.
-
 - [ ] [planned] **PLAN-FILE-HIERARCHY-01 — profilovaný souborový plán
   (cílová úroveň: implemented; větev
-  `feature/plan-file-hierarchy`).** Lze realizovat paralelně s
-  `DOC-PATTERN-CATALOG-01`. Rozšířit ADR 0055 o explicitní include bundle
+  `feature/plan-file-hierarchy`).** Lze zahájit nezávisle na čekajícím
+  doručení `DOC-PATTERN-CATALOG-01`. Rozšířit ADR 0055 o explicitní include bundle
   Markdown document artefaktů, jedinou kanonickou definici každého ID a
   uzavřené profily. Softwarový profil v1 vynutí `milestone → batch → task`;
   batch je jedna větev/PR, task leaf jednotka normálně pro jeden commit.
@@ -152,7 +139,7 @@ větev ani stacked PR bez dalšího výslovného rozhodnutí.
 
 - [ ] [planned] **PLAN-TASK-EDITOR-01 — lossless editor úkolů z widgetů
   (cílová úroveň: implemented; větev
-  `feature/plan-task-editor`).** Závisí na dokončení
+  `feature/plan-task-editor`).** Závisí na doručení
   `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`. Materializovat známé
   bloky do „lego“ widgetů pro typ, ID, stav, popis, hierarchii a kanonické
   vztahy. Nové bloky vkládat z katalogu. Raw text zůstává fallback a editor

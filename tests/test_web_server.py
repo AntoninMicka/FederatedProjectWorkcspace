@@ -94,6 +94,24 @@ class WebTests(unittest.TestCase):
         self.assertEqual(409, code)
         self.assertIn('změnila', json.loads(data)['error'])
 
+    def test_document_pattern_catalog_and_validation_are_read_only(self):
+        code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
+            'action': 'catalog'}))
+        self.assertEqual(200, code, data)
+        catalog = json.loads(data)
+        self.assertEqual('fpw-document-pattern-catalog-v1', catalog['schema'])
+        self.assertEqual({'markdown', 'task-plan', 'presentation', 'julia'},
+                         {item['id'] for item in catalog['adapters']})
+        code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
+            'action': 'validate', 'adapter_id': 'julia',
+            'format': 'application/json', 'content': '{broken'}))
+        self.assertEqual(422, code, data)
+        self.assertIn('JSON', json.loads(data)['error'])
+        code, _, _ = self.request(path='/v1/document-patterns', body=json.dumps({
+            'action': 'save', 'adapter_id': 'markdown',
+            'format': 'text/markdown', 'content': '# forbidden'}))
+        self.assertEqual(400, code)
+
     def create_planned_project(self):
         _, data, _ = self.create_project('Plánovaný projekt'); project = json.loads(data)['id']
         artifacts = Artifacts(self.root/'node.json'); head = Projects(self.root/'node.json').open(project)['commit_id']
@@ -956,14 +974,18 @@ def result(value):
  elif phase==1:
   phase=2;run("document.querySelector('.project-card').click();")
  elif phase==2:
-  phase=3;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+  phase=3;run("document.querySelector('#new-document').click();")
  elif phase==3:
-  phase=4;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='# Hlavní seznam úkolů\\n\\n- [ ] Ověřit editor\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+  phase=4;run("(()=>{const root=document.querySelector('#artifact-raw-widget'),select=root.querySelector('[data-raw-pattern]');select.value='markdown.section';select.dispatchEvent(new Event('change',{bubbles:true}));root.querySelector('[data-raw-insert]').click();root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
-  phase=5;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
+  phase=5;run("artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
  elif phase==5:
-  phase=6;run("window.confirm=()=>true;document.querySelector('#artifact-editor-close').click();")
- elif phase==6: finish('shared editor smoke: document, TODO and draft guard OK',0)
+  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='# Hlavní seznam úkolů\\n\\n- [ ] Ověřit editor\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+ elif phase==6:
+  phase=7;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
+ elif phase==7:
+  phase=8;run("window.confirm=()=>true;document.querySelector('#artifact-editor-close').click();")
+ elif phase==8: finish('shared editor smoke: pattern, document, TODO and draft guard OK',0)
 def poll():
  global ticks
  ticks+=1
@@ -972,10 +994,12 @@ def poll():
  0:"document.querySelector('#login-form')&&!document.body.classList.contains('authenticated')?'ready':'waiting'",
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
  2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
- 3:"(()=>{if(currentArtifacts.some(item=>item.title==='Sdílený dokument'))return'ready';const s=document.querySelector('#artifact-editor-status').textContent;return s&&s!=='Ukládám dokument…'?'FAIL: '+s:'waiting'})()",
- 4:"document.querySelector('#todo-tree').textContent.includes('Ověřit editor')?'ready':'waiting'",
- 5:"!artifactEditorView.hidden&&artifactEditorForm.elements.title.value==='Rozepsáno'?'ready':'FAIL: dirty draft was discarded'",
- 6:"artifactEditorView.hidden?'ready':'waiting'"}
+ 3:"document.querySelector('#artifact-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"markdown.section\\\"]')?'ready':'waiting'",
+ 4:"(()=>{const root=document.querySelector('#artifact-raw-widget');return artifactEditorForm.elements.body.value.includes('DOPLNIT: název části')&&root.querySelector('[data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
+ 5:"(()=>{if(currentArtifacts.some(item=>item.title==='Sdílený dokument'))return'ready';const s=document.querySelector('#artifact-editor-status').textContent;return s&&s!=='Ukládám dokument…'?'FAIL: '+s:'waiting'})()",
+ 6:"document.querySelector('#todo-tree').textContent.includes('Ověřit editor')?'ready':'waiting'",
+ 7:"!artifactEditorView.hidden&&artifactEditorForm.elements.title.value==='Rozepsáno'?'ready':'FAIL: dirty draft was discarded'",
+ 8:"artifactEditorView.hidden?'ready':'waiting'"}
  view.page().runJavaScript(checks[phase],result)
 timer=QTimer();timer.timeout.connect(poll);timer.start(100)
 view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec())
@@ -985,7 +1009,7 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
             WORKSPACE_SMOKE_URL='https://'+self.authority+'/'),
             capture_output=True, text=True, timeout=45)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('shared editor smoke: document, TODO and draft guard OK', result.stdout)
+        self.assertIn('shared editor smoke: pattern, document, TODO and draft guard OK', result.stdout)
         opened = Projects(self.root/'node.json').open(project['id'])
         self.assertEqual({item['title'] for item in opened['artifacts']},
                          {'Sdílený dokument', 'Hlavní seznam úkolů'})
