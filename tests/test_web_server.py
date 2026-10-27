@@ -102,6 +102,12 @@ class WebTests(unittest.TestCase):
         self.assertEqual('fpw-document-pattern-catalog-v1', catalog['schema'])
         self.assertEqual({'markdown', 'task-plan', 'presentation', 'julia'},
                          {item['id'] for item in catalog['adapters']})
+        self.assertTrue(catalog['coverage'])
+        self.assertTrue(all(item['format_help']
+                            for item in catalog['adapters']))
+        self.assertTrue(all(item['format_examples']
+                            for item in catalog['adapters']))
+        self.assertTrue(all(item['example'] for item in catalog['patterns']))
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
             'action': 'validate', 'adapter_id': 'julia',
             'format': 'application/json', 'content': '{broken'}))
@@ -993,11 +999,11 @@ def result(value):
  elif phase==2:
   phase=3;run("document.querySelector('#new-document').click();")
  elif phase==3:
-  phase=4;run("(()=>{const root=document.querySelector('#artifact-raw-widget'),select=root.querySelector('[data-raw-pattern]');select.value='markdown.section';select.dispatchEvent(new Event('change',{bubbles:true}));root.querySelector('[data-raw-insert]').click();root.querySelector('[data-raw-validate]').click();})()")
+  phase=4;run("(()=>{const root=document.querySelector('#artifact-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]'),textarea=root.querySelector('[data-raw-content]');if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor')||!example.textContent.includes('# Zápis z technické porady')){artifactEditorStatus.textContent='FAIL: default file help unavailable';return;}select.value='markdown.section';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Sekce'||!body.textContent.includes('pozici kurzoru')||!example.textContent.includes('## Omezení')){artifactEditorStatus.textContent='FAIL: pattern help unavailable';return;}textarea.value='# Začátek\\n\\nKonec\\n';const offset=textarea.value.indexOf('Konec');textarea.setSelectionRange(offset,offset);root.querySelector('[data-raw-insert]').click();if(!(textarea.value.indexOf('## <!-- DOPLNIT: název části -->')<textarea.value.indexOf('Konec'))){artifactEditorStatus.textContent='FAIL: raw insertion ignored cursor';return;}root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
   phase=5;run("artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
  elif phase==5:
-  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] Ověřit editor\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));if(taskPlanEditor.hidden||!taskPlanBlocks.children.length){artifactEditorStatus.textContent='FAIL: task plan blocks unavailable';}else artifactEditorForm.requestSubmit();")
+  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-FIRST] První\\n  - type: milestone\\n\\n- [ ] [MILESTONE-LAST] Poslední\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));setTimeout(()=>{const position=document.querySelector('#task-plan-insert-position');position.value='MILESTONE-LAST';document.querySelector('[data-task-pattern=\"task-plan.milestone\"]').click();const text=artifactEditorForm.elements.body.value;if(taskPlanEditor.hidden||taskPlanBlocks.children.length!==3||!(text.indexOf('MILESTONE-FIRST')<text.indexOf('MILESTONE-01')&&text.indexOf('MILESTONE-01')<text.indexOf('MILESTONE-LAST'))){artifactEditorStatus.textContent='FAIL: positioned task insertion unavailable';}else{artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] Ověřit editor\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();}},100);")
  elif phase==6:
   phase=7;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
  elif phase==7:
@@ -1012,7 +1018,7 @@ def poll():
  1:"document.body.classList.contains('authenticated')&&document.querySelector('.project-card')?'ready':'waiting'",
  2:"!document.querySelector('#project-view').hidden?'ready':'waiting'",
  3:"document.querySelector('#artifact-raw-widget [data-raw-pattern]')?.querySelector('option[value=\\\"markdown.section\\\"]')?'ready':'waiting'",
- 4:"(()=>{const root=document.querySelector('#artifact-raw-widget');return artifactEditorForm.elements.body.value.includes('DOPLNIT: název části')&&root.querySelector('[data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
+ 4:"(()=>{const failure=artifactEditorStatus.textContent;if(failure.startsWith('FAIL:'))return failure;const root=document.querySelector('#artifact-raw-widget');return artifactEditorForm.elements.body.value.includes('DOPLNIT: název části')&&root.querySelector('[data-raw-status]').textContent.startsWith('Obsah je validní')?'ready':'waiting'})()",
  5:"(()=>{if(currentArtifacts.some(item=>item.title==='Sdílený dokument'))return'ready';const s=document.querySelector('#artifact-editor-status').textContent;return s&&s!=='Ukládám dokument…'?'FAIL: '+s:'waiting'})()",
  6:"document.querySelector('#todo-tree').textContent.includes('Ověřit editor')?'ready':'waiting'",
  7:"!artifactEditorView.hidden&&artifactEditorForm.elements.title.value==='Rozepsáno'?'ready':'FAIL: dirty draft was discarded'",

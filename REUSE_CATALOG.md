@@ -70,6 +70,10 @@ komponent s odpovídající Git autoritou, recovery a lossless round-trip
 kontraktem; nepřenáší se z ní kód ani neveřejné detaily. Rozhodnutí:
 [ADR 0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a
 [ADR 0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).
+`DOC-PATTERN-LIBRARY-01` přímo adaptuje tentýž widget, bezpečné `textContent`,
+existující prezentační encoder/validator a Julia computation validátor pro
+coverage i kontextový help panel; nový help framework, renderer Markdownu,
+template engine ani zápisová služba nejsou potřeba.
 
 F-M5-CHAT-HISTORY-01 **reuse/adaptuje** přímo obousměrný podepsaný
 `federation_sync` z ADR 0042, `ChatThreads` a bilaterální mapování ADR 0021.

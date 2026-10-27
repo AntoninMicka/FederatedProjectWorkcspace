@@ -37,11 +37,25 @@ Konkrétní použití dodá **typový adaptér**, který uzavřeně deklaruje:
 - zda lze raw obsah lossless předat specializovanému editoru a zpět.
 
 **Katalog vzorů** je oddělený read-only registr. Každý vzor má stabilní ID,
-verzi, název, cílové typy/formáty, režim vložení, text a stručnou nápovědu.
+verzi, název, cílové typy/formáty, režim vložení, text, stručnou nápovědu
+a samostatný příklad použití. Příklad je vyplněný text v cílovém formátu,
+nikoli slovní instrukce ani text vzoru se zástupnými hodnotami.
 První implementace dodá pouze verzované, reviewované vestavěné vzory pro
 obecný Markdown, úkol/plán, prezentaci a Julia. Projektové, uživatelské nebo
 síťově získané katalogy jsou samostatný budoucí rozsah a nesmějí se tiše
 sloučit s vestavěnými položkami.
+
+Každý adaptér navíc dodává stručnou nápovědu a příklad použití pro každý
+podporovaný formát. Shared widget je ukazuje v pravém kontextovém panelu, dokud
+uživatel explicitně nevybere vzor; potom je nahradí podrobným popisem a
+příkladem zvoleného vzoru. Select nemá implicitně aktivní první vzor a samotný
+výběr nemění buffer. Na širokém desktopu si editor zachová dosavadní pracovní
+šířku a panel využije volné místo napravo; při užším viewportu se skládá
+pod textarea.
+
+Pro `cursor` a `block` insertion mode widget dovoluje zvolit aktuální pozici
+kurzoru/výběru nebo konec textu. Režim `document` nadále nahrazuje celý draft po
+potvrzení a volbu pozice nepoužívá.
 
 Vzor je textový příklad, nikoli makro ani spustitelný plugin. U syntaxí s
 komentáři označuje místa k doplnění platný komentář daného formátu, například
@@ -100,14 +114,22 @@ read-only API; neexistuje společný save endpoint ani execution callback.
 Julia adaptér a jeho platné Julia/TOML/JSON vzory jsou implementované jako
 neexekuční kontrakt pro `COMP-03`. Zapojení do rozpracovaného Julia authoringu,
 spuštění kódu, víceartefaktové uložení a fyzická ARM64 akceptace zůstávají v
-`COMP-03`. Obecný Markdown v této dávce používá bounded textovou validaci;
-specializovaný task parser vznikne až nad souborovým kontraktem v
-`PLAN-TASK-EDITOR-01`.
+`COMP-03`. Obecný Markdown používá bounded textovou validaci; specializovaný
+task parser a lossless editor byly následně implementované nad souborovým
+kontraktem v `PLAN-TASK-EDITOR-01`.
 
 První katalog ověřuje kontrakt a integraci, nikoli konečnou obsahovou šíři.
 Reviewovanou coverage mapu a praktické vzory pro realizované scénáře doplní
 samostatná dávka `DOC-PATTERN-LIBRARY-01`. Tím se obsahové rozšíření nemíchá do
 akceptovaného implementačního PR ani do samotného specializovaného editoru.
+
+`DOC-PATTERN-LIBRARY-01` tuto navazující šíři realizuje pro obecný Markdown,
+prezentaci a Julia. Strojová `coverage` mapa váže každý scénář právě na jeden
+stabilní vzor, formát a insertion mode; její lidsky reviewovaný protějšek je v
+[coverage knihovny](../pattern-library-coverage.md). Task/plán coverage zůstává
+beze změny vlastnictvím `PLAN-TASK-EDITOR-01`. Knihovna současně doplnila
+povinné příklady formátů i vzorů; UI je vykresluje stejnou bezpečnou textovou
+cestou jako ostatní nápovědu.
 
 ## Reuse rozhodnutí
 

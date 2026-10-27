@@ -5,11 +5,77 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DOC-PATTERN-LIBRARY-01 — Rozšířená knihovna vzorů a kontextová nápověda — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-library` z `develop` `50284d1` a
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
+čeká na commit a push poslední akceptační úpravy do otevřeného PR #109 proti
+`develop`. Původní požadavek na obsahově bohatší katalog byl během aktivace
+rozšířen o pravý kontextový panel:
+výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
+podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou
+pracovní šířku editoru, přesunula panel do volného prostoru napravo a doplnila
+formátovou i vzorovou nápovědu o konkrétní příklad použití. Druhé upřesnění
+vyžádalo skutečně vyplněný text místo slovního popisu a volitelnou pozici
+vložení v raw i kostkovém editoru.
+
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-A — coverage a katalogový kontrakt
+  (implemented).** Read-only katalog nyní zveřejňuje uzavřenou `coverage` mapu
+  pro obecný Markdown, prezentaci a Julia a adapter-level `format_help` pro
+  každý podporovaný formát. Každý formát i vzor nese samostatnou vyplněnou
+  textovou ukázku bez `DOPLNIT`. Modulová kontrola odmítne duplicitu, chybějící vzor nebo nápovědu
+  bez příkladu i nesoulad adaptéru, formátu a insertion mode; deterministická
+  revize zahrnuje i tato metadata.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-B — praktické vzory
+  (implemented).** Markdown získal checklist, rozhodovací záznam a zápis ze
+  schůzky. Prezentace nabízí celý one-slide deck, briefing a rozhodovací review
+  s backupem; všechny jsou doménově validní a lossless. Julia má skript,
+  funkci, modul, runner entrypoint s result manifestem, připnutý Project.toml a
+  úplný validní `fpw-julia-computation-v1` s neutrálními hodnotami k nahrazení.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-C — pravý panel nápovědy
+  (implemented).** Oba shared raw widgety používají přístupný panel vykreslený
+  přes `textContent`. Select začíná prázdnou volbou, panel nejprve ukazuje
+  nápovědu a příklad k celému souboru a po výběru název, detail a příklad
+  vzoru; textarea se změní až explicitním vložením. Na širokém desktopu
+  zůstává editoru jeho dosavadní pracovní šířka 820 px a panel využívá volné
+  místo napravo; při viewportu do 1250 px se skládá pod editor. Raw editor
+  vkládá fragment/blok na kurzor nebo konec a kostkový editor na konec nebo
+  před kterýkoli rozpoznaný uzel.
+- [x] [completed] **DOC-PATTERN-LIBRARY-01-D — regrese, dokumentace a předání
+  (implemented).** Coverage dokument, uživatelský návod, ADR 0058, roadmapa,
+  reuse evidence a pracovní evidence popisují stejný rozsah a hranice. Task
+  coverage zůstala beze změny v `PLAN-TASK-EDITOR-01`; Julia authoring a jeho
+  fyzická ARM64 akceptace zůstávají v `COMP-03`.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu, CSS a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **946 testů, 911 prošlo a 35
+volitelných bylo přeskočeno, bez chyb**, 228,374 s. Cílená sada katalogu,
+prezentačních dokumentů, task grafu, HTTP API a mobilního kontraktu prošla;
+Python kompilace, SPDX, roadmap graf a `git diff --check` byly bez chyby.
+Samostatný skutečný Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel výchozí
+nápovědou a příkladem k souboru, přepnutím na detail a příklad vybraného
+vzoru, vložením raw fragmentu na pozici kurzoru i kostky mezi dva existující
+uzly, validací, uložením dokumentu a TODO i dirty guardem. Při ukončení
+preview server zalogoval známý neblokující
+`BrokenPipe`/`SSL BAD_LENGTH`; test a
+následná kontrola uložených dat skončily úspěšně.
+
+Coverage, nápověda, výběr, vložení a validace jsou ephemerální a nevytvářejí
+novou persistentní vrstvu. Uložení dál používá doménový
+Workspace/Journal/Git/index kontrakt dokumentu nebo prezentace; Julia UI ani
+runner tato dávka nevolá. Responzivní složení panelu je pokryté CSS a statickým
+mobilním kontraktem, nikoli samostatnou fyzickou mobilní akceptací. První plný
+běh odhalil pouze nesoulad přesného CSS selektoru v existujícím mobilním testu;
+po zachování původního selektoru a oddělení nového pravidla prošel cílený test
+i opakovaná úplná brána.
+
 ## PLAN-TASK-EDITOR-01 — Profilovaný souborový plán a lossless task editor — 2026-10-27
 
 Dávka vznikla na větvi `feature/plan-task-editor` z `develop` `ac4281a` a
-dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
-čeká na commit, push a doručení jediným PR do `develop`. Rozsah na výslovný
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; do
+`develop` byla doručena PR #108 jako squash commit `50284d1`. Rozsah na výslovný
 požadavek uživatele zahrnul původní `PLAN-FILE-HIERARCHY-01` a úplnou task
 coverage katalogu; obecné rozšíření ostatních adaptérů zůstává v
 `DOC-PATTERN-LIBRARY-01`.
@@ -60,7 +126,7 @@ hranice: před commitem je autoritou journal, po commitu lze index obnovit z
 HEAD. První verze nevytváří externí task dokument a jeho batch odkaz atomicky,
 nepřesouvá uzly mezi soubory a nenabízí nový task store. Fyzický mobilní
 viewport nebyl samostatně akceptován; responzivní pravidla a nativní prvky jsou
-pokryté staticky. Stav doručení PR zůstává otevřený.
+pokryté staticky.
 
 ## DOC-PATTERN-CATALOG-01 — Katalog textových vzorů a sdílený raw editor — 2026-10-27
 

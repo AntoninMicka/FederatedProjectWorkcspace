@@ -98,14 +98,13 @@ stavový záznam.
 Práce na `COMP-03` byla rozhodnutím uživatele 27. 10. 2026 přerušena:
 Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
 `DOC-PATTERN-CATALOG-01` už implementovala sdílený raw editor a Julia adaptér
-na své feature větvi a byla doručena PR #107 jako squash commit `ac4281a`;
-její akceptovaná evidence je ve WORK_LOG. `COMP-03` je tím odblokovaná.
-Uživatelem aktivovaná `PLAN-TASK-EDITOR-01` na vlastní feature větvi zahrnula
-souborový kontrakt `PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu;
-jejich původní ID zůstávají v TODO jako dohledatelný původ rozsahu. Obecnou
-šíři vzorů mimo task editor dál drží samostatná `DOC-PATTERN-LIBRARY-01`. Poté
-následují podle
-uživatelem aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka
+a byla doručena PR #107 jako squash commit `ac4281a`; její akceptovaná evidence
+je ve WORK_LOG. `PLAN-TASK-EDITOR-01` zahrnula souborový kontrakt
+`PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu a byla doručena PR
+#108 jako squash commit `50284d1`. Obecnou šíři vzorů mimo task editor nyní
+realizuje aktivní `DOC-PATTERN-LIBRARY-01` v TODO. Poté následují podle
+uživatelem aktualizovaného pořadí `COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
+Každá položka
 zůstává samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani
 stacked PR bez dalšího výslovného rozhodnutí.
 
@@ -128,20 +127,6 @@ stacked PR bez dalšího výslovného rozhodnutí.
   `COMP-03` použije jeho widget a Julia adaptér bez paralelní jednorázové
   textové plochy. Mimo rozsah zůstává Pluto/Jupyter, automatický scheduler,
   síťové/GPU výpočty a instalace balíčků.
-
-- [ ] [planned] **DOC-PATTERN-LIBRARY-01 — rozšířená knihovna vzorů pro
-  specializované editory (cílová úroveň: implemented; větev
-  `feature/doc-pattern-library`).** Původ: uživatelské zjištění po akceptaci
-  `DOC-PATTERN-CATALOG-01`, že první katalog je funkční, ale obsahově chudý.
-  Nad doručeným stabilním katalogovým kontraktem nejprve sestavit reviewovanou
-  coverage mapu podporovaných typů, formátů a operací budoucích
-  specializovaných editorů. Poté rozšířit vestavěné textové vzory pro obecný
-  Markdown, prezentaci a Julia podle doložených scénářů; task/plán coverage je
-  součástí `PLAN-TASK-EDITOR-01`. Zachovat
-  stabilní ID/verze, platnou syntaxi, filtrování, nápovědu a read-only
-  distribuci. Mimo
-  rozsah zůstávají projektové, uživatelské a síťové katalogy, executable
-  šablony, ukládání a samotná implementace specializovaného editoru.
 
 ## Zjištěné mezery a navazující ověření
 
