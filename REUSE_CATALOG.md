@@ -61,8 +61,9 @@ hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
 DOC-EDITOR-CONTRACTS-01 navrhuje **reuse/adapt** shared artifact editoru a
 jeho dirty guardu, `ArtifactActions`, bezpečného DOM, existujícího
-prezentačního editoru, Julia editoru po doručení `COMP-03`, parseru/grafu
-ADR 0055 a jediné Workspace/Journal/Git/index cesty. Sdílený raw widget bude
+prezentačního editoru, rozpracovaného Julia authoringu při obnovení
+`COMP-03`, parseru/grafu ADR 0055 a jediné Workspace/Journal/Git/index cesty.
+Sdílený raw widget bude
 storage-agnostic; typové adaptéry zachovají doménové transakce. Odmítá se
 nový UI framework, executable template engine, univerzální save endpoint,
 obecný AST rewriter a druhý task store. Soukromá inventura nedoložila

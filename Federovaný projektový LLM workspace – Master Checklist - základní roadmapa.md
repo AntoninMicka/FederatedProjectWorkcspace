@@ -312,7 +312,9 @@ výběr verzované definice, typované parametry, přesný preview a samostatné
 potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
 spouštění ani notebookové prostředí. Na její samostatné feature větvi byl
 rozsah požadavkem uživatele rozšířen o Julia editor umístěný v Nástrojích;
-doručení a fyzickou akceptaci eviduje tato větev, nikoli roadmapa.
+práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editoru
+`DOC-PATTERN-CATALOG-01`. Doručení a fyzickou akceptaci eviduje feature větev,
+nikoli roadmapa.
 
 ---
 

@@ -130,11 +130,12 @@ vícesouborové operace, nikoli skryté vedlejší účinky běžného uložení
 ## Plánované pořadí realizace
 
 ```text
-DOC-PATTERN-CATALOG-01 ─┐
-                        ├─> PLAN-TASK-EDITOR-01
-PLAN-FILE-HIERARCHY-01 ─┘
+DOC-PATTERN-CATALOG-01 ─┬─> obnovení a dokončení COMP-03
+                        └─> PLAN-TASK-EDITOR-01
+PLAN-FILE-HIERARCHY-01 ───> PLAN-TASK-EDITOR-01
 ```
 
 Katalog/raw editor a souborový kontrakt lze vyvíjet paralelně. Editor úkolů
-začne až nad oběma stabilními kontrakty. Integrace raw widgetu do Julia editoru
-navíc čeká na doručení `COMP-03`; nemění umístění Julia editoru v Nástrojích.
+začne až nad oběma stabilními kontrakty. Práce na `COMP-03` je přerušená;
+po doručení katalogu a raw editoru se obnoví a zapojí jejich widget i Julia
+adaptér bez změny umístění Julia editoru v Nástrojích.

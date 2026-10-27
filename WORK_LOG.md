@@ -5,12 +5,36 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DOC-DEPENDENCY-FIX-01 — Oprava závislostí editorů a COMP-03 — 2026-10-27
+
+Dávka na větvi `feature/comp-03-dependency-fix` z `develop` `e4cf4c6`
+opravila obrácenou závislost zavedenou při návrhu editorů. Dosáhla úrovně
+**designed**; feature akceptace dokumentace je dokončená, PR do `develop`
+dosud nebyl vytvořen ani sloučen.
+
+- [x] [completed] **DOC-DEPENDENCY-FIX-01-A — skutečné pořadí dávek
+  (designed).** `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` jsou
+  paralelizovatelné. První dávka odblokuje přerušenou `COMP-03`; obě společně
+  odblokují `PLAN-TASK-EDITOR-01`. Rozpracovaná Julia větev zůstala beze změny.
+- [x] [completed] **DOC-DEPENDENCY-FIX-01-B — konzistence dokumentace
+  (designed).** BACKLOG, ADR 0058, uživatelský návod, roadmapa, reuse záznam
+  a strojový roadmapový graf nesou stejné hrany. Sedm cílených testů
+  `tests.test_spdx` a `tests.test_roadmap_graph` skončilo OK, relativní odkazy
+  v sedmi dotčených dokumentech byly ověřeny a `git diff --check` prošel.
+
+### Omezení a předání
+
+Jde pouze o opravu evidence a návrhového grafu. Neimplementuje raw editor,
+souborovou hierarchii ani Julia integraci a nemění dosavadní kód na
+`feature/comp-03-julia-workspace`. Doručení opravy zůstává otevřené do
+samostatného PR a merge.
+
 ## DOC-EDITOR-CONTRACTS-01 — Kontrakty vzorů, raw editoru a souborového plánu — 2026-10-27
 
 Dávka vznikla na větvi `feature/doc-pattern-editor-contracts` z `develop`
 `507c232` a dosáhla cílové úrovně **designed**. Feature akceptace dokumentace
-je dokončená; PR do `develop` dosud nebyl vytvořen ani sloučen. Jde pouze o
-návrh a implementační dávky zůstávají otevřené v BACKLOG.
+je dokončená a byla doručena PR #105 jako squash commit `e4cf4c6`. Jde pouze
+o návrh a implementační dávky zůstávají otevřené v BACKLOG.
 
 - [x] [completed] **DOC-EDITOR-CONTRACTS-01-A — společný raw editor a
   katalog vzorů (designed).** ADR 0058 odděluje storage-agnostic textový
