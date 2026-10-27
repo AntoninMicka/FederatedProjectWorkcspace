@@ -384,9 +384,13 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             'result.txt', workspace, head, self.author))
 
     def test_bubblewrap_command_denies_network_and_exposes_only_scoped_paths(self):
-        command = BubblewrapSandbox('/usr/bin/bwrap').command(
+        bubblewrap = self.base / 'bwrap'
+        bubblewrap.write_text('#!/bin/sh\nexit 0\n')
+        bubblewrap.chmod(0o700)
+        command = BubblewrapSandbox(bubblewrap).command(
             self.binding, self.project, self.project, self.state, self.state,
             self.state / 'request.json', self.computation)
+        self.assertEqual(str(bubblewrap), command[0])
         self.assertIn('--unshare-all', command)
         self.assertNotIn('--share-net', command)
         self.assertIn('--clearenv', command)
