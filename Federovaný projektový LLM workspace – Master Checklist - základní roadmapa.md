@@ -322,7 +322,8 @@ roadmapa.
 ## 2H. Vzory dokumentů a společné editory
 
 **Stav: katalog, sdílený raw widget a Markdown/TODO/prezentační adaptéry jsou
-implemented v `DOC-PATTERN-CATALOG-01`; souborový plán a speciální task editor
+implemented v `DOC-PATTERN-CATALOG-01`; rozšířená coverage a kontextová
+nápověda v `DOC-PATTERN-LIBRARY-01`; souborový plán a speciální task editor
 jsou realizovány v `PLAN-TASK-EDITOR-01` podle [ADR
 0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
 0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).** Cílem je jeden
@@ -337,9 +338,9 @@ endpointu.
   obecný Markdown, úkol/plán, prezentaci a Julia. Místa k doplnění budou
   komentářem pouze tam, kde je takový komentář platnou syntaxí.
 - [x] Task editor v `PLAN-TASK-EDITOR-01` pokrývá každý svůj blok a insert
-  operaci stabilním validovaným vzorem. V samostatné
-  `DOC-PATTERN-LIBRARY-01` zbývá rozšířit obecný Markdown, prezentaci a Julia
-  podle reviewované coverage mapy.
+  operaci stabilním validovaným vzorem. `DOC-PATTERN-LIBRARY-01` rozšířila
+  obecný Markdown, prezentaci a Julia podle reviewované coverage mapy a přidala
+  kontextovou nápovědu k celému souboru i vybranému vzoru.
 - [x] Zachovat raw text jako fallback. Specializovaný editor smí
   materializovat známé bloky do widgetů jen při lossless round-trip;
   neznámý obsah nesmí tiše odstranit ani přeformátovat.
@@ -350,10 +351,10 @@ endpointu.
   v Nástrojích, výpočet ve Výpočtech.
 
 Akceptovanou implementační evidenci drží WORK_LOG
-`DOC-PATTERN-CATALOG-01`; navazující rozpad drží BACKLOG
-`DOC-PATTERN-LIBRARY-01`; souborový kontrakt `PLAN-FILE-HIERARCHY-01` byl
-začleněn do aktivní `PLAN-TASK-EDITOR-01`. Uživatelský kontrakt a příklady jsou v
-[návodu](docs/document-patterns-and-task-authoring.md).
+`DOC-PATTERN-CATALOG-01`, `PLAN-TASK-EDITOR-01` a
+`DOC-PATTERN-LIBRARY-01`. Uživatelský kontrakt a příklady jsou v
+[návodu](docs/document-patterns-and-task-authoring.md) a
+[coverage mapě](docs/pattern-library-coverage.md).
 
 ---
 

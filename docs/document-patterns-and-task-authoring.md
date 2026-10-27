@@ -7,9 +7,10 @@ SPDX-License-Identifier: MPL-2.0
 
 Tento dokument popisuje současné i cílové používání. Vestavěný katalog,
 sdílený raw widget a jeho adaptéry pro Markdown/TODO a prezentaci jsou
-**implemented** v `DOC-PATTERN-CATALOG-01`. Julia adaptér je připravený jako
+**implemented** v `DOC-PATTERN-CATALOG-01`; praktickou coverage a kontextovou
+nápovědu rozšiřuje `DOC-PATTERN-LIBRARY-01`. Julia adaptér je připravený jako
 neexekuční kontrakt, ale jeho UI zapojí až obnovená `COMP-03`. Souborový plán a
-speciální task editor zůstávají **designed**. Architekturu určují
+speciální task editor jsou implementované v `PLAN-TASK-EDITOR-01`. Architekturu určují
 [ADR 0058](adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
 0059](adr/0059-file-plan-hierarchy-and-task-editor.md).
 
@@ -28,6 +29,11 @@ speciální task editor zůstávají **designed**. Architekturu určují
 
 Katalog se nejprve filtruje podle typu otevřeného dokumentu. Uživatel může
 vložit celý dokument, blok nebo fragment na kurzor. Vložení nic neukládá.
+
+Po otevření editoru není předvybraný první vzor. Pravý panel proto nejprve
+stručně vysvětluje celý aktivní soubor a jeho formát. Výběr konkrétního vzoru
+nápovědu nahradí jeho podrobným popisem, ale textarea změní až explicitní
+tlačítko **Vložit vzor**. Na mobilní šířce se panel přesune pod editor.
 
 Markdownový vzor může vypadat například takto:
 
@@ -49,9 +55,14 @@ zobrazí vedle editoru. Katalog nesmí vydávat neplatný JSON za použitelný v
 Vzory nejsou makra: samy nespouštějí kód, nevolají síť a nezískávají přístup k
 projektu.
 
-První katalog počítá se čtyřmi skupinami: obecný Markdown, úkol/plán,
+Katalog počítá se čtyřmi skupinami: obecný Markdown, úkol/plán,
 prezentace a Julia. Jeden vzor může podporovat více kompatibilních typů, ale UI
 nikdy nenabídne vzor mimo uzavřený seznam aktivního adaptéru.
+
+Reviewovanou tabulku scénářů, stabilních ID, formátů a insertion modes drží
+[coverage knihovny](pattern-library-coverage.md). Prezentační položky jsou celé
+lossless decky a computation JSON pro Julia je úplný doménově validní kontrakt
+v1; nejde o neplatné útržky vydávané za použitelné soubory.
 
 V současném desktop/web UI otevře **Dokumenty → Nový dokument** nebo editor
 hlavního TODO tentýž raw widget. Volba **Vzor** se filtruje podle aktivního
@@ -157,7 +168,7 @@ DOC-PATTERN-CATALOG-01 ──> DOC-PATTERN-LIBRARY-01 (ostatní adaptéry)
 ```
 
 Katalog/raw editor je implementovaný a doručený; `COMP-03` je tím odblokovaná.
-Task editor ve své feature dávce dodává úplnou coverage vlastních operací a
-souborový kontrakt. Samostatná `DOC-PATTERN-LIBRARY-01` zůstává pro obecné
-rozšíření Markdown, prezentačních a Julia vzorů. Obnovená `COMP-03` zapojí
+Task editor ve své feature dávce dodal úplnou coverage vlastních operací a
+souborový kontrakt. `DOC-PATTERN-LIBRARY-01` doplňuje obecné Markdown,
+prezentační a Julia scénáře i společnou kontextovou nápovědu. Obnovená `COMP-03` zapojí
 sdílený widget i Julia adaptér bez změny umístění Julia editoru v Nástrojích.

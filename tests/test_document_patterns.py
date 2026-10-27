@@ -19,6 +19,12 @@ class DocumentPatternTests(unittest.TestCase):
                          {item['id'] for item in self.catalog['adapters']})
         self.assertEqual(len(self.catalog['patterns']),
                          len({item['id'] for item in self.catalog['patterns']}))
+        self.assertEqual(len(self.catalog['coverage']),
+                         len({item['id'] for item in self.catalog['coverage']}))
+        for adapter in self.catalog['adapters']:
+            self.assertEqual(set(adapter['formats']), set(adapter['format_help']))
+            self.assertTrue(all(value.strip()
+                                for value in adapter['format_help'].values()))
         changed = copy.deepcopy(self.catalog)
         changed['patterns'][0]['text'] = 'changed'
         self.assertNotEqual(changed['patterns'][0]['text'],
@@ -35,6 +41,35 @@ class DocumentPatternTests(unittest.TestCase):
                             if item['id'] == 'julia.computation-json')
         self.assertNotIn('//', json_pattern['text'])
         self.assertNotIn('# DOPLNIT', json_pattern['text'])
+
+    def test_reviewed_coverage_maps_every_non_task_pattern_once(self):
+        patterns = {item['id']: item for item in self.catalog['patterns']}
+        covered = {item['pattern_id'] for item in self.catalog['coverage']}
+        expected = {item['id'] for item in self.catalog['patterns']
+                    if item['adapter_ids'] != ['task-plan']}
+        self.assertEqual(expected, covered)
+        self.assertEqual(len(covered), len(self.catalog['coverage']))
+        for item in self.catalog['coverage']:
+            pattern = patterns[item['pattern_id']]
+            self.assertIn(item['adapter_id'], pattern['adapter_ids'])
+            self.assertIn(item['format'], pattern['formats'])
+            self.assertEqual(pattern['insertion'], item['operation'])
+
+    def test_all_builtin_patterns_validate_in_their_declared_formats(self):
+        for pattern in self.catalog['patterns']:
+            for adapter_id in pattern['adapter_ids']:
+                for format_ in pattern['formats']:
+                    result = self.service.validate(adapter_id, format_,
+                                                   pattern['text'])
+                    self.assertTrue(result['valid'], pattern['id'])
+                    self.assertTrue(result['lossless'], pattern['id'])
+        computation = next(item for item in self.catalog['patterns']
+                           if item['id'] == 'julia.computation-json')
+        self.assertIn('execution_policy', computation['text'])
+        self.assertIn('julia_compat', computation['text'])
+        self.assertIn('fpw-julia-result-v1', next(
+            item for item in self.catalog['patterns']
+            if item['id'] == 'julia.runner-entrypoint')['text'])
 
     def test_task_editor_operations_have_stable_catalog_patterns(self):
         adapter = next(item for item in self.catalog['adapters']
@@ -102,10 +137,19 @@ class DocumentPatternTests(unittest.TestCase):
                     JS.index("const artifactEditorForm=")]
         self.assertNotIn('innerHTML', widget)
         self.assertIn('replaceChildren', widget)
+        self.assertIn("helpTitle.textContent=pattern?.name||'Nápověda k souboru'", widget)
+        self.assertIn('helpBody.textContent=pattern?.help||adapter?.format_help?.[format]',
+                      widget)
+        self.assertIn("patterns.length?'Vyberte vzor…'", widget)
+        self.assertEqual(2, HTML.count('class="raw-editor-help-panel"'))
+        self.assertEqual(2, HTML.count('data-raw-help-title'))
+        self.assertIn('.raw-editor-layout{display:grid', CSS)
+        self.assertIn('.raw-editor-help-panel{', CSS)
         self.assertIn("projectRequest('/v1/document-patterns'", JS)
         self.assertIn("if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return", JS)
         self.assertIn('presentationEditorDirty||presentationEditorAttempt', JS)
         self.assertIn('@media(max-width:700px)', CSS)
+        self.assertIn('.raw-editor-layout{grid-template-columns:1fr}', CSS)
         self.assertIn('.raw-editor-widget textarea{font-size:16px}', CSS)
         self.assertIn('/v1/document-patterns', DesktopHandler.post_paths)
         self.assertNotIn('/v1/document-patterns/save', DesktopHandler.post_paths)
