@@ -16,6 +16,10 @@
 
     {"id": "DEV-ROADMAP-GRAPH-01", "milestone": "DEV", "depends_on": []},
     {"id": "PLAN-TASK-GRAPH-01", "milestone": "DEV", "depends_on": ["DEV-ROADMAP-GRAPH-01"]},
+    {"id": "DOC-EDITOR-CONTRACTS-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01", "COMP-02"]},
+    {"id": "PLAN-FILE-HIERARCHY-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01", "PLAN-TASK-GRAPH-01"]},
+    {"id": "DOC-PATTERN-CATALOG-01", "milestone": "DEV", "depends_on": ["DOC-EDITOR-CONTRACTS-01", "COMP-03"]},
+    {"id": "PLAN-TASK-EDITOR-01", "milestone": "DEV", "depends_on": ["DOC-PATTERN-CATALOG-01", "PLAN-FILE-HIERARCHY-01"]},
     {"id": "DEV-IDE-TODO-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01"]},
     {"id": "DEV-01", "milestone": "DEV", "depends_on": ["PLAN-TASK-GRAPH-01"]},
     {"id": "DEV-02", "milestone": "DEV", "depends_on": ["DEV-01"]},

@@ -32,3 +32,8 @@ stejné revize. První řez nemění Git, index ani lokální journal.
 Starší checklist bez ID zůstane čitelný v panelu Úkoly, ale Plán vysvětlí,
 že vyžaduje strukturovaná ID. Budoucí editace grafu musí být samostatná
 feature a použít standardní expected-HEAD, journal, CAS a obnovu indexu.
+
+Navazující [ADR 0059](0059-file-plan-hierarchy-and-task-editor.md) zachovává
+tento kontrakt pro starší ploché TODO a navrhuje opt-in profilovaný bundle:
+kořen zůstává hlavní TODO, ale může explicitně zahrnout další definiční
+dokumenty. Podgrafy nadále pouze vybírají ID a nejsou autoritou stavu.

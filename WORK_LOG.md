@@ -5,11 +5,50 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## DOC-EDITOR-CONTRACTS-01 — Kontrakty vzorů, raw editoru a souborového plánu — 2026-10-27
+
+Dávka vznikla na větvi `feature/doc-pattern-editor-contracts` z `develop`
+`507c232` a dosáhla cílové úrovně **designed**. Feature akceptace dokumentace
+je dokončená; PR do `develop` dosud nebyl vytvořen ani sloučen. Jde pouze o
+návrh a implementační dávky zůstávají otevřené v BACKLOG.
+
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-A — společný raw editor a
+  katalog vzorů (designed).** ADR 0058 odděluje storage-agnostic textový
+  widget, typové adaptéry, read-only katalog a existující doménové operace.
+  Vzory jsou text, komentářové výplně se použijí jen v platné syntaxi a
+  vložení nic neukládá ani nespouští.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-B — souborová hierarchie
+  roadmapy (designed).** ADR 0059 definuje explicitní include bundle, jedinou
+  kanonickou definici ID, profil `milestone → batch → task`, jiné uzavřené
+  profily a podgrafy jako pouhé selektory.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-C — speciální task editor
+  (designed).** Známé bloky se materializují do „lego“ widgetů pouze při
+  lossless round-trip; raw text zůstává fallback a neznámý obsah se nesmí
+  tiše přepsat.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-D — roadmapa, backlog a reuse
+  (designed).** `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01` jsou
+  samostatné paralelizovatelné dávky; `PLAN-TASK-EDITOR-01` závisí na obou.
+  Roadmapový manifest nese stejné skutečné dependency hrany.
+- [x] [completed] **DOC-EDITOR-CONTRACTS-01-E — kontrola dokumentace
+  (designed).** Relativní odkazy byly ověřeny, `git diff --check` prošel a 7
+  cílených testů (`tests.test_spdx`, `tests.test_roadmap_graph`) skončilo OK.
+
+### Recovery a omezení
+
+Návrh zachovává existující crash boundaries jednotlivých adaptérů:
+ephemerální práce s draftem nic nezapisuje, dokument/prezentace/Julia použijí
+svou jedinou Workspace/journal operaci a index zůstává obnovitelnou projekcí
+HEAD. Souborový plán je read-only projekce jednoho commitu; vytvoření
+externího dokumentu a jeho include nesmí předstírat atomickou operaci, pokud
+ji implementace skutečně neposkytne. Nebyla změněna aplikace ani spuštěna plná
+testovací sada; fyzická UI akceptace patří do navazujících implementačních
+dávek.
+
 ## COMP-02 — Lokální Julia runner a publikace výsledků — 2026-10-26
 
 Dávka vznikla na větvi `feature/comp-02-julia-runner` z `develop` `b104843`
 a dosáhla cílové úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` dosud nebyl vytvořen ani sloučen.
+do `develop` byla doručena PR #104 jako commit `507c232`.
 
 - [x] [completed] **COMP-02-A — kontrakt, runtime inventory a preflight
   (implemented).** Striktní `fpw-julia-computation-v1` váže exact Git HEAD,
