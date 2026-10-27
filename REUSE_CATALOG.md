@@ -59,12 +59,11 @@ validují proti autoritativním Markdown dokumentům. Serverový SVG renderer
 slouží statickému exportu připnutému na tutéž revizi. Rozhodnutí a fail-closed
 hranice popisuje [ADR 0054](docs/adr/0054-read-only-roadmap-graph.md).
 
-DOC-EDITOR-CONTRACTS-01 navrhuje **reuse/adapt** shared artifact editoru a
-jeho dirty guardu, `ArtifactActions`, bezpečného DOM, existujícího
-prezentačního editoru, rozpracovaného Julia authoringu při obnovení
-`COMP-03`, parseru/grafu ADR 0055 a jediné Workspace/Journal/Git/index cesty.
-Sdílený raw widget bude
-storage-agnostic; typové adaptéry zachovají doménové transakce. Odmítá se
+DOC-PATTERN-CATALOG-01 podle návrhu DOC-EDITOR-CONTRACTS-01 **reuse/adaptuje**
+shared artifact editor, jeho dirty guard, `ArtifactActions`, bezpečný DOM,
+existující prezentační editor a jedinou Workspace/Journal/Git/index cestu. Nový
+sdílený raw widget je storage-agnostic a typové adaptéry zachovávají doménové
+transakce; Julia authoring jej převezme až při obnovení `COMP-03`. Odmítá se
 nový UI framework, executable template engine, univerzální save endpoint,
 obecný AST rewriter a druhý task store. Soukromá inventura nedoložila
 komponent s odpovídající Git autoritou, recovery a lossless round-trip

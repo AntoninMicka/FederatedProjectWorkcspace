@@ -5,10 +5,13 @@ SPDX-License-Identifier: MPL-2.0
 
 # Vzory dokumentů, raw editor a skládání plánu
 
-Tento dokument popisuje cílové používání. Funkce jsou zatím ve stavu
-**designed**; současné UI je ještě celé neposkytuje. Architekturu určují
-[ADR 0058](adr/0058-shared-raw-editor-and-pattern-catalog.md) a
-[ADR 0059](adr/0059-file-plan-hierarchy-and-task-editor.md).
+Tento dokument popisuje současné i cílové používání. Vestavěný katalog,
+sdílený raw widget a jeho adaptéry pro Markdown/TODO a prezentaci jsou
+**implemented** v `DOC-PATTERN-CATALOG-01`. Julia adaptér je připravený jako
+neexekuční kontrakt, ale jeho UI zapojí až obnovená `COMP-03`. Souborový plán a
+speciální task editor zůstávají **designed**. Architekturu určují
+[ADR 0058](adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
+0059](adr/0059-file-plan-hierarchy-and-task-editor.md).
 
 ## Čtyři oddělené části
 
@@ -50,11 +53,24 @@ První katalog počítá se čtyřmi skupinami: obecný Markdown, úkol/plán,
 prezentace a Julia. Jeden vzor může podporovat více kompatibilních typů, ale UI
 nikdy nenabídne vzor mimo uzavřený seznam aktivního adaptéru.
 
+V současném desktop/web UI otevře **Dokumenty → Nový dokument** nebo editor
+hlavního TODO tentýž raw widget. Volba **Vzor** se filtruje podle aktivního
+adaptéru; **Vložit vzor** změní jen lokální draft a **Ověřit obsah** zobrazí
+výsledek bounded validace. Uložení nadále používá původní dokumentovou
+operaci. Nativní select, tlačítka a textarea jsou ovladatelné klávesnicí; v
+úzkém zobrazení se toolbar skládá do jednoho sloupce a textarea nepoužívá
+mobilní zoom pod 16 px.
+
 ## Raw a speciální režim
 
 Raw režim vždy ukazuje text, který bude předán doménové validaci. Speciální
 režim může zobrazit jeho známé bloky jako formuláře nebo karty. Přepnutí režimu
 nesmí samo uložit ani přeformátovat dokument.
+
+Prezentační editor nabízí přepínač **Vizuální / Raw**. Přechod do Raw
+serializuje skutečný deck, nic neukládá a používá stejný widget. Návrat do
+vizuálního režimu nebo uložení projde jen pro validní kanonický deck s lossless
+round-tripem; jinak raw draft zůstane otevřený s chybou.
 
 Pokud strukturovaný parser nerozumí části textu, jsou možné jen dvě bezpečné
 varianty:
@@ -135,7 +151,7 @@ DOC-PATTERN-CATALOG-01 ─┬─> obnovení a dokončení COMP-03
 PLAN-FILE-HIERARCHY-01 ───> PLAN-TASK-EDITOR-01
 ```
 
-Katalog/raw editor a souborový kontrakt lze vyvíjet paralelně. Editor úkolů
-začne až nad oběma stabilními kontrakty. Práce na `COMP-03` je přerušená;
-po doručení katalogu a raw editoru se obnoví a zapojí jejich widget i Julia
-adaptér bez změny umístění Julia editoru v Nástrojích.
+Katalog/raw editor je implementovaný; jeho doručení do `develop` odblokuje
+obnovení `COMP-03`. Souborový kontrakt lze dál realizovat nezávisle. Editor
+úkolů začne až nad oběma stabilními kontrakty. Obnovená `COMP-03` zapojí
+sdílený widget i Julia adaptér bez změny umístění Julia editoru v Nástrojích.

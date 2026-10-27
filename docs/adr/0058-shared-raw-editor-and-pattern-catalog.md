@@ -5,10 +5,11 @@ SPDX-License-Identifier: MPL-2.0
 
 # ADR 0058 — Sdílený raw editor a typovaný katalog vzorů
 
-- Stav: přijatý návrh
+- Stav: přijaté rozhodnutí, implementováno
 - Datum: 2026-10-27
 - Dávka: `DOC-EDITOR-CONTRACTS-01`
-- Implementace: plánovaná jako `DOC-PATTERN-CATALOG-01`
+- Implementace: `DOC-PATTERN-CATALOG-01` na větvi
+  `feature/doc-pattern-catalog-raw-editor`; doručení PR zůstává samostatný stav
 
 ## Kontext
 
@@ -87,6 +88,21 @@ daného adaptéru. Obecný happy path tedy nezakrývá odlišné crash boundarie
 - Read-only source, replika nebo importovaný immutable vstup zůstává read-only.
 - Jeden widget sníží UI duplicity, ale nepředstírá jednotný datový formát ani
   jednotnou transakci všech dokumentů.
+
+## Stav implementace
+
+`spikes/document_patterns.py` poskytuje uzavřený verzovaný katalog, čtyři
+typové adaptéry a bounded validaci. Sdílený widget ve
+`spikes/desktop_ui.py` je zapojený do obecného Markdown/TODO editoru a jako
+lossless raw režim existujícího prezentačního editoru. Katalog i validace jsou
+read-only API; neexistuje společný save endpoint ani execution callback.
+
+Julia adaptér a jeho platné Julia/TOML/JSON vzory jsou implementované jako
+neexekuční kontrakt pro `COMP-03`. Zapojení do rozpracovaného Julia authoringu,
+spuštění kódu, víceartefaktové uložení a fyzická ARM64 akceptace zůstávají v
+`COMP-03`. Obecný Markdown v této dávce používá bounded textovou validaci;
+specializovaný task parser vznikne až nad souborovým kontraktem v
+`PLAN-TASK-EDITOR-01`.
 
 ## Reuse rozhodnutí
 

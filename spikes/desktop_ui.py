@@ -19,6 +19,7 @@ from spikes.metadata import MAX_FILE, ValidationError
 from spikes.presentation_visual import SLIDE_JS
 from spikes.presentation_documents import public_content
 from spikes.presentation_closing import closing_slide
+from spikes.document_patterns import DocumentPatterns
 from spikes.ollama_backend import OllamaResponseError, UnknownRun
 from spikes.openai_backend import OpenAIResponseError, OpenAIUnknownRun
 from spikes.publication_cloudflare import CloudflareUnavailable, CloudflareUnknown
@@ -818,7 +819,11 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
-<label>Obsah <textarea name="body" rows="18" maxlength="1048576" required></textarea></label>
+<section id="artifact-raw-widget" class="raw-editor-widget" aria-label="Raw editor dokumentu">
+<div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor dokumentu"></select></label>
+<button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div>
+<p data-raw-help class="raw-editor-help"></p><label>Obsah <textarea data-raw-content name="body" rows="18" maxlength="1048576" required spellcheck="true"></textarea></label>
+<p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></section>
 <div class="form-actions"><button type="submit">Uložit</button><button id="artifact-editor-close" class="secondary-button" type="button">Zavřít editor</button></div>
 <p id="artifact-editor-status" role="status" aria-live="polite"></p></form>
 <section id="artifact-delete-preview" class="standalone-form deletion-preview" hidden><h2>Připravit smazání</h2>
@@ -1019,7 +1024,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 </section></div></div>
 <div id="presentation-panel" role="tabpanel" aria-labelledby="presentation-tab" hidden>
 <div class="presentation-editor-head"><div><h2>Prezentace</h2><p>Editor, náhled i spuštění používají stejný deck otevřeného projektu.</p></div>
-<div class="form-actions"><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
+<div class="form-actions"><div class="editor-mode-switch" role="group" aria-label="Režim editoru prezentace"><button id="presentation-editor-mode-special" type="button" aria-pressed="true">Vizuální</button><button id="presentation-editor-mode-raw" class="secondary-button" type="button" aria-pressed="false">Raw</button></div><label>Uložená prezentace <select id="presentation-editor-documents"></select></label><button id="presentation-editor-new" type="button">Nová</button><button id="presentation-editor-reload" class="secondary-button" type="button">Znovu načíst</button></div></div>
 <div id="presentation-editor-workspace" class="presentation-editor-workspace" hidden>
 <section class="presentation-editor-slides"><label>Název prezentace <input id="presentation-deck-title" maxlength="200"></label><h3>Slidy</h3><ol id="presentation-slide-list"></ol>
 <div class="form-actions"><button id="presentation-add-main" type="button">+ Hlavní</button><button id="presentation-add-backup" type="button">+ Backup</button><button id="presentation-delete-slide" class="danger-button" type="button">Odstranit</button></div>
@@ -1035,6 +1040,8 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Tapeta PNG <input id="presentation-slide-wallpaper" type="file" accept="image/png"></label><button id="presentation-clear-wallpaper" class="secondary-button" type="button">Odebrat tapetu</button>
 <fieldset><legend>Zařazení a vazby</legend><div class="form-actions"><button id="presentation-slide-up" class="secondary-button" type="button">↑ Dříve</button><button id="presentation-slide-down" class="secondary-button" type="button">↓ Později</button></div><div id="presentation-backup-links"></div></fieldset></section>
 <section class="presentation-editor-preview"><h3>Náhled slidu</h3><div id="presentation-editor-preview" class="presenter-slide-preview"></div><p>Náhled nepřenáší soukromé poznámky do veřejného okna.</p></section></div>
+<section id="presentation-raw-panel" class="presentation-raw-panel" hidden><h3>Raw obsah prezentace</h3><p>Přepnutí ani vložení vzoru nic neukládá. Do vizuálního režimu projde pouze lossless validní deck.</p>
+<div id="presentation-raw-widget" class="raw-editor-widget" aria-label="Raw editor prezentace"><div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor prezentace"></select></label><button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div><p data-raw-help class="raw-editor-help"></p><label>Obsah <textarea id="presentation-raw-content" data-raw-content rows="28" maxlength="1048576" spellcheck="false"></textarea></label><p data-raw-status class="raw-editor-status" role="status" aria-live="polite"></p></div></section>
 <section id="presentation-session-section" class="presentation-session-section"><div><h3>Uskutečněné relace</h3><p>Každý záznam obsahuje jen skutečně potvrzené veřejné výstupy.</p></div><ul id="presentation-session-list"></ul><p id="presentation-session-status" role="status"></p></section>
 <div class="presentation-editor-footer"><p id="presentation-editor-status" role="status" aria-live="polite">Otevřete editor.</p><div class="form-actions"><button id="presentation-editor-print" class="secondary-button" type="button" disabled>Vytisknout prezentaci</button><button id="presentation-editor-save" type="button" disabled>Uložit do projektu</button><button id="presentation-editor-use" type="button" disabled>Spustit uloženou prezentaci</button><button id="presentation-editor-presenter" class="secondary-button" type="button">Otevřít presenter</button></div></div></div>
 <dialog id="presentation-print-dialog"><form method="dialog"><h2>Export prezentace do PDF</h2><pre id="presentation-print-details"></pre><p id="presentation-print-warning"></p><p id="presentation-print-target">Cíl PDF zatím není vybraný.</p><button id="presentation-print-choose" type="button">Vybrat cílový PDF soubor</button><label class="confirm"><input id="presentation-print-confirm" type="checkbox" disabled> Potvrzuji uvedený režim, zdrojovou revizi, pořadí stran, cíl a případné přepsání.</label><div class="form-actions"><button id="presentation-print-run" type="button" disabled>Vytvořit PDF</button><button value="cancel" class="secondary-button">Zrušit</button></div></form></dialog>
@@ -1251,7 +1258,8 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #autonomy-queue{margin:16px 0;border:1px solid #bfcdc9;border-radius:12px;padding:12px;background:#f8fbfc}#autonomy-queue>summary{font-weight:700;color:#176b60}.autonomy-plan-editor{margin:10px 0}.autonomy-plan-editor textarea,.autonomy-revision-editor textarea{width:100%;font-family:monospace;font-size:12px}#autonomy-list{display:grid;gap:10px;margin-top:12px}.autonomy-card{border:1px solid #dce3e9;border-left:5px solid #8aa1ad;border-radius:10px;padding:12px;background:#fff}.autonomy-card[data-state="completed"]{border-left-color:#2d8a62}.autonomy-card[data-state="paused"],.autonomy-card[data-state="awaiting-approval"],.autonomy-card[data-state="proposed"]{border-left-color:#c69224}.autonomy-card[data-state="failed"],.autonomy-card[data-state="unknown"]{border-left-color:#b74435}.autonomy-card h3{margin:0 0 5px}.autonomy-card progress{width:100%;accent-color:#176b60}.autonomy-card ol{padding-left:22px}.autonomy-card li{margin:5px 0}.autonomy-card details pre{max-height:220px;font-size:11px}.autonomy-card .form-actions{display:flex;gap:7px;flex-wrap:wrap}.autonomy-card .danger-button{background:#9b3f35}.autonomy-revision{margin:10px 0;padding:10px;border:1px solid #dfbd72;border-radius:8px;background:#fff8e8}.autonomy-revision p{margin:4px 0}.autonomy-revision-history{font-size:13px;color:#526575}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
-#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+#presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.editor-mode-switch{display:flex;gap:6px}.editor-mode-switch button[aria-pressed="true"]{box-shadow:0 0 0 2px #79c9ac inset}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-raw-panel{margin-top:14px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
+.raw-editor-widget{display:block;margin:12px 0;padding:12px;border:1px solid #c8d5dc;border-radius:10px;background:#f8fbfc}.raw-editor-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.raw-editor-toolbar label{display:grid!important;gap:4px;min-width:min(280px,100%);margin:0!important}.raw-editor-toolbar select{width:100%;padding:8px}.raw-editor-widget textarea{box-sizing:border-box;width:100%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.45;resize:vertical}.raw-editor-help,.raw-editor-status{min-height:18px;margin:7px 0;color:#456276;font-size:12px}.raw-editor-widget[data-dirty="true"]{border-color:#c69224}.raw-editor-widget[data-invalid="true"]{border-color:#b74435}.raw-editor-widget[data-read-only="true"]{background:#edf2f5}.raw-editor-widget[data-read-only="true"] textarea{background:#e7ecef}
 .outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
@@ -1307,7 +1315,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
-@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}}
+@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}.raw-editor-toolbar{display:grid;grid-template-columns:1fr}.raw-editor-toolbar label{min-width:0}.raw-editor-toolbar button{width:100%}.raw-editor-widget textarea{font-size:16px}}
 @media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
@@ -2392,9 +2400,62 @@ sourceImportForm.addEventListener('submit',async event=>{
   sidebarArtifactStatus.textContent='Zdroj byl importován beze změny původních bajtů.';
  }catch(error){sourceImportStatus.textContent=error.message;}finally{button.disabled=false;}
 });
+let documentPatternCatalogPromise=null;
+function documentPatternCatalog(){
+ if(!documentPatternCatalogPromise)documentPatternCatalogPromise=projectRequest('/v1/document-patterns',{action:'catalog'}).then(value=>{
+  if(value.schema!=='fpw-document-pattern-catalog-v1'||!Array.isArray(value.adapters)||!Array.isArray(value.patterns))throw new Error('Katalog vzorů má neplatný formát.');return value;
+ }).catch(error=>{documentPatternCatalogPromise=null;throw error;});
+ return documentPatternCatalogPromise;
+}
+function createRawEditorWidget(root,{textarea,onInput}){
+ const patternSelect=root.querySelector('[data-raw-pattern]'),insertButton=root.querySelector('[data-raw-insert]'),validateButton=root.querySelector('[data-raw-validate]'),help=root.querySelector('[data-raw-help]'),status=root.querySelector('[data-raw-status]');
+ let catalog=null,adapterId='',format='',baseline=textarea.value,disabled=false,configuration=0,lastValidation=null;
+ function selectedPattern(){return catalog?.patterns.find(item=>item.id===patternSelect.value&&item.adapter_ids.includes(adapterId)&&item.formats.includes(format));}
+ function renderHelp(){const pattern=selectedPattern();help.textContent=pattern?.help||'Pro tento typ nejsou dostupné žádné vzory.';insertButton.disabled=disabled||!pattern;}
+ function renderPatterns(){
+  patternSelect.replaceChildren();const patterns=catalog?.patterns.filter(item=>item.adapter_ids.includes(adapterId)&&item.formats.includes(format))||[];
+  if(!patterns.length)patternSelect.append(new Option('Žádný dostupný vzor',''));
+  for(const pattern of patterns)patternSelect.append(new Option(`${pattern.name} · v${pattern.version}`,pattern.id));
+  patternSelect.disabled=disabled||!patterns.length;validateButton.disabled=disabled;renderHelp();
+ }
+ function updateDirty(){root.dataset.dirty=String(textarea.value!==baseline);lastValidation=null;root.dataset.invalid='false';status.textContent='';onInput?.(textarea.value,textarea.value!==baseline);}
+ textarea.addEventListener('input',updateDirty);patternSelect.addEventListener('change',renderHelp);
+ insertButton.addEventListener('click',()=>{
+  const pattern=selectedPattern();if(!pattern||disabled)return;
+  if(pattern.insertion==='document'&&textarea.value&&textarea.value!==pattern.text&&!window.confirm('Nahradit rozepsaný raw obsah vybraným vzorem?'))return;
+  const start=textarea.selectionStart??textarea.value.length,end=textarea.selectionEnd??start;let content=pattern.text,selection=start+pattern.text.length;
+  if(pattern.insertion==='cursor'){content=textarea.value.slice(0,start)+pattern.text+textarea.value.slice(end);selection=start+pattern.text.length;}
+  else if(pattern.insertion==='block'){
+   const prefix=textarea.value.slice(0,start),suffix=textarea.value.slice(end),before=prefix&&!prefix.endsWith('\\n\\n')?(prefix.endsWith('\\n')?'\\n':'\\n\\n'):'',after=suffix&&!pattern.text.endsWith('\\n\\n')?(suffix.startsWith('\\n')?'\\n':'\\n\\n'):'';
+   content=prefix+before+pattern.text+after+suffix;selection=(prefix+before+pattern.text).length;
+  }
+  textarea.value=content;textarea.setSelectionRange(selection,selection);textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();status.textContent='Vzor byl vložen pouze do lokálního draftu.';
+ });
+ async function validate(){
+  if(disabled)return null;validateButton.disabled=true;status.textContent='Ověřuji raw obsah…';
+  try{lastValidation=await projectRequest('/v1/document-patterns',{action:'validate',adapter_id:adapterId,format,content:textarea.value});root.dataset.invalid='false';status.textContent=`Obsah je validní · ${lastValidation.bytes} B · ${lastValidation.content_sha256.slice(0,12)}.`;return lastValidation;}
+  catch(error){lastValidation=null;root.dataset.invalid='true';status.textContent=error.message;return null;}
+  finally{validateButton.disabled=disabled;}
+ }
+ validateButton.addEventListener('click',validate);
+ return {
+  async configure(options){
+   const token=++configuration;adapterId=options.adapterId;format=options.format;textarea.value=options.content??'';baseline=textarea.value;lastValidation=null;root.dataset.adapter=adapterId;root.dataset.dirty='false';root.dataset.invalid='false';status.textContent='';this.setDisabled(Boolean(options.readOnly));
+   try{const value=await documentPatternCatalog();if(token!==configuration)return;catalog=value;const adapter=catalog.adapters.find(item=>item.id===adapterId&&item.formats.includes(format));if(!adapter)throw new Error('Neznámý typ nebo formát raw editoru.');renderPatterns();}
+   catch(error){if(token!==configuration)return;catalog=null;patternSelect.replaceChildren(new Option('Katalog není dostupný',''));patternSelect.disabled=true;insertButton.disabled=true;status.textContent=error.message;}
+  },
+  validate,
+  markClean(value=textarea.value){baseline=value;root.dataset.dirty=String(textarea.value!==baseline);},
+  setDisabled(value){disabled=value;root.dataset.readOnly=String(value);textarea.readOnly=value;patternSelect.disabled=value||!catalog;insertButton.disabled=value||!selectedPattern();validateButton.disabled=value;},
+  value(){return textarea.value;},
+  get dirty(){return textarea.value!==baseline;},
+  get validation(){return lastValidation;},
+ };
+}
 const artifactEditorForm=document.querySelector('#artifact-editor-form');
 const artifactEditorStatus=document.querySelector('#artifact-editor-status');
 let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null;
+const artifactRawWidget=createRawEditorWidget(document.querySelector('#artifact-raw-widget'),{textarea:artifactEditorForm.elements.body,onInput:()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactRawWidget.dirty||artifactEditorState()!==artifactEditorBaseline;}});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 function canLeaveArtifactEditor(){
@@ -2414,6 +2475,7 @@ function fillArtifactEditor(doc,isNew=false){
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
+ const taskPlan=Boolean(activeProject&&artifactEditorItem?.id===activeProject.mainTodoId);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false});
 }
 async function closeArtifactEditor(){
  if(!canLeaveWorkspaceEditors())return;
@@ -2451,7 +2513,7 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 artifactEditorForm.addEventListener('submit',async event=>{
- event.preventDefault();if(!activeProject||!artifactEditorItem)return;const fields=new FormData(artifactEditorForm),button=artifactEditorForm.querySelector('button[type="submit"]');
+ event.preventDefault();if(!activeProject||!artifactEditorItem)return;const button=artifactEditorForm.querySelector('button[type="submit"]');if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
@@ -2474,7 +2536,7 @@ document.querySelector('#artifact-delete-run').addEventListener('click',async ev
  catch(error){artifactEditorStatus.textContent=error.message;event.currentTarget.disabled=false;}
 });
 document.querySelector('#artifact-editor-close').addEventListener('click',closeArtifactEditor);
-window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
+window.addEventListener('beforeunload',event=>{if(artifactEditorDirty||artifactEditorAttempt||presentationEditorDirty||presentationEditorAttempt||conflictDraftChanged()||projectConflictOperation){event.preventDefault();event.returnValue='';}});
 function localRunRetryHint(error){return [409,422,502].includes(error.status) ?
  ' Vstupy zůstaly zachovány; další potvrzení vytvoří vědomě nový běh.' : '';}
 let catalogRequest=0;
@@ -3192,9 +3254,26 @@ const presentationEditorUse=document.querySelector('#presentation-editor-use');
 const presentationEditorPrint=document.querySelector('#presentation-editor-print');
 const presentationSessionList=document.querySelector('#presentation-session-list');
 const presentationSessionStatus=document.querySelector('#presentation-session-status');
+const presentationRawPanel=document.querySelector('#presentation-raw-panel');
 let presentationEditorView=null,presentationEditorDeck=null,presentationEditorArtifact=null,presentationEditorSlide=null;
 let presentationEditorNew=false,presentationEditorDirty=false,presentationEditorAttempt=null,presentationEditorLoading=false;
+let presentationEditorMode='special';
 let presentationPrintPlan=null,presentationPrintTarget=null;
+const presentationRawWidget=createRawEditorWidget(document.querySelector('#presentation-raw-widget'),{textarea:document.querySelector('#presentation-raw-content'),onInput:()=>{if(presentationEditorMode==='raw'){presentationEditorDirty=true;presentationEditorAttempt=null;updatePresentationEditorEnabled();}}});
+function setPresentationEditorMode(mode){
+ presentationEditorMode=mode;const raw=mode==='raw';presentationEditorWorkspace.hidden=raw||!presentationEditorDeck;presentationRawPanel.hidden=!raw||!presentationEditorDeck;
+ document.querySelector('#presentation-editor-mode-special').setAttribute('aria-pressed',String(!raw));document.querySelector('#presentation-editor-mode-raw').setAttribute('aria-pressed',String(raw));updatePresentationEditorEnabled();
+}
+async function openPresentationRawEditor(){
+ if(!presentationEditorDeck||presentationEditorAttempt)return;
+ try{const result=await projectRequest('/v1/document-patterns',{action:'serialize',adapter_id:'presentation',format:'application/x-fpw-presentation-markdown',value:structuredClone(presentationEditorDeck)});await presentationRawWidget.configure({adapterId:'presentation',format:'application/x-fpw-presentation-markdown',content:result.normalized_content,readOnly:Boolean(activeProject?.readOnly)});setPresentationEditorMode('raw');document.querySelector('#presentation-raw-content').focus();presentationEditorStatus.textContent=activeProject?.readOnly?'Raw obsah je dostupný pouze pro čtení.':'Raw draft je lokální; přepnutí ani vzor nic neuložily.';}
+ catch(error){presentationEditorStatus.textContent=error.message;}
+}
+async function applyPresentationRaw(){
+ const result=await presentationRawWidget.validate();if(!result)return false;
+ if(!result.lossless){presentationEditorStatus.textContent='Raw obsah nelze beze změny převést do vizuálního editoru. Použijte kanonický formát z validace.';return false;}
+ presentationEditorDeck=structuredClone(result.value);if(!presentationEditorDeck.slides.some(item=>item.id===presentationEditorSlide))presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorDirty=presentationEditorDirty||presentationRawWidget.dirty;setPresentationEditorMode('special');renderPresentationEditor();presentationEditorStatus.textContent='Raw obsah byl validován a předán vizuálnímu editoru; projekt zatím nebyl uložen.';return true;
+}
 function presentationNewSlide(kind='main',layout='content'){
  const template=presentationEditorDeck?.templates?.find(item=>item.id===layout)||presentationEditorView?.layout_presets?.find(item=>item.id===layout)||{background:'#102b36',foreground:'#ffffff'};
  return {id:crypto.randomUUID(),kind,title:'Nový slide',bullets:[],notes:'',background:template.background,foreground:template.foreground,wallpaper:'',next:null,backups:[],repeat:false,reveal:'all',layout,column_break:0};
@@ -3215,14 +3294,15 @@ function canLeavePresentationEditor(){
  return window.confirm(presentationEditorAttempt?'Výsledek uložení není ověřený. Zahodit rozepsanou relaci editoru?':'Zahodit neuložené změny prezentace?');
 }
 function updatePresentationEditorEnabled(){
- const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck);
- for(const control of presentationEditorWorkspace.querySelectorAll('input,textarea,select,button'))control.disabled=frozen||!ready;
- presentationEditorDocuments.disabled=frozen;document.querySelector('#presentation-editor-new').disabled=frozen;
- presentationEditorSave.disabled=!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
+ const frozen=Boolean(presentationEditorAttempt),ready=Boolean(presentationEditorDeck),readOnly=Boolean(activeProject?.readOnly);
+ for(const control of presentationEditorWorkspace.querySelectorAll('input,textarea,select,button'))control.disabled=frozen||readOnly||!ready;
+ presentationEditorDocuments.disabled=frozen;document.querySelector('#presentation-editor-new').disabled=frozen||readOnly;
+ presentationEditorSave.disabled=readOnly||!ready||(!presentationEditorDirty&&!presentationEditorAttempt);
  presentationEditorSave.textContent=presentationEditorAttempt?'Opakovat stejné uložení':'Uložit do projektu';
  presentationEditorUse.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
  presentationEditorPrint.disabled=!ready||presentationEditorDirty||presentationEditorNew||Boolean(presentationEditorAttempt);
  document.querySelector('#presentation-clear-wallpaper').disabled=frozen||!ready||!presentationCurrentSlide()?.wallpaper;
+ presentationRawWidget.setDisabled(frozen||readOnly||!ready);document.querySelector('#presentation-editor-mode-special').disabled=frozen||!ready;document.querySelector('#presentation-editor-mode-raw').disabled=frozen||!ready;
 }
 function presentationEditorChanged(rerender=true){
  if(presentationEditorLoading||!presentationEditorDeck)return;presentationEditorDirty=true;presentationEditorAttempt=null;
@@ -3236,7 +3316,7 @@ function renderPresentationTemplateForm(preferred=null){
  document.querySelector('#presentation-template-delete').disabled=presentationEditorDeck.templates.length===1;document.querySelector('#presentation-column-break-label').hidden=slideTemplate.preset!=='two-column';document.querySelector('#presentation-column-break').value=current.column_break||0;
 }
 function renderPresentationEditor(){
- const slide=presentationCurrentSlide();presentationEditorLoading=true;presentationEditorWorkspace.hidden=!slide;
+ const slide=presentationCurrentSlide();presentationEditorLoading=true;presentationEditorWorkspace.hidden=!slide||presentationEditorMode==='raw';presentationRawPanel.hidden=!slide||presentationEditorMode!=='raw';
  if(!slide){presentationEditorLoading=false;updatePresentationEditorEnabled();return;}
  document.querySelector('#presentation-deck-title').value=presentationEditorDeck.title;
  const list=document.querySelector('#presentation-slide-list');list.replaceChildren();const order=presentationMainOrder(),byId=new Map(presentationEditorDeck.slides.map(item=>[item.id,item]));
@@ -3289,7 +3369,7 @@ function presentationPdfExportFinished(result){if(!presentationPrintPlan||result
 document.querySelector('#presentation-print-confirm').addEventListener('change',event=>{document.querySelector('#presentation-print-run').disabled=!(event.currentTarget.checked&&presentationPrintTarget&&presentationPrintPlan?.pages.length);});
 document.querySelector('#presentation-print-run').addEventListener('click',()=>{if(!presentationPrintTarget||!presentationPrintPlan?.pages.length||!document.querySelector('#presentation-print-confirm').checked)return;renderPresentationPrint();document.querySelector('#presentation-print-run').disabled=true;location.hash=`export-presentation-pdf?nonce=${presentationPrintPlan.nonce}`;});
 function installPresentationDocument(document){
- presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;renderPresentationEditor();
+ presentationEditorDeck=structuredClone(document.deck);presentationEditorArtifact=document.id;presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorMode='special';renderPresentationEditor();setPresentationEditorMode('special');
 }
 function renderOutputsOverview(preferred=null){
  outputsOverviewList.replaceChildren();
@@ -3343,7 +3423,7 @@ function renderPresentationDocuments(preferred=null,openEditor=true){
 async function loadPresentationEditor(preferred=null,openEditor=true){
  if(!activeProject)return;sidebarPresentationStatus.textContent='Načítám prezentace projektu…';presentationEditorStatus.textContent='Načítám prezentace projektu…';
  try{presentationEditorView=await projectRequest('/v1/presentations/open',{project_id:activeProject.id,expected_head:activeProject.head});renderPresentationDocuments(preferred,openEditor);presentationEditorStatus.textContent=presentationEditorView.documents.length?'Editor používá aktuální uloženou verzi projektu.':'Nová prezentace vznikne až po kliknutí na Uložit do projektu.';}
- catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorWorkspace.hidden=true;updatePresentationEditorEnabled();}
+ catch(error){sidebarPresentationStatus.textContent=error.message;presentationEditorStatus.textContent=error.message;presentationEditorDeck=null;presentationEditorMode='special';presentationEditorWorkspace.hidden=true;presentationRawPanel.hidden=true;updatePresentationEditorEnabled();}
 }
 async function openPresentationEditor(preferred=null){
  if(!activeProject){projectStatus.textContent='Nejprve otevřete projekt, do kterého prezentace patří.';return;}
@@ -3352,13 +3432,15 @@ async function openPresentationEditor(preferred=null){
  selectMainTab(presentationTab);presentationTab.focus();if(!presentationEditorView||presentationEditorView.commit_id!==activeProject.head)await loadPresentationEditor(preferred,true);else if(preferred){const document=presentationEditorView.documents.find(item=>item.id===preferred&&item.deck);if(document){if(!canLeavePresentationEditor())return;presentationEditorDocuments.value=document.id;installPresentationDocument(document);}}
 }
 function createPresentationDocument(confirmDiscard=true){
- if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorDocuments.value='';renderPresentationEditor();presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
+ if(confirmDiscard&&!canLeavePresentationEditor())return;presentationEditorDeck=presentationNewDeck();presentationEditorArtifact=crypto.randomUUID();presentationEditorSlide=presentationEditorDeck.slides[0].id;presentationEditorNew=true;presentationEditorDirty=true;presentationEditorAttempt=null;presentationEditorMode='special';presentationEditorDocuments.value='';renderPresentationEditor();setPresentationEditorMode('special');presentationEditorStatus.textContent='Koncept je pouze v editoru. Soubor vznikne až po uložení.';
 }
 presentationTab.addEventListener('click',()=>{if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor();else if(!presentationEditorDeck)renderPresentationDocuments();});
 document.querySelector('#presentations-tab').addEventListener('click',()=>{if(document.body.dataset.runtime==='server'){openOutputsOverview();return;}if(!presentationEditorView||presentationEditorView.commit_id!==activeProject?.head)loadPresentationEditor(null,false);else renderSidebarPresentations();});
 presentationEditorDocuments.addEventListener('change',()=>{const document=presentationEditorView?.documents.find(item=>item.id===presentationEditorDocuments.value&&item.deck);if(document){if(canLeavePresentationEditor())installPresentationDocument(document);else presentationEditorDocuments.value=presentationEditorArtifact;}});
 document.querySelector('#presentation-editor-new').addEventListener('click',()=>createPresentationDocument());
 document.querySelector('#presentation-editor-reload').addEventListener('click',()=>{if(canLeavePresentationEditor()){presentationEditorView=null;loadPresentationEditor();}});
+document.querySelector('#presentation-editor-mode-raw').addEventListener('click',openPresentationRawEditor);
+document.querySelector('#presentation-editor-mode-special').addEventListener('click',async()=>{if(presentationEditorMode==='raw')await applyPresentationRaw();});
 for(const id of ['presentation-deck-title','presentation-slide-title','presentation-slide-bullets','presentation-slide-notes','presentation-slide-repeat','presentation-slide-reveal','presentation-slide-background','presentation-slide-foreground'])document.querySelector('#'+id).addEventListener('input',()=>{
  if(presentationEditorLoading)return;const slide=presentationCurrentSlide();presentationEditorDeck.title=document.querySelector('#presentation-deck-title').value;slide.title=document.querySelector('#presentation-slide-title').value;slide.bullets=document.querySelector('#presentation-slide-bullets').value.split(/\\r?\\n/).filter(line=>line.trim());slide.column_break=Math.min(slide.column_break||0,slide.bullets.length);slide.notes=document.querySelector('#presentation-slide-notes').value;slide.repeat=document.querySelector('#presentation-slide-repeat').checked;slide.reveal=document.querySelector('#presentation-slide-reveal').value;slide.background=document.querySelector('#presentation-slide-background').value;slide.foreground=document.querySelector('#presentation-slide-foreground').value;presentationEditorChanged(false);
 });
@@ -3383,7 +3465,7 @@ document.querySelector('#presentation-slide-up').addEventListener('click',()=>mo
 document.querySelector('#presentation-clear-wallpaper').addEventListener('click',()=>{presentationCurrentSlide().wallpaper='';presentationEditorChanged();});
 document.querySelector('#presentation-slide-wallpaper').addEventListener('change',async event=>{const file=event.currentTarget.files[0];event.currentTarget.value='';if(!file)return;if(file.type!=='image/png'||file.size>190000){presentationEditorStatus.textContent='Vyberte PNG do 190 KiB.';return;}const value=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});if(String(value).length>262144){presentationEditorStatus.textContent='Zakódovaná tapeta překračuje limit 256 KiB.';return;}presentationCurrentSlide().wallpaper=String(value);presentationEditorChanged();});
 presentationEditorSave.addEventListener('click',async()=>{
- if(!activeProject||!presentationEditorDeck)return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
+ if(!activeProject||activeProject.readOnly||!presentationEditorDeck)return;if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return;if(!presentationEditorAttempt){const document={project_id:activeProject.id,artifact_id:presentationEditorArtifact,base_head:presentationEditorView.commit_id,new:presentationEditorNew,deck:structuredClone(presentationEditorDeck)};presentationEditorAttempt={operation_id:crypto.randomUUID(),document};}
  updatePresentationEditorEnabled();presentationEditorStatus.textContent='Ukládám potvrzenou podobu prezentace do projektu…';
  try{const result=await projectRequest('/v1/presentations/save',presentationEditorAttempt,120000),id=presentationEditorArtifact,projectId=activeProject.id;presentationEditorAttempt=null;presentationEditorDirty=false;presentationEditorNew=false;await openRegisteredProject(projectId);await openPresentationEditor(id);presentationEditorStatus.textContent=`Prezentace byla uložena do projektu (${result.commit_id.slice(0,12)}).`;}
  catch(error){if([400,409,422].includes(error.status))presentationEditorAttempt=null;presentationEditorStatus.textContent=error.message+(presentationEditorAttempt?' Opakujte stejné uložení nebo znovu načtěte projekt.':'');updatePresentationEditorEnabled();}
@@ -6889,6 +6971,7 @@ class DesktopHandler(Handler):
         '/v1/backend-catalog/status', '/v1/backend-catalog/reset',
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
+        '/v1/document-patterns',
         '/v1/roadmap/graph',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
@@ -6966,6 +7049,22 @@ class DesktopHandler(Handler):
     def dispatch(self, request):
         if self.path == '/v1/counter':
             return super().dispatch(request)
+        if self.path == '/v1/document-patterns' and isinstance(request, dict):
+            service = getattr(self.server, 'document_patterns', None) or DocumentPatterns()
+            try:
+                if request == {'action': 'catalog'}:
+                    return self.reply(200, service.catalog())
+                if set(request) == {'action', 'adapter_id', 'format', 'content'} \
+                        and request['action'] == 'validate':
+                    return self.reply(200, service.validate(
+                        request['adapter_id'], request['format'], request['content']))
+                if set(request) == {'action', 'adapter_id', 'format', 'value'} \
+                        and request['action'] == 'serialize':
+                    return self.reply(200, service.serialize(
+                        request['adapter_id'], request['format'], request['value']))
+                return self.send_error(400)
+            except (ValueError, TypeError, KeyError, UnicodeError, RecursionError) as exc:
+                return self.reply(422, {'error': str(exc) or 'Raw obsah nelze ověřit.'})
         if self.path == '/v1/roadmap/graph' and isinstance(request, dict):
             try:
                 service = getattr(self.server, 'roadmap_graph', None) or RoadmapGraph()
