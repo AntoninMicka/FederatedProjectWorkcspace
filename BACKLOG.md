@@ -98,15 +98,18 @@ stavový záznam.
 Práce na `COMP-03` byla rozhodnutím uživatele 27. 10. 2026 přerušena:
 Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
 `DOC-PATTERN-CATALOG-01` už implementovala sdílený raw editor a Julia adaptér
-na své feature větvi; její akceptovaná evidence je ve WORK_LOG a doručení PR
-do `develop` zůstává otevřené. Teprve toto doručení odblokuje obnovení
-`COMP-03`. `PLAN-FILE-HIERARCHY-01` lze zahájit nezávisle; doručení obou
-kontraktů odblokuje `PLAN-TASK-EDITOR-01`. Poté následují podle uživatelem
-aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka zůstává
-samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani stacked
-PR bez dalšího výslovného rozhodnutí.
+na své feature větvi a byla doručena PR #107 jako squash commit `ac4281a`;
+její akceptovaná evidence je ve WORK_LOG. `COMP-03` je tím odblokovaná.
+Uživatelem aktivovaná `PLAN-TASK-EDITOR-01` na vlastní feature větvi zahrnula
+souborový kontrakt `PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu;
+jejich původní ID zůstávají v TODO jako dohledatelný původ rozsahu. Obecnou
+šíři vzorů mimo task editor dál drží samostatná `DOC-PATTERN-LIBRARY-01`. Poté
+následují podle
+uživatelem aktualizovaného pořadí `DEV-IDE-TODO-01` a `DEV-01`. Každá položka
+zůstává samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani
+stacked PR bez dalšího výslovného rozhodnutí.
 
-- [ ] [blocked] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
+- [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
   PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
   `COMP-02` zpřístupnit v otevřeném projektu první řízený výpočet bez druhého
   runneru nebo zápisové cesty. Workspace načte pouze validovanou verzovanou
@@ -120,33 +123,25 @@ PR bez dalšího výslovného rozhodnutí.
   parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
   publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
   podporovaném ARM64 runtime. Uživatelské rozšíření na téže větvi přidává
-  editor Julia modelu pod Nástroje. Rozpracovaná větev zůstává zachovaná,
-  ale práce a fyzická akceptace se obnoví až po doručení
-  `DOC-PATTERN-CATALOG-01`; `COMP-03` pak použije jeho widget a Julia adaptér
-  bez paralelní jednorázové textové plochy. Mimo rozsah zůstává Pluto/Jupyter,
-  automatický scheduler, síťové/GPU výpočty a instalace balíčků.
+  editor Julia modelu pod Nástroje. Rozpracovaná větev zůstává zachovaná a po
+  doručení `DOC-PATTERN-CATALOG-01` lze práci i fyzickou akceptaci obnovit;
+  `COMP-03` použije jeho widget a Julia adaptér bez paralelní jednorázové
+  textové plochy. Mimo rozsah zůstává Pluto/Jupyter, automatický scheduler,
+  síťové/GPU výpočty a instalace balíčků.
 
-- [ ] [planned] **PLAN-FILE-HIERARCHY-01 — profilovaný souborový plán
-  (cílová úroveň: implemented; větev
-  `feature/plan-file-hierarchy`).** Lze zahájit nezávisle na čekajícím
-  doručení `DOC-PATTERN-CATALOG-01`. Rozšířit ADR 0055 o explicitní include bundle
-  Markdown document artefaktů, jedinou kanonickou definici každého ID a
-  uzavřené profily. Softwarový profil v1 vynutí `milestone → batch → task`;
-  batch je jedna větev/PR, task leaf jednotka normálně pro jeden commit.
-  Podgraf zůstává selektorem ID. Akceptace pokryje stejný i externí soubor,
-  duplicate/unknown/include/rekurzi, hierarchický a dependency cyklus, stale
-  HEAD, privacy/read-only a deterministickou projekci bez DB autority.
-
-- [ ] [planned] **PLAN-TASK-EDITOR-01 — lossless editor úkolů z widgetů
-  (cílová úroveň: implemented; větev
-  `feature/plan-task-editor`).** Závisí na doručení
-  `DOC-PATTERN-CATALOG-01` a `PLAN-FILE-HIERARCHY-01`. Materializovat známé
-  bloky do „lego“ widgetů pro typ, ID, stav, popis, hierarchii a kanonické
-  vztahy. Nové bloky vkládat z katalogu. Raw text zůstává fallback a editor
-  smí měnit pouze vlastněné spany; neznámý obsah, komentáře, pořadí a
-  whitespace se nesmějí ztratit. První verze edituje jeden soubor bundle a
-  odmítne nebezpečný round-trip; nový task store ani implicitní přesun mezi
-  soubory nevznikne.
+- [ ] [planned] **DOC-PATTERN-LIBRARY-01 — rozšířená knihovna vzorů pro
+  specializované editory (cílová úroveň: implemented; větev
+  `feature/doc-pattern-library`).** Původ: uživatelské zjištění po akceptaci
+  `DOC-PATTERN-CATALOG-01`, že první katalog je funkční, ale obsahově chudý.
+  Nad doručeným stabilním katalogovým kontraktem nejprve sestavit reviewovanou
+  coverage mapu podporovaných typů, formátů a operací budoucích
+  specializovaných editorů. Poté rozšířit vestavěné textové vzory pro obecný
+  Markdown, prezentaci a Julia podle doložených scénářů; task/plán coverage je
+  součástí `PLAN-TASK-EDITOR-01`. Zachovat
+  stabilní ID/verze, platnou syntaxi, filtrování, nápovědu a read-only
+  distribuci. Mimo
+  rozsah zůstávají projektové, uživatelské a síťové katalogy, executable
+  šablony, ukládání a samotná implementace specializovaného editoru.
 
 ## Zjištěné mezery a navazující ověření
 

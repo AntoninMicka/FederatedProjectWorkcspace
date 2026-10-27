@@ -138,6 +138,23 @@ class WebTests(unittest.TestCase):
         self.assertEqual(['CORE-01', 'UI-01'], plan['critical_path'])
         self.assertEqual(2, len(plan['subgraphs'])); self.assertIn('<svg ', plan['svg'])
 
+    def test_task_plan_draft_validation_route_is_read_only(self):
+        project = self.create_planned_project()
+        before = Projects(self.root/'node.json').open(project)['commit_id']
+        body = '''# TODO
+- [x] [CORE-01] Základ
+- [ ] [UI-01] Upravené rozhraní
+  - depends_on: CORE-01
+- [ ] [DOC-01] Návod
+  - relates_to: UI-01
+'''
+        code, data, _ = self.request(path='/v1/artifacts/editor/validate-plan',
+            body=json.dumps({'project_id': project, 'artifact_id': main_todo_id(project),
+                             'expected_head': before, 'body': body}))
+        self.assertEqual(200, code, data)
+        self.assertTrue(json.loads(data)['valid'])
+        self.assertEqual(before, Projects(self.root/'node.json').open(project)['commit_id'])
+
     def create_project(self, title, operation_id=None, headers=None):
         operation_id = operation_id or str(uuid4())
         code, data, _ = self.request(path='/v1/projects/create/preview', headers=headers,
@@ -980,7 +997,7 @@ def result(value):
  elif phase==4:
   phase=5;run("artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
  elif phase==5:
-  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='# Hlavní seznam úkolů\\n\\n- [ ] Ověřit editor\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
+  phase=6;run("document.querySelector('#todo-tab').click();document.querySelector('#create-main-todo').click();artifactEditorForm.elements.body.value='<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] Ověřit editor\\n  - type: milestone\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));if(taskPlanEditor.hidden||!taskPlanBlocks.children.length){artifactEditorStatus.textContent='FAIL: task plan blocks unavailable';}else artifactEditorForm.requestSubmit();")
  elif phase==6:
   phase=7;run("document.querySelector('#new-document').click();artifactEditorForm.elements.title.value='Rozepsáno';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));window.confirm=()=>false;document.querySelector('#artifact-editor-close').click();")
  elif phase==7:
@@ -1013,7 +1030,8 @@ view.load(QUrl(os.environ['WORKSPACE_SMOKE_URL']));view.show();sys.exit(app.exec
         opened = Projects(self.root/'node.json').open(project['id'])
         self.assertEqual({item['title'] for item in opened['artifacts']},
                          {'Sdílený dokument', 'Hlavní seznam úkolů'})
-        self.assertEqual(opened['main_todo']['items'][0]['title'], 'Ověřit editor')
+        self.assertEqual(opened['main_todo']['items'][0]['title'],
+                         '[MILESTONE-01] Ověřit editor')
 
     @unittest.skipUnless(os.environ.get('M0_DESKTOP_TEST') == '1', 'Requires real Qt/WebEngine')
     def test_real_browser_renders_and_filters_roadmap_graph(self):

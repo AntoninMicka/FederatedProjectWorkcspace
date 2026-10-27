@@ -8,6 +8,10 @@ from spikes.artifact_history import ArtifactHistory
 from spikes.artifacts import Artifacts
 from spikes.metadata import require
 from spikes.projects import Projects
+from spikes.metadata import validate_snapshot
+from spikes.markdown_documents import document
+from spikes.storage import StaleIndex
+from spikes.task_graph import project_task_graph
 
 
 class ArtifactActions:
@@ -37,6 +41,32 @@ class ArtifactActions:
         receipt = self.artifacts.save(request, operation_id)
         return dict(project_id=request['project_id'], artifact_id=request['artifact_id'],
                     commit_id=receipt['commit_id'])
+
+    def validate_task_plan(self, project_id, artifact_id, expected_head, body):
+        """Validate a one-file draft against the exact committed plan bundle."""
+        require(isinstance(body, str) and '\0' not in body, 'Invalid task plan draft')
+        project = self.projects.open(project_id)
+        if project['commit_id'] != expected_head:
+            raise StaleIndex('Project changed; reopen editor')
+        workspace = self.artifacts.workspace(project_id)
+        with workspace.journal.lock(), workspace.journal.connect() as db:
+            require(not workspace._active(db) and
+                    not db.execute('SELECT 1 FROM pending').fetchone(),
+                    'Project has an unfinished operation')
+            workspace._branch()
+            head = workspace.git.head()
+            if head != expected_head:
+                raise StaleIndex('Project changed; reopen editor')
+            files = workspace.git.snapshot(head)
+            entities = validate_snapshot(files)
+            current = document(files, entities, artifact_id)
+            files[current['path']] = body.encode('utf-8')
+            entities = validate_snapshot(files)
+            plan = project_task_graph(files, entities, project_id, head)
+            require(plan['status'] == 'ready', plan.get('error', 'Plán není platný.'))
+            require(workspace.git.head() == head, 'Project changed while validating plan')
+            return {'valid': True, 'revision': plan['revision'],
+                    'nodes': len(plan['nodes']), 'profile': plan.get('profile')}
 
     def deletion_preview(self, project_id, artifact_id, expected_head):
         current = self.open(project_id, artifact_id, expected_head)

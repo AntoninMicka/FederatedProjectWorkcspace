@@ -83,11 +83,10 @@ přípustné.
 
 ## Softwarová roadmapa v souborech
 
-Kořenový hlavní TODO zvolí profil a může zahrnout další definice:
+Kořenový hlavní TODO zvolí profil:
 
 ```markdown
 <!-- fpw-plan-profile: software-development/v1 -->
-<!-- fpw-plan-include: artifacts/018f.../content.md -->
 ```
 
 Softwarový profil má tři úrovně:
@@ -98,23 +97,29 @@ Softwarový profil má tři úrovně:
 | Dávka (`batch`) | jedna feature větev a jeden PR | úkoly |
 | Úkol (`task`) | jedna nejmenší funkce/změna, normálně jeden commit | nic |
 
-Kanonická definice každého ID je právě v jednom souboru. Definice mohou být v
-hlavním TODO nebo v explicitně zahrnutém Markdown dokumentu. Nejde o kopie:
-stav se mění v souboru, který dané ID vlastní.
+Kanonická definice každého ID je právě v jednom souboru. Batch má task potomky
+buď jako vnořené odrážky, nebo jeho titul odkazuje na přesnou verzovanou cestu
+document artefaktu. Nejde o kopie: stav se mění v souboru, který dané ID vlastní.
 
 Příklad:
 
 ```markdown
-- [ ] [B-PATTERNS] Katalog vzorů a raw editor
-  - type: batch
-  - parent: M-EDITOR
-  - parent_of: T-CATALOG
+- [ ] [M-EDITOR] Editory
+  - type: milestone
+  - [ ] [B-PATTERNS] Katalog vzorů a raw editor
+    - type: batch
+    - [ ] [T-CATALOG] Validovat a filtrovat katalog
+      - type: task
+      - depends_on: T-ADAPTERS
 
-- [ ] [T-CATALOG] Validovat a filtrovat katalog
-  - type: task
-  - parent: B-PATTERNS
-  - depends_on: T-ADAPTERS
+  - [ ] [B-EXTERNAL] [Externí dávka](artifacts/018f.../content.md)
+    - type: batch
 ```
+
+Odkazovaný dokument začíná `<!-- fpw-plan-document: definitions/v1 -->` a v
+první verzi obsahuje pouze kořenové leaf tasky dané dávky. Inline potomci a
+souborový odkaz se na jednom batch nekombinují. Graf obě varianty materializuje
+na stejné uzly a `parent_id`; není dalším úložištěm stavu.
 
 Potřebuje-li se údajný task dále dělit, není ještě nejmenší jednotkou. Vzniknou
 samostatné tasky ve stejné dávce a jejich pořadí se vyjádří vztahy.
@@ -129,7 +134,7 @@ Podgraf je nadále dokument s tagem `plan-subgraph`. Obsahuje pouze výběr ID:
 ```
 
 Text, typ a checkbox v podgrafu nejsou autoritativní. Projekce je vždy načte z
-kanonické definice napříč hlavním TODO a jeho explicitními include soubory.
+kanonické definice napříč hlavním TODO a jeho odkazovanými task soubory.
 Podgraf tedy může ukázat tým, téma, release nebo jiný řez bez kopírování stavů.
 
 ## Editor úkolů jako lego
@@ -140,18 +145,19 @@ Nová kostka se vloží přes odpovídající katalogový vzor. Raw režim zůst
 dostupný pro ruční text a nepodporované konstrukce.
 
 První verze edituje jeden soubor najednou. Přesun uzlu do jiného dokumentu a
-atomické vytvoření externího souboru spolu s include jsou samostatné
+atomické vytvoření externího souboru spolu s odkazem jsou samostatné
 vícesouborové operace, nikoli skryté vedlejší účinky běžného uložení.
 
-## Plánované pořadí realizace
+## Pořadí realizace
 
 ```text
-DOC-PATTERN-CATALOG-01 ─┬─> obnovení a dokončení COMP-03
-                        └─> PLAN-TASK-EDITOR-01
-PLAN-FILE-HIERARCHY-01 ───> PLAN-TASK-EDITOR-01
+DOC-PATTERN-CATALOG-01 ──> obnovení a dokončení COMP-03
+DOC-PATTERN-CATALOG-01 + PLAN-TASK-GRAPH-01 ──> PLAN-TASK-EDITOR-01
+DOC-PATTERN-CATALOG-01 ──> DOC-PATTERN-LIBRARY-01 (ostatní adaptéry)
 ```
 
-Katalog/raw editor je implementovaný; jeho doručení do `develop` odblokuje
-obnovení `COMP-03`. Souborový kontrakt lze dál realizovat nezávisle. Editor
-úkolů začne až nad oběma stabilními kontrakty. Obnovená `COMP-03` zapojí
+Katalog/raw editor je implementovaný a doručený; `COMP-03` je tím odblokovaná.
+Task editor ve své feature dávce dodává úplnou coverage vlastních operací a
+souborový kontrakt. Samostatná `DOC-PATTERN-LIBRARY-01` zůstává pro obecné
+rozšíření Markdown, prezentačních a Julia vzorů. Obnovená `COMP-03` zapojí
 sdílený widget i Julia adaptér bez změny umístění Julia editoru v Nástrojích.

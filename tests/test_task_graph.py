@@ -9,7 +9,7 @@ from spikes.desktop_ui import HTML, JS
 
 
 class TaskGraphTests(unittest.TestCase):
-    def fixture(self, body, subgraphs=()):
+    def fixture(self, body, subgraphs=(), documents=()):
         project_id = str(uuid4()); todo_id = main_todo_id(project_id)
         entities = {todo_id: {'id': todo_id, 'kind': 'document', 'title': 'Hlavní TODO',
                               'file': 'content.md', 'tags': []}}
@@ -21,7 +21,59 @@ class TaskGraphTests(unittest.TestCase):
                                      'file': 'content.md', 'tags': ['plan-subgraph']}
             files[f'artifacts/{artifact_id}/content.md'] = text.encode()
             files[f'artifacts/{artifact_id}/metadata.json'] = b'{}'
+        for artifact_id, title, text in documents:
+            entities[artifact_id] = {'id': artifact_id, 'kind': 'document', 'title': title,
+                                     'file': 'content.md', 'tags': []}
+            files[f'artifacts/{artifact_id}/content.md'] = text.encode()
+            files[f'artifacts/{artifact_id}/metadata.json'] = b'{}'
         return project_task_graph(files, entities, project_id, 'a' * 40)
+
+    def test_inline_and_linked_batch_children_materialize_the_same_hierarchy(self):
+        inline = self.fixture('''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Editor plánu
+  - type: milestone
+  - [ ] [BATCH-01] Task editor
+    - type: batch
+    - [ ] [TASK-01] Sestavit widgety
+      - type: task
+''')
+        document_id = str(uuid4())
+        linked = self.fixture(f'''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Editor plánu
+  - type: milestone
+  - [ ] [BATCH-01] [Task editor](artifacts/{document_id}/content.md)
+    - type: batch
+''', documents=[(document_id, 'Task editor', '''<!-- fpw-plan-document: definitions/v1 -->
+- [ ] [TASK-01] Sestavit widgety
+  - type: task
+''')])
+        self.assertEqual('ready', inline['status'])
+        self.assertEqual('ready', linked['status'])
+        fields = lambda value: [(item['id'], item['title'], item['type'],
+                                 item['parent_id'], item['hierarchy_depth'])
+                                for item in value['nodes']]
+        self.assertEqual(fields(inline), fields(linked))
+        external = next(item for item in linked['nodes'] if item['id'] == 'TASK-01')
+        self.assertEqual(document_id, external['source']['artifact_id'])
+        self.assertEqual(2, external['line'])
+
+    def test_profiled_bundle_rejects_ambiguous_or_unsafe_hierarchy(self):
+        document_id = str(uuid4())
+        prefix = '''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Milník
+  - type: milestone
+'''
+        cases = [
+            prefix + '  - [ ] [BATCH-01] Batch\n    - type: batch\n'
+                     '    - [ ] [TASK-01] Task\n      - type: milestone\n',
+            prefix + f'  - [ ] [BATCH-01] [Batch](artifacts/{document_id}/content.md)\n'
+                     '    - type: batch\n    - [ ] [TASK-01] Inline\n      - type: task\n',
+            prefix + '  - [ ] [BATCH-01] [Batch](artifacts/00000000-0000-4000-8000-000000000099/content.md)\n'
+                     '    - type: batch\n',
+        ]
+        for body in cases:
+            with self.subTest(body=body):
+                self.assertEqual('invalid', self.fixture(body)['status'])
 
     def test_canonical_relations_readiness_critical_path_and_subgraph(self):
         value = self.fixture('''# TODO

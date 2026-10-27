@@ -313,8 +313,9 @@ potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automa
 spouštění ani notebookové prostředí. Na její samostatné feature větvi byl
 rozsah požadavkem uživatele rozšířen o Julia editor umístěný v Nástrojích;
 práce byla 27. 10. 2026 přerušena do doby implementace sdíleného raw editoru
-`DOC-PATTERN-CATALOG-01`. Doručení a fyzickou akceptaci eviduje feature větev,
-nikoli roadmapa.
+`DOC-PATTERN-CATALOG-01`. Ta byla doručena PR #107 jako `ac4281a`, takže práci
+lze obnovit; fyzickou akceptaci eviduje feature větev `COMP-03`, nikoli
+roadmapa.
 
 ---
 
@@ -322,7 +323,7 @@ nikoli roadmapa.
 
 **Stav: katalog, sdílený raw widget a Markdown/TODO/prezentační adaptéry jsou
 implemented v `DOC-PATTERN-CATALOG-01`; souborový plán a speciální task editor
-zůstávají designed v [ADR
+jsou realizovány v `PLAN-TASK-EDITOR-01` podle [ADR
 0058](docs/adr/0058-shared-raw-editor-and-pattern-catalog.md) a [ADR
 0059](docs/adr/0059-file-plan-hierarchy-and-task-editor.md).** Cílem je jeden
 raw textový widget napříč typy dokumentů, filtrovaný katalog textových vzorů a
@@ -335,6 +336,10 @@ endpointu.
 - [x] Vestavěný katalog filtrovat podle typu dokumentu; první sada zahrne
   obecný Markdown, úkol/plán, prezentaci a Julia. Místa k doplnění budou
   komentářem pouze tam, kde je takový komentář platnou syntaxí.
+- [x] Task editor v `PLAN-TASK-EDITOR-01` pokrývá každý svůj blok a insert
+  operaci stabilním validovaným vzorem. V samostatné
+  `DOC-PATTERN-LIBRARY-01` zbývá rozšířit obecný Markdown, prezentaci a Julia
+  podle reviewované coverage mapy.
 - [x] Zachovat raw text jako fallback. Specializovaný editor smí
   materializovat známé bloky do widgetů jen při lossless round-trip;
   neznámý obsah nesmí tiše odstranit ani přeformátovat.
@@ -346,7 +351,8 @@ endpointu.
 
 Akceptovanou implementační evidenci drží WORK_LOG
 `DOC-PATTERN-CATALOG-01`; navazující rozpad drží BACKLOG
-`PLAN-FILE-HIERARCHY-01` a `PLAN-TASK-EDITOR-01`. Uživatelský kontrakt a příklady jsou v
+`DOC-PATTERN-LIBRARY-01`; souborový kontrakt `PLAN-FILE-HIERARCHY-01` byl
+začleněn do aktivní `PLAN-TASK-EDITOR-01`. Uživatelský kontrakt a příklady jsou v
 [návodu](docs/document-patterns-and-task-authoring.md).
 
 ---

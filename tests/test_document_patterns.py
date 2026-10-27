@@ -36,6 +36,26 @@ class DocumentPatternTests(unittest.TestCase):
         self.assertNotIn('//', json_pattern['text'])
         self.assertNotIn('# DOPLNIT', json_pattern['text'])
 
+    def test_task_editor_operations_have_stable_catalog_patterns(self):
+        adapter = next(item for item in self.catalog['adapters']
+                       if item['id'] == 'task-plan')
+        required = {'task-plan.document', 'task-plan.external-document',
+                    'task-plan.milestone', 'task-plan.batch-inline',
+                    'task-plan.batch-file', 'task-plan.task',
+                    'task-plan.dependency'}
+        self.assertEqual(required, set(adapter['pattern_ids']))
+        patterns = {item['id']: item for item in self.catalog['patterns']}
+        self.assertIn('fpw-plan-profile: software-development/v1',
+                      patterns['task-plan.document']['text'])
+        self.assertIn('fpw-plan-document: definitions/v1',
+                      patterns['task-plan.external-document']['text'])
+        self.assertIn('](artifacts/', patterns['task-plan.batch-file']['text'])
+        for pattern_id in required:
+            result = self.service.validate('task-plan', 'text/markdown',
+                                           patterns[pattern_id]['text'])
+            self.assertTrue(result['valid'])
+            self.assertTrue(result['lossless'])
+
     def test_presentation_pattern_and_round_trip_use_real_domain_format(self):
         pattern = next(item for item in self.catalog['patterns']
                        if item['id'] == 'presentation.document')

@@ -819,6 +819,11 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <label>Název souboru (.md) <input name="filename" maxlength="200" required></label>
 <label>Popis <textarea name="description" rows="3"></textarea></label>
 <label>Štítky, jeden na řádek <textarea name="tags" rows="3"></textarea></label>
+<section id="task-plan-editor" class="task-plan-editor" hidden aria-label="Strukturovaný editor plánu">
+<div class="task-plan-mode" role="tablist" aria-label="Režim editoru plánu"><button id="task-plan-mode-structured" type="button" role="tab" aria-selected="true">Kostky</button><button id="task-plan-mode-raw" type="button" role="tab" aria-selected="false">Raw text</button></div>
+<p id="task-plan-editor-status" role="status" aria-live="polite"></p>
+<div id="task-plan-insert" class="task-plan-insert" aria-label="Vložit vzor"><button type="button" data-task-pattern="task-plan.milestone">Přidat milník</button><button type="button" data-task-pattern="task-plan.batch-inline">Přidat batch s úkoly</button><button type="button" data-task-pattern="task-plan.batch-file">Přidat batch se souborem</button><button type="button" data-task-pattern="task-plan.task">Přidat task</button><button type="button" data-task-pattern="task-plan.dependency">Přidat závislost</button></div>
+<div id="task-plan-blocks" class="task-plan-blocks"></div></section>
 <section id="artifact-raw-widget" class="raw-editor-widget" aria-label="Raw editor dokumentu">
 <div class="raw-editor-toolbar"><label>Vzor <select data-raw-pattern aria-label="Vzor dokumentu"></select></label>
 <button data-raw-insert type="button">Vložit vzor</button><button data-raw-validate class="secondary-button" type="button">Ověřit obsah</button></div>
@@ -1260,6 +1265,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.editor-mode-switch{display:flex;gap:6px}.editor-mode-switch button[aria-pressed="true"]{box-shadow:0 0 0 2px #79c9ac inset}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-raw-panel{margin-top:14px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 .raw-editor-widget{display:block;margin:12px 0;padding:12px;border:1px solid #c8d5dc;border-radius:10px;background:#f8fbfc}.raw-editor-toolbar{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.raw-editor-toolbar label{display:grid!important;gap:4px;min-width:min(280px,100%);margin:0!important}.raw-editor-toolbar select{width:100%;padding:8px}.raw-editor-widget textarea{box-sizing:border-box;width:100%;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;line-height:1.45;resize:vertical}.raw-editor-help,.raw-editor-status{min-height:18px;margin:7px 0;color:#456276;font-size:12px}.raw-editor-widget[data-dirty="true"]{border-color:#c69224}.raw-editor-widget[data-invalid="true"]{border-color:#b74435}.raw-editor-widget[data-read-only="true"]{background:#edf2f5}.raw-editor-widget[data-read-only="true"] textarea{background:#e7ecef}
+.task-plan-editor{margin:12px 0;padding:12px;border:1px solid #b9cec8;border-radius:10px;background:#f5faf8}.task-plan-mode,.task-plan-insert{display:flex;gap:7px;flex-wrap:wrap}.task-plan-mode button[aria-selected="true"]{background:#176b60;color:#fff}.task-plan-insert{margin:10px 0}.task-plan-insert button{background:#e5efec;color:#244d47}.task-plan-blocks{display:grid;gap:10px}.task-plan-block{display:grid;grid-template-columns:auto minmax(115px,.55fr) minmax(130px,.65fr) minmax(220px,2fr);gap:8px;align-items:end;padding:10px 12px;border-left:4px solid #6aa298;border-radius:8px;background:#fff}.task-plan-block label{margin:0!important}.task-plan-block small{grid-column:2/-1;color:#566d78}.task-plan-block[data-depth="1"]{margin-left:18px}.task-plan-block[data-depth="2"]{margin-left:36px}.task-plan-block[data-depth="3"]{margin-left:54px}
 .outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
 .back-button{align-self:flex-start;background:transparent;color:#456276;padding:8px 0;font-size:13px;flex-shrink:0}.back-button:hover{background:transparent;color:#176b60}
@@ -1315,7 +1321,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 }
 @media(max-width:640px) and (prefers-reduced-motion:reduce){aside{transition:none}}
 @media(max-width:1000px){.presentation-editor-workspace{grid-template-columns:1fr 1fr}.presentation-editor-preview{grid-column:1/-1}}
-@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}.raw-editor-toolbar{display:grid;grid-template-columns:1fr}.raw-editor-toolbar label{min-width:0}.raw-editor-toolbar button{width:100%}.raw-editor-widget textarea{font-size:16px}}
+@media(max-width:700px){.presentation-editor-workspace,.outputs-overview-grid{grid-template-columns:1fr}.presentation-editor-preview{grid-column:auto}.presentation-editor-head label{display:block}.presentation-editor-head select{max-width:100%;width:100%}.outputs-overview-detail dl{grid-template-columns:1fr}.outputs-overview-detail dd{margin-bottom:6px}.raw-editor-toolbar{display:grid;grid-template-columns:1fr}.raw-editor-toolbar label{min-width:0}.raw-editor-toolbar button{width:100%}.raw-editor-widget textarea{font-size:16px}.task-plan-block{grid-template-columns:1fr;margin-left:0!important}.task-plan-block small{grid-column:auto}.task-plan-insert button{width:100%}}
 @media(max-width:1000px){.conflict-grid{grid-template-columns:1fr}.conflict-code,.conflict-editor-stack{height:300px}.conflict-toolbar{align-items:stretch}.conflict-toolbar button{width:100%}}
 '''
 CSS += ADMIN_CSS + '''
@@ -2420,8 +2426,8 @@ function createRawEditorWidget(root,{textarea,onInput}){
  }
  function updateDirty(){root.dataset.dirty=String(textarea.value!==baseline);lastValidation=null;root.dataset.invalid='false';status.textContent='';onInput?.(textarea.value,textarea.value!==baseline);}
  textarea.addEventListener('input',updateDirty);patternSelect.addEventListener('change',renderHelp);
- insertButton.addEventListener('click',()=>{
-  const pattern=selectedPattern();if(!pattern||disabled)return;
+ function insertPattern(patternId=null){
+  const pattern=patternId?catalog?.patterns.find(item=>item.id===patternId&&item.adapter_ids.includes(adapterId)&&item.formats.includes(format)):selectedPattern();if(!pattern||disabled)return false;
   if(pattern.insertion==='document'&&textarea.value&&textarea.value!==pattern.text&&!window.confirm('Nahradit rozepsaný raw obsah vybraným vzorem?'))return;
   const start=textarea.selectionStart??textarea.value.length,end=textarea.selectionEnd??start;let content=pattern.text,selection=start+pattern.text.length;
   if(pattern.insertion==='cursor'){content=textarea.value.slice(0,start)+pattern.text+textarea.value.slice(end);selection=start+pattern.text.length;}
@@ -2429,8 +2435,9 @@ function createRawEditorWidget(root,{textarea,onInput}){
    const prefix=textarea.value.slice(0,start),suffix=textarea.value.slice(end),before=prefix&&!prefix.endsWith('\\n\\n')?(prefix.endsWith('\\n')?'\\n':'\\n\\n'):'',after=suffix&&!pattern.text.endsWith('\\n\\n')?(suffix.startsWith('\\n')?'\\n':'\\n\\n'):'';
    content=prefix+before+pattern.text+after+suffix;selection=(prefix+before+pattern.text).length;
   }
-  textarea.value=content;textarea.setSelectionRange(selection,selection);textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();status.textContent='Vzor byl vložen pouze do lokálního draftu.';
- });
+  textarea.value=content;textarea.setSelectionRange(selection,selection);textarea.dispatchEvent(new Event('input',{bubbles:true}));textarea.focus();status.textContent='Vzor byl vložen pouze do lokálního draftu.';return true;
+ }
+ insertButton.addEventListener('click',()=>insertPattern());
  async function validate(){
   if(disabled)return null;validateButton.disabled=true;status.textContent='Ověřuji raw obsah…';
   try{lastValidation=await projectRequest('/v1/document-patterns',{action:'validate',adapter_id:adapterId,format,content:textarea.value});root.dataset.invalid='false';status.textContent=`Obsah je validní · ${lastValidation.bytes} B · ${lastValidation.content_sha256.slice(0,12)}.`;return lastValidation;}
@@ -2445,6 +2452,7 @@ function createRawEditorWidget(root,{textarea,onInput}){
    catch(error){if(token!==configuration)return;catalog=null;patternSelect.replaceChildren(new Option('Katalog není dostupný',''));patternSelect.disabled=true;insertButton.disabled=true;status.textContent=error.message;}
   },
   validate,
+  insert:insertPattern,
   markClean(value=textarea.value){baseline=value;root.dataset.dirty=String(textarea.value!==baseline);},
   setDisabled(value){disabled=value;root.dataset.readOnly=String(value);textarea.readOnly=value;patternSelect.disabled=value||!catalog;insertButton.disabled=value||!selectedPattern();validateButton.disabled=value;},
   value(){return textarea.value;},
@@ -2456,6 +2464,42 @@ const artifactEditorForm=document.querySelector('#artifact-editor-form');
 const artifactEditorStatus=document.querySelector('#artifact-editor-status');
 let artifactEditorItem=null,artifactEditorAttempt=null,artifactEditorBaseline=null,artifactEditorDirty=false,artifactDeletePreview=null,artifactDeleteOperation=null;
 const artifactRawWidget=createRawEditorWidget(document.querySelector('#artifact-raw-widget'),{textarea:artifactEditorForm.elements.body,onInput:()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactRawWidget.dirty||artifactEditorState()!==artifactEditorBaseline;}});
+const taskPlanEditor=document.querySelector('#task-plan-editor'),taskPlanBlocks=document.querySelector('#task-plan-blocks'),taskPlanStatus=document.querySelector('#task-plan-editor-status'),artifactRawRoot=document.querySelector('#artifact-raw-widget');
+let taskPlanMode='structured';
+function parseTaskPlanDraft(body){
+ const lines=body.split('\\n'),tasks=[],ancestors=[];let fence=null,pending=null,profile=false,external=false;
+ for(let index=0;index<lines.length;index++){
+  const line=lines[index],marker=line.match(/^\\s*(`{3,}|~{3,})(.*)$/);
+  if(marker){if(!fence)fence=[marker[1][0],marker[1].length];else if(marker[1][0]===fence[0]&&marker[1].length>=fence[1]&&!marker[2].trim())fence=null;continue;}if(fence)continue;
+  if(/^\\s*<!--\\s*fpw-plan-profile:\\s*software-development\\/v1\\s*-->\\s*$/.test(line)){profile=true;continue;}
+  if(/^\\s*<!--\\s*fpw-plan-document:\\s*definitions\\/v1\\s*-->\\s*$/.test(line)){external=true;continue;}
+  const checkbox=line.match(/^(\\s*[-+*]\\s+\\[)([ xX])(\\]\\s+\\[)([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)(\\]\\s+)(.*?)(\\r?)$/);
+  if(/^\\s*[-+*]\\s+\\[[ xX]\\]\\s+/.test(line)&&!checkbox)return {safe:false,error:`Řádek ${index+1} nemá stabilní ID.`};
+  if(checkbox){const indent=checkbox[1].match(/^\\s*/)[0].replace(/\\t/g,'    ').length;while(ancestors.length&&ancestors.at(-1).indent>=indent)ancestors.pop();pending={line:index,parts:checkbox,indent,depth:ancestors.length,parentId:ancestors.at(-1)?.id||null,type:null,typeLine:null,relations:[]};tasks.push(pending);ancestors.push({indent,id:checkbox[4]});continue;}
+  const metadata=line.match(/^(\\s*[-+*]\\s+)([^:]{1,32}):(.*?)(\\r?)$/);
+  if(metadata&&pending&&metadata[1].replace(/\\t/g,'    ').length>pending.indent){const key=metadata[2].trim().toLowerCase(),value=metadata[3].trim();if(key==='type'||key==='typ'){if(!['milestone','batch','task'].includes(value)||pending.type)return {safe:false,error:`Uzel ${pending.parts[4]} nemá jednoznačný type.`};pending.type=value;pending.typeLine={line:index,parts:metadata};}else if(['depends_on','blocks','duplicates','supersedes','relates_to','parent_of','závisí na','blokuje','duplikuje','nahrazuje','souvisí s'].includes(key))pending.relations.push(`${metadata[2].trim()}: ${value}`);}
+ }
+ if(!profile&&!external)return {safe:false,error:'Dokument nemá podporovanou profilovou značku.'};
+ if(!tasks.length)return {safe:false,error:'Dokument neobsahuje žádný strukturovaný uzel.'};
+ if(tasks.some(item=>!item.type))return {safe:false,error:'Každý uzel musí mít právě jeden rozpoznaný type.'};
+ if(new Set(tasks.map(item=>item.parts[4])).size!==tasks.length)return {safe:false,error:'Dokument obsahuje duplicitní stabilní ID.'};
+ const byId=new Map(tasks.map(item=>[item.parts[4],item]));
+ for(const task of tasks){const parent=task.parentId?byId.get(task.parentId):null,linked=task.parts[6].startsWith('[')&&task.parts[6].includes('](artifacts/')&&task.parts[6].endsWith('.md)');if(profile&&!parent&&task.type!=='milestone')return {safe:false,error:`Kořen ${task.parts[4]} musí být milestone.`};if(external&&(!(!parent&&task.type==='task')))return {safe:false,error:'Externí soubor smí obsahovat pouze kořenové task uzly.'};if(parent&&!({milestone:'batch',batch:'task'}[parent.type]===task.type))return {safe:false,error:`Hierarchie ${parent.type} → ${task.type} není povolená.`};if(linked&&task.type!=='batch')return {safe:false,error:'Odkaz na soubor může nést pouze batch.'};if(linked&&tasks.some(item=>item.parentId===task.parts[4]))return {safe:false,error:`Batch ${task.parts[4]} kombinuje odkaz a inline potomky.`};}
+ return {safe:true,tasks,lines,profile,external};
+}
+function replaceTaskPlanLine(index,value){const lines=artifactEditorForm.elements.body.value.split('\\n');lines[index]=value;artifactEditorForm.elements.body.value=lines.join('\\n');artifactEditorForm.elements.body.dispatchEvent(new Event('input',{bubbles:true}));renderTaskPlanEditor();}
+function renderTaskPlanEditor(){
+ if(taskPlanEditor.hidden)return;const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);taskPlanBlocks.replaceChildren();document.querySelector('#task-plan-mode-structured').setAttribute('aria-selected',String(taskPlanMode==='structured'));document.querySelector('#task-plan-mode-raw').setAttribute('aria-selected',String(taskPlanMode==='raw'));artifactRawRoot.hidden=taskPlanMode==='structured';taskPlanBlocks.hidden=taskPlanMode!=='structured';document.querySelector('#task-plan-insert').hidden=taskPlanMode!=='structured';
+ if(!parsed.safe){taskPlanStatus.textContent=`Strukturovaný režim je pouze pro čtení: ${parsed.error} Použijte raw text.`;document.querySelector('#task-plan-insert').hidden=true;return;}
+ taskPlanStatus.textContent=`${parsed.tasks.length} uzlů · změny polí přepisují jen rozpoznané řádky; ostatní text zůstává beze změny.`;
+ for(const task of parsed.tasks){const card=document.createElement('section');card.className='task-plan-block';card.dataset.depth=String(Math.min(task.depth,3));const state=document.createElement('label'),check=document.createElement('input');check.type='checkbox';check.checked=task.parts[2].toLowerCase()==='x';state.append(check,document.createTextNode(' Hotovo'));const typeLabel=document.createElement('label'),type=document.createElement('select');for(const value of ['milestone','batch','task'])type.append(new Option(value,value));type.value=task.type;typeLabel.append('Typ',type);const idLabel=document.createElement('label'),id=document.createElement('input');id.value=task.parts[4];id.pattern='[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+';idLabel.append('ID',id);const titleLabel=document.createElement('label'),title=document.createElement('input');title.value=task.parts[6];title.maxLength=500;titleLabel.append('Název nebo odkaz',title);const details=document.createElement('small');details.textContent=`rodič: ${task.parentId||'kořen'}${task.relations.length?' · '+task.relations.join(' · '):''}`;
+  const update=()=>{if(!id.checkValidity()||!title.value.trim()){taskPlanStatus.textContent='ID a název musí zůstat platné.';return;}replaceTaskPlanLine(task.line,task.parts[1]+(check.checked?'x':' ')+task.parts[3]+id.value.trim()+task.parts[5]+title.value.trim()+task.parts[7]);};check.addEventListener('change',update);id.addEventListener('change',update);title.addEventListener('change',update);type.addEventListener('change',()=>replaceTaskPlanLine(task.typeLine.line,task.typeLine.parts[1]+task.typeLine.parts[2]+': '+type.value+task.typeLine.parts[4]));card.append(state,typeLabel,idLabel,titleLabel,details);taskPlanBlocks.append(card);}
+}
+function configureTaskPlanEditor(enabled){taskPlanEditor.hidden=!enabled;artifactRawRoot.hidden=enabled&&taskPlanMode==='structured';if(enabled)renderTaskPlanEditor();else artifactRawRoot.hidden=false;}
+document.querySelector('#task-plan-mode-structured').addEventListener('click',()=>{taskPlanMode='structured';renderTaskPlanEditor();});
+document.querySelector('#task-plan-mode-raw').addEventListener('click',()=>{taskPlanMode='raw';renderTaskPlanEditor();});
+for(const button of document.querySelectorAll('[data-task-pattern]'))button.addEventListener('click',()=>{const textarea=artifactEditorForm.elements.body;textarea.setSelectionRange(textarea.value.length,textarea.value.length);if(artifactRawWidget.insert(button.dataset.taskPattern))renderTaskPlanEditor();});
+artifactEditorForm.elements.body.addEventListener('input',()=>{if(!taskPlanEditor.hidden&&taskPlanMode==='structured')renderTaskPlanEditor();});
 function hideArtifactDeletion(){artifactDeletePreview=null;artifactDeleteOperation=null;document.querySelector('#artifact-delete-preview').hidden=true;document.querySelector('#artifact-delete-confirm').checked=false;document.querySelector('#artifact-delete-run').disabled=true;}
 function artifactEditorState(){return JSON.stringify(Object.fromEntries(new FormData(artifactEditorForm).entries()));}
 function canLeaveArtifactEditor(){
@@ -2475,7 +2519,7 @@ function fillArtifactEditor(doc,isNew=false){
  artifactEditorForm.elements.title.value=doc.title||'';artifactEditorForm.elements.filename.value=meta.file||doc.filename||'content.md';
  artifactEditorForm.elements.description.value=meta.description||'';artifactEditorForm.elements.tags.value=(meta.tags||[]).join('\\n');artifactEditorForm.elements.body.value=doc.body||'';
  artifactEditorBaseline=artifactEditorState();artifactEditorDirty=isNew;artifactEditorAttempt=null;
- const taskPlan=Boolean(activeProject&&artifactEditorItem?.id===activeProject.mainTodoId);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false});
+ const taskPlan=Boolean(activeProject&&(artifactEditorItem?.id===activeProject.mainTodoId||/<!--\\s*fpw-plan-(?:profile|document):/.test(doc.body||'')||taskPlanProjection?.nodes?.some(item=>item.source?.artifact_id===artifactEditorItem?.id)));configureTaskPlanEditor(taskPlan);artifactRawWidget.configure({adapterId:taskPlan?'task-plan':'markdown',format:'text/markdown',content:doc.body||'',readOnly:false}).then(()=>configureTaskPlanEditor(taskPlan));
 }
 async function closeArtifactEditor(){
  if(!canLeaveWorkspaceEditors())return;
@@ -2503,7 +2547,7 @@ function openNewArtifactEditor({todo=false}={}){
  artifactEditorItem={id,kind:'document',new:true};hideArtifactDeletion();
  document.querySelector('#project-home').hidden=true;settingsView.hidden=true;sourceImportView.hidden=true;historyView.hidden=true;projectView.hidden=true;artifactEditorView.hidden=false;
  selectSidebarTab(document.querySelector(todo?'#todo-tab':'#artifacts-tab'));
- fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'# Hlavní seznam úkolů\\n\\n- [ ] První úkol\\n'}:{title:'',filename:'content.md',body:''},true);
+ fillArtifactEditor(todo?{title:'Hlavní seznam úkolů',filename:'content.md',body:'<!-- fpw-plan-profile: software-development/v1 -->\\n\\n# Hlavní seznam úkolů\\n\\n- [ ] [MILESTONE-01] První milník\\n  - type: milestone\\n'}:{title:'',filename:'content.md',body:''},true);
  artifactEditorStatus.textContent='Dokument vznikne až po uložení.';artifactEditorForm.elements.title.focus();
 }
 function openMainTodoEditor(){
@@ -2513,7 +2557,9 @@ function openMainTodoEditor(){
 document.querySelector('#new-document').addEventListener('click',()=>openNewArtifactEditor());
 artifactEditorForm.addEventListener('input',()=>{artifactEditorAttempt=null;artifactEditorDirty=artifactEditorState()!==artifactEditorBaseline;});
 artifactEditorForm.addEventListener('submit',async event=>{
- event.preventDefault();if(!activeProject||!artifactEditorItem)return;const button=artifactEditorForm.querySelector('button[type="submit"]');if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return;}const fields=new FormData(artifactEditorForm);
+ event.preventDefault();if(!activeProject||!artifactEditorItem)return;const button=artifactEditorForm.querySelector('button[type="submit"]');
+ if(!taskPlanEditor.hidden){const parsed=parseTaskPlanDraft(artifactEditorForm.elements.body.value);if(!parsed.safe){artifactEditorStatus.textContent='Strukturovaný plán nelze bezpečně uložit: '+parsed.error;return;}if(!artifactEditorItem.new){try{await projectRequest('/v1/artifacts/editor/validate-plan',{project_id:activeProject.id,artifact_id:artifactEditorItem.id,expected_head:activeProject.head,body:artifactEditorForm.elements.body.value});}catch(error){artifactEditorStatus.textContent=error.message;return;}}}
+ if(!await artifactRawWidget.validate()){artifactEditorStatus.textContent='Raw obsah je nutné opravit před uložením.';return;}const fields=new FormData(artifactEditorForm);
  const request={project_id:activeProject.id,artifact_id:artifactEditorItem.id,base_head:activeProject.head,title:String(fields.get('title')).trim(),body:String(fields.get('body')),new:Boolean(artifactEditorItem.new),filename:String(fields.get('filename')).trim(),metadata:{description:String(fields.get('description')),tags:String(fields.get('tags')).split(/\\r?\\n/).map(value=>value.trim()).filter(Boolean)}};
  const signature=JSON.stringify(request);if(!artifactEditorAttempt||artifactEditorAttempt.signature!==signature)artifactEditorAttempt={signature,operation_id:crypto.randomUUID(),document:request};
  button.disabled=true;artifactEditorStatus.textContent='Ukládám dokument…';
@@ -6947,6 +6993,7 @@ class DesktopHandler(Handler):
         '/v1/projects/conflicts/list', '/v1/projects/conflicts/preview',
         '/v1/projects/conflicts/confirm',
         '/v1/artifacts/editor/open', '/v1/artifacts/editor/save',
+        '/v1/artifacts/editor/validate-plan',
         '/v1/artifacts/delete/preview', '/v1/artifacts/delete/confirm',
         '/v1/sources/import', '/v1/google-drive/status', '/v1/google-drive/configure',
         '/v1/google-drive/authorize', '/v1/google-drive/preview',
@@ -7629,6 +7676,9 @@ class DesktopHandler(Handler):
                 if (self.path == '/v1/artifacts/editor/open' and isinstance(request, dict)
                         and set(request) == {'project_id', 'artifact_id', 'expected_head'}):
                     return self.reply(200, actions.open(**request))
+                if (self.path == '/v1/artifacts/editor/validate-plan' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'artifact_id', 'expected_head', 'body'}):
+                    return self.reply(200, actions.validate_task_plan(**request))
                 if (self.path == '/v1/artifacts/editor/save' and isinstance(request, dict)
                         and set(request) == {'operation_id', 'document'}
                         and isinstance(request['document'], dict)):
@@ -7791,7 +7841,9 @@ class DesktopHandler(Handler):
                 return self.reply(422, {'error':
                     'Potvrzení prezentace nelze dokončit: návrh, schválení nebo projektová revize '
                     'se změnily. Načtěte aktuální stav; pokud návrh zůstane dostupný, opakování '
-                    'stejného tlačítka zachová identitu operace.'})
+                                       'stejného tlačítka zachová identitu operace.'})
+            if self.path == '/v1/artifacts/editor/validate-plan':
+                return self.reply(422, {'error': str(exc) or 'Plán nelze bezpečně materializovat.'})
             if self.path.startswith(('/v1/publication-cms/', '/v1/chat/', '/v1/node-telemetry/', '/v1/search/', '/v1/external/', '/v1/tasks/', '/v1/workflows/', '/v1/autonomy/', '/v1/summary/', '/v1/extraction/', '/v1/media/',
                                      '/v1/metadata-suggestions/')):
                 message = ('Publikační CMS požadavek nelze provést. Ověřte přítomnost, povolení a verzi '
