@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from spikes.markdown_documents import main_todo_id
 from spikes.task_graph import project_task_graph, task_graph_svg
-from spikes.desktop_ui import HTML, JS
+from spikes.desktop_ui import CSS, HTML, JS
 
 
 class TaskGraphTests(unittest.TestCase):
@@ -75,6 +75,49 @@ class TaskGraphTests(unittest.TestCase):
             with self.subTest(body=body):
                 self.assertEqual('invalid', self.fixture(body)['status'])
 
+    def test_profiled_descriptions_and_cross_milestone_batch_dependency(self):
+        value = self.fixture('''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Import
+  - type: milestone
+  - Importovat projektové podklady.
+  - Rozsah: hlavní i doplňkové soubory.
+  - [x] [BATCH-01] Načíst roadmapu
+    - type: batch
+    - Načíst hlavní i doplňkové roadmapy.
+    - [ ] [TASK-01] Načíst soubor
+      - type: task
+      - Zachovat původní bajty souboru.
+- [ ] [MILESTONE-02] Zobrazení
+  - type: milestone
+  - Zobrazit importovaný plán.
+  - [ ] [BATCH-02] Vykreslit roadmapu
+    - type: batch
+    - Navázat na import z prvního milníku.
+    - depends_on: BATCH-01
+''')
+        self.assertEqual('ready', value['status'])
+        nodes = {item['id']: item for item in value['nodes']}
+        self.assertEqual('Importovat projektové podklady.\nRozsah: hlavní i doplňkové soubory.',
+                         nodes['MILESTONE-01']['description'])
+        self.assertEqual('Načíst hlavní i doplňkové roadmapy.', nodes['BATCH-01']['description'])
+        self.assertEqual('Zachovat původní bajty souboru.', nodes['TASK-01']['description'])
+        self.assertEqual(['BATCH-01'], nodes['BATCH-02']['depends_on'])
+        self.assertEqual(1, nodes['BATCH-02']['dependency_depth'])
+        self.assertNotIn('type: batch', nodes['BATCH-02']['description'])
+        self.assertIn('Importovat projektové podklady.', value['svg'])
+        self.assertIn('Navázat na import z prvního milníku.', value['svg'])
+        self.assertIn('class="edge"', value['svg'])
+        self.assertNotIn('TASK-01', value['svg'])
+
+    def test_profiled_description_limit_fails_closed(self):
+        value = self.fixture('''<!-- fpw-plan-profile: software-development/v1 -->
+- [ ] [MILESTONE-01] Milník
+  - type: milestone
+  - %s
+''' % ('x' * 8193))
+        self.assertEqual('invalid', value['status'])
+        self.assertIn('8 KiB', value['error'])
+
     def test_canonical_relations_readiness_critical_path_and_subgraph(self):
         value = self.fixture('''# TODO
 - [x] [TASK-01] Základ
@@ -128,8 +171,10 @@ class TaskGraphTests(unittest.TestCase):
         self.assertLess(HTML.index('id="todo-tab"'), HTML.index('id="plan-tab"'))
         self.assertLess(HTML.index('id="plan-tab"'), HTML.index('id="artifacts-tab"'))
         for marker in ('Hlavní graf', 'Podgrafy', 'renderTaskPlanSidebar(result.plan)',
-                       "roadmapElement('svg'", 'textContent=item.title'):
-            self.assertIn(marker, HTML + JS)
+                       "roadmapElement('svg'", 'textContent=item.title',
+                       'renderProfiledTaskRoadmap', 'plan-milestone-label',
+                       'position:sticky', "item.type==='batch'"):
+            self.assertIn(marker, HTML + CSS + JS)
 
 
 if __name__ == '__main__':

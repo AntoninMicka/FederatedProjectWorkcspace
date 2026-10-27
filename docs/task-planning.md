@@ -32,6 +32,22 @@ Profil `software-development/v1` podle [ADR
 větev/PR a task nejmenší změna normálně cílená na jeden commit. Typ je povinné
 metadata `type` a rodič vychází z fyzického vnoření.
 
+Každý z těchto uzlů může mít pod `type` jednu nebo více obyčejných vnořených
+odrážek. Ty tvoří víceřádkový popis uzlu; rozpoznaná metadata jako `type` a
+`depends_on` do popisu nepatří. Například:
+
+```markdown
+- [ ] [MILESTONE-01] Import projektu
+  - type: milestone
+  - Importovat roadmapu, úkoly a popisy z původního projektu.
+  - [ ] [BATCH-01] Načíst soubory plánu
+    - type: batch
+    - Zachovat původní bajty a stabilní ID položek.
+    - [ ] [TASK-01] Ověřit vstup
+      - type: task
+      - Neplatný bundle odmítnout bez částečné projekce.
+```
+
 Batch může tasky obsahovat jako vnořené odrážky, nebo jeho titul může být
 přesný Markdown odkaz `artifacts/UUID/content.md`. Odkazovaný dokument začíná
 `<!-- fpw-plan-document: definitions/v1 -->` a obsahuje kořenové leaf tasky.
@@ -44,8 +60,15 @@ Kanonická definice ID smí být právě v jednom souboru bundle. Podgraf i poto
 pouze vybírá ID a nepřebírá jejich stav. Uživatelský příklad je v
 [návodu ke vzorům a skládání plánu](document-patterns-and-task-authoring.md).
 
-Položka **Plán** v levé liště zpřístupňuje hlavní graf a seznam podgrafů.
-Graf je pouze pro čtení. Hlavní TODO a odkazované task soubory lze upravit
+Položka **Plán** v levé liště zpřístupňuje hlavní roadmapu a seznam podgrafů.
+Hlavní profilovaný pohled zobrazuje milníkové pruhy s jejich popisem a batch
+karty s popisem. Dependency hrany batch mohou vést i mezi různými milníky;
+plátno proto roste do šířky a lze je vodorovně posouvat, zatímco levý nadpis a
+popis milníku zůstávají ukotvené. Samostatná vizuální úroveň tasků je odložená;
+tasky však parser i editor nadále materializují a podgraf je může zobrazit v
+obecném grafu.
+
+Roadmapa je pouze pro čtení. Hlavní TODO a odkazované task soubory lze upravit
 specializovaným editorem **Kostky / Raw text**. Kostky mění jen rozpoznané
 řádky; před uložením existujícího souboru se celý draft ověří proti přesnému
 committed bundle a expected HEAD. Neplatné nebo duplicitní ID, neznámý cíl,

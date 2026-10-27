@@ -10,6 +10,9 @@ Feature `F-M3-ATLASCLOUD-01` byla doručena PR #93. Výběr backendu/modelu
 `UX-BACKEND-MODEL-01` byl doručen PR #96 a #97 a navazující pinning
 `UX-BACKEND-MODEL-02` byl doručen PR #98 a `DEV-ROADMAP-GRAPH-01` PR #99.
 Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #100.
+Profilovaný souborový plán a task editor byly doručeny PR #108, rozšířená
+knihovna vzorů PR #109 a milestone/batch pohled obecné roadmapy je
+feature-akceptovaný v `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
 #103 a `COMP-02` byla doručena PR #104 s lokálním Julia runnerem a explicitní
@@ -822,7 +825,9 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
 
 # 11B. Vlastní rozvoj produktu, IDE rozšíření a integrace coding agenta
 
-**Stav: read-only roadmapový i obecný projektový graf PoC validated; DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
+**Stav: read-only roadmapový i obecný projektový graf PoC validated;
+profilovaný souborový plán, editor a milestone/batch pohled jsou implemented;
+DEV-01 až DEV-04 zůstávají designed / plánované.** Workspace má po dosažení potřebných M1–M6 schopností umožnit analyzovat, plánovat a evidovat rozvoj tohoto produktu v něm samotném. Rozšíření pro Microsoft Visual Studio Code a VSCodium zpřístupní tento workflow přímo v IDE; implementaci zdrojového kódu lze předat samostatnému coding agentovi, například Codexu. Workspace zůstává autoritou projektových požadavků, rozhodnutí, úkolů, oprávnění a akceptace.
 
 - [x] Generovat read-only DAG feature dávek z autoritativních Markdown stavů a
   explicitní anotace hran; zobrazit milestone swimlanes, kritickou cestu,
@@ -836,16 +841,23 @@ Tato sekce pokrývá lokální LLM konverzace. Federovaný chat mezi lidmi použ
   záložkami Hlavní graf a Podgrafy — `PLAN-TASK-GRAPH-01`, PoC validated,
   evidence ve WORK_LOG a ADR 0055.
 
-- [ ] Rozšířit hlavní TODO o explicitně zahrnutý bundle verzovaných
+- [x] Rozšířit hlavní TODO o explicitně zahrnutý bundle verzovaných
   definičních souborů. Každé ID má jedinou kanonickou definici; podgrafy
   nadále pouze vybírají ID a nikdy nepřebírají stav nebo typ.
-- [ ] Zavést uzavřené profily hierarchie. Softwarový profil v1 používá
+- [x] Zavést uzavřené profily hierarchie. Softwarový profil v1 používá
   `milestone → batch → task`, kde batch je jedna feature větev/PR a task
   nejmenší změna normálně cílená na jeden commit. Jiné domény mohou
   deklarovat jiné uzavřené typy a povolené parent-child hrany.
-- [ ] Nad souborovým kontraktem a katalogem vzorů vytvořit speciální editor
+- [x] Nad souborovým kontraktem a katalogem vzorů vytvořit speciální editor
   úkolů. Známé bloky skládá jako widgety, ale raw režim zůstává
   kanonickým fallbackem a neznámý text se při round-trip neztratí.
+
+- [x] Umožnit milestone, batch a task uzlům obyčejné popisné odrážky a v
+  hlavním profilovaném pohledu zobrazit milestone pruhy a batch karty včetně
+  popisů. Dependency hrany mohou vést mezi milníky, široké plátno scrolluje a
+  nadpis s popisem milníku zůstává ukotvený —
+  `PLAN-ROADMAP-MILESTONE-VIEW-01`, implemented. Samostatný task pohled čeká
+  na uživatelské zhodnocení první úrovně.
 
 - [ ] Převést vybrané části roadmapy do verzovaných projektových entit: požadavky, milníky, feature dávky, úkoly, závislosti, rozhodnutí, rizika a akceptační podmínky. Každá odvozená entita zachová ID, zdrojovou revizi a provenance; synchronizace nesmí vytvářet druhý konkurenční stav roadmapy ani zahazovat ruční změny.
 - [ ] Umožnit export lidsky čitelného Markdown TODO i strojově čitelného balíčku úkolů. Export obsahuje stabilní task ID, cíl, rozsah/mimo rozsah, závislosti, akceptaci, prioritu, stav, oprávněné vstupy a jejich přesné revize; export sám nemění stav úkolu.

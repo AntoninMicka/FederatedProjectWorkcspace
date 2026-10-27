@@ -102,6 +102,21 @@ vnoření nebo rodiči odkazovaného souboru. Projekce uloží jediný směr
 `supersedes` a `relates_to` zůstávají ortogonální k hierarchii. Dependency
 cyklus je zakázaný; hierarchie musí být acyklická a odpovídat profilu.
 
+## Popisné odrážky a roadmapový pohled
+
+Obyčejná odrážka vnořená pod milestone, batch nebo task, která nemá
+rozpoznaný metadatový klíč, je řádek popisu nejbližšího uzlu. Rozpoznaná
+metadata (`type`, dependency a další vztahy) zůstávají oddělená. Projekce
+spojuje více popisných odrážek v pořadí souboru, ale raw Markdown neupravuje;
+platí stejný limit a fail-closed sestavení bundle jako pro ostatní data uzlu.
+
+Hlavní pohled profilu `software-development/v1` materializuje nejprve pouze
+milestone a batch úroveň. Milník tvoří vodorovný pruh s ukotveným nadpisem a
+popisem, batch je karta s vlastním popisem. Dependency hrana batch není
+omezena hranicí milníku, takže plátno smí růst do šířky a vodorovně se
+posouvat. Task data zůstávají v projekci i editoru, ale jejich samostatná
+vizuální úroveň není součástí tohoto prvního pohledu.
+
 ## Speciální editor úkolů
 
 Task editor je specializovaný pohled nad raw textem a profilem, nikoli nový

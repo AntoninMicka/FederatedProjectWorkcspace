@@ -5,12 +5,66 @@ SPDX-License-Identifier: MPL-2.0
 
 # Záznam dokončené práce
 
+## PLAN-ROADMAP-MILESTONE-VIEW-01 — Popisy plánu a milníkový pohled roadmapy — 2026-10-28
+
+Dávka vznikla na větvi `feature/plan-roadmap-milestone-view` z `develop`
+`ab09744` a dosáhla cílové úrovně **implemented**. Feature akceptace je
+dokončená; commit, push ani PR do `develop` dosud nebyly vytvořeny. Rozsah
+vychází z uživatelského požadavku převzít vizuální jazyk milníků z
+**Nastavení → Roadmapa** do obecného projektového plánu, doplnit popisy
+milníků a dávek a zachovat dependency hrany i napříč milníky.
+
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-A — popisné bloky plánu
+  (implemented).** Obyčejné vnořené odrážky se materializují jako víceřádkový
+  popis nejbližšího milestone, batch nebo task uzlu. Rozpoznaná typová a
+  vztahová metadata zůstávají oddělená, text s neznámým klíčem a dvojtečkou
+  lze použít jako popis a limit 8 KiB na uzel selže uzavřeně. Projekční schéma
+  v2 zachovává zvlášť hierarchickou a dependency hloubku; raw Markdown se
+  nemění.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-B — milestone/batch pohled
+  (implemented).** Hlavní pohled profilu `software-development/v1` používá
+  milníkové pruhy s nadpisem a popisem a batch karty s názvem a popisem.
+  Samostatnou task vizuální úroveň zatím nevykresluje; task data zůstávají v
+  projekci, editoru a obecných podgrafech. Detail bezpečně zobrazuje plný
+  popis, typ, rodiče, stav a vztahy.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-C — závislosti a scroll
+  (implemented).** Batch karty se vodorovně rozmisťují podle dependency
+  hloubky na společném plátně, takže SVG hrana může spojit dávky v různých
+  milnících. Plátno roste do šířky, jeho kontejner scrolluje a levý nadpis s
+  popisem milníku zůstává sticky. Revizně připnutý SVG export používá stejnou
+  milestone/batch projekci.
+- [x] [completed] **PLAN-ROADMAP-MILESTONE-VIEW-01-D — regrese, dokumentace a
+  předání (implemented).** Task vzory i jejich vyplněné příklady nyní obsahují
+  popisné odrážky. ADR 0059, oba návody, master roadmapa a pracovní evidence
+  popisují stejný materializovaný pohled a hranici odložené task úrovně.
+
+### Ověření, recovery a omezení
+
+Po poslední změně kódu, CSS a testů prošla celá sada
+`python3 -m unittest discover -s tests -v`: **949 testů, 913 prošlo a 36
+volitelných bylo přeskočeno, bez chyb**, 233,245 s. Cílených 19 testů parseru,
+SVG, katalogu a statického UI prošlo a dva cílené HTTPS testy validace/projekce
+prošly mimo omezený sandbox. Samostatný skutečný Qt/WebEngine smoke s
+`M0_DESKTOP_TEST=1` prošel dvěma milníky a dávkami, jejich popisy, skrytou task
+úrovní, cross-milestone hranou, skutečným vodorovným overflow, sticky CSS i
+výběrem detailu. `git diff --check` byl bez chyby. Úplná sada vypsala existující
+neblokující `ResourceWarning` pro neuzavřené testovací SQLite connection, ale
+neselhal žádný test.
+
+Jde o read-only projekci committed souborů a změna nepřidává persistentní
+vrstvu ani zápisovou operaci. Uložení v task editoru dál používá existující
+Workspace/Journal/Git/index hranice: před commitem je autoritou journal a po
+commitu lze index obnovit z HEAD. Reuse/adapt rozhodnutí zachovalo parser a
+fail-closed graf ADR 0055/0059 i vizuální jazyk existující roadmapy; nový
+renderer či task store nevznikl. Samostatný způsob zobrazení task úrovně čeká
+na uživatelské zhodnocení tohoto prvního pohledu a je předán do BACKLOG.
+
 ## DOC-PATTERN-LIBRARY-01 — Rozšířená knihovna vzorů a kontextová nápověda — 2026-10-27
 
 Dávka vznikla na větvi `feature/doc-pattern-library` z `develop` `50284d1` a
-dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
-čeká na commit a push poslední akceptační úpravy do otevřeného PR #109 proti
-`develop`. Původní požadavek na obsahově bohatší katalog byl během aktivace
+dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; PR #109
+byla sloučena do `develop` jako squash commit `ab09744`. Původní požadavek na
+obsahově bohatší katalog byl během aktivace
 rozšířen o pravý kontextový panel:
 výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
 podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou

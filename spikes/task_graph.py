@@ -10,10 +10,11 @@ import re
 from spikes.markdown_documents import document, main_todo_id
 from spikes.metadata import ValidationError, require
 
-SCHEMA = 'fpw-project-task-graph-v1'
+SCHEMA = 'fpw-project-task-graph-v2'
 TASK_ID = re.compile(r'[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+')
 TASK = re.compile(r'^(\s*)[-+*]\s+\[([ xX])\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\]\s+(.+?)\s*$')
 RELATION = re.compile(r'^(\s*)[-+*]\s+([^:]{1,32}):\s*(.+?)\s*$')
+DESCRIPTION = re.compile(r'^(\s*)[-+*]\s+(.+?)\s*$')
 REFERENCE = re.compile(r'^\s*[-+*]\s+\[[ xX]\]\s+\[([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\](?:\s+.*)?$')
 PROFILE = re.compile(r'^\s*<!--\s*fpw-plan-profile:\s*([^\s]+)\s*-->\s*$')
 PLAN_DOCUMENT = re.compile(r'^\s*<!--\s*fpw-plan-document:\s*definitions/v1\s*-->\s*$')
@@ -27,6 +28,7 @@ ALIASES = {
     'parent_of': 'parent_of', 'rodič': 'parent_of',
 }
 MAX_TASKS, MAX_RELATIONS, MAX_SUBGRAPHS = 1000, 4000, 100
+MAX_DESCRIPTION_BYTES = 8192
 SOFTWARE_PROFILE = 'software-development/v1'
 CHILD_TYPES = {'milestone': {'batch'}, 'batch': {'task'}, 'task': set()}
 
@@ -86,6 +88,7 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
             link = DOCUMENT_LINK.fullmatch(title)
             pending = {'id': task_id, 'title': title, 'checked': checked.lower() == 'x',
                        'indent': indent_value, 'relations': defaultdict(list),
+                       'description_lines': [],
                        'type': None, 'parent_id': parent_id,
                        'document_link': link.group(2) if link else None,
                        'source': source, 'line': line_number}
@@ -101,11 +104,22 @@ def parse_main_todo(body, *, source=None, inherited_parent=None, require_profile
                 values = _targets(relation.group(3)); relation_count += len(values)
                 require(relation_count <= MAX_RELATIONS, 'TODO přesahuje limit 4000 vztahů.')
                 pending['relations'][key].extend(values)
+                continue
             elif relation.group(2).strip().lower() in {'type', 'typ'}:
                 value = relation.group(3).strip().lower()
                 require(value in CHILD_TYPES, f'Neznámý typ uzlu: {value}')
                 require(pending['type'] is None, f'Uzel {pending["id"]} deklaruje typ vícekrát.')
                 pending['type'] = value
+                continue
+        description = DESCRIPTION.match(line)
+        if (description and pending
+                and len(description.group(1).expandtabs(4)) > pending['indent']):
+            text = description.group(2).strip()
+            require(text and '\0' not in text, 'Popis uzlu nesmí být prázdný.')
+            pending['description_lines'].append(text)
+            require(len('\n'.join(pending['description_lines']).encode('utf-8'))
+                    <= MAX_DESCRIPTION_BYTES,
+                    f'Popis uzlu {pending["id"]} přesahuje limit 8 KiB.')
     require(tasks, 'Hlavní TODO neobsahuje žádný strukturovaný úkol.')
     if require_profile:
         require(profile is None, 'Externí soubor nesmí měnit profil plánu.')
@@ -259,8 +273,11 @@ def project_task_graph(files, entities, project_id, commit_id):
             task = tasks[task_id]; parents = sorted(dependencies[task_id])
             relations = {key: sorted(values) for key, values in derived[task_id].items()
                          if key != 'depends_on' and values}
-            nodes.append({'id': task_id, 'title': task['title'], 'checked': task['checked'],
+            nodes.append({'id': task_id, 'title': task['title'],
+                          'description': '\n'.join(task['description_lines']),
+                          'checked': task['checked'],
                           'depends_on': parents, 'relations': relations, 'depth': depths[task_id],
+                          'dependency_depth': depths[task_id],
                           'type': task['type'], 'parent_id': task['parent_id'],
                           'hierarchy_depth': _hierarchy_depth(tasks, task_id),
                           'source': task['source'], 'line': task['line'],
@@ -292,6 +309,8 @@ def _hierarchy_depth(tasks, task_id):
 
 def task_graph_svg(value, selected=None):
     require(value.get('status') == 'ready', 'Plán není dostupný pro export.')
+    if value.get('profile') == SOFTWARE_PROFILE and selected is None:
+        return _profiled_task_graph_svg(value)
     ids = set(selected or [item['id'] for item in value['nodes']])
     nodes = [item for item in value['nodes'] if item['id'] in ids]
     positions, slots = {}, defaultdict(int)
@@ -319,5 +338,55 @@ def task_graph_svg(value, selected=None):
         parts.extend([f'<g><title>{escape(item["title"])}</title><rect class="{" ".join(classes)}" x="{x}" y="{y}" width="220" height="52" rx="8"/>',
                       f'<text x="{x+9}" y="{y+21}" font-weight="700">{escape(item["id"])}</text>',
                       f'<text x="{x+9}" y="{y+40}" font-size="11">{escape(item["title"][:32])}</text></g>'])
+    parts.append(f'<metadata>{SCHEMA} {escape(value["revision"])}</metadata></svg>')
+    return ''.join(parts)
+
+
+def _profiled_task_graph_svg(value):
+    milestones = sorted((item for item in value['nodes'] if item['type'] == 'milestone'),
+                        key=lambda item: ((item['source'] or {}).get('path', ''), item['line']))
+    batches = [item for item in value['nodes'] if item['type'] == 'batch']
+    label_width, column_width, card_width, card_height = 220, 270, 220, 96
+    positions, lanes = {}, []
+    top, max_depth = 10, 0
+    for milestone in milestones:
+        slots, max_slot = defaultdict(int), 0
+        for batch in (item for item in batches if item['parent_id'] == milestone['id']):
+            depth = batch['dependency_depth']; slot = slots[depth]; slots[depth] += 1
+            max_slot = max(max_slot, slot); max_depth = max(max_depth, depth)
+            positions[batch['id']] = (label_width + 28 + depth * column_width,
+                                      top + 18 + slot * (card_height + 10))
+        height = 36 + (max_slot + 1) * card_height + max_slot * 10
+        lanes.append((milestone, top, height)); top += height + 10
+    width, height = label_width + 68 + (max_depth + 1) * column_width, max(top, 140)
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}">',
+             '<style>text{font-family:system-ui}.lane{fill:#edf3f5}.label{font-weight:700;fill:#18384a}.description{font-size:11px;fill:#526b79}.edge{stroke:#91a5b1;stroke-width:2;fill:none}.card{fill:#fff;stroke:#557384;stroke-width:2}.ready{stroke:#176b60;stroke-dasharray:6 3}.blocked{fill:#f8dddd}.done{fill:#e2f3eb}.critical{stroke-width:4}</style>']
+    for milestone, lane_top, lane_height in lanes:
+        full_description = milestone['description'].replace('\n', ' ') or 'Bez doplňujícího popisu.'
+        parts.append(f'<g><title>{escape(milestone["title"])} — {escape(full_description)}</title><rect class="lane" x="10" y="{lane_top}" width="{width-20}" height="{lane_height}" rx="11"/>')
+        parts.append(f'<text class="label" x="28" y="{lane_top+28}">{escape(milestone["id"])} · {escape(milestone["title"][:28])}</text>')
+        parts.append(f'<text class="description" x="28" y="{lane_top+49}">{escape(full_description[:30])}</text></g>')
+    for batch in batches:
+        target = positions.get(batch['id'])
+        if not target:
+            continue
+        x2, y2 = target
+        for parent in batch['depends_on']:
+            if parent in positions:
+                x1, y1 = positions[parent]
+                parts.append(f'<path class="edge" d="M{x1+card_width} {y1+card_height//2} C{x1+card_width+28} {y1+card_height//2} {x2-28} {y2+card_height//2} {x2} {y2+card_height//2}"/>')
+    for batch in batches:
+        if batch['id'] not in positions:
+            continue
+        x, y = positions[batch['id']]; classes = ['card']
+        if batch['checked']: classes.append('done')
+        if batch['ready']: classes.append('ready')
+        if batch['blocked']: classes.append('blocked')
+        if batch['critical']: classes.append('critical')
+        description = batch['description'].replace('\n', ' ') or 'Bez doplňujícího popisu.'
+        parts.extend([f'<g><title>{escape(batch["title"])} — {escape(description)}</title><rect class="{" ".join(classes)}" x="{x}" y="{y}" width="{card_width}" height="{card_height}" rx="9"/>',
+                      f'<text x="{x+10}" y="{y+22}" font-weight="700">{escape(batch["id"])}</text>',
+                      f'<text x="{x+10}" y="{y+43}" font-size="11">{escape(batch["title"][:31])}</text>',
+                      f'<text class="description" x="{x+10}" y="{y+64}">{escape(description[:31])}</text></g>'])
     parts.append(f'<metadata>{SCHEMA} {escape(value["revision"])}</metadata></svg>')
     return ''.join(parts)

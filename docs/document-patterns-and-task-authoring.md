@@ -126,10 +126,13 @@ Příklad:
 ```markdown
 - [ ] [M-EDITOR] Editory
   - type: milestone
+  - Umožnit bezpečnou práci s projektovými dokumenty.
   - [ ] [B-PATTERNS] Katalog vzorů a raw editor
     - type: batch
+    - Dodat validovaný katalog a společný editor v jednom PR.
     - [ ] [T-CATALOG] Validovat a filtrovat katalog
       - type: task
+      - Odmítnout duplicitní ID a nekompatibilní formáty.
       - depends_on: T-ADAPTERS
 
   - [ ] [B-EXTERNAL] [Externí dávka](artifacts/018f.../content.md)
@@ -140,6 +143,14 @@ Odkazovaný dokument začíná `<!-- fpw-plan-document: definitions/v1 -->` a v
 první verzi obsahuje pouze kořenové leaf tasky dané dávky. Inline potomci a
 souborový odkaz se na jednom batch nekombinují. Graf obě varianty materializuje
 na stejné uzly a `parent_id`; není dalším úložištěm stavu.
+
+Obyčejná vnořená odrážka, která není rozpoznaným metadatovým klíčem, je
+popis nejbližšího milestone, batch nebo task uzlu. Více odrážek se v projekci
+zachová jako víceřádkový popis; raw text zůstává beze změny. Hlavní roadmapa
+zatím zobrazuje popisy milníků a dávek. Dávky se rozmisťují podle dependency
+hloubky i napříč milníky, široké plátno lze vodorovně posouvat a popis milníku
+zůstává při posunu ukotvený. Task vizuální úroveň bude navržena až po kontrole
+tohoto prvního pohledu.
 
 Potřebuje-li se údajný task dále dělit, není ještě nejmenší jednotkou. Vzniknou
 samostatné tasky ve stejné dávce a jejich pořadí se vyjádří vztahy.

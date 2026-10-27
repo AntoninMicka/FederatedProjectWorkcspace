@@ -101,9 +101,11 @@ Julia authoring se nemá dokončovat nad další jednorázovou textovou plochou.
 a byla doručena PR #107 jako squash commit `ac4281a`; její akceptovaná evidence
 je ve WORK_LOG. `PLAN-TASK-EDITOR-01` zahrnula souborový kontrakt
 `PLAN-FILE-HIERARCHY-01` i úplnou task coverage katalogu a byla doručena PR
-#108 jako squash commit `50284d1`. Obecnou šíři vzorů mimo task editor nyní
-realizuje aktivní `DOC-PATTERN-LIBRARY-01` v TODO. Poté následují podle
-uživatelem aktualizovaného pořadí `COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
+#108 jako squash commit `50284d1`. `DOC-PATTERN-LIBRARY-01` byla doručena PR
+#109 jako squash commit `ab09744`. Navazující ad-hoc dávka
+`PLAN-ROADMAP-MILESTONE-VIEW-01` je feature-akceptovaná a její doručení čeká v
+TODO. Poté zůstávají podle uživatelem aktualizovaného pořadí připravené
+`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
 Každá položka
 zůstává samostatnou feature dávkou a vlastním PR; nevzniká společná větev ani
 stacked PR bez dalšího výslovného rozhodnutí.
@@ -167,6 +169,12 @@ Přeneseno z původní sekce 19 roadmapy. Široké M2 a M3/M4 se před implement
 - [ ] **[planned] M3/M4 — Role a backendy:** implementovat Role/Backend modely a testy autorizace/execution boundaries dle ADR 0008 a následné předávání artefaktů mezi rolemi.
 
 ## Vlastní rozvoj produktu a coding agenti — navazuje na M6
+
+- [ ] [planned] **PLAN-ROADMAP-TASK-VIEW-01 — další vizuální úroveň roadmapy
+  (cílová úroveň: designed).** Po uživatelském zhodnocení milestone/batch
+  pohledu určit způsob zobrazení task úrovně bez změny autority souborového
+  plánu. Neaktivovat před rozhodnutím o požadované podobě a rozsahu; nejde o
+  podmínku doručení `PLAN-ROADMAP-MILESTONE-VIEW-01`.
 
 - [ ] [planned] **DEV-IDE-TODO-01 — VS Code/VSCodium jako zdroj TODO (cílová úroveň: PoC validated).** Po `PLAN-TASK-GRAPH-01` dodat malé rozšíření pro společný podporovaný průnik obou IDE, které zpřístupní explicitně vybraný workspace TODO zdroj a jeho revizi. První řez je read-only zdroj/importní preview bez spouštění coding agenta a bez zápisu mimo standardní Workspace lifecycle; plný handoff zůstává v DEV-02 a DEV-03.
 - [ ] [planned] **DEV-01 — Roadmapa jako projektová data a export úkolů (cílová úroveň: implemented).** Po `PLAN-TASK-GRAPH-01` převést uživatelem vybraný rozsah roadmapy do verzovaných entit požadavků, milníků, feature dávek, rozhodnutí, rizik, závislostí a úkolů bez vytvoření druhého autoritativního plánu. Akceptace: stabilní ID a provenance na zdrojovou revizi, opakovaný import bez duplikace, konflikt ruční a zdrojové změny, odstraněný/přejmenovaný bod a export Markdown TODO i strojově čitelného task balíčku se scope, dependencies a acceptance. Export nemění stav zdrojového úkolu; interní roadmapa použije stejný obecný plánovací kontrakt jako ostatní projekty.
