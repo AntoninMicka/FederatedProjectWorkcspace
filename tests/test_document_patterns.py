@@ -23,8 +23,14 @@ class DocumentPatternTests(unittest.TestCase):
                          len({item['id'] for item in self.catalog['coverage']}))
         for adapter in self.catalog['adapters']:
             self.assertEqual(set(adapter['formats']), set(adapter['format_help']))
+            self.assertEqual(set(adapter['formats']),
+                             set(adapter['format_examples']))
             self.assertTrue(all(value.strip()
                                 for value in adapter['format_help'].values()))
+            self.assertTrue(all(value.strip()
+                                for value in adapter['format_examples'].values()))
+        self.assertTrue(all(item['example'].strip()
+                            for item in self.catalog['patterns']))
         changed = copy.deepcopy(self.catalog)
         changed['patterns'][0]['text'] = 'changed'
         self.assertNotEqual(changed['patterns'][0]['text'],
@@ -140,10 +146,17 @@ class DocumentPatternTests(unittest.TestCase):
         self.assertIn("helpTitle.textContent=pattern?.name||'Nápověda k souboru'", widget)
         self.assertIn('helpBody.textContent=pattern?.help||adapter?.format_help?.[format]',
                       widget)
+        self.assertIn('helpExample.textContent=pattern?.example||adapter?.format_examples?.[format]',
+                      widget)
         self.assertIn("patterns.length?'Vyberte vzor…'", widget)
         self.assertEqual(2, HTML.count('class="raw-editor-help-panel"'))
         self.assertEqual(2, HTML.count('data-raw-help-title'))
+        self.assertEqual(2, HTML.count('data-raw-help-example'))
         self.assertIn('.raw-editor-layout{display:grid', CSS)
+        self.assertIn('grid-template-columns:minmax(0,820px) minmax(260px,320px)',
+                      CSS)
+        self.assertIn('#artifact-raw-widget{width:min(1174px,calc(100vw - 388px))',
+                      CSS)
         self.assertIn('.raw-editor-help-panel{', CSS)
         self.assertIn("projectRequest('/v1/document-patterns'", JS)
         self.assertIn("if(presentationEditorMode==='raw'&&!await applyPresentationRaw())return", JS)

@@ -162,6 +162,26 @@ ADAPTERS = (
     },
 )
 
+_FORMAT_EXAMPLES = {
+    'markdown': {
+        'text/markdown': 'Příklad: začněte zápisem ze schůzky, doplňte závěry a checklist dalších kroků a teprve potom dokument explicitně uložte.',
+    },
+    'task-plan': {
+        'text/markdown': 'Příklad: milestone obsahuje feature batch a ten inline tasky nebo odkaz na jejich samostatný verzovaný soubor.',
+    },
+    'presentation': {
+        'application/x-fpw-presentation-markdown': 'Příklad: vložte briefing, vraťte se do vizuálního režimu a upravte titulní slide, stav a závěrečný další krok.',
+    },
+    'julia': {
+        'text/x-julia': 'Příklad: model.jl načte připravený request, provede výpočet a zapíše pouze výstupy deklarované v computation kontraktu.',
+        'application/toml': 'Příklad: Project.toml připne Julia 1.10.12 a deklarované balíčky; odpovídající Manifest zůstane samostatným verzovaným artefaktem.',
+        'application/json': 'Příklad: computation JSON připne model.jl, Project.toml, Manifest, vstupy, parametry, výstupy a fail-closed limity ke stejnému commitu.',
+    },
+}
+ADAPTERS = tuple({**adapter, 'version': adapter['version'] + 1,
+                  'format_examples': copy.deepcopy(_FORMAT_EXAMPLES[adapter['id']])}
+                 for adapter in ADAPTERS)
+
 PATTERNS = (
     {
         'id': 'markdown.document', 'version': 2, 'name': 'Prázdný dokument',
@@ -320,6 +340,33 @@ PATTERNS = (
     },
 )
 
+_PATTERN_EXAMPLES = {
+    'markdown.document': 'Příklad: nový technický návod s jedním názvem a krátkým vymezením účelu.',
+    'markdown.section': 'Příklad: do existujícího návodu přidejte sekci „Omezení“ na pozici kurzoru.',
+    'markdown.checklist': 'Příklad: před předáním doplňte body „Testy prošly“ a „Odkazy jsou platné“.',
+    'markdown.decision': 'Příklad: zaznamenejte volbu úložiště, její kontext, zvolenou variantu a provozní důsledky.',
+    'markdown.meeting-notes': 'Příklad: oddělte potvrzené závěry porady od úkolů s vlastníkem a otevřených otázek.',
+    'task-plan.document': 'Příklad: založte hlavní TODO pro profil software-development/v1 a vložte první milestone.',
+    'task-plan.external-document': 'Příklad: držte leaf tasky jedné feature dávky v samostatném document artefaktu.',
+    'task-plan.milestone': 'Příklad: milestone „Editory“ seskupí několik samostatně dodávaných feature dávek.',
+    'task-plan.batch-inline': 'Příklad: malá feature dávka obsahuje dva inline tasky ve stejném TODO souboru.',
+    'task-plan.batch-file': 'Příklad: rozsáhlejší dávka odkazuje na verzovaný soubor se svými leaf tasky.',
+    'task-plan.task': 'Příklad: task „Doplnit validaci“ je nejmenší ověřitelná změna uvnitř jedné dávky.',
+    'task-plan.dependency': 'Příklad: implementační task závisí na dokončení návrhového tasku ve stejné projekci.',
+    'presentation.document': 'Příklad: jedním slidem představte hlavní sdělení a poté deck rozšiřte vizuálním editorem.',
+    'presentation.briefing': 'Příklad: na krátké poradě ukažte téma, současný stav s rizikem a konkrétní další krok.',
+    'presentation.decision-review': 'Příklad: porovnejte dvě varianty, doporučte jednu a podpůrný důkaz ponechte v backup slidu.',
+    'julia.script': 'Příklad: ověřte malý numerický vztah a vypište diagnostickou hodnotu na stdout.',
+    'julia.function': 'Příklad: přidejte čistou funkci model(value), kterou později zavolá runner entrypoint.',
+    'julia.module': 'Příklad: seskupte veřejnou funkci model do modulu DoplnitModel bez implicitních závislostí.',
+    'julia.runner-entrypoint': 'Příklad: vytvořte result.txt, spočítejte jeho SHA-256 a zapište odpovídající result manifest.',
+    'julia.project-toml': 'Příklad: založte prostředí modelu s přesnou kompatibilitou Julia a následně doplňte deklarované závislosti.',
+    'julia.computation-json': 'Příklad: nahraďte neutrální UUID, cesty a hashe referencemi artefaktů z aktuálního committed snapshotu.',
+}
+PATTERNS = tuple({**pattern, 'version': pattern['version'] + 1,
+                  'example': _PATTERN_EXAMPLES[pattern['id']]}
+                 for pattern in PATTERNS)
+
 COVERAGE = (
     {'id': 'markdown.start-document', 'adapter_id': 'markdown',
      'format': 'text/markdown', 'operation': 'document',
@@ -373,7 +420,7 @@ def _validate_registry():
         if (set(adapter) != {'id', 'version', 'label', 'formats', 'comment_prefix',
                              'comment_suffix', 'max_bytes', 'supports_special',
                              'save_operation', 'integration', 'validation',
-                             'pattern_ids', 'format_help'}
+                             'pattern_ids', 'format_help', 'format_examples'}
                 or not ID.fullmatch(adapter['id']) or adapter['id'] in adapter_ids
                 or type(adapter['version']) is not int or adapter['version'] < 1
                 or not adapter['formats'] or not set(adapter['formats']) <= FORMATS
@@ -385,12 +432,16 @@ def _validate_registry():
                 or not isinstance(adapter['format_help'], dict)
                 or set(adapter['format_help']) != set(adapter['formats'])
                 or not all(isinstance(value, str) and value.strip()
-                           for value in adapter['format_help'].values())):
+                           for value in adapter['format_help'].values())
+                or not isinstance(adapter['format_examples'], dict)
+                or set(adapter['format_examples']) != set(adapter['formats'])
+                or not all(isinstance(value, str) and value.strip()
+                           for value in adapter['format_examples'].values())):
             raise ValueError('Invalid raw-editor adapter registry')
         adapter_ids.add(adapter['id'])
     for pattern in PATTERNS:
         if (set(pattern) != {'id', 'version', 'name', 'adapter_ids', 'formats',
-                             'insertion', 'text', 'help'}
+                             'insertion', 'text', 'help', 'example'}
                 or not ID.fullmatch(pattern['id']) or pattern['id'] in pattern_ids
                 or type(pattern['version']) is not int or pattern['version'] < 1
                 or pattern['insertion'] not in INSERTION_MODES
@@ -398,7 +449,8 @@ def _validate_registry():
                 or not pattern['formats'] or not set(pattern['formats']) <= FORMATS
                 or not isinstance(pattern['text'], str) or '\0' in pattern['text']
                 or len(pattern['text'].encode('utf-8')) > MAX_TEXT
-                or not isinstance(pattern['name'], str) or not isinstance(pattern['help'], str)):
+                or not isinstance(pattern['name'], str) or not isinstance(pattern['help'], str)
+                or not isinstance(pattern['example'], str) or not pattern['example'].strip()):
             raise ValueError('Invalid document pattern registry')
         for adapter_id in pattern['adapter_ids']:
             adapter = next(item for item in ADAPTERS if item['id'] == adapter_id)

@@ -9,17 +9,21 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/doc-pattern-library` z `develop` `50284d1` a
 dosáhla cílové úrovně **implemented**. Feature akceptace je dokončená; větev
-čeká na commit, push a doručení jediným PR do `develop`. Původní požadavek na
-obsahově bohatší katalog byl během aktivace rozšířen o pravý kontextový panel:
+čeká na commit a push poslední akceptační úpravy do otevřeného PR #109 proti
+`develop`. Původní požadavek na obsahově bohatší katalog byl během aktivace
+rozšířen o pravý kontextový panel:
 výchozí stav vysvětluje celý formát souboru a explicitní výběr jej nahradí
-podrobnou nápovědou vzoru.
+podrobnou nápovědou vzoru. Následná akceptační připomínka zachovala plnou
+pracovní šířku editoru, přesunula panel do volného prostoru napravo a doplnila
+formátovou i vzorovou nápovědu o konkrétní příklad použití.
 
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-A — coverage a katalogový kontrakt
   (implemented).** Read-only katalog nyní zveřejňuje uzavřenou `coverage` mapu
   pro obecný Markdown, prezentaci a Julia a adapter-level `format_help` pro
-  každý podporovaný formát. Modulová kontrola odmítne duplicitu, chybějící vzor
-  nebo nesoulad adaptéru, formátu a insertion mode; deterministická revize
-  zahrnuje i tato metadata.
+  každý podporovaný formát. Každý formát i vzor nese samostatný příklad
+  použití. Modulová kontrola odmítne duplicitu, chybějící vzor nebo nápovědu
+  bez příkladu i nesoulad adaptéru, formátu a insertion mode; deterministická
+  revize zahrnuje i tato metadata.
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-B — praktické vzory
   (implemented).** Markdown získal checklist, rozhodovací záznam a zápis ze
   schůzky. Prezentace nabízí celý one-slide deck, briefing a rozhodovací review
@@ -29,9 +33,10 @@ podrobnou nápovědou vzoru.
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-C — pravý panel nápovědy
   (implemented).** Oba shared raw widgety používají přístupný panel vykreslený
   přes `textContent`. Select začíná prázdnou volbou, panel nejprve ukazuje
-  nápovědu k celému souboru a po výběru název a detail vzoru; textarea se změní
-  až explicitním vložením. Desktop používá pravý sloupec, pod 700 px se panel
-  skládá pod editor.
+  nápovědu a příklad k celému souboru a po výběru název, detail a příklad
+  vzoru; textarea se změní až explicitním vložením. Na širokém desktopu
+  zůstává editoru jeho dosavadní pracovní šířka 820 px a panel využívá volné
+  místo napravo; při viewportu do 1250 px se skládá pod editor.
 - [x] [completed] **DOC-PATTERN-LIBRARY-01-D — regrese, dokumentace a předání
   (implemented).** Coverage dokument, uživatelský návod, ADR 0058, roadmapa,
   reuse evidence a pracovní evidence popisují stejný rozsah a hranice. Task
@@ -42,13 +47,14 @@ podrobnou nápovědou vzoru.
 
 Po poslední změně kódu, CSS a testů prošla celá sada
 `python3 -m unittest discover -s tests -v`: **945 testů, 910 prošlo a 35
-volitelných bylo přeskočeno, bez chyb**, 229,391 s. Cílená sada katalogu,
+volitelných bylo přeskočeno, bez chyb**, 232,310 s. Cílená sada katalogu,
 prezentačních dokumentů, task grafu, HTTP API a mobilního kontraktu prošla;
 Python kompilace, SPDX, roadmap graf a `git diff --check` byly bez chyby.
 Samostatný skutečný Qt/WebEngine smoke s `M0_DESKTOP_TEST=1` prošel výchozí
-nápovědou k souboru, přepnutím na detail vybraného vzoru, explicitním vložením,
-validací, uložením dokumentu a TODO i dirty guardem. Při ukončení preview
-server zalogoval známý neblokující `BrokenPipe`/`SSL BAD_LENGTH`; test a
+nápovědou a příkladem k souboru, přepnutím na detail a příklad vybraného
+vzoru, explicitním vložením, validací, uložením dokumentu a TODO i dirty
+guardem. Při ukončení preview server zalogoval známý neblokující
+`BrokenPipe`/`SSL BAD_LENGTH`; test a
 následná kontrola uložených dat skončily úspěšně.
 
 Coverage, nápověda, výběr, vložení a validace jsou ephemerální a nevytvářejí

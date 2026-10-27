@@ -105,6 +105,9 @@ class WebTests(unittest.TestCase):
         self.assertTrue(catalog['coverage'])
         self.assertTrue(all(item['format_help']
                             for item in catalog['adapters']))
+        self.assertTrue(all(item['format_examples']
+                            for item in catalog['adapters']))
+        self.assertTrue(all(item['example'] for item in catalog['patterns']))
         code, data, _ = self.request(path='/v1/document-patterns', body=json.dumps({
             'action': 'validate', 'adapter_id': 'julia',
             'format': 'application/json', 'content': '{broken'}))
@@ -996,7 +999,7 @@ def result(value):
  elif phase==2:
   phase=3;run("document.querySelector('#new-document').click();")
  elif phase==3:
-  phase=4;run("(()=>{const root=document.querySelector('#artifact-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]');if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor')){artifactEditorStatus.textContent='FAIL: default file help unavailable';return;}select.value='markdown.section';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Sekce'||!body.textContent.includes('pozici kurzoru')){artifactEditorStatus.textContent='FAIL: pattern help unavailable';return;}root.querySelector('[data-raw-insert]').click();root.querySelector('[data-raw-validate]').click();})()")
+  phase=4;run("(()=>{const root=document.querySelector('#artifact-raw-widget'),select=root.querySelector('[data-raw-pattern]'),title=root.querySelector('[data-raw-help-title]'),body=root.querySelector('[data-raw-help-body]'),example=root.querySelector('[data-raw-help-example]');if(select.value!==''||title.textContent!=='Nápověda k souboru'||!body.textContent.includes('Celý soubor')||!example.textContent.includes('zápisem ze schůzky')){artifactEditorStatus.textContent='FAIL: default file help unavailable';return;}select.value='markdown.section';select.dispatchEvent(new Event('change',{bubbles:true}));if(title.textContent!=='Sekce'||!body.textContent.includes('pozici kurzoru')||!example.textContent.includes('Omezení')){artifactEditorStatus.textContent='FAIL: pattern help unavailable';return;}root.querySelector('[data-raw-insert]').click();root.querySelector('[data-raw-validate]').click();})()")
  elif phase==4:
   phase=5;run("artifactEditorForm.elements.title.value='Sdílený dokument';artifactEditorForm.elements.body.value='# Obsah\\n';artifactEditorForm.dispatchEvent(new Event('input',{bubbles:true}));artifactEditorForm.requestSubmit();")
  elif phase==5:

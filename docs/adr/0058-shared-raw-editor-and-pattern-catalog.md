@@ -37,17 +37,20 @@ Konkrétní použití dodá **typový adaptér**, který uzavřeně deklaruje:
 - zda lze raw obsah lossless předat specializovanému editoru a zpět.
 
 **Katalog vzorů** je oddělený read-only registr. Každý vzor má stabilní ID,
-verzi, název, cílové typy/formáty, režim vložení, text a stručnou nápovědu.
+verzi, název, cílové typy/formáty, režim vložení, text, stručnou nápovědu
+a samostatný příklad použití.
 První implementace dodá pouze verzované, reviewované vestavěné vzory pro
 obecný Markdown, úkol/plán, prezentaci a Julia. Projektové, uživatelské nebo
 síťově získané katalogy jsou samostatný budoucí rozsah a nesmějí se tiše
 sloučit s vestavěnými položkami.
 
-Každý adaptér navíc dodává stručnou nápovědu pro každý podporovaný formát.
-Shared widget ji ukazuje v pravém kontextovém panelu, dokud uživatel explicitně
-nevybere vzor; potom ji nahradí podrobným popisem zvoleného vzoru. Select nemá
-implicitně aktivní první vzor a samotný výběr nemění buffer. Na úzkém viewportu
-se panel skládá pod textarea.
+Každý adaptér navíc dodává stručnou nápovědu a příklad použití pro každý
+podporovaný formát. Shared widget je ukazuje v pravém kontextovém panelu, dokud
+uživatel explicitně nevybere vzor; potom je nahradí podrobným popisem a
+příkladem zvoleného vzoru. Select nemá implicitně aktivní první vzor a samotný
+výběr nemění buffer. Na širokém desktopu si editor zachová dosavadní pracovní
+šířku a panel využije volné místo napravo; při užším viewportu se skládá
+pod textarea.
 
 Vzor je textový příklad, nikoli makro ani spustitelný plugin. U syntaxí s
 komentáři označuje místa k doplnění platný komentář daného formátu, například
@@ -119,7 +122,9 @@ akceptovaného implementačního PR ani do samotného specializovaného editoru.
 prezentaci a Julia. Strojová `coverage` mapa váže každý scénář právě na jeden
 stabilní vzor, formát a insertion mode; její lidsky reviewovaný protějšek je v
 [coverage knihovny](../pattern-library-coverage.md). Task/plán coverage zůstává
-beze změny vlastnictvím `PLAN-TASK-EDITOR-01`.
+beze změny vlastnictvím `PLAN-TASK-EDITOR-01`. Knihovna současně doplnila
+povinné příklady formátů i vzorů; UI je vykresluje stejnou bezpečnou textovou
+cestou jako ostatní nápovědu.
 
 ## Reuse rozhodnutí
 

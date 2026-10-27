@@ -31,9 +31,11 @@ Katalog se nejprve filtruje podle typu otevřeného dokumentu. Uživatel může
 vložit celý dokument, blok nebo fragment na kurzor. Vložení nic neukládá.
 
 Po otevření editoru není předvybraný první vzor. Pravý panel proto nejprve
-stručně vysvětluje celý aktivní soubor a jeho formát. Výběr konkrétního vzoru
-nápovědu nahradí jeho podrobným popisem, ale textarea změní až explicitní
-tlačítko **Vložit vzor**. Na mobilní šířce se panel přesune pod editor.
+stručně vysvětluje celý aktivní soubor, jeho formát a typické použití.
+Výběr konkrétního vzoru nápovědu nahradí jeho podrobným popisem a vlastním
+příkladem, ale textarea změní až explicitní tlačítko **Vložit vzor**. Na
+širokém desktopu panel využívá volné místo napravo a nezužuje dosavadní
+820px pracovní plochu editoru; při užším viewportu se přesune pod editor.
 
 Markdownový vzor může vypadat například takto:
 

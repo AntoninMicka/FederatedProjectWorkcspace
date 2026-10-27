@@ -58,11 +58,16 @@ do `COMP-03`.
 
 ## Kontextová nápověda
 
-Každý adaptér nese krátkou nápovědu pro každý svůj formát. Po otevření raw
-editoru není předvybraný žádný vzor a pravý panel popisuje celý aktivní soubor.
-Po explicitním výběru položky panel nahradí tento text názvem a podrobným
-popisem vzoru. Pouhá změna výběru nemění textarea; na úzkém viewportu se panel
-složí pod editor.
+Každý adaptér nese krátkou nápovědu a příklad použití pro každý svůj
+formát; každý vzor má vlastní detail a příklad. Po otevření raw editoru není
+předvybraný žádný vzor a pravý panel popisuje celý aktivní soubor včetně
+krátkého typického použití. Po explicitním výběru položky panel nahradí tento
+obsah názvem, podrobným popisem a příkladem zvoleného vzoru. Vše se vykresluje
+jako bezpečný text. Pouhá změna výběru nemění textarea.
+
+Na širokém desktopu panel neukrajuje prostor z dosavadní 820px pracovní šířky
+editoru, ale využívá prázdné místo napravo od formuláře. Při viewportu do
+1250 px se editor a panel složí do jednoho sloupce.
 
 Katalogový registr strojově zveřejňuje tutéž mapu jako `coverage`. Modulová
 validace odmítne chybějící, duplicitní nebo s adaptérem, formátem či insertion
