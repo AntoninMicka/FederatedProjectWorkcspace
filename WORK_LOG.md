@@ -9,7 +9,7 @@ SPDX-License-Identifier: MPL-2.0
 
 Dávka vznikla na větvi `feature/comp-02-julia-runner` z `develop` `b104843`
 a dosáhla cílové úrovně **PoC validated**. Feature akceptace je dokončená;
-PR do `develop` dosud nebyl vytvořen ani sloučen.
+byla doručena PR #104 jako merge commit `507c232` do `develop`.
 
 - [x] [completed] **COMP-02-A — kontrakt, runtime inventory a preflight
   (implemented).** Striktní `fpw-julia-computation-v1` váže exact Git HEAD,

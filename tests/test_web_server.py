@@ -94,6 +94,42 @@ class WebTests(unittest.TestCase):
         self.assertEqual(409, code)
         self.assertIn('změnila', json.loads(data)['error'])
 
+    def test_julia_workspace_routes_keep_preview_and_execution_separate(self):
+        code, data, _ = self.create_project('Julia workspace routes')
+        self.assertEqual(200, code, data); project_id = json.loads(data)['id']
+
+        class Service:
+            def __init__(self): self.calls = []
+            def definitions(inner, project, head):
+                inner.calls.append(('definitions', project, head))
+                return {'schema': 'fpw-julia-workspace-v1', 'project_id': project,
+                        'project_commit': head, 'definitions': []}
+            def prepare(inner, request, *, user_id=None):
+                inner.calls.append(('preview', request, user_id))
+                return {'operation_id': request['operation_id'], 'state': 'prepared'}
+            def execute(inner, request, *, user_id=None):
+                inner.calls.append(('execute', request, user_id))
+                return {'operation_id': request['operation_id'], 'accepted': True,
+                        'state': 'dispatching'}
+
+        service = Service(); self.server.julia_workspace = service
+        head = Projects(self.root/'node.json').open(project_id)['commit_id']
+        code, data, _ = self.request(path='/v1/julia/definitions', body=json.dumps({
+            'project_id': project_id, 'expected_head': head}))
+        self.assertEqual(200, code, data)
+        operation_id = str(uuid4())
+        preview = {'operation_id': operation_id, 'project_id': project_id,
+            'expected_head': head, 'definition_path': 'artifacts/a/computation.json',
+            'parameters': {}}
+        code, data, _ = self.request(path='/v1/julia/preview', body=json.dumps(preview))
+        self.assertEqual(200, code, data)
+        code, data, _ = self.request(path='/v1/julia/execute', body=json.dumps({
+            'operation_id': operation_id, 'project_id': project_id,
+            'approval_digest': 'a' * 64}))
+        self.assertEqual(200, code, data)
+        self.assertEqual(['definitions', 'preview', 'execute'],
+                         [item[0] for item in service.calls])
+
     def create_planned_project(self):
         _, data, _ = self.create_project('Plánovaný projekt'); project = json.loads(data)['id']
         artifacts = Artifacts(self.root/'node.json'); head = Projects(self.root/'node.json').open(project)['commit_id']

@@ -21,6 +21,7 @@ from scripts.julia_runtime_binding import main as runtime_binding_cli
 from spikes.julia_cli import main as julia_cli
 from spikes.julia_computation import (BubblewrapSandbox, DirectTestSandbox,
     JuliaExecutor, RUN_SCHEMA, _distribution_digest, validate_computation)
+from spikes.julia_workspace import JuliaWorkspaceService
 from spikes.metadata import ValidationError, validate_metadata, validate_snapshot
 from spikes.output_execution import canonical, digest
 from spikes.project_creation import ProjectCreation
@@ -157,6 +158,23 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
         return executor, executor.prepare(operation_id, self.node_id, self.user_id,
             self.project_id, self.computation, {'value': value})
 
+    def publish_definition(self, privacy='project'):
+        definition_id = str(uuid4()); path = f'artifacts/{definition_id}/computation.json'
+        metadata = {'schema_version': 1, 'id': definition_id,
+            'title': 'Julia computation', 'kind': 'source',
+            'created_at': '2026-10-26T12:00:00Z', 'author_id': self.author,
+            'privacy': privacy, 'provenance': 'user', 'file': 'computation.json'}
+        workspace = Projects(self.node).workspace(self.project_id)
+        workspace.transact(str(uuid4()), {'action': 'add-julia-definition',
+            'definition_id': definition_id, 'base_head': self.git.head()},
+            lambda _: ({path: canonical(self.computation),
+                       f'artifacts/{definition_id}/metadata.json':
+                            (json.dumps(metadata, sort_keys=True, indent=2) + '\n').encode()},
+                       'Test author', self.author + '@local.invalid',
+                       'Add Julia computation definition'),
+            expected_head=self.git.head())
+        return path
+
     def test_descriptor_is_closed_bounded_and_pins_network_and_runtime(self):
         self.assertEqual(self.computation, validate_computation(self.computation))
         cases = []
@@ -174,6 +192,102 @@ manifest = {'schema':'fpw-julia-result-v1','outputs':[{'name':'result',
             prepared['operation_id'], self.node_id, self.user_id)['freshness'])
         self.assertFalse((self.state / 'output-materializations' /
                           prepared['operation_id']).exists())
+
+    def test_workspace_projection_confirmed_run_output_and_publication(self):
+        path = self.publish_definition()
+        service = JuliaWorkspaceService(self.node, Projects(self.node),
+            runtime_root=self.base / 'unused-runtime',
+            executor_factory=lambda git: JuliaExecutor(
+                git=git, state_dir=self.state, runtime_binding=self.binding,
+                sandbox=DirectTestSandbox()))
+        head = self.git.head(); catalog = service.definitions(self.project_id, head)
+        self.assertEqual([path], [item['definition']['path']
+                                  for item in catalog['definitions']])
+        operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': self.project_id, 'expected_head': head,
+            'definition_path': path, 'parameters': {'value': 42}}, user_id=self.author)
+        self.assertEqual('prepared', prepared['state'])
+        self.assertFalse((self.state / 'output-materializations' / operation_id).exists())
+        service.execute({'operation_id': operation_id, 'project_id': self.project_id,
+                         'approval_digest': prepared['approval_digest']}, user_id=self.author)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            run = service.status(self.project_id, operation_id, user_id=self.author)
+            if run['state'] not in {'prepared', 'dispatching'}: break
+            time.sleep(.02)
+        self.assertEqual('current', run['freshness'])
+        output = service.output(self.project_id, operation_id, 'result', user_id=self.author)
+        self.assertEqual(b'result=42\n', base64.b64decode(output['content_b64']))
+        artifact_id = str(uuid4())
+        receipt = service.publish({'publication_id': str(uuid4()),
+            'operation_id': operation_id, 'project_id': self.project_id,
+            'output_name': 'result', 'artifact_id': artifact_id, 'title': 'Result',
+            'filename': 'result.txt', 'expected_head': head, 'privacy': 'confidential'},
+            user_id=self.author, author_name='Test author')
+        self.assertEqual(self.git.head(), receipt['commit_id'])
+        self.assertIn(artifact_id, validate_snapshot(self.git.snapshot(self.git.head())))
+
+    def test_network_workspace_hides_local_only_definition_before_prepare(self):
+        path = self.publish_definition(privacy='local-only')
+        projects = Projects(self.node, network=True)
+        service = JuliaWorkspaceService(self.node, projects,
+            runtime_root=self.base / 'unused-runtime',
+            executor_factory=lambda git: JuliaExecutor(
+                git=git, state_dir=self.state, runtime_binding=self.binding,
+                sandbox=DirectTestSandbox()))
+        head = self.git.head()
+        self.assertEqual([], service.definitions(self.project_id, head)['definitions'])
+        with self.assertRaisesRegex(ValidationError, 'Local-only'):
+            service.prepare({'operation_id': str(uuid4()), 'project_id': self.project_id,
+                'expected_head': head, 'definition_path': path,
+                'parameters': {'value': 42}}, user_id=self.author)
+        self.assertFalse((self.state / 'julia-runs.sqlite').exists())
+
+    def test_workspace_reports_predispatch_rejection_and_does_not_reconcile_live_worker(self):
+        path = self.publish_definition()
+        service = JuliaWorkspaceService(self.node, Projects(self.node),
+            runtime_root=self.base / 'unused-runtime',
+            executor_factory=lambda git: JuliaExecutor(
+                git=git, state_dir=self.state, runtime_binding=self.binding,
+                sandbox=DirectTestSandbox()))
+        head = self.git.head(); operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': self.project_id, 'expected_head': head,
+            'definition_path': path, 'parameters': {'value': 42}}, user_id=self.author)
+        changed = self.runtime / 'lib' / 'changed.so'; changed.write_bytes(b'changed')
+        changed.chmod(0o600)
+        service.execute({'operation_id': operation_id, 'project_id': self.project_id,
+                         'approval_digest': prepared['approval_digest']}, user_id=self.author)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            status = service.status(self.project_id, operation_id, user_id=self.author)
+            if not status['worker_active']: break
+            time.sleep(.01)
+        self.assertEqual('prepared', status['state'])
+        self.assertIn('distribution differs', status['dispatch_error'])
+        changed.unlink()
+
+        operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': self.project_id, 'expected_head': head,
+            'definition_path': path, 'parameters': {'value': 998}}, user_id=self.author)
+        service.execute({'operation_id': operation_id, 'project_id': self.project_id,
+                         'approval_digest': prepared['approval_digest']}, user_id=self.author)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            status = service.status(self.project_id, operation_id, user_id=self.author)
+            if status['worker_active'] and status['state'] == 'dispatching': break
+            time.sleep(.01)
+        with self.assertRaisesRegex(ValidationError, 'Active Julia worker'):
+            service.reconcile(self.project_id, operation_id, user_id=self.author)
+        service.cancel(self.project_id, operation_id, user_id=self.author)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            status = service.status(self.project_id, operation_id, user_id=self.author)
+            if not status['worker_active']: break
+            time.sleep(.01)
+        self.assertEqual('cancelled', status['state'])
 
     def test_prepare_execute_restart_status_and_exact_output(self):
         executor, prepared = self.prepare()
@@ -675,20 +789,48 @@ write(joinpath(output, "fpw-julia-result-v1.json"), manifest)
             'distribution_sha256': _distribution_digest(runtime), 'sysimage': str(sysimage),
             'sysimage_sha256': digest(sysimage.read_bytes()), 'depot': str(depot),
             'depot_sha256': hashlib.sha256().hexdigest()}
-        executor = JuliaExecutor(git=git, state_dir=state, runtime_binding=binding)
-        node_id, user_id, operation_id = str(uuid4()), str(uuid4()), str(uuid4())
-        prepared = executor.prepare(operation_id, node_id, user_id, project_id,
-                                    computation, {})
-        completed = executor.execute(operation_id, node_id, user_id,
-                                     prepared['approval_digest'])
-        self.assertEqual('succeeded', completed['state'])
-        content, _, _ = executor.output(operation_id, node_id, user_id, 'result')
-        self.assertEqual(b'real-julia=42;network=denied\n', content)
+        definition_id = str(uuid4()); definition_path = (
+            f'artifacts/{definition_id}/computation.json')
+        definition_meta = {'schema_version': 1, 'id': definition_id,
+            'title': 'Physical Julia computation', 'kind': 'source',
+            'created_at': '2026-10-26T12:00:00Z', 'author_id': author,
+            'privacy': 'project', 'provenance': 'user', 'file': 'computation.json'}
         workspace = Projects(node).workspace(project_id); head = git.head()
+        workspace.transact(str(uuid4()), {'action': 'add-julia-definition'},
+            lambda _: ({definition_path: canonical(computation),
+                        f'artifacts/{definition_id}/metadata.json':
+                            (json.dumps(definition_meta, sort_keys=True, indent=2) + '\n').encode()},
+                       'Physical acceptance', author + '@local.invalid',
+                       'Add physical Julia definition'), expected_head=head)
+        service = JuliaWorkspaceService(node, Projects(node),
+            runtime_root=base / 'unused-runtime',
+            executor_factory=lambda git: JuliaExecutor(
+                git=git, state_dir=state, runtime_binding=binding))
+        head = git.head(); self.assertEqual(1, len(
+            service.definitions(project_id, head)['definitions']))
+        operation_id = str(uuid4())
+        prepared = service.prepare({'operation_id': operation_id,
+            'project_id': project_id, 'expected_head': head,
+            'definition_path': definition_path, 'parameters': {}}, user_id=author)
+        service.execute({'operation_id': operation_id, 'project_id': project_id,
+                         'approval_digest': prepared['approval_digest']}, user_id=author)
+        deadline = time.monotonic() + 35
+        while time.monotonic() < deadline:
+            completed = service.status(project_id, operation_id, user_id=author)
+            if completed['state'] not in {'prepared', 'dispatching'}: break
+            time.sleep(.05)
+        self.assertEqual('succeeded', completed['state'])
+        result = service.output(project_id, operation_id, 'result', user_id=author)
+        content = base64.b64decode(result['content_b64'])
+        self.assertEqual(b'real-julia=42;network=denied\n', content)
+        head = git.head()
         artifact_id = str(uuid4())
-        receipt = executor.publish(str(uuid4()), operation_id, node_id, user_id,
-            'result', artifact_id, 'Physical Julia result', 'result.txt', workspace,
-            head, author)
+        receipt = service.publish({'publication_id': str(uuid4()),
+            'operation_id': operation_id, 'project_id': project_id,
+            'output_name': 'result', 'artifact_id': artifact_id,
+            'title': 'Physical Julia result', 'filename': 'result.txt',
+            'expected_head': head, 'privacy': 'project'}, user_id=author,
+            author_name='Physical acceptance')
         self.assertNotEqual(head, receipt['commit_id'])
         self.assertEqual(content,
             git.snapshot(git.head())[f'artifacts/{artifact_id}/result.txt'])

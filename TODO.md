@@ -3,9 +3,93 @@ SPDX-FileCopyrightText: 2026 Antonín Mička
 SPDX-License-Identifier: MPL-2.0
 -->
 
-# TODO
+# TODO — COMP-03
 
-Dávka `COMP-02 — Lokální Julia runner a publikace výsledků` je akceptovaná na
-úrovni **PoC validated** a její úplná evidence je archivována ve
-[WORK_LOG.md](WORK_LOG.md). Větev `feature/comp-02-julia-runner` čeká na
-doručení jediným PR do `develop`; PR dosud nebyl vytvořen ani sloučen.
+Aktivní feature dávka: **Workspace řízení Julia výpočtu**
+
+- **Původ:** uživatelský požadavek spustit výpočet přímo z Workspace po
+  doručení `COMP-02`; roadmapa 2G a navazující dávka v BACKLOG.
+- **Milník a úroveň:** M6-COMPUTE, cílově **PoC validated**.
+- **Větev a PR:** `feature/comp-03-julia-workspace` z `develop` `507c232`,
+  cílová větev PR `develop`.
+- **Závislosti:** doručené `COMP-01` a `COMP-02`; používá jejich validovaný
+  kontrakt, node-local runtime binding, Julia journal, materializaci a
+  explicitní Workspace publikaci bez druhého runneru nebo zápisové cesty.
+- **Rozsah:** shared desktop/web UI otevřeného projektu načte pouze validované
+  `fpw-julia-computation-v1` definice z přesného Git HEAD, nabídne typované
+  parametry, přesný preview, explicitně potvrzený běh, bezpečný
+  cancel/reconcile, stav po restartu, náhled deklarovaných výstupů a odděleně
+  potvrzenou publikaci jednoho výstupu s provenance.
+- **Mimo rozsah:** editor Julia kódu, Pluto/Jupyter, automatický scheduler,
+  síťové/GPU/distribuované výpočty, instalace runtime či balíčků a automatická
+  publikace.
+- **Crash boundaries a recovery:** preview je read-only. Potvrzený běh používá
+  autoritativní SQLite journal a exact request z `COMP-02`; pád před durable
+  dispatch nic nespustí, neurčitý pád po dispatch zůstane `unknown` bez
+  automatického retry a exact materializace se pouze reconciliuje. Publikace
+  používá samostatnou serializovanou Workspace operaci; po commitu se index
+  obnoví z HEAD a retry nesmí vytvořit druhý artefakt. UI drží jen projekci
+  těchto stavů.
+
+- [x] [completed] **COMP-03-A — projektová projekce definic a přesný preview
+  (cílová úroveň: implemented).** Prověřit reuse stávajícího runner API a
+  shared route/adaptérů; načíst validované definice z aktuálního HEAD, vykreslit
+  typované parametry a vrátit revizně připnutý preview se vstupy, privacy,
+  runtime a limity bez dispatch.
+- [x] [completed] **COMP-03-B — potvrzený běh a lifecycle (cílová úroveň:
+  implemented).** Samostatné potvrzení smí spustit pouze exact preview přes
+  existující Julia journal. Status rozliší `prepared/running/current/stale/
+  failed/cancelled/unknown`; cancel a reconcile respektují bezpečné hranice a
+  restart nesmí způsobit automatický nový běh.
+- [x] [completed] **COMP-03-C — výstupy a explicitní publikace (cílová úroveň:
+  implemented).** Nabídnout bounded náhled deklarovaných výstupů a oddělené
+  potvrzení jednoho vybraného výstupu přes existující Workspace publikaci;
+  znovu ověřit HEAD, RBAC a privacy a zachovat idempotentní receipt/provenance.
+- [x] [completed] **COMP-03-D — shared desktop/web UI (cílová úroveň:
+  implemented).** Zpřístupnit celý tok v otevřeném projektu se stejným
+  bezpečným DOM a klávesnicovou/mobilní dostupností; otevření projektu, změna
+  parametru ani čtení statusu nesmí nic spustit nebo publikovat.
+- [ ] [in progress] **COMP-03-E — regrese, dokumentace a fyzická akceptace
+  (cílová úroveň: PoC validated).** Pokrýt validní i fail-closed cesty,
+  concurrency/restart/stale/cancel/unknown/publikaci, shared web wiring a
+  fyzicky projít jeden výpočet a publikaci na podporovaném Julia 1.10.12
+  Linux glibc aarch64 runtime. Před dokončením spustit plnou testovací sadu,
+  zkontrolovat dokumentaci, finální diff a `git diff --check`.
+
+### Průběžné výsledky a ověření
+
+- Shared servis reuse stávající `JuliaExecutor`, journal, materializaci a
+  Workspace publikaci. Katalog připíná i samotnou definici jako vstup; její
+  privacy se proto započte do výsledku. Síťová projekce před vytvořením runu
+  skryje definici i každý výpočet závislý na `local-only` artefaktu.
+- Background dispatch neblokuje omezený HTTP worker. Safe pre-dispatch chyba
+  ponechá durable preview připravené a vrátí session diagnostiku; aktivní
+  worker nelze reconcile. Restart nic automaticky neopakuje a nedokončený
+  durable dispatch používá původní `unknown` recovery.
+- Cílená Julia sada: **29 testů, OK, 2 podmíněně přeskočeny**. Shared
+  desktop/web API a UI testy prošly; dočasný rozpor aktivního TODO s grafovou
+  projekcí byl opraven a následných 7 grafových testů prošlo.
+- Fyzická akceptace přes `JuliaWorkspaceService` nad oficiálním Julia 1.10.12
+  Linux glibc aarch64 runtime prošla: Git definice, exact preview, potvrzený
+  bubblewrap běh, odmítnutá síť, výstup `real-julia=42;network=denied` a
+  explicitní Workspace publikace.
+- Plná sada před závěrečným oddělením read-only Git projekce: **936 testů,
+  OK, 35 podmíněně přeskočeno, 233,044 s**. Po této úzké opravě znovu prošla
+  celá Julia sada a projektový side-effect test: **30 testů, OK, 2 podmíněně
+  přeskočeny**. JavaScript navíc prošel `node --check`; finální plnou sadu
+  zopakovat po viditelné akceptaci a poslední případné opravě.
+- Zbývá viditelná uživatelská akceptace záložky **Výpočty** ve skutečném
+  desktopovém nebo webovém Workspace. Real Qt/WebEngine scénáře jsou v běžné
+  sadě podmíněně přeskočené. Read-only inventura sedmi aktuálně registrovaných
+  projektů našla 0 validních Julia definic, takže akceptace potřebuje oddělený
+  demonstrační projekt nebo uživatelem vybraný existující projekt. Bez této
+  kontroly dávku nearchivovat ani nedoporučovat PR.
+
+### Podmínky akceptace
+
+Uživatel z otevřeného projektu vybere validovanou definici, vyplní typované
+parametry, zkontroluje exact preview a až samostatným potvrzením spustí běh.
+Po restartu vidí pravdivý stav a může bezpečně cancel/reconcile. Výstup lze
+prohlédnout bez zápisu do Gitu a jeden vybraný výstup publikovat až druhým
+explicitním potvrzením; změna HEAD, oprávnění, privacy, runtime nebo preview
+selže před účinkem. Automatické otevření, retry běhu ani publikace neexistují.

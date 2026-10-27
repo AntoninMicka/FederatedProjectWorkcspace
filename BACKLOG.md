@@ -91,30 +91,13 @@ revalidace, agregace aliasů a fyzická akceptace `UX-BACKEND-MODEL-02` dosáhly
 commit `8c08be2`; evidence je ve WORK_LOG. Navazující
 `F-M5-SYNC-CONTROLS-01` byla doručena PR #102 jako merge commit `64a7dac`;
 evidence je ve WORK_LOG. `COMP-01` byla doručena PR #103 jako merge commit
-`b104843`; evidence je ve WORK_LOG. `COMP-02` je akceptována na úrovni PoC
-validated, čeká na doručení PR a její evidence je ve WORK_LOG; backlog ji
-nedrží jako druhý stavový záznam.
+`b104843`; evidence je ve WORK_LOG. `COMP-02` byla doručena PR #104 jako merge
+commit `507c232`; evidence je ve WORK_LOG. Aktivní `COMP-03` drží pouze TODO.
 
-Po doručení `COMP-02` následují podle uživatelem aktualizovaného pořadí
-`COMP-03`, `DEV-IDE-TODO-01` a `DEV-01`.
+Po aktivní `COMP-03` následují podle uživatelem aktualizovaného pořadí
+`DEV-IDE-TODO-01` a `DEV-01`.
 Jde o prioritu, nikoli o vymyšlené technické dependency hrany; každá položka
 zůstává samostatnou feature dávkou a vlastním PR.
-
-- [ ] [planned] **COMP-03 — Workspace řízení Julia výpočtu (cílová úroveň:
-  PoC validated; větev `feature/comp-03-julia-workspace`).** Nad doručeným
-  `COMP-02` zpřístupnit v otevřeném projektu první řízený výpočet bez druhého
-  runneru nebo zápisové cesty. Workspace načte pouze validovanou verzovanou
-  `fpw-julia-computation-v1` definici z aktuálního Git commitu, vykreslí její
-  typované parametry a přesný preview s revizí, vstupy, privacy, runtime a
-  limity. Samostatné potvrzení spustí existující Julia journal; UI po restartu
-  zobrazí `prepared/running/current/stale/failed/cancelled/unknown`, dovolí
-  bezpečný cancel/reconcile a náhled deklarovaných výstupů. Teprve další
-  explicitní potvrzení publikuje jeden vybraný výstup přes existující
-  `Workspace` operaci s provenance. Otevření projektu, status ani změna
-  parametrů nic nespouštějí; local-only a RBAC se znovu ověří před dispatch i
-  publikací. Rozsah zahrnuje shared desktop/web UI a fyzický průchod na
-  podporovaném ARM64 runtime, nikoli editor Julia kódu, Pluto/Jupyter,
-  automatický scheduler, síťové/GPU výpočty ani instalaci balíčků.
 
 ## Zjištěné mezery a navazující ověření
 

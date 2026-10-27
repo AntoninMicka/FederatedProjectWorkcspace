@@ -838,6 +838,7 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <button id="summary-tab" role="tab" aria-controls="summary-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Souhrn</button>
 <button id="extraction-tab" role="tab" aria-controls="extraction-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Extrakce</button>
 <button id="image-tab" role="tab" aria-controls="image-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Obrázek</button>
+<button id="julia-tab" role="tab" aria-controls="julia-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Výpočty</button>
 <button id="outputs-overview-tab" role="tab" aria-controls="outputs-overview-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1" hidden>Výstupy</button>
 <button id="presentation-tab" role="tab" aria-controls="presentation-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Prezentace</button>
 <button id="metadata-tab" role="tab" aria-controls="metadata-panel" aria-selected="false" data-prompt-default="hidden" tabindex="-1">Metadata</button>
@@ -1009,6 +1010,23 @@ práva, identitu projektu ani obsah neznámého poškozeného stavu.</p>
 <pre id="image-result-metadata"></pre><label for="image-title">Název artefaktu</label>
 <input id="image-title" maxlength="200" value="Vygenerovaný obrázek">
 <button id="image-publish" type="button">Uložit do projektu</button></section></div>
+<div id="julia-panel" role="tabpanel" aria-labelledby="julia-tab" hidden>
+<header><span class="dashboard-kicker">PŘIPNUTÝ LOKÁLNÍ RUNTIME</span><h2>Julia výpočet</h2>
+<p>Výběr ani náhled nic nespouští. Kód se spustí až po potvrzení přesného preview; publikace výsledku vyžaduje další potvrzení.</p></header>
+<label>Definice výpočtu <select id="julia-definition"></select></label>
+<div id="julia-parameters"></div>
+<button id="julia-preview" type="button">Připravit náhled</button>
+<pre id="julia-preview-value" hidden></pre>
+<label id="julia-run-confirm-row" class="confirm" hidden><input id="julia-run-confirm" type="checkbox"> Potvrzuji přesnou revizi, parametry, limity a spuštění lokálního procesu bez sítě.</label>
+<div class="form-actions"><button id="julia-run" type="button" disabled>Spustit výpočet</button><button id="julia-cancel" class="danger-button" type="button" hidden>Zrušit běh</button><button id="julia-reconcile" class="secondary-button" type="button" hidden>Ověřit po přerušení</button></div>
+<p id="julia-status" role="status" aria-live="polite">Načítám definice…</p>
+<section id="julia-output" hidden><h3>Výstup</h3><label>Výstup <select id="julia-output-name"></select></label>
+<button id="julia-output-preview" class="secondary-button" type="button">Zobrazit náhled</button><pre id="julia-output-value"></pre>
+<fieldset><legend>Publikovat do projektu</legend><label>Název artefaktu <input id="julia-publish-title" maxlength="200"></label>
+<label>Název souboru <input id="julia-publish-filename" maxlength="200"></label>
+<label>Privacy <select id="julia-publish-privacy"><option value="project">V projektu</option><option value="confidential">Důvěrné</option><option value="local-only">Jen lokálně</option><option value="public">Veřejné</option></select></label>
+<label class="confirm"><input id="julia-publish-confirm" type="checkbox"> Potvrzuji publikaci přesně tohoto výstupu do aktuální revize projektu.</label>
+<button id="julia-publish" type="button" disabled>Publikovat výstup</button></fieldset></section></div>
 <div id="outputs-overview-panel" role="tabpanel" aria-labelledby="outputs-overview-tab" hidden>
 <header class="outputs-overview-heading"><span class="dashboard-kicker">VERZOVANÉ DEFINICE</span><h2>Výstupy projektu</h2>
 <p>Web zobrazuje přesně uložené definice výstupů aktuálního commitu. Úpravy, spuštění presenteru a lokální export zůstávají v desktopové aplikaci.</p></header>
@@ -1251,6 +1269,7 @@ aside h2{font-size:16px;color:white}aside p{font-size:12px;color:#aabecf}aside s
 #autonomy-queue{margin:16px 0;border:1px solid #bfcdc9;border-radius:12px;padding:12px;background:#f8fbfc}#autonomy-queue>summary{font-weight:700;color:#176b60}.autonomy-plan-editor{margin:10px 0}.autonomy-plan-editor textarea,.autonomy-revision-editor textarea{width:100%;font-family:monospace;font-size:12px}#autonomy-list{display:grid;gap:10px;margin-top:12px}.autonomy-card{border:1px solid #dce3e9;border-left:5px solid #8aa1ad;border-radius:10px;padding:12px;background:#fff}.autonomy-card[data-state="completed"]{border-left-color:#2d8a62}.autonomy-card[data-state="paused"],.autonomy-card[data-state="awaiting-approval"],.autonomy-card[data-state="proposed"]{border-left-color:#c69224}.autonomy-card[data-state="failed"],.autonomy-card[data-state="unknown"]{border-left-color:#b74435}.autonomy-card h3{margin:0 0 5px}.autonomy-card progress{width:100%;accent-color:#176b60}.autonomy-card ol{padding-left:22px}.autonomy-card li{margin:5px 0}.autonomy-card details pre{max-height:220px;font-size:11px}.autonomy-card .form-actions{display:flex;gap:7px;flex-wrap:wrap}.autonomy-card .danger-button{background:#9b3f35}.autonomy-revision{margin:10px 0;padding:10px;border:1px solid #dfbd72;border-radius:8px;background:#fff8e8}.autonomy-revision p{margin:4px 0}.autonomy-revision-history{font-size:13px;color:#526575}
 #metadata-panel label{display:block;margin:10px 0 5px}#metadata-panel select{padding:9px;max-width:100%;margin-bottom:10px}#metadata-status{font-size:12px;min-height:20px;color:#315f58}#metadata-diff{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#metadata-diff p,#metadata-diff span{white-space:pre-wrap}#metadata-diff fieldset{margin:14px 0;border:1px solid #dce3e9}#metadata-tag-list label{font-weight:400}
 #image-panel label{display:block;margin:10px 0 5px}#image-panel textarea,#image-panel input,#image-panel select{padding:9px;max-width:100%}#image-prompt{width:100%;box-sizing:border-box;resize:vertical}#image-status{font-size:12px;min-height:20px;color:#315f58}#image-request-preview,#image-result{background:#f5f7fb;border-radius:12px;padding:12px 18px;margin:12px 0}#image-request-json,#image-result-metadata{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}#image-result-preview{display:block;max-width:100%;max-height:520px;margin:12px auto}#image-result-preview:not([src]){display:none}
+#julia-panel>label,#julia-parameters label,#julia-output label{display:block;margin:10px 0 5px}#julia-panel input,#julia-panel select,#julia-panel textarea{box-sizing:border-box;padding:9px;max-width:100%}#julia-definition,#julia-parameters input:not([type="checkbox"]),#julia-parameters textarea{width:100%}#julia-preview-value,#julia-output-value{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f7fb;border-radius:12px;padding:12px}#julia-status{min-height:20px;color:#315f58}#julia-output{margin-top:16px;padding:14px;border:1px solid #dce3e9;border-radius:12px;background:#fff}#julia-output fieldset{margin-top:14px;border:1px solid #dce3e9}#julia-output fieldset input:not([type="checkbox"]),#julia-output fieldset select{width:100%}
 #presentation-panel{min-height:100%}.presentation-editor-head,.presentation-editor-footer{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap}.presentation-editor-head h2{margin-bottom:0}.presentation-editor-head p{margin-top:4px}.presentation-editor-head label{display:flex;align-items:center;gap:8px}.presentation-editor-head select{padding:8px;max-width:300px}.presentation-editor-workspace{display:grid;grid-template-columns:minmax(220px,26%) minmax(300px,1fr) minmax(260px,34%);gap:14px;margin-top:14px}.presentation-editor-workspace>section{background:#fff;border:1px solid #dce3e9;border-radius:12px;padding:14px;min-width:0}.presentation-editor-workspace label{display:block;margin:8px 0}.presentation-editor-workspace input[type="text"],.presentation-editor-workspace input[type="number"],.presentation-editor-workspace textarea,.presentation-editor-workspace select{width:100%;padding:8px}.presentation-editor-options{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}.presentation-editor-options label:first-child{grid-column:1/-1}.presentation-editor-options input[type="color"]{width:64px;height:36px;padding:2px}.presentation-editor-slides ol{list-style:none;padding:0;max-height:420px;overflow:auto}.presentation-editor-slides li button{display:block;width:100%;text-align:left;background:#edf2f5;color:#304657;margin:5px 0;padding:9px}.presentation-editor-slides li button[aria-current="true"]{background:#176b60;color:#fff}.presentation-editor-slides li.backup button{border-left:4px solid #d6b36a}.presentation-template-manager{margin-top:14px;border-top:1px solid #dce3e9;padding-top:10px}.presentation-template-manager summary{font-weight:700}.presentation-template-manager .form-actions{display:grid;grid-template-columns:1fr 1fr}.presentation-template-manager .form-actions button:last-child{grid-column:1/-1}.presentation-template-colors{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.presentation-template-colors input[type="color"]{width:100%;height:36px;padding:2px}.presentation-editor-fields fieldset{margin-top:12px;border:1px solid #dce3e9}.presentation-editor-fields #presentation-backup-links label{font-weight:400}.presentation-editor-preview #presentation-editor-preview{width:100%;aspect-ratio:16/9;background:#10222f;color:#f6faf8;overflow:hidden}.presentation-session-section{margin-top:16px;padding:14px;background:#fff;border:1px solid #dce3e9;border-radius:12px}.presentation-session-section ul{list-style:none;padding:0}.presentation-session-section li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #dce3e9}.presentation-session-section small{display:block;color:#526675}.presentation-editor-footer{margin-top:12px;border-top:1px solid #dce3e9}.presentation-editor-footer>p{flex:1}.danger-button{background:#9b3f3f}.danger-button:hover{background:#7d3030}#presentation-print-view{display:none}
 .outputs-overview-heading{max-width:760px}.outputs-overview-heading h2{margin:4px 0}.outputs-overview-grid{display:grid;grid-template-columns:minmax(240px,38%) minmax(280px,1fr);gap:16px;margin-top:14px}.outputs-overview-grid>ul{list-style:none;margin:0;padding:0}.outputs-overview-grid>ul button{display:block;width:100%;margin:0 0 8px;padding:12px;text-align:left;background:#edf2f5;color:#213746}.outputs-overview-grid>ul button[aria-current="true"]{background:#176b60;color:#fff}.outputs-overview-grid>ul small{display:block;margin-top:4px;overflow-wrap:anywhere}.outputs-overview-detail{border:1px solid #dce3e9;border-radius:12px;padding:16px;background:#fff}.outputs-overview-detail dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:8px 14px}.outputs-overview-detail dt{font-weight:700}.outputs-overview-detail dd{margin:0;overflow-wrap:anywhere}
 @media print{body>*{display:none!important}#presentation-print-view{display:block!important}#presentation-print-view .print-slide{display:block;break-after:page;width:16in;height:9in;page-break-after:always}#presentation-print-view .print-slide:last-child{break-after:auto;page-break-after:auto}@page{size:16in 9in;margin:0}}
@@ -2161,7 +2180,7 @@ function clearProject(){
  artifactEditorItem=null;artifactEditorAttempt=null;artifactEditorBaseline=null;artifactEditorDirty=false;hideArtifactDeletion();
  presentationEditorView=null;presentationEditorDeck=null;presentationEditorArtifact=null;presentationEditorSlide=null;presentationEditorNew=false;presentationEditorDirty=false;presentationEditorAttempt=null;presentationEditorWorkspace.hidden=true;presentationEditorDocuments.replaceChildren();sidebarPresentationList.replaceChildren();sidebarPresentationStatus.textContent='Otevřete projekt.';presentationEditorStatus.textContent='Otevřete projekt.';
  clearPreview();activeProject=null;document.querySelector('#chat-draft').value='';
- currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();
+ currentArtifacts=[];clearSummary();clearWorkflow();clearExtraction();clearImage();clearMetadata();clearJulia();
  activeThread=null;activeTaskThreadId=null;taskOutcomes=[];pendingChatRequest=null;
  hideSearchRecovery();
  pendingSearchPreview=null;document.querySelector('#search-preview').hidden=true;
@@ -2603,6 +2622,7 @@ async function openRegisteredProject(projectId){
   sourceImportView.hidden=true;historyView.hidden=true;artifactEditorView.hidden=true;projectView.hidden=false;document.querySelector('#project-home').hidden=true;
   syncSidebarProjectAvailability();
   loadProjectConflictSummary();
+  await loadJuliaWorkspace();
   await loadChat();
   syncSidebarProjectAvailability();
   selectSidebarTab(document.querySelector('#artifacts-tab'));selectMainTab(document.querySelector('#project-overview-tab'));
@@ -3175,9 +3195,85 @@ for(const tab of mainTabs){
   const next={ArrowRight:(index+1)%visible.length,
    ArrowLeft:(index+visible.length-1)%visible.length,Home:0,End:visible.length-1}[event.key];
   if(next===undefined)return;
-  event.preventDefault();selectMainTab(visible[next]);visible[next].focus();
+ event.preventDefault();selectMainTab(visible[next]);visible[next].focus();
  });
 }
+const juliaDefinition=document.querySelector('#julia-definition');
+const juliaParameters=document.querySelector('#julia-parameters');
+const juliaStatus=document.querySelector('#julia-status');
+let juliaCatalog=[],juliaPrepared=null,juliaRun=null,juliaPoll=null;
+function clearJulia(){
+ if(juliaPoll){clearTimeout(juliaPoll);juliaPoll=null;}
+ juliaCatalog=[];juliaPrepared=null;juliaRun=null;juliaDefinition.replaceChildren();juliaParameters.replaceChildren();
+ document.querySelector('#julia-preview-value').hidden=true;document.querySelector('#julia-preview-value').textContent='';
+ document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run-confirm').checked=false;document.querySelector('#julia-run').disabled=true;
+ document.querySelector('#julia-cancel').hidden=true;document.querySelector('#julia-reconcile').hidden=true;document.querySelector('#julia-output').hidden=true;
+ juliaStatus.textContent='Otevřete projekt.';
+}
+function selectedJulia(){return juliaCatalog.find(item=>item.definition.path===juliaDefinition.value);}
+function renderJuliaParameters(){
+ juliaPrepared=null;document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run').disabled=true;
+ juliaParameters.replaceChildren();const selected=selectedJulia();if(!selected)return;
+ for(const descriptor of selected.computation.parameters){
+  const label=document.createElement('label');label.textContent=descriptor.name+(descriptor.required?' *':'');
+  let input;
+  if(descriptor.type==='boolean'){input=document.createElement('input');input.type='checkbox';input.checked=Boolean(descriptor.default);}
+  else if(['integer','number'].includes(descriptor.type)){input=document.createElement('input');input.type='number';if(descriptor.type==='integer')input.step='1';if(descriptor.default!==null)input.value=descriptor.default;if(descriptor.constraints.minimum!==undefined)input.min=descriptor.constraints.minimum;if(descriptor.constraints.maximum!==undefined)input.max=descriptor.constraints.maximum;}
+  else if(Array.isArray(descriptor.constraints.enum)){input=document.createElement('select');for(const value of descriptor.constraints.enum){const option=document.createElement('option');option.value=JSON.stringify(value);option.textContent=String(value);input.append(option);}if(descriptor.default!==null)input.value=JSON.stringify(descriptor.default);}
+  else if(['array','object'].includes(descriptor.type)){input=document.createElement('textarea');input.rows=4;input.value=descriptor.default===null?'':JSON.stringify(descriptor.default,null,2);}
+  else{input=document.createElement('input');input.type='text';input.maxLength=descriptor.constraints.max_length||8192;if(descriptor.default!==null)input.value=descriptor.default;}
+  input.dataset.name=descriptor.name;input.dataset.type=descriptor.type;input.dataset.required=String(descriptor.required);input.addEventListener('input',()=>{juliaPrepared=null;document.querySelector('#julia-run-confirm-row').hidden=true;document.querySelector('#julia-run').disabled=true;});label.append(input);juliaParameters.append(label);
+ }
+}
+function juliaParameterValues(){
+ const values={};for(const input of juliaParameters.querySelectorAll('[data-name]')){
+  let value;if(input.tagName==='SELECT')value=JSON.parse(input.value);else if(input.dataset.type==='boolean')value=input.checked;
+  else if(input.dataset.type==='integer')value=input.value===''?null:Number.parseInt(input.value,10);
+  else if(input.dataset.type==='number')value=input.value===''?null:Number(input.value);
+  else if(['array','object'].includes(input.dataset.type))value=input.value.trim()===''?null:JSON.parse(input.value);else value=input.value;
+  if(value!==null&&!(value===''&&input.dataset.required==='false'))values[input.dataset.name]=value;
+ }return values;
+}
+async function loadJuliaWorkspace(){
+ if(!activeProject)return;clearJulia();juliaStatus.textContent='Načítám definice výpočtů…';
+ try{const catalog=await projectRequest('/v1/julia/definitions',{project_id:activeProject.id,expected_head:activeProject.head});juliaCatalog=catalog.definitions;
+  for(const item of juliaCatalog){const option=document.createElement('option');option.value=item.definition.path;option.textContent=item.computation.title;juliaDefinition.append(option);}
+  renderJuliaParameters();juliaStatus.textContent=juliaCatalog.length?`${juliaCatalog.length} dostupných definic. Připravte read-only náhled.`:'Aktuální revize neobsahuje validovanou Julia definici.';
+  document.querySelector('#julia-preview').disabled=!juliaCatalog.length||activeProject.readOnly;
+  const history=await projectRequest('/v1/julia/status',{project_id:activeProject.id});if(history.runs.length)renderJuliaRun(history.runs[0]);
+ }catch(error){juliaStatus.textContent=error.message;}
+}
+juliaDefinition.addEventListener('change',renderJuliaParameters);
+document.querySelector('#julia-preview').addEventListener('click',async event=>{
+ const selected=selectedJulia();if(!selected)return;event.currentTarget.disabled=true;
+ try{const prepared=await projectRequest('/v1/julia/preview',{operation_id:crypto.randomUUID(),project_id:activeProject.id,expected_head:activeProject.head,definition_path:selected.definition.path,parameters:juliaParameterValues()});
+  juliaPrepared=prepared;const shown={commit:prepared.preview.project_commit,title:prepared.preview.title,privacy:prepared.preview.privacy,parameters:prepared.preview.parameters,outputs:prepared.preview.outputs,runtime:prepared.preview.runtime,effects:prepared.preview.effects,not_included:prepared.preview.not_included,approval_digest:prepared.approval_digest};
+  const output=document.querySelector('#julia-preview-value');output.textContent=JSON.stringify(shown,null,2);output.hidden=false;document.querySelector('#julia-run-confirm-row').hidden=false;document.querySelector('#julia-run-confirm').checked=false;juliaStatus.textContent='Náhled je připraven; nic nebylo spuštěno.';
+ }catch(error){juliaStatus.textContent=error.message;}finally{event.currentTarget.disabled=false;}
+});
+document.querySelector('#julia-run-confirm').addEventListener('change',event=>{document.querySelector('#julia-run').disabled=!(event.currentTarget.checked&&juliaPrepared&&!activeProject.readOnly);});
+document.querySelector('#julia-run').addEventListener('click',async event=>{
+ if(!juliaPrepared)return;event.currentTarget.disabled=true;
+ try{await projectRequest('/v1/julia/execute',{project_id:activeProject.id,operation_id:juliaPrepared.operation_id,approval_digest:juliaPrepared.approval_digest});juliaStatus.textContent='Výpočet byl předán lokálnímu runneru.';await pollJulia(juliaPrepared.operation_id);}
+ catch(error){juliaStatus.textContent=error.message;}
+});
+function juliaStateLabel(run){return run.freshness==='current'?'hotovo · aktuální':run.freshness==='stale'?'hotovo · neaktuální':run.worker_active&&run.state==='prepared'?'ověřuji před spuštěním':({prepared:'připraveno',dispatching:'běží',cancel_requested:'rušení',cancelled:'zrušeno',failed:'selhalo',unknown:'výsledek neznámý'}[run.freshness||run.state]||run.state);}
+function renderJuliaRun(run){
+ juliaRun=run;juliaStatus.textContent=`${run.preview.title}: ${juliaStateLabel(run)}${run.error?' · '+run.error:''}${run.dispatch_error?' · před dispatch: '+run.dispatch_error:''}`;
+ document.querySelector('#julia-cancel').hidden=!['prepared','dispatching','cancel_requested'].includes(run.state)||activeProject.readOnly;
+ document.querySelector('#julia-reconcile').hidden=!['dispatching','cancel_requested'].includes(run.state)||activeProject.readOnly;
+ const box=document.querySelector('#julia-output');box.hidden=run.state!=='succeeded';if(box.hidden)return;
+ const select=document.querySelector('#julia-output-name');select.replaceChildren();for(const item of run.preview.outputs){const option=document.createElement('option');option.value=item.name;option.textContent=`${item.name} · ${item.kind} · ${item.media_type}`;select.append(option);}
+ document.querySelector('#julia-publish-title').value=run.preview.title+' – výstup';document.querySelector('#julia-publish-filename').value=(select.value||'result')+'.dat';document.querySelector('#julia-publish-privacy').value=run.preview.privacy;document.querySelector('#julia-publish-confirm').checked=false;document.querySelector('#julia-publish').disabled=true;
+}
+async function pollJulia(operationId){
+ if(!activeProject)return;try{const run=await projectRequest('/v1/julia/status',{project_id:activeProject.id,operation_id:operationId});renderJuliaRun(run);if(['dispatching','cancel_requested'].includes(run.state)||(run.state==='prepared'&&run.worker_active))juliaPoll=setTimeout(()=>pollJulia(operationId),1000);}catch(error){juliaStatus.textContent=error.message;}
+}
+document.querySelector('#julia-cancel').addEventListener('click',async()=>{try{renderJuliaRun(await projectRequest('/v1/julia/cancel',{project_id:activeProject.id,operation_id:juliaRun.operation_id}));if(juliaRun.state==='cancel_requested')pollJulia(juliaRun.operation_id);}catch(error){juliaStatus.textContent=error.message;}});
+document.querySelector('#julia-reconcile').addEventListener('click',async()=>{try{renderJuliaRun(await projectRequest('/v1/julia/reconcile',{project_id:activeProject.id,operation_id:juliaRun.operation_id}));}catch(error){juliaStatus.textContent=error.message;}});
+document.querySelector('#julia-output-preview').addEventListener('click',async()=>{try{const result=await projectRequest('/v1/julia/output',{project_id:activeProject.id,operation_id:juliaRun.operation_id,output_name:document.querySelector('#julia-output-name').value});const target=document.querySelector('#julia-output-value');target.textContent=result.preview_available?new TextDecoder().decode(Uint8Array.from(atob(result.content_b64),c=>c.charCodeAt(0))):`Náhled není dostupný; výstup má ${result.output.size} B.`;}catch(error){juliaStatus.textContent=error.message;}});
+document.querySelector('#julia-publish-confirm').addEventListener('change',event=>{document.querySelector('#julia-publish').disabled=!(event.currentTarget.checked&&juliaRun&&!activeProject.readOnly);});
+document.querySelector('#julia-publish').addEventListener('click',async event=>{event.currentTarget.disabled=true;try{const result=await projectRequest('/v1/julia/publish',{publication_id:crypto.randomUUID(),operation_id:juliaRun.operation_id,project_id:activeProject.id,output_name:document.querySelector('#julia-output-name').value,artifact_id:crypto.randomUUID(),title:document.querySelector('#julia-publish-title').value,filename:document.querySelector('#julia-publish-filename').value,expected_head:activeProject.head,privacy:document.querySelector('#julia-publish-privacy').value},120000);juliaStatus.textContent=`Výstup byl publikován v commitu ${result.commit_id||result.result?.commit_id||'projektu'}.`;await openRegisteredProject(activeProject.id);}catch(error){juliaStatus.textContent=error.message;event.currentTarget.disabled=false;}});
 const presentationTab=document.querySelector('#presentation-tab');
 const outputsOverviewTab=document.querySelector('#outputs-overview-tab');
 const outputsOverviewList=document.querySelector('#outputs-overview-list');
@@ -6890,6 +6986,9 @@ class DesktopHandler(Handler):
         '/v1/model-selection/status',
         '/v1/model-selection/preferences',
         '/v1/roadmap/graph',
+        '/v1/julia/definitions', '/v1/julia/preview', '/v1/julia/execute',
+        '/v1/julia/status', '/v1/julia/cancel', '/v1/julia/reconcile',
+        '/v1/julia/output', '/v1/julia/publish',
         '/v1/external/propose', '/v1/external/send', '/v1/external/send-stream', '/v1/external/request',
         '/v1/external/preview', '/v1/external/confirm',
         '/v1/external/cancel',
@@ -6980,6 +7079,41 @@ class DesktopHandler(Handler):
                                             'svg': service.svg(projection)})
                 return self.send_error(400)
             except (ValueError, OSError, json.JSONDecodeError) as exc:
+                return self.reply(422, {'error': str(exc)})
+        if self.path.startswith('/v1/julia/'):
+            service = getattr(self.server, 'julia_workspace', None)
+            if service is None:
+                return self.reply(503, {'error': 'Julia Workspace není na tomto uzlu dostupný.'})
+            actor = getattr(self, 'actor', None) or {}
+            user_id, author_name = actor.get('id'), actor.get('name', 'Workspace user')
+            try:
+                if (self.path == '/v1/julia/definitions' and isinstance(request, dict)
+                        and set(request) == {'project_id', 'expected_head'}):
+                    result = service.definitions(request['project_id'], request['expected_head'])
+                elif self.path == '/v1/julia/preview':
+                    result = service.prepare(request, user_id=user_id)
+                elif self.path == '/v1/julia/execute':
+                    result = service.execute(request, user_id=user_id)
+                elif (self.path == '/v1/julia/status' and isinstance(request, dict)
+                      and set(request) in ({'project_id'}, {'project_id', 'operation_id'})):
+                    result = service.status(request['project_id'], request.get('operation_id'),
+                                            user_id=user_id)
+                elif (self.path in {'/v1/julia/cancel', '/v1/julia/reconcile'}
+                      and isinstance(request, dict)
+                      and set(request) == {'project_id', 'operation_id'}):
+                    method = service.cancel if self.path.endswith('/cancel') else service.reconcile
+                    result = method(request['project_id'], request['operation_id'], user_id=user_id)
+                elif (self.path == '/v1/julia/output' and isinstance(request, dict)
+                      and set(request) == {'project_id', 'operation_id', 'output_name'}):
+                    result = service.output(request['project_id'], request['operation_id'],
+                                            request['output_name'], user_id=user_id)
+                elif self.path == '/v1/julia/publish':
+                    result = service.publish(request, user_id=user_id, author_name=author_name)
+                else:
+                    return self.send_error(400)
+                return self.reply(200, result)
+            except (ValueError, OSError, sqlite3.Error, subprocess.SubprocessError,
+                    json.JSONDecodeError) as exc:
                 return self.reply(422, {'error': str(exc)})
         if self.path == '/v1/backend-catalog/reset':
             try: return self.reply(200, self.reset_backend(request))

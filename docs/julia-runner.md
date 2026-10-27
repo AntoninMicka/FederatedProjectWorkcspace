@@ -191,10 +191,23 @@ oficiální checksum, ale nemůže doložit, že jste skutečně provedli samost
 GPG krok výše. Příkaz také nestahuje balíčky, nespouští projektový kód a
 nevytváří `computation.json`.
 
-Tím je připravený **runtime**, nikoli ještě projektový výpočet v UI. Současný
-PoC nemá průvodce tvorbou Julia modelu ani tlačítko pro spuštění; navazující
-`next.command` je vývojářské CLI a vyžaduje verzované projektové artefakty a
-UUID registrovaného projektu, uzlu a uživatele.
+Tím je připravený **runtime**. Otevřený projekt poté nabídne v záložce
+**Výpočty** každou validní definici `fpw-julia-computation-v1`, která je
+uložena jako JSON soubor verzovaného source artefaktu. UI nevytváří ani
+neupravuje Julia model: entrypoint, `Project.toml`, manifest, vstupy a definice
+musí již být připnuté v aktuálním Git commitu. Změna parametru ani příprava
+preview kód nespustí; běh vyžaduje samostatné potvrzení exact preview a
+publikace jednoho výsledku další potvrzení.
+
+Desktop použije lokálního autora projektu. Web používá přihlášený účet a
+vyžaduje zápisové oprávnění pro preview, dispatch, cancel/reconcile i
+publikaci; definici nebo vstup `local-only` přes síť nenabízí. Po restartu UI
+čte Julia journal, ale samo běh neopakuje. Stav `dispatching` lze explicitně
+reconcile, pouze pokud v aktuálním procesu neběží jeho worker; neúplný účinek
+bez kompletní materializace skončí `unknown`.
+
+`next.command` zůstává nízkoúrovňové CLI pro diagnostiku a automatizované
+testy a vyžaduje UUID registrovaného projektu, uzlu a uživatele.
 
 ### Časté chyby
 

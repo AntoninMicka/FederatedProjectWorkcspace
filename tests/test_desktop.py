@@ -343,6 +343,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('id="presentation-template-select"', HTML)
         self.assertIn('id="presentation-template-copy"', HTML)
         self.assertIn('id="presentation-slide-layout"', HTML)
+
         self.assertIn("['title','title-content','two-column','visual','closing']", SLIDE_JS)
         self.assertIn("gridTemplateColumns:'1fr 1fr'", SLIDE_JS)
         self.assertIn('presentationVisualSlide', JS)
@@ -360,6 +361,19 @@ class DesktopTests(unittest.TestCase):
         self.assertIn("requestNativeAction('presenter-displays-cancel')", JS)
         self.assertIn('showPresenterDisplayConfiguration', JS)
         self.assertIn("typeof closePresenterDisplayConfiguration==='function'", desktop)
+
+    def test_julia_workspace_ui_separates_preview_run_and_publication(self):
+        self.assertIn('id="julia-tab"', HTML)
+        self.assertIn('id="julia-panel"', HTML)
+        self.assertIn('id="julia-parameters"', HTML)
+        self.assertIn('id="julia-run-confirm"', HTML)
+        self.assertIn('id="julia-publish-confirm"', HTML)
+        for path in ('definitions', 'preview', 'execute', 'status', 'cancel',
+                     'reconcile', 'output', 'publish'):
+            self.assertIn(f"projectRequest('/v1/julia/{path}'", JS)
+            self.assertIn(f'/v1/julia/{path}', DesktopHandler.post_paths)
+        self.assertIn('textContent=JSON.stringify(shown,null,2)', JS)
+        self.assertNotIn('julia-output-value.innerHTML', JS)
 
     def test_presentation_pdf_publication_is_same_directory_and_atomic(self):
         nonce = '5d81c0bc-b5b4-4ca9-bf9f-f4d77f98f181'

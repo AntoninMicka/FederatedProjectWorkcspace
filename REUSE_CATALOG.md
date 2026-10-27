@@ -777,3 +777,11 @@ je externí node-managed oficiální Julia 1.10.12, nikoli distribuovaný obsah.
 Fyzicky ověřen je pouze Linux glibc aarch64 profil. Obecný job server,
 automatické runtime aktualizace, runtime/depot v Gitu a LLM run store zůstávají
 **reject**. Provozní evidence: [Julia runner](docs/julia-runner.md).
+
+COMP-03 **reuse** používá `JuliaExecutor`, jeho SQLite journal,
+`MaterializationCache` a jediný Workspace writer beze změny autority. **Adapt**
+je pouze shared projektová projekce validních definic, request-local identita a
+RBAC/privacy kontrola, background dispatch mimo omezené HTTP workery a bezpečné
+DOM UI se dvěma oddělenými potvrzeními. Druhý runner, nový job store, kopie
+recovery logiky, automatický retry po restartu a přímý zápis výsledku do Gitu
+jsou **reject**.
