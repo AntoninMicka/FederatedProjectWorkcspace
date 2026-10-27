@@ -13,7 +13,8 @@ Obecná projektová plánovací dávka `PLAN-TASK-GRAPH-01` byla doručena PR #1
 `F-M5-CHAT-HISTORY-01` byla doručena PR #101 a navazující
 `F-M5-SYNC-CONTROLS-01` PR #102. Návrhová dávka `COMP-01` byla doručena PR
 #103 a `COMP-02` akceptovaná na úrovni PoC validated čeká na doručení PR s
-lokálním Julia runnerem a explicitní publikací výsledků.
+lokálním Julia runnerem a explicitní publikací výsledků. Navazující `COMP-03`
+je plánovaný první řízený Julia výpočet ze shared workspace UI.
 Široký `F-M5-TRUST-01` zůstává otevřený. Gate M3 jako celek zůstává otevřený.
 Aktuální stav předání je v [TODO.md](TODO.md), další připravené feature dávky a
 strategický zásobník v [BACKLOG.md](BACKLOG.md) a uzavřené dávky s důkazy ve
@@ -304,6 +305,11 @@ První implementační rozsah je sdílení mezi dvěma lokálně registrovanými
 Dokončený operativní rozpad `COMP-01` a `COMP-02` drží WORK_LOG. Julia runner
 není LLM backend a jeho deterministické nebo numerické výstupy se nesmějí
 evidenčně smíchat s LLM run records.
+
+Navazující dávka `COMP-03` zpřístupní existující runner ze shared workspace UI:
+výběr verzované definice, typované parametry, přesný preview a samostatné
+potvrzení běhu i publikace jednoho výstupu. Nezavádí druhý runtime, automatické
+spouštění, notebookové prostředí ani editor Julia zdrojů.
 
 ---
 

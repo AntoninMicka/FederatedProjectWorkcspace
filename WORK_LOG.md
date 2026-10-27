@@ -68,8 +68,9 @@ PR do `develop` dosud nebyl vytvořen ani sloučen.
 
 ### Ověření, recovery a omezení
 
-Finální úplná sada po onboardingu prošla mimo omezený sandbox: **927 testů bez
-selhání, 35 přeskočeno, za 229,964 s**. Cílená Julia sada prošla s 22 testy a
+Finální úplná sada po jednokrokovém onboardingu a opravě navazujícího
+entrypointu prošla mimo omezený sandbox: **931 testů bez selhání, 35
+přeskočeno, za 228,044 s**. Cílená Julia sada prošla s 22 testy a
 2 podmíněně přeskočenými; kombinovaná Julia/balení/licence sada měla 38 testů
 a 3 přeskočené. Skutečný `setup` nad oficiálním runtime ověřil nový binding,
 depot/state a bubblewrap namespace a opakování vrátilo `reused: true`.
@@ -83,8 +84,9 @@ archiv obsahuje popsané `bin/julia` i `lib/julia/sys.so`.
 Archiv `julia-1.10.12-linux-aarch64.tar.gz` odpovídal zveřejněnému SHA-256
 `cc257b21967049642bfe17de1aff7dae17477eba4f423f98cb400c002080e5a2` a jeho
 oddělený podpis prošel GPG klíčem s fingerprintem
-`64B779A570972FFF7BFC2B54EAD471E1A1F2C10A`. Runtime zůstal pouze v `/tmp`;
-neproběhla systémová instalace ani změna uzlové konfigurace.
+`64B779A570972FFF7BFC2B54EAD471E1A1F2C10A`. První akceptační runtime byl jen
+v `/tmp`; finální onboarding vytvořil uživatelský runtime pod XDG state.
+Neproběhla systémová instalace ani změna uzlové konfigurace.
 
 Po doplnění `COMP-02-I` prošel `./run.sh julia-setup` nad stejným oficiálním
 archivem přímo z `~/Downloads`; první běh vytvořil runtime a binding pod
